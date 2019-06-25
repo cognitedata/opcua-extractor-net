@@ -5,3 +5,7 @@
 # C# specific
 obj/
 bin/
+
+# Temp data
+certificates/
+Logs/
