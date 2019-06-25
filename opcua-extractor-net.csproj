@@ -6,4 +6,9 @@
     <RootNamespace>opcua_extractor_net</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="./lib/Opc.Ua.Core/Opc.Ua.Core.csproj" />
+    <ProjectReference Include="./lib/Opc.Ua.Client/Opc.Ua.Client.csproj" />
+    <ProjectReference Include="./lib/Opc.Ua.Configuration/Opc.Ua.Configuration.csproj" />
+  </ItemGroup>
 </Project>
