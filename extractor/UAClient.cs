@@ -111,5 +111,74 @@ namespace opcua_extractor_net
             if (session == null) return null;
             return session.ReadNode(ObjectIds.Server);
         }
+        private ReferenceDescriptionCollection getNodeChildren(NodeId parent)
+        {
+            Byte[] continuationPoint;
+            ReferenceDescriptionCollection references;
+            session.Browse(
+                null,
+                null,
+                parent,
+                0,
+                BrowseDirection.Forward,
+                ReferenceTypeIds.HierarchicalReferences,
+                true,
+                (uint)NodeClass.Variable | (uint)NodeClass.Object,
+                out continuationPoint,
+                out references
+            );
+            return references;
+        }
+        private void _browseDirectory(NodeId root, int level)
+        {
+            if (root == ObjectIds.Server) return;
+            var references = getNodeChildren(root);
+            foreach (var rd in references)
+            {
+                Console.WriteLine(new String(' ', level * 4 + 1) + "{0}, {1}, {2}", rd.BrowseName, rd.DisplayName, rd.NodeClass);
+                Console.WriteLine(getUniqueId(rd.NodeId));
+                _browseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), level + 1);
+            }
+        }
+        public void browseDirectory(NodeId root)
+        {
+            Console.WriteLine(" BrowseName, DisplayName, NodeClass");
+            _browseDirectory(root, 0);
+        }
+        private string getUniqueId(string namespaceUri, NodeId nodeid)
+        {
+            string prefix = ConfigurationManager.AppSettings[namespaceUri];
+            if (prefix == null)
+            {
+                prefix = ConfigurationManager.AppSettings["defaultPrefix"];
+            }
+            if (prefix == null)
+            {
+                prefix = "opcua";
+            }
+            // Strip the ns=namespaceIndex; part, as it may be inconsistent between sessions
+            // We still want the identifierType part of the id, so we just remove the first ocurrence of ns=..
+            string nodeidstr = nodeid.ToString();
+            string nsstr = "ns=" + nodeid.NamespaceIndex+";";
+            int pos = nodeidstr.IndexOf(nsstr);
+            if (pos >= 0) {
+                nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
+            }
+            return prefix + ":" + nodeidstr;
+ 
+        }
+        public string getUniqueId(NodeId nodeid)
+        {
+            return getUniqueId(session.NamespaceUris.GetString(nodeid.NamespaceIndex), nodeid);
+        }
+        public string getUniqueId(ExpandedNodeId nodeid)
+        {
+            string namespaceUri = nodeid.NamespaceUri;
+            if (namespaceUri == null)
+            {
+                namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
+            }
+            return getUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
+        }
     }
 }
