@@ -10,4 +10,7 @@
     <ProjectReference Include="../lib/Opc.Ua.Client/Opc.Ua.Client.csproj" />
     <ProjectReference Include="../lib/Opc.Ua.Configuration/Opc.Ua.Configuration.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="4.5.0" />
+  </ItemGroup>
 </Project>

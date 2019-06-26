@@ -1,6 +1,7 @@
 
 using System.Threading;
 using System.Threading.Tasks;
+using System.Configuration;
 using System;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -8,20 +9,17 @@ using Opc.Ua.Configuration;
 
 namespace opcua_extractor_net
 {
-    class OPCUAClient
+    class UAClient
     {
         const int ReconnectPeriod = 10;
-        bool running = false;
         string endpointURL;
         static bool autoaccept;
-        int stopTimeout;
-        Session session;
+        Session session = null;
         SessionReconnectHandler reconnectHandler;
-        public OPCUAClient(string _endpointURL, bool _autoaccept, int _stopTimeout)
+        public UAClient(string _endpointURL, bool _autoaccept)
         {
             endpointURL = _endpointURL;
             autoaccept = _autoaccept;
-            stopTimeout = _stopTimeout <= 0 ? Timeout.Infinite : _stopTimeout;
         }
         public async Task run()
         {
@@ -66,7 +64,7 @@ namespace opcua_extractor_net
                 endpoint,
                 false,
                 ".NET OPC-UA Extractor Client",
-                60000,
+                0,
                 new UserIdentity(new AnonymousIdentityToken()), null
             );
 
@@ -108,6 +106,10 @@ namespace opcua_extractor_net
                     Console.WriteLine("Rejected Bad Certificate {0}", eventArgs.Certificate.Subject);
                 }
             }
+        }
+        public Node getServerNode() {
+            if (session == null) return null;
+            return session.ReadNode(ObjectIds.Server);
         }
     }
 }

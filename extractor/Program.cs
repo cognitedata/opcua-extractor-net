@@ -3,6 +3,7 @@ using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using System.Threading;
+using System.Configuration;
 
 namespace opcua_extractor_net
 {
@@ -10,7 +11,9 @@ namespace opcua_extractor_net
     {
         static void Main(string[] args)
         {
-            OPCUAClient client = new OPCUAClient("opc.tcp://localhost:4840", false, 0);
+            string clientURL = ConfigurationManager.AppSettings["clientURL"];
+            bool autoaccept = ConfigurationManager.AppSettings["autoaccept"] == "true";
+            UAClient client = new UAClient(clientURL, autoaccept);
             client.run().Wait();
 
             ManualResetEvent quitEvent = new ManualResetEvent(false);
