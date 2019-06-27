@@ -6,7 +6,8 @@
     <RootNamespace>opcua_extractor_net</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="System.Configuration.ConfigurationManager" Version="4.5.0" />
+    <PackageReference Include="Xamarin.Yaml.Parser" Version="1.1.9" />
+    <PackageReference Include="YamlDotNet" Version="6.1.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\lib\Opc.Ua.Client\Opc.Ua.Client.csproj" />
@@ -14,7 +15,13 @@
     <ProjectReference Include="..\lib\Opc.Ua.Core\Opc.Ua.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="App.config" />
+  </ItemGroup>
+  <ItemGroup>
     <None Update="opc.ua.net.extractor.Config.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="config.yml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

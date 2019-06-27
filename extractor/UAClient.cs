@@ -1,29 +1,28 @@
 
 using System.Threading.Tasks;
-using System.Configuration;
 using System.Collections.Generic;
 using System;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
+using YamlDotNet.RepresentationModel;
 
 namespace opcua_extractor_net
 {
     class UAClient
     {
-        const int ReconnectPeriod = 10;
-        readonly string endpointURL;
-        static bool autoaccept;
+        static UAClientConfig config;
         Session session;
         SessionReconnectHandler reconnectHandler;
-        readonly uint maxResults;
-        readonly int pollingInterval;
-        public UAClient(string endpointURL, bool autoaccept, int pollingInterval, uint maxResults)
+        YamlMappingNode nsmaps;
+        public UAClient(UAClientConfig config, YamlMappingNode nsmaps)
         {
-            this.endpointURL = endpointURL;
-            UAClient.autoaccept = autoaccept;
-            this.pollingInterval = pollingInterval;
-            this.maxResults = maxResults;
+            this.nsmaps = nsmaps;
+            UAClient.config = config;
+            if (config.GlobalPrefix == null)
+            {
+                throw new Exception("Missing glboal prefix");
+            }
         }
         public async Task Run()
         {
@@ -46,8 +45,7 @@ namespace opcua_extractor_net
                 ApplicationType = ApplicationType.Client,
                 ConfigSectionName = "opc.ua.net.extractor"
             };
-            Console.WriteLine(application == null);
-            ApplicationConfiguration config = await application.LoadApplicationConfiguration(false);
+            ApplicationConfiguration appconfig = await application.LoadApplicationConfiguration(false);
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
             if (!validAppCert)
             {
@@ -55,16 +53,17 @@ namespace opcua_extractor_net
             }
             else
             {
-                config.ApplicationUri = Utils.GetApplicationUriFromCertificate(config.SecurityConfiguration.ApplicationCertificate.Certificate);
-                autoaccept |= config.SecurityConfiguration.AutoAcceptUntrustedCertificates;
-                config.CertificateValidator.CertificateValidation += new CertificateValidationEventHandler(CertificateValidationHandler);
+                appconfig.ApplicationUri = Utils.GetApplicationUriFromCertificate(
+                    appconfig.SecurityConfiguration.ApplicationCertificate.Certificate);
+                config.Autoaccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
+                appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
-            var selectedEndpoint = CoreClientUtils.SelectEndpoint(endpointURL, validAppCert, 15000);
-            var endpointConfiguration = EndpointConfiguration.Create(config);
+            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert, 15000);
+            var endpointConfiguration = EndpointConfiguration.Create(appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
 
             session = await Session.Create(
-                config,
+                appconfig,
                 endpoint,
                 false,
                 ".NET OPC-UA Extractor Client",
@@ -73,7 +72,7 @@ namespace opcua_extractor_net
             );
 
             session.KeepAlive += ClientKeepAlive;
-            Console.WriteLine("Successfully connected to server {0}", endpointURL);
+            Console.WriteLine("Successfully connected to server {0}", config.EndpointURL);
         }
         private void ClientReconnectComplete(Object sender, EventArgs eventArgs)
         {
@@ -93,7 +92,7 @@ namespace opcua_extractor_net
                 {
                     Console.WriteLine("--- RECONNECTING ---");
                     reconnectHandler = new SessionReconnectHandler();
-                    reconnectHandler.BeginReconnect(sender, ReconnectPeriod * 1000, ClientReconnectComplete);
+                    reconnectHandler.BeginReconnect(sender, config.ReconnectPeriod, ClientReconnectComplete);
                 }
             }
         }
@@ -101,8 +100,8 @@ namespace opcua_extractor_net
         {
             if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
             {
-                eventArgs.Accept = autoaccept;
-                if (autoaccept)
+                eventArgs.Accept = config.Autoaccept;
+                if (config.Autoaccept)
                 {
                     Console.WriteLine("Accepted Bad Certificate {0}", eventArgs.Certificate.Subject);
                 }
@@ -196,14 +195,14 @@ namespace opcua_extractor_net
         }
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {
-            string prefix = ConfigurationManager.AppSettings[namespaceUri];
-            if (prefix == null)
+            string prefix;
+            if (nsmaps.Children.TryGetValue(new YamlScalarNode(namespaceUri), out YamlNode prefixNode))
             {
-                prefix = ConfigurationManager.AppSettings["defaultPrefix"];
+                prefix = prefixNode.ToString();
             }
-            if (prefix == null)
+            else
             {
-                prefix = "opcua";
+                prefix = namespaceUri;
             }
             // Strip the ns=namespaceIndex; part, as it may be inconsistent between sessions
             // We still want the identifierType part of the id, so we just remove the first ocurrence of ns=..
@@ -214,7 +213,7 @@ namespace opcua_extractor_net
             {
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
-            return prefix + ":" + nodeidstr;
+            return config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
 
         }
         public string GetUniqueId(NodeId nodeid)
@@ -272,7 +271,7 @@ namespace opcua_extractor_net
             {
                 throw new Exception("Node not a variable");
             }
-            Subscription subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = pollingInterval };
+            Subscription subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
 
             var monitor = new MonitoredItem(subscription.DefaultItem)
             {
@@ -297,7 +296,7 @@ namespace opcua_extractor_net
                 {
                     StartTime = startTime,
                     EndTime = endTime,
-                    NumValuesPerNode = maxResults,
+                    NumValuesPerNode = config.MaxResults,
                 };
 
                 session.HistoryRead(
