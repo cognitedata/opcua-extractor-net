@@ -144,11 +144,25 @@ namespace opcua_extractor_net
             }
             return references;
         }
-        private void BrowseDirectory(NodeId root, int level)
+        private void BrowseDirectory(NodeId root, int level, Action<ReferenceDescription, int> callback)
         {
             if (root == ObjectIds.Server) return;
             var references = GetNodeChildren(root);
             foreach (var rd in references)
+            {
+                callback?.Invoke(rd, level);
+                
+                BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), level + 1, callback);
+            }
+        }
+        public void BrowseDirectory(NodeId root, Action<ReferenceDescription, int> callback)
+        {
+            BrowseDirectory(root, 0, callback);
+        }
+        public void DebugBrowseDirectory(NodeId root)
+        {
+            Console.WriteLine(" Browsename, DisplayName, NodeClass");
+            BrowseDirectory(root, 0, (ReferenceDescription rd, int level) =>
             {
                 Console.WriteLine(new String(' ', level * 4 + 1) + "{0}, {1}, {2}", rd.BrowseName, rd.DisplayName, rd.NodeClass);
                 Console.WriteLine(GetUniqueId(rd.NodeId));
@@ -170,7 +184,7 @@ namespace opcua_extractor_net
                         },
                         (MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs) =>
                         {
-                            foreach(var j in item.DequeueValues())
+                            foreach (var j in item.DequeueValues())
                             {
                                 Console.WriteLine("{0}: {1}, {2}, {3}", item.DisplayName, j.Value, j.SourceTimestamp, j.StatusCode);
                             }
@@ -178,13 +192,7 @@ namespace opcua_extractor_net
 
                     );
                 }
-                BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), level + 1);
-            }
-        }
-        public void BrowseDirectory(NodeId root)
-        {
-            Console.WriteLine(" BrowseName, DisplayName, NodeClass");
-            BrowseDirectory(root, 0);
+            });
         }
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {

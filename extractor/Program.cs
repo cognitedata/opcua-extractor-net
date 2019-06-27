@@ -23,7 +23,7 @@ namespace opcua_extractor_net
             }
             UAClient client = new UAClient(clientURL, autoaccept, pollingInterval, maxResults);
             client.Run().Wait();
-            client.BrowseDirectory(ObjectIds.ObjectsFolder);
+            client.DebugBrowseDirectory(ObjectIds.ObjectsFolder);
             
 
             ManualResetEvent quitEvent = new ManualResetEvent(false);
