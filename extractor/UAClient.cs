@@ -16,10 +16,14 @@ namespace opcua_extractor_net
         static bool autoaccept;
         Session session;
         SessionReconnectHandler reconnectHandler;
-        public UAClient(string _endpointURL, bool _autoaccept)
+        readonly uint maxResults;
+        readonly int pollingInterval;
+        public UAClient(string endpointURL, bool autoaccept, int pollingInterval, uint maxResults)
         {
-            endpointURL = _endpointURL;
-            autoaccept = _autoaccept;
+            this.endpointURL = endpointURL;
+            UAClient.autoaccept = autoaccept;
+            this.pollingInterval = pollingInterval;
+            this.maxResults = maxResults;
         }
         public async Task Run()
         {
@@ -77,6 +81,7 @@ namespace opcua_extractor_net
             session = reconnectHandler.Session;
             reconnectHandler.Dispose();
             Console.WriteLine("--- RECONNECTED ---");
+            // TODO Here we need to synch, as the server may have been alive while we were reconnecting.
         }
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
         {
@@ -151,7 +156,7 @@ namespace opcua_extractor_net
                 {
                     SynchronizeDataNode(
                         ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris),
-                        DateTime.UtcNow.Subtract(new TimeSpan(365*30, 0, 0, 0)), // TODO find a solution to this
+                        new DateTime(1970, 1, 1), // TODO find a solution to this
                         (HistoryReadResultCollection val) => {
                             foreach (HistoryReadResult res in val)
                             {
@@ -259,7 +264,7 @@ namespace opcua_extractor_net
             {
                 throw new Exception("Node not a variable");
             }
-            Subscription subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = 100 }; //TODO config option
+            Subscription subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = pollingInterval };
 
             var monitor = new MonitoredItem(subscription.DefaultItem)
             {
@@ -284,7 +289,7 @@ namespace opcua_extractor_net
                 {
                     StartTime = startTime,
                     EndTime = endTime,
-                    NumValuesPerNode = 100, //TODO config option
+                    NumValuesPerNode = maxResults,
                 };
 
                 session.HistoryRead(

@@ -13,7 +13,15 @@ namespace opcua_extractor_net
         {
             string clientURL = ConfigurationManager.AppSettings["clientURL"];
             bool autoaccept = ConfigurationManager.AppSettings["autoaccept"] == "true";
-            UAClient client = new UAClient(clientURL, autoaccept);
+            if (!uint.TryParse(ConfigurationManager.AppSettings["maxResults"], out uint maxResults))
+            {
+                throw new Exception("Invalid configuration: maxResults");
+            }
+            if (!int.TryParse(ConfigurationManager.AppSettings["pollingInterval"], out int pollingInterval))
+            {
+                throw new Exception("Invalid configuration: pollingInterval");
+            }
+            UAClient client = new UAClient(clientURL, autoaccept, pollingInterval, maxResults);
             client.Run().Wait();
             client.BrowseDirectory(ObjectIds.ObjectsFolder);
             
