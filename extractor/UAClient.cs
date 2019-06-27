@@ -126,6 +126,17 @@ namespace opcua_extractor_net
                 out byte[] continuationPoint,
                 out ReferenceDescriptionCollection references
             );
+            while (continuationPoint != null)
+            {
+                session.BrowseNext(
+                    null,
+                    false,
+                    continuationPoint,
+                    out continuationPoint,
+                    out ReferenceDescriptionCollection tmpReferences
+                );
+                references.AddRange(tmpReferences);
+            }
             return references;
         }
         private void BrowseDirectory(NodeId root, int level)
@@ -140,7 +151,7 @@ namespace opcua_extractor_net
                 {
                     SynchronizeDataNode(
                         ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris),
-                        DateTime.UtcNow.Subtract(new TimeSpan(365*30, 0, 0, 0)),
+                        DateTime.UtcNow.Subtract(new TimeSpan(365*30, 0, 0, 0)), // TODO find a solution to this
                         (HistoryReadResultCollection val) => {
                             foreach (HistoryReadResult res in val)
                             {
@@ -248,7 +259,6 @@ namespace opcua_extractor_net
             {
                 throw new Exception("Node not a variable");
             }
-            DateTime endTime = DateTime.UtcNow;
             Subscription subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = 100 }; //TODO config option
 
             var monitor = new MonitoredItem(subscription.DefaultItem)
@@ -257,12 +267,16 @@ namespace opcua_extractor_net
                 StartNodeId = nodeid
             };
             // TODO, it might be more efficient to register all items as a single subscription? Does it matter?
-            // It will require a more complicated subscription handler, thoguh in practice this might be much the same.
+            // It will require a more complicated subscription handler, but will probably result in less overhead overall.
+            // The handlers can be reused if viable
             monitor.Notification += subscriptionHandler;
             subscription.AddItem(monitor);
+            // This is thread safe, see implementation
             session.AddSubscription(subscription);
             subscription.Create();
             if (!((bool)attributes[Attributes.Historizing].Value)) return;
+            // Store this date now, at this point the subscription should be created, so combined they should cover all timestamps.
+            DateTime endTime = DateTime.UtcNow;
             HistoryReadResultCollection results = null;
             do
             {
@@ -283,7 +297,7 @@ namespace opcua_extractor_net
                         new HistoryReadValueId()
                         {
                             NodeId = nodeid,
-                            ContinuationPoint = results ? [results.Count-1].ContinuationPoint
+                            ContinuationPoint = results ? [0].ContinuationPoint
                         },
 
                     },
@@ -291,7 +305,7 @@ namespace opcua_extractor_net
                     out _
                 );
                 callback(results);
-            } while (results.Count > 0 && results[results.Count-1].ContinuationPoint != null);
+            } while (results[0].ContinuationPoint != null);
         }
     }
 }
