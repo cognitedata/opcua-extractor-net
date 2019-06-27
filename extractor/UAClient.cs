@@ -1,7 +1,7 @@
 
-using System.Threading;
 using System.Threading.Tasks;
 using System.Configuration;
+using System.Collections.Generic;
 using System;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -12,18 +12,19 @@ namespace opcua_extractor_net
     class UAClient
     {
         const int ReconnectPeriod = 10;
-        string endpointURL;
+        readonly string endpointURL;
         static bool autoaccept;
-        Session session = null;
+        Session session;
         SessionReconnectHandler reconnectHandler;
         public UAClient(string _endpointURL, bool _autoaccept)
         {
             endpointURL = _endpointURL;
             autoaccept = _autoaccept;
         }
-        public async Task run()
+        public async Task Run()
         {
-            try {
+            try
+            {
                 await StartSession();
             }
             catch (Exception e)
@@ -35,11 +36,13 @@ namespace opcua_extractor_net
         }
         private async Task StartSession()
         {
-            ApplicationInstance application = new ApplicationInstance {
+            ApplicationInstance application = new ApplicationInstance
+            {
                 ApplicationName = ".NET OPC-UA Extractor",
                 ApplicationType = ApplicationType.Client,
                 ConfigSectionName = "opc.ua.net.extractor"
             };
+            Console.WriteLine(application == null);
             ApplicationConfiguration config = await application.LoadApplicationConfiguration(false);
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
             if (!validAppCert)
@@ -49,10 +52,7 @@ namespace opcua_extractor_net
             else
             {
                 config.ApplicationUri = Utils.GetApplicationUriFromCertificate(config.SecurityConfiguration.ApplicationCertificate.Certificate);
-                if (config.SecurityConfiguration.AutoAcceptUntrustedCertificates)
-                {
-                    autoaccept = true;
-                }
+                autoaccept |= config.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 config.CertificateValidator.CertificateValidation += new CertificateValidationEventHandler(CertificateValidationHandler);
             }
             var selectedEndpoint = CoreClientUtils.SelectEndpoint(endpointURL, validAppCert, 15000);
@@ -107,14 +107,13 @@ namespace opcua_extractor_net
                 }
             }
         }
-        public Node getServerNode() {
+        public Node GetServerNode()
+        {
             if (session == null) return null;
             return session.ReadNode(ObjectIds.Server);
         }
-        private ReferenceDescriptionCollection getNodeChildren(NodeId parent)
+        private ReferenceDescriptionCollection GetNodeChildren(NodeId parent)
         {
-            Byte[] continuationPoint;
-            ReferenceDescriptionCollection references;
             session.Browse(
                 null,
                 null,
@@ -124,28 +123,54 @@ namespace opcua_extractor_net
                 ReferenceTypeIds.HierarchicalReferences,
                 true,
                 (uint)NodeClass.Variable | (uint)NodeClass.Object,
-                out continuationPoint,
-                out references
+                out byte[] continuationPoint,
+                out ReferenceDescriptionCollection references
             );
             return references;
         }
-        private void _browseDirectory(NodeId root, int level)
+        private void BrowseDirectory(NodeId root, int level)
         {
             if (root == ObjectIds.Server) return;
-            var references = getNodeChildren(root);
+            var references = GetNodeChildren(root);
             foreach (var rd in references)
             {
                 Console.WriteLine(new String(' ', level * 4 + 1) + "{0}, {1}, {2}", rd.BrowseName, rd.DisplayName, rd.NodeClass);
-                Console.WriteLine(getUniqueId(rd.NodeId));
-                _browseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), level + 1);
+                Console.WriteLine(GetUniqueId(rd.NodeId));
+                if (rd.NodeClass == NodeClass.Variable)
+                {
+                    SynchronizeDataNode(
+                        ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris),
+                        DateTime.UtcNow.Subtract(new TimeSpan(365*30, 0, 0, 0)),
+                        (HistoryReadResultCollection val) => {
+                            foreach (HistoryReadResult res in val)
+                            {
+                                HistoryData data = ExtensionObject.ToEncodeable(res.HistoryData) as HistoryData;
+                                Console.WriteLine("Found {0} results", data.DataValues.Count);
+                                foreach (var item in data.DataValues)
+                                {
+                                    Console.WriteLine("{0}: {1}", item.SourceTimestamp, item.Value);
+                                }
+                            }
+                        },
+                        (MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs) =>
+                        {
+                            foreach(var j in item.DequeueValues())
+                            {
+                                Console.WriteLine("{0}: {1}, {2}, {3}", item.DisplayName, j.Value, j.SourceTimestamp, j.StatusCode);
+                            }
+                        }
+
+                    );
+                }
+                BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), level + 1);
             }
         }
-        public void browseDirectory(NodeId root)
+        public void BrowseDirectory(NodeId root)
         {
             Console.WriteLine(" BrowseName, DisplayName, NodeClass");
-            _browseDirectory(root, 0);
+            BrowseDirectory(root, 0);
         }
-        private string getUniqueId(string namespaceUri, NodeId nodeid)
+        private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {
             string prefix = ConfigurationManager.AppSettings[namespaceUri];
             if (prefix == null)
@@ -159,26 +184,114 @@ namespace opcua_extractor_net
             // Strip the ns=namespaceIndex; part, as it may be inconsistent between sessions
             // We still want the identifierType part of the id, so we just remove the first ocurrence of ns=..
             string nodeidstr = nodeid.ToString();
-            string nsstr = "ns=" + nodeid.NamespaceIndex+";";
-            int pos = nodeidstr.IndexOf(nsstr);
-            if (pos >= 0) {
+            string nsstr = "ns=" + nodeid.NamespaceIndex + ";";
+            int pos = nodeidstr.IndexOf(nsstr, StringComparison.CurrentCulture);
+            if (pos >= 0)
+            {
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
             return prefix + ":" + nodeidstr;
- 
+
         }
-        public string getUniqueId(NodeId nodeid)
+        public string GetUniqueId(NodeId nodeid)
         {
-            return getUniqueId(session.NamespaceUris.GetString(nodeid.NamespaceIndex), nodeid);
+            return GetUniqueId(session.NamespaceUris.GetString(nodeid.NamespaceIndex), nodeid);
         }
-        public string getUniqueId(ExpandedNodeId nodeid)
+        public string GetUniqueId(ExpandedNodeId nodeid)
         {
             string namespaceUri = nodeid.NamespaceUri;
             if (namespaceUri == null)
             {
                 namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
             }
-            return getUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
+            return GetUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
+        }
+        // Fetch data for synchronizing with cdf, also establishing a subscription. This does require that the node is a variable, or it will fail.
+        public void SynchronizeDataNode(NodeId nodeid,
+            DateTime startTime,
+            Action<HistoryReadResultCollection> callback,
+            MonitoredItemNotificationEventHandler subscriptionHandler)
+        {
+            // First get necessary node data
+            SortedDictionary<uint, DataValue> attributes = new SortedDictionary<uint, DataValue>
+            {
+                { Attributes.DataType, null },
+                { Attributes.Historizing, null },
+                { Attributes.NodeClass, null },
+                { Attributes.DisplayName, null }
+            };
+
+            ReadValueIdCollection itemsToRead = new ReadValueIdCollection();
+            foreach (uint attributeId in attributes.Keys)
+            {
+                ReadValueId itemToRead = new ReadValueId
+                {
+                    AttributeId = attributeId,
+                    NodeId = nodeid
+                };
+                itemsToRead.Add(itemToRead);
+            }
+
+            session.Read(
+                null,
+                0,
+                TimestampsToReturn.Both,
+                itemsToRead,
+                out DataValueCollection values,
+                out _
+            );
+            for (int i = 0; i < itemsToRead.Count; i++)
+            {
+                attributes[itemsToRead[i].AttributeId] = values[i];
+            }
+            if ((NodeClass)attributes[Attributes.NodeClass].Value != NodeClass.Variable)
+            {
+                throw new Exception("Node not a variable");
+            }
+            DateTime endTime = DateTime.UtcNow;
+            Subscription subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = 100 }; //TODO config option
+
+            var monitor = new MonitoredItem(subscription.DefaultItem)
+            {
+                DisplayName = "Value: " + attributes[Attributes.DisplayName],
+                StartNodeId = nodeid
+            };
+            // TODO, it might be more efficient to register all items as a single subscription? Does it matter?
+            // It will require a more complicated subscription handler, thoguh in practice this might be much the same.
+            monitor.Notification += subscriptionHandler;
+            subscription.AddItem(monitor);
+            session.AddSubscription(subscription);
+            subscription.Create();
+            if (!((bool)attributes[Attributes.Historizing].Value)) return;
+            HistoryReadResultCollection results = null;
+            do
+            {
+                ReadRawModifiedDetails details = new ReadRawModifiedDetails()
+                {
+                    StartTime = startTime,
+                    EndTime = endTime,
+                    NumValuesPerNode = 100, //TODO config option
+                };
+
+                session.HistoryRead(
+                    null,
+                    new ExtensionObject(details),
+                    TimestampsToReturn.Neither,
+                    false,
+                    new HistoryReadValueIdCollection()
+                    {
+                        new HistoryReadValueId()
+                        {
+                            NodeId = nodeid,
+                            ContinuationPoint = results ? [results.Count-1].ContinuationPoint
+                        },
+
+                    },
+                    out results,
+                    out _
+                );
+                callback(results);
+            } while (results.Count > 0 && results[results.Count-1].ContinuationPoint != null);
         }
     }
 }

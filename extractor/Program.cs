@@ -14,8 +14,9 @@ namespace opcua_extractor_net
             string clientURL = ConfigurationManager.AppSettings["clientURL"];
             bool autoaccept = ConfigurationManager.AppSettings["autoaccept"] == "true";
             UAClient client = new UAClient(clientURL, autoaccept);
-            client.run().Wait();
-            client.browseDirectory(ObjectIds.ObjectsFolder);
+            client.Run().Wait();
+            client.BrowseDirectory(ObjectIds.ObjectsFolder);
+            
 
             ManualResetEvent quitEvent = new ManualResetEvent(false);
             try

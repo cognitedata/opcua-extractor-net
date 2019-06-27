@@ -1,6 +1,7 @@
 # IDE/OS Specific
 .vscode/
 *.swp
+.DS_Store
 
 # C# specific
 obj/
