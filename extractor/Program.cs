@@ -9,7 +9,7 @@ namespace opcua_extractor_net
 {
     class Program
     {
-        static void Main(string[] args)
+        static void Main()
         {
             var config = ReadConfig();
             YamlMappingNode clientCfg = (YamlMappingNode)config.Children[new YamlScalarNode("client")];
@@ -20,17 +20,11 @@ namespace opcua_extractor_net
             
 
             ManualResetEvent quitEvent = new ManualResetEvent(false);
-            try
+            Console.CancelKeyPress += (sender, eArgs) =>
             {
-                Console.CancelKeyPress += (sender, eArgs) =>
-                {
-                    quitEvent.Set();
-                    eArgs.Cancel = true;
-                };
-            }
-            catch
-            {
-            }
+                quitEvent.Set();
+                eArgs.Cancel = true;
+            };
 
             quitEvent.WaitOne(-1);
         }
@@ -40,11 +34,6 @@ namespace opcua_extractor_net
             StringReader input = new StringReader(document);
             YamlStream stream = new YamlStream();
             stream.Load(input);
-
-            var deserializer= new Deserializer();
-            deserializer.Deserialize(input);
-
-
 
             return (YamlMappingNode)stream.Documents[0].RootNode;
         }

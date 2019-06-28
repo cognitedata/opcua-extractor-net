@@ -14,7 +14,8 @@ namespace opcua_extractor_net
         static UAClientConfig config;
         Session session;
         SessionReconnectHandler reconnectHandler;
-        YamlMappingNode nsmaps;
+        readonly YamlMappingNode nsmaps;
+
         public UAClient(UAClientConfig config, YamlMappingNode nsmaps)
         {
             this.nsmaps = nsmaps;
@@ -143,20 +144,18 @@ namespace opcua_extractor_net
             }
             return references;
         }
-        private void BrowseDirectory(NodeId root, int level, Action<ReferenceDescription, int> callback)
+        private void BrowseDirectory(NodeId root, int last, Func<ReferenceDescription, int, int> callback)
         {
             if (root == ObjectIds.Server) return;
             var references = GetNodeChildren(root);
             foreach (var rd in references)
-            {
-                callback?.Invoke(rd, level);
-                
-                BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), level + 1, callback);
+            {                
+                BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), callback(rd, last), callback);
             }
         }
-        public void BrowseDirectory(NodeId root, Action<ReferenceDescription, int> callback)
+        public void BrowseDirectory(NodeId root, Func<ReferenceDescription, int, int> callback, int initial)
         {
-            BrowseDirectory(root, 0, callback);
+            BrowseDirectory(root, initial, callback);
         }
         public void DebugBrowseDirectory(NodeId root)
         {
@@ -191,6 +190,7 @@ namespace opcua_extractor_net
 
                     );
                 }
+                return level + 1;
             });
         }
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
@@ -206,6 +206,8 @@ namespace opcua_extractor_net
             }
             // Strip the ns=namespaceIndex; part, as it may be inconsistent between sessions
             // We still want the identifierType part of the id, so we just remove the first ocurrence of ns=..
+            // If we can find out if the value of the key alone is unique, then we can remove the identifierType, though I suspect
+            // that i=1 and s=1 (1 as string key) would be considered distinct.
             string nodeidstr = nodeid.ToString();
             string nsstr = "ns=" + nodeid.NamespaceIndex + ";";
             int pos = nodeidstr.IndexOf(nsstr, StringComparison.CurrentCulture);
@@ -263,14 +265,20 @@ namespace opcua_extractor_net
                 out DataValueCollection values,
                 out _
             );
+
             for (int i = 0; i < itemsToRead.Count; i++)
             {
                 attributes[itemsToRead[i].AttributeId] = values[i];
             }
+
             if ((NodeClass)attributes[Attributes.NodeClass].Value != NodeClass.Variable)
             {
                 throw new Exception("Node not a variable");
             }
+
+            if ((uint)((NodeId)attributes[Attributes.DataType].Value).Identifier < DataTypes.SByte
+                || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier > DataTypes.Double) return;
+
             Subscription subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
 
             var monitor = new MonitoredItem(subscription.DefaultItem)
@@ -318,6 +326,14 @@ namespace opcua_extractor_net
                 );
                 callback(results);
             } while (results[0].ContinuationPoint != null);
+        }
+        public NodeId ToNodeId(ExpandedNodeId nodeid)
+        {
+            return ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris);
+        }
+        public void ClearSubscriptions()
+        {
+            session.RemoveSubscriptions(session.Subscriptions);
         }
     }
 }

@@ -10,7 +10,7 @@
   PollingInterval: 500
   # Time in ms between each attempted reconnect after a disconnect
   ReconnectPeriod: 5000
-  # Global prefix for externalId in CDF
+  # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
   GlobalPrefix: gp
 
 
@@ -19,5 +19,6 @@ nsmaps:
   # Map OPC-UA namespaces to prefixes in CDF. 
   # Ex: "urn:cognite:net:server": cns
   # Saves space compared to using the full URL. Using the ns index is not safe
+  # If not specified, the full URI is used instead.
   "urn:freeopcua:python:server": fps
   "http://examples.freeopcua.github.io": efg
