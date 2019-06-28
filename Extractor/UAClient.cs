@@ -15,10 +15,12 @@ namespace opcua_extractor_net
         Session session;
         SessionReconnectHandler reconnectHandler;
         readonly YamlMappingNode nsmaps;
+        Extractor extractor;
 
-        public UAClient(UAClientConfig config, YamlMappingNode nsmaps)
+        public UAClient(UAClientConfig config, YamlMappingNode nsmaps, Extractor extractor = null)
         {
             this.nsmaps = nsmaps;
+            this.extractor = extractor;
             UAClient.config = config;
             if (config.GlobalPrefix == null)
             {
@@ -81,6 +83,7 @@ namespace opcua_extractor_net
             session = reconnectHandler.Session;
             reconnectHandler.Dispose();
             Console.WriteLine("--- RECONNECTED ---");
+            extractor?.RestartExtractor();
             // TODO Here we need to synch, as the server may have been alive while we were reconnecting.
         }
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
@@ -309,7 +312,6 @@ namespace opcua_extractor_net
             }
             else
             {
-                Console.WriteLine(subscription.MonitoredItemCount);
                 subscription.CreateItems();
             }
             if (!((bool)attributes[Attributes.Historizing].Value))

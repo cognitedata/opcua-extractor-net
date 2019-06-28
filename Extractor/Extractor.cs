@@ -8,23 +8,33 @@ namespace opcua_extractor_net
 {
     class Extractor
     {
-        readonly UAClient Client;
+        public UAClient Client { get; set; } = null;
         IDictionary<NodeId, int> NodeToTimeseriesId;
         ISet<int> notInSync = new HashSet<int>();
-        bool buffersEmpty = false;
-        public Extractor(UAClient Client)
+        bool buffersEmpty;
+        NodeId rootNode;
+        int rootAsset = -1;
+        public Extractor(FullConfig config)
         {
-            this.Client = Client;
+            // this.Client = new UAClient(fullConfig.uaconfig, fullConfig.nsmaps, this);
             // Asynchronously starts the session
-            Client.Run().Wait();
+            // Client.Run().Wait();
+
         }
         public void RestartExtractor()
         {
             Client.ClearSubscriptions();
             NodeToTimeseriesId.Clear();
+            if (rootAsset < 0 || rootNode == null)
+            {
+                throw new Exception("May not restart unconfigured Extractor");
+            }
+            MapUAToCDF(rootNode, rootAsset);
         }
         public void MapUAToCDF(NodeId rootNode, int rootAsset)
         {
+            this.rootAsset = rootAsset;
+            this.rootNode = rootNode;
             Client.BrowseDirectory(rootNode, HandleNode, rootAsset);
         }
         private int HandleNode(ReferenceDescription node, int parentId)
