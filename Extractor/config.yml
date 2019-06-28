@@ -1,0 +1,24 @@
+﻿client:
+  # The URL of the OPC-UA server to connect to
+  EndpointURL: opc.tcp://localhost:4840
+  # Auto accept connections, if this is true, no certificates will be used. Do not set to true in prod!
+  Autoaccept: false
+  # Maximum number of results to return when reading historical data. 0 for unlimited, though lower numbers give
+  # higher reliability, as data is pushed to CDF after each read finishes
+  MaxResults: 100
+  # Polling interval in ms between each test of changes to a subscribed variable
+  PollingInterval: 500
+  # Time in ms between each attempted reconnect after a disconnect
+  ReconnectPeriod: 5000
+  # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
+  GlobalPrefix: gp
+
+
+
+nsmaps:
+  # Map OPC-UA namespaces to prefixes in CDF. 
+  # Ex: "urn:cognite:net:server": cns
+  # Saves space compared to using the full URL. Using the ns index is not safe
+  # If not specified, the full URI is used instead.
+  "urn:freeopcua:python:server": fps
+  "http://examples.freeopcua.github.io": efg

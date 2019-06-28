@@ -1,5 +1,6 @@
 # IDE/OS Specific
 .vscode/
+.vs/
 *.swp
 .DS_Store
 
