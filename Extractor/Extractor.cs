@@ -8,8 +8,10 @@ namespace opcua_extractor_net
 {
     class Extractor
     {
-        UAClient Client;
+        readonly UAClient Client;
         IDictionary<NodeId, int> NodeToTimeseriesId;
+        ISet<int> notInSync = new HashSet<int>();
+        bool buffersEmpty = false;
         public Extractor(UAClient Client)
         {
             this.Client = Client;
@@ -39,12 +41,17 @@ namespace opcua_extractor_net
                 DateTime startTime = DateTime.MinValue;
                 // Get datetime from CDF using generated externalId.
                 // If need be, synchronize new timeseries with CDF
+                int timeSeriesId = 0;
+                buffersEmpty = false;
+                lock (notInSync)
+                {
+                    notInSync.Add(timeSeriesId);
+                }
                 if (startTime == DateTime.MinValue)
                 {
                     startTime = new DateTime(1970, 1, 1);
                 }
-                // I think this is the only thing we really need to consider using paralellism for.
-                // Presumably, both SubscriptionHandler and HistoryDataHandler can be made to only read from member variables
+                
                 Parallel.Invoke(() => Client.SynchronizeDataNode(
                     Client.ToNodeId(node.NodeId),
                     startTime,
@@ -54,15 +61,23 @@ namespace opcua_extractor_net
                 return parentId; // I'm not 100% sure if variables can have children, if they can, it is probably best to collapse
                 // that structure in CDF.
             } // An else case here is impossible according to specifications, if the resultset is empty, then this is never called
-            return 0;
+            throw new Exception("Invalid node type");
         }
 
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
+            if (!buffersEmpty && notInSync.Contains(NodeToTimeseriesId[item.ResolvedNodeId])) return;
             // Post to CDF
         }
-        private void HistoryDataHandler(HistoryReadResultCollection data)
+        private void HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
         {
+            if (final)
+            {
+                lock(notInSync)
+                {
+                    notInSync.Remove(NodeToTimeseriesId[nodeid]);
+                }
+            }
             // Post to CDF
         }
     }

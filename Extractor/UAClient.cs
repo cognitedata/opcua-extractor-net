@@ -112,11 +112,6 @@ namespace opcua_extractor_net
                 }
             }
         }
-        public Node GetServerNode()
-        {
-            if (session == null) return null;
-            return session.ReadNode(ObjectIds.Server);
-        }
         private ReferenceDescriptionCollection GetNodeChildren(NodeId parent)
         {
             session.Browse(
@@ -150,7 +145,11 @@ namespace opcua_extractor_net
             var references = GetNodeChildren(root);
             foreach (var rd in references)
             {                
-                BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), callback(rd, last), callback);
+                Parallel.Invoke(() =>
+                {
+                    BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), callback(rd, last), callback);
+                }
+                );
             }
         }
         public void BrowseDirectory(NodeId root, Func<ReferenceDescription, int, int> callback, int initial)
@@ -169,7 +168,8 @@ namespace opcua_extractor_net
                     SynchronizeDataNode(
                         ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris),
                         new DateTime(1970, 1, 1), // TODO find a solution to this
-                        (HistoryReadResultCollection val) => {
+                        (HistoryReadResultCollection val, bool final, NodeId nodeid) => {
+                            if (val == null) return;
                             foreach (HistoryReadResult res in val)
                             {
                                 HistoryData data = ExtensionObject.ToEncodeable(res.HistoryData) as HistoryData;
@@ -234,7 +234,7 @@ namespace opcua_extractor_net
         // Fetch data for synchronizing with cdf, also establishing a subscription. This does require that the node is a variable, or it will fail.
         public void SynchronizeDataNode(NodeId nodeid,
             DateTime startTime,
-            Action<HistoryReadResultCollection> callback,
+            Action<HistoryReadResultCollection, bool, NodeId> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler)
         {
             // First get necessary node data
@@ -279,34 +279,53 @@ namespace opcua_extractor_net
             if ((uint)((NodeId)attributes[Attributes.DataType].Value).Identifier < DataTypes.SByte
                 || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier > DataTypes.Double) return;
 
-            Subscription subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
-
+            Subscription subscription;
+            if (session.SubscriptionCount == 0)
+            {
+                subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
+            }
+            else
+            {
+                var enumerator = session.Subscriptions.GetEnumerator();
+                enumerator.MoveNext();
+                subscription = enumerator.Current;
+            }
             var monitor = new MonitoredItem(subscription.DefaultItem)
             {
                 DisplayName = "Value: " + attributes[Attributes.DisplayName],
                 StartNodeId = nodeid
             };
+            Console.WriteLine("Add subscription to {0}", attributes[Attributes.DisplayName]);
             // TODO, it might be more efficient to register all items as a single subscription? Does it matter?
             // It will require a more complicated subscription handler, but will probably result in less overhead overall.
             // The handlers can be reused if viable
             monitor.Notification += subscriptionHandler;
             subscription.AddItem(monitor);
             // This is thread safe, see implementation
-            session.AddSubscription(subscription);
-            subscription.Create();
-            if (!((bool)attributes[Attributes.Historizing].Value)) return;
-            // Store this date now, at this point the subscription should be created, so combined they should cover all timestamps.
-            DateTime endTime = DateTime.UtcNow;
+            if (!subscription.Created)
+            {
+                session.AddSubscription(subscription);
+                subscription.Create();
+            }
+            else
+            {
+                Console.WriteLine(subscription.MonitoredItemCount);
+                subscription.CreateItems();
+            }
+            if (!((bool)attributes[Attributes.Historizing].Value))
+            {
+                callback(null, true, nodeid);
+                return;
+            }
             HistoryReadResultCollection results = null;
             do
             {
                 ReadRawModifiedDetails details = new ReadRawModifiedDetails()
                 {
                     StartTime = startTime,
-                    EndTime = endTime,
+                    EndTime = DateTime.MaxValue,
                     NumValuesPerNode = config.MaxResults,
                 };
-
                 session.HistoryRead(
                     null,
                     new ExtensionObject(details),
@@ -324,7 +343,7 @@ namespace opcua_extractor_net
                     out results,
                     out _
                 );
-                callback(results);
+                callback(results, results[0].ContinuationPoint == null, nodeid);
             } while (results[0].ContinuationPoint != null);
         }
         public NodeId ToNodeId(ExpandedNodeId nodeid)
