@@ -5,9 +5,11 @@ using YamlDotNet.Serialization;
 using System.IO;
 using YamlDotNet.RepresentationModel;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 using Cognite.Sdk.Api;
+using System.Net.Http;
 
-namespace opcua_extractor_net
+namespace Cognite.OpcUa
 {
     class Program
     {
@@ -16,25 +18,23 @@ namespace opcua_extractor_net
             var config = ReadConfig();
             YamlMappingNode clientCfg = (YamlMappingNode)config.Children[new YamlScalarNode("client")];
             YamlMappingNode nsmaps = (YamlMappingNode)config.Children[new YamlScalarNode("nsmaps")];
+            YamlMappingNode cogniteConfig = (YamlMappingNode)config.Children[new YamlScalarNode("cognite")];
             FullConfig fullConfig = new FullConfig()
             {
                 nsmaps = nsmaps,
-                uaconfig = clientCfg
+                uaconfig = DeserializeNode<UAClientConfig>(clientCfg),
+                cogniteConfig = DeserializeNode<CogniteClientConfig>(cogniteConfig)
             };
-            Extractor extractor = new Extractor();
-            UAClient client = new UAClient(DeserializeNode<UAClientConfig>(clientCfg), nsmaps, extractor);
-            extractor.Client = client;
 
-            var serviceCollection = new ServiceCollection();
-            serviceCollection.AddHttpClient<Client>()
-                .SetHandlerLifetime(TimeSpan.MaxValue);
+            ServiceCollection services = new ServiceCollection();
+            Configure(services);
+            ServiceProvider provider = services.BuildServiceProvider();
 
-            client.Run().Wait();
-            client.DebugBrowseDirectory(ObjectIds.ObjectsFolder);
+            Extractor extractor = new Extractor(fullConfig, provider.GetRequiredService<IHttpClientFactory>());
+            // UAClient client = new UAClient(fullConfig.uaconfig, nsmaps, extractor);
 
-            ServiceProvider services = serviceCollection.BuildServiceProvider();
-
-            Client cogniteClient = services.GetRequiredService<Client>();
+            // client.Run().Wait();
+            // client.DebugBrowseDirectory(ObjectIds.ObjectsFolder);
 
 
             ManualResetEvent quitEvent = new ManualResetEvent(false);
@@ -68,6 +68,10 @@ namespace opcua_extractor_net
                 return new Deserializer().Deserialize<T>(reader);
             }
         }
+        public static void Configure(IServiceCollection services)
+        {
+            services.AddHttpClient();
+        }
     }
     public class UAClientConfig
     {
@@ -78,9 +82,18 @@ namespace opcua_extractor_net
         public int PollingInterval { get; set; } = 500;
         public string GlobalPrefix { get; set; }
     }
+    public class CogniteClientConfig
+    {
+        public string Project { get; set; }
+        public string ApiKey { get; set; }
+        public long RootAssetId { get; set; }
+        public string RootNodeNamespace { get; set; }
+        public string RootNodeId { get; set; }
+    }
     public class FullConfig
     {
         public YamlMappingNode nsmaps { get; set; }
         public UAClientConfig uaconfig { get; set; }
+        public CogniteClientConfig cogniteConfig { get; set; }
     }
 }

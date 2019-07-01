@@ -7,7 +7,7 @@ using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using YamlDotNet.RepresentationModel;
 
-namespace opcua_extractor_net
+namespace Cognite.OpcUa
 {
     class UAClient
     {
@@ -142,29 +142,31 @@ namespace opcua_extractor_net
             }
             return references;
         }
-        private void BrowseDirectory(NodeId root, int last, Func<ReferenceDescription, int, int> callback)
+        private async Task BrowseDirectory(NodeId root, long last, Func<ReferenceDescription, long, Task<long>> callback)
         {
             if (root == ObjectIds.Server) return;
             var references = GetNodeChildren(root);
+            List<Task> tasks = new List<Task>();
             foreach (var rd in references)
-            {                
-                Parallel.Invoke(() =>
-                {
-                    BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), callback(rd, last), callback);
-                }
-                );
+            {
+                tasks.Add(BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), await callback(rd, last), callback));
             }
+            await Task.WhenAll(tasks.ToArray());
         }
-        public void BrowseDirectory(NodeId root, Func<ReferenceDescription, int, int> callback, int initial)
+        public async Task BrowseDirectory(NodeId root, Func<ReferenceDescription, long, Task<long>> callback, long initial)
         {
-            BrowseDirectory(root, initial, callback);
+            if (root != ObjectIds.ObjectsFolder)
+            {
+                Node rootNode = session.ReadNode(root);
+            }
+            await BrowseDirectory(root, initial, callback);
         }
         public void DebugBrowseDirectory(NodeId root)
         {
             Console.WriteLine(" Browsename, DisplayName, NodeClass");
-            BrowseDirectory(root, 0, (ReferenceDescription rd, int level) =>
+            BrowseDirectory(root, 0, async (ReferenceDescription rd, long level) =>
             {
-                Console.WriteLine(new String(' ', level * 4 + 1) + "{0}, {1}, {2}", rd.BrowseName, rd.DisplayName, rd.NodeClass);
+                Console.WriteLine(new String(' ', (int)(level * 4 + 1)) + "{0}, {1}, {2}", rd.BrowseName, rd.DisplayName, rd.NodeClass);
                 Console.WriteLine(GetUniqueId(rd.NodeId));
                 if (rd.NodeClass == NodeClass.Variable)
                 {
@@ -194,7 +196,7 @@ namespace opcua_extractor_net
                     );
                 }
                 return level + 1;
-            });
+            }).Wait();
         }
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {
@@ -234,6 +236,25 @@ namespace opcua_extractor_net
             }
             return GetUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
         }
+        public LocalizedText GetDescription(NodeId nodeId)
+        {
+            session.Read(
+                null,
+                0,
+                TimestampsToReturn.Neither,
+                new ReadValueIdCollection
+                {
+                    new ReadValueId
+                    {
+                        AttributeId = Attributes.Description,
+                        NodeId = nodeId
+                    }
+                },
+                out DataValueCollection values,
+                out _
+            );
+            return values[0].GetValue<LocalizedText>("");
+        }
         // Fetch data for synchronizing with cdf, also establishing a subscription. This does require that the node is a variable, or it will fail.
         public void SynchronizeDataNode(NodeId nodeid,
             DateTime startTime,
@@ -259,11 +280,10 @@ namespace opcua_extractor_net
                 };
                 itemsToRead.Add(itemToRead);
             }
-
             session.Read(
                 null,
                 0,
-                TimestampsToReturn.Both,
+                TimestampsToReturn.Neither,
                 itemsToRead,
                 out DataValueCollection values,
                 out _
@@ -351,6 +371,11 @@ namespace opcua_extractor_net
         public NodeId ToNodeId(ExpandedNodeId nodeid)
         {
             return ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris);
+        }
+        public NodeId ToNodeId(string identifier, string namespaceUri)
+        {
+            string nsString = "ns=" + session.NamespaceUris.GetIndex(namespaceUri);
+            return new NodeId(nsString + ";" + identifier);
         }
         public void ClearSubscriptions()
         {

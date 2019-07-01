@@ -13,8 +13,6 @@
   # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
   GlobalPrefix: gp
 
-
-
 nsmaps:
   # Map OPC-UA namespaces to prefixes in CDF. 
   # Ex: "urn:cognite:net:server": cns
@@ -22,3 +20,16 @@ nsmaps:
   # If not specified, the full URI is used instead.
   "urn:freeopcua:python:server": fps
   "http://examples.freeopcua.github.io": efg
+
+cognite:
+  # The project to connect to in the API
+  Project: test
+  # Cognite api key
+  ApiKey: test
+  # The root asset must exist, and will be mapped to the root node in opcua
+  # Root assetid to map to root OPC-UA node
+  RootAssetId: 123
+  # Full name of the namespace of the root node
+  RootNodeNamespace: http://examples.freeopcua.github.io
+  # Id of the root node, on the form "i=123" or "s=stringid" etc.
+  RootNodeId: i=1
