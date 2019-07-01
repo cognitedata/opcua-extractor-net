@@ -12,6 +12,10 @@
   ReconnectPeriod: 5000
   # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
   GlobalPrefix: gp
+  # OPC-UA username
+  Username: "username"
+  # OPC-UA password
+  Password: "password"
 
 nsmaps:
   # Map OPC-UA namespaces to prefixes in CDF. 

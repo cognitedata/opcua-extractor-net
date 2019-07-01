@@ -81,6 +81,9 @@ namespace Cognite.OpcUa
         public uint MaxResults { get; set; } = 100;
         public int PollingInterval { get; set; } = 500;
         public string GlobalPrefix { get; set; }
+        public string Username { get; set; }
+        public string Password { get; set; }
+
     }
     public class CogniteClientConfig
     {

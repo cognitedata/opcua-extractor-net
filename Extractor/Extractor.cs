@@ -38,6 +38,9 @@ namespace Cognite.OpcUa
         }
         public void RestartExtractor()
         {
+            // In theory, a disconnect might be a server restart, which can cause namespaces to change.
+            // This invalidates our stored mapping, so we need to redo everything, remap structure, read history,
+            // synchronize history
             UAClient.ClearSubscriptions();
             NodeToTimeseriesId.Clear();
             MapUAToCDF();

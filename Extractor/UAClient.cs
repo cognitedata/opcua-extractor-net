@@ -71,7 +71,7 @@ namespace Cognite.OpcUa
                 false,
                 ".NET OPC-UA Extractor Client",
                 0,
-                new UserIdentity(new AnonymousIdentityToken()), // some sort of authentication?
+                new UserIdentity(config.Username, config.Password),
                 null
             );
 
@@ -85,7 +85,6 @@ namespace Cognite.OpcUa
             reconnectHandler.Dispose();
             Console.WriteLine("--- RECONNECTED ---");
             extractor?.RestartExtractor();
-            // TODO Here we need to synch, as the server may have been alive while we were reconnecting.
         }
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
         {
@@ -269,7 +268,8 @@ namespace Cognite.OpcUa
                 { Attributes.DataType, null },
                 { Attributes.Historizing, null },
                 { Attributes.NodeClass, null },
-                { Attributes.DisplayName, null }
+                { Attributes.DisplayName, null },
+                { Attributes.ValueRank, null }
             };
 
             ReadValueIdCollection itemsToRead = new ReadValueIdCollection();
@@ -300,9 +300,9 @@ namespace Cognite.OpcUa
             {
                 throw new Exception("Node not a variable");
             }
-
             if ((uint)((NodeId)attributes[Attributes.DataType].Value).Identifier < DataTypes.SByte
-                || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier > DataTypes.Double) return;
+                || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier > DataTypes.Double
+                || (int)attributes[Attributes.ValueRank].Value != ValueRanks.Scalar) return;
 
             Subscription subscription;
             if (session.SubscriptionCount == 0)
