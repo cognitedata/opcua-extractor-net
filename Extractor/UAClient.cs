@@ -15,7 +15,7 @@ namespace Cognite.OpcUa
         Session session;
         SessionReconnectHandler reconnectHandler;
         readonly YamlMappingNode nsmaps;
-        Extractor extractor;
+        readonly Extractor extractor;
 
         public UAClient(UAClientConfig config, YamlMappingNode nsmaps, Extractor extractor = null)
         {
@@ -71,7 +71,8 @@ namespace Cognite.OpcUa
                 false,
                 ".NET OPC-UA Extractor Client",
                 0,
-                new UserIdentity(new AnonymousIdentityToken()), null
+                new UserIdentity(new AnonymousIdentityToken()), // some sort of authentication?
+                null
             );
 
             session.KeepAlive += ClientKeepAlive;
@@ -95,6 +96,7 @@ namespace Cognite.OpcUa
                 if (reconnectHandler == null)
                 {
                     Console.WriteLine("--- RECONNECTING ---");
+                    extractor?.notInSync.Clear(); // Desync all nodes, we rebuild after reconnect
                     reconnectHandler = new SessionReconnectHandler();
                     reconnectHandler.BeginReconnect(sender, config.ReconnectPeriod, ClientReconnectComplete);
                 }
@@ -319,9 +321,7 @@ namespace Cognite.OpcUa
                 StartNodeId = nodeid
             };
             Console.WriteLine("Add subscription to {0}", attributes[Attributes.DisplayName]);
-            // TODO, it might be more efficient to register all items as a single subscription? Does it matter?
-            // It will require a more complicated subscription handler, but will probably result in less overhead overall.
-            // The handlers can be reused if viable
+
             monitor.Notification += subscriptionHandler;
             subscription.AddItem(monitor);
             // This is thread safe, see implementation

@@ -15,13 +15,13 @@ namespace Cognite.OpcUa
 {
     class Extractor
     {
-        public UAClient UAClient { get; set; } = null;
-        IDictionary<NodeId, long> NodeToTimeseriesId;
-        ISet<long> notInSync = new HashSet<long>();
+        readonly UAClient UAClient;
+        readonly IDictionary<NodeId, long> NodeToTimeseriesId = new Dictionary<NodeId, long>();
+        public readonly ISet<long> notInSync = new HashSet<long>();
         bool buffersEmpty;
-        NodeId rootNode;
-        long rootAsset = -1;
-        CogniteClientConfig config;
+        readonly NodeId rootNode;
+        readonly long rootAsset = -1;
+        readonly CogniteClientConfig config;
         private readonly IHttpClientFactory clientFactory;
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
         {
@@ -67,7 +67,7 @@ namespace Cognite.OpcUa
                         return assets.Items.First().Id;
                     }
                     Console.WriteLine("Asset not found: {0}", node.BrowseName);
-                    var asset = Asset.Create(node.DisplayName.Text)
+                    AssetCreateDto asset = node.DisplayName.Text.Create()
                         .SetExternalId(externalId)
                         .SetParentId(parentId);
                     var result = await client.CreateAssetsAsync(new List<AssetCreateDto>
