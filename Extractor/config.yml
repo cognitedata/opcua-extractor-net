@@ -7,7 +7,8 @@
   # higher reliability, as data is pushed to CDF after each read finishes
   MaxResults: 100
   # Polling interval in ms between each test of changes to a subscribed variable
-  PollingInterval: 500
+  # 0 updates instantly, but might result in heavier load on the OPC-UA server
+  PollingInterval: 0
   # Time in ms between each attempted reconnect after a disconnect
   ReconnectPeriod: 5000
   # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
@@ -32,7 +33,7 @@ cognite:
   ApiKey: test
   # The root asset must exist, and will be mapped to the root node in opcua
   # Root assetid to map to root OPC-UA node
-  RootAssetId: 123
+  RootAssetId: 0
   # Full name of the namespace of the root node
   RootNodeNamespace: http://examples.freeopcua.github.io
   # Id of the root node, on the form "i=123" or "s=stringid" etc.

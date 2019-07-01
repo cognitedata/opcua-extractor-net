@@ -31,11 +31,6 @@ namespace Cognite.OpcUa
             ServiceProvider provider = services.BuildServiceProvider();
 
             Extractor extractor = new Extractor(fullConfig, provider.GetRequiredService<IHttpClientFactory>());
-            // UAClient client = new UAClient(fullConfig.uaconfig, nsmaps, extractor);
-
-            // client.Run().Wait();
-            // client.DebugBrowseDirectory(ObjectIds.ObjectsFolder);
-
 
             ManualResetEvent quitEvent = new ManualResetEvent(false);
             Console.CancelKeyPress += (sender, eArgs) =>

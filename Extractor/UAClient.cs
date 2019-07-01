@@ -78,7 +78,7 @@ namespace Cognite.OpcUa
             session.KeepAlive += ClientKeepAlive;
             Console.WriteLine("Successfully connected to server {0}", config.EndpointURL);
         }
-        private void ClientReconnectComplete(Object sender, EventArgs eventArgs)
+        private void ClientReconnectComplete(object sender, EventArgs eventArgs)
         {
             if (!Object.ReferenceEquals(sender, reconnectHandler)) return;
             session = reconnectHandler.Session;
@@ -95,7 +95,7 @@ namespace Cognite.OpcUa
                 if (reconnectHandler == null)
                 {
                     Console.WriteLine("--- RECONNECTING ---");
-                    extractor?.notInSync.Clear(); // Desync all nodes, we rebuild after reconnect
+                    extractor?.SetBlocking();
                     reconnectHandler = new SessionReconnectHandler();
                     reconnectHandler.BeginReconnect(sender, config.ReconnectPeriod, ClientReconnectComplete);
                 }
@@ -150,7 +150,12 @@ namespace Cognite.OpcUa
             List<Task> tasks = new List<Task>();
             foreach (var rd in references)
             {
-                tasks.Add(BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), await callback(rd, last), callback));
+                Console.WriteLine("Start task for " + rd.NodeId);
+                tasks.Add(callback(rd, last).ContinueWith(async (Task<long> cbresult) =>
+                {
+                    Console.WriteLine("Finish cb " + rd.NodeId);
+                    await BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), cbresult.Result, callback);
+                }));
             }
             await Task.WhenAll(tasks.ToArray());
         }
@@ -161,43 +166,6 @@ namespace Cognite.OpcUa
                 Node rootNode = session.ReadNode(root);
             }
             await BrowseDirectory(root, initial, callback);
-        }
-        public void DebugBrowseDirectory(NodeId root)
-        {
-            Console.WriteLine(" Browsename, DisplayName, NodeClass");
-            BrowseDirectory(root, 0, async (ReferenceDescription rd, long level) =>
-            {
-                Console.WriteLine(new String(' ', (int)(level * 4 + 1)) + "{0}, {1}, {2}", rd.BrowseName, rd.DisplayName, rd.NodeClass);
-                Console.WriteLine(GetUniqueId(rd.NodeId));
-                if (rd.NodeClass == NodeClass.Variable)
-                {
-                    SynchronizeDataNode(
-                        ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris),
-                        new DateTime(1970, 1, 1), // TODO find a solution to this
-                        (HistoryReadResultCollection val, bool final, NodeId nodeid) => {
-                            if (val == null) return;
-                            foreach (HistoryReadResult res in val)
-                            {
-                                HistoryData data = ExtensionObject.ToEncodeable(res.HistoryData) as HistoryData;
-                                Console.WriteLine("Found {0} results", data.DataValues.Count);
-                                foreach (var item in data.DataValues)
-                                {
-                                    Console.WriteLine("{0}: {1}", item.SourceTimestamp, item.Value);
-                                }
-                            }
-                        },
-                        (MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs) =>
-                        {
-                            foreach (var j in item.DequeueValues())
-                            {
-                                Console.WriteLine("{0}: {1}, {2}, {3}", item.DisplayName, j.Value, j.SourceTimestamp, j.StatusCode);
-                            }
-                        }
-
-                    );
-                }
-                return level + 1;
-            }).Wait();
         }
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {
