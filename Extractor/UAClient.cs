@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System;
+using System.Linq;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
@@ -22,10 +23,6 @@ namespace Cognite.OpcUa
             this.nsmaps = nsmaps;
             this.extractor = extractor;
             UAClient.config = config;
-            if (config.GlobalPrefix == null)
-            {
-                throw new Exception("Missing glboal prefix");
-            }
         }
         public async Task Run()
         {
@@ -39,6 +36,167 @@ namespace Cognite.OpcUa
                 Console.WriteLine(e.StackTrace);
                 Console.WriteLine(e.InnerException.StackTrace);
             }
+        }
+        public async Task BrowseDirectory(NodeId root, Func<ReferenceDescription, long, Task<long>> callback, long initial)
+        {
+            await BrowseDirectory(root, initial, callback);
+        }
+        public string GetUniqueId(ExpandedNodeId nodeid)
+        {
+            string namespaceUri = nodeid.NamespaceUri;
+            if (namespaceUri == null)
+            {
+                namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
+            }
+            return GetUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
+        }
+        public LocalizedText GetDescription(NodeId nodeId)
+        {
+            session.Read(
+                null,
+                0,
+                TimestampsToReturn.Neither,
+                new ReadValueIdCollection
+                {
+                    new ReadValueId
+                    {
+                        AttributeId = Attributes.Description,
+                        NodeId = nodeId
+                    }
+                },
+                out DataValueCollection values,
+                out _
+            );
+            return values[0].GetValue<LocalizedText>("");
+        }
+        public void SynchronizeDataNode(NodeId nodeid,
+            DateTime startTime,
+            Action<HistoryReadResultCollection, bool, NodeId> callback,
+            MonitoredItemNotificationEventHandler subscriptionHandler)
+        {
+            // First get necessary node data
+            SortedDictionary<uint, DataValue> attributes = new SortedDictionary<uint, DataValue>
+            {
+                { Attributes.DataType, null },
+                { Attributes.Historizing, null },
+                { Attributes.NodeClass, null },
+                { Attributes.DisplayName, null },
+                { Attributes.ValueRank, null }
+            };
+
+            ReadValueIdCollection itemsToRead = new ReadValueIdCollection();
+            foreach (uint attributeId in attributes.Keys)
+            {
+                ReadValueId itemToRead = new ReadValueId
+                {
+                    AttributeId = attributeId,
+                    NodeId = nodeid
+                };
+                itemsToRead.Add(itemToRead);
+            }
+            session.Read(
+                null,
+                0,
+                TimestampsToReturn.Neither,
+                itemsToRead,
+                out DataValueCollection values,
+                out _
+            );
+
+            for (int i = 0; i < itemsToRead.Count; i++)
+            {
+                attributes[itemsToRead[i].AttributeId] = values[i];
+            }
+
+            if ((NodeClass)attributes[Attributes.NodeClass].Value != NodeClass.Variable)
+            {
+                throw new Exception("Node not a variable");
+            }
+
+            // Filter out data we can't or won't parse
+            if ((uint)((NodeId)attributes[Attributes.DataType].Value).Identifier < DataTypes.SByte
+                || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier > DataTypes.Double
+                || (int)attributes[Attributes.ValueRank].Value != ValueRanks.Scalar) return;
+
+            Subscription subscription;
+            if (session.SubscriptionCount == 0)
+            {
+                subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
+            }
+            else
+            {
+                subscription = session.Subscriptions.First();
+            }
+            var monitor = new MonitoredItem(subscription.DefaultItem)
+            {
+                DisplayName = "Value: " + attributes[Attributes.DisplayName],
+                StartNodeId = nodeid
+            };
+
+            monitor.Notification += subscriptionHandler;
+            subscription.AddItem(monitor);
+
+            if (!subscription.Created)
+            {
+                session.AddSubscription(subscription);
+                subscription.Create();
+            }
+            else
+            {
+                subscription.CreateItems();
+            }
+
+            if (!(bool)attributes[Attributes.Historizing].Value)
+            {
+                callback(null, true, nodeid);
+                return;
+            }
+            // Thread.Sleep(1000);
+            HistoryReadResultCollection results = null;
+            do
+            {
+                ReadRawModifiedDetails details = new ReadRawModifiedDetails()
+                {
+                    StartTime = startTime,
+                    EndTime = DateTime.MaxValue,
+                    NumValuesPerNode = config.MaxResults,
+                };
+                session.HistoryRead(
+                    null,
+                    new ExtensionObject(details),
+                    TimestampsToReturn.Neither,
+                    false,
+                    new HistoryReadValueIdCollection()
+                    {
+                        new HistoryReadValueId()
+                        {
+                            NodeId = nodeid,
+                            ContinuationPoint = results ? [0].ContinuationPoint
+                        },
+
+                    },
+                    out results,
+                    out _
+                );
+                callback(results, results[0].ContinuationPoint == null, nodeid);
+            } while (results[0].ContinuationPoint != null);
+        }
+        public NodeId ToNodeId(ExpandedNodeId nodeid)
+        {
+            return ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris);
+        }
+        public NodeId ToNodeId(string identifier, string namespaceUri)
+        {
+            string nsString = "ns=" + session.NamespaceUris.GetIndex(namespaceUri);
+            if (session.NamespaceUris.GetIndex(namespaceUri) == -1)
+            {
+                return NodeId.Null;
+            }
+            return new NodeId(nsString + ";" + identifier);
+        }
+        public void ClearSubscriptions()
+        {
+            session.RemoveSubscriptions(session.Subscriptions);
         }
         private async Task StartSession()
         {
@@ -61,7 +219,7 @@ namespace Cognite.OpcUa
                 config.Autoaccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
-            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert, 15000);
+            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert);
             var endpointConfiguration = EndpointConfiguration.Create(appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
 
@@ -80,7 +238,7 @@ namespace Cognite.OpcUa
         }
         private void ClientReconnectComplete(object sender, EventArgs eventArgs)
         {
-            if (!Object.ReferenceEquals(sender, reconnectHandler)) return;
+            if (!ReferenceEquals(sender, reconnectHandler)) return;
             session = reconnectHandler.Session;
             reconnectHandler.Dispose();
             Console.WriteLine("--- RECONNECTED ---");
@@ -148,24 +306,16 @@ namespace Cognite.OpcUa
             if (root == ObjectIds.Server) return;
             var references = GetNodeChildren(root);
             List<Task> tasks = new List<Task>();
+            // Thread.Sleep(1000);
             foreach (var rd in references)
             {
-                Console.WriteLine("Start task for " + rd.NodeId);
-                tasks.Add(callback(rd, last).ContinueWith(async (Task<long> cbresult) =>
+                Console.WriteLine("Add task");
+                tasks.Add(Task.Run(async () =>
                 {
-                    Console.WriteLine("Finish cb " + rd.NodeId);
-                    await BrowseDirectory(ExpandedNodeId.ToNodeId(rd.NodeId, session.NamespaceUris), cbresult.Result, callback);
+                    await BrowseDirectory(ToNodeId(rd.NodeId), await callback(rd, last), callback);
                 }));
             }
             await Task.WhenAll(tasks.ToArray());
-        }
-        public async Task BrowseDirectory(NodeId root, Func<ReferenceDescription, long, Task<long>> callback, long initial)
-        {
-            if (root != ObjectIds.ObjectsFolder)
-            {
-                Node rootNode = session.ReadNode(root);
-            }
-            await BrowseDirectory(root, initial, callback);
         }
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {
@@ -192,162 +342,6 @@ namespace Cognite.OpcUa
             return config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
 
         }
-        public string GetUniqueId(NodeId nodeid)
-        {
-            return GetUniqueId(session.NamespaceUris.GetString(nodeid.NamespaceIndex), nodeid);
-        }
-        public string GetUniqueId(ExpandedNodeId nodeid)
-        {
-            string namespaceUri = nodeid.NamespaceUri;
-            if (namespaceUri == null)
-            {
-                namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
-            }
-            return GetUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
-        }
-        public LocalizedText GetDescription(NodeId nodeId)
-        {
-            session.Read(
-                null,
-                0,
-                TimestampsToReturn.Neither,
-                new ReadValueIdCollection
-                {
-                    new ReadValueId
-                    {
-                        AttributeId = Attributes.Description,
-                        NodeId = nodeId
-                    }
-                },
-                out DataValueCollection values,
-                out _
-            );
-            return values[0].GetValue<LocalizedText>("");
-        }
         // Fetch data for synchronizing with cdf, also establishing a subscription. This does require that the node is a variable, or it will fail.
-        public void SynchronizeDataNode(NodeId nodeid,
-            DateTime startTime,
-            Action<HistoryReadResultCollection, bool, NodeId> callback,
-            MonitoredItemNotificationEventHandler subscriptionHandler)
-        {
-            // First get necessary node data
-            SortedDictionary<uint, DataValue> attributes = new SortedDictionary<uint, DataValue>
-            {
-                { Attributes.DataType, null },
-                { Attributes.Historizing, null },
-                { Attributes.NodeClass, null },
-                { Attributes.DisplayName, null },
-                { Attributes.ValueRank, null }
-            };
-
-            ReadValueIdCollection itemsToRead = new ReadValueIdCollection();
-            foreach (uint attributeId in attributes.Keys)
-            {
-                ReadValueId itemToRead = new ReadValueId
-                {
-                    AttributeId = attributeId,
-                    NodeId = nodeid
-                };
-                itemsToRead.Add(itemToRead);
-            }
-            session.Read(
-                null,
-                0,
-                TimestampsToReturn.Neither,
-                itemsToRead,
-                out DataValueCollection values,
-                out _
-            );
-
-            for (int i = 0; i < itemsToRead.Count; i++)
-            {
-                attributes[itemsToRead[i].AttributeId] = values[i];
-            }
-
-            if ((NodeClass)attributes[Attributes.NodeClass].Value != NodeClass.Variable)
-            {
-                throw new Exception("Node not a variable");
-            }
-            if ((uint)((NodeId)attributes[Attributes.DataType].Value).Identifier < DataTypes.SByte
-                || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier > DataTypes.Double
-                || (int)attributes[Attributes.ValueRank].Value != ValueRanks.Scalar) return;
-
-            Subscription subscription;
-            if (session.SubscriptionCount == 0)
-            {
-                subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
-            }
-            else
-            {
-                var enumerator = session.Subscriptions.GetEnumerator();
-                enumerator.MoveNext();
-                subscription = enumerator.Current;
-            }
-            var monitor = new MonitoredItem(subscription.DefaultItem)
-            {
-                DisplayName = "Value: " + attributes[Attributes.DisplayName],
-                StartNodeId = nodeid
-            };
-            Console.WriteLine("Add subscription to {0}", attributes[Attributes.DisplayName]);
-
-            monitor.Notification += subscriptionHandler;
-            subscription.AddItem(monitor);
-            // This is thread safe, see implementation
-            if (!subscription.Created)
-            {
-                session.AddSubscription(subscription);
-                subscription.Create();
-            }
-            else
-            {
-                subscription.CreateItems();
-            }
-            if (!((bool)attributes[Attributes.Historizing].Value))
-            {
-                callback(null, true, nodeid);
-                return;
-            }
-            HistoryReadResultCollection results = null;
-            do
-            {
-                ReadRawModifiedDetails details = new ReadRawModifiedDetails()
-                {
-                    StartTime = startTime,
-                    EndTime = DateTime.MaxValue,
-                    NumValuesPerNode = config.MaxResults,
-                };
-                session.HistoryRead(
-                    null,
-                    new ExtensionObject(details),
-                    TimestampsToReturn.Neither,
-                    false,
-                    new HistoryReadValueIdCollection()
-                    {
-                        new HistoryReadValueId()
-                        {
-                            NodeId = nodeid,
-                            ContinuationPoint = results ? [0].ContinuationPoint
-                        },
-
-                    },
-                    out results,
-                    out _
-                );
-                callback(results, results[0].ContinuationPoint == null, nodeid);
-            } while (results[0].ContinuationPoint != null);
-        }
-        public NodeId ToNodeId(ExpandedNodeId nodeid)
-        {
-            return ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris);
-        }
-        public NodeId ToNodeId(string identifier, string namespaceUri)
-        {
-            string nsString = "ns=" + session.NamespaceUris.GetIndex(namespaceUri);
-            return new NodeId(nsString + ";" + identifier);
-        }
-        public void ClearSubscriptions()
-        {
-            session.RemoveSubscriptions(session.Subscriptions);
-        }
     }
 }

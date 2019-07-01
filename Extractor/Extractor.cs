@@ -38,6 +38,10 @@ namespace Cognite.OpcUa
             UAClient.Run().Wait();
 
             rootNode = UAClient.ToNodeId(config.cogniteConfig.RootNodeId, config.cogniteConfig.RootNodeNamespace);
+            if (rootNode.IsNullNodeId)
+            {
+                rootNode = ObjectIds.ObjectsFolder;
+            }
             rootAsset = config.cogniteConfig.RootAssetId;
             MapUAToCDF();
 
@@ -67,7 +71,6 @@ namespace Cognite.OpcUa
             string externalId = UAClient.GetUniqueId(node.NodeId);
             if (node.NodeClass == NodeClass.Object)
             {
-                // Get object from CDF, then return id.
 #if TEST_UA
                 Console.WriteLine(new String(' ', (int)(parentId * 4 + 1)) + "{0}, {1}, {2}", node.BrowseName,
                     node.DisplayName, node.NodeClass);

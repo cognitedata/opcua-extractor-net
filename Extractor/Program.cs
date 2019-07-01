@@ -19,7 +19,7 @@ namespace Cognite.OpcUa
             YamlMappingNode clientCfg = (YamlMappingNode)config.Children[new YamlScalarNode("client")];
             YamlMappingNode nsmaps = (YamlMappingNode)config.Children[new YamlScalarNode("nsmaps")];
             YamlMappingNode cogniteConfig = (YamlMappingNode)config.Children[new YamlScalarNode("cognite")];
-            FullConfig fullConfig = new FullConfig()
+            FullConfig fullConfig = new FullConfig
             {
                 nsmaps = nsmaps,
                 uaconfig = DeserializeNode<UAClientConfig>(clientCfg),
@@ -41,7 +41,7 @@ namespace Cognite.OpcUa
 
             quitEvent.WaitOne(-1);
         }
-        static YamlMappingNode ReadConfig()
+        private static YamlMappingNode ReadConfig()
         {
             string document = File.ReadAllText("config.yml");
             StringReader input = new StringReader(document);
@@ -50,7 +50,7 @@ namespace Cognite.OpcUa
 
             return (YamlMappingNode)stream.Documents[0].RootNode;
         }
-        
+
         private static T DeserializeNode<T>(YamlNode node)
         {
             using (var stream = new MemoryStream())
@@ -61,6 +61,33 @@ namespace Cognite.OpcUa
                 writer.Flush();
                 stream.Position = 0;
                 return new Deserializer().Deserialize<T>(reader);
+            }
+        }
+        private static void ValidateConfig(FullConfig config)
+        {
+            if (config.uaconfig.ReconnectPeriod < 100)
+            {
+                throw new Exception("Too short reconnect period (<100ms)");
+            }
+            if (string.IsNullOrEmpty(config.uaconfig.EndpointURL))
+            {
+                throw new Exception("Invalid EndpointURL");
+            }
+            if (string.IsNullOrEmpty(config.uaconfig.GlobalPrefix))
+            {
+                throw new Exception("Invalid GlobalPrefix");
+            }
+            if (config.uaconfig.PollingInterval < 0)
+            {
+                throw new Exception("PollingInterval must be a positive number");
+            }
+            if (string.IsNullOrEmpty(config.cogniteConfig.Project))
+            {
+                throw new Exception("Invalid Project");
+            }
+            if (string.IsNullOrEmpty(config.cogniteConfig.ApiKey))
+            {
+                throw new Exception("Invalid api-key");
             }
         }
         public static void Configure(IServiceCollection services)

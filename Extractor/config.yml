@@ -10,6 +10,7 @@
   # 0 updates instantly, but might result in heavier load on the OPC-UA server
   PollingInterval: 0
   # Time in ms between each attempted reconnect after a disconnect
+  # Should not be set too short
   ReconnectPeriod: 5000
   # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
   GlobalPrefix: gp
@@ -35,6 +36,7 @@ cognite:
   # Root assetid to map to root OPC-UA node
   RootAssetId: 0
   # Full name of the namespace of the root node
-  RootNodeNamespace: http://examples.freeopcua.github.io
+  # RootNodeNamespace: http://examples.freeopcua.github.io
+  RootNodeNamespace:
   # Id of the root node, on the form "i=123" or "s=stringid" etc.
-  RootNodeId: i=1
+  RootNodeId: i=0
