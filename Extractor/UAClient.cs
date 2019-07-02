@@ -88,9 +88,9 @@ namespace Cognite.OpcUa
             );
             return (uint)values[0].GetValue<NodeId>(NodeId.Null).Identifier;
         }
-        public void SynchronizeDataNode(NodeId nodeid,
+        public async Task SynchronizeDataNode(NodeId nodeid,
             DateTime startTime,
-            Action<HistoryReadResultCollection, bool, NodeId> callback,
+            Func<HistoryReadResultCollection, bool, NodeId, Task> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler)
         {
             // First get necessary node data
@@ -167,7 +167,7 @@ namespace Cognite.OpcUa
 
             if (!(bool)attributes[Attributes.Historizing].Value)
             {
-                callback(null, true, nodeid);
+                await callback(null, true, nodeid);
                 return;
             }
             // Thread.Sleep(1000);
@@ -197,7 +197,7 @@ namespace Cognite.OpcUa
                     out results,
                     out _
                 );
-                callback(results, results[0].ContinuationPoint == null, nodeid);
+                await callback(results, results[0].ContinuationPoint == null, nodeid);
             } while (results[0].ContinuationPoint != null);
         }
         public NodeId ToNodeId(ExpandedNodeId nodeid)

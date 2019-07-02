@@ -1,7 +1,4 @@
-﻿#define TEST_UA
-#define TEST_CDF
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -19,7 +16,7 @@ namespace Cognite.OpcUa
     {
         readonly UAClient UAClient;
         readonly IDictionary<NodeId, long> NodeToTimeseriesId = new Dictionary<NodeId, long>();
-        object notInSyncLock = new object();
+        readonly object notInSyncLock = new object();
         readonly ISet<long> notInSync = new HashSet<long>();
         bool buffersEmpty;
         bool blocking;
@@ -143,7 +140,7 @@ namespace Cognite.OpcUa
                             QueryDataLatest.Create().ExternalId(externalId)
                         });
                     }
-                    catch (ResponseException e)
+                    catch (ResponseException)
                     {
                         // Fails if TS is not found.
                         result = new List<PointResponseDataPoints>();
@@ -195,12 +192,19 @@ namespace Cognite.OpcUa
                 {
                     startTime = new DateTime(1970, 1, 1); // TODO, maybe fix this if possible?
                 }
-                Parallel.Invoke(() => UAClient.SynchronizeDataNode(
-                    UAClient.ToNodeId(node.NodeId),
-                    startTime,
-                    HistoryDataHandler,
-                    SubscriptionHandler
-                ));
+                try
+                {
+                    await UAClient.SynchronizeDataNode(
+                        UAClient.ToNodeId(node.NodeId),
+                        startTime,
+                        HistoryDataHandler,
+                        SubscriptionHandler
+                    ).ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Failed to synchronize node: " + e.StackTrace);
+                }
                 return parentId; // I'm not 100% sure if variables can have children, if they can, it is probably best to collapse
                 // that structure in CDF.
             } // An else case here is impossible according to specifications, if the resultset is empty, then this is never called
@@ -239,7 +243,7 @@ namespace Cognite.OpcUa
                 }
             });
         }
-        private void HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
+        private async Task HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
         {
             if (final)
             {
@@ -266,14 +270,14 @@ namespace Cognite.OpcUa
                         (double)datapoint.Value));
                 }
                 Console.WriteLine("Begin insert data {0}", tsId);
-                client.InsertDataAsync(new List<DataPoints>
+                await client.InsertDataAsync(new List<DataPoints>
                 {
                     new DataPoints
                     {
                         Identity = Identity.Id(tsId),
                         DataPoints = dataPoints
                     }
-                }).Wait();
+                });
             }
         }
     }

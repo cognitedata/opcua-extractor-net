@@ -1,12 +1,9 @@
 ﻿using System;
-using Opc.Ua;
 using System.Threading;
 using YamlDotNet.Serialization;
 using System.IO;
 using YamlDotNet.RepresentationModel;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
-using Cognite.Sdk.Api;
 using System.Net.Http;
 
 namespace Cognite.OpcUa
@@ -25,7 +22,7 @@ namespace Cognite.OpcUa
                 uaconfig = DeserializeNode<UAClientConfig>(clientCfg),
                 cogniteConfig = DeserializeNode<CogniteClientConfig>(cogniteConfig)
             };
-
+            ValidateConfig(fullConfig);
             ServiceCollection services = new ServiceCollection();
             Configure(services);
             ServiceProvider provider = services.BuildServiceProvider();
