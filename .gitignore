@@ -11,3 +11,6 @@ bin/
 # Temp data
 certificates/
 Logs/
+
+# Config
+config.yml

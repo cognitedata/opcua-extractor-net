@@ -113,8 +113,8 @@ namespace Cognite.OpcUa
                 // Get datetime from CDF using generated externalId.
                 // If need be, synchronize new timeseries with CDF
 #if TEST_UA
-                Console.WriteLine(new String(' ', (int)(parentId * 4 + 1)) + "{0}, {1}, {2}", node.BrowseName,
-                    node.DisplayName, node.NodeClass);
+                Console.WriteLine(new String(' ', (int)(parentId * 4 + 1)) + "{0}, {1}, {2}, {3}", node.BrowseName,
+                    node.DisplayName, node.NodeClass, UAClient.GetDescription(UAClient.ToNodeId(node.NodeId)));
                 lock (tsSequenceLock)
                 {
                     NodeToTimeseriesId.Add(nodeId, ++dummyTsSequence);
@@ -196,7 +196,7 @@ namespace Cognite.OpcUa
             foreach (var j in item.DequeueValues())
             {
                 Console.WriteLine("{0}: {1}, {2}, {3}", item.DisplayName, j.Value, j.SourceTimestamp, j.StatusCode);
-            }
+            }            
 #else
             using (HttpClient httpClient = clientFactory.CreateClient())
             {
@@ -207,6 +207,7 @@ namespace Cognite.OpcUa
                 List<DataPoint> dataPoints = new List<DataPoint>();
                 foreach (var datapoint in item.DequeueValues())
                 {
+                    
                     dataPoints.Add(DataPoint.Float(datapoint.SourceTimestamp.Ticks, (double)datapoint.Value));
                 }
                 
