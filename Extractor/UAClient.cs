@@ -69,6 +69,25 @@ namespace Cognite.OpcUa
             );
             return values[0].GetValue<LocalizedText>("");
         }
+        public uint GetDatatype(NodeId nodeId)
+        {
+            session.Read(
+                null,
+                0,
+                TimestampsToReturn.Neither,
+                new ReadValueIdCollection
+                {
+                    new ReadValueId
+                    {
+                        AttributeId = Attributes.DataType,
+                        NodeId = nodeId
+                    }
+                },
+                out DataValueCollection values,
+                out _
+            );
+            return (uint)values[0].GetValue<NodeId>(NodeId.Null).Identifier;
+        }
         public void SynchronizeDataNode(NodeId nodeid,
             DateTime startTime,
             Action<HistoryReadResultCollection, bool, NodeId> callback,
@@ -303,12 +322,12 @@ namespace Cognite.OpcUa
         }
         private async Task BrowseDirectory(NodeId root, long last, Func<ReferenceDescription, long, Task<long>> callback)
         {
-            if (root == ObjectIds.Server) return;
             var references = GetNodeChildren(root);
             List<Task> tasks = new List<Task>();
             // Thread.Sleep(1000);
             foreach (var rd in references)
             {
+                if (rd.NodeId == ObjectIds.Server) continue;
                 Console.WriteLine("Add task");
                 tasks.Add(Task.Run(async () =>
                 {
