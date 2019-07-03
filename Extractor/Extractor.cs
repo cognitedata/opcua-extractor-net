@@ -9,6 +9,8 @@ using Cognite.Sdk.Api;
 using Cognite.Sdk;
 using Cognite.Sdk.Assets;
 using Cognite.Sdk.Timeseries;
+using System.Collections.Concurrent;
+using System.Timers;
 
 namespace Cognite.OpcUa
 {
@@ -24,6 +26,9 @@ namespace Cognite.OpcUa
         readonly long rootAsset = -1;
         readonly CogniteClientConfig config;
         private readonly IHttpClientFactory clientFactory;
+        private readonly ConcurrentQueue<BufferedDataPoint> bufferQueue = new ConcurrentQueue<BufferedDataPoint>();
+        private Timer pushTimer;
+        private readonly DateTime epoch = new DateTime(1970, 1, 1);
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
         {
             this.clientFactory = clientFactory;
@@ -37,6 +42,15 @@ namespace Cognite.OpcUa
                 rootNode = ObjectIds.ObjectsFolder;
             }
             rootAsset = config.cogniteConfig.RootAssetId;
+
+            pushTimer = new Timer
+            {
+                Interval = config.cogniteConfig.PushDelay,
+                AutoReset = true
+            };
+            pushTimer.Elapsed += PushDataPointsToCDF;
+            pushTimer.Start();
+
             MapUAToCDF();
 
         }
@@ -58,8 +72,6 @@ namespace Cognite.OpcUa
         public void MapUAToCDF()
         {
             Console.WriteLine("Begin mapping");
-
-
             UAClient.BrowseDirectory(rootNode, HandleNode, rootAsset).Wait();
         }
         private async Task<long> HandleNode(ReferenceDescription node, long parentId)
@@ -120,8 +132,9 @@ namespace Cognite.OpcUa
             {
                 DateTime startTime = DateTime.MinValue;
                 NodeId nodeId = UAClient.ToNodeId(node.NodeId);
-                // Get datetime from CDF using generated externalId.
-                // If need be, synchronize new timeseries with CDF
+                uint dataType = UAClient.GetDatatype(nodeId);
+                if (dataType < DataTypes.SByte || dataType > DataTypes.Double) return parentId;
+
                 Console.WriteLine("{0}, {1}, {2}, {3}", node.BrowseName,
                     node.DisplayName, node.NodeClass, UAClient.GetDescription(UAClient.ToNodeId(node.NodeId)));
                 long timeSeriesId;
@@ -156,20 +169,25 @@ namespace Cognite.OpcUa
                     }
                     else
                     {
-                        uint dataType = UAClient.GetDatatype(nodeId);
                         Console.WriteLine("TS not found: {0}, {1}", dataType, node.DisplayName.Text);
-
-                        if (dataType < DataTypes.SByte || dataType > DataTypes.Double) return parentId;
                         LocalizedText description = UAClient.GetDescription(nodeId);
-                        TimeseriesResponse cresult = await client.CreateTimeseriesAsync(new List<TimeseriesCreateDto>
+                        TimeseriesResponse cresult = null;
+                        try
                         {
-                            Timeseries.Create()
-                                .SetName(node.DisplayName.Text)
-                                .SetExternalId(externalId)
-                                .SetDescription(description.Text)
-                                .SetAssetId(parentId)
-                        });
-                        if (cresult.Items.Any())
+                            cresult = await client.CreateTimeseriesAsync(new List<TimeseriesCreateDto>
+                            {
+                                Timeseries.Create()
+                                    .SetName(node.DisplayName.Text)
+                                    .SetExternalId(externalId)
+                                    .SetDescription(description.Text)
+                                    .SetAssetId(parentId)
+                            });
+                        }
+                        catch (ResponseException)
+                        {
+                            Console.WriteLine("Failed to create TS");
+                        }
+                        if (cresult != null && cresult.Items.Any())
                         {
                             timeSeriesId = cresult.Items.First().Id;
                         }
@@ -194,12 +212,12 @@ namespace Cognite.OpcUa
                 }
                 try
                 {
-                    await UAClient.SynchronizeDataNode(
+                    Parallel.Invoke(() => UAClient.SynchronizeDataNode(
                         UAClient.ToNodeId(node.NodeId),
                         startTime,
                         HistoryDataHandler,
                         SubscriptionHandler
-                    ).ConfigureAwait(false);
+                    ));
                 }
                 catch (Exception e)
                 {
@@ -214,36 +232,20 @@ namespace Cognite.OpcUa
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
             if (blocking || !buffersEmpty && notInSync.Contains(NodeToTimeseriesId[item.ResolvedNodeId])) return;
-            Task.Run(async () =>
-            {
-                using (HttpClient httpClient = clientFactory.CreateClient())
-                {
-                    Client client = Client.Create(httpClient)
-                        .AddHeader("api-key", config.ApiKey)
-                        .SetProject(config.Project);
-                    long tsId = NodeToTimeseriesId[item.ResolvedNodeId];
-                    List<DataPoint> dataPoints = new List<DataPoint>();
-                    foreach (var datapoint in item.DequeueValues())
-                    {
-                        Console.WriteLine("{0}: {1}, {2}, {3}: {4}", item.DisplayName, datapoint.Value,
-                            datapoint.SourceTimestamp, datapoint.StatusCode, tsId);
-                        dataPoints.Add(DataPoint.Float(
-                            (long)datapoint.SourceTimestamp.Subtract(new DateTime(1970, 1, 1)).TotalMilliseconds,
-                            (double)datapoint.Value));
-                    }
 
-                    await client.InsertDataAsync(new List<DataPoints>
-                    {
-                        new DataPoints()
-                        {
-                            Identity = Identity.Id(tsId),
-                            DataPoints = dataPoints
-                        }
-                    });
-                }
-            });
+            foreach (var datapoint in item.DequeueValues())
+            {
+                long tsId = NodeToTimeseriesId[item.ResolvedNodeId];
+                Console.WriteLine("{0}: {1}, {2}, {3}: {4}", item.DisplayName, datapoint.Value,
+                    datapoint.SourceTimestamp, datapoint.StatusCode, tsId);
+                bufferQueue.Enqueue(new BufferedDataPoint(
+                    (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
+                    item.ResolvedNodeId,
+                    (double)datapoint.Value
+                ));
+            }
         }
-        private async Task HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
+        private void HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
         {
             if (final)
             {
@@ -254,31 +256,80 @@ namespace Cognite.OpcUa
                 }
             }
             if (data == null) return;
+
+            HistoryData hdata = ExtensionObject.ToEncodeable(data[0].HistoryData) as HistoryData;
+            foreach (var datapoint in hdata.DataValues)
+            {
+                Console.WriteLine("{0}: {1}", datapoint.SourceTimestamp, datapoint.Value);
+                bufferQueue.Enqueue(new BufferedDataPoint(
+                    (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
+                    nodeid,
+                    (double)datapoint.Value
+                ));
+            }
+        }
+        private async void PushDataPointsToCDF(object sender, ElapsedEventArgs e)
+        {
+            pushTimer.Stop();
+
+            List<BufferedDataPoint> dataPointList = new List<BufferedDataPoint>();
+
+            int count = 0;
+            while (bufferQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
+            {
+                dataPointList.Add(buffer);
+            }
+
+            IDictionary<NodeId, Tuple<IList<DataPoint>, Identity>> organizedDatapoints =
+                new Dictionary<NodeId, Tuple<IList<DataPoint>, Identity>>();
+            foreach (BufferedDataPoint dataPoint in dataPointList)
+            {
+                if (!organizedDatapoints.TryGetValue(dataPoint.nodeId, out var dataPoints))
+                {
+                    dataPoints = new Tuple<IList<DataPoint>, Identity>
+                    (
+                        new List<DataPoint>(),
+                        Identity.Id(NodeToTimeseriesId[dataPoint.nodeId])
+                    );
+                    organizedDatapoints.Add(dataPoint.nodeId, dataPoints);
+                }
+                dataPoints.Item1.Add(dataPoint.isString
+                    ? (DataPoint)DataPoint.String(dataPoint.timestamp, dataPoint.stringValue)
+                    : DataPoint.Float(dataPoint.timestamp, dataPoint.doubleValue));
+            }
+
+            List <DataPoints> finalDataPoints = new List<DataPoints>();
+            foreach (var dataPointTuple in organizedDatapoints.Values)
+            {
+                finalDataPoints.Add(new DataPoints
+                {
+                    Identity = dataPointTuple.Item2,
+                    DataPoints = dataPointTuple.Item1
+                });
+            }
+
+            Console.WriteLine("Push {0} datapoints to CDF", count);
+            if (count == 0)
+            {
+                pushTimer.Start();
+                return;
+            }
             using (HttpClient httpClient = clientFactory.CreateClient())
             {
                 Client client = Client.Create(httpClient)
                     .AddHeader("api-key", config.ApiKey)
                     .SetProject(config.Project);
-                long tsId = NodeToTimeseriesId[nodeid];
-                List<DataPoint> dataPoints = new List<DataPoint>();
-                HistoryData hdata = ExtensionObject.ToEncodeable(data[0].HistoryData) as HistoryData;
-                foreach (var datapoint in hdata.DataValues)
+                try
                 {
-                    Console.WriteLine("{0}: {1}", datapoint.SourceTimestamp, datapoint.Value);
-                    dataPoints.Add(DataPoint.Float(
-                        (long)datapoint.SourceTimestamp.Subtract(new DateTime(1970, 1, 1)).TotalMilliseconds,
-                        (double)datapoint.Value));
+                    await client.InsertDataAsync(finalDataPoints);
                 }
-                Console.WriteLine("Begin insert data {0}", tsId);
-                await client.InsertDataAsync(new List<DataPoints>
+                catch (ResponseException)
                 {
-                    new DataPoints
-                    {
-                        Identity = Identity.Id(tsId),
-                        DataPoints = dataPoints
-                    }
-                });
+                    Console.WriteLine("Failed to insert into CDF");
+                    // Write to file, then later on success, read and wipe.
+                }
             }
+            pushTimer.Start();
         }
     }
 }
