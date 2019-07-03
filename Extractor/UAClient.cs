@@ -86,11 +86,11 @@ namespace Cognite.OpcUa
                 out DataValueCollection values,
                 out _
             );
-            return (uint)values[0].GetValue<NodeId>(NodeId.Null).Identifier;
+            return (uint)values[0].GetValue(NodeId.Null).Identifier;
         }
-        public async Task SynchronizeDataNode(NodeId nodeid,
+        public void SynchronizeDataNode(NodeId nodeid,
             DateTime startTime,
-            Func<HistoryReadResultCollection, bool, NodeId, Task> callback,
+            Action<HistoryReadResultCollection, bool, NodeId> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler)
         {
             // First get necessary node data
@@ -167,7 +167,7 @@ namespace Cognite.OpcUa
 
             if (!(bool)attributes[Attributes.Historizing].Value)
             {
-                await callback(null, true, nodeid);
+                callback(null, true, nodeid);
                 return;
             }
             // Thread.Sleep(1000);
@@ -197,7 +197,7 @@ namespace Cognite.OpcUa
                     out results,
                     out _
                 );
-                await callback(results, results[0].ContinuationPoint == null, nodeid);
+                callback(results, results[0].ContinuationPoint == null, nodeid);
             } while (results[0].ContinuationPoint != null);
         }
         public NodeId ToNodeId(ExpandedNodeId nodeid)
@@ -328,7 +328,6 @@ namespace Cognite.OpcUa
             foreach (var rd in references)
             {
                 if (rd.NodeId == ObjectIds.Server) continue;
-                Console.WriteLine("Add task");
                 tasks.Add(Task.Run(async () =>
                 {
                     await BrowseDirectory(ToNodeId(rd.NodeId), await callback(rd, last), callback);
@@ -362,5 +361,27 @@ namespace Cognite.OpcUa
 
         }
         // Fetch data for synchronizing with cdf, also establishing a subscription. This does require that the node is a variable, or it will fail.
+    }
+    public class BufferedDataPoint
+    {
+        public readonly long timestamp;
+        public readonly NodeId nodeId;
+        public readonly double doubleValue;
+        public readonly string stringValue;
+        public readonly bool isString;
+        public BufferedDataPoint(long timestamp, NodeId nodeId, double value)
+        {
+            this.timestamp = timestamp;
+            this.nodeId = nodeId;
+            doubleValue = value;
+            isString = false;
+        }
+        public BufferedDataPoint(long timestamp, NodeId nodeId, string value)
+        {
+            this.timestamp = timestamp;
+            this.nodeId = nodeId;
+            stringValue = value;
+            isString = true;
+        }
     }
 }

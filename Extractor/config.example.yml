@@ -41,3 +41,5 @@ cognite:
   RootNodeNamespace:
   # Id of the root node, on the form "i=123" or "s=stringid" etc.
   RootNodeId: i=0
+  # Delay in ms between each push to CDF
+  PushDelay: 1000
