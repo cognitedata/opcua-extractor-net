@@ -222,7 +222,11 @@ namespace Cognite.OpcUa
         }
         public void ClearSubscriptions()
         {
-            session.RemoveSubscriptions(session.Subscriptions);
+            if (!session.RemoveSubscriptions(session.Subscriptions))
+            {
+                Console.WriteLine("Failed to remove subscriptions, retrying");
+                session.RemoveSubscriptions(session.Subscriptions);
+            }
         }
         private async Task StartSession()
         {
