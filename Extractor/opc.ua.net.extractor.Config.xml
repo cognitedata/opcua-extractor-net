@@ -14,7 +14,7 @@
     <ApplicationCertificate>
       <StoreType>X509Store</StoreType>
       <StorePath>CurrentUser\My</StorePath>
-      <SubjectName>CN=Minimal Client, C=NO, S=Oslo, O=Cognite, DC=localhost</SubjectName>
+      <SubjectName>CN=Opcua-extractor, C=NO, S=Oslo, O=Cognite, DC=localhost</SubjectName>
     </ApplicationCertificate>
 
     <!-- Where the issuer certificate are stored (certificate authorities) -->

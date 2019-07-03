@@ -33,13 +33,20 @@ namespace Cognite.OpcUa
             catch (Exception e)
             {
                 Console.WriteLine("Error starting client: " + e.Message);
-                Console.WriteLine(e.StackTrace);
-                Console.WriteLine(e.InnerException.StackTrace);
+                throw e;
             }
         }
         public async Task BrowseDirectory(NodeId root, Func<ReferenceDescription, long, Task<long>> callback, long initial)
         {
-            await BrowseDirectory(root, initial, callback);
+            try
+            {
+                await BrowseDirectory(root, initial, callback);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Failed to browse directory: " + e.Message);
+                throw e;
+            }
         }
         public string GetUniqueId(ExpandedNodeId nodeid)
         {
@@ -330,7 +337,11 @@ namespace Cognite.OpcUa
                 if (rd.NodeId == ObjectIds.Server) continue;
                 tasks.Add(Task.Run(async () =>
                 {
-                    await BrowseDirectory(ToNodeId(rd.NodeId), await callback(rd, last), callback);
+                    long cbresult = await callback(rd, last);
+                    if (cbresult > 0)
+                    {
+                        await BrowseDirectory(ToNodeId(rd.NodeId), cbresult, callback);
+                    }
                 }));
             }
             await Task.WhenAll(tasks.ToArray());
