@@ -27,8 +27,9 @@ namespace Cognite.OpcUa
         readonly CogniteClientConfig config;
         private readonly IHttpClientFactory clientFactory;
         private readonly ConcurrentQueue<BufferedDataPoint> bufferQueue = new ConcurrentQueue<BufferedDataPoint>();
-        private Timer pushTimer;
+        private readonly Timer pushTimer;
         private readonly DateTime epoch = new DateTime(1970, 1, 1);
+        private static readonly int retryCount = 2;
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
         {
             this.clientFactory = clientFactory;
@@ -69,10 +70,29 @@ namespace Cognite.OpcUa
             NodeToTimeseriesId.Clear();
             MapUAToCDF();
         }
-        public void MapUAToCDF()
+        public void Close()
+        {
+            UAClient.Close();
+        }
+        private void MapUAToCDF()
         {
             Console.WriteLine("Begin mapping");
             UAClient.BrowseDirectory(rootNode, HandleNode, rootAsset).Wait();
+        }
+        private async Task<T> retryAsync<T>(Func<Task<T>> action, string failureMessage)
+        {
+            for (int i = 0; i < retryCount; i++)
+            {
+                try
+                {
+                    return await action();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
+                }
+            }
+            return default(T);
         }
         private async Task<long> HandleNode(ReferenceDescription node, long parentId)
         {
@@ -81,26 +101,21 @@ namespace Cognite.OpcUa
             {
                 Console.WriteLine("{0}, {1}, {2}", node.BrowseName,
                     node.DisplayName, node.NodeClass);
-                // return parentId + 1;
+
                 using (HttpClient httpClient = clientFactory.CreateClient())
                 {
                     Client client = Client.Create(httpClient)
                         .AddHeader("api-key", config.ApiKey)
                         .SetProject(config.Project);
-                    GetAssets.Assets assets;
-                    try
-                    {
-                        assets = await client.GetAssetsAsync(new List<GetAssets.Option>
+                    GetAssets.Assets assets = await retryAsync(async () =>
+                        await client.GetAssetsAsync(new List<GetAssets.Option>
                         {
                             GetAssets.Option.ExternalIdPrefix(externalId)
-                        });
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine("Failed to get asset" + e.StackTrace);
-                        throw e;
-                    }
-                    if (assets.Items.Any())
+                        }),
+                        "Failed to get asset"
+                    );
+
+                    if (assets != null && assets.Items.Any())
                     {
                         Console.WriteLine("Asset found: {0}", assets.Items.First().Name);
                         return assets.Items.First().Id;
@@ -109,23 +124,20 @@ namespace Cognite.OpcUa
                     AssetCreateDto asset = node.DisplayName.Text.Create()
                         .SetExternalId(externalId)
                         .SetParentId(parentId);
-                    try
-                    {
-                        var result = await client.CreateAssetsAsync(new List<AssetCreateDto>
-                    {
-                        asset
-                    });
-                        if (result.Any())
+
+                    IEnumerable<AssetReadDto> result = await retryAsync(async () =>
+                        await client.CreateAssetsAsync(new List<AssetCreateDto>
                         {
-                            return result.First().Id;
-                        }
-                    }
-                    catch (Exception e)
+                            asset
+                        }),
+                        "Failed to create asset"
+                    );
+
+                    if (result != null && result.Any())
                     {
-                        Console.WriteLine("Failed to create asset: " + e.StackTrace);
-                        throw e;
+                        return result.First().Id;
                     }
-                    throw new Exception("Failed to create asset: " + node.DisplayName);
+                    return 0;
                 }
             }
             if (node.NodeClass == NodeClass.Variable)
@@ -156,37 +168,34 @@ namespace Cognite.OpcUa
                     catch (ResponseException)
                     {
                         // Fails if TS is not found.
-                        result = new List<PointResponseDataPoints>();
+                        // TODO, differentiate between "not found" and other error
+                        result = null;
                     }
-                    if (result.Any())
+                    if (result != null && result.Any())
                     {
                         Console.WriteLine("TS found: {0} ,{1}", result.First().Id, result.First().ExternalId);
                         timeSeriesId = result.First().Id;
                         if (result.First().DataPoints.Any())
                         {
-                            startTime = new DateTime(result.First().DataPoints.First().TimeStamp);
+                            startTime = epoch.AddMilliseconds(result.First().DataPoints.First().TimeStamp);
                         }
                     }
                     else
                     {
                         Console.WriteLine("TS not found: {0}, {1}", dataType, node.DisplayName.Text);
                         LocalizedText description = UAClient.GetDescription(nodeId);
-                        TimeseriesResponse cresult = null;
-                        try
-                        {
-                            cresult = await client.CreateTimeseriesAsync(new List<TimeseriesCreateDto>
+                        TimeseriesResponse cresult = await retryAsync(async () =>
+                            await client.CreateTimeseriesAsync(new List<TimeseriesCreateDto>
                             {
                                 Timeseries.Create()
                                     .SetName(node.DisplayName.Text)
                                     .SetExternalId(externalId)
                                     .SetDescription(description.Text)
                                     .SetAssetId(parentId)
-                            });
-                        }
-                        catch (ResponseException)
-                        {
-                            Console.WriteLine("Failed to create TS");
-                        }
+                            }),
+                            "Failed to create TS"
+                        );
+
                         if (cresult != null && cresult.Items.Any())
                         {
                             timeSeriesId = cresult.Items.First().Id;
@@ -236,8 +245,8 @@ namespace Cognite.OpcUa
             foreach (var datapoint in item.DequeueValues())
             {
                 long tsId = NodeToTimeseriesId[item.ResolvedNodeId];
-                Console.WriteLine("{0}: {1}, {2}, {3}: {4}", item.DisplayName, datapoint.Value,
-                    datapoint.SourceTimestamp, datapoint.StatusCode, tsId);
+                Console.WriteLine("{0}: {1}, {2}, {3}", item.DisplayName, datapoint.Value,
+                    datapoint.SourceTimestamp, datapoint.StatusCode);
                 bufferQueue.Enqueue(new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
                     item.ResolvedNodeId,
@@ -258,9 +267,9 @@ namespace Cognite.OpcUa
             if (data == null) return;
 
             HistoryData hdata = ExtensionObject.ToEncodeable(data[0].HistoryData) as HistoryData;
+            Console.WriteLine("Fetch {0} datapoints for nodeid {1}", hdata.DataValues.Count, nodeid);
             foreach (var datapoint in hdata.DataValues)
             {
-                Console.WriteLine("{0}: {1}", datapoint.SourceTimestamp, datapoint.Value);
                 bufferQueue.Enqueue(new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
                     nodeid,
@@ -321,7 +330,7 @@ namespace Cognite.OpcUa
                     .SetProject(config.Project);
                 try
                 {
-                    await client.InsertDataAsync(finalDataPoints);
+                    await retryAsync(async () => await client.InsertDataAsync(finalDataPoints), "Failed to insert into CDF");
                 }
                 catch (ResponseException)
                 {

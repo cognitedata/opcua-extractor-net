@@ -33,13 +33,24 @@ namespace Cognite.OpcUa
             catch (Exception e)
             {
                 Console.WriteLine("Error starting client: " + e.Message);
-                Console.WriteLine(e.StackTrace);
-                Console.WriteLine(e.InnerException.StackTrace);
+                throw e;
             }
+        }
+        public void Close()
+        {
+            session.CloseSession(null, true);
         }
         public async Task BrowseDirectory(NodeId root, Func<ReferenceDescription, long, Task<long>> callback, long initial)
         {
-            await BrowseDirectory(root, initial, callback);
+            try
+            {
+                await BrowseDirectory(root, initial, callback);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Failed to browse directory: " + e.Message);
+                throw e;
+            }
         }
         public string GetUniqueId(ExpandedNodeId nodeid)
         {
@@ -137,15 +148,8 @@ namespace Cognite.OpcUa
                 || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier > DataTypes.Double
                 || (int)attributes[Attributes.ValueRank].Value != ValueRanks.Scalar) return;
 
-            Subscription subscription;
-            if (session.SubscriptionCount == 0)
-            {
-                subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
-            }
-            else
-            {
-                subscription = session.Subscriptions.First();
-            }
+            Subscription subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
+            Console.WriteLine("Add subscription for " + attributes[Attributes.DisplayName]);
             var monitor = new MonitoredItem(subscription.DefaultItem)
             {
                 DisplayName = "Value: " + attributes[Attributes.DisplayName],
@@ -185,9 +189,9 @@ namespace Cognite.OpcUa
                     new ExtensionObject(details),
                     TimestampsToReturn.Neither,
                     false,
-                    new HistoryReadValueIdCollection()
+                    new HistoryReadValueIdCollection
                     {
-                        new HistoryReadValueId()
+                        new HistoryReadValueId
                         {
                             NodeId = nodeid,
                             ContinuationPoint = results ? [0].ContinuationPoint
@@ -215,7 +219,11 @@ namespace Cognite.OpcUa
         }
         public void ClearSubscriptions()
         {
-            session.RemoveSubscriptions(session.Subscriptions);
+            if (!session.RemoveSubscriptions(session.Subscriptions))
+            {
+                Console.WriteLine("Failed to remove subscriptions, retrying");
+                session.RemoveSubscriptions(session.Subscriptions);
+            }
         }
         private async Task StartSession()
         {
@@ -283,6 +291,7 @@ namespace Cognite.OpcUa
             if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
             {
                 eventArgs.Accept = config.Autoaccept;
+                // TODO Verify client acceptance here somehow?
                 if (config.Autoaccept)
                 {
                     Console.WriteLine("Accepted Bad Certificate {0}", eventArgs.Certificate.Subject);
@@ -330,7 +339,11 @@ namespace Cognite.OpcUa
                 if (rd.NodeId == ObjectIds.Server) continue;
                 tasks.Add(Task.Run(async () =>
                 {
-                    await BrowseDirectory(ToNodeId(rd.NodeId), await callback(rd, last), callback);
+                    long cbresult = await callback(rd, last);
+                    if (cbresult > 0)
+                    {
+                        await BrowseDirectory(ToNodeId(rd.NodeId), cbresult, callback);
+                    }
                 }));
             }
             await Task.WhenAll(tasks.ToArray());
