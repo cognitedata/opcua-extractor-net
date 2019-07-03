@@ -36,6 +36,10 @@ namespace Cognite.OpcUa
                 throw e;
             }
         }
+        public void Close()
+        {
+            session.CloseSession(null, true);
+        }
         public async Task BrowseDirectory(NodeId root, Func<ReferenceDescription, long, Task<long>> callback, long initial)
         {
             try

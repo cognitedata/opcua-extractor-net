@@ -27,7 +27,7 @@ namespace Cognite.OpcUa
         readonly CogniteClientConfig config;
         private readonly IHttpClientFactory clientFactory;
         private readonly ConcurrentQueue<BufferedDataPoint> bufferQueue = new ConcurrentQueue<BufferedDataPoint>();
-        private Timer pushTimer;
+        private readonly Timer pushTimer;
         private readonly DateTime epoch = new DateTime(1970, 1, 1);
         private static readonly int retryCount = 2;
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
@@ -70,7 +70,11 @@ namespace Cognite.OpcUa
             NodeToTimeseriesId.Clear();
             MapUAToCDF();
         }
-        public void MapUAToCDF()
+        public void Close()
+        {
+            UAClient.Close();
+        }
+        private void MapUAToCDF()
         {
             Console.WriteLine("Begin mapping");
             UAClient.BrowseDirectory(rootNode, HandleNode, rootAsset).Wait();
@@ -173,7 +177,7 @@ namespace Cognite.OpcUa
                         timeSeriesId = result.First().Id;
                         if (result.First().DataPoints.Any())
                         {
-                            startTime = new DateTime(result.First().DataPoints.First().TimeStamp);
+                            startTime = epoch.AddMilliseconds(result.First().DataPoints.First().TimeStamp);
                         }
                     }
                     else

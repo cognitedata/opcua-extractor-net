@@ -37,6 +37,7 @@ namespace Cognite.OpcUa
             };
 
             quitEvent.WaitOne(-1);
+            extractor.Close();
         }
         private static YamlMappingNode ReadConfig()
         {
