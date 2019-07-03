@@ -245,8 +245,8 @@ namespace Cognite.OpcUa
             foreach (var datapoint in item.DequeueValues())
             {
                 long tsId = NodeToTimeseriesId[item.ResolvedNodeId];
-                Console.WriteLine("{0}: {1}, {2}, {3}: {4}", item.DisplayName, datapoint.Value,
-                    datapoint.SourceTimestamp, datapoint.StatusCode, tsId);
+                Console.WriteLine("{0}: {1}, {2}, {3}", item.DisplayName, datapoint.Value,
+                    datapoint.SourceTimestamp, datapoint.StatusCode);
                 bufferQueue.Enqueue(new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
                     item.ResolvedNodeId,
@@ -267,9 +267,9 @@ namespace Cognite.OpcUa
             if (data == null) return;
 
             HistoryData hdata = ExtensionObject.ToEncodeable(data[0].HistoryData) as HistoryData;
+            Console.WriteLine("Fetch {0} datapoints for nodeid {1}", hdata.DataValues.Count, nodeid);
             foreach (var datapoint in hdata.DataValues)
             {
-                Console.WriteLine("{0}: {1}", datapoint.SourceTimestamp, datapoint.Value);
                 bufferQueue.Enqueue(new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
                     nodeid,

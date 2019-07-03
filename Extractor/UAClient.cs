@@ -148,15 +148,8 @@ namespace Cognite.OpcUa
                 || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier > DataTypes.Double
                 || (int)attributes[Attributes.ValueRank].Value != ValueRanks.Scalar) return;
 
-            Subscription subscription;
-            if (session.SubscriptionCount == 0)
-            {
-                subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
-            }
-            else
-            {
-                subscription = session.Subscriptions.First();
-            }
+            Subscription subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
+            Console.WriteLine("Add subscription for " + attributes[Attributes.DisplayName]);
             var monitor = new MonitoredItem(subscription.DefaultItem)
             {
                 DisplayName = "Value: " + attributes[Attributes.DisplayName],
@@ -196,9 +189,9 @@ namespace Cognite.OpcUa
                     new ExtensionObject(details),
                     TimestampsToReturn.Neither,
                     false,
-                    new HistoryReadValueIdCollection()
+                    new HistoryReadValueIdCollection
                     {
-                        new HistoryReadValueId()
+                        new HistoryReadValueId
                         {
                             NodeId = nodeid,
                             ContinuationPoint = results ? [0].ContinuationPoint
@@ -298,6 +291,7 @@ namespace Cognite.OpcUa
             if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
             {
                 eventArgs.Accept = config.Autoaccept;
+                // TODO Verify client acceptance here somehow?
                 if (config.Autoaccept)
                 {
                     Console.WriteLine("Accepted Bad Certificate {0}", eventArgs.Certificate.Subject);
