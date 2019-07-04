@@ -99,6 +99,7 @@ namespace Cognite.OpcUa
                 out DataValueCollection values,
                 out _
             );
+            if (values[0].GetValue(NodeId.Null).IdType != IdType.Numeric) return 0;
             return (uint)values[0].GetValue(NodeId.Null).Identifier;
         }
         public void SynchronizeDataNode(NodeId nodeid,
@@ -131,7 +132,7 @@ namespace Cognite.OpcUa
             session.Read(
                 null,
                 0,
-                TimestampsToReturn.Server,
+                TimestampsToReturn.Source,
                 itemsToRead,
                 out DataValueCollection values,
                 out _
@@ -147,7 +148,8 @@ namespace Cognite.OpcUa
                 throw new Exception("Node not a variable");
             }
             // Filter out data we can't or won't parse
-            if ((uint)((NodeId)attributes[Attributes.DataType].Value).Identifier < DataTypes.SByte
+            if (((NodeId)attributes[Attributes.DataType].Value).IdType != IdType.Numeric
+                || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier < DataTypes.SByte
                 || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier > DataTypes.Double
                 || (int)attributes[Attributes.ValueRank].Value != ValueRanks.Scalar) return;
             Subscription subscription;
@@ -159,18 +161,19 @@ namespace Cognite.OpcUa
             {
                 subscription = session.Subscriptions.First();
             }
-            Console.WriteLine("Add subscription for " + attributes[Attributes.DisplayName] + ", " + nodeid);
             bool contains = false;
             foreach (var item in subscription.MonitoredItems)
             {
                 if (item.StartNodeId == nodeid)
                 {
+                    Console.WriteLine("Duplicate sub found" + nodeid);
                     contains = true;
                     break;
                 }
             }
             if (!contains)
             {
+                Console.WriteLine("Add subscription for " + attributes[Attributes.DisplayName] + ", " + nodeid);
                 var monitor = new MonitoredItem(subscription.DefaultItem)
                 {
                     DisplayName = "Value: " + attributes[Attributes.DisplayName],
@@ -265,7 +268,7 @@ namespace Cognite.OpcUa
             if (datavalue == null || datavalue.Value == null) return 0;
             if (datavalue.Value.GetType().IsArray)
             {
-                return Convert.ToDouble((datavalue.Value as IEnumerable<object>).First());
+                return Convert.ToDouble((datavalue.Value as IEnumerable<object>)?.First());
             }
             return Convert.ToDouble(datavalue.Value);
         }
@@ -387,7 +390,7 @@ namespace Cognite.OpcUa
             // Thread.Sleep(1000);
             foreach (var rd in references)
             {
-                Console.WriteLine("Call cb for parent " + last);
+                // Console.WriteLine("Call cb for parent " + last);
                 if (rd.NodeId == ObjectIds.Server) continue;
                 await Task.Run(async () =>
                 {

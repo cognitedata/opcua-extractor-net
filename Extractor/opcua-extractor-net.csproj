@@ -8,7 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Xamarin.Yaml.Parser" Version="1.1.9" />
     <PackageReference Include="YamlDotNet" Version="6.1.1" />
-    <PackageReference Include="CogniteSdk" Version="0.3.8" />
+    <PackageReference Include="CogniteSdk" Version="0.4.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="2.2.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
   </ItemGroup>
