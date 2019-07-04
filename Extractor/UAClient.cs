@@ -1,12 +1,12 @@
-
+﻿
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System;
-using System.Linq;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using YamlDotNet.RepresentationModel;
+using System.Linq;
 
 namespace Cognite.OpcUa
 {
@@ -17,6 +17,9 @@ namespace Cognite.OpcUa
         SessionReconnectHandler reconnectHandler;
         readonly YamlMappingNode nsmaps;
         readonly Extractor extractor;
+        readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
+        object subscriptionLock = new object();
+        bool clientReconnecting = false;
 
         public UAClient(UAClientConfig config, YamlMappingNode nsmaps, Extractor extractor = null)
         {
@@ -49,7 +52,6 @@ namespace Cognite.OpcUa
             catch (Exception e)
             {
                 Console.WriteLine("Failed to browse directory: " + e.Message);
-                throw e;
             }
         }
         public string GetUniqueId(ExpandedNodeId nodeid)
@@ -104,6 +106,7 @@ namespace Cognite.OpcUa
             Action<HistoryReadResultCollection, bool, NodeId> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler)
         {
+            if (clientReconnecting) return;
             // First get necessary node data
             SortedDictionary<uint, DataValue> attributes = new SortedDictionary<uint, DataValue>
             {
@@ -111,7 +114,8 @@ namespace Cognite.OpcUa
                 { Attributes.Historizing, null },
                 { Attributes.NodeClass, null },
                 { Attributes.DisplayName, null },
-                { Attributes.ValueRank, null }
+                { Attributes.ValueRank, null },
+                { Attributes.Value, null }
             };
 
             ReadValueIdCollection itemsToRead = new ReadValueIdCollection();
@@ -127,7 +131,7 @@ namespace Cognite.OpcUa
             session.Read(
                 null,
                 0,
-                TimestampsToReturn.Neither,
+                TimestampsToReturn.Server,
                 itemsToRead,
                 out DataValueCollection values,
                 out _
@@ -142,35 +146,64 @@ namespace Cognite.OpcUa
             {
                 throw new Exception("Node not a variable");
             }
-
             // Filter out data we can't or won't parse
             if ((uint)((NodeId)attributes[Attributes.DataType].Value).Identifier < DataTypes.SByte
                 || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier > DataTypes.Double
                 || (int)attributes[Attributes.ValueRank].Value != ValueRanks.Scalar) return;
-
-            Subscription subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
-            Console.WriteLine("Add subscription for " + attributes[Attributes.DisplayName]);
-            var monitor = new MonitoredItem(subscription.DefaultItem)
+            Subscription subscription;
+            if (session.SubscriptionCount == 0)
             {
-                DisplayName = "Value: " + attributes[Attributes.DisplayName],
-                StartNodeId = nodeid
-            };
-
-            monitor.Notification += subscriptionHandler;
-            subscription.AddItem(monitor);
-
-            if (!subscription.Created)
-            {
-                session.AddSubscription(subscription);
-                subscription.Create();
+                subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
             }
             else
             {
-                subscription.CreateItems();
+                subscription = session.Subscriptions.First();
+            }
+            Console.WriteLine("Add subscription for " + attributes[Attributes.DisplayName] + ", " + nodeid);
+            bool contains = false;
+            foreach (var item in subscription.MonitoredItems)
+            {
+                if (item.StartNodeId == nodeid)
+                {
+                    contains = true;
+                    break;
+                }
+            }
+            if (!contains)
+            {
+                var monitor = new MonitoredItem(subscription.DefaultItem)
+                {
+                    DisplayName = "Value: " + attributes[Attributes.DisplayName],
+                    StartNodeId = nodeid
+                };
+
+                monitor.Notification += subscriptionHandler;
+                subscription.AddItem(monitor);
+                lock (subscriptionLock)
+                {
+                    if (!subscription.Created)
+                    {
+                        session.AddSubscription(subscription);
+                        subscription.Create();
+                    }
+                    else
+                    {
+                        lock (subscriptionLock)
+                        {
+                            subscription.CreateItems();
+                        }
+                    }
+                }
             }
 
             if (!(bool)attributes[Attributes.Historizing].Value)
             {
+                DataValue value = attributes[Attributes.Value];
+                extractor.AddSingleDataPoint(new BufferedDataPoint(
+                    (long)value.SourceTimestamp.Subtract(extractor.epoch).TotalMilliseconds,
+                    nodeid,
+                    ConvertToDouble(value)
+                ));
                 callback(null, true, nodeid);
                 return;
             }
@@ -178,7 +211,7 @@ namespace Cognite.OpcUa
             HistoryReadResultCollection results = null;
             do
             {
-                ReadRawModifiedDetails details = new ReadRawModifiedDetails()
+                ReadRawModifiedDetails details = new ReadRawModifiedDetails
                 {
                     StartTime = startTime,
                     EndTime = DateTime.MaxValue,
@@ -219,11 +252,22 @@ namespace Cognite.OpcUa
         }
         public void ClearSubscriptions()
         {
+            Console.WriteLine("Begin clear subscriptions");
             if (!session.RemoveSubscriptions(session.Subscriptions))
             {
                 Console.WriteLine("Failed to remove subscriptions, retrying");
                 session.RemoveSubscriptions(session.Subscriptions);
             }
+            Console.WriteLine("End clear subscriptions");
+        }
+        public double ConvertToDouble(DataValue datavalue)
+        {
+            if (datavalue == null || datavalue.Value == null) return 0;
+            if (datavalue.Value.GetType().IsArray)
+            {
+                return Convert.ToDouble((datavalue.Value as IEnumerable<object>).First());
+            }
+            return Convert.ToDouble(datavalue.Value);
         }
         private async Task StartSession()
         {
@@ -246,17 +290,18 @@ namespace Cognite.OpcUa
                 config.Autoaccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
-            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert);
+            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && false);
             var endpointConfiguration = EndpointConfiguration.Create(appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-
+            Console.WriteLine("Attempt to connect to endpoint: " + endpoint.Description.SecurityPolicyUri);
             session = await Session.Create(
                 appconfig,
                 endpoint,
                 false,
                 ".NET OPC-UA Extractor Client",
                 0,
-                new UserIdentity(config.Username, config.Password),
+                new UserIdentity(new AnonymousIdentityToken()),
+                // new UserIdentity(config.Username, config.Password),
                 null
             );
 
@@ -265,11 +310,14 @@ namespace Cognite.OpcUa
         }
         private void ClientReconnectComplete(object sender, EventArgs eventArgs)
         {
+            if (!clientReconnecting) return;
             if (!ReferenceEquals(sender, reconnectHandler)) return;
             session = reconnectHandler.Session;
             reconnectHandler.Dispose();
+            clientReconnecting = false;
             Console.WriteLine("--- RECONNECTED ---");
-            extractor?.RestartExtractor();
+            visitedNodes.Clear();
+            Task.Run(() => extractor?.RestartExtractor());
         }
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
         {
@@ -280,6 +328,7 @@ namespace Cognite.OpcUa
                 if (reconnectHandler == null)
                 {
                     Console.WriteLine("--- RECONNECTING ---");
+                    clientReconnecting = true;
                     extractor?.SetBlocking();
                     reconnectHandler = new SessionReconnectHandler();
                     reconnectHandler.BeginReconnect(sender, config.ReconnectPeriod, ClientReconnectComplete);
@@ -331,22 +380,24 @@ namespace Cognite.OpcUa
         }
         private async Task BrowseDirectory(NodeId root, long last, Func<ReferenceDescription, long, Task<long>> callback)
         {
+            if (!visitedNodes.Add(root)) return;
+            if (clientReconnecting) return;
             var references = GetNodeChildren(root);
             List<Task> tasks = new List<Task>();
             // Thread.Sleep(1000);
             foreach (var rd in references)
             {
+                Console.WriteLine("Call cb for parent " + last);
                 if (rd.NodeId == ObjectIds.Server) continue;
-                tasks.Add(Task.Run(async () =>
+                await Task.Run(async () =>
                 {
                     long cbresult = await callback(rd, last);
                     if (cbresult > 0)
                     {
                         await BrowseDirectory(ToNodeId(rd.NodeId), cbresult, callback);
                     }
-                }));
+                }).ConfigureAwait(false);
             }
-            await Task.WhenAll(tasks.ToArray());
         }
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {

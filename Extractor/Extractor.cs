@@ -28,7 +28,7 @@ namespace Cognite.OpcUa
         private readonly IHttpClientFactory clientFactory;
         private readonly ConcurrentQueue<BufferedDataPoint> bufferQueue = new ConcurrentQueue<BufferedDataPoint>();
         private readonly Timer pushTimer;
-        private readonly DateTime epoch = new DateTime(1970, 1, 1);
+        public readonly DateTime epoch = new DateTime(1970, 1, 1);
         private static readonly int retryCount = 2;
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
         {
@@ -64,7 +64,7 @@ namespace Cognite.OpcUa
             // In theory, a disconnect might be a server restart, which can cause namespaces to change.
             // This invalidates our stored mapping, so we need to redo everything, remap structure, read history,
             // synchronize history
-            UAClient.ClearSubscriptions();
+            // UAClient.ClearSubscriptions();
             blocking = false;
             buffersEmpty = false;
             NodeToTimeseriesId.Clear();
@@ -74,12 +74,16 @@ namespace Cognite.OpcUa
         {
             UAClient.Close();
         }
+        public void AddSingleDataPoint(BufferedDataPoint dataPoint)
+        {
+            bufferQueue.Enqueue(dataPoint);
+        }
         private void MapUAToCDF()
         {
             Console.WriteLine("Begin mapping");
             UAClient.BrowseDirectory(rootNode, HandleNode, rootAsset).Wait();
         }
-        private async Task<T> retryAsync<T>(Func<Task<T>> action, string failureMessage)
+        private async Task<T> RetryAsync<T>(Func<Task<T>> action, string failureMessage)
         {
             for (int i = 0; i < retryCount; i++)
             {
@@ -90,6 +94,11 @@ namespace Cognite.OpcUa
                 catch (Exception e)
                 {
                     Console.WriteLine(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
+                    if (e.GetType() == typeof(ResponseException))
+                    {
+                        var re = (ResponseException)e;
+                        Console.WriteLine(re.Data0);
+                    }
                 }
             }
             return default(T);
@@ -107,7 +116,7 @@ namespace Cognite.OpcUa
                     Client client = Client.Create(httpClient)
                         .AddHeader("api-key", config.ApiKey)
                         .SetProject(config.Project);
-                    GetAssets.Assets assets = await retryAsync(async () =>
+                    GetAssets.Assets assets = await RetryAsync(async () =>
                         await client.GetAssetsAsync(new List<GetAssets.Option>
                         {
                             GetAssets.Option.ExternalIdPrefix(externalId)
@@ -125,7 +134,7 @@ namespace Cognite.OpcUa
                         .SetExternalId(externalId)
                         .SetParentId(parentId);
 
-                    IEnumerable<AssetReadDto> result = await retryAsync(async () =>
+                    IEnumerable<AssetReadDto> result = await RetryAsync(async () =>
                         await client.CreateAssetsAsync(new List<AssetCreateDto>
                         {
                             asset
@@ -173,7 +182,7 @@ namespace Cognite.OpcUa
                     }
                     if (result != null && result.Any())
                     {
-                        Console.WriteLine("TS found: {0} ,{1}", result.First().Id, result.First().ExternalId);
+                        Console.WriteLine("TS found: {0}", result.First().Id);
                         timeSeriesId = result.First().Id;
                         if (result.First().DataPoints.Any())
                         {
@@ -184,7 +193,7 @@ namespace Cognite.OpcUa
                     {
                         Console.WriteLine("TS not found: {0}, {1}", dataType, node.DisplayName.Text);
                         LocalizedText description = UAClient.GetDescription(nodeId);
-                        TimeseriesResponse cresult = await retryAsync(async () =>
+                        TimeseriesResponse cresult = await RetryAsync(async () =>
                             await client.CreateTimeseriesAsync(new List<TimeseriesCreateDto>
                             {
                                 Timeseries.Create()
@@ -217,20 +226,21 @@ namespace Cognite.OpcUa
                 }
                 if (startTime == DateTime.MinValue)
                 {
-                    startTime = new DateTime(1970, 1, 1); // TODO, maybe fix this if possible?
+                    startTime = epoch;
                 }
                 try
                 {
-                    Parallel.Invoke(() => UAClient.SynchronizeDataNode(
+                    await Task.Run(() => UAClient.SynchronizeDataNode(
                         UAClient.ToNodeId(node.NodeId),
                         startTime,
                         HistoryDataHandler,
                         SubscriptionHandler
-                    ));
+                    )).ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine("Failed to synchronize node: " + e.StackTrace);
+                    Console.WriteLine("Failed to synchronize node: " + e.Message);
+                    Console.WriteLine(e.StackTrace);
                 }
                 return parentId; // I'm not 100% sure if variables can have children, if they can, it is probably best to collapse
                 // that structure in CDF.
@@ -250,7 +260,7 @@ namespace Cognite.OpcUa
                 bufferQueue.Enqueue(new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
                     item.ResolvedNodeId,
-                    (double)datapoint.Value
+                    UAClient.ConvertToDouble(datapoint)
                 ));
             }
         }
@@ -273,7 +283,7 @@ namespace Cognite.OpcUa
                 bufferQueue.Enqueue(new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
                     nodeid,
-                    (double)datapoint.Value
+                    UAClient.ConvertToDouble(datapoint)
                 ));
             }
         }
@@ -286,7 +296,10 @@ namespace Cognite.OpcUa
             int count = 0;
             while (bufferQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
             {
-                dataPointList.Add(buffer);
+                if (buffer.timestamp > 0L)
+                {
+                    dataPointList.Add(buffer);
+                }
             }
 
             IDictionary<NodeId, Tuple<IList<DataPoint>, Identity>> organizedDatapoints =
@@ -328,14 +341,13 @@ namespace Cognite.OpcUa
                 Client client = Client.Create(httpClient)
                     .AddHeader("api-key", config.ApiKey)
                     .SetProject(config.Project);
-                try
+                if (!await RetryAsync(async () => await client.InsertDataAsync(finalDataPoints), "Failed to insert into CDF"))
                 {
-                    await retryAsync(async () => await client.InsertDataAsync(finalDataPoints), "Failed to insert into CDF");
-                }
-                catch (ResponseException)
-                {
-                    Console.WriteLine("Failed to insert into CDF");
-                    // Write to file, then later on success, read and wipe.
+                    Console.WriteLine("Failed to insert into CDF, points: ");
+                    foreach (BufferedDataPoint datap in dataPointList)
+                    {
+                        Console.WriteLine("{0}, {1}, {2}, {3}", datap.timestamp, datap.nodeId, datap.doubleValue, NodeToTimeseriesId[datap.nodeId]);
+                    }
                 }
             }
             pushTimer.Start();
