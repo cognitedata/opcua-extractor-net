@@ -18,8 +18,8 @@ namespace Cognite.OpcUa
         readonly YamlMappingNode nsmaps;
         readonly Extractor extractor;
         readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
-        object subscriptionLock = new object();
-        bool clientReconnecting = false;
+        readonly object subscriptionLock = new object();
+        bool clientReconnecting;
 
         public UAClient(UAClientConfig config, YamlMappingNode nsmaps, Extractor extractor = null)
         {

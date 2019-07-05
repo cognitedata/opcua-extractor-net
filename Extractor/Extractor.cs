@@ -34,7 +34,7 @@ namespace Cognite.OpcUa
         private readonly System.Timers.Timer nodePushTimer;
         public readonly DateTime epoch = new DateTime(1970, 1, 1);
         private static readonly int retryCount = 2;
-        private static bool debug = true;
+        private static readonly bool debug = true;
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
         {
             this.clientFactory = clientFactory;
@@ -140,149 +140,6 @@ namespace Cognite.OpcUa
             {
                 bufferedNodeQueue.Enqueue(new BufferedVariable(UAClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId));
             }
-            /* if (node.NodeClass == NodeClass.Object)
-            {
-                Console.WriteLine("{0}, {1}, {2}", node.BrowseName,
-                    node.DisplayName, node.NodeClass);
-                if (debug) return parentId + 1;
-                using (HttpClient httpClient = clientFactory.CreateClient())
-                {
-                    httpClient.Timeout = TimeSpan.FromMilliseconds(30000);
-                    Client client = Client.Create(httpClient)
-                        .AddHeader("api-key", config.ApiKey)
-                        .SetProject(config.Project);
-                    var assets = await RetryAsync(async () =>
-                        await client.GetAssetsAsync(new List<GetAssets.Option>
-                        {
-                            GetAssets.Option.ExternalIdPrefix(externalId)
-                        }),
-                        "Failed to get asset"
-                    );
-                    if (assets == null) return 0;
-
-                    if (assets != null && assets.Items.Any())
-                    {
-                        Console.WriteLine("Asset found: {0}", assets.Items.First().Name);
-                        return assets.Items.First().Id;
-                    }
-                    Console.WriteLine("Asset not found: {0}", node.BrowseName);
-                    var result = await RetryAsync(async () =>
-                        await client.CreateAssetsAsync(new List<Asset>
-                        {
-                            new Asset
-                            {
-                                ExternalId = externalId,
-                                ParentId = parentId
-                            }
-                        }),
-                        "Failed to create asset"
-                    );
-
-                    if (result != null && result.Any())
-                    {
-                        return result.First().Id;
-                    }
-                    return 0;
-                }
-            }
-            if (node.NodeClass == NodeClass.Variable)
-            {
-                DateTime startTime = DateTime.MinValue;
-                NodeId nodeId = UAClient.ToNodeId(node.NodeId);
-                uint dataType = UAClient.GetDatatype(nodeId);
-                if (dataType < DataTypes.SByte || dataType > DataTypes.Double) return parentId;
-
-                Console.WriteLine("{0}, {1}, {2}", node.BrowseName,
-                    node.DisplayName, node.NodeClass);
-                if (!debug)
-                {
-                    long timeSeriesId;
-                    using (HttpClient httpClient = clientFactory.CreateClient())
-                    {
-                        Client client = Client.Create(httpClient)
-                            .AddHeader("api-key", config.ApiKey)
-                            .SetProject(config.Project);
-                        QueryDataLatest query = QueryDataLatest.Create();
-
-                        IEnumerable<PointResponseDataPoints> result;
-                        try
-                        {
-                            result = await client.GetTimeseriesLatestDataAsync(new List<QueryDataLatest>
-                        {
-                            QueryDataLatest.Create().ExternalId(externalId)
-                        });
-                        }
-                        catch (ResponseException)
-                        {
-                            // Fails if TS is not found.
-                            // TODO, differentiate between "not found" and other error
-                            result = null;
-                        }
-                        if (result != null && result.Any())
-                        {
-                            Console.WriteLine("TS found: {0}", result.First().Id);
-                            timeSeriesId = result.First().Id;
-                            if (result.First().DataPoints.Any())
-                            {
-                                startTime = epoch.AddMilliseconds(result.First().DataPoints.First().TimeStamp);
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine("TS not found: {0}, {1}", dataType, node.DisplayName.Text);
-                            LocalizedText description = UAClient.GetDescription(nodeId);
-                            TimeseriesResponse cresult = await RetryAsync(async () =>
-                                await client.CreateTimeseriesAsync(new List<TimeseriesCreateDto>
-                                {
-                                Timeseries.Create()
-                                    .SetName(node.DisplayName.Text)
-                                    .SetExternalId(externalId)
-                                    .SetDescription(description.Text)
-                                    .SetAssetId(parentId)
-                                }),
-                                "Failed to create TS"
-                            );
-
-                            if (cresult != null && cresult.Items.Any())
-                            {
-                                timeSeriesId = cresult.Items.First().Id;
-                            }
-                            else
-                            {
-                                throw new Exception("Failed to create timeseries: " + node.DisplayName);
-                            }
-                        }
-                    }
-                    buffersEmpty = false;
-                    lock (NodeToTimeseriesId)
-                    {
-                        NodeToTimeseriesId.Add(nodeId, timeSeriesId);
-                    }
-                    lock (notInSyncLock)
-                    {
-                        notInSync.Add(timeSeriesId);
-                    }
-                    if (startTime == DateTime.MinValue)
-                    {
-                        startTime = epoch;
-                    }
-                }
-                try
-                {
-                    await Task.Run(() => UAClient.SynchronizeDataNode(
-                        UAClient.ToNodeId(node.NodeId),
-                        startTime,
-                        HistoryDataHandler,
-                        SubscriptionHandler
-                    )).ConfigureAwait(false);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine("Failed to synchronize node: " + e.Message);
-                    Console.WriteLine(e.StackTrace);
-                }
-                return 0;
-            } */
             throw new Exception("Invalid node type");
         }
 
@@ -392,6 +249,169 @@ namespace Cognite.OpcUa
             }
             dataPushTimer.Start();
         }
+        private async Task EnsureAssets(List<BufferedNode> assetList, Client client)
+        {
+            IDictionary<string, BufferedNode> assetIds = new Dictionary<string, BufferedNode>();
+            foreach (BufferedNode node in assetList)
+            {
+                assetIds.Add(UAClient.GetUniqueId(node.Id), node);
+            }
+            // TODO: When v1 gets support for ExternalId on assets when associating timeseries, we can drop a lot of this.
+            // Specifically anything related to NodeToTimeseriesIds
+            ISet<string> missingAssetIds = new HashSet<string>();
+            try
+            {
+                var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(assetIds.Keys), "Failed to get assets", true);
+                if (readResults != null)
+                {
+                    foreach (var resultItem in readResults)
+                    {
+                        nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
+                    }
+                }
+            }
+            catch (ResponseException ex)
+            {
+                // TODO: Get exception data here to parse missing ids
+            }
+            if (missingAssetIds.Any())
+            {
+                var createAssets = new List<AssetWritePoco>();
+                foreach (string externalId in missingAssetIds)
+                {
+                    BufferedNode node = assetIds[externalId];
+                    var writePoco = new AssetWritePoco
+                    {
+                        Description = node.Description,
+                        ExternalId = externalId,
+                        Name = node.DisplayName
+                    };
+                    if (node.ParentId == rootNode)
+                    {
+                        writePoco.ParentId = rootAsset;
+                    }
+                    else
+                    {
+                        writePoco.ParentExternalId = UAClient.GetUniqueId(node.ParentId);
+                    }
+                    createAssets.Add(writePoco);
+                }
+                var writeResults = await RetryAsync(() => client.CreateAssetsAsync(createAssets), "Failed to create assets");
+                if (writeResults != null)
+                {
+                    foreach (var resultItem in writeResults)
+                    {
+                        nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
+                    }
+                }
+                IList<string> idsToMap = new List<string>();
+                foreach (string id in assetIds.Keys)
+                {
+                    if (!missingAssetIds.Contains(id))
+                    {
+                        idsToMap.Add(id);
+                    }
+                }
+                if (idsToMap.Any())
+                {
+                    var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(assetIds.Keys), "Failed to get asset ids");
+                    if (readResults != null)
+                    {
+                        foreach (var resultItem in readResults)
+                        {
+                            nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
+                        }
+                    }
+                }
+            }
+        }
+        private async Task EnsureTimeseries(List<BufferedVariable> tsList, Client client)
+        {
+            IDictionary<string, BufferedVariable> tsIds = new Dictionary<string, BufferedVariable>();
+            foreach (BufferedVariable node in tsList)
+            {
+                tsIds.Add(UAClient.GetUniqueId(node.Id), node);
+            }
+
+            ISet<string> missingTSIds = new HashSet<string>();
+            IList<(Identity, string)> pairedTsIds = new List<(Identity, string)>();
+            foreach (string id in tsIds.Keys)
+            {
+                pairedTsIds.Add((Identity.ExternalId(id), id));
+            }
+
+            try
+            {
+                var readResults = await RetryAsync(() =>
+                    client.GetTimeseriesLatestDataAsync(pairedTsIds), "Failed to get timeseries", true);
+                if (readResults != null)
+                {
+                    foreach (var resultItem in readResults)
+                    {
+                        nodeToAssetIds.Add(tsIds[resultItem.ExternalId.Value].Id, resultItem.Id);
+                        if (resultItem.DataPoints.Any())
+                        {
+                            tsIds[resultItem.ExternalId.Value].LatestTimestamp =
+                                epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
+                        }
+                    }
+                }
+            }
+            catch (ResponseException ex)
+            {
+                // TODO: Get exception data here to parse missing ids
+            }
+            if (missingTSIds.Any())
+            {
+                var createTimeseries = new List<TimeseriesWritePoco>();
+                foreach (string externalId in missingTSIds)
+                {
+                    BufferedVariable node = tsIds[externalId];
+                    var writePoco = new TimeseriesWritePoco
+                    {
+                        Description = node.Description,
+                        ExternalId = externalId,
+                        AssetId = nodeToAssetIds[node.ParentId],
+                        Name = node.DisplayName,
+                        LegacyName = externalId
+                    };
+                    createTimeseries.Add(writePoco);
+                }
+                var writeResults = await RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS");
+                if (writeResults != null)
+                {
+                    foreach (var resultItem in writeResults)
+                    {
+                        nodeToAssetIds.Add(tsIds[resultItem.ExternalId].Id, resultItem.Id);
+                    }
+                }
+                IList<(Identity, string)> idsToMap = new List<(Identity, string)>();
+                foreach (string id in tsIds.Keys)
+                {
+                    if (!missingTSIds.Contains(id))
+                    {
+                        idsToMap.Add((Identity.ExternalId(id), id));
+                    }
+                }
+                if (idsToMap.Any())
+                {
+                    var readResults = await RetryAsync(() => client.GetTimeseriesLatestDataAsync(pairedTsIds),
+                        "Failed to get timeseries ids");
+                    if (readResults != null)
+                    {
+                        foreach (var resultItem in readResults)
+                        {
+                            nodeToAssetIds.Add(tsIds[resultItem.ExternalId.Value].Id, resultItem.Id);
+                            if (resultItem.DataPoints.Any())
+                            {
+                                tsIds[resultItem.ExternalId.Value].LatestTimestamp =
+                                    epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         private async void PushNodesToCDF(object sender, ElapsedEventArgs e)
         {
             List<BufferedNode> assetList = new List<BufferedNode>();
@@ -409,173 +429,20 @@ namespace Cognite.OpcUa
                     assetList.Add(buffer);
                 }
             }
+
             UAClient.ReadNodeData(assetList.Concat(tsList));
-
-            IDictionary<string, BufferedNode> assetIds = new Dictionary<string, BufferedNode>();
-            foreach (BufferedNode node in assetList)
-            {
-                assetIds.Add(UAClient.GetUniqueId(node.Id), node);
-            }
-
-            IDictionary<string, BufferedVariable> tsIds = new Dictionary<string, BufferedVariable>();
-            foreach (BufferedVariable node in tsList)
-            {
-                tsIds.Add(UAClient.GetUniqueId(node.Id), node);
-            }
 
             using (HttpClient httpClient = clientFactory.CreateClient())
             {
                 Client client = Client.Create(httpClient)
                     .AddHeader("api-key", config.ApiKey)
                     .SetProject(config.Project);
-                // TODO: When v1 gets support for ExternalId on assets when associating timeseries, we can drop a lot of this.
-                // Specifically anything related to NodeToTimeseriesIds
-                ISet<string> missingAssetIds = new HashSet<string>();
-                try
-                {
-                    var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(assetIds.Keys), "Failed to get assets", true);
-                    if (readResults != null)
-                    {
-                        foreach (var resultItem in readResults)
-                        {
-                            nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
-                        }
-                    }
-                }
-                catch (ResponseException ex)
-                {
-                    // TODO: Get exception data here to parse missing ids
-                }
-                if (missingAssetIds.Any())
-                {
-                    var createAssets = new List<AssetWritePoco>();
-                    foreach (string externalId in missingAssetIds)
-                    {
-                        BufferedNode node = assetIds[externalId];
-                        var writePoco = new AssetWritePoco
-                        {
-                            Description = node.Description,
-                            ExternalId = externalId,
-                            Name = node.DisplayName
-                        };
-                        if (node.ParentId == rootNode)
-                        {
-                            writePoco.ParentId = rootAsset;
-                        }
-                        else
-                        {
-                            writePoco.ParentExternalId = UAClient.GetUniqueId(node.ParentId);
-                        }
-                        createAssets.Add(writePoco);
-                    }
-                    var writeResults = await RetryAsync(() => client.CreateAssetsAsync(createAssets), "Failed to create assets");
-                    if (writeResults != null)
-                    {
-                        foreach (var resultItem in writeResults)
-                        {
-                            nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
-                        }
-                    }
-                    IList<string> idsToMap = new List<string>();
-                    foreach (string id in assetIds.Keys)
-                    {
-                        if (!missingAssetIds.Contains(id))
-                        {
-                            idsToMap.Add(id);
-                        }
-                    }
-                    if (idsToMap.Any())
-                    {
-                        var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(assetIds.Keys), "Failed to get asset ids");
-                        if (readResults != null)
-                        {
-                            foreach (var resultItem in readResults)
-                            {
-                                nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
-                            }
-                        }
-                    }
-                }
+
+                await EnsureAssets(assetList, client);
                 // At this point the assets should all be synchronized and mapped
                 // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
-                ISet<string> missingTSIds = new HashSet<string>();
-                IList<(Identity, string)> pairedTsIds = new List<(Identity, string)>();
-                foreach (string id in tsIds.Keys)
-                {
-                    pairedTsIds.Add((Identity.ExternalId(id), id));
-                }
-
-                try
-                {
-                    var readResults = await RetryAsync(() =>
-                        client.GetTimeseriesLatestDataAsync(pairedTsIds), "Failed to get timeseries", true);
-                    if (readResults != null)
-                    {
-                        foreach (var resultItem in readResults)
-                        {
-                            nodeToAssetIds.Add(assetIds[resultItem.ExternalId.Value].Id, resultItem.Id);
-                            if (resultItem.DataPoints.Any())
-                            {
-                                tsIds[resultItem.ExternalId.Value].LatestTimestamp =
-                                    epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
-                            }
-                        }
-                    }
-                }
-                catch (ResponseException ex)
-                {
-                    // TODO: Get exception data here to parse missing ids
-                }
-                if (missingTSIds.Any())
-                {
-                    var createTimeseries = new List<TimeseriesWritePoco>();
-                    foreach (string externalId in missingTSIds)
-                    {
-                        BufferedVariable node = tsIds[externalId];
-                        var writePoco = new TimeseriesWritePoco
-                        {
-                            Description = node.Description,
-                            ExternalId = externalId,
-                            AssetId = nodeToAssetIds[node.ParentId],
-                            Name = node.DisplayName,
-                            LegacyName = externalId
-                        };
-                        createTimeseries.Add(writePoco);
-                    }
-                    var writeResults = await RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS");
-                    if (writeResults != null)
-                    {
-                        foreach (var resultItem in writeResults)
-                        {
-                            nodeToAssetIds.Add(tsIds[resultItem.ExternalId].Id, resultItem.Id);
-                        }
-                    }
-                    IList<(Identity, string)> idsToMap = new List<(Identity, string)>();
-                    foreach (string id in tsIds.Keys)
-                    {
-                        if (!missingTSIds.Contains(id))
-                        {
-                            idsToMap.Add((Identity.ExternalId(id), id));
-                        }
-                    }
-                    if (idsToMap.Any())
-                    {
-                        var readResults = await RetryAsync(() => client.GetTimeseriesLatestDataAsync(pairedTsIds),
-                            "Failed to get timeseries ids");
-                        if (readResults != null)
-                        {
-                            foreach (var resultItem in readResults)
-                            {
-                                nodeToAssetIds.Add(tsIds[resultItem.ExternalId.Value].Id, resultItem.Id);
-                                if (resultItem.DataPoints.Any())
-                                {
-                                    tsIds[resultItem.ExternalId.Value].LatestTimestamp =
-                                        epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
-                                }
-                            }
-                        }
-                    }
-                }
+                // This also sets the LastTimestamp property of each BufferedVariable
+                await EnsureTimeseries(tsList, client);
             }
 
             // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
