@@ -43,11 +43,11 @@ namespace Cognite.OpcUa
         {
             session.CloseSession(null, true);
         }
-        public async Task BrowseDirectory(NodeId root, Func<ReferenceDescription, long, Task<long>> callback, long initial)
+        public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback)
         {
             try
             {
-                await BrowseDirectory(root, initial, callback);
+                await Task.Run(() => BrowseDirectory(root, callback));
             }
             catch (Exception e)
             {
@@ -62,183 +62,6 @@ namespace Cognite.OpcUa
                 namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
             }
             return GetUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
-        }
-        public LocalizedText GetDescription(NodeId nodeId)
-        {
-            session.Read(
-                null,
-                0,
-                TimestampsToReturn.Neither,
-                new ReadValueIdCollection
-                {
-                    new ReadValueId
-                    {
-                        AttributeId = Attributes.Description,
-                        NodeId = nodeId
-                    }
-                },
-                out DataValueCollection values,
-                out _
-            );
-            return values[0].GetValue<LocalizedText>("");
-        }
-        public uint GetDatatype(NodeId nodeId)
-        {
-            session.Read(
-                null,
-                0,
-                TimestampsToReturn.Neither,
-                new ReadValueIdCollection
-                {
-                    new ReadValueId
-                    {
-                        AttributeId = Attributes.DataType,
-                        NodeId = nodeId
-                    }
-                },
-                out DataValueCollection values,
-                out _
-            );
-            if (values[0].GetValue(NodeId.Null).IdType != IdType.Numeric) return 0;
-            return (uint)values[0].GetValue(NodeId.Null).Identifier;
-        }
-        public void SynchronizeDataNode(NodeId nodeid,
-            DateTime startTime,
-            Action<HistoryReadResultCollection, bool, NodeId> callback,
-            MonitoredItemNotificationEventHandler subscriptionHandler)
-        {
-            if (clientReconnecting) return;
-            // First get necessary node data
-            SortedDictionary<uint, DataValue> attributes = new SortedDictionary<uint, DataValue>
-            {
-                { Attributes.DataType, null },
-                { Attributes.Historizing, null },
-                { Attributes.NodeClass, null },
-                { Attributes.DisplayName, null },
-                { Attributes.ValueRank, null },
-                { Attributes.Value, null }
-            };
-
-            ReadValueIdCollection itemsToRead = new ReadValueIdCollection();
-            foreach (uint attributeId in attributes.Keys)
-            {
-                ReadValueId itemToRead = new ReadValueId
-                {
-                    AttributeId = attributeId,
-                    NodeId = nodeid
-                };
-                itemsToRead.Add(itemToRead);
-            }
-            session.Read(
-                null,
-                0,
-                TimestampsToReturn.Source,
-                itemsToRead,
-                out DataValueCollection values,
-                out _
-            );
-
-            for (int i = 0; i < itemsToRead.Count; i++)
-            {
-                attributes[itemsToRead[i].AttributeId] = values[i];
-            }
-
-            if ((NodeClass)attributes[Attributes.NodeClass].Value != NodeClass.Variable)
-            {
-                throw new Exception("Node not a variable");
-            }
-            // Filter out data we can't or won't parse
-            if (((NodeId)attributes[Attributes.DataType].Value).IdType != IdType.Numeric
-                || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier < DataTypes.SByte
-                || (uint)((NodeId)attributes[Attributes.DataType].Value).Identifier > DataTypes.Double
-                || (int)attributes[Attributes.ValueRank].Value != ValueRanks.Scalar) return;
-            Subscription subscription;
-            if (session.SubscriptionCount == 0)
-            {
-                subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
-            }
-            else
-            {
-                subscription = session.Subscriptions.First();
-            }
-            bool contains = false;
-            foreach (var item in subscription.MonitoredItems)
-            {
-                if (item.StartNodeId == nodeid)
-                {
-                    Console.WriteLine("Duplicate sub found" + nodeid);
-                    contains = true;
-                    break;
-                }
-            }
-            if (!contains)
-            {
-                Console.WriteLine("Add subscription for " + attributes[Attributes.DisplayName] + ", " + nodeid);
-                var monitor = new MonitoredItem(subscription.DefaultItem)
-                {
-                    DisplayName = "Value: " + attributes[Attributes.DisplayName],
-                    StartNodeId = nodeid
-                };
-
-                monitor.Notification += subscriptionHandler;
-                subscription.AddItem(monitor);
-                lock (subscriptionLock)
-                {
-                    if (!subscription.Created)
-                    {
-                        session.AddSubscription(subscription);
-                        subscription.Create();
-                    }
-                    else
-                    {
-                        lock (subscriptionLock)
-                        {
-                            subscription.CreateItems();
-                        }
-                    }
-                }
-            }
-
-            if (!(bool)attributes[Attributes.Historizing].Value)
-            {
-                DataValue value = attributes[Attributes.Value];
-                extractor.AddSingleDataPoint(new BufferedDataPoint(
-                    (long)value.SourceTimestamp.Subtract(extractor.epoch).TotalMilliseconds,
-                    nodeid,
-                    ConvertToDouble(value)
-                ));
-                callback(null, true, nodeid);
-                return;
-            }
-            // Thread.Sleep(1000);
-            HistoryReadResultCollection results = null;
-            do
-            {
-                ReadRawModifiedDetails details = new ReadRawModifiedDetails
-                {
-                    StartTime = startTime,
-                    EndTime = DateTime.MaxValue,
-                    NumValuesPerNode = config.MaxResults,
-                };
-                session.HistoryRead(
-                    null,
-                    new ExtensionObject(details),
-                    TimestampsToReturn.Neither,
-                    false,
-                    new HistoryReadValueIdCollection
-                    {
-                        new HistoryReadValueId
-                        {
-                            NodeId = nodeid,
-                            ContinuationPoint = results ? [0].ContinuationPoint
-                        },
-
-                    },
-                    out results,
-                    out _
-                );
-                callback(results, results[0].ContinuationPoint == null, nodeid);
-            } while (results[0].ContinuationPoint != null);
         }
         public NodeId ToNodeId(ExpandedNodeId nodeid)
         {
@@ -271,6 +94,164 @@ namespace Cognite.OpcUa
                 return Convert.ToDouble((datavalue.Value as IEnumerable<object>)?.First());
             }
             return Convert.ToDouble(datavalue.Value);
+        }
+        public void DoHistoryRead(BufferedVariable toRead,
+            Action<HistoryReadResultCollection, bool, NodeId> callback)
+        {
+            ReadRawModifiedDetails details = new ReadRawModifiedDetails
+            {
+                StartTime = toRead.LatestTimestamp,
+                EndTime = DateTime.MaxValue,
+                NumValuesPerNode = config.MaxResults
+            };
+            HistoryReadResultCollection results = null;
+            do
+            {
+                session.HistoryRead(
+                   null,
+                   new ExtensionObject(details),
+                   TimestampsToReturn.Neither,
+                   false,
+                   new HistoryReadValueIdCollection
+                   {
+                        new HistoryReadValueId
+                        {
+                            NodeId = toRead.Id,
+                            ContinuationPoint = results ? [0].ContinuationPoint
+                        },
+
+                   },
+                   out results,
+                   out _
+               );
+                callback(results, results[0].ContinuationPoint == null, toRead.Id);
+            } while (results[0].ContinuationPoint != null);
+        }
+        public void SynchronizeNodes(List<BufferedVariable> nodeList,
+            Action<HistoryReadResultCollection, bool, NodeId> callback,
+            MonitoredItemNotificationEventHandler subscriptionHandler)
+        {
+            int count = 0;
+            List<BufferedVariable> toSynch = new List<BufferedVariable>();
+            List<BufferedVariable> toHistoryRead = new List<BufferedVariable>();
+
+            foreach (BufferedVariable node in nodeList)
+            {
+                if (node != null
+                    && node.DataType >= DataTypes.SByte
+                    && node.DataType <= DataTypes.Double
+                    && node.IsVariable
+                    && node.ValueRank == ValueRanks.Scalar)
+                {
+                    count++;
+                    toSynch.Add(node);
+                    if (node.Historizing)
+                    {
+                        toHistoryRead.Add(node);
+                    }
+                }
+            }
+            if (count == 0) return;
+            Subscription subscription = session.SubscriptionCount == 0
+                ? new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval }
+                : session.Subscriptions.First();
+            count = 0;
+            ISet<NodeId> hasSubscription = new HashSet<NodeId>();
+            foreach (var item in subscription.MonitoredItems)
+            {
+                hasSubscription.Add(item.ResolvedNodeId);
+            }
+            foreach (BufferedNode node in toSynch)
+            {
+                if (!hasSubscription.Contains(node.Id))
+                {
+                    var monitor = new MonitoredItem(subscription.DefaultItem)
+                    {
+                        StartNodeId = node.Id,
+                        DisplayName = "Value: " + node.DisplayName
+                    };
+                    monitor.Notification += subscriptionHandler;
+                    subscription.AddItem(monitor);
+                    count++;
+                }
+            }
+            lock (subscriptionLock)
+            {
+                if (count > 0)
+                {
+                    if (subscription.Created)
+                    {
+                        subscription.CreateItems();
+                    }
+                    else
+                    {
+                        session.AddSubscription(subscription);
+                        subscription.Create();
+                    }
+                }
+            }
+            foreach (BufferedVariable node in toHistoryRead)
+            {
+                Task.Run(() => DoHistoryRead(node, callback));
+            }
+        }
+        public void ReadNodeData(IEnumerable<BufferedNode> nodes)
+        {
+            IEnumerable<uint> variableAttributes = new List<uint>
+            {
+                Attributes.DataType,
+                Attributes.Historizing,
+                Attributes.ValueRank
+            };
+            var readValueIds = new ReadValueIdCollection();
+            foreach (BufferedNode node in nodes)
+            {
+                readValueIds.Add(new ReadValueId
+                {
+                    AttributeId = Attributes.Description,
+                    NodeId = node.Id
+                });
+                if (node.IsVariable)
+                {
+                    foreach (uint attribute in variableAttributes)
+                    {
+                        readValueIds.Add(new ReadValueId
+                        {
+                            AttributeId = attribute,
+                            NodeId = node.Id
+                        });
+                    }
+                }
+            }
+            session.Read(
+                null,
+                0,
+                TimestampsToReturn.Neither,
+                readValueIds,
+                out DataValueCollection values,
+                out _
+            );
+            var enumerator = values.GetEnumerator();
+            foreach (BufferedNode node in nodes)
+            {
+                enumerator.MoveNext();
+                node.Description = enumerator.Current.GetValue("");
+                if (node.IsVariable)
+                {
+                    BufferedVariable vnode = node as BufferedVariable;
+                    if (node == null) continue;
+                    enumerator.MoveNext();
+                    NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
+                    if (dataType.IdType == IdType.Numeric)
+                    {
+                        vnode.DataType = (uint)dataType.Identifier;
+                    }
+                    enumerator.MoveNext();
+                    vnode.Historizing = enumerator.Current.GetValue(false);
+                    enumerator.MoveNext();
+                    vnode.ValueRank = enumerator.Current.GetValue(0);
+                }
+            }
         }
         private async Task StartSession()
         {
@@ -381,25 +362,17 @@ namespace Cognite.OpcUa
             }
             return references;
         }
-        private async Task BrowseDirectory(NodeId root, long last, Func<ReferenceDescription, long, Task<long>> callback)
+        private void BrowseDirectory(NodeId root, Action<ReferenceDescription, NodeId> callback)
         {
             if (!visitedNodes.Add(root)) return;
             if (clientReconnecting) return;
             var references = GetNodeChildren(root);
             List<Task> tasks = new List<Task>();
-            // Thread.Sleep(1000);
             foreach (var rd in references)
             {
-                // Console.WriteLine("Call cb for parent " + last);
                 if (rd.NodeId == ObjectIds.Server) continue;
-                await Task.Run(async () =>
-                {
-                    long cbresult = await callback(rd, last);
-                    if (cbresult > 0)
-                    {
-                        await BrowseDirectory(ToNodeId(rd.NodeId), cbresult, callback);
-                    }
-                }).ConfigureAwait(false);
+                callback(rd, root);
+                Task.Run(() => BrowseDirectory(ToNodeId(rd.NodeId), callback));
             }
         }
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
@@ -426,29 +399,6 @@ namespace Cognite.OpcUa
             }
             return config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
 
-        }
-        // Fetch data for synchronizing with cdf, also establishing a subscription. This does require that the node is a variable, or it will fail.
-    }
-    public class BufferedDataPoint
-    {
-        public readonly long timestamp;
-        public readonly NodeId nodeId;
-        public readonly double doubleValue;
-        public readonly string stringValue;
-        public readonly bool isString;
-        public BufferedDataPoint(long timestamp, NodeId nodeId, double value)
-        {
-            this.timestamp = timestamp;
-            this.nodeId = nodeId;
-            doubleValue = value;
-            isString = false;
-        }
-        public BufferedDataPoint(long timestamp, NodeId nodeId, string value)
-        {
-            this.timestamp = timestamp;
-            this.nodeId = nodeId;
-            stringValue = value;
-            isString = true;
         }
     }
 }

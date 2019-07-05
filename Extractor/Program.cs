@@ -112,7 +112,8 @@ namespace Cognite.OpcUa
         public long RootAssetId { get; set; }
         public string RootNodeNamespace { get; set; }
         public string RootNodeId { get; set; }
-        public int PushDelay { get; set; }
+        public int DataPushDelay { get; set; }
+        public int NodePushDelay { get; set; }
     }
     public class FullConfig
     {
