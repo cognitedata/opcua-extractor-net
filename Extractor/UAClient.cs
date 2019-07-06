@@ -7,6 +7,7 @@ using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using YamlDotNet.RepresentationModel;
 using System.Linq;
+using System.Threading;
 
 namespace Cognite.OpcUa
 {
@@ -152,9 +153,19 @@ namespace Cognite.OpcUa
                 }
             }
             if (count == 0) return;
-            Subscription subscription = session.SubscriptionCount == 0
-                ? new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval }
-                : session.Subscriptions.First();
+            Subscription subscription = null;
+            foreach (var sub in session.Subscriptions)
+            {
+                if (sub.DisplayName != "NodeChangeListener")
+                {
+                    subscription = sub;
+                    break;
+                }
+            }
+            if (subscription == null)
+            {
+                subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
+            }
             count = 0;
             ISet<NodeId> hasSubscription = new HashSet<NodeId>();
             foreach (var item in subscription.MonitoredItems)
@@ -252,6 +263,47 @@ namespace Cognite.OpcUa
                     vnode.ValueRank = enumerator.Current.GetValue(0);
                 }
             }
+        }
+        public void AddChangeListener(NodeId rootNode, MonitoredItemNotificationEventHandler eventHandler)
+        {
+            Subscription subscription = new Subscription(session.DefaultSubscription) {
+                PublishingInterval = 1000,
+                DisplayName = "NodeChangeListener",
+            };
+            // where OfType(AuditNodeManagementEventType)
+            EventFilter filter = new EventFilter();
+            ContentFilter whereClause = new ContentFilter();
+            LiteralOperand operand = new LiteralOperand
+            {
+                Value = new Variant(ObjectTypeIds.BaseEventType)
+            };
+            whereClause.Push(FilterOperator.OfType, operand);
+
+            filter.WhereClause = whereClause;
+
+            var selectClauses = new SimpleAttributeOperandCollection();
+            var soperand = new SimpleAttributeOperand();
+            soperand.TypeDefinitionId = ObjectTypeIds.BaseEventType;
+            soperand.AttributeId = Attributes.NodeId;
+            soperand.BrowsePath = new QualifiedNameCollection();
+            selectClauses.Add(soperand);
+
+            filter.SelectClauses = selectClauses;
+
+            var item = new MonitoredItem(subscription.DefaultItem, true)
+            {
+                DisplayName = "Structure modified",
+                // StartNodeId = ObjectIds.Server,
+                // NodeClass = NodeClass.Object,
+                AttributeId = Attributes.EventNotifier,
+                // MonitoringMode = MonitoringMode.Reporting,
+            };
+            item.Notification += eventHandler;
+            item.Notification += (_, __) => Console.WriteLine("test");
+            subscription.AddItem(item);
+            session.AddSubscription(subscription);
+            Console.WriteLine("Create sub");
+            subscription.Create();
         }
         private async Task StartSession()
         {
@@ -372,6 +424,7 @@ namespace Cognite.OpcUa
             {
                 if (rd.NodeId == ObjectIds.Server) continue;
                 callback(rd, root);
+                if (rd.NodeClass == NodeClass.Variable) continue;
                 Task.Run(() => BrowseDirectory(ToNodeId(rd.NodeId), callback));
             }
         }

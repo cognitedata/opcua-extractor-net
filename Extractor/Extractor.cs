@@ -50,6 +50,8 @@ namespace Cognite.OpcUa
             rootAsset = config.cogniteConfig.RootAssetId;
             nodeToAssetIds.Add(rootNode, rootAsset);
 
+            UAClient.AddChangeListener(rootNode, StructureChangeHandler);
+
             dataPushTimer = new System.Timers.Timer
             {
                 Interval = config.cogniteConfig.DataPushDelay,
@@ -67,7 +69,6 @@ namespace Cognite.OpcUa
             };
             nodePushTimer.Elapsed += PushNodesToCDF;
             nodePushTimer.Start();
-
             MapUAToCDF();
 
         }
@@ -132,6 +133,7 @@ namespace Cognite.OpcUa
         }
         private void HandleNode(ReferenceDescription node, NodeId parentId)
         {
+            Console.WriteLine("    {0}, {1}, {2}, {3}", node.DisplayName, node.BrowseName, node.NodeClass, node.NodeId);
             if (node.NodeClass == NodeClass.Object)
             {
                 bufferedNodeQueue.Enqueue(new BufferedNode(UAClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId));
@@ -140,7 +142,10 @@ namespace Cognite.OpcUa
             {
                 bufferedNodeQueue.Enqueue(new BufferedVariable(UAClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId));
             }
-            throw new Exception("Invalid node type");
+            else
+            {
+                throw new Exception("Invalid node type");
+            }
         }
 
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
@@ -181,6 +186,14 @@ namespace Cognite.OpcUa
                     nodeid,
                     UAClient.ConvertToDouble(datapoint)
                 ));
+            }
+        }
+        private void StructureChangeHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
+        {
+            Console.WriteLine("Event triggered");
+            foreach (var val in item.DequeueEvents())
+            {
+                Console.WriteLine(val.Message);
             }
         }
         private async void PushDataPointsToCDF(object sender, ElapsedEventArgs e)
@@ -414,6 +427,7 @@ namespace Cognite.OpcUa
         }
         private async void PushNodesToCDF(object sender, ElapsedEventArgs e)
         {
+            nodePushTimer.Stop();
             List<BufferedNode> assetList = new List<BufferedNode>();
             List<BufferedVariable> tsList = new List<BufferedVariable>();
 
@@ -429,29 +443,33 @@ namespace Cognite.OpcUa
                     assetList.Add(buffer);
                 }
             }
-
+            if (count == 0) return;
             UAClient.ReadNodeData(assetList.Concat(tsList));
-
-            using (HttpClient httpClient = clientFactory.CreateClient())
+            Console.WriteLine("Push up to {0} nodes to CDF", count);
+            if (!debug)
             {
-                Client client = Client.Create(httpClient)
-                    .AddHeader("api-key", config.ApiKey)
-                    .SetProject(config.Project);
+                using (HttpClient httpClient = clientFactory.CreateClient())
+                {
+                    Client client = Client.Create(httpClient)
+                        .AddHeader("api-key", config.ApiKey)
+                        .SetProject(config.Project);
 
-                await EnsureAssets(assetList, client);
-                // At this point the assets should all be synchronized and mapped
-                // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
-                // This also sets the LastTimestamp property of each BufferedVariable
-                await EnsureTimeseries(tsList, client);
+                    await EnsureAssets(assetList, client);
+                    // At this point the assets should all be synchronized and mapped
+                    // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
+                    // This also sets the LastTimestamp property of each BufferedVariable
+                    await EnsureTimeseries(tsList, client);
+                }
+
+                // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
+                // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
+                // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
+                // node to timeseries map.
+                // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
+                // createSubscription service called here
             }
-
-            // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
-            // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
-            // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
-            // node to timeseries map.
-            // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
-            // createSubscription service called here
             UAClient.SynchronizeNodes(tsList, HistoryDataHandler, SubscriptionHandler);
+            nodePushTimer.Start();
         }
     }
     public class BufferedNode
