@@ -112,12 +112,17 @@ namespace Cognite.OpcUa
         public long RootAssetId { get; set; }
         public string RootNodeNamespace { get; set; }
         public string RootNodeId { get; set; }
-        public int PushDelay { get; set; }
+        public int DataPushDelay { get; set; }
+        public int NodePushDelay { get; set; }
     }
     public class FullConfig
     {
         public YamlMappingNode nsmaps { get; set; }
         public UAClientConfig uaconfig { get; set; }
         public CogniteClientConfig cogniteConfig { get; set; }
+    }
+    public class LoggerConfig
+    {
+        public string LogFolder { get; set; }
     }
 }

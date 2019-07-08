@@ -11,13 +11,14 @@ using Cognite.Sdk.Assets;
 using Cognite.Sdk.Timeseries;
 using System.Collections.Concurrent;
 using System.Timers;
+using System.Threading;
 
 namespace Cognite.OpcUa
 {
     class Extractor
     {
         readonly UAClient UAClient;
-        readonly IDictionary<NodeId, long> NodeToTimeseriesId = new Dictionary<NodeId, long>();
+        private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         readonly object notInSyncLock = new object();
         readonly ISet<long> notInSync = new HashSet<long>();
         bool buffersEmpty;
@@ -26,10 +27,14 @@ namespace Cognite.OpcUa
         readonly long rootAsset = -1;
         readonly CogniteClientConfig config;
         private readonly IHttpClientFactory clientFactory;
-        private readonly ConcurrentQueue<BufferedDataPoint> bufferQueue = new ConcurrentQueue<BufferedDataPoint>();
-        private readonly Timer pushTimer;
+        private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
+        private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
+
+        private readonly System.Timers.Timer dataPushTimer;
+        private readonly System.Timers.Timer nodePushTimer;
         public readonly DateTime epoch = new DateTime(1970, 1, 1);
         private static readonly int retryCount = 2;
+        private static readonly bool debug = false;
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
         {
             this.clientFactory = clientFactory;
@@ -43,15 +48,27 @@ namespace Cognite.OpcUa
                 rootNode = ObjectIds.ObjectsFolder;
             }
             rootAsset = config.cogniteConfig.RootAssetId;
+            nodeToAssetIds.Add(rootNode, rootAsset);
 
-            pushTimer = new Timer
+            // UAClient.AddChangeListener(rootNode, StructureChangeHandler);
+
+            dataPushTimer = new System.Timers.Timer
             {
-                Interval = config.cogniteConfig.PushDelay,
+                Interval = config.cogniteConfig.DataPushDelay,
                 AutoReset = true
             };
-            pushTimer.Elapsed += PushDataPointsToCDF;
-            pushTimer.Start();
-
+            dataPushTimer.Elapsed += PushDataPointsToCDF;
+            if (!debug)
+            {
+                dataPushTimer.Start();
+            }
+            nodePushTimer = new System.Timers.Timer
+            {
+                Interval = config.cogniteConfig.NodePushDelay,
+                AutoReset = true
+            };
+            nodePushTimer.Elapsed += PushNodesToCDF;
+            nodePushTimer.Start();
             MapUAToCDF();
 
         }
@@ -67,7 +84,7 @@ namespace Cognite.OpcUa
             // UAClient.ClearSubscriptions();
             blocking = false;
             buffersEmpty = false;
-            NodeToTimeseriesId.Clear();
+            nodeToAssetIds.Clear();
             MapUAToCDF();
         }
         public void Close()
@@ -76,14 +93,15 @@ namespace Cognite.OpcUa
         }
         public void AddSingleDataPoint(BufferedDataPoint dataPoint)
         {
-            bufferQueue.Enqueue(dataPoint);
+            Console.WriteLine("{0}, {1}, {2}", dataPoint.timestamp, dataPoint.doubleValue, dataPoint.nodeId);
+            bufferedDPQueue.Enqueue(dataPoint);
         }
         private void MapUAToCDF()
         {
             Console.WriteLine("Begin mapping");
-            UAClient.BrowseDirectory(rootNode, HandleNode, rootAsset).Wait();
+            UAClient.BrowseDirectoryAsync(rootNode, HandleNode).Wait();
         }
-        private async Task<T> RetryAsync<T>(Func<Task<T>> action, string failureMessage)
+        private async Task<T> RetryAsync<T>(Func<Task<T>> action, string failureMessage, bool expectResponseException = false)
         {
             for (int i = 0; i < retryCount; i++)
             {
@@ -93,171 +111,56 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
                     if (e.GetType() == typeof(ResponseException))
                     {
                         var re = (ResponseException)e;
+                        if (i == retryCount - 1 || expectResponseException)
+                        {
+                            throw re;
+                        }
+                    }
+                    else if (e.GetType() == typeof(DecodeException))
+                    {
+                        var re = (DecodeException)e;
                         Console.WriteLine(re.Data0);
                     }
+                    Console.WriteLine(failureMessage + ", " + e.Message + ", " + e.GetType() + ": attempt " + (i + 1) + "/" + retryCount);
+                    Console.WriteLine(e.StackTrace);
+                    Console.WriteLine(e.InnerException?.StackTrace);
                 }
+                Thread.Sleep(500);
             }
             return default(T);
         }
-        private async Task<long> HandleNode(ReferenceDescription node, long parentId)
+        private void HandleNode(ReferenceDescription node, NodeId parentId)
         {
-            string externalId = UAClient.GetUniqueId(node.NodeId);
+            Console.WriteLine("    {0}, {1}, {2}, {3}", node.DisplayName, node.BrowseName, node.NodeClass, node.NodeId);
             if (node.NodeClass == NodeClass.Object)
             {
-                Console.WriteLine("{0}, {1}, {2}", node.BrowseName,
-                    node.DisplayName, node.NodeClass);
-
-                using (HttpClient httpClient = clientFactory.CreateClient())
-                {
-                    Client client = Client.Create(httpClient)
-                        .AddHeader("api-key", config.ApiKey)
-                        .SetProject(config.Project);
-                    GetAssets.Assets assets = await RetryAsync(async () =>
-                        await client.GetAssetsAsync(new List<GetAssets.Option>
-                        {
-                            GetAssets.Option.ExternalIdPrefix(externalId)
-                        }),
-                        "Failed to get asset"
-                    );
-
-                    if (assets != null && assets.Items.Any())
-                    {
-                        Console.WriteLine("Asset found: {0}", assets.Items.First().Name);
-                        return assets.Items.First().Id;
-                    }
-                    Console.WriteLine("Asset not found: {0}", node.BrowseName);
-                    AssetCreateDto asset = node.DisplayName.Text.Create()
-                        .SetExternalId(externalId)
-                        .SetParentId(parentId);
-
-                    IEnumerable<AssetReadDto> result = await RetryAsync(async () =>
-                        await client.CreateAssetsAsync(new List<AssetCreateDto>
-                        {
-                            asset
-                        }),
-                        "Failed to create asset"
-                    );
-
-                    if (result != null && result.Any())
-                    {
-                        return result.First().Id;
-                    }
-                    return 0;
-                }
+                bufferedNodeQueue.Enqueue(new BufferedNode(UAClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId));
             }
-            if (node.NodeClass == NodeClass.Variable)
+            else if (node.NodeClass == NodeClass.Variable)
             {
-                DateTime startTime = DateTime.MinValue;
-                NodeId nodeId = UAClient.ToNodeId(node.NodeId);
-                uint dataType = UAClient.GetDatatype(nodeId);
-                if (dataType < DataTypes.SByte || dataType > DataTypes.Double) return parentId;
-
-                Console.WriteLine("{0}, {1}, {2}, {3}", node.BrowseName,
-                    node.DisplayName, node.NodeClass, UAClient.GetDescription(UAClient.ToNodeId(node.NodeId)));
-                long timeSeriesId;
-                using (HttpClient httpClient = clientFactory.CreateClient())
-                {
-                    Client client = Client.Create(httpClient)
-                        .AddHeader("api-key", config.ApiKey)
-                        .SetProject(config.Project);
-                    QueryDataLatest query = QueryDataLatest.Create();
-
-                    IEnumerable<PointResponseDataPoints> result;
-                    try
-                    {
-                        result = await client.GetTimeseriesLatestDataAsync(new List<QueryDataLatest>
-                        {
-                            QueryDataLatest.Create().ExternalId(externalId)
-                        });
-                    }
-                    catch (ResponseException)
-                    {
-                        // Fails if TS is not found.
-                        // TODO, differentiate between "not found" and other error
-                        result = null;
-                    }
-                    if (result != null && result.Any())
-                    {
-                        Console.WriteLine("TS found: {0}", result.First().Id);
-                        timeSeriesId = result.First().Id;
-                        if (result.First().DataPoints.Any())
-                        {
-                            startTime = epoch.AddMilliseconds(result.First().DataPoints.First().TimeStamp);
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("TS not found: {0}, {1}", dataType, node.DisplayName.Text);
-                        LocalizedText description = UAClient.GetDescription(nodeId);
-                        TimeseriesResponse cresult = await RetryAsync(async () =>
-                            await client.CreateTimeseriesAsync(new List<TimeseriesCreateDto>
-                            {
-                                Timeseries.Create()
-                                    .SetName(node.DisplayName.Text)
-                                    .SetExternalId(externalId)
-                                    .SetDescription(description.Text)
-                                    .SetAssetId(parentId)
-                            }),
-                            "Failed to create TS"
-                        );
-
-                        if (cresult != null && cresult.Items.Any())
-                        {
-                            timeSeriesId = cresult.Items.First().Id;
-                        }
-                        else
-                        {
-                            throw new Exception("Failed to create timeseries: " + node.DisplayName);
-                        }
-                    }
-                }
-                buffersEmpty = false;
-                lock (NodeToTimeseriesId)
-                {
-                    NodeToTimeseriesId.Add(nodeId, timeSeriesId);
-                }
-                lock (notInSyncLock)
-                {
-                    notInSync.Add(timeSeriesId);
-                }
-                if (startTime == DateTime.MinValue)
-                {
-                    startTime = epoch;
-                }
-                try
-                {
-                    await Task.Run(() => UAClient.SynchronizeDataNode(
-                        UAClient.ToNodeId(node.NodeId),
-                        startTime,
-                        HistoryDataHandler,
-                        SubscriptionHandler
-                    )).ConfigureAwait(false);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine("Failed to synchronize node: " + e.Message);
-                    Console.WriteLine(e.StackTrace);
-                }
-                return parentId; // I'm not 100% sure if variables can have children, if they can, it is probably best to collapse
-                // that structure in CDF.
-            } // An else case here is impossible according to specifications, if the resultset is empty, then this is never called
-            throw new Exception("Invalid node type");
+                bufferedNodeQueue.Enqueue(new BufferedVariable(UAClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId));
+            }
+            else
+            {
+                throw new Exception("Invalid node type");
+            }
         }
 
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
-            if (blocking || !buffersEmpty && notInSync.Contains(NodeToTimeseriesId[item.ResolvedNodeId])) return;
+            if (blocking || !debug && !buffersEmpty && notInSync.Contains(nodeToAssetIds[item.ResolvedNodeId])) return;
 
             foreach (var datapoint in item.DequeueValues())
             {
-                long tsId = NodeToTimeseriesId[item.ResolvedNodeId];
+                long tsId = !debug ? nodeToAssetIds[item.ResolvedNodeId] : 0;
                 Console.WriteLine("{0}: {1}, {2}, {3}", item.DisplayName, datapoint.Value,
                     datapoint.SourceTimestamp, datapoint.StatusCode);
-                bufferQueue.Enqueue(new BufferedDataPoint(
+
+                if (debug) return;
+                bufferedDPQueue.Enqueue(new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
                     item.ResolvedNodeId,
                     UAClient.ConvertToDouble(datapoint)
@@ -266,11 +169,11 @@ namespace Cognite.OpcUa
         }
         private void HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
         {
-            if (final)
+            if (final && !debug)
             {
                 lock(notInSyncLock)
                 {
-                    notInSync.Remove(NodeToTimeseriesId[nodeid]);
+                    notInSync.Remove(nodeToAssetIds[nodeid]);
                     buffersEmpty |= notInSync.Count == 0;
                 }
             }
@@ -280,21 +183,29 @@ namespace Cognite.OpcUa
             Console.WriteLine("Fetch {0} datapoints for nodeid {1}", hdata.DataValues.Count, nodeid);
             foreach (var datapoint in hdata.DataValues)
             {
-                bufferQueue.Enqueue(new BufferedDataPoint(
+                bufferedDPQueue.Enqueue(new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
                     nodeid,
                     UAClient.ConvertToDouble(datapoint)
                 ));
             }
         }
+        private void StructureChangeHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
+        {
+            Console.WriteLine("Event triggered");
+            foreach (var val in item.DequeueEvents())
+            {
+                Console.WriteLine(val.Message);
+            }
+        }
         private async void PushDataPointsToCDF(object sender, ElapsedEventArgs e)
         {
-            pushTimer.Stop();
+            dataPushTimer.Stop();
 
             List<BufferedDataPoint> dataPointList = new List<BufferedDataPoint>();
 
             int count = 0;
-            while (bufferQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
+            while (bufferedDPQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
             {
                 if (buffer.timestamp > 0L)
                 {
@@ -302,40 +213,42 @@ namespace Cognite.OpcUa
                 }
             }
 
-            IDictionary<NodeId, Tuple<IList<DataPoint>, Identity>> organizedDatapoints =
-                new Dictionary<NodeId, Tuple<IList<DataPoint>, Identity>>();
+            var organizedDatapoints = new Dictionary<NodeId, Tuple<IList<DataPointPoco>, Identity>>();
             foreach (BufferedDataPoint dataPoint in dataPointList)
             {
                 if (!organizedDatapoints.TryGetValue(dataPoint.nodeId, out var dataPoints))
                 {
-                    dataPoints = new Tuple<IList<DataPoint>, Identity>
+                    dataPoints = new Tuple<IList<DataPointPoco>, Identity>
                     (
-                        new List<DataPoint>(),
-                        Identity.Id(NodeToTimeseriesId[dataPoint.nodeId])
+                        new List<DataPointPoco>(),
+                        Identity.Id(nodeToAssetIds[dataPoint.nodeId])
                     );
                     organizedDatapoints.Add(dataPoint.nodeId, dataPoints);
                 }
-                dataPoints.Item1.Add(dataPoint.isString
-                    ? (DataPoint)DataPoint.String(dataPoint.timestamp, dataPoint.stringValue)
-                    : DataPoint.Float(dataPoint.timestamp, dataPoint.doubleValue));
+                dataPoints.Item1.Add(new DataPointPoco
+                {
+                    TimeStamp = dataPoint.timestamp,
+                    Value = Numeric.Float(dataPoint.doubleValue)
+                });
             }
 
-            List <DataPoints> finalDataPoints = new List<DataPoints>();
+            var finalDataPoints = new List<DataPointsWritePoco>();
             foreach (var dataPointTuple in organizedDatapoints.Values)
             {
-                finalDataPoints.Add(new DataPoints
+                finalDataPoints.Add(new DataPointsWritePoco
                 {
                     Identity = dataPointTuple.Item2,
                     DataPoints = dataPointTuple.Item1
                 });
             }
 
-            Console.WriteLine("Push {0} datapoints to CDF", count);
             if (count == 0)
             {
-                pushTimer.Start();
+                dataPushTimer.Start();
                 return;
             }
+            Console.WriteLine("Push {0} datapoints to CDF", count);
+
             using (HttpClient httpClient = clientFactory.CreateClient())
             {
                 Client client = Client.Create(httpClient)
@@ -346,11 +259,306 @@ namespace Cognite.OpcUa
                     Console.WriteLine("Failed to insert into CDF, points: ");
                     foreach (BufferedDataPoint datap in dataPointList)
                     {
-                        Console.WriteLine("{0}, {1}, {2}, {3}", datap.timestamp, datap.nodeId, datap.doubleValue, NodeToTimeseriesId[datap.nodeId]);
+                        Console.WriteLine("{0}, {1}, {2}, {3}", datap.timestamp, datap.nodeId, datap.doubleValue, nodeToAssetIds[datap.nodeId]);
                     }
                 }
             }
-            pushTimer.Start();
+            dataPushTimer.Start();
+        }
+        private async Task EnsureAssets(List<BufferedNode> assetList, Client client)
+        {
+            IDictionary<string, BufferedNode> assetIds = new Dictionary<string, BufferedNode>();
+            foreach (BufferedNode node in assetList)
+            {
+                assetIds.Add(UAClient.GetUniqueId(node.Id), node);
+            }
+            // TODO: When v1 gets support for ExternalId on assets when associating timeseries, we can drop a lot of this.
+            // Specifically anything related to NodeToTimeseriesIds
+            ISet<string> missingAssetIds = new HashSet<string>();
+            IList<Identity> assetIdentities = new List<Identity>(assetIds.Keys.Count);
+            foreach (var id in assetIds.Keys)
+            {
+                assetIdentities.Add(Identity.ExternalId(id));
+            }
+            try
+            {
+                var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(assetIdentities), "Failed to get assets", true);
+                if (readResults != null)
+                {
+                    foreach (var resultItem in readResults)
+                    {
+                        Console.WriteLine(resultItem.Id);
+                        nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
+                    }
+                }
+            }
+            catch (ResponseException ex)
+            {
+                if (ex.Code == 400)
+                {
+                    foreach (var missing in ex.Missing)
+                    {
+                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        {
+                            Console.WriteLine(value);
+                            missingAssetIds.Add(value.ToString());
+                        }
+                        else
+                        {
+                            Console.WriteLine("Missing externalId in response");
+                        }
+                    }
+                    Console.WriteLine("Found {0} missing assets", ex.Missing.Count());
+                }
+            }
+            if (missingAssetIds.Any())
+            {
+                var createAssets = new List<AssetWritePoco>();
+                foreach (string externalId in missingAssetIds)
+                {
+                    BufferedNode node = assetIds[externalId];
+                    var writePoco = new AssetWritePoco
+                    {
+                        Description = node.Description,
+                        ExternalId = externalId,
+                        Name = node.DisplayName
+                    };
+                    if (node.ParentId == rootNode)
+                    {
+                        writePoco.ParentId = rootAsset;
+                    }
+                    else
+                    {
+                        writePoco.ParentExternalId = UAClient.GetUniqueId(node.ParentId);
+                    }
+                    createAssets.Add(writePoco);
+                }
+                var writeResults = await RetryAsync(() => client.CreateAssetsAsync(createAssets), "Failed to create assets");
+                if (writeResults != null)
+                {
+                    foreach (var resultItem in writeResults)
+                    {
+                        nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
+                    }
+                }
+                IList<Identity> idsToMap = new List<Identity>();
+                foreach (string id in assetIds.Keys)
+                {
+                    if (!missingAssetIds.Contains(id))
+                    {
+                        idsToMap.Add(Identity.ExternalId(id));
+                    }
+                }
+                if (idsToMap.Any())
+                {
+                    var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(idsToMap), "Failed to get asset ids");
+                    if (readResults != null)
+                    {
+                        foreach (var resultItem in readResults)
+                        {
+                            nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
+                        }
+                    }
+                }
+            }
+        }
+        private async Task EnsureTimeseries(List<BufferedVariable> tsList, Client client)
+        {
+            IDictionary<string, BufferedVariable> tsIds = new Dictionary<string, BufferedVariable>();
+            foreach (BufferedVariable node in tsList)
+            {
+                tsIds.Add(UAClient.GetUniqueId(node.Id), node);
+            }
+
+            ISet<string> missingTSIds = new HashSet<string>();
+            IList<(Identity, string)> pairedTsIds = new List<(Identity, string)>();
+            foreach (string id in tsIds.Keys)
+            {
+                pairedTsIds.Add((Identity.ExternalId(id), null));
+            }
+
+            try
+            {
+                var readResults = await RetryAsync(() =>
+                    client.GetTimeseriesLatestDataAsync(pairedTsIds), "Failed to get timeseries", true);
+                if (readResults != null)
+                {
+                    foreach (var resultItem in readResults)
+                    {
+                        Console.WriteLine(resultItem.Id);
+                        nodeToAssetIds.Add(tsIds[resultItem.ExternalId.Value].Id, resultItem.Id);
+                        if (resultItem.DataPoints.Any())
+                        {
+                            tsIds[resultItem.ExternalId.Value].LatestTimestamp =
+                                epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
+                        }
+                    }
+                }
+            }
+            catch (ResponseException ex)
+            {
+                if (ex.Code == 400)
+                {
+                    foreach (var missing in ex.Missing)
+                    {
+                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        {
+                            Console.WriteLine(value);
+                            missingTSIds.Add(value.ToString());
+                        }
+                        else
+                        {
+                            Console.WriteLine("Missing externalId in response");
+                        }
+                    }
+                }
+                Console.WriteLine(ex.Message + ", " + ex.Missing.Count());
+            }
+            if (missingTSIds.Any())
+            {
+                var createTimeseries = new List<TimeseriesWritePoco>();
+                foreach (string externalId in missingTSIds)
+                {
+                    BufferedVariable node = tsIds[externalId];
+                    var writePoco = new TimeseriesWritePoco
+                    {
+                        Description = node.Description,
+                        ExternalId = externalId,
+                        AssetId = nodeToAssetIds[node.ParentId],
+                        Name = node.DisplayName,
+                        LegacyName = externalId
+                    };
+                    createTimeseries.Add(writePoco);
+                }
+                var writeResults = await RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS");
+                if (writeResults != null)
+                {
+                    foreach (var resultItem in writeResults)
+                    {
+                        nodeToAssetIds.Add(tsIds[resultItem.ExternalId].Id, resultItem.Id);
+                    }
+                }
+                IList<(Identity, string)> idsToMap = new List<(Identity, string)>();
+                foreach (string id in tsIds.Keys)
+                {
+                    if (!missingTSIds.Contains(id))
+                    {
+                        idsToMap.Add((Identity.ExternalId(id), id));
+                    }
+                }
+                if (idsToMap.Any())
+                {
+                    var readResults = await RetryAsync(() => client.GetTimeseriesLatestDataAsync(pairedTsIds),
+                        "Failed to get timeseries ids");
+                    if (readResults != null)
+                    {
+                        foreach (var resultItem in readResults)
+                        {
+                            nodeToAssetIds.Add(tsIds[resultItem.ExternalId.Value].Id, resultItem.Id);
+                            if (resultItem.DataPoints.Any())
+                            {
+                                tsIds[resultItem.ExternalId.Value].LatestTimestamp =
+                                    epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        private async void PushNodesToCDF(object sender, ElapsedEventArgs e)
+        {
+            nodePushTimer.Stop();
+            List<BufferedNode> assetList = new List<BufferedNode>();
+            List<BufferedVariable> tsList = new List<BufferedVariable>();
+
+            int count = 0;
+            while (bufferedNodeQueue.TryDequeue(out BufferedNode buffer) && count++ < 1000)
+            {
+                if (buffer.IsVariable)
+                {
+                    tsList.Add((BufferedVariable)buffer);
+                }
+                else
+                {
+                    assetList.Add(buffer);
+                }
+            }
+            if (count == 0)
+            {
+                nodePushTimer.Start();
+                return;
+            }
+            UAClient.ReadNodeData(assetList.Concat(tsList));
+            Console.WriteLine("Push up to {0} nodes to CDF", count);
+            if (!debug)
+            {
+                using (HttpClient httpClient = clientFactory.CreateClient())
+                {
+                    Client client = Client.Create(httpClient)
+                        .AddHeader("api-key", config.ApiKey)
+                        .SetProject(config.Project);
+
+                    await EnsureAssets(assetList, client);
+                    // At this point the assets should all be synchronized and mapped
+                    // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
+                    // This also sets the LastTimestamp property of each BufferedVariable
+                    // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
+                    // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
+                    // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
+                    // node to assets map.
+                    await EnsureTimeseries(tsList, client);
+                }
+            }
+            // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
+            // createSubscription service called here
+            UAClient.SynchronizeNodes(tsList, HistoryDataHandler, SubscriptionHandler);
+            nodePushTimer.Start();
+        }
+    }
+    public class BufferedNode
+    {
+        public readonly NodeId Id;
+        public readonly string DisplayName;
+        public readonly bool IsVariable;
+        public readonly NodeId ParentId;
+        public string Description { get; set; }
+        public BufferedNode(NodeId Id, string DisplayName, NodeId ParentId) : this(Id, DisplayName, false, ParentId) {}
+        protected BufferedNode(NodeId Id, string DisplayName, bool IsVariable, NodeId ParentId)
+        {
+            this.Id = Id;
+            this.DisplayName = DisplayName;
+            this.IsVariable = IsVariable;
+            this.ParentId = ParentId;
+        }
+    }
+    public class BufferedVariable : BufferedNode
+    {
+        public uint DataType { get; set; }
+        public bool Historizing { get; set; }
+        public int ValueRank { get; set; }
+        public DateTime LatestTimestamp { get; set; } = new DateTime(1970, 1, 1);
+        public BufferedVariable(NodeId Id, string DisplayName, NodeId ParentId) : base(Id, DisplayName, true, ParentId) {}
+    }
+    public class BufferedDataPoint
+    {
+        public readonly long timestamp;
+        public readonly NodeId nodeId;
+        public readonly double doubleValue;
+        public readonly string stringValue;
+        public readonly bool isString;
+        public BufferedDataPoint(long timestamp, NodeId nodeId, double value)
+        {
+            this.timestamp = timestamp;
+            this.nodeId = nodeId;
+            doubleValue = value;
+            isString = false;
+        }
+        public BufferedDataPoint(long timestamp, NodeId nodeId, string value)
+        {
+            this.timestamp = timestamp;
+            this.nodeId = nodeId;
+            stringValue = value;
+            isString = true;
         }
     }
 }
