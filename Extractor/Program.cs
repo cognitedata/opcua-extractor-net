@@ -22,10 +22,10 @@ namespace Cognite.OpcUa
 				YamlMappingNode loggerConfig = (YamlMappingNode)config.Children[new YamlScalarNode("logging")];
 				fullConfig = new FullConfig
 				{
-					nsmaps = nsmaps,
-					uaconfig = DeserializeNode<UAClientConfig>(clientCfg),
-					cogniteConfig = DeserializeNode<CogniteClientConfig>(cogniteConfig),
-                    loggerConfig = DeserializeNode<LoggerConfig>(loggerConfig)
+					Nsmaps = nsmaps,
+					Uaconfig = DeserializeNode<UAClientConfig>(clientCfg),
+					CogniteConfig = DeserializeNode<CogniteClientConfig>(cogniteConfig),
+                    LoggerConfig = DeserializeNode<LoggerConfig>(loggerConfig)
 				};
 				ValidateConfig(fullConfig);
 			}
@@ -40,7 +40,7 @@ namespace Cognite.OpcUa
             ServiceProvider provider = services.BuildServiceProvider();
 
             Extractor extractor = new Extractor(fullConfig, provider.GetRequiredService<IHttpClientFactory>());
-			Logger.Startup(fullConfig.loggerConfig);
+			Logger.Startup(fullConfig.LoggerConfig);
 
             try
 			{
@@ -88,27 +88,27 @@ namespace Cognite.OpcUa
         }
         private static void ValidateConfig(FullConfig config)
         {
-            if (config.uaconfig.ReconnectPeriod < 100)
+            if (config.Uaconfig.ReconnectPeriod < 100)
             {
                 throw new Exception("Too short reconnect period (<100ms)");
             }
-            if (string.IsNullOrEmpty(config.uaconfig.EndpointURL))
+            if (string.IsNullOrEmpty(config.Uaconfig.EndpointURL))
             {
                 throw new Exception("Invalid EndpointURL");
             }
-            if (string.IsNullOrEmpty(config.uaconfig.GlobalPrefix))
+            if (string.IsNullOrEmpty(config.Uaconfig.GlobalPrefix))
             {
                 throw new Exception("Invalid GlobalPrefix");
             }
-            if (config.uaconfig.PollingInterval < 0)
+            if (config.Uaconfig.PollingInterval < 0)
             {
                 throw new Exception("PollingInterval must be a positive number");
             }
-            if (string.IsNullOrEmpty(config.cogniteConfig.Project))
+            if (string.IsNullOrEmpty(config.CogniteConfig.Project))
             {
                 throw new Exception("Invalid Project");
             }
-            if (string.IsNullOrEmpty(config.cogniteConfig.ApiKey))
+            if (string.IsNullOrEmpty(config.CogniteConfig.ApiKey))
             {
                 throw new Exception("Invalid api-key");
             }
@@ -139,13 +139,14 @@ namespace Cognite.OpcUa
         public string RootNodeId { get; set; }
         public int DataPushDelay { get; set; }
         public int NodePushDelay { get; set; }
+        public bool Debug { get; set; }
     }
     public class FullConfig
     {
-        public YamlMappingNode nsmaps { get; set; }
-        public UAClientConfig uaconfig { get; set; }
-        public CogniteClientConfig cogniteConfig { get; set; }
-        public LoggerConfig loggerConfig { get; set; }
+        public YamlMappingNode Nsmaps { get; set; }
+        public UAClientConfig Uaconfig { get; set; }
+        public CogniteClientConfig CogniteConfig { get; set; }
+        public LoggerConfig LoggerConfig { get; set; }
     }
     public class LoggerConfig
     {

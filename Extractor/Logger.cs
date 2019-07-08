@@ -15,10 +15,10 @@ namespace Cognite.OpcUa
         private static readonly object StartedMutex = new object();
 
         private static readonly BlockingCollection<LogLine> LogLines = new BlockingCollection<LogLine>();
-        private static Task backgroundTask = null;
-        private static string logFolder = null;
-        private static bool started = false;
-		private static bool logData = false;
+        private static Task backgroundTask;
+        private static string logFolder;
+        private static bool started;
+		private static bool logData;
 
         private enum Severity
         {
