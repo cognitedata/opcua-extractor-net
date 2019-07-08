@@ -39,7 +39,8 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Console.WriteLine("Error starting client: " + e.Message);
+                Logger.LogError("Erorr starting client");
+                Logger.LogException(e);
                 throw e;
             }
         }
@@ -55,7 +56,8 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Console.WriteLine("Failed to browse directory: " + e.Message);
+                Logger.LogError("Failed to browse directory");
+                Logger.LogException(e);
             }
         }
         public string GetUniqueId(ExpandedNodeId nodeid)
@@ -79,16 +81,6 @@ namespace Cognite.OpcUa
                 return NodeId.Null;
             }
             return new NodeId(nsString + ";" + identifier);
-        }
-        public void ClearSubscriptions()
-        {
-            Console.WriteLine("Begin clear subscriptions");
-            if (!session.RemoveSubscriptions(session.Subscriptions))
-            {
-                Console.WriteLine("Failed to remove subscriptions, retrying");
-                session.RemoveSubscriptions(session.Subscriptions);
-            }
-            Console.WriteLine("End clear subscriptions");
         }
         public double ConvertToDouble(DataValue datavalue)
         {
@@ -267,50 +259,6 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        // Failed/incomplete attempt at a node change listener. Would have worked in theory, however it
-        // seems like most server implementations violate specifications by not firing these events,
-        // or by having it be optional. Either way, this is unlikely to be reliable enough for anything.
-        public void AddChangeListener(NodeId rootNode, MonitoredItemNotificationEventHandler eventHandler)
-        {
-            Subscription subscription = new Subscription(session.DefaultSubscription) {
-                PublishingInterval = 1000,
-                DisplayName = "NodeChangeListener",
-            };
-            // where OfType(AuditNodeManagementEventType)
-            EventFilter filter = new EventFilter();
-            ContentFilter whereClause = new ContentFilter();
-            LiteralOperand operand = new LiteralOperand
-            {
-                Value = new Variant(ObjectTypeIds.BaseEventType)
-            };
-            whereClause.Push(FilterOperator.OfType, operand);
-
-            filter.WhereClause = whereClause;
-
-            var selectClauses = new SimpleAttributeOperandCollection();
-            var soperand = new SimpleAttributeOperand();
-            soperand.TypeDefinitionId = ObjectTypeIds.BaseEventType;
-            soperand.AttributeId = Attributes.NodeId;
-            soperand.BrowsePath = new QualifiedNameCollection();
-            selectClauses.Add(soperand);
-
-            filter.SelectClauses = selectClauses;
-
-            var item = new MonitoredItem(subscription.DefaultItem, true)
-            {
-                DisplayName = "Structure modified",
-                // StartNodeId = ObjectIds.Server,
-                // NodeClass = NodeClass.Object,
-                AttributeId = Attributes.EventNotifier,
-                // MonitoringMode = MonitoringMode.Reporting,
-            };
-            item.Notification += eventHandler;
-            item.Notification += (_, __) => Console.WriteLine("test");
-            subscription.AddItem(item);
-            session.AddSubscription(subscription);
-            Console.WriteLine("Create sub");
-            subscription.Create();
-        }
         private async Task StartSession()
         {
             ApplicationInstance application = new ApplicationInstance
@@ -323,7 +271,7 @@ namespace Cognite.OpcUa
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
             if (!validAppCert)
             {
-                Console.WriteLine("Missing application certificate, using insecure connection.");
+                Logger.LogWarning("Missing application certificate, using insecure connection.");
             }
             else
             {
@@ -335,7 +283,7 @@ namespace Cognite.OpcUa
             var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && false);
             var endpointConfiguration = EndpointConfiguration.Create(appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            Console.WriteLine("Attempt to connect to endpoint: " + endpoint.Description.SecurityPolicyUri);
+            Logger.LogInfo("Attempt to connect to endpoint: " + endpoint.Description.SecurityPolicyUri);
             session = await Session.Create(
                 appconfig,
                 endpoint,
@@ -348,7 +296,7 @@ namespace Cognite.OpcUa
             );
 
             session.KeepAlive += ClientKeepAlive;
-            Console.WriteLine("Successfully connected to server {0}", config.EndpointURL);
+            Logger.LogInfo("Successfully connected to server at " + config.EndpointURL);
         }
         private void ClientReconnectComplete(object sender, EventArgs eventArgs)
         {
@@ -357,7 +305,7 @@ namespace Cognite.OpcUa
             session = reconnectHandler.Session;
             reconnectHandler.Dispose();
             clientReconnecting = false;
-            Console.WriteLine("--- RECONNECTED ---");
+            Logger.LogWarning("--- RECONNECTED ---");
             visitedNodes.Clear();
             Task.Run(() => extractor?.RestartExtractor());
         }
@@ -365,11 +313,10 @@ namespace Cognite.OpcUa
         {
             if (eventArgs.Status != null && ServiceResult.IsNotGood(eventArgs.Status))
             {
-                Console.WriteLine("{0} {1}/{2}", eventArgs.Status, sender.OutstandingRequestCount, sender.DefunctRequestCount);
-
+                Logger.LogWarning(eventArgs.Status.ToString());
                 if (reconnectHandler == null)
                 {
-                    Console.WriteLine("--- RECONNECTING ---");
+                    Logger.LogWarning("--- RECONNECTING ---");
                     clientReconnecting = true;
                     extractor?.SetBlocking();
                     reconnectHandler = new SessionReconnectHandler();
@@ -385,11 +332,11 @@ namespace Cognite.OpcUa
                 // TODO Verify client acceptance here somehow?
                 if (config.Autoaccept)
                 {
-                    Console.WriteLine("Accepted Bad Certificate {0}", eventArgs.Certificate.Subject);
+                    Logger.LogWarning("Accepted Bad Certificate " + eventArgs.Certificate.Subject);
                 }
                 else
                 {
-                    Console.WriteLine("Rejected Bad Certificate {0}", eventArgs.Certificate.Subject);
+                    Logger.LogInfo("Rejected Bad Certificate " + eventArgs.Certificate.Subject);
                 }
             }
         }

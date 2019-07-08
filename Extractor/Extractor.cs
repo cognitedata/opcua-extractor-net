@@ -69,8 +69,6 @@ namespace Cognite.OpcUa
             };
             nodePushTimer.Elapsed += PushNodesToCDF;
             nodePushTimer.Start();
-            MapUAToCDF();
-
         }
         public void SetBlocking()
         {
@@ -93,12 +91,12 @@ namespace Cognite.OpcUa
         }
         public void AddSingleDataPoint(BufferedDataPoint dataPoint)
         {
-            Console.WriteLine("{0}, {1}, {2}", dataPoint.timestamp, dataPoint.doubleValue, dataPoint.nodeId);
+			Logger.LogData(dataPoint);
             bufferedDPQueue.Enqueue(dataPoint);
         }
-        private void MapUAToCDF()
+        public void MapUAToCDF()
         {
-            Console.WriteLine("Begin mapping");
+			Logger.LogInfo("Begin mapping directory");
             UAClient.BrowseDirectoryAsync(rootNode, HandleNode).Wait();
         }
         private async Task<T> RetryAsync<T>(Func<Task<T>> action, string failureMessage, bool expectResponseException = false)
@@ -119,14 +117,8 @@ namespace Cognite.OpcUa
                             throw re;
                         }
                     }
-                    else if (e.GetType() == typeof(DecodeException))
-                    {
-                        var re = (DecodeException)e;
-                        Console.WriteLine(re.Data0);
-                    }
-                    Console.WriteLine(failureMessage + ", " + e.Message + ", " + e.GetType() + ": attempt " + (i + 1) + "/" + retryCount);
-                    Console.WriteLine(e.StackTrace);
-                    Console.WriteLine(e.InnerException?.StackTrace);
+					Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
+					Logger.LogException(e);
                 }
                 Thread.Sleep(500);
             }
@@ -134,14 +126,17 @@ namespace Cognite.OpcUa
         }
         private void HandleNode(ReferenceDescription node, NodeId parentId)
         {
-            Console.WriteLine("    {0}, {1}, {2}, {3}", node.DisplayName, node.BrowseName, node.NodeClass, node.NodeId);
             if (node.NodeClass == NodeClass.Object)
             {
-                bufferedNodeQueue.Enqueue(new BufferedNode(UAClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId));
+				var bufferedNode = new BufferedNode(UAClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId);
+				Logger.LogData(bufferedNode);
+                bufferedNodeQueue.Enqueue(bufferedNode);
             }
             else if (node.NodeClass == NodeClass.Variable)
             {
-                bufferedNodeQueue.Enqueue(new BufferedVariable(UAClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId));
+				var bufferedNode = new BufferedVariable(UAClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId);
+				Logger.LogData(bufferedNode);
+                bufferedNodeQueue.Enqueue(bufferedNode);
             }
             else
             {
@@ -156,15 +151,20 @@ namespace Cognite.OpcUa
             foreach (var datapoint in item.DequeueValues())
             {
                 long tsId = !debug ? nodeToAssetIds[item.ResolvedNodeId] : 0;
-                Console.WriteLine("{0}: {1}, {2}, {3}", item.DisplayName, datapoint.Value,
-                    datapoint.SourceTimestamp, datapoint.StatusCode);
+				var buffDp = new BufferedDataPoint(
+					(long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
+					item.ResolvedNodeId,
+					UAClient.ConvertToDouble(datapoint)
+				);
+                if (StatusCode.IsNotGood(datapoint.StatusCode))
+                {
+                    Logger.LogWarning("Bad datapoint: " + buffDp.nodeId);
+                    return;
+                }
+				Logger.LogData(buffDp);
 
                 if (debug) return;
-                bufferedDPQueue.Enqueue(new BufferedDataPoint(
-                    (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
-                    item.ResolvedNodeId,
-                    UAClient.ConvertToDouble(datapoint)
-                ));
+                bufferedDPQueue.Enqueue(buffDp);
             }
         }
         private void HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
@@ -180,22 +180,16 @@ namespace Cognite.OpcUa
             if (data == null) return;
 
             HistoryData hdata = ExtensionObject.ToEncodeable(data[0].HistoryData) as HistoryData;
-            Console.WriteLine("Fetch {0} datapoints for nodeid {1}", hdata.DataValues.Count, nodeid);
+            Logger.LogInfo("Fetch " + hdata.DataValues.Count + " datapoints for nodeid " + nodeid);
             foreach (var datapoint in hdata.DataValues)
             {
-                bufferedDPQueue.Enqueue(new BufferedDataPoint(
+                var buffDp = new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
                     nodeid,
                     UAClient.ConvertToDouble(datapoint)
-                ));
-            }
-        }
-        private void StructureChangeHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
-        {
-            Console.WriteLine("Event triggered");
-            foreach (var val in item.DequeueEvents())
-            {
-                Console.WriteLine(val.Message);
+                );
+                Logger.LogData(buffDp);
+                bufferedDPQueue.Enqueue(buffDp);
             }
         }
         private async void PushDataPointsToCDF(object sender, ElapsedEventArgs e)
@@ -247,7 +241,7 @@ namespace Cognite.OpcUa
                 dataPushTimer.Start();
                 return;
             }
-            Console.WriteLine("Push {0} datapoints to CDF", count);
+            Logger.LogVerbose("pushdata", "Push " + count + " datapoints to CDF");
 
             using (HttpClient httpClient = clientFactory.CreateClient())
             {
@@ -256,11 +250,7 @@ namespace Cognite.OpcUa
                     .SetProject(config.Project);
                 if (!await RetryAsync(async () => await client.InsertDataAsync(finalDataPoints), "Failed to insert into CDF"))
                 {
-                    Console.WriteLine("Failed to insert into CDF, points: ");
-                    foreach (BufferedDataPoint datap in dataPointList)
-                    {
-                        Console.WriteLine("{0}, {1}, {2}, {3}", datap.timestamp, datap.nodeId, datap.doubleValue, nodeToAssetIds[datap.nodeId]);
-                    }
+                    Logger.LogError("Failed to insert " + count + " datapoints into CDF");
                 }
             }
             dataPushTimer.Start();
@@ -287,7 +277,6 @@ namespace Cognite.OpcUa
                 {
                     foreach (var resultItem in readResults)
                     {
-                        Console.WriteLine(resultItem.Id);
                         nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
                     }
                 }
@@ -300,15 +289,15 @@ namespace Cognite.OpcUa
                     {
                         if (missing.TryGetValue("externalId", out ErrorValue value))
                         {
-                            Console.WriteLine(value);
                             missingAssetIds.Add(value.ToString());
                         }
-                        else
-                        {
-                            Console.WriteLine("Missing externalId in response");
-                        }
                     }
-                    Console.WriteLine("Found {0} missing assets", ex.Missing.Count());
+                    Logger.LogInfo("Found " + ex.Missing.Count() + " missing assets");
+                }
+                else
+                {
+                    Logger.LogError("Failed to fetch asset ids");
+                    Logger.LogException(ex);
                 }
             }
             if (missingAssetIds.Any())
@@ -385,7 +374,6 @@ namespace Cognite.OpcUa
                 {
                     foreach (var resultItem in readResults)
                     {
-                        Console.WriteLine(resultItem.Id);
                         nodeToAssetIds.Add(tsIds[resultItem.ExternalId.Value].Id, resultItem.Id);
                         if (resultItem.DataPoints.Any())
                         {
@@ -403,16 +391,15 @@ namespace Cognite.OpcUa
                     {
                         if (missing.TryGetValue("externalId", out ErrorValue value))
                         {
-                            Console.WriteLine(value);
                             missingTSIds.Add(value.ToString());
-                        }
-                        else
-                        {
-                            Console.WriteLine("Missing externalId in response");
                         }
                     }
                 }
-                Console.WriteLine(ex.Message + ", " + ex.Missing.Count());
+                else
+                {
+                    Logger.LogError("Failed to fetch timeseries data");
+                    Logger.LogException(ex);
+                }
             }
             if (missingTSIds.Any())
             {
@@ -489,7 +476,7 @@ namespace Cognite.OpcUa
                 return;
             }
             UAClient.ReadNodeData(assetList.Concat(tsList));
-            Console.WriteLine("Push up to {0} nodes to CDF", count);
+            Logger.LogInfo("Testing " + count + " nodes against CDF");
             if (!debug)
             {
                 using (HttpClient httpClient = clientFactory.CreateClient())

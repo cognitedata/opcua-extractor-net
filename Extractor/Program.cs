@@ -10,24 +10,48 @@ namespace Cognite.OpcUa
 {
     class Program
     {
-        static void Main()
+        static int Main()
         {
             var config = ReadConfig();
-            YamlMappingNode clientCfg = (YamlMappingNode)config.Children[new YamlScalarNode("client")];
-            YamlMappingNode nsmaps = (YamlMappingNode)config.Children[new YamlScalarNode("nsmaps")];
-            YamlMappingNode cogniteConfig = (YamlMappingNode)config.Children[new YamlScalarNode("cognite")];
-            FullConfig fullConfig = new FullConfig
-            {
-                nsmaps = nsmaps,
-                uaconfig = DeserializeNode<UAClientConfig>(clientCfg),
-                cogniteConfig = DeserializeNode<CogniteClientConfig>(cogniteConfig)
-            };
-            ValidateConfig(fullConfig);
+            FullConfig fullConfig;
+			try
+			{
+				YamlMappingNode clientCfg = (YamlMappingNode)config.Children[new YamlScalarNode("client")];
+				YamlMappingNode nsmaps = (YamlMappingNode)config.Children[new YamlScalarNode("nsmaps")];
+				YamlMappingNode cogniteConfig = (YamlMappingNode)config.Children[new YamlScalarNode("cognite")];
+				YamlMappingNode loggerConfig = (YamlMappingNode)config.Children[new YamlScalarNode("logging")];
+				fullConfig = new FullConfig
+				{
+					nsmaps = nsmaps,
+					uaconfig = DeserializeNode<UAClientConfig>(clientCfg),
+					cogniteConfig = DeserializeNode<CogniteClientConfig>(cogniteConfig),
+                    loggerConfig = DeserializeNode<LoggerConfig>(loggerConfig)
+				};
+				ValidateConfig(fullConfig);
+			}
+            catch (Exception e)
+			{
+				Console.WriteLine(e.Message);
+				return -1;
+			}
+
             ServiceCollection services = new ServiceCollection();
             Configure(services);
             ServiceProvider provider = services.BuildServiceProvider();
 
             Extractor extractor = new Extractor(fullConfig, provider.GetRequiredService<IHttpClientFactory>());
+			Logger.Startup(fullConfig.loggerConfig);
+
+            try
+			{
+				extractor.MapUAToCDF();
+			}
+            catch (Exception e)
+			{
+				Logger.LogError("Failed to map directory");
+				Logger.LogException(e);
+				return -1;
+			}
 
             ManualResetEvent quitEvent = new ManualResetEvent(false);
             Console.CancelKeyPress += (sender, eArgs) =>
@@ -38,6 +62,7 @@ namespace Cognite.OpcUa
 
             quitEvent.WaitOne(-1);
             extractor.Close();
+			return 0;
         }
         private static YamlMappingNode ReadConfig()
         {
@@ -120,9 +145,11 @@ namespace Cognite.OpcUa
         public YamlMappingNode nsmaps { get; set; }
         public UAClientConfig uaconfig { get; set; }
         public CogniteClientConfig cogniteConfig { get; set; }
+        public LoggerConfig loggerConfig { get; set; }
     }
     public class LoggerConfig
     {
         public string LogFolder { get; set; }
+        public bool LogData { get; set; }
     }
 }
