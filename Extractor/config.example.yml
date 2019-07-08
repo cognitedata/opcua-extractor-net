@@ -45,3 +45,9 @@ cognite:
   DataPushDelay: 1000
   # Delay in ms between each push of Nodes to CDF
   NodePushDelay: 5000
+
+logging:
+  # Folder for logging output. Leave blank for console only
+  LogFolder:
+  # Whether or not to log all data output. For debugging only. true/false
+  LogData: false
