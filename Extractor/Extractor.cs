@@ -34,7 +34,7 @@ namespace Cognite.OpcUa
         private readonly System.Timers.Timer nodePushTimer;
         public readonly DateTime epoch = new DateTime(1970, 1, 1);
         private static readonly int retryCount = 2;
-        private static readonly bool debug = true;
+        private static readonly bool debug = false;
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
         {
             this.clientFactory = clientFactory;
@@ -50,7 +50,7 @@ namespace Cognite.OpcUa
             rootAsset = config.cogniteConfig.RootAssetId;
             nodeToAssetIds.Add(rootNode, rootAsset);
 
-            UAClient.AddChangeListener(rootNode, StructureChangeHandler);
+            // UAClient.AddChangeListener(rootNode, StructureChangeHandler);
 
             dataPushTimer = new System.Timers.Timer
             {
@@ -111,11 +111,9 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
                     if (e.GetType() == typeof(ResponseException))
                     {
                         var re = (ResponseException)e;
-                        Console.WriteLine(re.Data0);
                         if (i == retryCount - 1 || expectResponseException)
                         {
                             throw re;
@@ -126,6 +124,9 @@ namespace Cognite.OpcUa
                         var re = (DecodeException)e;
                         Console.WriteLine(re.Data0);
                     }
+                    Console.WriteLine(failureMessage + ", " + e.Message + ", " + e.GetType() + ": attempt " + (i + 1) + "/" + retryCount);
+                    Console.WriteLine(e.StackTrace);
+                    Console.WriteLine(e.InnerException?.StackTrace);
                 }
                 Thread.Sleep(500);
             }
@@ -157,6 +158,7 @@ namespace Cognite.OpcUa
                 long tsId = !debug ? nodeToAssetIds[item.ResolvedNodeId] : 0;
                 Console.WriteLine("{0}: {1}, {2}, {3}", item.DisplayName, datapoint.Value,
                     datapoint.SourceTimestamp, datapoint.StatusCode);
+
                 if (debug) return;
                 bufferedDPQueue.Enqueue(new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
@@ -240,12 +242,13 @@ namespace Cognite.OpcUa
                 });
             }
 
-            Console.WriteLine("Push {0} datapoints to CDF", count);
             if (count == 0)
             {
                 dataPushTimer.Start();
                 return;
             }
+            Console.WriteLine("Push {0} datapoints to CDF", count);
+
             using (HttpClient httpClient = clientFactory.CreateClient())
             {
                 Client client = Client.Create(httpClient)
@@ -272,20 +275,41 @@ namespace Cognite.OpcUa
             // TODO: When v1 gets support for ExternalId on assets when associating timeseries, we can drop a lot of this.
             // Specifically anything related to NodeToTimeseriesIds
             ISet<string> missingAssetIds = new HashSet<string>();
+            IList<Identity> assetIdentities = new List<Identity>(assetIds.Keys.Count);
+            foreach (var id in assetIds.Keys)
+            {
+                assetIdentities.Add(Identity.ExternalId(id));
+            }
             try
             {
-                var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(assetIds.Keys), "Failed to get assets", true);
+                var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(assetIdentities), "Failed to get assets", true);
                 if (readResults != null)
                 {
                     foreach (var resultItem in readResults)
                     {
+                        Console.WriteLine(resultItem.Id);
                         nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
                     }
                 }
             }
             catch (ResponseException ex)
             {
-                // TODO: Get exception data here to parse missing ids
+                if (ex.Code == 400)
+                {
+                    foreach (var missing in ex.Missing)
+                    {
+                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        {
+                            Console.WriteLine(value);
+                            missingAssetIds.Add(value.ToString());
+                        }
+                        else
+                        {
+                            Console.WriteLine("Missing externalId in response");
+                        }
+                    }
+                    Console.WriteLine("Found {0} missing assets", ex.Missing.Count());
+                }
             }
             if (missingAssetIds.Any())
             {
@@ -317,17 +341,17 @@ namespace Cognite.OpcUa
                         nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
                     }
                 }
-                IList<string> idsToMap = new List<string>();
+                IList<Identity> idsToMap = new List<Identity>();
                 foreach (string id in assetIds.Keys)
                 {
                     if (!missingAssetIds.Contains(id))
                     {
-                        idsToMap.Add(id);
+                        idsToMap.Add(Identity.ExternalId(id));
                     }
                 }
                 if (idsToMap.Any())
                 {
-                    var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(assetIds.Keys), "Failed to get asset ids");
+                    var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(idsToMap), "Failed to get asset ids");
                     if (readResults != null)
                     {
                         foreach (var resultItem in readResults)
@@ -350,7 +374,7 @@ namespace Cognite.OpcUa
             IList<(Identity, string)> pairedTsIds = new List<(Identity, string)>();
             foreach (string id in tsIds.Keys)
             {
-                pairedTsIds.Add((Identity.ExternalId(id), id));
+                pairedTsIds.Add((Identity.ExternalId(id), null));
             }
 
             try
@@ -361,6 +385,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var resultItem in readResults)
                     {
+                        Console.WriteLine(resultItem.Id);
                         nodeToAssetIds.Add(tsIds[resultItem.ExternalId.Value].Id, resultItem.Id);
                         if (resultItem.DataPoints.Any())
                         {
@@ -372,7 +397,22 @@ namespace Cognite.OpcUa
             }
             catch (ResponseException ex)
             {
-                // TODO: Get exception data here to parse missing ids
+                if (ex.Code == 400)
+                {
+                    foreach (var missing in ex.Missing)
+                    {
+                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        {
+                            Console.WriteLine(value);
+                            missingTSIds.Add(value.ToString());
+                        }
+                        else
+                        {
+                            Console.WriteLine("Missing externalId in response");
+                        }
+                    }
+                }
+                Console.WriteLine(ex.Message + ", " + ex.Missing.Count());
             }
             if (missingTSIds.Any())
             {
@@ -443,7 +483,11 @@ namespace Cognite.OpcUa
                     assetList.Add(buffer);
                 }
             }
-            if (count == 0) return;
+            if (count == 0)
+            {
+                nodePushTimer.Start();
+                return;
+            }
             UAClient.ReadNodeData(assetList.Concat(tsList));
             Console.WriteLine("Push up to {0} nodes to CDF", count);
             if (!debug)
@@ -458,16 +502,15 @@ namespace Cognite.OpcUa
                     // At this point the assets should all be synchronized and mapped
                     // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
                     // This also sets the LastTimestamp property of each BufferedVariable
+                    // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
+                    // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
+                    // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
+                    // node to assets map.
                     await EnsureTimeseries(tsList, client);
                 }
-
-                // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
-                // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
-                // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
-                // node to timeseries map.
-                // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
-                // createSubscription service called here
             }
+            // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
+            // createSubscription service called here
             UAClient.SynchronizeNodes(tsList, HistoryDataHandler, SubscriptionHandler);
             nodePushTimer.Start();
         }

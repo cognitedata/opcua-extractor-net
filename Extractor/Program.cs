@@ -121,4 +121,8 @@ namespace Cognite.OpcUa
         public UAClientConfig uaconfig { get; set; }
         public CogniteClientConfig cogniteConfig { get; set; }
     }
+    public class LoggerConfig
+    {
+        public string LogFolder { get; set; }
+    }
 }

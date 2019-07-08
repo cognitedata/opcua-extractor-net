@@ -16,15 +16,18 @@ namespace Cognite.OpcUa
         static UAClientConfig config;
         Session session;
         SessionReconnectHandler reconnectHandler;
-        readonly YamlMappingNode nsmaps;
+        readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
         readonly Extractor extractor;
         readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
         readonly object subscriptionLock = new object();
         bool clientReconnecting;
 
-        public UAClient(UAClientConfig config, YamlMappingNode nsmaps, Extractor extractor = null)
+        public UAClient(UAClientConfig config, YamlMappingNode namespaces, Extractor extractor = null)
         {
-            this.nsmaps = nsmaps;
+            foreach (var node in namespaces.Children)
+            {
+                nsmaps.Add(((YamlScalarNode)node.Key).Value, ((YamlScalarNode)node.Value).Value);
+            }
             this.extractor = extractor;
             UAClient.config = config;
         }
@@ -264,6 +267,9 @@ namespace Cognite.OpcUa
                 }
             }
         }
+        // Failed/incomplete attempt at a node change listener. Would have worked in theory, however it
+        // seems like most server implementations violate specifications by not firing these events,
+        // or by having it be optional. Either way, this is unlikely to be reliable enough for anything.
         public void AddChangeListener(NodeId rootNode, MonitoredItemNotificationEventHandler eventHandler)
         {
             Subscription subscription = new Subscription(session.DefaultSubscription) {
@@ -431,9 +437,9 @@ namespace Cognite.OpcUa
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {
             string prefix;
-            if (nsmaps.Children.TryGetValue(new YamlScalarNode(namespaceUri), out YamlNode prefixNode))
+            if (nsmaps.TryGetValue(namespaceUri, out string prefixNode))
             {
-                prefix = prefixNode.ToString();
+                prefix = prefixNode;
             }
             else
             {
