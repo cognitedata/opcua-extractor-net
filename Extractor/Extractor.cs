@@ -281,7 +281,7 @@ namespace Cognite.OpcUa
                     Logger.LogInfo("Found " + readResults.Count() + " assets");
                     foreach (var resultItem in readResults)
                     {
-                        nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
+                        nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
                     }
                 }
             }
@@ -356,7 +356,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var resultItem in writeResults)
                     {
-                        nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
+                        nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
                     }
                 }
                 IList<Identity> idsToMap = new List<Identity>();
@@ -375,7 +375,7 @@ namespace Cognite.OpcUa
                     {
                         foreach (var resultItem in readResults)
                         {
-                            nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
+                            nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
                         }
                     }
                 }
@@ -402,7 +402,7 @@ namespace Cognite.OpcUa
                     Logger.LogInfo("Found " + readResults.Count() + " timeseries");
                     foreach (var resultItem in readResults)
                     {
-                        nodeToAssetIds.Add(tsIds[resultItem.ExternalId].Id, resultItem.Id);
+                        nodeToAssetIds.TryAdd(tsIds[resultItem.ExternalId].Id, resultItem.Id);
                     }
                 }
             }
@@ -464,7 +464,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var resultItem in writeResults)
                     {
-                        nodeToAssetIds.Add(tsIds[resultItem.ExternalId].Id, resultItem.Id);
+                        nodeToAssetIds.TryAdd(tsIds[resultItem.ExternalId].Id, resultItem.Id);
                     }
                 }
                 ISet<string> idsToMap = new HashSet<string>();
@@ -484,7 +484,7 @@ namespace Cognite.OpcUa
                     {
                         foreach (var resultItem in readResults)
                         {
-                            nodeToAssetIds.Add(tsIds[resultItem.ExternalId].Id, resultItem.Id);
+                            nodeToAssetIds.TryAdd(tsIds[resultItem.ExternalId].Id, resultItem.Id);
                         }
                     }
                 }
@@ -521,7 +521,7 @@ namespace Cognite.OpcUa
                         Logger.LogInfo("Found " + readResults.Count() + " historizing timeseries");
                         foreach (var resultItem in readResults)
                         {
-                            nodeToAssetIds.Add(tsIds[resultItem.ExternalId.Value].Id, resultItem.Id);
+                            nodeToAssetIds.TryAdd(tsIds[resultItem.ExternalId.Value].Id, resultItem.Id);
                             if (resultItem.DataPoints.Any())
                             {
                                 tsIds[resultItem.ExternalId.Value].LatestTimestamp =
@@ -588,7 +588,7 @@ namespace Cognite.OpcUa
                     {
                         foreach (var resultItem in writeResults)
                         {
-                            nodeToAssetIds.Add(tsIds[resultItem.ExternalId].Id, resultItem.Id);
+                            nodeToAssetIds.TryAdd(tsIds[resultItem.ExternalId].Id, resultItem.Id);
                         }
                     }
                     ISet<(Identity, string)> idsToMap = new HashSet<(Identity, string)>();
@@ -608,7 +608,7 @@ namespace Cognite.OpcUa
                         {
                             foreach (var resultItem in readResults)
                             {
-                                nodeToAssetIds.Add(tsIds[resultItem.ExternalId.Value].Id, resultItem.Id);
+                                nodeToAssetIds.TryAdd(tsIds[resultItem.ExternalId.Value].Id, resultItem.Id);
                                 if (resultItem.DataPoints.Any())
                                 {
                                     tsIds[resultItem.ExternalId.Value].LatestTimestamp =
@@ -702,7 +702,9 @@ namespace Cognite.OpcUa
                     }
                     catch (Exception e)
                     {
+                        Logger.LogError("Failed to push to CDF");
                         Logger.LogException(e);
+                        throw e;
                     }
                 }
             }

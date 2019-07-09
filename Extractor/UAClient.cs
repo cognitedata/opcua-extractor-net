@@ -99,6 +99,7 @@ namespace Cognite.OpcUa
             Logger.LogWarning("--- RECONNECTED ---");
             visitedNodes.Clear();
             Task.Run(() => extractor?.RestartExtractor());
+            reconnectHandler = null;
         }
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
         {
@@ -439,7 +440,7 @@ namespace Cognite.OpcUa
                         var children = GetNodeChildren(node.Id);
                         foreach (var child in children)
                         {
-                            var property = new BufferedVariable(ToNodeId(child.NodeId), child.DisplayName.Text, node.Id);
+                            var property = new BufferedVariable(ToNodeId(child.NodeId), child.DisplayName.Text, node.Id) { IsProperty = true };
                             properties.Add(property);
                             if (node.properties == null)
                             {
@@ -502,7 +503,6 @@ namespace Cognite.OpcUa
         public static string ConvertToString(object value)
         {
             if (value == null) return "";
-
             if (value.GetType().IsArray)
             {
                 string result = "[";
@@ -532,7 +532,10 @@ namespace Cognite.OpcUa
             {
                 return ((EUInformation)value).DisplayName + ": " + ((EUInformation)value).Description;
             }
-
+            if (value.GetType() == typeof(EnumValueType))
+            {
+                return ((EnumValueType)value).DisplayName + ": " + ((EnumValueType)value).Value;
+            }
             return value.ToString();
         }
         public static string ConvertToString(DataValue datavalue)
