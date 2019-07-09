@@ -59,8 +59,9 @@ namespace Cognite.OpcUa
                 quitEvent.Set();
                 eArgs.Cancel = true;
             };
-
+            Console.WriteLine("Press ^C to exit");
             quitEvent.WaitOne(-1);
+            Logger.LogInfo("Shutting down extractor");
             extractor.Close();
 			return 0;
         }
