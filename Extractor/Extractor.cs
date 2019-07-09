@@ -307,6 +307,19 @@ namespace Cognite.OpcUa
             if (missingAssetIds.Any())
             {
                 Logger.LogInfo("Create " + missingAssetIds.Count + " new assets");
+                IList<BufferedNode> getMetaData = new List<BufferedNode>();
+                foreach (string externalid in missingAssetIds)
+                {
+                    getMetaData.Add(assetIds[externalid]);
+                }
+                try
+                {
+                    UAClient.GetNodeProperties(getMetaData);
+                }
+                catch (Exception e)
+                {
+                    Logger.LogException(e);
+                }
                 var createAssets = new List<AssetWritePoco>();
                 foreach (string externalId in missingAssetIds)
                 {
@@ -324,6 +337,17 @@ namespace Cognite.OpcUa
                     else
                     {
                         writePoco.ParentExternalId = UAClient.GetUniqueId(node.ParentId);
+                    }
+                    if (node.properties != null && node.properties.Any())
+                    {
+                        writePoco.MetaData = new Dictionary<string, string>();
+                        foreach (var property in node.properties)
+                        {
+                            if (property.Value != null)
+                            {
+                                writePoco.MetaData.Add(property.DisplayName, property.Value.stringValue);
+                            }
+                        }
                     }
                     createAssets.Add(writePoco);
                 }
@@ -405,6 +429,12 @@ namespace Cognite.OpcUa
             {
                 Logger.LogInfo("Create " + missingTSIds.Count + " new timeseries");
                 var createTimeseries = new List<TimeseriesWritePoco>();
+                IList<BufferedNode> getMetaData = new List<BufferedNode>();
+                foreach (string externalid in missingTSIds)
+                {
+                    getMetaData.Add(tsIds[externalid]);
+                }
+                UAClient.GetNodeProperties(getMetaData);
                 foreach (string externalId in missingTSIds)
                 {
                     BufferedVariable node = tsIds[externalId];
@@ -416,6 +446,17 @@ namespace Cognite.OpcUa
                         Name = node.DisplayName,
                         LegacyName = externalId
                     };
+                    if (node.properties != null && node.properties.Any())
+                    {
+                        writePoco.MetaData = new Dictionary<string, string>();
+                        foreach (var property in node.properties)
+                        {
+                            if (property.Value != null)
+                            {
+                                writePoco.MetaData.Add(property.DisplayName, property.Value.stringValue);
+                            }
+                        }
+                    }
                     createTimeseries.Add(writePoco);
                 }
                 var writeResults = await RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS");
@@ -512,6 +553,12 @@ namespace Cognite.OpcUa
                 {
                     Logger.LogInfo("Create " + missingTSIds.Count + " new historizing timeseries");
                     var createTimeseries = new List<TimeseriesWritePoco>();
+                    IList<BufferedNode> getMetaData = new List<BufferedNode>();
+                    foreach (string externalid in missingTSIds)
+                    {
+                        getMetaData.Add(tsIds[externalid]);
+                    }
+                    UAClient.GetNodeProperties(getMetaData);
                     foreach (string externalId in missingTSIds)
                     {
                         BufferedVariable node = tsIds[externalId];
@@ -523,6 +570,17 @@ namespace Cognite.OpcUa
                             Name = node.DisplayName,
                             LegacyName = externalId
                         };
+                        if (node.properties != null && node.properties.Any())
+                        {
+                            writePoco.MetaData = new Dictionary<string, string>();
+                            foreach (var property in node.properties)
+                            {
+                                if (property.Value != null)
+                                {
+                                    writePoco.MetaData.Add(property.DisplayName, property.Value.stringValue);
+                                }
+                            }
+                        }
                         createTimeseries.Add(writePoco);
                     }
                     var writeResults = await RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create historizing TS");
@@ -629,17 +687,23 @@ namespace Cognite.OpcUa
                     Client client = Client.Create(httpClient)
                         .AddHeader("api-key", config.ApiKey)
                         .SetProject(config.Project);
-
-                    await EnsureAssets(assetList, client);
-                    // At this point the assets should all be synchronized and mapped
-                    // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
-                    // This also sets the LastTimestamp property of each BufferedVariable
-                    // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
-                    // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
-                    // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
-                    // node to assets map.
-                    await EnsureTimeseries(tsList, client);
-                    await EnsureHistorizingTimeseries(histTsList, client);
+                    try
+                    {
+                        await EnsureAssets(assetList, client);
+                        // At this point the assets should all be synchronized and mapped
+                        // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
+                        // This also sets the LastTimestamp property of each BufferedVariable
+                        // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
+                        // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
+                        // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
+                        // node to assets map.
+                        await EnsureTimeseries(tsList, client);
+                        await EnsureHistorizingTimeseries(histTsList, client);
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.LogException(e);
+                    }
                 }
             }
             // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
@@ -674,17 +738,16 @@ namespace Cognite.OpcUa
         public bool IsProperty { get; set; }
         public DateTime LatestTimestamp { get; set; } = new DateTime(1970, 1, 1);
         public BufferedDataPoint Value { get; set; }
-        public uint[] ArrayDimensions { get; set; }
         public BufferedVariable(NodeId Id, string DisplayName, NodeId ParentId) : base(Id, DisplayName, true, ParentId) {}
         public void SetDataPoint(DataValue value)
         {
-            if (value == null) return;
-            if (DataType < DataTypes.SByte || DataType > DataTypes.Double)
+            if (value == null || value.Value == null) return;
+            if (DataType < DataTypes.SByte || DataType > DataTypes.Double || IsProperty)
             {
                 Value = new BufferedDataPoint(
                     (long)value.SourceTimestamp.Subtract(Extractor.epoch).TotalMilliseconds,
                     Id,
-                    value.ToString());
+                    UAClient.ConvertToString(value));
             }
             else
             {

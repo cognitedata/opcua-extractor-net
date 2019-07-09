@@ -31,6 +31,8 @@ namespace Cognite.OpcUa
             this.extractor = extractor;
             UAClient.config = config;
         }
+        #region Session management
+
         public async Task Run()
         {
             try
@@ -48,6 +50,91 @@ namespace Cognite.OpcUa
         {
             session.CloseSession(null, true);
         }
+        private async Task StartSession()
+        {
+            ApplicationInstance application = new ApplicationInstance
+            {
+                ApplicationName = ".NET OPC-UA Extractor",
+                ApplicationType = ApplicationType.Client,
+                ConfigSectionName = "opc.ua.net.extractor"
+            };
+            ApplicationConfiguration appconfig = await application.LoadApplicationConfiguration(false);
+            bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
+            if (!validAppCert)
+            {
+                Logger.LogWarning("Missing application certificate, using insecure connection.");
+            }
+            else
+            {
+                appconfig.ApplicationUri = Utils.GetApplicationUriFromCertificate(
+                    appconfig.SecurityConfiguration.ApplicationCertificate.Certificate);
+                config.Autoaccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
+                appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
+            }
+            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && false);
+            var endpointConfiguration = EndpointConfiguration.Create(appconfig);
+            var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
+            Logger.LogInfo("Attempt to connect to endpoint: " + endpoint.Description.SecurityPolicyUri);
+            session = await Session.Create(
+                appconfig,
+                endpoint,
+                false,
+                ".NET OPC-UA Extractor Client",
+                0,
+                new UserIdentity(new AnonymousIdentityToken()),
+                // new UserIdentity(config.Username, config.Password),
+                null
+            );
+
+            session.KeepAlive += ClientKeepAlive;
+            Logger.LogInfo("Successfully connected to server at " + config.EndpointURL);
+        }
+        private void ClientReconnectComplete(object sender, EventArgs eventArgs)
+        {
+            if (!clientReconnecting) return;
+            if (!ReferenceEquals(sender, reconnectHandler)) return;
+            session = reconnectHandler.Session;
+            reconnectHandler.Dispose();
+            clientReconnecting = false;
+            Logger.LogWarning("--- RECONNECTED ---");
+            visitedNodes.Clear();
+            Task.Run(() => extractor?.RestartExtractor());
+        }
+        private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
+        {
+            if (eventArgs.Status != null && ServiceResult.IsNotGood(eventArgs.Status))
+            {
+                Logger.LogWarning(eventArgs.Status.ToString());
+                if (reconnectHandler == null)
+                {
+                    Logger.LogWarning("--- RECONNECTING ---");
+                    clientReconnecting = true;
+                    extractor?.SetBlocking();
+                    reconnectHandler = new SessionReconnectHandler();
+                    reconnectHandler.BeginReconnect(sender, config.ReconnectPeriod, ClientReconnectComplete);
+                }
+            }
+        }
+        private static void CertificateValidationHandler(CertificateValidator validator,
+            CertificateValidationEventArgs eventArgs)
+        {
+            if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
+            {
+                eventArgs.Accept = config.Autoaccept;
+                // TODO Verify client acceptance here somehow?
+                if (config.Autoaccept)
+                {
+                    Logger.LogWarning("Accepted Bad Certificate " + eventArgs.Certificate.Subject);
+                }
+                else
+                {
+                    Logger.LogInfo("Rejected Bad Certificate " + eventArgs.Certificate.Subject);
+                }
+            }
+        }
+        #endregion
+        #region Browse
+
         public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback)
         {
             try
@@ -60,37 +147,51 @@ namespace Cognite.OpcUa
                 Logger.LogException(e);
             }
         }
-        public string GetUniqueId(ExpandedNodeId nodeid)
+        private ReferenceDescriptionCollection GetNodeChildren(NodeId parent)
         {
-            string namespaceUri = nodeid.NamespaceUri;
-            if (namespaceUri == null)
+            session.Browse(
+                null,
+                null,
+                parent,
+                0,
+                BrowseDirection.Forward,
+                ReferenceTypeIds.HierarchicalReferences,
+                true,
+                (uint)NodeClass.Variable | (uint)NodeClass.Object,
+                out byte[] continuationPoint,
+                out ReferenceDescriptionCollection references
+            );
+            while (continuationPoint != null)
             {
-                namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
+                session.BrowseNext(
+                    null,
+                    false,
+                    continuationPoint,
+                    out continuationPoint,
+                    out ReferenceDescriptionCollection tmpReferences
+                );
+                references.AddRange(tmpReferences);
             }
-            return GetUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
+            return references;
         }
-        public NodeId ToNodeId(ExpandedNodeId nodeid)
+        private void BrowseDirectory(NodeId root, Action<ReferenceDescription, NodeId> callback)
         {
-            return ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris);
-        }
-        public NodeId ToNodeId(string identifier, string namespaceUri)
-        {
-            string nsString = "ns=" + session.NamespaceUris.GetIndex(namespaceUri);
-            if (session.NamespaceUris.GetIndex(namespaceUri) == -1)
+            if (!visitedNodes.Add(root)) return;
+            if (clientReconnecting) return;
+            var references = GetNodeChildren(root);
+            List<Task> tasks = new List<Task>();
+            foreach (var rd in references)
             {
-                return NodeId.Null;
+                if (rd.NodeId == ObjectIds.Server) continue;
+                callback(rd, root);
+                if (rd.NodeClass == NodeClass.Variable) continue;
+                tasks.Add(Task.Run(() => BrowseDirectory(ToNodeId(rd.NodeId), callback)));
             }
-            return new NodeId(nsString + ";" + identifier);
+            Task.WhenAll(tasks.ToArray()).Wait();
         }
-        public static double ConvertToDouble(DataValue datavalue)
-        {
-            if (datavalue == null || datavalue.Value == null) return 0;
-            if (datavalue.Value.GetType().IsArray)
-            {
-                return Convert.ToDouble((datavalue.Value as IEnumerable<object>)?.First());
-            }
-            return Convert.ToDouble(datavalue.Value);
-        }
+        #endregion
+        #region Get data
+
         public void DoHistoryRead(BufferedVariable toRead,
             Action<HistoryReadResultCollection, bool, NodeId> callback)
         {
@@ -207,8 +308,7 @@ namespace Cognite.OpcUa
             {
                 Attributes.DataType,
                 Attributes.Historizing,
-                Attributes.ValueRank,
-                Attributes.Value
+                Attributes.ValueRank
             };
             var readValueIds = new ReadValueIdCollection();
             foreach (BufferedNode node in nodes)
@@ -241,7 +341,6 @@ namespace Cognite.OpcUa
                     varEnumerator.MoveNext();
                     nextValues.Add(varEnumerator.Current);
                 }
-                Logger.LogInfo("Get " + nextValues.Count + " values");
                 session.Read(
                     null,
                     0,
@@ -275,133 +374,171 @@ namespace Cognite.OpcUa
                     vnode.Historizing = enumerator.Current.GetValue(false);
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
+                }
+            }
+        }
+        public void ReadNodeValues(IEnumerable<BufferedVariable> nodes)
+        {
+            var readValuesIds = new ReadValueIdCollection();
+            foreach (var node in nodes)
+            {
+                if (node.ValueRank == -1)
+                {
+                    readValuesIds.Add(new ReadValueId
+                    {
+                        AttributeId = Attributes.Value,
+                        NodeId = node.Id
+                    });
+                }
+            }
+            DataValueCollection values = new DataValueCollection();
+            var varEnumerator = readValuesIds.GetEnumerator();
+            int remaining = readValuesIds.Count;
+            while (remaining > 0)
+            {
+                ReadValueIdCollection nextValues = new ReadValueIdCollection();
+                for (int i = 0; i < Math.Min(remaining, 1000); i++)
+                {
+                    varEnumerator.MoveNext();
+                    nextValues.Add(varEnumerator.Current);
+                }
+                session.Read(
+                    null,
+                    0,
+                    TimestampsToReturn.Source,
+                    nextValues,
+                    out DataValueCollection lvalues,
+                    out _
+                );
+                foreach (var value in lvalues)
+                {
+                    values.Add(value);
+                }
+                remaining -= 1000;
+            }
+            var enumerator = values.GetEnumerator();
+            foreach (var node in nodes)
+            {
+                if (node.ValueRank == -1)
+                {
                     enumerator.MoveNext();
-                    vnode.SetDataPoint(enumerator.Current.GetValue<DataValue>(null));
+                    node.SetDataPoint(enumerator.Current);
                 }
             }
         }
-        private async Task StartSession()
+        public void GetNodeProperties(IEnumerable<BufferedNode> nodes)
         {
-            ApplicationInstance application = new ApplicationInstance
+            IList<Task> tasks = new List<Task>();
+            ISet<BufferedVariable> properties = new HashSet<BufferedVariable>();
+            foreach (var node in nodes)
             {
-                ApplicationName = ".NET OPC-UA Extractor",
-                ApplicationType = ApplicationType.Client,
-                ConfigSectionName = "opc.ua.net.extractor"
-            };
-            ApplicationConfiguration appconfig = await application.LoadApplicationConfiguration(false);
-            bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
-            if (!validAppCert)
-            {
-                Logger.LogWarning("Missing application certificate, using insecure connection.");
-            }
-            else
-            {
-                appconfig.ApplicationUri = Utils.GetApplicationUriFromCertificate(
-                    appconfig.SecurityConfiguration.ApplicationCertificate.Certificate);
-                config.Autoaccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
-                appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
-            }
-            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && false);
-            var endpointConfiguration = EndpointConfiguration.Create(appconfig);
-            var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            Logger.LogInfo("Attempt to connect to endpoint: " + endpoint.Description.SecurityPolicyUri);
-            session = await Session.Create(
-                appconfig,
-                endpoint,
-                false,
-                ".NET OPC-UA Extractor Client",
-                0,
-                new UserIdentity(new AnonymousIdentityToken()),
-                // new UserIdentity(config.Username, config.Password),
-                null
-            );
-
-            session.KeepAlive += ClientKeepAlive;
-            Logger.LogInfo("Successfully connected to server at " + config.EndpointURL);
-        }
-        private void ClientReconnectComplete(object sender, EventArgs eventArgs)
-        {
-            if (!clientReconnecting) return;
-            if (!ReferenceEquals(sender, reconnectHandler)) return;
-            session = reconnectHandler.Session;
-            reconnectHandler.Dispose();
-            clientReconnecting = false;
-            Logger.LogWarning("--- RECONNECTED ---");
-            visitedNodes.Clear();
-            Task.Run(() => extractor?.RestartExtractor());
-        }
-        private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
-        {
-            if (eventArgs.Status != null && ServiceResult.IsNotGood(eventArgs.Status))
-            {
-                Logger.LogWarning(eventArgs.Status.ToString());
-                if (reconnectHandler == null)
+                if (node.IsVariable)
                 {
-                    Logger.LogWarning("--- RECONNECTING ---");
-                    clientReconnecting = true;
-                    extractor?.SetBlocking();
-                    reconnectHandler = new SessionReconnectHandler();
-                    reconnectHandler.BeginReconnect(sender, config.ReconnectPeriod, ClientReconnectComplete);
-                }
-            }
-        }
-        private static void CertificateValidationHandler(CertificateValidator validator, CertificateValidationEventArgs eventArgs)
-        {
-            if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
-            {
-                eventArgs.Accept = config.Autoaccept;
-                // TODO Verify client acceptance here somehow?
-                if (config.Autoaccept)
-                {
-                    Logger.LogWarning("Accepted Bad Certificate " + eventArgs.Certificate.Subject);
+                    tasks.Add(Task.Run(() =>
+                    {
+                        var children = GetNodeChildren(node.Id);
+                        foreach (var child in children)
+                        {
+                            var property = new BufferedVariable(ToNodeId(child.NodeId), child.DisplayName.Text, node.Id);
+                            properties.Add(property);
+                            if (node.properties == null)
+                            {
+                                node.properties = new List<BufferedVariable>();
+                            }
+                            node.properties.Add(property);
+                        }
+                    }));
                 }
                 else
                 {
-                    Logger.LogInfo("Rejected Bad Certificate " + eventArgs.Certificate.Subject);
+                    if (node.properties != null)
+                    {
+                        foreach (var property in node.properties)
+                        {
+                            properties.Add(property);
+                        }
+                    }
                 }
             }
+            Task.WhenAll(tasks).Wait();
+            ReadNodeData(properties);
+            ReadNodeValues(properties);
+
         }
-        private ReferenceDescriptionCollection GetNodeChildren(NodeId parent)
+        #endregion
+        #region Utils
+
+        public string GetUniqueId(ExpandedNodeId nodeid)
         {
-            session.Browse(
-                null,
-                null,
-                parent,
-                0,
-                BrowseDirection.Forward,
-                ReferenceTypeIds.HierarchicalReferences,
-                true,
-                (uint)NodeClass.Variable | (uint)NodeClass.Object,
-                out byte[] continuationPoint,
-                out ReferenceDescriptionCollection references
-            );
-            while (continuationPoint != null)
+            string namespaceUri = nodeid.NamespaceUri;
+            if (namespaceUri == null)
             {
-                session.BrowseNext(
-                    null,
-                    false,
-                    continuationPoint,
-                    out continuationPoint,
-                    out ReferenceDescriptionCollection tmpReferences
-                );
-                references.AddRange(tmpReferences);
+                namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
             }
-            return references;
+            return GetUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
         }
-        private void BrowseDirectory(NodeId root, Action<ReferenceDescription, NodeId> callback)
+        public NodeId ToNodeId(ExpandedNodeId nodeid)
         {
-            if (!visitedNodes.Add(root)) return;
-            if (clientReconnecting) return;
-            var references = GetNodeChildren(root);
-            List<Task> tasks = new List<Task>();
-            foreach (var rd in references)
+            return ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris);
+        }
+        public NodeId ToNodeId(string identifier, string namespaceUri)
+        {
+            string nsString = "ns=" + session.NamespaceUris.GetIndex(namespaceUri);
+            if (session.NamespaceUris.GetIndex(namespaceUri) == -1)
             {
-                if (rd.NodeId == ObjectIds.Server) continue;
-                callback(rd, root);
-                if (rd.NodeClass == NodeClass.Variable) continue;
-                tasks.Add(Task.Run(() => BrowseDirectory(ToNodeId(rd.NodeId), callback)));
+                return NodeId.Null;
             }
-            Task.WhenAll(tasks.ToArray()).Wait();
+            return new NodeId(nsString + ";" + identifier);
+        }
+        public static double ConvertToDouble(DataValue datavalue)
+        {
+            if (datavalue == null || datavalue.Value == null) return 0;
+            if (datavalue.Value.GetType().IsArray)
+            {
+                return Convert.ToDouble((datavalue.Value as IEnumerable<object>)?.First());
+            }
+            return Convert.ToDouble(datavalue.Value);
+        }
+        public static string ConvertToString(object value)
+        {
+            if (value == null) return "";
+
+            if (value.GetType().IsArray)
+            {
+                string result = "[";
+                if (value is object[]values)
+                {
+                    int count = 0;
+                    foreach (var dvalue in values)
+                    {
+                        result += ((count++ > 0) ? ", " : "") + ConvertToString(dvalue);
+                    }
+                }
+                return result + "]";
+            }
+            if (value.GetType() == typeof(LocalizedText))
+            {
+                return ((LocalizedText)value).Text;
+            }
+            if (value.GetType() == typeof(ExtensionObject))
+            {
+                return ConvertToString(((ExtensionObject)value).Body);
+            }
+            if (value.GetType() == typeof(Range))
+            {
+                return "(" + ((Range)value).Low + ", " + ((Range)value).High + ")";
+            }
+            if (value.GetType() == typeof(EUInformation))
+            {
+                return ((EUInformation)value).DisplayName + ": " + ((EUInformation)value).Description;
+            }
+
+            return value.ToString();
+        }
+        public static string ConvertToString(DataValue datavalue)
+        {
+            if (datavalue == null) return "";
+            return ConvertToString(datavalue.Value);
         }
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {
@@ -426,7 +563,7 @@ namespace Cognite.OpcUa
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
             return config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
-
         }
+        #endregion
     }
 }
