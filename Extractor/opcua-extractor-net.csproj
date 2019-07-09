@@ -10,12 +10,12 @@
     <PackageReference Include="YamlDotNet" Version="6.1.1" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="2.2.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
+    <PackageReference Include="CogniteSdk" Version="0.5.6" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\lib\Opc.Ua.Client\Opc.Ua.Client.csproj" />
     <ProjectReference Include="..\lib\Opc.Ua.Configuration\Opc.Ua.Configuration.csproj" />
     <ProjectReference Include="..\lib\Opc.Ua.Core\Opc.Ua.Core.csproj" />
-    <ProjectReference Include="..\..\CogniteSdk.NET\src\CogniteSdk.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <None Remove="App.config" />

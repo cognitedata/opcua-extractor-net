@@ -9,8 +9,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Opc.Ua.Core", "lib\Opc.Ua.C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "opcua-extractor-net", "Extractor\opcua-extractor-net.csproj", "{F2F44615-586A-45BD-AC07-4553AA5ED948}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "CogniteSdk", "..\CogniteSdk.NET\src\CogniteSdk.fsproj", "{ADC73752-DB08-49D5-A93E-E18583467802}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,9 +31,5 @@ Global
 		{F2F44615-586A-45BD-AC07-4553AA5ED948}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F2F44615-586A-45BD-AC07-4553AA5ED948}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F2F44615-586A-45BD-AC07-4553AA5ED948}.Release|Any CPU.Build.0 = Release|Any CPU
-		{ADC73752-DB08-49D5-A93E-E18583467802}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{ADC73752-DB08-49D5-A93E-E18583467802}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{ADC73752-DB08-49D5-A93E-E18583467802}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{ADC73752-DB08-49D5-A93E-E18583467802}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
