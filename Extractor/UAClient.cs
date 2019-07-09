@@ -11,7 +11,7 @@ using System.Threading;
 
 namespace Cognite.OpcUa
 {
-    class UAClient
+    public class UAClient
     {
         static UAClientConfig config;
         Session session;
@@ -111,7 +111,7 @@ namespace Cognite.OpcUa
                 {
                     Logger.LogWarning("--- RECONNECTING ---");
                     clientReconnecting = true;
-                    extractor?.SetBlocking();
+                    extractor.Blocking = true;
                     reconnectHandler = new SessionReconnectHandler();
                     reconnectHandler.BeginReconnect(sender, config.ReconnectPeriod, ClientReconnectComplete);
                 }
@@ -135,6 +135,7 @@ namespace Cognite.OpcUa
             }
         }
         #endregion
+
         #region Browse
 
         public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback)
@@ -192,6 +193,7 @@ namespace Cognite.OpcUa
             Task.WhenAll(tasks.ToArray()).Wait();
         }
         #endregion
+
         #region Get data
 
         public void DoHistoryRead(BufferedVariable toRead,
@@ -468,6 +470,7 @@ namespace Cognite.OpcUa
 
         }
         #endregion
+
         #region Utils
 
         public string GetUniqueId(ExpandedNodeId nodeid)
