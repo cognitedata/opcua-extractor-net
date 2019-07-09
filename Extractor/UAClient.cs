@@ -81,8 +81,9 @@ namespace Cognite.OpcUa
                 false,
                 ".NET OPC-UA Extractor Client",
                 0,
-                new UserIdentity(new AnonymousIdentityToken()),
-                // new UserIdentity(config.Username, config.Password),
+                (config.Username == null || !config.Username.Trim().Any())
+                    ? new UserIdentity(new AnonymousIdentityToken())
+                    : new UserIdentity(config.Username, config.Password),
                 null
             );
 
@@ -236,7 +237,7 @@ namespace Cognite.OpcUa
             foreach (BufferedVariable node in nodeList)
             {
                 if (node != null
-                    && node.DataType >= DataTypes.SByte
+                    && node.DataType >= DataTypes.Boolean
                     && node.DataType <= DataTypes.Double
                     && node.IsVariable
                     && node.ValueRank == ValueRanks.Scalar)

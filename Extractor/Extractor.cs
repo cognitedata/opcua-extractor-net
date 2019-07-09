@@ -457,6 +457,10 @@ namespace Cognite.OpcUa
                             }
                         }
                     }
+                    if (node.DataType == DataTypes.Boolean)
+                    {
+                        writePoco.IsStep = true;
+                    }
                     createTimeseries.Add(writePoco);
                 }
                 var writeResults = await RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS");
@@ -581,6 +585,10 @@ namespace Cognite.OpcUa
                                 }
                             }
                         }
+                        if (node.DataType == DataTypes.Boolean)
+                        {
+                            writePoco.IsStep = true;
+                        }
                         createTimeseries.Add(writePoco);
                     }
                     var writeResults = await RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create historizing TS");
@@ -630,14 +638,14 @@ namespace Cognite.OpcUa
             List<BufferedVariable> tsList = new List<BufferedVariable>();
 
             int count = 0;
-            while (bufferedNodeQueue.TryDequeue(out BufferedNode buffer) && count++ < 1000)
+            while (bufferedNodeQueue.TryDequeue(out BufferedNode buffer) && count < 1000)
             {
                 if (buffer.IsVariable)
                 {
                     var buffVar = (BufferedVariable)buffer;
+
                     if (buffVar.IsProperty)
                     {
-                        count--;
                         var parent = nodeMap[buffVar.ParentId];
                         if (parent.properties == null)
                         {
@@ -647,11 +655,13 @@ namespace Cognite.OpcUa
                     }
                     else
                     {
+                        count++;
                         varList.Add(buffVar);
                     }
                 }
                 else
                 {
+                    count++;
                     assetList.Add(buffer);
                 }
                 nodeMap.Add(buffer.Id, buffer);
@@ -670,13 +680,16 @@ namespace Cognite.OpcUa
             foreach (var node in varList)
             {
                 if (node.IsProperty) continue;
-                if (node.Historizing)
+                if (node.DataType >= DataTypes.Boolean && node.DataType <= DataTypes.Double && node.ValueRank == -1)
                 {
-                    histTsList.Add(node);
-                }
-                else
-                {
-                    tsList.Add(node);
+                    if (node.Historizing)
+                    {
+                        histTsList.Add(node);
+                    }
+                    else
+                    {
+                        tsList.Add(node);
+                    }
                 }
             }
             Logger.LogInfo("Testing " + count + " nodes against CDF");
@@ -744,7 +757,7 @@ namespace Cognite.OpcUa
         public void SetDataPoint(DataValue value)
         {
             if (value == null || value.Value == null) return;
-            if (DataType < DataTypes.SByte || DataType > DataTypes.Double || IsProperty)
+            if (DataType < DataTypes.Boolean || DataType > DataTypes.Double || IsProperty)
             {
                 Value = new BufferedDataPoint(
                     (long)value.SourceTimestamp.Subtract(Extractor.epoch).TotalMilliseconds,

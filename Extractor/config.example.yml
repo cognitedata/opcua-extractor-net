@@ -15,7 +15,7 @@ client:
   ReconnectPeriod: 5000
   # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
   GlobalPrefix: gp
-  # OPC-UA username
+  # OPC-UA username, leave blank for anonymous user. (no authentication)
   Username: "username"
   # OPC-UA password
   Password: "password"
