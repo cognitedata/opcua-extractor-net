@@ -31,8 +31,7 @@ namespace Cognite.OpcUa
         private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
 
         private readonly System.Timers.Timer dataPushTimer;
-        private readonly System.Timers.Timer nodePushTimer;
-        public readonly DateTime epoch = new DateTime(1970, 1, 1);
+        public static readonly DateTime epoch = new DateTime(1970, 1, 1);
         private static readonly int retryCount = 2;
         private readonly bool debug;
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
@@ -51,8 +50,6 @@ namespace Cognite.OpcUa
             rootAsset = config.CogniteConfig.RootAssetId;
             nodeToAssetIds.Add(rootNode, rootAsset);
 
-            // UAClient.AddChangeListener(rootNode, StructureChangeHandler);
-
             dataPushTimer = new System.Timers.Timer
             {
                 Interval = config.CogniteConfig.DataPushDelay,
@@ -63,13 +60,6 @@ namespace Cognite.OpcUa
             {
                 dataPushTimer.Start();
             }
-            nodePushTimer = new System.Timers.Timer
-            {
-                Interval = config.CogniteConfig.NodePushDelay,
-                AutoReset = true
-            };
-            nodePushTimer.Elapsed += PushNodesToCDF;
-            nodePushTimer.Start();
         }
         public void SetBlocking()
         {
@@ -100,6 +90,10 @@ namespace Cognite.OpcUa
 			Logger.LogInfo("Begin mapping directory");
             UAClient.BrowseDirectoryAsync(rootNode, HandleNode).Wait();
             Logger.LogInfo("End mapping directory");
+            while (bufferedNodeQueue.Any())
+            {
+                PushNodesToCDF().Wait();
+            }
         }
         private async Task<T> RetryAsync<T>(Func<Task<T>> action, string failureMessage, bool expectResponseException = false)
         {
@@ -122,7 +116,7 @@ namespace Cognite.OpcUa
 					Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
 					Logger.LogException(e);
                 }
-                Thread.Sleep(500);
+                Thread.Sleep(500 * (2 << i));
             }
             return default(T);
         }
@@ -137,6 +131,10 @@ namespace Cognite.OpcUa
             else if (node.NodeClass == NodeClass.Variable)
             {
 				var bufferedNode = new BufferedVariable(UAClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId);
+                if (node.TypeDefinition == VariableTypeIds.PropertyType)
+                {
+                    bufferedNode.IsProperty = true;
+                }
 				Logger.LogData(bufferedNode);
                 bufferedNodeQueue.Enqueue(bufferedNode);
             }
@@ -565,9 +563,9 @@ namespace Cognite.OpcUa
                 tsKeys = tsKeys.Skip(toTest).ToHashSet();
             }
         }
-        private async void PushNodesToCDF(object sender, ElapsedEventArgs e)
+        private async Task PushNodesToCDF()
         {
-            nodePushTimer.Stop();
+            Dictionary<NodeId, BufferedNode> nodeMap = new Dictionary<NodeId, BufferedNode>();
             List<BufferedNode> assetList = new List<BufferedNode>();
             List<BufferedVariable> varList = new List<BufferedVariable>();
             List<BufferedVariable> histTsList = new List<BufferedVariable>();
@@ -578,21 +576,42 @@ namespace Cognite.OpcUa
             {
                 if (buffer.IsVariable)
                 {
-                    varList.Add((BufferedVariable)buffer);
+                    var buffVar = (BufferedVariable)buffer;
+                    if (buffVar.IsProperty)
+                    {
+                        count--;
+                        var parent = nodeMap[buffVar.ParentId];
+                        if (parent.properties == null)
+                        {
+                            parent.properties = new List<BufferedVariable>();
+                        }
+                        parent.properties.Add(buffVar);
+                    }
+                    else
+                    {
+                        varList.Add(buffVar);
+                    }
                 }
                 else
                 {
                     assetList.Add(buffer);
                 }
+                nodeMap.Add(buffer.Id, buffer);
             }
-            if (count == 0)
+            if (count == 0) return;
+            Logger.LogInfo("Getting data for " + (varList.Count() + assetList.Count()) + " nodes");
+            try
             {
-                nodePushTimer.Start();
-                return;
+                UAClient.ReadNodeData(assetList.Concat(varList));
             }
-            UAClient.ReadNodeData(assetList.Concat(varList));
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to read node data");
+                Logger.LogException(e);
+            }
             foreach (var node in varList)
             {
+                if (node.IsProperty) continue;
                 if (node.Historizing)
                 {
                     histTsList.Add(node);
@@ -628,7 +647,6 @@ namespace Cognite.OpcUa
             Logger.LogInfo("Begin synchronize nodes");
             UAClient.SynchronizeNodes(tsList.Concat(histTsList), HistoryDataHandler, SubscriptionHandler);
             Logger.LogInfo("End synchronize nodes");
-            nodePushTimer.Start();
         }
     }
     public class BufferedNode
@@ -638,6 +656,7 @@ namespace Cognite.OpcUa
         public readonly bool IsVariable;
         public readonly NodeId ParentId;
         public string Description { get; set; }
+        public IList<BufferedVariable> properties;
         public BufferedNode(NodeId Id, string DisplayName, NodeId ParentId) : this(Id, DisplayName, false, ParentId) {}
         protected BufferedNode(NodeId Id, string DisplayName, bool IsVariable, NodeId ParentId)
         {
@@ -652,8 +671,29 @@ namespace Cognite.OpcUa
         public uint DataType { get; set; }
         public bool Historizing { get; set; }
         public int ValueRank { get; set; }
+        public bool IsProperty { get; set; }
         public DateTime LatestTimestamp { get; set; } = new DateTime(1970, 1, 1);
+        public BufferedDataPoint Value { get; set; }
+        public uint[] ArrayDimensions { get; set; }
         public BufferedVariable(NodeId Id, string DisplayName, NodeId ParentId) : base(Id, DisplayName, true, ParentId) {}
+        public void SetDataPoint(DataValue value)
+        {
+            if (value == null) return;
+            if (DataType < DataTypes.SByte || DataType > DataTypes.Double)
+            {
+                Value = new BufferedDataPoint(
+                    (long)value.SourceTimestamp.Subtract(Extractor.epoch).TotalMilliseconds,
+                    Id,
+                    value.ToString());
+            }
+            else
+            {
+                Value = new BufferedDataPoint(
+                    (long)value.SourceTimestamp.Subtract(Extractor.epoch).TotalMilliseconds,
+                    Id,
+                    UAClient.ConvertToDouble(value));
+            }
+        }
     }
     public class BufferedDataPoint
     {

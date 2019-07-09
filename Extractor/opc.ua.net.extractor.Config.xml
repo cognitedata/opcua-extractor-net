@@ -46,10 +46,10 @@
   <TransportQuotas>
     <OperationTimeout>600000</OperationTimeout>
     <MaxStringLength>1048576</MaxStringLength>
-    <MaxByteStringLength>4194304</MaxByteStringLength>
+    <MaxByteStringLength>41943040</MaxByteStringLength>
     <MaxArrayLength>65535</MaxArrayLength>
-    <MaxMessageSize>4194304</MaxMessageSize>
-    <MaxBufferSize>65535</MaxBufferSize>
+    <MaxMessageSize>41943040</MaxMessageSize>
+    <MaxBufferSize>655350</MaxBufferSize>
     <ChannelLifetime>300000</ChannelLifetime>
     <SecurityTokenLifetime>3600000</SecurityTokenLifetime>
   </TransportQuotas>

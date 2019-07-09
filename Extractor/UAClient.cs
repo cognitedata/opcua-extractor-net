@@ -82,7 +82,7 @@ namespace Cognite.OpcUa
             }
             return new NodeId(nsString + ";" + identifier);
         }
-        public double ConvertToDouble(DataValue datavalue)
+        public static double ConvertToDouble(DataValue datavalue)
         {
             if (datavalue == null || datavalue.Value == null) return 0;
             if (datavalue.Value.GetType().IsArray)
@@ -207,7 +207,8 @@ namespace Cognite.OpcUa
             {
                 Attributes.DataType,
                 Attributes.Historizing,
-                Attributes.ValueRank
+                Attributes.ValueRank,
+                Attributes.Value
             };
             var readValueIds = new ReadValueIdCollection();
             foreach (BufferedNode node in nodes)
@@ -229,14 +230,32 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            session.Read(
-                null,
-                0,
-                TimestampsToReturn.Neither,
-                readValueIds,
-                out DataValueCollection values,
-                out _
-            );
+            DataValueCollection values = new DataValueCollection();
+            var varEnumerator = readValueIds.GetEnumerator();
+            int remaining = readValueIds.Count;
+            while (remaining > 0)
+            {
+                ReadValueIdCollection nextValues = new ReadValueIdCollection();
+                for (int i = 0; i < Math.Min(remaining, 1000); i++)
+                {
+                    varEnumerator.MoveNext();
+                    nextValues.Add(varEnumerator.Current);
+                }
+                Logger.LogInfo("Get " + nextValues.Count + " values");
+                session.Read(
+                    null,
+                    0,
+                    TimestampsToReturn.Source,
+                    nextValues,
+                    out DataValueCollection lvalues,
+                    out _
+                );
+                foreach (var value in lvalues)
+                {
+                    values.Add(value);
+                }
+                remaining -= 1000;
+            }
             var enumerator = values.GetEnumerator();
             foreach (BufferedNode node in nodes)
             {
@@ -256,6 +275,8 @@ namespace Cognite.OpcUa
                     vnode.Historizing = enumerator.Current.GetValue(false);
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
+                    enumerator.MoveNext();
+                    vnode.SetDataPoint(enumerator.Current.GetValue<DataValue>(null));
                 }
             }
         }
@@ -378,8 +399,9 @@ namespace Cognite.OpcUa
                 if (rd.NodeId == ObjectIds.Server) continue;
                 callback(rd, root);
                 if (rd.NodeClass == NodeClass.Variable) continue;
-                Task.Run(() => BrowseDirectory(ToNodeId(rd.NodeId), callback));
+                tasks.Add(Task.Run(() => BrowseDirectory(ToNodeId(rd.NodeId), callback)));
             }
+            Task.WhenAll(tasks.ToArray()).Wait();
         }
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {
