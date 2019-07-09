@@ -123,7 +123,7 @@ namespace Cognite.OpcUa
                 callback(results, results[0].ContinuationPoint == null, toRead.Id);
             } while (results[0].ContinuationPoint != null);
         }
-        public void SynchronizeNodes(List<BufferedVariable> nodeList,
+        public void SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
             Action<HistoryReadResultCollection, bool, NodeId> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler)
         {

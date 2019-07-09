@@ -1,17 +1,17 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Net.Http;
-using System.Threading.Tasks;
 using System.Linq;
-using Opc.Ua;
-using Opc.Ua.Client;
-using Cognite.Sdk.Api;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Timers;
 using Cognite.Sdk;
+using Cognite.Sdk.Api;
 using Cognite.Sdk.Assets;
 using Cognite.Sdk.Timeseries;
-using System.Collections.Concurrent;
-using System.Timers;
-using System.Threading;
+using Opc.Ua;
+using Opc.Ua.Client;
 
 namespace Cognite.OpcUa
 {
@@ -268,6 +268,9 @@ namespace Cognite.OpcUa
             // Specifically anything related to NodeToTimeseriesIds
             ISet<string> missingAssetIds = new HashSet<string>();
             IList<Identity> assetIdentities = new List<Identity>(assetIds.Keys.Count);
+
+            Logger.LogInfo("Test " + assetList.Count() + " assets");
+
             foreach (var id in assetIds.Keys)
             {
                 assetIdentities.Add(Identity.ExternalId(id));
@@ -277,6 +280,7 @@ namespace Cognite.OpcUa
                 var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(assetIdentities), "Failed to get assets", true);
                 if (readResults != null)
                 {
+                    Logger.LogInfo("Found " + readResults.Count() + " assets");
                     foreach (var resultItem in readResults)
                     {
                         nodeToAssetIds.Add(assetIds[resultItem.ExternalId].Id, resultItem.Id);
@@ -304,6 +308,7 @@ namespace Cognite.OpcUa
             }
             if (missingAssetIds.Any())
             {
+                Logger.LogInfo("Create " + missingAssetIds.Count + " new assets");
                 var createAssets = new List<AssetWritePoco>();
                 foreach (string externalId in missingAssetIds)
                 {
@@ -342,6 +347,7 @@ namespace Cognite.OpcUa
                 }
                 if (idsToMap.Any())
                 {
+                    Logger.LogInfo("Get remaining " + idsToMap.Count + " assetids");
                     var readResults = await RetryAsync(() => client.GetAssetsByIdsAsync(idsToMap), "Failed to get asset ids");
                     if (readResults != null)
                     {
@@ -355,6 +361,7 @@ namespace Cognite.OpcUa
         }
         private async Task EnsureTimeseries(List<BufferedVariable> tsList, Client client)
         {
+            if (!tsList.Any()) return;
             IDictionary<string, BufferedVariable> tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
@@ -379,7 +386,7 @@ namespace Cognite.OpcUa
             }
             catch (ResponseException ex)
             {
-                if (ex.Code == 400 && ex.Message == "Time series ids not found")
+                if (ex.Code == 400 && ex.Missing.Any())
                 {
                     foreach (var missing in ex.Missing)
                     {
@@ -398,6 +405,7 @@ namespace Cognite.OpcUa
             }
             if (missingTSIds.Any())
             {
+                Logger.LogInfo("Create " + missingTSIds.Count + " new timeseries");
                 var createTimeseries = new List<TimeseriesWritePoco>();
                 foreach (string externalId in missingTSIds)
                 {
@@ -430,6 +438,7 @@ namespace Cognite.OpcUa
                 }
                 if (idsToMap.Any())
                 {
+                    Logger.LogInfo("Get remaining " + idsToMap.Count + " timeseries ids");
                     var readResults = await RetryAsync(() => client.GetTimeseriesByIdsAsync(idsToMap),
                         "Failed to get timeseries ids");
                     if (readResults != null)
@@ -444,6 +453,7 @@ namespace Cognite.OpcUa
         }
         private async Task EnsureHistorizingTimeseries(List<BufferedVariable> tsList, Client client)
         {
+            if (!tsList.Any()) return;
             IDictionary<string, BufferedVariable> tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
@@ -454,7 +464,7 @@ namespace Cognite.OpcUa
             while (tsKeys.Any())
             {
                 int toTest = Math.Min(100, tsKeys.Count);
-                Logger.LogInfo("Test " + toTest + " timeseries");
+                Logger.LogInfo("Test " + toTest + " historizing timeseries");
                 ISet<string> missingTSIds = new HashSet<string>();
                 IList<(Identity, string)> pairedTsIds = new List<(Identity, string)>();
 
@@ -483,7 +493,7 @@ namespace Cognite.OpcUa
                 }
                 catch (ResponseException ex)
                 {
-                    if (ex.Code == 400 && ex.Message == "Historizing timeseries ids not found")
+                    if (ex.Code == 400 && ex.Missing.Any())
                     {
                         foreach (var missing in ex.Missing)
                         {
@@ -502,6 +512,7 @@ namespace Cognite.OpcUa
                 }
                 if (missingTSIds.Any())
                 {
+                    Logger.LogInfo("Create " + missingTSIds.Count + " new historizing timeseries");
                     var createTimeseries = new List<TimeseriesWritePoco>();
                     foreach (string externalId in missingTSIds)
                     {
@@ -534,6 +545,7 @@ namespace Cognite.OpcUa
                     }
                     if (idsToMap.Any())
                     {
+                        Logger.LogInfo("Get remaining " + idsToMap.Count + " historizing timeseries ids");
                         var readResults = await RetryAsync(() => client.GetTimeseriesLatestDataAsync(idsToMap),
                             "Failed to get historizing timeseries ids");
                         if (readResults != null)
@@ -557,23 +569,16 @@ namespace Cognite.OpcUa
         {
             nodePushTimer.Stop();
             List<BufferedNode> assetList = new List<BufferedNode>();
-            List<BufferedVariable> tsList = new List<BufferedVariable>();
+            List<BufferedVariable> varList = new List<BufferedVariable>();
             List<BufferedVariable> histTsList = new List<BufferedVariable>();
+            List<BufferedVariable> tsList = new List<BufferedVariable>();
 
             int count = 0;
             while (bufferedNodeQueue.TryDequeue(out BufferedNode buffer) && count++ < 1000)
             {
                 if (buffer.IsVariable)
                 {
-                    var buffVar = (BufferedVariable)buffer;
-                    if (buffVar.Historizing)
-                    {
-                        histTsList.Add(buffVar);
-                    }
-                    else
-                    {
-                        tsList.Add((BufferedVariable)buffer);
-                    }
+                    varList.Add((BufferedVariable)buffer);
                 }
                 else
                 {
@@ -585,7 +590,18 @@ namespace Cognite.OpcUa
                 nodePushTimer.Start();
                 return;
             }
-            UAClient.ReadNodeData(assetList.Concat(tsList));
+            UAClient.ReadNodeData(assetList.Concat(varList));
+            foreach (var node in varList)
+            {
+                if (node.Historizing)
+                {
+                    histTsList.Add(node);
+                }
+                else
+                {
+                    tsList.Add(node);
+                }
+            }
             Logger.LogInfo("Testing " + count + " nodes against CDF");
             if (!debug)
             {
@@ -610,7 +626,7 @@ namespace Cognite.OpcUa
             // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
             // createSubscription service called here
             Logger.LogInfo("Begin synchronize nodes");
-            UAClient.SynchronizeNodes(tsList, HistoryDataHandler, SubscriptionHandler);
+            UAClient.SynchronizeNodes(tsList.Concat(histTsList), HistoryDataHandler, SubscriptionHandler);
             Logger.LogInfo("End synchronize nodes");
             nodePushTimer.Start();
         }
