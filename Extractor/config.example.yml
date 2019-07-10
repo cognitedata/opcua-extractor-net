@@ -53,3 +53,16 @@ logging:
   LogFolder:
   # Whether or not to log all data output. For debugging only. true/false
   LogData: false
+
+metrics:
+  # Leave host or job blank to disable metrics
+  # URL of prometheus host
+  URL:
+  # Port to connect to on prometheus host
+  Job:
+  # Prometheus username
+  Username:
+  # Prometheus password
+  Password:
+  # Time in ms between each push
+  PushInterval: 1000

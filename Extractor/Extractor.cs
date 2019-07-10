@@ -37,7 +37,7 @@ namespace Cognite.OpcUa
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
         {
             this.clientFactory = clientFactory;
-            UAClient = new UAClient(config.Uaconfig, config.Nsmaps, this);
+            UAClient = new UAClient(config, this);
             this.config = config.CogniteConfig;
             debug = config.CogniteConfig.Debug;
             UAClient.Run().Wait();
@@ -81,7 +81,15 @@ namespace Cognite.OpcUa
         public void Close()
         {
             if (!UAClient.Started) return;
-            UAClient.Close();
+            try
+            {
+                UAClient.Close();
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to cleanly shut down UAClient");
+                Logger.LogException(e);
+            }
         }
         public void MapUAToCDF()
         {

@@ -11,6 +11,7 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="2.2.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="CogniteSdk" Version="0.5.6" />
+    <PackageReference Include="prometheus-net" Version="3.1.4" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\lib\Opc.Ua.Client\Opc.Ua.Client.csproj" />

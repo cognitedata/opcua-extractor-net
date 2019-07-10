@@ -12,7 +12,7 @@ namespace Cognite.OpcUa
 {
     public class UAClient
     {
-        static UAClientConfig config;
+        readonly UAClientConfig config;
         Session session;
         SessionReconnectHandler reconnectHandler;
         readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
@@ -22,14 +22,14 @@ namespace Cognite.OpcUa
         bool clientReconnecting;
         public bool Started { get; private set; }
 
-        public UAClient(UAClientConfig config, YamlMappingNode namespaces, Extractor extractor = null)
+        public UAClient(FullConfig config, Extractor extractor = null)
         {
-            foreach (var node in namespaces.Children)
+            foreach (var node in config.NSMaps.Children)
             {
                 nsmaps.Add(((YamlScalarNode)node.Key).Value, ((YamlScalarNode)node.Value).Value);
             }
             this.extractor = extractor;
-            UAClient.config = config;
+            this.config = config.UAConfig;
         }
         #region Session management
 
@@ -117,7 +117,7 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        private static void CertificateValidationHandler(CertificateValidator validator,
+        private void CertificateValidationHandler(CertificateValidator validator,
             CertificateValidationEventArgs eventArgs)
         {
             if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
@@ -423,7 +423,8 @@ namespace Cognite.OpcUa
                         var children = GetNodeChildren(node.Id);
                         foreach (var child in children)
                         {
-                            var property = new BufferedVariable(ToNodeId(child.NodeId), child.DisplayName.Text, node.Id) { IsProperty = true };
+                            var property = new BufferedVariable(ToNodeId(child.NodeId),
+                                child.DisplayName.Text, node.Id) { IsProperty = true };
                             properties.Add(property);
                             if (node.properties == null)
                             {
