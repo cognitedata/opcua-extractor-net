@@ -7,7 +7,7 @@ using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using YamlDotNet.RepresentationModel;
 using System.Linq;
-using Prometheus;
+using Prometheus.Client;
 
 namespace Cognite.OpcUa
 {

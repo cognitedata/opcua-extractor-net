@@ -56,7 +56,7 @@ logging:
 
 metrics:
   # Leave host or job blank to disable metrics
-  # URL of prometheus host
+  # URL of prometheus host, ex my.prometheus.server gives final endpoint my.prometheus.server/metrics/jobs/myjob, 
   URL:
   # Port to connect to on prometheus host
   Job:
@@ -66,3 +66,5 @@ metrics:
   Password:
   # Time in ms between each push
   PushInterval: 1000
+  # Instance tag for prometheus
+  Instance:
