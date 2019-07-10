@@ -7,11 +7,10 @@ using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using YamlDotNet.RepresentationModel;
 using System.Linq;
-using System.Threading;
 
 namespace Cognite.OpcUa
 {
-    class UAClient
+    public class UAClient
     {
         static UAClientConfig config;
         Session session;
@@ -21,6 +20,7 @@ namespace Cognite.OpcUa
         readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
         readonly object subscriptionLock = new object();
         bool clientReconnecting;
+        public bool Started { get; private set; }
 
         public UAClient(UAClientConfig config, YamlMappingNode namespaces, Extractor extractor = null)
         {
@@ -43,7 +43,6 @@ namespace Cognite.OpcUa
             {
                 Logger.LogError("Erorr starting client");
                 Logger.LogException(e);
-                throw e;
             }
         }
         public void Close()
@@ -52,13 +51,13 @@ namespace Cognite.OpcUa
         }
         private async Task StartSession()
         {
-            ApplicationInstance application = new ApplicationInstance
+            var application = new ApplicationInstance
             {
                 ApplicationName = ".NET OPC-UA Extractor",
                 ApplicationType = ApplicationType.Client,
                 ConfigSectionName = "opc.ua.net.extractor"
             };
-            ApplicationConfiguration appconfig = await application.LoadApplicationConfiguration(false);
+            var appconfig = await application.LoadApplicationConfiguration(false);
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
             if (!validAppCert)
             {
@@ -71,7 +70,7 @@ namespace Cognite.OpcUa
                 config.Autoaccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
-            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && false);
+            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && config.Secure);
             var endpointConfiguration = EndpointConfiguration.Create(appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
             Logger.LogInfo("Attempt to connect to endpoint: " + endpoint.Description.SecurityPolicyUri);
@@ -88,6 +87,7 @@ namespace Cognite.OpcUa
             );
 
             session.KeepAlive += ClientKeepAlive;
+            Started = true;
             Logger.LogInfo("Successfully connected to server at " + config.EndpointURL);
         }
         private void ClientReconnectComplete(object sender, EventArgs eventArgs)
@@ -111,7 +111,7 @@ namespace Cognite.OpcUa
                 {
                     Logger.LogWarning("--- RECONNECTING ---");
                     clientReconnecting = true;
-                    extractor?.SetBlocking();
+                    extractor.Blocking = true;
                     reconnectHandler = new SessionReconnectHandler();
                     reconnectHandler.BeginReconnect(sender, config.ReconnectPeriod, ClientReconnectComplete);
                 }
@@ -135,6 +135,7 @@ namespace Cognite.OpcUa
             }
         }
         #endregion
+
         #region Browse
 
         public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback)
@@ -192,12 +193,13 @@ namespace Cognite.OpcUa
             Task.WhenAll(tasks.ToArray()).Wait();
         }
         #endregion
+
         #region Get data
 
         public void DoHistoryRead(BufferedVariable toRead,
             Action<HistoryReadResultCollection, bool, NodeId> callback)
         {
-            ReadRawModifiedDetails details = new ReadRawModifiedDetails
+            var details = new ReadRawModifiedDetails
             {
                 StartTime = toRead.LatestTimestamp,
                 EndTime = DateTime.MaxValue,
@@ -223,18 +225,18 @@ namespace Cognite.OpcUa
                    out results,
                    out _
                );
-                callback(results, results[0].ContinuationPoint == null, toRead.Id);
-            } while (results[0].ContinuationPoint != null);
+               callback(results, results[0].ContinuationPoint == null, toRead.Id);
+            } while (results != null && results[0].ContinuationPoint != null);
         }
         public void SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
             Action<HistoryReadResultCollection, bool, NodeId> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler)
         {
             int count = 0;
-            List<BufferedVariable> toSynch = new List<BufferedVariable>();
-            List<BufferedVariable> toHistoryRead = new List<BufferedVariable>();
+            var toSynch = new List<BufferedVariable>();
+            var toHistoryRead = new List<BufferedVariable>();
 
-            foreach (BufferedVariable node in nodeList)
+            foreach (var node in nodeList)
             {
                 if (node != null
                     && node.DataType >= DataTypes.Boolean
@@ -265,7 +267,7 @@ namespace Cognite.OpcUa
                 subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
             }
             count = 0;
-            ISet<NodeId> hasSubscription = new HashSet<NodeId>();
+            var hasSubscription = new HashSet<NodeId>();
             foreach (var item in subscription.MonitoredItems)
             {
                 hasSubscription.Add(item.ResolvedNodeId);
@@ -280,6 +282,7 @@ namespace Cognite.OpcUa
                         DisplayName = "Value: " + node.DisplayName
                     };
                     monitor.Notification += subscriptionHandler;
+                    Logger.LogInfo("Add subscription to " + node.DisplayName);
                     subscription.AddItem(monitor);
                     count++;
                 }
@@ -304,25 +307,25 @@ namespace Cognite.OpcUa
                 Task.Run(() => DoHistoryRead(node, callback));
             }
         }
-        public void ReadNodeData(IEnumerable<BufferedNode> nodes)
+        private IEnumerable<DataValue> GetNodeAttributes(IEnumerable<BufferedNode> nodes,
+            IEnumerable<uint> common,
+            IEnumerable<uint> variables)
         {
-            IEnumerable<uint> variableAttributes = new List<uint>
-            {
-                Attributes.DataType,
-                Attributes.Historizing,
-                Attributes.ValueRank
-            };
+            if (!nodes.Any()) return null;
             var readValueIds = new ReadValueIdCollection();
-            foreach (BufferedNode node in nodes)
+            foreach (var node in nodes)
             {
-                readValueIds.Add(new ReadValueId
+                foreach (var attribute in common)
                 {
-                    AttributeId = Attributes.Description,
-                    NodeId = node.Id
-                });
+                    readValueIds.Add(new ReadValueId
+                    {
+                        AttributeId = attribute,
+                        NodeId = node.Id
+                    });
+                }
                 if (node.IsVariable)
                 {
-                    foreach (uint attribute in variableAttributes)
+                    foreach (var attribute in variables)
                     {
                         readValueIds.Add(new ReadValueId
                         {
@@ -332,16 +335,18 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            DataValueCollection values = new DataValueCollection();
-            var varEnumerator = readValueIds.GetEnumerator();
+            IEnumerable<DataValue> values = new DataValueCollection();
+            var enumerator = readValueIds.GetEnumerator();
             int remaining = readValueIds.Count;
+            int per = 1000;
             while (remaining > 0)
             {
+                Logger.LogInfo("Read " + Math.Min(remaining, per) + " attributes");
                 ReadValueIdCollection nextValues = new ReadValueIdCollection();
-                for (int i = 0; i < Math.Min(remaining, 1000); i++)
+                for (int i = 0; i < Math.Min(remaining, per); i++)
                 {
-                    varEnumerator.MoveNext();
-                    nextValues.Add(varEnumerator.Current);
+                    enumerator.MoveNext();
+                    nextValues.Add(enumerator.Current);
                 }
                 session.Read(
                     null,
@@ -351,12 +356,22 @@ namespace Cognite.OpcUa
                     out DataValueCollection lvalues,
                     out _
                 );
-                foreach (var value in lvalues)
-                {
-                    values.Add(value);
-                }
-                remaining -= 1000;
+                values = values.Concat(lvalues);
+                remaining -= per;
             }
+            return values;
+        }
+        public void ReadNodeData(IEnumerable<BufferedNode> nodes)
+        {
+            var values = GetNodeAttributes(nodes, new List<uint>
+            {
+                Attributes.Description
+            }, new List<uint>
+            {
+                Attributes.DataType,
+                Attributes.Historizing,
+                Attributes.ValueRank
+            });
             var enumerator = values.GetEnumerator();
             foreach (BufferedNode node in nodes)
             {
@@ -381,43 +396,10 @@ namespace Cognite.OpcUa
         }
         public void ReadNodeValues(IEnumerable<BufferedVariable> nodes)
         {
-            var readValuesIds = new ReadValueIdCollection();
-            foreach (var node in nodes)
-            {
-                if (node.ValueRank == -1)
-                {
-                    readValuesIds.Add(new ReadValueId
-                    {
-                        AttributeId = Attributes.Value,
-                        NodeId = node.Id
-                    });
-                }
-            }
-            DataValueCollection values = new DataValueCollection();
-            var varEnumerator = readValuesIds.GetEnumerator();
-            int remaining = readValuesIds.Count;
-            while (remaining > 0)
-            {
-                ReadValueIdCollection nextValues = new ReadValueIdCollection();
-                for (int i = 0; i < Math.Min(remaining, 1000); i++)
-                {
-                    varEnumerator.MoveNext();
-                    nextValues.Add(varEnumerator.Current);
-                }
-                session.Read(
-                    null,
-                    0,
-                    TimestampsToReturn.Source,
-                    nextValues,
-                    out DataValueCollection lvalues,
-                    out _
-                );
-                foreach (var value in lvalues)
-                {
-                    values.Add(value);
-                }
-                remaining -= 1000;
-            }
+            var values = GetNodeAttributes(nodes.Where((BufferedVariable buff) => buff.ValueRank == -1),
+                new List<uint>(),
+                new List<uint> { Attributes.Value }
+            );
             var enumerator = values.GetEnumerator();
             foreach (var node in nodes)
             {
@@ -430,8 +412,8 @@ namespace Cognite.OpcUa
         }
         public void GetNodeProperties(IEnumerable<BufferedNode> nodes)
         {
-            IList<Task> tasks = new List<Task>();
-            ISet<BufferedVariable> properties = new HashSet<BufferedVariable>();
+            var tasks = new List<Task>();
+            var properties = new HashSet<BufferedVariable>();
             foreach (var node in nodes)
             {
                 if (node.IsVariable)
@@ -465,20 +447,11 @@ namespace Cognite.OpcUa
             Task.WhenAll(tasks).Wait();
             ReadNodeData(properties);
             ReadNodeValues(properties);
-
         }
         #endregion
+
         #region Utils
 
-        public string GetUniqueId(ExpandedNodeId nodeid)
-        {
-            string namespaceUri = nodeid.NamespaceUri;
-            if (namespaceUri == null)
-            {
-                namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
-            }
-            return GetUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
-        }
         public NodeId ToNodeId(ExpandedNodeId nodeid)
         {
             return ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris);
@@ -543,6 +516,15 @@ namespace Cognite.OpcUa
         {
             if (datavalue == null) return "";
             return ConvertToString(datavalue.Value);
+        }
+        public string GetUniqueId(ExpandedNodeId nodeid)
+        {
+            string namespaceUri = nodeid.NamespaceUri;
+            if (namespaceUri == null)
+            {
+                namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
+            }
+            return GetUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
         }
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {
