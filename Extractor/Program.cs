@@ -6,7 +6,8 @@ using YamlDotNet.RepresentationModel;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 using System.Collections.Generic;
-using Prometheus;
+using Prometheus.Client;
+using Prometheus.Client.MetricPusher;
 
 namespace Cognite.OpcUa
 {
@@ -20,7 +21,6 @@ namespace Cognite.OpcUa
             var services = new ServiceCollection();
             Configure(services);
             var provider = services.BuildServiceProvider();
-            Metrics.SuppressDefaultMetrics();
             Extractor extractor = new Extractor(fullConfig, provider.GetRequiredService<IHttpClientFactory>());
 			Logger.Startup(fullConfig.LoggerConfig);
             try
@@ -133,7 +133,7 @@ namespace Cognite.OpcUa
                 Logger.LogWarning("Unable to start metrics, missing URL or Job");
                 return;
             }
-            var additionalHeaders = new List<Tuple<string, string>>();
+            var additionalHeaders = new Dictionary<string, string>();
             if (!string.IsNullOrWhiteSpace(config.Username) && !string.IsNullOrWhiteSpace(config.Password))
             {
                 string encoded = Convert.ToBase64String(
@@ -141,10 +141,11 @@ namespace Cognite.OpcUa
                         .GetEncoding("ISO-8859-1")
                         .GetBytes(config.Username + ":" + config.Password)
                 );
-                additionalHeaders.Add(new Tuple<string, string>("Authorization", "Basic " + encoded));
+                additionalHeaders.Add("Authorization", "Basic " + encoded);
             }
-            var pusher = new MetricPusher(config.URL, config.Job, null, config.PushInterval, additionalHeaders);
-            pusher.Start();
+            var pusher = new MetricPusher(config.URL, config.Job, config.Instance, additionalHeaders);
+            var worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));
+            worker.Start();
         }
     }
     public class UAClientConfig
@@ -190,5 +191,6 @@ namespace Cognite.OpcUa
         public string Username { get; set; }
         public string Password { get; set; }
         public int PushInterval { get; set; }
+        public string Instance { get; set; }
     }
 }

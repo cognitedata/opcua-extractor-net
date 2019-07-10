@@ -12,7 +12,7 @@ using Cognite.Sdk.Assets;
 using Cognite.Sdk.Timeseries;
 using Opc.Ua;
 using Opc.Ua.Client;
-using Prometheus;
+using Prometheus.Client;
 
 namespace Cognite.OpcUa
 {
@@ -60,7 +60,7 @@ namespace Cognite.OpcUa
                 Logger.LogError("Failed to start UAClient");
                 return;
             }
-            startTime.SetToCurrentTimeUtc();
+            startTime.Set(DateTime.Now.Subtract(epoch).TotalMilliseconds);
             rootNode = UAClient.ToNodeId(config.CogniteConfig.RootNodeId, config.CogniteConfig.RootNodeNamespace);
             if (rootNode.IsNullNodeId)
             {

@@ -6,12 +6,13 @@
     <RootNamespace>opcua_extractor_net</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Prometheus.Client.MetricPusher" Version="1.0.1" />
     <PackageReference Include="Xamarin.Yaml.Parser" Version="1.1.9" />
     <PackageReference Include="YamlDotNet" Version="6.1.1" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="2.2.0" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="CogniteSdk" Version="0.5.6" />
-    <PackageReference Include="prometheus-net" Version="3.1.4" />
+    <PackageReference Include="Prometheus.Client" Version="3.0.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\lib\Opc.Ua.Client\Opc.Ua.Client.csproj" />
