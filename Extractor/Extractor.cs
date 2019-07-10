@@ -12,6 +12,7 @@ using Cognite.Sdk.Assets;
 using Cognite.Sdk.Timeseries;
 using Opc.Ua;
 using Opc.Ua.Client;
+using Prometheus;
 
 namespace Cognite.OpcUa
 {
@@ -29,15 +30,28 @@ namespace Cognite.OpcUa
         private readonly IHttpClientFactory clientFactory;
         private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
         private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
-
         private readonly System.Timers.Timer dataPushTimer;
         public static readonly DateTime epoch = new DateTime(1970, 1, 1);
         private static readonly int retryCount = 4;
         private readonly bool debug;
+
+        private static readonly Counter dataPointsCounter = Metrics
+            .CreateCounter("opcua_datapoints_pushed", "Number of datapoints pushed to CDF");
+        private static readonly Counter dataPointPushes = Metrics
+            .CreateCounter("opcua_datapoint_pushes", "Number of times datapoints have been pushed to CDF");
+        private static readonly Counter dataPointPushFailures = Metrics
+            .CreateCounter("opcua_datapoint_push_failures", "Number of completely failed pushes of datapoints to CDF");
+        private static readonly Gauge startTime = Metrics
+            .CreateGauge("opcua_start_time", "Start time for the extractor");
+        private static readonly Gauge trackedAssets = Metrics
+            .CreateGauge("opcua_tracked_assets", "Number of objects on the opcua server mapped to assets in CDF");
+        private static readonly Gauge trackedTimeseres = Metrics
+            .CreateGauge("opcua_tracked_timeseries", "Number of variables on the opcua server mapped to timeseries in CDF");
+
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
         {
             this.clientFactory = clientFactory;
-            UAClient = new UAClient(config.Uaconfig, config.Nsmaps, this);
+            UAClient = new UAClient(config, this);
             this.config = config.CogniteConfig;
             debug = config.CogniteConfig.Debug;
             UAClient.Run().Wait();
@@ -46,7 +60,7 @@ namespace Cognite.OpcUa
                 Logger.LogError("Failed to start UAClient");
                 return;
             }
-
+            startTime.SetToCurrentTimeUtc();
             rootNode = UAClient.ToNodeId(config.CogniteConfig.RootNodeId, config.CogniteConfig.RootNodeNamespace);
             if (rootNode.IsNullNodeId)
             {
@@ -81,10 +95,20 @@ namespace Cognite.OpcUa
         public void Close()
         {
             if (!UAClient.Started) return;
-            UAClient.Close();
+            try
+            {
+                UAClient.Close();
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to cleanly shut down UAClient");
+                Logger.LogException(e);
+            }
         }
         public void MapUAToCDF()
         {
+            trackedAssets.Set(0);
+            trackedTimeseres.Set(0);
 			Logger.LogInfo("Begin mapping directory");
             UAClient.BrowseDirectoryAsync(rootNode, HandleNode).Wait();
             Logger.LogInfo("End mapping directory");
@@ -185,7 +209,11 @@ namespace Cognite.OpcUa
                     dataPointList.Add(buffer);
                 }
             }
-
+            if (count == 0)
+            {
+                dataPushTimer.Start();
+                return;
+            }
             var organizedDatapoints = new Dictionary<NodeId, Tuple<IList<DataPointPoco>, Identity>>();
             foreach (BufferedDataPoint dataPoint in dataPointList)
             {
@@ -215,11 +243,7 @@ namespace Cognite.OpcUa
                 });
             }
 
-            if (count == 0)
-            {
-                dataPushTimer.Start();
-                return;
-            }
+            
             Logger.LogVerbose("pushdata", "Push " + count + " datapoints to CDF");
 
             using (HttpClient httpClient = clientFactory.CreateClient())
@@ -230,6 +254,12 @@ namespace Cognite.OpcUa
                 if (!await RetryAsync(async () => await client.InsertDataAsync(finalDataPoints), "Failed to insert into CDF"))
                 {
                     Logger.LogError("Failed to insert " + count + " datapoints into CDF");
+                    dataPointPushFailures.Inc();
+                }
+                else
+                {
+                    dataPointsCounter.Inc(count);
+                    dataPointPushes.Inc();
                 }
             }
             dataPushTimer.Start();
@@ -567,6 +597,7 @@ namespace Cognite.OpcUa
                     try
                     {
                         await EnsureAssets(assetList, client);
+                        trackedAssets.Inc(assetList.Count);
                         // At this point the assets should all be synchronized and mapped
                         // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
                         // This also sets the LastTimestamp property of each BufferedVariable
@@ -574,8 +605,12 @@ namespace Cognite.OpcUa
                         // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
                         // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
                         // node to assets map.
+                        // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
+                        // fetching the timeseries itself
                         await EnsureTimeseries(tsList, client);
+                        trackedTimeseres.Inc(tsList.Count);
                         await EnsureHistorizingTimeseries(histTsList, client);
+                        trackedTimeseres.Inc(histTsList.Count);
                     }
                     catch (Exception e)
                     {

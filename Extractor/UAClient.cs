@@ -7,12 +7,13 @@ using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using YamlDotNet.RepresentationModel;
 using System.Linq;
+using Prometheus;
 
 namespace Cognite.OpcUa
 {
     public class UAClient
     {
-        static UAClientConfig config;
+        readonly UAClientConfig config;
         Session session;
         SessionReconnectHandler reconnectHandler;
         readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
@@ -22,14 +23,27 @@ namespace Cognite.OpcUa
         bool clientReconnecting;
         public bool Started { get; private set; }
 
-        public UAClient(UAClientConfig config, YamlMappingNode namespaces, Extractor extractor = null)
+        private static readonly Counter connects = Metrics
+            .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
+        private static readonly Gauge connected = Metrics
+            .CreateGauge("opcua_connected", "Whether or not the client is currently connected to the opcua server");
+        private static readonly Counter attributeRequests = Metrics
+            .CreateCounter("opcua_attribute_requests", "Number of attributes fetched from the server");
+        private static readonly Gauge numSubscriptions = Metrics
+            .CreateGauge("opcua_subscriptions", "Number of variables with an active subscription");
+        private static readonly Counter numHistoryReads = Metrics
+            .CreateCounter("opcua_history_reads", "Number of historyread operations performed");
+        private static readonly Counter numBrowse = Metrics
+            .CreateCounter("opcua_browse_operations", "Number of browse operations performed");
+
+        public UAClient(FullConfig config, Extractor extractor = null)
         {
-            foreach (var node in namespaces.Children)
+            foreach (var node in config.NSMaps.Children)
             {
                 nsmaps.Add(((YamlScalarNode)node.Key).Value, ((YamlScalarNode)node.Value).Value);
             }
             this.extractor = extractor;
-            UAClient.config = config;
+            this.config = config.UAConfig;
         }
         #region Session management
 
@@ -88,6 +102,8 @@ namespace Cognite.OpcUa
 
             session.KeepAlive += ClientKeepAlive;
             Started = true;
+            connects.Inc();
+            connected.Set(1);
             Logger.LogInfo("Successfully connected to server at " + config.EndpointURL);
         }
         private void ClientReconnectComplete(object sender, EventArgs eventArgs)
@@ -100,6 +116,8 @@ namespace Cognite.OpcUa
             Logger.LogWarning("--- RECONNECTED ---");
             visitedNodes.Clear();
             Task.Run(() => extractor?.RestartExtractor());
+            connects.Inc();
+            connected.Set(1);
             reconnectHandler = null;
         }
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
@@ -109,6 +127,7 @@ namespace Cognite.OpcUa
                 Logger.LogWarning(eventArgs.Status.ToString());
                 if (reconnectHandler == null)
                 {
+                    connected.Set(0);
                     Logger.LogWarning("--- RECONNECTING ---");
                     clientReconnecting = true;
                     extractor.Blocking = true;
@@ -117,7 +136,7 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        private static void CertificateValidationHandler(CertificateValidator validator,
+        private void CertificateValidationHandler(CertificateValidator validator,
             CertificateValidationEventArgs eventArgs)
         {
             if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
@@ -164,6 +183,7 @@ namespace Cognite.OpcUa
                 out byte[] continuationPoint,
                 out ReferenceDescriptionCollection references
             );
+            numBrowse.Inc();
             while (continuationPoint != null)
             {
                 session.BrowseNext(
@@ -174,6 +194,7 @@ namespace Cognite.OpcUa
                     out ReferenceDescriptionCollection tmpReferences
                 );
                 references.AddRange(tmpReferences);
+                numBrowse.Inc();
             }
             return references;
         }
@@ -202,30 +223,31 @@ namespace Cognite.OpcUa
             var details = new ReadRawModifiedDetails
             {
                 StartTime = toRead.LatestTimestamp,
-                EndTime = DateTime.MaxValue,
+                EndTime = DateTime.Now.AddDays(1),
                 NumValuesPerNode = config.MaxResults
             };
             HistoryReadResultCollection results = null;
             do
             {
                 session.HistoryRead(
-                   null,
-                   new ExtensionObject(details),
-                   TimestampsToReturn.Neither,
-                   false,
-                   new HistoryReadValueIdCollection
-                   {
+                    null,
+                    new ExtensionObject(details),
+                    TimestampsToReturn.Neither,
+                    false,
+                    new HistoryReadValueIdCollection
+                    {
                         new HistoryReadValueId
                         {
                             NodeId = toRead.Id,
                             ContinuationPoint = results ? [0].ContinuationPoint
                         },
 
-                   },
-                   out results,
-                   out _
-               );
-               callback(results, results[0].ContinuationPoint == null, toRead.Id);
+                    },
+                    out results,
+                    out _
+                );
+                numHistoryReads.Inc();
+                callback(results, results[0].ContinuationPoint == null, toRead.Id);
             } while (results != null && results[0].ContinuationPoint != null);
         }
         public void SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
@@ -301,6 +323,7 @@ namespace Cognite.OpcUa
                         subscription.Create();
                     }
                 }
+                numSubscriptions.Set(subscription.MonitoredItemCount);
             }
             foreach (BufferedVariable node in toHistoryRead)
             {
@@ -311,7 +334,7 @@ namespace Cognite.OpcUa
             IEnumerable<uint> common,
             IEnumerable<uint> variables)
         {
-            if (!nodes.Any()) return null;
+            if (!nodes.Any()) return new List<DataValue>();
             var readValueIds = new ReadValueIdCollection();
             foreach (var node in nodes)
             {
@@ -356,6 +379,7 @@ namespace Cognite.OpcUa
                     out DataValueCollection lvalues,
                     out _
                 );
+                attributeRequests.Inc(Math.Min(remaining, per));
                 values = values.Concat(lvalues);
                 remaining -= per;
             }
@@ -423,7 +447,8 @@ namespace Cognite.OpcUa
                         var children = GetNodeChildren(node.Id);
                         foreach (var child in children)
                         {
-                            var property = new BufferedVariable(ToNodeId(child.NodeId), child.DisplayName.Text, node.Id) { IsProperty = true };
+                            var property = new BufferedVariable(ToNodeId(child.NodeId),
+                                child.DisplayName.Text, node.Id) { IsProperty = true };
                             properties.Add(property);
                             if (node.properties == null)
                             {
