@@ -8,7 +8,7 @@ client:
   # higher reliability, as data is pushed to CDF after each read finishes
   MaxResults: 100
   # Polling interval in ms between each test of changes to a subscribed variable
-  # 0 updates instantly, but might result in heavier load on the OPC-UA server
+  # 0 updates at maximum rate set by server
   PollingInterval: 0
   # Time in ms between each attempted reconnect after a disconnect
   # Should not be set too short
@@ -45,8 +45,8 @@ cognite:
   RootNodeId: i=0
   # Delay in ms between each push of data points to CDF
   DataPushDelay: 1000
-  # Delay in ms between each push of Nodes to CDF
-  NodePushDelay: 5000
+  # Debug mode, if true, Extractor will not push to CDF
+  Debug: false
 
 logging:
   # Folder for logging output. Leave blank for console only

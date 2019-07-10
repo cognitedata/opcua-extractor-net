@@ -202,7 +202,7 @@ namespace Cognite.OpcUa
             var details = new ReadRawModifiedDetails
             {
                 StartTime = toRead.LatestTimestamp,
-                EndTime = DateTime.MaxValue,
+                EndTime = DateTime.Now.AddDays(1),
                 NumValuesPerNode = config.MaxResults
             };
             HistoryReadResultCollection results = null;
@@ -311,7 +311,7 @@ namespace Cognite.OpcUa
             IEnumerable<uint> common,
             IEnumerable<uint> variables)
         {
-            if (!nodes.Any()) return null;
+            if (!nodes.Any()) return new List<DataValue>();
             var readValueIds = new ReadValueIdCollection();
             foreach (var node in nodes)
             {

@@ -140,7 +140,6 @@ namespace Cognite.OpcUa
         public string RootNodeNamespace { get; set; }
         public string RootNodeId { get; set; }
         public int DataPushDelay { get; set; }
-        public int NodePushDelay { get; set; }
         public bool Debug { get; set; }
     }
     public class FullConfig
