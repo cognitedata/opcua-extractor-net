@@ -19,6 +19,8 @@ client:
   Username: "username"
   # OPC-UA password
   Password: "password"
+  # Use secured connection
+  Secure: false
 
 nsmaps:
   # Map OPC-UA namespaces to prefixes in CDF. 
