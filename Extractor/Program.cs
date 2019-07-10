@@ -20,7 +20,7 @@ namespace Cognite.OpcUa
             var services = new ServiceCollection();
             Configure(services);
             var provider = services.BuildServiceProvider();
-
+            Metrics.SuppressDefaultMetrics();
             Extractor extractor = new Extractor(fullConfig, provider.GetRequiredService<IHttpClientFactory>());
 			Logger.Startup(fullConfig.LoggerConfig);
             try
