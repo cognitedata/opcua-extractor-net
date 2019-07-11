@@ -144,6 +144,7 @@ namespace Cognite.OpcUa
         }
         public BufferedDataPoint(byte[] bytes)
         {
+            if (bytes.Length < sizeof(long) + sizeof(double)) return;
             timestamp = BitConverter.ToInt64(bytes, bytes.Length - sizeof(long));
             doubleValue = BitConverter.ToDouble(bytes, bytes.Length - sizeof(double) - sizeof(long));
             char[] chars = new char[(bytes.Length - sizeof(long) - sizeof(double))/sizeof(char)];

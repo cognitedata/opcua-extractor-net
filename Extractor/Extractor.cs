@@ -230,6 +230,11 @@ namespace Cognite.OpcUa
                     int dRead = await fs.ReadAsync(dataBytes, 0, size);
                     if (dRead < size) break;
                     var buffDp = new BufferedDataPoint(dataBytes);
+                    if (!nodeIsHistorizing.ContainsKey(buffDp.nodeId))
+                    {
+                        Logger.LogWarning("Bad datapoint in file");
+                        continue;
+                    }
                     bufferedDPQueue.Enqueue(buffDp);
                     Logger.LogWarning("Read dp from file!");
                     Logger.LogData(buffDp);
