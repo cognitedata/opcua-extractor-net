@@ -20,7 +20,6 @@ namespace Cognite.OpcUa
     public class Extractor
     {
         readonly UAClient UAClient;
-        int debugCount = 0;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
         readonly object notInSyncLock = new object();
@@ -230,7 +229,7 @@ namespace Cognite.OpcUa
                     int dRead = await fs.ReadAsync(dataBytes, 0, size);
                     if (dRead < size) break;
                     var buffDp = new BufferedDataPoint(dataBytes);
-                    if (!nodeIsHistorizing.ContainsKey(buffDp.nodeId))
+                    if (buffDp.nodeId == null || !nodeIsHistorizing.ContainsKey(buffDp.nodeId))
                     {
                         Logger.LogWarning("Bad datapoint in file");
                         continue;
@@ -300,7 +299,7 @@ namespace Cognite.OpcUa
                 Client client = Client.Create(httpClient)
                     .AddHeader("api-key", config.ApiKey)
                     .SetProject(config.Project);
-                if (debugCount++ < 10 || !await RetryAsync(async () => await client.InsertDataAsync(finalDataPoints), "Failed to insert into CDF"))
+                if (!await RetryAsync(async () => await client.InsertDataAsync(finalDataPoints), "Failed to insert into CDF"))
                 {
                     Logger.LogError("Failed to insert " + count + " datapoints into CDF");
                     dataPointPushFailures.Inc();
