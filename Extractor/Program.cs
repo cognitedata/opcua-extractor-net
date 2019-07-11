@@ -12,9 +12,9 @@ namespace Cognite.OpcUa
 {
     class Program
     {
-        static int Main()
+        static int Main(string[] args)
         {
-            FullConfig fullConfig = GetConfig();
+            FullConfig fullConfig = GetConfig(args.Length > 0 ? args[0] : "config.yml");
             if (fullConfig == null) return -1;
 
             var services = new ServiceCollection();
@@ -54,9 +54,9 @@ namespace Cognite.OpcUa
             extractor.Close();
 			return 0;
         }
-        private static FullConfig GetConfig()
+        private static FullConfig GetConfig(string configPath)
         {
-            var config = ReadConfig();
+            var config = ReadConfig(configPath);
             FullConfig fullConfig = null;
             try
             {
@@ -83,9 +83,13 @@ namespace Cognite.OpcUa
             }
             return fullConfig;
         }
-        private static YamlMappingNode ReadConfig()
+        private static YamlMappingNode ReadConfig(string configPath)
         {
-            string document = File.ReadAllText("config.yml");
+            if (!File.Exists(configPath))
+            {
+                Console.WriteLine("Failed to open config file " + configPath);
+            }
+            string document = File.ReadAllText(configPath);
             StringReader input = new StringReader(document);
             YamlStream stream = new YamlStream();
             stream.Load(input);
