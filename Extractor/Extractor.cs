@@ -17,6 +17,9 @@ using Prometheus.Client;
 
 namespace Cognite.OpcUa
 {
+    /// <summary>
+    /// Main extractor class, tying together the <see cref="UAClient"/> and CDF client.
+    /// </summary>
     public class Extractor
     {
         readonly UAClient UAClient;
@@ -25,7 +28,6 @@ namespace Cognite.OpcUa
         readonly object notInSyncLock = new object();
         readonly ISet<NodeId> notInSync = new HashSet<NodeId>();
         bool buffersEmpty;
-        public bool Blocking { get; set; }
         readonly NodeId rootNode;
         readonly long rootAsset = -1;
         readonly CogniteClientConfig config;
@@ -51,6 +53,11 @@ namespace Cognite.OpcUa
         private static readonly Gauge trackedTimeseres = Metrics
             .CreateGauge("opcua_tracked_timeseries", "Number of variables on the opcua server mapped to timeseries in CDF");
 
+        /// <summary>
+        /// Primary constructor, creates and starts the UAClient and starts the dataPushTimer.
+        /// </summary>
+        /// <param name="config"></param>
+        /// <param name="clientFactory"></param>
         public Extractor(FullConfig config, IHttpClientFactory clientFactory)
         {
             this.clientFactory = clientFactory;
@@ -84,17 +91,22 @@ namespace Cognite.OpcUa
             }
         }
         #region Interface
-
+        /// <summary>
+        /// Restarts the extractor, to some extent, clears known asset ids, allows data to be pushed to CDF, and begins mapping the opcua
+        /// directory again
+        /// </summary>
         public void RestartExtractor()
         {
             // In theory, a disconnect might be a server restart, which can cause namespaces to change.
             // This invalidates our stored mapping, so we need to redo everything, remap structure, read history,
             // synchronize history
-            Blocking = false;
             buffersEmpty = false;
             nodeToAssetIds.Clear();
             MapUAToCDF();
         }
+        /// <summary>
+        /// Closes the extractor, mainly just shutting down the opcua client.
+        /// </summary>
         public void Close()
         {
             if (!UAClient.Started) return;
@@ -108,6 +120,9 @@ namespace Cognite.OpcUa
                 Logger.LogException(e);
             }
         }
+        /// <summary>
+        /// Starts the extractor, calling BrowseDirectory on the root node, then pushes all nodes to CDF once finished.
+        /// </summary>
         public void MapUAToCDF()
         {
             trackedAssets.Set(0);
@@ -123,7 +138,14 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Handlers
-
+        /// <summary>
+        /// Callback for the browse operation, creates <see cref="BufferedNode"/>s and enqueues them.
+        /// </summary>
+        /// <remarks>
+        /// A FIFO queue ensures that parents will always be created before their children
+        /// </remarks>
+        /// <param name="node">Description of the node to be handled</param>
+        /// <param name="parentId">Id of the parent node</param>
         private void HandleNode(ReferenceDescription node, NodeId parentId)
         {
             if (node.NodeClass == NodeClass.Object)
@@ -147,9 +169,13 @@ namespace Cognite.OpcUa
                 throw new Exception("Invalid node type");
             }
         }
+        /// <summary>
+        /// Handles notifications on subscribed items, pushes all new datapoints to the queue.
+        /// </summary>
+        /// <param name="item">Modified item</param>
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
-            if (Blocking || !buffersEmpty && notInSync.Contains(item.ResolvedNodeId)) return;
+            if (!buffersEmpty && notInSync.Contains(item.ResolvedNodeId)) return;
 
             foreach (var datapoint in item.DequeueValues())
             {
@@ -170,6 +196,12 @@ namespace Cognite.OpcUa
                 bufferedDPQueue.Enqueue(buffDp);
             }
         }
+        /// <summary>
+        /// Callback for HistoryRead operations. Simply pushes all datapoints to the queue.
+        /// </summary>
+        /// <param name="data">Collection of data to be handled</param>
+        /// <param name="final">True if this is the final call for this node, and the lock may be removed</param>
+        /// <param name="nodeid">Id of the node in question</param>
         private void HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
         {
             if (final)
@@ -198,23 +230,33 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Push Data
-
+        /// <summary>
+        /// Write a list of datapoints to buffer file. Only writes non-historizing datapoints.
+        /// </summary>
+        /// <param name="dataPoints">List of points to be buffered</param>
         private async Task WriteBufferToFile(IEnumerable<BufferedDataPoint> dataPoints)
         {
             using (FileStream fs = new FileStream(config.BufferFile, FileMode.Append, FileAccess.Write))
             {
-                Logger.LogInfo("Write " + dataPoints.Count() + " to file");
+                int count = 0;
                 foreach (var dp in dataPoints)
                 {
                     if (nodeIsHistorizing[dp.nodeId]) continue;
+                    count++;
                     bufferFileEmpty = false;
-                    Console.WriteLine("Write: " + dp.nodeId);
                     byte[] bytes = dp.ToStorableBytes();
                     await fs.WriteAsync(bytes, 0, bytes.Length);
                 }
+                if (count > 0)
+                {
+                    Logger.LogInfo("Write " + count + " datapoints to file");
+                }
+
             }
         }
-
+        /// <summary>
+        /// Reads buffer from file into the datapoint queue
+        /// </summary>
         private async Task ReadBufferFromFile()
         {
             using (FileStream fs = new FileStream(config.BufferFile, FileMode.OpenOrCreate, FileAccess.Read))
@@ -235,14 +277,14 @@ namespace Cognite.OpcUa
                         continue;
                     }
                     bufferedDPQueue.Enqueue(buffDp);
-                    Logger.LogWarning("Read dp from file!");
-                    Logger.LogData(buffDp);
                 }
             }
             File.Create(config.BufferFile).Close();
             bufferFileEmpty = true;
         }
-
+        /// <summary>
+        /// Dequeues up to 100000 points from the queue, then pushes them to CDF.
+        /// </summary>
         private async void PushDataPointsToCDF(object sender, ElapsedEventArgs e)
         {
             dataPushTimer.Stop();
@@ -328,6 +370,11 @@ namespace Cognite.OpcUa
             }
             dataPushTimer.Start();
         }
+        /// <summary>
+        /// Test if given list of assets exists, then create any that do not, checking for properties.
+        /// </summary>
+        /// <param name="assetList">List of assets to be tested</param>
+        /// <param name="client">Cognite client to be used</param>
         private async Task EnsureAssets(List<BufferedNode> assetList, Client client)
         {
             IDictionary<string, BufferedNode> assetIds = new Dictionary<string, BufferedNode>();
@@ -428,6 +475,11 @@ namespace Cognite.OpcUa
                 }
             }
         }
+        /// <summary>
+        /// Test if given list of timeseries exists, then create any that do not, checking for properties.
+        /// </summary>
+        /// <param name="tsList">List of timeseries to be tested</param>
+        /// <param name="client">Cognite client to be used</param>
         private async Task EnsureTimeseries(List<BufferedVariable> tsList, Client client)
         {
             if (!tsList.Any()) return;
@@ -487,6 +539,11 @@ namespace Cognite.OpcUa
                 await RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS");
             }
         }
+        /// <summary>
+        /// Try to get latest timestamp from given list of timeseries, then create any not found and try again
+        /// </summary>
+        /// <param name="tsList">List of timeseries to be tested</param>
+        /// <param name="client">Cognite client to be used</param>
         private async Task EnsureHistorizingTimeseries(List<BufferedVariable> tsList, Client client)
         {
             if (!tsList.Any()) return;
@@ -591,6 +648,9 @@ namespace Cognite.OpcUa
                 tsKeys = tsKeys.Skip(toTest).ToHashSet();
             }
         }
+        /// <summary>
+        /// Empty queue, fetch info for each relevant node, test results against CDF, then synchronize any variables
+        /// </summary>
         private async Task PushNodesToCDF()
         {
             var nodeMap = new Dictionary<NodeId, BufferedNode>();
@@ -696,7 +756,14 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Util
-
+        /// <summary>
+        /// Retry the given asynchronous action a fixed number of times, logging each failure, and delaying with exponential backoff.
+        /// </summary>
+        /// <typeparam name="T">Expected return type</typeparam>
+        /// <param name="action">Asynchronous action to be performed</param>
+        /// <param name="failureMessage">Message to log on failure, in addition to attempt number</param>
+        /// <param name="expectResponseException">If true, expect a <see cref="ResponseException"/> and throw it immediately if found</param>
+        /// <returns></returns>
         private async Task<T> RetryAsync<T>(Func<Task<T>> action, string failureMessage, bool expectResponseException = false)
         {
             for (int i = 0; i < retryCount; i++)

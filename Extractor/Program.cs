@@ -12,16 +12,22 @@ namespace Cognite.OpcUa
 {
     class Program
     {
+        /// <summary>
+        /// Load config, start the <see cref="Logger"/>, start the <see cref="Extractor"/> then wait for exit signal
+        /// </summary>
+        /// <param name="args"></param>
+        /// <returns></returns>
         static int Main(string[] args)
         {
             FullConfig fullConfig = GetConfig(args.Length > 0 ? args[0] : "config.yml");
             if (fullConfig == null) return -1;
+            Logger.Startup(fullConfig.LoggerConfig);
 
             var services = new ServiceCollection();
             Configure(services);
             var provider = services.BuildServiceProvider();
             Extractor extractor = new Extractor(fullConfig, provider.GetRequiredService<IHttpClientFactory>());
-			Logger.Startup(fullConfig.LoggerConfig);
+
             try
             {
                 SetupMetrics(fullConfig.MetricsConfig);
@@ -54,6 +60,11 @@ namespace Cognite.OpcUa
             extractor.Close();
 			return 0;
         }
+        /// <summary>
+        /// Map yaml config to the FullConfig object
+        /// </summary>
+        /// <param name="configPath">Path to config file</param>
+        /// <returns>A <see cref="FullConfig"/> object representing the entire config file</returns>
         private static FullConfig GetConfig(string configPath)
         {
             var config = ReadConfig(configPath);
@@ -83,6 +94,11 @@ namespace Cognite.OpcUa
             }
             return fullConfig;
         }
+        /// <summary>
+        /// Reads config from file, then maps to a YamlDotNet tree
+        /// </summary>
+        /// <param name="configPath">Path to the config file</param>
+        /// <returns>The root <see cref="YamlMappingNode"/></returns>
         private static YamlMappingNode ReadConfig(string configPath)
         {
             if (!File.Exists(configPath))
@@ -96,7 +112,12 @@ namespace Cognite.OpcUa
 
             return (YamlMappingNode)stream.Documents[0].RootNode;
         }
-
+        /// <summary>
+        /// Generic implementation of a small hack to use the YamlDotNet deserializer on individual nodes
+        /// </summary>
+        /// <typeparam name="T">Target type</typeparam>
+        /// <param name="node">The root node for the target object</param>
+        /// <returns>An instantiated instance of the target type</returns>
         private static T DeserializeNode<T>(YamlNode node)
         {
             using (var stream = new MemoryStream())
@@ -117,6 +138,11 @@ namespace Cognite.OpcUa
                 }
             }
         }
+        /// <summary>
+        /// Tests that the config is correct and valid
+        /// </summary>
+        /// <param name="config">The config object</param>
+        /// <exception cref="Exception">On invalid config</exception>
         private static void ValidateConfig(FullConfig config)
         {
             if (string.IsNullOrWhiteSpace(config.UAConfig.EndpointURL)) throw new Exception("Invalid EndpointURL");
@@ -129,6 +155,10 @@ namespace Cognite.OpcUa
         {
             services.AddHttpClient();
         }
+        /// <summary>
+        /// Starts prometheus pushgateway client
+        /// </summary>
+        /// <param name="config">The metrics config object</param>
         private static void SetupMetrics(MetricsConfig config)
         {
             if (string.IsNullOrWhiteSpace(config.URL) || string.IsNullOrWhiteSpace(config.Job))
