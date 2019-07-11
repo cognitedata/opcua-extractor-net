@@ -207,7 +207,8 @@ namespace Cognite.OpcUa
             foreach (var rd in references)
             {
                 if (rd.NodeId == ObjectIds.Server) continue;
-                if (config.IgnoreUnderscored && rd.DisplayName.Text.StartsWith('_')) continue;
+                if (!string.IsNullOrWhiteSpace(config.IgnorePrefix) && rd.DisplayName.Text
+                    .StartsWith(config.IgnorePrefix, StringComparison.CurrentCulture)) continue;
                 callback(rd, root);
                 if (rd.NodeClass == NodeClass.Variable) continue;
                 tasks.Add(Task.Run(() => BrowseDirectory(ToNodeId(rd.NodeId), callback)));

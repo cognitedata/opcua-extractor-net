@@ -6,7 +6,6 @@ using YamlDotNet.RepresentationModel;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 using System.Collections.Generic;
-using Prometheus.Client;
 using Prometheus.Client.MetricPusher;
 
 namespace Cognite.OpcUa
@@ -159,7 +158,7 @@ namespace Cognite.OpcUa
         public string Username { get; set; }
         public string Password { get; set; }
         public bool Secure { get; set; }
-        public bool IgnoreUnderscored { get; set; }
+        public string IgnorePrefix { get; set; }
 
     }
     public class CogniteClientConfig

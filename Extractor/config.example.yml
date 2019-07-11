@@ -21,8 +21,8 @@ client:
   Password: "password"
   # Use secured connection
   Secure: false
-  # Use _ prefix for private, ignores any node with displayname prefixed with _
-  IgnoreUnderscored: false
+  # Specify prefix on DisplayName to ignore, leave empty for none
+  IgnorePrefix:
 
 nsmaps:
   # Map OPC-UA namespaces to prefixes in CDF. 
