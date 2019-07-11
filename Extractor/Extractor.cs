@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -20,6 +21,7 @@ namespace Cognite.OpcUa
     {
         readonly UAClient UAClient;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
+        private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
         readonly object notInSyncLock = new object();
         readonly ISet<NodeId> notInSync = new HashSet<NodeId>();
         bool buffersEmpty;
@@ -32,8 +34,9 @@ namespace Cognite.OpcUa
         private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
         private readonly System.Timers.Timer dataPushTimer;
         public static readonly DateTime epoch = new DateTime(1970, 1, 1);
-        private static readonly int retryCount = 4;
+        private static readonly int retryCount = 3;
         private readonly bool debug;
+        private bool bufferFileEmpty;
 
         private static readonly Counter dataPointsCounter = Metrics
             .CreateCounter("opcua_datapoints_pushed", "Number of datapoints pushed to CDF");
@@ -152,7 +155,7 @@ namespace Cognite.OpcUa
             {
                 var buffDp = new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
-                    item.ResolvedNodeId,
+                    UAClient.GetUniqueId(item.ResolvedNodeId),
                     UAClient.ConvertToDouble(datapoint)
                 );
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
@@ -161,6 +164,7 @@ namespace Cognite.OpcUa
                     return;
                 }
                 Logger.LogData(buffDp);
+                // Logger.LogData(new BufferedDataPoint(buffDp.ToStorableBytes().Skip(sizeof(ushort)).ToArray()));
 
                 if (debug) return;
                 bufferedDPQueue.Enqueue(buffDp);
@@ -184,7 +188,7 @@ namespace Cognite.OpcUa
             {
                 var buffDp = new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
-                    nodeid,
+                    UAClient.GetUniqueId(nodeid),
                     UAClient.ConvertToDouble(datapoint)
                 );
                 Logger.LogData(buffDp);
@@ -194,6 +198,50 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Push Data
+
+        private async Task WriteBufferToFile(IEnumerable<BufferedDataPoint> dataPoints)
+        {
+            using (FileStream fs = new FileStream(config.BufferFile, FileMode.Append, FileAccess.Write))
+            {
+                Logger.LogInfo("Write " + dataPoints.Count() + " to file");
+                foreach (var dp in dataPoints)
+                {
+                    if (nodeIsHistorizing[dp.nodeId]) continue;
+                    bufferFileEmpty = false;
+                    Console.WriteLine("Write: " + dp.nodeId);
+                    byte[] bytes = dp.ToStorableBytes();
+                    await fs.WriteAsync(bytes, 0, bytes.Length);
+                }
+            }
+        }
+
+        private async Task ReadBufferFromFile()
+        {
+            using (FileStream fs = new FileStream(config.BufferFile, FileMode.OpenOrCreate, FileAccess.Read))
+            {
+                byte[] sizeBytes = new byte[sizeof(ushort)];
+                while (true)
+                {
+                    int read = await fs.ReadAsync(sizeBytes, 0, sizeBytes.Length);
+                    if (read < sizeBytes.Length) break;
+                    ushort size = BitConverter.ToUInt16(sizeBytes, 0);
+                    byte[] dataBytes = new byte[size];
+                    int dRead = await fs.ReadAsync(dataBytes, 0, size);
+                    if (dRead < size) break;
+                    var buffDp = new BufferedDataPoint(dataBytes);
+                    if (buffDp.nodeId == null || !nodeIsHistorizing.ContainsKey(buffDp.nodeId))
+                    {
+                        Logger.LogWarning("Bad datapoint in file");
+                        continue;
+                    }
+                    bufferedDPQueue.Enqueue(buffDp);
+                    Logger.LogWarning("Read dp from file!");
+                    Logger.LogData(buffDp);
+                }
+            }
+            File.Create(config.BufferFile).Close();
+            bufferFileEmpty = true;
+        }
 
         private async void PushDataPointsToCDF(object sender, ElapsedEventArgs e)
         {
@@ -222,7 +270,7 @@ namespace Cognite.OpcUa
                     dataPoints = new Tuple<IList<DataPointPoco>, Identity>
                     (
                         new List<DataPointPoco>(),
-                        Identity.ExternalId(UAClient.GetUniqueId(dataPoint.nodeId))
+                        Identity.ExternalId(dataPoint.nodeId)
                     );
                     organizedDatapoints.Add(dataPoint.nodeId, dataPoints);
                 }
@@ -255,9 +303,25 @@ namespace Cognite.OpcUa
                 {
                     Logger.LogError("Failed to insert " + count + " datapoints into CDF");
                     dataPointPushFailures.Inc();
+                    if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile))
+                    {
+                        try
+                        {
+                            await WriteBufferToFile(dataPointList);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogError("Failed to write buffer to file");
+                            Logger.LogException(ex);
+                        }
+                    }
                 }
                 else
                 {
+                    if (config.BufferOnFailure && !bufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
+                    {
+                        await ReadBufferFromFile();
+                    }
                     dataPointsCounter.Inc(count);
                     dataPointPushes.Inc();
                 }
@@ -370,7 +434,9 @@ namespace Cognite.OpcUa
             var tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
-                tsIds.Add(UAClient.GetUniqueId(node.Id), node);
+                string externalId = UAClient.GetUniqueId(node.Id);
+                tsIds.Add(externalId, node);
+                nodeIsHistorizing.TryAdd(externalId, false);
             }
 
             Logger.LogInfo("Test " + tsIds.Keys.Count + " timeseries");
@@ -427,7 +493,9 @@ namespace Cognite.OpcUa
             var tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
-                tsIds.Add(UAClient.GetUniqueId(node.Id), node);
+                string externalId = UAClient.GetUniqueId(node.Id);
+                tsIds.Add(externalId, node);
+                nodeIsHistorizing.TryAdd(externalId, true);
             }
 
             var tsKeys = new HashSet<string>(tsIds.Keys);

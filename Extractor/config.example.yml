@@ -37,7 +37,7 @@ cognite:
   Project: test
   # Cognite api key
   ApiKey: test
-  # The root asset must exist, and will be mapped to the root node in opcua
+  # The root asset must exist, and will be mapped to the root node in opcua, no changes will be made to the root asset
   # Root assetid to map to root OPC-UA node
   RootAssetId: 0
   # Full name of the namespace of the root node
@@ -49,6 +49,10 @@ cognite:
   DataPushDelay: 1000
   # Debug mode, if true, Extractor will not push to CDF
   Debug: false
+  # Buffer datapoints when the connection to CDF fails.
+  BufferOnFailure: false
+  # Buffer file name
+  BufferFile: buffer.bin
 
 logging:
   # Folder for logging output. Leave blank for console only
