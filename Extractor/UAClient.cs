@@ -11,6 +11,9 @@ using Prometheus.Client;
 
 namespace Cognite.OpcUa
 {
+    /// <summary>
+    /// Client managing the connection to the opcua server, and providing wrapper methods to simplify interaction with the server.
+    /// </summary>
     public class UAClient
     {
         readonly UAClientConfig config;
@@ -36,6 +39,11 @@ namespace Cognite.OpcUa
         private static readonly Counter numBrowse = Metrics
             .CreateCounter("opcua_browse_operations", "Number of browse operations performed");
 
+        /// <summary>
+        /// Constructor, does not start the client.
+        /// </summary>
+        /// <param name="config">Full configuartion object</param>
+        /// <param name="extractor">The parent exctractor. Can be null</param>
         public UAClient(FullConfig config, Extractor extractor = null)
         {
             foreach (var node in config.NSMaps.Children)
@@ -46,7 +54,9 @@ namespace Cognite.OpcUa
             this.config = config.UAConfig;
         }
         #region Session management
-
+        /// <summary>
+        /// Entrypoint for starting the opcua session. Must be called before any further requests can be made.
+        /// </summary>
         public async Task Run()
         {
             try
@@ -59,10 +69,16 @@ namespace Cognite.OpcUa
                 Logger.LogException(e);
             }
         }
+        /// <summary>
+        /// Close the session, cleaning up any client data on the server
+        /// </summary>
         public void Close()
         {
             session.CloseSession(null, true);
         }
+        /// <summary>
+        /// Load security configuration for the session, then start the server.
+        /// </summary>
         private async Task StartSession()
         {
             var application = new ApplicationInstance
@@ -106,6 +122,9 @@ namespace Cognite.OpcUa
             connected.Set(1);
             Logger.LogInfo("Successfully connected to server at " + config.EndpointURL);
         }
+        /// <summary>
+        /// Event triggered after a succesfull reconnect.
+        /// </summary>
         private void ClientReconnectComplete(object sender, EventArgs eventArgs)
         {
             if (!clientReconnecting) return;
@@ -120,6 +139,9 @@ namespace Cognite.OpcUa
             connected.Set(1);
             reconnectHandler = null;
         }
+        /// <summary>
+        /// Called on client keep alive, handles the case where the server has stopped responding and the connection timed out.
+        /// </summary>
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
         {
             if (eventArgs.Status != null && ServiceResult.IsNotGood(eventArgs.Status))
@@ -130,12 +152,14 @@ namespace Cognite.OpcUa
                     connected.Set(0);
                     Logger.LogWarning("--- RECONNECTING ---");
                     clientReconnecting = true;
-                    extractor.Blocking = true;
                     reconnectHandler = new SessionReconnectHandler();
                     reconnectHandler.BeginReconnect(sender, config.ReconnectPeriod, ClientReconnectComplete);
                 }
             }
         }
+        /// <summary>
+        /// Called after succesful validation of a server certificate. Handles the case where the certificate is untrusted.
+        /// </summary>
         private void CertificateValidationHandler(CertificateValidator validator,
             CertificateValidationEventArgs eventArgs)
         {
@@ -156,7 +180,12 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Browse
-
+        /// <summary>
+        /// Browse an opcua directory, calling callback for all relevant nodes found.
+        /// </summary>
+        /// <param name="root">Initial node to start mapping. Will not be sent to callback</param>
+        /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
+        /// <returns></returns>
         public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback)
         {
             try
@@ -169,7 +198,12 @@ namespace Cognite.OpcUa
                 Logger.LogException(e);
             }
         }
-        private ReferenceDescriptionCollection GetNodeChildren(NodeId parent)
+        /// <summary>
+        /// Returns a list of all nodes with a hierarchical reference to the parent
+        /// </summary>
+        /// <param name="parent">Parent of returned nodes</param>
+        /// <returns><see cref="ReferenceDescriptionCollection"/> containing descriptions of all found children</returns>
+        private ReferenceDescriptionCollection GetNodeChildren(NodeId parent, NodeId referenceTypes = null)
         {
             session.Browse(
                 null,
@@ -177,7 +211,7 @@ namespace Cognite.OpcUa
                 parent,
                 0,
                 BrowseDirection.Forward,
-                ReferenceTypeIds.HierarchicalReferences,
+                referenceTypes == null ? ReferenceTypeIds.HierarchicalReferences : referenceTypes,
                 true,
                 (uint)NodeClass.Variable | (uint)NodeClass.Object,
                 out byte[] continuationPoint,
@@ -198,6 +232,11 @@ namespace Cognite.OpcUa
             }
             return references;
         }
+        /// <summary>
+        /// The main browse method, recursively calls itself on all object children
+        /// </summary>
+        /// <param name="root">Root node. Will not be sent to callback</param>
+        /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
         private void BrowseDirectory(NodeId root, Action<ReferenceDescription, NodeId> callback)
         {
             if (!visitedNodes.Add(root)) return;
@@ -218,7 +257,12 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Get data
-
+        /// <summary>
+        /// Read historydata for the requested node and call the callback after each call to HistoryRead
+        /// </summary>
+        /// <param name="toRead">Variable to read for</param>
+        /// <param name="callback">Callback, takes a <see cref="HistoryReadResultCollection"/>,
+        /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
         public void DoHistoryRead(BufferedVariable toRead,
             Action<HistoryReadResultCollection, bool, NodeId> callback)
         {
@@ -252,6 +296,14 @@ namespace Cognite.OpcUa
                 callback(results, results[0].ContinuationPoint == null, toRead.Id);
             } while (results != null && results[0].ContinuationPoint != null);
         }
+        /// <summary>
+        /// Synchronizes a list of nodes with the server, creating subscriptions and reading historical data where necessary.
+        /// </summary>
+        /// <param name="nodeList">List of buffered variables to synchronize</param>
+        /// <param name="callback">Callback used for DoHistoryRead. Takes a <see cref="HistoryReadResultCollection"/>,
+        /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
+        /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
+        /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
         public void SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
             Action<HistoryReadResultCollection, bool, NodeId> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler)
@@ -332,6 +384,13 @@ namespace Cognite.OpcUa
                 Task.Run(() => DoHistoryRead(node, callback));
             }
         }
+        /// <summary>
+        /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
+        /// </summary>
+        /// <param name="nodes">List of nodes to fetch attributes for</param>
+        /// <param name="common">List of attributes to fetch for all nodes</param>
+        /// <param name="variables">List of attributes to fetch for variable nodes only</param>
+        /// <returns>A list of <see cref="DataValue"/>s</returns>
         private IEnumerable<DataValue> GetNodeAttributes(IEnumerable<BufferedNode> nodes,
             IEnumerable<uint> common,
             IEnumerable<uint> variables)
@@ -387,6 +446,10 @@ namespace Cognite.OpcUa
             }
             return values;
         }
+        /// <summary>
+        /// Gets Description for all nodes, and DataType, Historizing and ValueRank for Variable nodes, then updates the given list of nodes
+        /// </summary>
+        /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         public void ReadNodeData(IEnumerable<BufferedNode> nodes)
         {
             var values = GetNodeAttributes(nodes, new List<uint>
@@ -420,22 +483,35 @@ namespace Cognite.OpcUa
                 }
             }
         }
+        /// <summary>
+        /// Gets the values of the given list of variables, then updates each variable with a BufferedDataPoint
+        /// </summary>
+        /// <remarks>
+        /// Note that there is a fixed maximum message size, and we here fetch a large number of values at the same time.
+        /// To avoid complications, avoid fetching data of unknown large size here.
+        /// Due to this, only nodes with ValueRank -1 (Scalar) will be fetched.
+        /// </remarks>
+        /// <param name="nodes">List of variables to be updated</param>
         public void ReadNodeValues(IEnumerable<BufferedVariable> nodes)
         {
-            var values = GetNodeAttributes(nodes.Where((BufferedVariable buff) => buff.ValueRank == -1),
+            var values = GetNodeAttributes(nodes.Where((BufferedVariable buff) => buff.ValueRank == ValueRanks.Scalar),
                 new List<uint>(),
                 new List<uint> { Attributes.Value }
             );
             var enumerator = values.GetEnumerator();
             foreach (var node in nodes)
             {
-                if (node.ValueRank == -1)
+                if (node.ValueRank == ValueRanks.Scalar)
                 {
                     enumerator.MoveNext();
                     node.SetDataPoint(enumerator.Current, this);
                 }
             }
         }
+        /// <summary>
+        /// Gets properties for variables in nodes given, then updates all properties in given list of nodes with relevant data and values.
+        /// </summary>
+        /// <param name="nodes">Nodes to be updated with properties</param>
         public void GetNodeProperties(IEnumerable<BufferedNode> nodes)
         {
             var tasks = new List<Task>();
@@ -446,7 +522,7 @@ namespace Cognite.OpcUa
                 {
                     tasks.Add(Task.Run(() =>
                     {
-                        var children = GetNodeChildren(node.Id);
+                        var children = GetNodeChildren(node.Id, ReferenceTypeIds.HasProperty);
                         foreach (var child in children)
                         {
                             var property = new BufferedVariable(ToNodeId(child.NodeId),
@@ -478,11 +554,21 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Utils
-
+        /// <summary>
+        /// Converts an ExpandedNodeId into a NodeId using the session
+        /// </summary>
+        /// <param name="nodeid"></param>
+        /// <returns>Resulting NodeId</returns>
         public NodeId ToNodeId(ExpandedNodeId nodeid)
         {
             return ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris);
         }
+        /// <summary>
+        /// Converts identifier string and namespaceUri into NodeId. Identifier will be on form i=123 or s=abc etc.
+        /// </summary>
+        /// <param name="identifier">Full identifier on form i=123 or s=abc etc.</param>
+        /// <param name="namespaceUri">Full namespaceUri</param>
+        /// <returns>Resulting NodeId</returns>
         public NodeId ToNodeId(string identifier, string namespaceUri)
         {
             string nsString = "ns=" + session.NamespaceUris.GetIndex(namespaceUri);
@@ -492,6 +578,11 @@ namespace Cognite.OpcUa
             }
             return new NodeId(nsString + ";" + identifier);
         }
+        /// <summary>
+        /// Convert a datavalue into a double representation, testing for edge cases.
+        /// </summary>
+        /// <param name="datavalue">Datavalue to be converted</param>
+        /// <returns>Double value, will return 0 if the datavalue is invalid</returns>
         public static double ConvertToDouble(DataValue datavalue)
         {
             if (datavalue == null || datavalue.Value == null) return 0;
@@ -501,6 +592,11 @@ namespace Cognite.OpcUa
             }
             return Convert.ToDouble(datavalue.Value);
         }
+        /// <summary>
+        /// Converts object fetched from ua server to string, contains cases for special types we want to represent in CDF
+        /// </summary>
+        /// <param name="value">Object to convert</param>
+        /// <returns>Metadata suitable string</returns>
         public static string ConvertToString(object value)
         {
             if (value == null) return "";
@@ -539,11 +635,21 @@ namespace Cognite.OpcUa
             }
             return value.ToString();
         }
+        /// <summary>
+        /// Converts DataValue fetched from ua server to string, contains cases for special types we want to represent in CDF
+        /// </summary>
+        /// <param name="datavalue">Datavalue to convert</param>
+        /// <returns>Metadata suitable string</returns>
         public static string ConvertToString(DataValue datavalue)
         {
             if (datavalue == null) return "";
             return ConvertToString(datavalue.Value);
         }
+        /// <summary>
+        /// Returns consistent unique string representation of an <see cref="ExpandedNodeId"/> or <see cref="NodeId"/>
+        /// </summary>
+        /// <param name="nodeid">Nodeid to be converted</param>
+        /// <returns>Unique string representation</returns>
         public string GetUniqueId(ExpandedNodeId nodeid)
         {
             string namespaceUri = nodeid.NamespaceUri;
@@ -553,6 +659,17 @@ namespace Cognite.OpcUa
             }
             return GetUniqueId(namespaceUri, ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris));
         }
+        /// <summary>
+        /// Returns consistent unique string representation of a <see cref="NodeId"/> given its namespaceUri
+        /// </summary>
+        /// <remarks>
+        /// NodeId is, according to spec, unique in combination with its namespaceUri. We use this to generate a consistent, unique string
+        /// to be used for mapping assets and timeseries in CDF to opcua nodes.
+        /// To avoid having to send the entire namespaceUri to CDF, we allow mapping Uris to prefixes in the config file.
+        /// </remarks>
+        /// <param name="namespaceUri">NamespaceUri of given node</param>
+        /// <param name="nodeid">Nodeid to be converted</param>
+        /// <returns>Unique string representation</returns>
         private string GetUniqueId(string namespaceUri, NodeId nodeid)
         {
             string prefix;
