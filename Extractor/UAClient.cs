@@ -16,14 +16,14 @@ namespace Cognite.OpcUa
     /// </summary>
     public class UAClient
     {
-        readonly UAClientConfig config;
-        Session session;
-        SessionReconnectHandler reconnectHandler;
-        readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
-        readonly Extractor extractor;
-        readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
-        readonly object subscriptionLock = new object();
-        bool clientReconnecting;
+        private readonly UAClientConfig config;
+        private Session session;
+        private SessionReconnectHandler reconnectHandler;
+        private readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
+        private readonly Extractor extractor;
+        private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
+        private readonly object subscriptionLock = new object();
+        private bool clientReconnecting;
         public bool Started { get; private set; }
 
         private static readonly Counter connects = Metrics
@@ -211,7 +211,7 @@ namespace Cognite.OpcUa
                 parent,
                 0,
                 BrowseDirection.Forward,
-                referenceTypes == null ? ReferenceTypeIds.HierarchicalReferences : referenceTypes,
+                referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
                 true,
                 (uint)NodeClass.Variable | (uint)NodeClass.Object,
                 out byte[] continuationPoint,
@@ -526,7 +526,8 @@ namespace Cognite.OpcUa
                         foreach (var child in children)
                         {
                             var property = new BufferedVariable(ToNodeId(child.NodeId),
-                                child.DisplayName.Text, node.Id) { IsProperty = true };
+                                child.DisplayName.Text, node.Id)
+                            { IsProperty = true };
                             properties.Add(property);
                             if (node.properties == null)
                             {
@@ -603,7 +604,7 @@ namespace Cognite.OpcUa
             if (value.GetType().IsArray)
             {
                 string result = "[";
-                if (value is object[]values)
+                if (value is object[] values)
                 {
                     int count = 0;
                     foreach (var dvalue in values)

@@ -22,20 +22,20 @@ namespace Cognite.OpcUa
     /// </summary>
     public class Extractor
     {
-        readonly UAClient UAClient;
+        private readonly UAClient UAClient;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
-        readonly object notInSyncLock = new object();
-        readonly ISet<NodeId> notInSync = new HashSet<NodeId>();
-        bool buffersEmpty;
-        readonly NodeId rootNode;
-        readonly long rootAsset = -1;
-        readonly CogniteClientConfig config;
+        private readonly object notInSyncLock = new object();
+        private readonly ISet<NodeId> notInSync = new HashSet<NodeId>();
+        private bool buffersEmpty;
+        private readonly NodeId rootNode;
+        private readonly long rootAsset = -1;
+        private readonly CogniteClientConfig config;
         private readonly IHttpClientFactory clientFactory;
         private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
         private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
         private readonly System.Timers.Timer dataPushTimer;
-        public static readonly DateTime epoch = new DateTime(1970, 1, 1);
+        public static readonly DateTime Epoch = new DateTime(1970, 1, 1);
         private static readonly int retryCount = 3;
         private readonly bool debug;
         private bool bufferFileEmpty;
@@ -70,7 +70,7 @@ namespace Cognite.OpcUa
                 Logger.LogError("Failed to start UAClient");
                 return;
             }
-            startTime.Set(DateTime.Now.Subtract(epoch).TotalMilliseconds);
+            startTime.Set(DateTime.Now.Subtract(Epoch).TotalMilliseconds);
             rootNode = UAClient.ToNodeId(config.CogniteConfig.RootNodeId, config.CogniteConfig.RootNodeNamespace);
             if (rootNode.IsNullNodeId)
             {
@@ -180,7 +180,7 @@ namespace Cognite.OpcUa
             foreach (var datapoint in item.DequeueValues())
             {
                 var buffDp = new BufferedDataPoint(
-                    (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
+                    (long)datapoint.SourceTimestamp.Subtract(Epoch).TotalMilliseconds,
                     UAClient.GetUniqueId(item.ResolvedNodeId),
                     UAClient.ConvertToDouble(datapoint)
                 );
@@ -219,7 +219,7 @@ namespace Cognite.OpcUa
             foreach (var datapoint in hdata.DataValues)
             {
                 var buffDp = new BufferedDataPoint(
-                    (long)datapoint.SourceTimestamp.Subtract(epoch).TotalMilliseconds,
+                    (long)datapoint.SourceTimestamp.Subtract(Epoch).TotalMilliseconds,
                     UAClient.GetUniqueId(nodeid),
                     UAClient.ConvertToDouble(datapoint)
                 );
@@ -580,7 +580,7 @@ namespace Cognite.OpcUa
                             if (resultItem.DataPoints.Any())
                             {
                                 tsIds[resultItem.ExternalId.Value].LatestTimestamp =
-                                    epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
+                                    Epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
                             }
                         }
                     }
@@ -639,7 +639,7 @@ namespace Cognite.OpcUa
                                 if (resultItem.DataPoints.Any())
                                 {
                                     tsIds[resultItem.ExternalId.Value].LatestTimestamp =
-                                        epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
+                                        Epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
                                 }
                             }
                         }
