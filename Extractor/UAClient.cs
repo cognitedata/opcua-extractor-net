@@ -213,7 +213,7 @@ namespace Cognite.OpcUa
                 if (rd.NodeClass == NodeClass.Variable) continue;
                 tasks.Add(Task.Run(() => BrowseDirectory(ToNodeId(rd.NodeId), callback)));
             }
-            Task.WhenAll(tasks.ToArray()).Wait();
+            Task.WhenAll(tasks).Wait();
         }
         #endregion
 
@@ -432,7 +432,7 @@ namespace Cognite.OpcUa
                 if (node.ValueRank == -1)
                 {
                     enumerator.MoveNext();
-                    node.SetDataPoint(enumerator.Current);
+                    node.SetDataPoint(enumerator.Current, this);
                 }
             }
         }
@@ -571,7 +571,7 @@ namespace Cognite.OpcUa
             string nodeidstr = nodeid.ToString();
             string nsstr = "ns=" + nodeid.NamespaceIndex + ";";
             int pos = nodeidstr.IndexOf(nsstr, StringComparison.CurrentCulture);
-            if (pos >= 0)
+            if (pos == 0)
             {
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }

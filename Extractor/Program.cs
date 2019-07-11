@@ -170,6 +170,8 @@ namespace Cognite.OpcUa
         public string RootNodeId { get; set; }
         public int DataPushDelay { get; set; }
         public bool Debug { get; set; }
+        public bool BufferOnFailure { get; set; }
+        public string BufferFile { get; set; }
     }
     public class FullConfig
     {
