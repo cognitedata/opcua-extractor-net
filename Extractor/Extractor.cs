@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -128,12 +129,17 @@ namespace Cognite.OpcUa
             trackedAssets.Set(0);
             trackedTimeseres.Set(0);
 			Logger.LogInfo("Begin mapping directory");
-            UAClient.BrowseDirectoryAsync(rootNode, HandleNode).Wait();
-            Logger.LogInfo("End mapping directory");
-            while (bufferedNodeQueue.Any())
+            try
             {
-                PushNodesToCDF().Wait();
+                UAClient.BrowseDirectoryAsync(rootNode, HandleNode).Wait();
             }
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to map directory");
+                Logger.LogException(e);
+            }
+            Logger.LogInfo("End mapping directory");
+            PushNodesToCDF().Wait();
         }
         #endregion
 
@@ -334,7 +340,7 @@ namespace Cognite.OpcUa
             }
 
             
-            Logger.LogVerbose("pushdata", "Push " + count + " datapoints to CDF");
+            Logger.LogInfo("Push " + count + " datapoints to CDF");
 
             using (HttpClient httpClient = clientFactory.CreateClient())
             {
@@ -375,7 +381,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="assetList">List of assets to be tested</param>
         /// <param name="client">Cognite client to be used</param>
-        private async Task EnsureAssets(List<BufferedNode> assetList, Client client)
+        private async Task EnsureAssets(IEnumerable<BufferedNode> assetList, Client client)
         {
             IDictionary<string, BufferedNode> assetIds = new Dictionary<string, BufferedNode>();
             foreach (BufferedNode node in assetList)
@@ -480,7 +486,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="tsList">List of timeseries to be tested</param>
         /// <param name="client">Cognite client to be used</param>
-        private async Task EnsureTimeseries(List<BufferedVariable> tsList, Client client)
+        private async Task EnsureTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
         {
             if (!tsList.Any()) return;
             var tsIds = new Dictionary<string, BufferedVariable>();
@@ -544,7 +550,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="tsList">List of timeseries to be tested</param>
         /// <param name="client">Cognite client to be used</param>
-        private async Task EnsureHistorizingTimeseries(List<BufferedVariable> tsList, Client client)
+        private async Task EnsureHistorizingTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
         {
             if (!tsList.Any()) return;
             var tsIds = new Dictionary<string, BufferedVariable>();
@@ -555,26 +561,81 @@ namespace Cognite.OpcUa
                 nodeIsHistorizing.TryAdd(externalId, true);
             }
 
-            var tsKeys = new HashSet<string>(tsIds.Keys);
-            while (tsKeys.Any())
+            Logger.LogInfo("Test " + tsIds.Keys.Count + " historizing timeseries");
+            var missingTSIds = new HashSet<string>();
+            var pairedTsIds = new List<(Identity, string)>();
+
+            foreach (var key in tsIds.Keys)
             {
-                int toTest = Math.Min(100, tsKeys.Count);
-                Logger.LogInfo("Test " + toTest + " historizing timeseries");
-                var missingTSIds = new HashSet<string>();
-                var pairedTsIds = new List<(Identity, string)>();
+                pairedTsIds.Add((Identity.ExternalId(key), null));
+            }
 
-                foreach (var key in tsKeys.Take(toTest))
+            try
+            {
+                var readResults = await RetryAsync(() =>
+                    client.GetTimeseriesLatestDataAsync(pairedTsIds), "Failed to get historizing timeseries", true);
+                if (readResults != null)
                 {
-                    pairedTsIds.Add((Identity.ExternalId(key), null));
+                    Logger.LogInfo("Found " + readResults.Count() + " historizing timeseries");
+                    foreach (var resultItem in readResults)
+                    {
+                        if (resultItem.DataPoints.Any())
+                        {
+                            tsIds[resultItem.ExternalId.Value].LatestTimestamp =
+                                Epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
+                        }
+                    }
                 }
-
-                try
+            }
+            catch (ResponseException ex)
+            {
+                if (ex.Code == 400 && ex.Missing.Any())
                 {
-                    var readResults = await RetryAsync(() =>
-                        client.GetTimeseriesLatestDataAsync(pairedTsIds), "Failed to get historizing timeseries", true);
+                    foreach (var missing in ex.Missing)
+                    {
+                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        {
+                            missingTSIds.Add(value.ToString());
+                        }
+                    }
+                    Logger.LogInfo("Found " + ex.Missing.Count() + " missing historizing timeseries");
+                }
+                else
+                {
+                    Logger.LogError("Failed to fetch historizing timeseries data");
+                    Logger.LogException(ex);
+                }
+            }
+            if (missingTSIds.Any())
+            {
+                Logger.LogInfo("Create " + missingTSIds.Count + " new historizing timeseries");
+                var createTimeseries = new List<TimeseriesWritePoco>();
+                var getMetaData = new List<BufferedNode>();
+                foreach (string externalid in missingTSIds)
+                {
+                    getMetaData.Add(tsIds[externalid]);
+                }
+                UAClient.GetNodeProperties(getMetaData);
+                foreach (string externalId in missingTSIds)
+                {
+                    createTimeseries.Add(tsIds[externalId].ToTimeseries(externalId, nodeToAssetIds));
+                }
+                await RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create historizing TS");
+                var idsToMap = new HashSet<(Identity, string)>();
+                foreach (var key in tsIds.Keys)
+                {
+                    if (!missingTSIds.Contains(key))
+                    {
+                        idsToMap.Add((Identity.ExternalId(key), null));
+                    }
+                }
+                if (idsToMap.Any())
+                {
+                    Logger.LogInfo("Get remaining " + idsToMap.Count + " historizing timeseries ids");
+                    var readResults = await RetryAsync(() => client.GetTimeseriesLatestDataAsync(idsToMap),
+                        "Failed to get historizing timeseries ids");
                     if (readResults != null)
                     {
-                        Logger.LogInfo("Found " + readResults.Count() + " historizing timeseries");
                         foreach (var resultItem in readResults)
                         {
                             if (resultItem.DataPoints.Any())
@@ -585,67 +646,6 @@ namespace Cognite.OpcUa
                         }
                     }
                 }
-                catch (ResponseException ex)
-                {
-                    if (ex.Code == 400 && ex.Missing.Any())
-                    {
-                        foreach (var missing in ex.Missing)
-                        {
-                            if (missing.TryGetValue("externalId", out ErrorValue value))
-                            {
-                                missingTSIds.Add(value.ToString());
-                            }
-                        }
-                        Logger.LogInfo("Found " + ex.Missing.Count() + " missing historizing timeseries");
-                    }
-                    else
-                    {
-                        Logger.LogError("Failed to fetch historizing timeseries data");
-                        Logger.LogException(ex);
-                    }
-                }
-                if (missingTSIds.Any())
-                {
-                    Logger.LogInfo("Create " + missingTSIds.Count + " new historizing timeseries");
-                    var createTimeseries = new List<TimeseriesWritePoco>();
-                    var getMetaData = new List<BufferedNode>();
-                    foreach (string externalid in missingTSIds)
-                    {
-                        getMetaData.Add(tsIds[externalid]);
-                    }
-                    UAClient.GetNodeProperties(getMetaData);
-                    foreach (string externalId in missingTSIds)
-                    {
-                        createTimeseries.Add(tsIds[externalId].ToTimeseries(externalId, nodeToAssetIds));
-                    }
-                    await RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create historizing TS");
-                    var idsToMap = new HashSet<(Identity, string)>();
-                    foreach (var key in tsKeys.Take(toTest))
-                    {
-                        if (!missingTSIds.Contains(key))
-                        {
-                            idsToMap.Add((Identity.ExternalId(key), null));
-                        }
-                    }
-                    if (idsToMap.Any())
-                    {
-                        Logger.LogInfo("Get remaining " + idsToMap.Count + " historizing timeseries ids");
-                        var readResults = await RetryAsync(() => client.GetTimeseriesLatestDataAsync(idsToMap),
-                            "Failed to get historizing timeseries ids");
-                        if (readResults != null)
-                        {
-                            foreach (var resultItem in readResults)
-                            {
-                                if (resultItem.DataPoints.Any())
-                                {
-                                    tsIds[resultItem.ExternalId.Value].LatestTimestamp =
-                                        Epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
-                                }
-                            }
-                        }
-                    }
-                }
-                tsKeys = tsKeys.Skip(toTest).ToHashSet();
             }
         }
         /// <summary>
@@ -660,7 +660,7 @@ namespace Cognite.OpcUa
             var tsList = new List<BufferedVariable>();
 
             int count = 0;
-            while (bufferedNodeQueue.TryDequeue(out BufferedNode buffer) && count < 1000)
+            while (bufferedNodeQueue.TryDequeue(out BufferedNode buffer))
             {
                 if (buffer.IsVariable)
                 {
@@ -668,7 +668,8 @@ namespace Cognite.OpcUa
 
                     if (buffVar.IsProperty)
                     {
-                        var parent = nodeMap[buffVar.ParentId];
+                        nodeMap.TryGetValue(buffVar.ParentId, out BufferedNode parent);
+                        if (parent == null) continue;
                         if (parent.properties == null)
                         {
                             parent.properties = new List<BufferedVariable>();
@@ -724,8 +725,19 @@ namespace Cognite.OpcUa
                         .SetProject(config.Project);
                     try
                     {
-                        await EnsureAssets(assetList, client);
-                        trackedAssets.Inc(assetList.Count);
+                        {
+                            int per = 1000;
+                            int remaining = assetList.Count;
+                            IEnumerable<BufferedNode> tempAssetList = assetList;
+                            while (remaining > 0)
+                            {
+                                await EnsureAssets(tempAssetList.Take(Math.Min(remaining, per)), client);
+                                tempAssetList = tempAssetList.Skip(Math.Min(remaining, per));
+                                remaining -= per;
+                            }
+                            trackedAssets.Inc(assetList.Count);
+
+                        }
                         // At this point the assets should all be synchronized and mapped
                         // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
                         // This also sets the LastTimestamp property of each BufferedVariable
@@ -735,10 +747,30 @@ namespace Cognite.OpcUa
                         // node to assets map.
                         // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
                         // fetching the timeseries itself
-                        await EnsureTimeseries(tsList, client);
-                        trackedTimeseres.Inc(tsList.Count);
-                        await EnsureHistorizingTimeseries(histTsList, client);
-                        trackedTimeseres.Inc(histTsList.Count);
+                        {
+                            int per = 1000;
+                            int remaining = tsList.Count;
+                            IEnumerable<BufferedVariable> tempTsList = tsList;
+                            while (remaining > 0)
+                            {
+                                await EnsureTimeseries(tempTsList.Take(Math.Min(remaining, per)), client);
+                                tempTsList = tempTsList.Skip(Math.Min(remaining, per));
+                                remaining -= per;
+                            }
+                            trackedTimeseres.Inc(tsList.Count);
+                        }
+                        {
+                            int per = 100;
+                            int remaining = histTsList.Count;
+                            IEnumerable<BufferedVariable> tempHistTsList = histTsList;
+                            while (remaining > 0)
+                            {
+                                await EnsureHistorizingTimeseries(tempHistTsList.Take(Math.Min(remaining, per)), client);
+                                tempHistTsList = tempHistTsList.Skip(Math.Min(remaining, per));
+                                remaining -= per;
+                            }
+                            trackedTimeseres.Inc(histTsList.Count);
+                        }
                     }
                     catch (Exception e)
                     {

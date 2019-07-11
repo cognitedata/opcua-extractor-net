@@ -118,14 +118,14 @@ namespace Cognite.OpcUa
             if (DataType < DataTypes.Boolean || DataType > DataTypes.Double || IsProperty)
             {
                 Value = new BufferedDataPoint(
-                    (long)value.SourceTimestamp.Subtract(Extractor.epoch).TotalMilliseconds,
+                    (long)value.SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
                     client.GetUniqueId(Id),
                     UAClient.ConvertToString(value));
             }
             else
             {
                 Value = new BufferedDataPoint(
-                    (long)value.SourceTimestamp.Subtract(Extractor.epoch).TotalMilliseconds,
+                    (long)value.SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
                     client.GetUniqueId(Id),
                     UAClient.ConvertToDouble(value));
             }

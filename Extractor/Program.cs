@@ -45,9 +45,10 @@ namespace Cognite.OpcUa
 			{
 				Logger.LogError("Failed to map directory");
 				Logger.LogException(e);
+                Logger.Shutdown();
 				return -1;
 			}
-
+            Logger.LogInfo("Extractor started");
             var quitEvent = new ManualResetEvent(false);
             Console.CancelKeyPress += (sender, eArgs) =>
             {
@@ -58,6 +59,7 @@ namespace Cognite.OpcUa
             quitEvent.WaitOne(-1);
             Logger.LogInfo("Shutting down extractor");
             extractor.Close();
+            Logger.Shutdown();
 			return 0;
         }
         /// <summary>
