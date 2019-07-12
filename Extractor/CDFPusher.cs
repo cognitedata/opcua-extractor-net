@@ -12,6 +12,9 @@ using Prometheus.Client;
 
 namespace Cognite.OpcUa
 {
+    /// <summary>
+    /// Pusher against CDF
+    /// </summary>
     public class CDFPusher : IPusher
     {
         private readonly IHttpClientFactory clientFactory;
@@ -41,9 +44,11 @@ namespace Cognite.OpcUa
         private static readonly Gauge trackedTimeseres = Metrics
             .CreateGauge("opcua_tracked_timeseries", "Number of variables on the opcua server mapped to timeseries in CDF");
 
+        #region Interface
         /// <summary>
         /// Dequeues up to 100000 points from the queue, then pushes them to CDF.
         /// </summary>
+        /// <param name="dataPointQueue">Queue to be emptied</param>
         public async Task PushDataPoints(ConcurrentQueue<BufferedDataPoint> dataPointQueue)
         {
             var dataPointList = new List<BufferedDataPoint>();
@@ -122,285 +127,10 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        public void Reset()
-        {
-            nodeToAssetIds.Clear();
-            trackedAssets.Set(0);
-            trackedTimeseres.Set(0);
-        }
-        /// <summary>
-        /// Test if given list of assets exists, then create any that do not, checking for properties.
-        /// </summary>
-        /// <param name="assetList">List of assets to be tested</param>
-        /// <param name="client">Cognite client to be used</param>
-        private async Task EnsureAssets(IEnumerable<BufferedNode> assetList, Client client)
-        {
-            IDictionary<string, BufferedNode> assetIds = new Dictionary<string, BufferedNode>();
-            foreach (BufferedNode node in assetList)
-            {
-                assetIds.Add(node.Id.ToString(), node);
-            }
-            // TODO: When v1 gets support for ExternalId on assets when associating timeseries, we can drop a lot of this.
-            // Specifically anything related to NodeToAssetIds
-            ISet<string> missingAssetIds = new HashSet<string>();
-            IList<Identity> assetIdentities = new List<Identity>(assetIds.Keys.Count);
-
-            Logger.LogInfo("Test " + assetList.Count() + " assets");
-
-            foreach (var id in assetIds.Keys)
-            {
-                assetIdentities.Add(Identity.ExternalId(id));
-            }
-            try
-            {
-                var readResults = await Utils.RetryAsync(() => client.GetAssetsByIdsAsync(assetIdentities), "Failed to get assets", true);
-                if (readResults != null)
-                {
-                    Logger.LogInfo("Found " + readResults.Count() + " assets");
-                    foreach (var resultItem in readResults)
-                    {
-                        nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id.ToString(), resultItem.Id);
-                    }
-                }
-            }
-            catch (ResponseException ex)
-            {
-                if (ex.Code == 400)
-                {
-                    foreach (var missing in ex.Missing)
-                    {
-                        if (missing.TryGetValue("externalId", out ErrorValue value))
-                        {
-                            missingAssetIds.Add(value.ToString());
-                        }
-                    }
-                    Logger.LogInfo("Found " + ex.Missing.Count() + " missing assets");
-                }
-                else
-                {
-                    Logger.LogError("Failed to fetch asset ids");
-                    Logger.LogException(ex);
-                }
-            }
-            if (missingAssetIds.Any())
-            {
-                Logger.LogInfo("Create " + missingAssetIds.Count + " new assets");
-                IList<BufferedNode> getMetaData = new List<BufferedNode>();
-                foreach (string externalid in missingAssetIds)
-                {
-                    getMetaData.Add(assetIds[externalid]);
-                }
-                try
-                {
-                    Extractor.GetNodeProperties(getMetaData);
-                }
-                catch (Exception e)
-                {
-                    Logger.LogException(e);
-                }
-                var createAssets = new List<AssetWritePoco>();
-                foreach (string externalId in missingAssetIds)
-                {
-                    createAssets.Add(NodeToAsset(assetIds[externalId]));
-                }
-                var writeResults = await Utils.RetryAsync(() => client.CreateAssetsAsync(createAssets), "Failed to create assets");
-                if (writeResults != null)
-                {
-                    foreach (var resultItem in writeResults)
-                    {
-                        nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id.ToString(), resultItem.Id);
-                    }
-                }
-                IList<Identity> idsToMap = new List<Identity>();
-                foreach (string id in assetIds.Keys)
-                {
-                    if (!missingAssetIds.Contains(id))
-                    {
-                        idsToMap.Add(Identity.ExternalId(id));
-                    }
-                }
-                if (idsToMap.Any())
-                {
-                    Logger.LogInfo("Get remaining " + idsToMap.Count + " assetids");
-                    var readResults = await Utils.RetryAsync(() => client.GetAssetsByIdsAsync(idsToMap), "Failed to get asset ids");
-                    if (readResults != null)
-                    {
-                        foreach (var resultItem in readResults)
-                        {
-                            nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id.ToString(), resultItem.Id);
-                        }
-                    }
-                }
-            }
-        }
-        /// <summary>
-        /// Test if given list of timeseries exists, then create any that do not, checking for properties.
-        /// </summary>
-        /// <param name="tsList">List of timeseries to be tested</param>
-        /// <param name="client">Cognite client to be used</param>
-        private async Task EnsureTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
-        {
-            if (!tsList.Any()) return;
-            var tsIds = new Dictionary<string, BufferedVariable>();
-            foreach (BufferedVariable node in tsList)
-            {
-                tsIds.Add(node.Id.ToString(), node);
-                nodeIsHistorizing.TryAdd(node.Id.ToString(), false);
-            }
-
-            Logger.LogInfo("Test " + tsIds.Keys.Count + " timeseries");
-            var missingTSIds = new HashSet<string>();
-
-            try
-            {
-                var readResults = await Utils.RetryAsync(() =>
-                    client.GetTimeseriesByIdsAsync(tsIds.Keys), "Failed to get timeseries", true);
-                if (readResults != null)
-                {
-                    Logger.LogInfo("Found " + readResults.Count() + " timeseries");
-                }
-            }
-            catch (ResponseException ex)
-            {
-                if (ex.Code == 400 && ex.Missing.Any())
-                {
-                    foreach (var missing in ex.Missing)
-                    {
-                        if (missing.TryGetValue("externalId", out ErrorValue value))
-                        {
-                            missingTSIds.Add(value.ToString());
-                        }
-                    }
-                    Logger.LogInfo("Found " + ex.Missing.Count() + " missing timeseries");
-                }
-                else
-                {
-                    Logger.LogError("Failed to fetch timeseries data");
-                    Logger.LogException(ex);
-                }
-            }
-            if (missingTSIds.Any())
-            {
-                Logger.LogInfo("Create " + missingTSIds.Count + " new timeseries");
-                var createTimeseries = new List<TimeseriesWritePoco>();
-                var getMetaData = new List<BufferedNode>();
-                foreach (string externalid in missingTSIds)
-                {
-                    getMetaData.Add(tsIds[externalid]);
-                }
-                Extractor.GetNodeProperties(getMetaData);
-                foreach (string externalId in missingTSIds)
-                {
-                    createTimeseries.Add(VariableToTimeseries(tsIds[externalId]));
-                }
-                await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS");
-            }
-        }
-        /// <summary>
-        /// Try to get latest timestamp from given list of timeseries, then create any not found and try again
-        /// </summary>
-        /// <param name="tsList">List of timeseries to be tested</param>
-        /// <param name="client">Cognite client to be used</param>
-        private async Task EnsureHistorizingTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
-        {
-            if (!tsList.Any()) return;
-            var tsIds = new Dictionary<string, BufferedVariable>();
-            foreach (BufferedVariable node in tsList)
-            {
-                tsIds.Add(node.Id.ToString(), node);
-                nodeIsHistorizing.TryAdd(node.Id.ToString(), true);
-            }
-
-            Logger.LogInfo("Test " + tsIds.Keys.Count + " historizing timeseries");
-            var missingTSIds = new HashSet<string>();
-            var pairedTsIds = new List<(Identity, string)>();
-
-            foreach (var key in tsIds.Keys)
-            {
-                pairedTsIds.Add((Identity.ExternalId(key), null));
-            }
-
-            try
-            {
-                var readResults = await Utils.RetryAsync(() =>
-                    client.GetTimeseriesLatestDataAsync(pairedTsIds), "Failed to get historizing timeseries", true);
-                if (readResults != null)
-                {
-                    Logger.LogInfo("Found " + readResults.Count() + " historizing timeseries");
-                    foreach (var resultItem in readResults)
-                    {
-                        if (resultItem.DataPoints.Any())
-                        {
-                            tsIds[resultItem.ExternalId.Value].LatestTimestamp =
-                                Extractor.Epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
-                        }
-                    }
-                }
-            }
-            catch (ResponseException ex)
-            {
-                if (ex.Code == 400 && ex.Missing.Any())
-                {
-                    foreach (var missing in ex.Missing)
-                    {
-                        if (missing.TryGetValue("externalId", out ErrorValue value))
-                        {
-                            missingTSIds.Add(value.ToString());
-                        }
-                    }
-                    Logger.LogInfo("Found " + ex.Missing.Count() + " missing historizing timeseries");
-                }
-                else
-                {
-                    Logger.LogError("Failed to fetch historizing timeseries data");
-                    Logger.LogException(ex);
-                }
-            }
-            if (missingTSIds.Any())
-            {
-                Logger.LogInfo("Create " + missingTSIds.Count + " new historizing timeseries");
-                var createTimeseries = new List<TimeseriesWritePoco>();
-                var getMetaData = new List<BufferedNode>();
-                foreach (string externalid in missingTSIds)
-                {
-                    getMetaData.Add(tsIds[externalid]);
-                }
-                Extractor.GetNodeProperties(getMetaData);
-                foreach (string externalId in missingTSIds)
-                {
-                    createTimeseries.Add(VariableToTimeseries(tsIds[externalId]));
-                }
-                await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create historizing TS");
-                var idsToMap = new HashSet<(Identity, string)>();
-                foreach (var key in tsIds.Keys)
-                {
-                    if (!missingTSIds.Contains(key))
-                    {
-                        idsToMap.Add((Identity.ExternalId(key), null));
-                    }
-                }
-                if (idsToMap.Any())
-                {
-                    Logger.LogInfo("Get remaining " + idsToMap.Count + " historizing timeseries ids");
-                    var readResults = await Utils.RetryAsync(() => client.GetTimeseriesLatestDataAsync(idsToMap),
-                        "Failed to get historizing timeseries ids");
-                    if (readResults != null)
-                    {
-                        foreach (var resultItem in readResults)
-                        {
-                            if (resultItem.DataPoints.Any())
-                            {
-                                tsIds[resultItem.ExternalId.Value].LatestTimestamp =
-                                    Extractor.Epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
-                            }
-                        }
-                    }
-                }
-            }
-        }
         /// <summary>
         /// Empty queue, fetch info for each relevant node, test results against CDF, then synchronize any variables
         /// </summary>
+        /// <param name="nodeQueue">Queue to be emptied</param>
         public async Task PushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
         {
             var nodeMap = new Dictionary<string, BufferedNode>();
@@ -533,8 +263,291 @@ namespace Cognite.OpcUa
             Logger.LogInfo("End synchronize nodes");
         }
         /// <summary>
+        /// Reset the pusher, preparing it to be restarted
+        /// </summary>
+        public void Reset()
+        {
+            nodeToAssetIds.Clear();
+            trackedAssets.Set(0);
+            trackedTimeseres.Set(0);
+        }
+        #endregion
+
+        #region Pushing
+        /// <summary>
+        /// Test if given list of assets exists, then create any that do not, checking for properties.
+        /// </summary>
+        /// <param name="assetList">List of assets to be tested</param>
+        /// <param name="client">Cognite client to be used</param>
+        private async Task EnsureAssets(IEnumerable<BufferedNode> assetList, Client client)
+        {
+            IDictionary<string, BufferedNode> assetIds = new Dictionary<string, BufferedNode>();
+            foreach (BufferedNode node in assetList)
+            {
+                assetIds.Add(node.Id.ToString(), node);
+            }
+            // TODO: When v1 gets support for ExternalId on assets when associating timeseries, we can drop a lot of this.
+            // Specifically anything related to NodeToAssetIds
+            ISet<string> missingAssetIds = new HashSet<string>();
+            IList<Identity> assetIdentities = new List<Identity>(assetIds.Keys.Count);
+
+            Logger.LogInfo("Test " + assetList.Count() + " assets");
+
+            foreach (var id in assetIds.Keys)
+            {
+                assetIdentities.Add(Identity.ExternalId(id));
+            }
+            try
+            {
+                var readResults = await Utils.RetryAsync(() => client.GetAssetsByIdsAsync(assetIdentities), "Failed to get assets", true);
+                if (readResults != null)
+                {
+                    Logger.LogInfo("Found " + readResults.Count() + " assets");
+                    foreach (var resultItem in readResults)
+                    {
+                        nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id.ToString(), resultItem.Id);
+                    }
+                }
+            }
+            catch (ResponseException ex)
+            {
+                if (ex.Code == 400)
+                {
+                    foreach (var missing in ex.Missing)
+                    {
+                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        {
+                            missingAssetIds.Add(value.ToString());
+                        }
+                    }
+                    Logger.LogInfo("Found " + ex.Missing.Count() + " missing assets");
+                }
+                else
+                {
+                    Logger.LogError("Failed to fetch asset ids");
+                    Logger.LogException(ex);
+                }
+            }
+            if (missingAssetIds.Any())
+            {
+                Logger.LogInfo("Create " + missingAssetIds.Count + " new assets");
+                IList<BufferedNode> getMetaData = new List<BufferedNode>();
+                foreach (string externalid in missingAssetIds)
+                {
+                    getMetaData.Add(assetIds[externalid]);
+                }
+                try
+                {
+                    Extractor.GetNodeProperties(getMetaData);
+                }
+                catch (Exception e)
+                {
+                    Logger.LogException(e);
+                }
+                var createAssets = new List<AssetWritePoco>();
+                foreach (string externalId in missingAssetIds)
+                {
+                    createAssets.Add(NodeToAsset(assetIds[externalId]));
+                }
+                var writeResults = await Utils.RetryAsync(() => client.CreateAssetsAsync(createAssets), "Failed to create assets");
+                if (writeResults != null)
+                {
+                    foreach (var resultItem in writeResults)
+                    {
+                        nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id.ToString(), resultItem.Id);
+                    }
+                }
+                IList<Identity> idsToMap = new List<Identity>();
+                foreach (string id in assetIds.Keys)
+                {
+                    if (!missingAssetIds.Contains(id))
+                    {
+                        idsToMap.Add(Identity.ExternalId(id));
+                    }
+                }
+                if (idsToMap.Any())
+                {
+                    Logger.LogInfo("Get remaining " + idsToMap.Count + " assetids");
+                    var readResults = await Utils.RetryAsync(() => client.GetAssetsByIdsAsync(idsToMap), "Failed to get asset ids");
+                    if (readResults != null)
+                    {
+                        foreach (var resultItem in readResults)
+                        {
+                            nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id.ToString(), resultItem.Id);
+                        }
+                    }
+                }
+            }
+        }
+        /// <summary>
+        /// Test if given list of timeseries exists, then create any that do not, checking for properties.
+        /// </summary>
+        /// <param name="tsList">List of timeseries to be tested</param>
+        /// <param name="client">Cognite client to be used</param>
+        private async Task EnsureTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
+        {
+            if (!tsList.Any()) return;
+            var tsIds = new Dictionary<string, BufferedVariable>();
+            foreach (BufferedVariable node in tsList)
+            {
+                tsIds.Add(node.Id.ToString(), node);
+                nodeIsHistorizing[node.Id.ToString()] = false;
+            }
+
+            Logger.LogInfo("Test " + tsIds.Keys.Count + " timeseries");
+            var missingTSIds = new HashSet<string>();
+
+            try
+            {
+                var readResults = await Utils.RetryAsync(() =>
+                    client.GetTimeseriesByIdsAsync(tsIds.Keys), "Failed to get timeseries", true);
+                if (readResults != null)
+                {
+                    Logger.LogInfo("Found " + readResults.Count() + " timeseries");
+                }
+            }
+            catch (ResponseException ex)
+            {
+                if (ex.Code == 400 && ex.Missing.Any())
+                {
+                    foreach (var missing in ex.Missing)
+                    {
+                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        {
+                            missingTSIds.Add(value.ToString());
+                        }
+                    }
+                    Logger.LogInfo("Found " + ex.Missing.Count() + " missing timeseries");
+                }
+                else
+                {
+                    Logger.LogError("Failed to fetch timeseries data");
+                    Logger.LogException(ex);
+                }
+            }
+            if (missingTSIds.Any())
+            {
+                Logger.LogInfo("Create " + missingTSIds.Count + " new timeseries");
+                var createTimeseries = new List<TimeseriesWritePoco>();
+                var getMetaData = new List<BufferedNode>();
+                foreach (string externalid in missingTSIds)
+                {
+                    getMetaData.Add(tsIds[externalid]);
+                }
+                Extractor.GetNodeProperties(getMetaData);
+                foreach (string externalId in missingTSIds)
+                {
+                    createTimeseries.Add(VariableToTimeseries(tsIds[externalId]));
+                }
+                await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS");
+            }
+        }
+        /// <summary>
+        /// Try to get latest timestamp from given list of timeseries, then create any not found and try again
+        /// </summary>
+        /// <param name="tsList">List of timeseries to be tested</param>
+        /// <param name="client">Cognite client to be used</param>
+        private async Task EnsureHistorizingTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
+        {
+            if (!tsList.Any()) return;
+            var tsIds = new Dictionary<string, BufferedVariable>();
+            foreach (BufferedVariable node in tsList)
+            {
+                tsIds.Add(node.Id.ToString(), node);
+                nodeIsHistorizing[node.Id.ToString()] = true;
+            }
+
+            Logger.LogInfo("Test " + tsIds.Keys.Count + " historizing timeseries");
+            var missingTSIds = new HashSet<string>();
+            var pairedTsIds = new List<(Identity, string)>();
+
+            foreach (var key in tsIds.Keys)
+            {
+                pairedTsIds.Add((Identity.ExternalId(key), null));
+            }
+
+            try
+            {
+                var readResults = await Utils.RetryAsync(() =>
+                    client.GetTimeseriesLatestDataAsync(pairedTsIds), "Failed to get historizing timeseries", true);
+                if (readResults != null)
+                {
+                    Logger.LogInfo("Found " + readResults.Count() + " historizing timeseries");
+                    foreach (var resultItem in readResults)
+                    {
+                        if (resultItem.DataPoints.Any())
+                        {
+                            tsIds[resultItem.ExternalId.Value].LatestTimestamp =
+                                Extractor.Epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
+                        }
+                    }
+                }
+            }
+            catch (ResponseException ex)
+            {
+                if (ex.Code == 400 && ex.Missing.Any())
+                {
+                    foreach (var missing in ex.Missing)
+                    {
+                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        {
+                            missingTSIds.Add(value.ToString());
+                        }
+                    }
+                    Logger.LogInfo("Found " + ex.Missing.Count() + " missing historizing timeseries");
+                }
+                else
+                {
+                    Logger.LogError("Failed to fetch historizing timeseries data");
+                    Logger.LogException(ex);
+                }
+            }
+            if (missingTSIds.Any())
+            {
+                Logger.LogInfo("Create " + missingTSIds.Count + " new historizing timeseries");
+                var createTimeseries = new List<TimeseriesWritePoco>();
+                var getMetaData = new List<BufferedNode>();
+                foreach (string externalid in missingTSIds)
+                {
+                    getMetaData.Add(tsIds[externalid]);
+                }
+                Extractor.GetNodeProperties(getMetaData);
+                foreach (string externalId in missingTSIds)
+                {
+                    createTimeseries.Add(VariableToTimeseries(tsIds[externalId]));
+                }
+                await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create historizing TS");
+                var idsToMap = new HashSet<(Identity, string)>();
+                foreach (var key in tsIds.Keys)
+                {
+                    if (!missingTSIds.Contains(key))
+                    {
+                        idsToMap.Add((Identity.ExternalId(key), null));
+                    }
+                }
+                if (idsToMap.Any())
+                {
+                    Logger.LogInfo("Get remaining " + idsToMap.Count + " historizing timeseries ids");
+                    var readResults = await Utils.RetryAsync(() => client.GetTimeseriesLatestDataAsync(idsToMap),
+                        "Failed to get historizing timeseries ids");
+                    if (readResults != null)
+                    {
+                        foreach (var resultItem in readResults)
+                        {
+                            if (resultItem.DataPoints.Any())
+                            {
+                                tsIds[resultItem.ExternalId.Value].LatestTimestamp =
+                                    Extractor.Epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        /// <summary>
         /// Create timeseries poco to create this node in CDF
         /// </summary>
+        /// <param name="variable">Variable to be converted</param>
         /// <returns>Complete timeseries write poco</returns>
         private TimeseriesWritePoco VariableToTimeseries(BufferedVariable variable)
         {
@@ -563,6 +576,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Converts BufferedNode into asset write poco.
         /// </summary>
+        /// <param name="node">Node to be converted</param>
         /// <returns>Full asset write poco</returns>
         private AssetWritePoco NodeToAsset(BufferedNode node)
         {
@@ -597,5 +611,6 @@ namespace Cognite.OpcUa
             }
             return writePoco;
         }
+        #endregion
     }
 }
