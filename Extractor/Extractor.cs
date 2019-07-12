@@ -38,10 +38,12 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="config"></param>
         /// <param name="pusher"></param>
-        public Extractor(FullConfig config, IPusher pusher)
+        public Extractor(FullConfig config, IPusher pusher, UAClient UAClient)
         {
             this.pusher = pusher;
-            UAClient = new UAClient(config, this);
+            this.UAClient = UAClient;
+            UAClient.Extractor = this;
+
             debug = config.CogniteConfig.Debug;
             runningPush = !debug;
             pusher.Extractor = this;
@@ -152,7 +154,7 @@ namespace Cognite.OpcUa
         }
         public bool AllowTSMap(BufferedVariable node)
         {
-            return node.DataType >= DataTypes.Boolean && node.DataType <= DataTypes.Double && node.ValueRank == -1;
+            return UAClient.IsNumericType(node.DataType) && node.ValueRank == ValueRanks.Scalar;
         }
         public void ReadNodeData(IEnumerable<BufferedNode> nodes)
         {
@@ -200,7 +202,7 @@ namespace Cognite.OpcUa
         /// <param name="item">Modified item</param>
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
-            string uniqueId = UAClient.GetUniqueId(item.ResolvedNodeId);
+            string uniqueId = UAClient.GetUniqueId(item.ResolvedNodeId).ToString();
             if (!buffersEmpty && notInSync.Contains(uniqueId)) return;
 
             foreach (var datapoint in item.DequeueValues())
@@ -212,7 +214,7 @@ namespace Cognite.OpcUa
                 );
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Logger.LogWarning("Bad datapoint: " + buffDp.nodeId);
+                    Logger.LogWarning("Bad datapoint: " + buffDp.Id);
                     return;
                 }
                 Logger.LogData(buffDp);
@@ -230,7 +232,7 @@ namespace Cognite.OpcUa
         /// <param name="nodeid">Id of the node in question</param>
         private void HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
         {
-            string uniqueId = UAClient.GetUniqueId(nodeid);
+            string uniqueId = UAClient.GetUniqueId(nodeid).ToString();
             if (final)
             {
                 lock (notInSyncLock)

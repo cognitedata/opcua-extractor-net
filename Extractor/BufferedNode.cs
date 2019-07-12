@@ -1,21 +1,41 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using Cognite.Sdk.Assets;
-using Cognite.Sdk.Timeseries;
 using Opc.Ua;
 
 namespace Cognite.OpcUa
 {
+    public class UniqueId
+    {
+        public readonly string namespaceUri;
+        public readonly char identifierType;
+        public readonly object value;
+        public static string GlobalPrefix;
+        public static Dictionary<string, string> NSmaps;
+        public UniqueId(string namespaceUri, char identifierType, object value)
+        {
+            this.namespaceUri = namespaceUri;
+            this.identifierType = identifierType;
+            this.value = value;
+        }
+        public override string ToString()
+        {
+            string prefix;
+            if (!NSmaps.TryGetValue(namespaceUri, out prefix))
+            {
+                prefix = namespaceUri;
+            }
+            return GlobalPrefix + "." + prefix + ":" + identifierType + "=" + value;
+        }
+    }
     /// <summary>
     /// Represents an opcua node.
     /// </summary>
     public class BufferedNode
     {
-        public readonly string Id;
+        public readonly UniqueId Id;
         public readonly string DisplayName;
         public readonly bool IsVariable;
-        public readonly string ParentId;
+        public readonly UniqueId ParentId;
         /// <summary>
         /// Description in opcua
         /// </summary>
@@ -24,8 +44,8 @@ namespace Cognite.OpcUa
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public BufferedNode(string Id, string DisplayName, string ParentId) : this(Id, DisplayName, false, ParentId) { }
-        protected BufferedNode(string Id, string DisplayName, bool IsVariable, string ParentId)
+        public BufferedNode(UniqueId Id, string DisplayName, UniqueId ParentId) : this(Id, DisplayName, false, ParentId) { }
+        protected BufferedNode(UniqueId Id, string DisplayName, bool IsVariable, UniqueId ParentId)
         {
             this.Id = Id;
             this.DisplayName = DisplayName;
@@ -65,7 +85,7 @@ namespace Cognite.OpcUa
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public BufferedVariable(string Id, string DisplayName, string ParentId) : base(Id, DisplayName, true, ParentId) { }
+        public BufferedVariable(UniqueId Id, string DisplayName, UniqueId ParentId) : base(Id, DisplayName, true, ParentId) { }
         /// <summary>
         /// Sets the datapoint to provided DataValue.
         /// </summary>
@@ -74,18 +94,18 @@ namespace Cognite.OpcUa
         public void SetDataPoint(DataValue value, UAClient client)
         {
             if (value == null || value.Value == null) return;
-            if (DataType < DataTypes.Boolean || DataType > DataTypes.Double || IsProperty)
+            if (client.IsNumericType(DataType) || IsProperty)
             {
                 Value = new BufferedDataPoint(
                     (long)value.SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
-                    client.GetUniqueId(Id),
+                    Id.ToString(),
                     UAClient.ConvertToString(value));
             }
             else
             {
                 Value = new BufferedDataPoint(
                     (long)value.SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
-                    client.GetUniqueId(Id),
+                    Id.ToString(),
                     UAClient.ConvertToDouble(value));
             }
         }
@@ -97,28 +117,28 @@ namespace Cognite.OpcUa
     public class BufferedDataPoint
     {
         public readonly long timestamp;
-        public readonly string nodeId;
+        public readonly string Id;
         public readonly double doubleValue;
         public readonly string stringValue;
         public readonly bool isString;
         public readonly bool historizing;
         /// <param name="timestamp">Timestamp in ms since epoch</param>
-        /// <param name="nodeId">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
+        /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public BufferedDataPoint(long timestamp, string nodeId, double value)
+        public BufferedDataPoint(long timestamp, string Id, double value)
         {
             this.timestamp = timestamp;
-            this.nodeId = nodeId;
+            this.Id = Id;
             doubleValue = value;
             isString = false;
         }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
-        /// <param name="nodeId">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
+        /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public BufferedDataPoint(long timestamp, string nodeId, string value)
+        public BufferedDataPoint(long timestamp, string Id, string value)
         {
             this.timestamp = timestamp;
-            this.nodeId = nodeId;
+            this.Id = Id;
             stringValue = value;
             isString = true;
         }
@@ -134,7 +154,7 @@ namespace Cognite.OpcUa
         /// <returns>Array of bytes</returns>
         public byte[] ToStorableBytes()
         {
-            string externalId = nodeId;
+            string externalId = Id;
             ushort size = (ushort)(externalId.Length * sizeof(char) + sizeof(double) + sizeof(long));
             byte[] bytes = new byte[size + sizeof(ushort)];
             Buffer.BlockCopy(externalId.ToCharArray(), 0, bytes, sizeof(ushort), externalId.Length * sizeof(char));
@@ -156,7 +176,7 @@ namespace Cognite.OpcUa
             doubleValue = BitConverter.ToDouble(bytes, bytes.Length - sizeof(double) - sizeof(long));
             char[] chars = new char[(bytes.Length - sizeof(long) - sizeof(double))/sizeof(char)];
             Buffer.BlockCopy(bytes, 0, chars, 0, bytes.Length - sizeof(long) - sizeof(double));
-            nodeId = new string(chars);
+            Id = new string(chars);
             isString = false;
         }
     }

@@ -61,7 +61,7 @@ namespace Cognite.OpcUa
                     int count = 0;
                     foreach (var dp in dataPoints)
                     {
-                        if (nodeIsHistorizing[dp.nodeId]) continue;
+                        if (nodeIsHistorizing[dp.Id]) continue;
                         count++;
                         BufferFileEmpty = false;
                         byte[] bytes = dp.ToStorableBytes();
@@ -95,7 +95,7 @@ namespace Cognite.OpcUa
                         int dRead = fs.Read(dataBytes, 0, size);
                         if (dRead < size) break;
                         var buffDp = new BufferedDataPoint(dataBytes);
-                        if (buffDp.nodeId == null || !nodeIsHistorizing.ContainsKey(buffDp.nodeId))
+                        if (buffDp.Id == null || !nodeIsHistorizing.ContainsKey(buffDp.Id))
                         {
                             Logger.LogWarning("Bad datapoint in file");
                             continue;
