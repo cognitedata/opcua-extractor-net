@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 using System.Collections.Generic;
 using Prometheus.Client.MetricPusher;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
@@ -27,7 +28,11 @@ namespace Cognite.OpcUa
             Configure(services);
             var provider = services.BuildServiceProvider();
             Extractor extractor = new Extractor(fullConfig, provider.GetRequiredService<IHttpClientFactory>());
-
+            if (!extractor.Started)
+            {
+                Logger.Shutdown();
+                return -1;
+            }
             try
             {
                 SetupMetrics(fullConfig.MetricsConfig);
@@ -37,19 +42,22 @@ namespace Cognite.OpcUa
                 Logger.LogError("Failed to start metrics pusher");
                 Logger.LogException(e);
             }
-            try
-			{
-				extractor.MapUAToCDF();
-			}
-            catch (Exception e)
-			{
-				Logger.LogError("Failed to map directory");
-				Logger.LogException(e);
-                Logger.Shutdown();
-				return -1;
-			}
-            Logger.LogInfo("Extractor started");
+
             var quitEvent = new ManualResetEvent(false);
+            Task runtask = null;
+			runtask = Task.Run(() =>
+            {
+                try
+                {
+                    extractor.MapUAToCDF();
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError("Failed to map directory");
+                    Logger.LogException(e);
+                    quitEvent.Set();
+                }
+            });
             Console.CancelKeyPress += (sender, eArgs) =>
             {
                 quitEvent.Set();
@@ -57,9 +65,15 @@ namespace Cognite.OpcUa
             };
             Console.WriteLine("Press ^C to exit");
             quitEvent.WaitOne(-1);
-            Logger.LogInfo("Shutting down extractor");
+            Logger.LogInfo("Shutting down extractor...");
             extractor.Close();
             Logger.Shutdown();
+            if (runtask != null && runtask.IsFaulted)
+            {
+                Logger.Shutdown();
+                extractor.Close();
+                return -1;
+            }
 			return 0;
         }
         /// <summary>

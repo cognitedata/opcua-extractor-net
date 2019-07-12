@@ -26,6 +26,9 @@ namespace Cognite.OpcUa
         private bool clientReconnecting;
         public bool Started { get; private set; }
 
+        private int pendingOperations;
+        private readonly object pendingOpLock = new object();
+
         private static readonly Counter connects = Metrics
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
         private static readonly Gauge connected = Metrics
@@ -177,6 +180,24 @@ namespace Cognite.OpcUa
                 }
             }
         }
+        private void IncOperations()
+        {
+            lock (pendingOpLock)
+            {
+                pendingOperations++;
+            }
+        }
+        private void DecOperations()
+        {
+            lock (pendingOpLock)
+            {
+                pendingOperations--;
+            }
+        }
+        public async Task WaitForOperations()
+        {
+            while (pendingOperations > 0) await Task.Delay(100);
+        }
         #endregion
 
         #region Browse
@@ -185,7 +206,6 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="root">Initial node to start mapping. Will not be sent to callback</param>
         /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
-        /// <returns></returns>
         public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback)
         {
             visitedNodes.Clear();
@@ -207,30 +227,43 @@ namespace Cognite.OpcUa
         /// <returns><see cref="ReferenceDescriptionCollection"/> containing descriptions of all found children</returns>
         private ReferenceDescriptionCollection GetNodeChildren(NodeId parent, NodeId referenceTypes = null)
         {
-            session.Browse(
-                null,
-                null,
-                parent,
-                0,
-                BrowseDirection.Forward,
-                referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
-                true,
-                (uint)NodeClass.Variable | (uint)NodeClass.Object,
-                out byte[] continuationPoint,
-                out ReferenceDescriptionCollection references
-            );
-            numBrowse.Inc();
-            while (continuationPoint != null)
+            IncOperations();
+            ReferenceDescriptionCollection references = null;
+            try
             {
-                session.BrowseNext(
+                session.Browse(
                     null,
-                    false,
-                    continuationPoint,
-                    out continuationPoint,
-                    out ReferenceDescriptionCollection tmpReferences
+                    null,
+                    parent,
+                    0,
+                    BrowseDirection.Forward,
+                    referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
+                    true,
+                    (uint)NodeClass.Variable | (uint)NodeClass.Object,
+                    out byte[] continuationPoint,
+                    out references
                 );
-                references.AddRange(tmpReferences);
                 numBrowse.Inc();
+                while (continuationPoint != null)
+                {
+                    session.BrowseNext(
+                        null,
+                        false,
+                        continuationPoint,
+                        out continuationPoint,
+                        out ReferenceDescriptionCollection tmpReferences
+                    );
+                    references.AddRange(tmpReferences);
+                    numBrowse.Inc();
+                }
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+            finally
+            {
+                DecOperations();
             }
             return references;
         }
@@ -275,28 +308,40 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = config.MaxResults
             };
             HistoryReadResultCollection results = null;
-            do
+            IncOperations();
+            try
             {
-                session.HistoryRead(
-                    null,
-                    new ExtensionObject(details),
-                    TimestampsToReturn.Neither,
-                    false,
-                    new HistoryReadValueIdCollection
-                    {
+                do
+                {
+                    session.HistoryRead(
+                        null,
+                        new ExtensionObject(details),
+                        TimestampsToReturn.Neither,
+                        false,
+                        new HistoryReadValueIdCollection
+                        {
                         new HistoryReadValueId
                         {
                             NodeId = toRead.Id,
                             ContinuationPoint = results ? [0].ContinuationPoint
                         },
 
-                    },
-                    out results,
-                    out _
-                );
-                numHistoryReads.Inc();
-                callback(results, results[0].ContinuationPoint == null, toRead.Id);
-            } while (results != null && results[0].ContinuationPoint != null);
+                        },
+                        out results,
+                        out _
+                    );
+                    numHistoryReads.Inc();
+                    callback(results, results[0].ContinuationPoint == null, toRead.Id);
+                } while (results != null && results[0].ContinuationPoint != null);
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+            finally
+            {
+                DecOperations();
+            }
         }
         /// <summary>
         /// Synchronizes a list of nodes with the server, creating subscriptions and reading historical data where necessary.
@@ -367,17 +412,29 @@ namespace Cognite.OpcUa
             }
             lock (subscriptionLock)
             {
-                if (count > 0)
+                IncOperations();
+                try
                 {
-                    if (subscription.Created)
+                    if (count > 0)
                     {
-                        subscription.CreateItems();
+                        if (subscription.Created)
+                        {
+                            subscription.CreateItems();
+                        }
+                        else
+                        {
+                            session.AddSubscription(subscription);
+                            subscription.Create();
+                        }
                     }
-                    else
-                    {
-                        session.AddSubscription(subscription);
-                        subscription.Create();
-                    }
+                }
+                catch (Exception e)
+                {
+                    throw e;
+                }
+                finally
+                {
+                    DecOperations();
                 }
                 numSubscriptions.Set(subscription.MonitoredItemCount);
             }
@@ -422,29 +479,41 @@ namespace Cognite.OpcUa
                 }
             }
             IEnumerable<DataValue> values = new DataValueCollection();
-            var enumerator = readValueIds.GetEnumerator();
-            int remaining = readValueIds.Count;
-            int per = 1000;
-            while (remaining > 0)
+            IncOperations();
+            try
             {
-                Logger.LogInfo("Read " + Math.Min(remaining, per) + " attributes");
-                ReadValueIdCollection nextValues = new ReadValueIdCollection();
-                for (int i = 0; i < Math.Min(remaining, per); i++)
+                var enumerator = readValueIds.GetEnumerator();
+                int remaining = readValueIds.Count;
+                int per = 1000;
+                while (remaining > 0)
                 {
-                    enumerator.MoveNext();
-                    nextValues.Add(enumerator.Current);
+                    Logger.LogInfo("Read " + Math.Min(remaining, per) + " attributes");
+                    ReadValueIdCollection nextValues = new ReadValueIdCollection();
+                    for (int i = 0; i < Math.Min(remaining, per); i++)
+                    {
+                        enumerator.MoveNext();
+                        nextValues.Add(enumerator.Current);
+                    }
+                    session.Read(
+                        null,
+                        0,
+                        TimestampsToReturn.Source,
+                        nextValues,
+                        out DataValueCollection lvalues,
+                        out _
+                    );
+                    attributeRequests.Inc(Math.Min(remaining, per));
+                    values = values.Concat(lvalues);
+                    remaining -= per;
                 }
-                session.Read(
-                    null,
-                    0,
-                    TimestampsToReturn.Source,
-                    nextValues,
-                    out DataValueCollection lvalues,
-                    out _
-                );
-                attributeRequests.Inc(Math.Min(remaining, per));
-                values = values.Concat(lvalues);
-                remaining -= per;
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+            finally
+            {
+                DecOperations();
             }
             return values;
         }
