@@ -349,7 +349,6 @@ namespace Cognite.OpcUa
         {
             int count = 0;
             var toSynch = new List<BufferedVariable>();
-            var toHistoryRead = new List<BufferedVariable>();
 
             foreach (var node in nodeList)
             {
@@ -361,10 +360,6 @@ namespace Cognite.OpcUa
                 {
                     count++;
                     toSynch.Add(node);
-                    if (node.Historizing)
-                    {
-                        toHistoryRead.Add(node);
-                    }
                 }
             }
             if (count == 0) return;
@@ -430,9 +425,16 @@ namespace Cognite.OpcUa
                 }
                 numSubscriptions.Set(subscription.MonitoredItemCount);
             }
-            foreach (BufferedVariable node in toHistoryRead)
+            foreach (BufferedVariable node in toSynch)
             {
-                Task.Run(() => DoHistoryRead(node, callback));
+                if (node.Historizing)
+                {
+                    Task.Run(() => DoHistoryRead(node, callback));
+                }
+                else
+                {
+                    callback(null, true, FromUniqueId(node.Id));
+                }
             }
         }
         /// <summary>

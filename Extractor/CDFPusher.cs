@@ -23,6 +23,8 @@ namespace Cognite.OpcUa
         private readonly IDictionary<string, long> nodeToAssetIds = new Dictionary<string, long>();
         public Extractor Extractor { get; set; }
         public UniqueId RootNode { get { return RootNode; } set { nodeToAssetIds.Add(value.ToString(), rootAsset); } }
+        public ISet<string> NotInSync { get; }  = new HashSet<string>();
+        public object NotInSyncLock { get; } = new object();
 
         private readonly long rootAsset = -1;
 
@@ -61,6 +63,7 @@ namespace Cognite.OpcUa
                     dataPointList.Add(buffer);
                 }
             }
+
             if (count == 0) return;
             var organizedDatapoints = new Dictionary<string, Tuple<IList<DataPointPoco>, Identity>>();
             foreach (BufferedDataPoint dataPoint in dataPointList)
@@ -188,6 +191,10 @@ namespace Cognite.OpcUa
                     if (node.Historizing)
                     {
                         histTsList.Add(node);
+                        lock (NotInSyncLock)
+                        {
+                            NotInSync.Add(node.Id.ToString());
+                        }
                     }
                     else
                     {

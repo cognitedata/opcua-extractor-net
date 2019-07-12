@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
@@ -13,6 +14,8 @@ namespace Cognite.OpcUa
         /// Parent extractor
         /// </summary>
         Extractor Extractor { get; set; }
+        ISet<string> NotInSync { get; }
+        object NotInSyncLock { get; }
         /// <summary>
         /// Push data points, emptying the queue
         /// </summary>

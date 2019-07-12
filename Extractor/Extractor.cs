@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
@@ -15,8 +16,6 @@ namespace Cognite.OpcUa
     public class Extractor
     {
         private readonly UAClient UAClient;
-        private readonly object notInSyncLock = new object();
-        private readonly ISet<string> notInSync = new HashSet<string>();
         private bool buffersEmpty;
         public NodeId RootNode { get; private set; }
         private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
@@ -203,14 +202,14 @@ namespace Cognite.OpcUa
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
             string uniqueId = UAClient.GetUniqueId(item.ResolvedNodeId).ToString();
-            if (!buffersEmpty && notInSync.Contains(uniqueId)) return;
+            if (!buffersEmpty && pusher.NotInSync.Contains(uniqueId)) return;
 
             foreach (var datapoint in item.DequeueValues())
             {
                 var buffDp = new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(Epoch).TotalMilliseconds,
                     uniqueId,
-                    UAClient.ConvertToDouble(datapoint)
+                    UAClient.ConvertToDouble(datapoint.Value)
                 );
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
@@ -235,10 +234,10 @@ namespace Cognite.OpcUa
             string uniqueId = UAClient.GetUniqueId(nodeid).ToString();
             if (final)
             {
-                lock (notInSyncLock)
+                lock (pusher.NotInSyncLock)
                 {
-                    notInSync.Remove(uniqueId);
-                    buffersEmpty |= notInSync.Count == 0;
+                    pusher.NotInSync.Remove(uniqueId);
+                    buffersEmpty = pusher.NotInSync.Count == 0;
                 }
             }
             if (data == null) return;
@@ -250,7 +249,7 @@ namespace Cognite.OpcUa
                 var buffDp = new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(Epoch).TotalMilliseconds,
                     uniqueId,
-                    UAClient.ConvertToDouble(datapoint)
+                    UAClient.ConvertToDouble(datapoint.Value)
                 );
                 Logger.LogData(buffDp);
                 bufferedDPQueue.Enqueue(buffDp);
