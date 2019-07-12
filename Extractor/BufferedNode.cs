@@ -18,8 +18,7 @@ namespace Cognite.OpcUa
         }
         public override string ToString()
         {
-            string prefix;
-            if (!NSmaps.TryGetValue(namespaceUri, out prefix))
+            if (!NSmaps.TryGetValue(namespaceUri, out string prefix))
             {
                 prefix = namespaceUri;
             }

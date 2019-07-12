@@ -22,7 +22,8 @@ namespace Cognite.OpcUa
         private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
         private readonly IDictionary<string, long> nodeToAssetIds = new Dictionary<string, long>();
         public Extractor Extractor { get; set; }
-        public UniqueId RootNode { get { return RootNode; } set { nodeToAssetIds.Add(value.ToString(), rootAsset); } }
+        private UniqueId _rootId;
+        public UniqueId RootNode { get { return _rootId; } set { nodeToAssetIds.Add(value.ToString(), rootAsset); _rootId = value; } }
         public ISet<string> NotInSync { get; }  = new HashSet<string>();
         public object NotInSyncLock { get; } = new object();
 
@@ -605,6 +606,7 @@ namespace Cognite.OpcUa
             {
                 writePoco.ParentExternalId = node.ParentId.ToString();
             }
+            Console.WriteLine("Attempt map properties");
             if (node.properties != null && node.properties.Any())
             {
                 writePoco.MetaData = new Dictionary<string, string>();
