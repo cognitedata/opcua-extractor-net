@@ -95,7 +95,7 @@ namespace Cognite.OpcUa
 				LogLines.Add(new LogLine
 				{
 					Time = DateTime.Now,
-					Message = "Update " + dp.nodeId + ": " + (dp.isString ? dp.stringValue : dp.doubleValue.ToString())
+					Message = "Update " + dp.Id + ": " + (dp.isString ? dp.stringValue : dp.doubleValue.ToString())
                         + " at " + dp.timestamp,
                     Severity = Severity.Verbose
 				});

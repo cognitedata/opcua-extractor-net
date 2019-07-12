@@ -27,7 +27,19 @@ namespace Cognite.OpcUa
             var services = new ServiceCollection();
             Configure(services);
             var provider = services.BuildServiceProvider();
-            Extractor extractor = new Extractor(fullConfig, provider.GetRequiredService<IHttpClientFactory>());
+
+            UniqueId.NSmaps = new Dictionary<string, string>();
+            foreach (var node in fullConfig.NSMaps.Children)
+            {
+                UniqueId.NSmaps.Add(((YamlScalarNode)node.Key).Value, ((YamlScalarNode)node.Value).Value);
+            }
+            UniqueId.GlobalPrefix = fullConfig.UAConfig.GlobalPrefix;
+
+            CDFPusher pusher = new CDFPusher(provider.GetRequiredService<IHttpClientFactory>(), fullConfig.CogniteConfig);
+            UAClient client = new UAClient(fullConfig);
+            Extractor extractor = new Extractor(fullConfig, pusher, client);
+
+
             if (!extractor.Started)
             {
                 Logger.Shutdown();

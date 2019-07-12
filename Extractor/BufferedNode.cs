@@ -1,21 +1,39 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using Cognite.Sdk.Assets;
-using Cognite.Sdk.Timeseries;
-using Opc.Ua;
 
 namespace Cognite.OpcUa
 {
+    public class UniqueId
+    {
+        public readonly string namespaceUri;
+        public readonly char identifierType;
+        public readonly object value;
+        public static string GlobalPrefix;
+        public static Dictionary<string, string> NSmaps;
+        public UniqueId(string namespaceUri, char identifierType, object value)
+        {
+            this.namespaceUri = namespaceUri;
+            this.identifierType = identifierType;
+            this.value = value;
+        }
+        public override string ToString()
+        {
+            if (!NSmaps.TryGetValue(namespaceUri, out string prefix))
+            {
+                prefix = namespaceUri;
+            }
+            return GlobalPrefix + "." + prefix + ":" + identifierType + "=" + value;
+        }
+    }
     /// <summary>
     /// Represents an opcua node.
     /// </summary>
     public class BufferedNode
     {
-        public readonly NodeId Id;
+        public readonly UniqueId Id;
         public readonly string DisplayName;
         public readonly bool IsVariable;
-        public readonly NodeId ParentId;
+        public readonly UniqueId ParentId;
         /// <summary>
         /// Description in opcua
         /// </summary>
@@ -24,54 +42,13 @@ namespace Cognite.OpcUa
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public BufferedNode(NodeId Id, string DisplayName, NodeId ParentId) : this(Id, DisplayName, false, ParentId) { }
-        protected BufferedNode(NodeId Id, string DisplayName, bool IsVariable, NodeId ParentId)
+        public BufferedNode(UniqueId Id, string DisplayName, UniqueId ParentId) : this(Id, DisplayName, false, ParentId) { }
+        protected BufferedNode(UniqueId Id, string DisplayName, bool IsVariable, UniqueId ParentId)
         {
             this.Id = Id;
             this.DisplayName = DisplayName;
             this.IsVariable = IsVariable;
             this.ParentId = ParentId;
-        }
-        /// <summary>
-        /// Converts BufferedNode into asset write poco.
-        /// </summary>
-        /// <param name="externalId">External id, this is known when being called, so we pass it for efficiency</param>
-        /// <param name="rootNode">Root node for the extractor</param>
-        /// <param name="rootAsset">Root asset for the extractor</param>
-        /// <param name="UAClient">Active UAClient</param>
-        /// <returns>Full asset write poco</returns>
-        public AssetWritePoco ToAsset(string externalId, NodeId rootNode, long rootAsset, UAClient UAClient)
-        {
-            if (IsVariable)
-            {
-                throw new Exception("ToAsset called on variable");
-            }
-            var writePoco = new AssetWritePoco
-            {
-                Description = Description,
-                ExternalId = externalId,
-                Name = DisplayName
-            };
-            if (ParentId == rootNode)
-            {
-                writePoco.ParentId = rootAsset;
-            }
-            else
-            {
-                writePoco.ParentExternalId = UAClient.GetUniqueId(ParentId);
-            }
-            if (properties != null && properties.Any())
-            {
-                writePoco.MetaData = new Dictionary<string, string>();
-                foreach (var property in properties)
-                {
-                    if (property.Value != null)
-                    {
-                        writePoco.MetaData.Add(property.DisplayName, property.Value.stringValue);
-                    }
-                }
-            }
-            return writePoco;
         }
     }
     /// <summary>
@@ -106,60 +83,32 @@ namespace Cognite.OpcUa
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public BufferedVariable(NodeId Id, string DisplayName, NodeId ParentId) : base(Id, DisplayName, true, ParentId) { }
+        public BufferedVariable(UniqueId Id, string DisplayName, UniqueId ParentId) : base(Id, DisplayName, true, ParentId) { }
         /// <summary>
         /// Sets the datapoint to provided DataValue.
         /// </summary>
         /// <param name="value">Value to set</param>
+        /// <param name="SourceTimestamp">Timestamp from source</param>
         /// <param name="client">Current client context</param>
-        public void SetDataPoint(DataValue value, UAClient client)
+        public void SetDataPoint(object value, DateTime SourceTimestamp, UAClient client)
         {
-            if (value == null || value.Value == null) return;
-            if (DataType < DataTypes.Boolean || DataType > DataTypes.Double || IsProperty)
+            if (Value == null) return;
+            if (client.IsNumericType(DataType) || IsProperty)
             {
                 Value = new BufferedDataPoint(
-                    (long)value.SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
-                    client.GetUniqueId(Id),
+                    (long)SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
+                    Id.ToString(),
                     UAClient.ConvertToString(value));
             }
             else
             {
                 Value = new BufferedDataPoint(
-                    (long)value.SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
-                    client.GetUniqueId(Id),
+                    (long)SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
+                    Id.ToString(),
                     UAClient.ConvertToDouble(value));
             }
         }
-        /// <summary>
-        /// Create timeseries poco to create this node in CDF
-        /// </summary>
-        /// <param name="externalId">ExternalId is usually known in context, so pass it here</param>
-        /// <param name="nodeToAssetIds">Map containing parent id and asset id</param>
-        /// <returns>Complete timeseries write poco</returns>
-        public TimeseriesWritePoco ToTimeseries(string externalId, IDictionary<NodeId, long> nodeToAssetIds)
-        {
-            var writePoco = new TimeseriesWritePoco
-            {
-                Description = Description,
-                ExternalId = externalId,
-                AssetId = nodeToAssetIds[ParentId],
-                Name = DisplayName,
-                LegacyName = externalId
-            };
-            if (properties != null && properties.Any())
-            {
-                writePoco.MetaData = new Dictionary<string, string>();
-                foreach (var property in properties)
-                {
-                    if (property.Value != null)
-                    {
-                        writePoco.MetaData.Add(property.DisplayName, property.Value.stringValue);
-                    }
-                }
-            }
-            writePoco.IsStep |= DataType == DataTypes.Boolean;
-            return writePoco;
-        }
+
     }
     /// <summary>
     /// Represents a single value at specified timestamp
@@ -167,27 +116,28 @@ namespace Cognite.OpcUa
     public class BufferedDataPoint
     {
         public readonly long timestamp;
-        public readonly string nodeId;
+        public readonly string Id;
         public readonly double doubleValue;
         public readonly string stringValue;
         public readonly bool isString;
+        public readonly bool historizing;
         /// <param name="timestamp">Timestamp in ms since epoch</param>
-        /// <param name="nodeId">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
+        /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public BufferedDataPoint(long timestamp, string nodeId, double value)
+        public BufferedDataPoint(long timestamp, string Id, double value)
         {
             this.timestamp = timestamp;
-            this.nodeId = nodeId;
+            this.Id = Id;
             doubleValue = value;
             isString = false;
         }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
-        /// <param name="nodeId">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
+        /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public BufferedDataPoint(long timestamp, string nodeId, string value)
+        public BufferedDataPoint(long timestamp, string Id, string value)
         {
             this.timestamp = timestamp;
-            this.nodeId = nodeId;
+            this.Id = Id;
             stringValue = value;
             isString = true;
         }
@@ -203,7 +153,7 @@ namespace Cognite.OpcUa
         /// <returns>Array of bytes</returns>
         public byte[] ToStorableBytes()
         {
-            string externalId = nodeId;
+            string externalId = Id;
             ushort size = (ushort)(externalId.Length * sizeof(char) + sizeof(double) + sizeof(long));
             byte[] bytes = new byte[size + sizeof(ushort)];
             Buffer.BlockCopy(externalId.ToCharArray(), 0, bytes, sizeof(ushort), externalId.Length * sizeof(char));
@@ -225,7 +175,7 @@ namespace Cognite.OpcUa
             doubleValue = BitConverter.ToDouble(bytes, bytes.Length - sizeof(double) - sizeof(long));
             char[] chars = new char[(bytes.Length - sizeof(long) - sizeof(double))/sizeof(char)];
             Buffer.BlockCopy(bytes, 0, chars, 0, bytes.Length - sizeof(long) - sizeof(double));
-            nodeId = new string(chars);
+            Id = new string(chars);
             isString = false;
         }
     }
