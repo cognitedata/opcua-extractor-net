@@ -5,7 +5,6 @@ using System;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
-using YamlDotNet.RepresentationModel;
 using System.Linq;
 using Prometheus.Client;
 
@@ -568,7 +567,9 @@ namespace Cognite.OpcUa
                 if (node.ValueRank == ValueRanks.Scalar)
                 {
                     enumerator.MoveNext();
-                    node.SetDataPoint(enumerator.Current, this);
+                    node.SetDataPoint(enumerator.Current?.Value,
+                        enumerator.Current == null ? enumerator.Current.SourceTimestamp : DateTime.MinValue,
+                        this);
                 }
             }
         }
@@ -648,14 +649,14 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="datavalue">Datavalue to be converted</param>
         /// <returns>Double value, will return 0 if the datavalue is invalid</returns>
-        public static double ConvertToDouble(DataValue datavalue)
+        public static double ConvertToDouble(object datavalue)
         {
-            if (datavalue == null || datavalue.Value == null) return 0;
-            if (datavalue.Value.GetType().IsArray)
+            if (datavalue == null) return 0;
+            if (datavalue.GetType().IsArray)
             {
-                return Convert.ToDouble((datavalue.Value as IEnumerable<object>)?.First());
+                return Convert.ToDouble((datavalue as IEnumerable<object>)?.First());
             }
-            return Convert.ToDouble(datavalue.Value);
+            return Convert.ToDouble(datavalue);
         }
         /// <summary>
         /// Converts object fetched from ua server to string, contains cases for special types we want to represent in CDF

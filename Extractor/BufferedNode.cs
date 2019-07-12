@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Opc.Ua;
 
 namespace Cognite.OpcUa
 {
@@ -90,21 +89,22 @@ namespace Cognite.OpcUa
         /// Sets the datapoint to provided DataValue.
         /// </summary>
         /// <param name="value">Value to set</param>
+        /// <param name="SourceTimestamp">Timestamp from source</param>
         /// <param name="client">Current client context</param>
-        public void SetDataPoint(DataValue value, UAClient client)
+        public void SetDataPoint(object value, DateTime SourceTimestamp, UAClient client)
         {
-            if (value == null || value.Value == null) return;
+            if (Value == null) return;
             if (client.IsNumericType(DataType) || IsProperty)
             {
                 Value = new BufferedDataPoint(
-                    (long)value.SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
+                    (long)SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
                     Id.ToString(),
                     UAClient.ConvertToString(value));
             }
             else
             {
                 Value = new BufferedDataPoint(
-                    (long)value.SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
+                    (long)SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
                     Id.ToString(),
                     UAClient.ConvertToDouble(value));
             }
