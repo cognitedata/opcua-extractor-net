@@ -7,7 +7,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Timers;
 using Cognite.Sdk;
 using Cognite.Sdk.Api;
 using Cognite.Sdk.Assets;
@@ -35,11 +34,13 @@ namespace Cognite.OpcUa
         private readonly IHttpClientFactory clientFactory;
         private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
         private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
-        private readonly System.Timers.Timer dataPushTimer;
         public static readonly DateTime Epoch = new DateTime(1970, 1, 1);
         private static readonly int retryCount = 3;
         private readonly bool debug;
+        private bool pushingDatapoints;
+        private bool runningPush = true;
         private bool bufferFileEmpty;
+        public bool Started { get; private set; }
 
         private static readonly Counter dataPointsCounter = Metrics
             .CreateCounter("opcua_datapoints_pushed", "Number of datapoints pushed to CDF");
@@ -65,12 +66,14 @@ namespace Cognite.OpcUa
             UAClient = new UAClient(config, this);
             this.config = config.CogniteConfig;
             debug = config.CogniteConfig.Debug;
+            runningPush = debug;
+
             UAClient.Run().Wait();
             if (!UAClient.Started)
             {
-                Logger.LogError("Failed to start UAClient");
                 return;
             }
+            Started = true;
             startTime.Set(DateTime.Now.Subtract(Epoch).TotalMilliseconds);
             rootNode = UAClient.ToNodeId(config.CogniteConfig.RootNodeId, config.CogniteConfig.RootNodeNamespace);
             if (rootNode.IsNullNodeId)
@@ -80,16 +83,16 @@ namespace Cognite.OpcUa
             rootAsset = config.CogniteConfig.RootAssetId;
             nodeToAssetIds.Add(rootNode, rootAsset);
 
-            dataPushTimer = new System.Timers.Timer
+            Task.Run(async () =>
             {
-                Interval = config.CogniteConfig.DataPushDelay,
-                AutoReset = true
-            };
-            dataPushTimer.Elapsed += PushDataPointsToCDF;
-            if (!debug)
-            {
-                dataPushTimer.Start();
-            }
+                while (runningPush)
+                {
+                    pushingDatapoints = true;
+                    await PushDataPointsToCDF();
+                    pushingDatapoints = false;
+                    Thread.Sleep(config.CogniteConfig.DataPushDelay);
+                }
+            });
         }
         #region Interface
         /// <summary>
@@ -101,6 +104,7 @@ namespace Cognite.OpcUa
             // In theory, a disconnect might be a server restart, which can cause namespaces to change.
             // This invalidates our stored mapping, so we need to redo everything, remap structure, read history,
             // synchronize history
+            UAClient.WaitForOperations().Wait();
             buffersEmpty = false;
             nodeToAssetIds.Clear();
             MapUAToCDF();
@@ -110,6 +114,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public void Close()
         {
+            WaitForFinalPush().Wait();
             if (!UAClient.Started) return;
             try
             {
@@ -120,6 +125,7 @@ namespace Cognite.OpcUa
                 Logger.LogError("Failed to cleanly shut down UAClient");
                 Logger.LogException(e);
             }
+            UAClient.WaitForOperations().Wait();
         }
         /// <summary>
         /// Starts the extractor, calling BrowseDirectory on the root node, then pushes all nodes to CDF once finished.
@@ -137,9 +143,27 @@ namespace Cognite.OpcUa
             {
                 Logger.LogError("Failed to map directory");
                 Logger.LogException(e);
+                return;
             }
             Logger.LogInfo("End mapping directory");
-            PushNodesToCDF().Wait();
+            try
+            {
+                PushNodesToCDF().Wait();
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to push nodes to CDF");
+                Logger.LogException(e);
+            }
+        }
+        /// <summary>
+        /// Disables pushing to CDF, then waits until the final push has been completed
+        /// </summary>
+        /// <returns></returns>
+        public async Task WaitForFinalPush()
+        {
+            runningPush = false;
+            while (pushingDatapoints) await Task.Delay(100);
         }
         #endregion
 
@@ -291,10 +315,9 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Dequeues up to 100000 points from the queue, then pushes them to CDF.
         /// </summary>
-        private async void PushDataPointsToCDF(object sender, ElapsedEventArgs e)
+        private async Task PushDataPointsToCDF()
         {
-            dataPushTimer.Stop();
-
+            if (debug) return;
             var dataPointList = new List<BufferedDataPoint>();
 
             int count = 0;
@@ -305,11 +328,7 @@ namespace Cognite.OpcUa
                     dataPointList.Add(buffer);
                 }
             }
-            if (count == 0)
-            {
-                dataPushTimer.Start();
-                return;
-            }
+            if (count == 0) return;
             var organizedDatapoints = new Dictionary<NodeId, Tuple<IList<DataPointPoco>, Identity>>();
             foreach (BufferedDataPoint dataPoint in dataPointList)
             {
@@ -374,7 +393,6 @@ namespace Cognite.OpcUa
                     dataPointPushes.Inc();
                 }
             }
-            dataPushTimer.Start();
         }
         /// <summary>
         /// Test if given list of assets exists, then create any that do not, checking for properties.
