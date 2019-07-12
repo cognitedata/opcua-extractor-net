@@ -66,7 +66,7 @@ namespace Cognite.OpcUa
             UAClient = new UAClient(config, this);
             this.config = config.CogniteConfig;
             debug = config.CogniteConfig.Debug;
-            runningPush = debug;
+            runningPush = !debug;
 
             UAClient.Run().Wait();
             if (!UAClient.Started)

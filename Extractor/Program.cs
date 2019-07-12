@@ -65,9 +65,9 @@ namespace Cognite.OpcUa
             };
             Console.WriteLine("Press ^C to exit");
             quitEvent.WaitOne(-1);
+            Logger.LogInfo("Shutting down extractor...");
             extractor.Close();
             Logger.Shutdown();
-            Logger.LogInfo("Shutting down extractor...");
             if (runtask != null && runtask.IsFaulted)
             {
                 Logger.Shutdown();
