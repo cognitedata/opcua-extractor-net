@@ -20,7 +20,7 @@ namespace Cognite.OpcUa
         private Session session;
         private SessionReconnectHandler reconnectHandler;
         private readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
-        private readonly Extractor extractor;
+        private Extractor Extractor { get; set; }
         private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
         private bool clientReconnecting;
@@ -46,8 +46,7 @@ namespace Cognite.OpcUa
         /// Constructor, does not start the client.
         /// </summary>
         /// <param name="config">Full configuartion object</param>
-        /// <param name="extractor">The parent exctractor. Can be null</param>
-        public UAClient(FullConfig config, Extractor extractor = null)
+        public UAClient(FullConfig config)
         {
             foreach (var node in config.NSMaps.Children)
             {

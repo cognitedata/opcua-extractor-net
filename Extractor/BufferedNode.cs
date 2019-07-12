@@ -12,10 +12,10 @@ namespace Cognite.OpcUa
     /// </summary>
     public class BufferedNode
     {
-        public readonly NodeId Id;
+        public readonly string Id;
         public readonly string DisplayName;
         public readonly bool IsVariable;
-        public readonly NodeId ParentId;
+        public readonly string ParentId;
         /// <summary>
         /// Description in opcua
         /// </summary>
@@ -24,54 +24,13 @@ namespace Cognite.OpcUa
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public BufferedNode(NodeId Id, string DisplayName, NodeId ParentId) : this(Id, DisplayName, false, ParentId) { }
-        protected BufferedNode(NodeId Id, string DisplayName, bool IsVariable, NodeId ParentId)
+        public BufferedNode(string Id, string DisplayName, string ParentId) : this(Id, DisplayName, false, ParentId) { }
+        protected BufferedNode(string Id, string DisplayName, bool IsVariable, string ParentId)
         {
             this.Id = Id;
             this.DisplayName = DisplayName;
             this.IsVariable = IsVariable;
             this.ParentId = ParentId;
-        }
-        /// <summary>
-        /// Converts BufferedNode into asset write poco.
-        /// </summary>
-        /// <param name="externalId">External id, this is known when being called, so we pass it for efficiency</param>
-        /// <param name="rootNode">Root node for the extractor</param>
-        /// <param name="rootAsset">Root asset for the extractor</param>
-        /// <param name="UAClient">Active UAClient</param>
-        /// <returns>Full asset write poco</returns>
-        public AssetWritePoco ToAsset(string externalId, NodeId rootNode, long rootAsset, UAClient UAClient)
-        {
-            if (IsVariable)
-            {
-                throw new Exception("ToAsset called on variable");
-            }
-            var writePoco = new AssetWritePoco
-            {
-                Description = Description,
-                ExternalId = externalId,
-                Name = DisplayName
-            };
-            if (ParentId == rootNode)
-            {
-                writePoco.ParentId = rootAsset;
-            }
-            else
-            {
-                writePoco.ParentExternalId = UAClient.GetUniqueId(ParentId);
-            }
-            if (properties != null && properties.Any())
-            {
-                writePoco.MetaData = new Dictionary<string, string>();
-                foreach (var property in properties)
-                {
-                    if (property.Value != null)
-                    {
-                        writePoco.MetaData.Add(property.DisplayName, property.Value.stringValue);
-                    }
-                }
-            }
-            return writePoco;
         }
     }
     /// <summary>
@@ -106,7 +65,7 @@ namespace Cognite.OpcUa
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public BufferedVariable(NodeId Id, string DisplayName, NodeId ParentId) : base(Id, DisplayName, true, ParentId) { }
+        public BufferedVariable(string Id, string DisplayName, string ParentId) : base(Id, DisplayName, true, ParentId) { }
         /// <summary>
         /// Sets the datapoint to provided DataValue.
         /// </summary>
@@ -130,36 +89,7 @@ namespace Cognite.OpcUa
                     UAClient.ConvertToDouble(value));
             }
         }
-        /// <summary>
-        /// Create timeseries poco to create this node in CDF
-        /// </summary>
-        /// <param name="externalId">ExternalId is usually known in context, so pass it here</param>
-        /// <param name="nodeToAssetIds">Map containing parent id and asset id</param>
-        /// <returns>Complete timeseries write poco</returns>
-        public TimeseriesWritePoco ToTimeseries(string externalId, IDictionary<NodeId, long> nodeToAssetIds)
-        {
-            var writePoco = new TimeseriesWritePoco
-            {
-                Description = Description,
-                ExternalId = externalId,
-                AssetId = nodeToAssetIds[ParentId],
-                Name = DisplayName,
-                LegacyName = externalId
-            };
-            if (properties != null && properties.Any())
-            {
-                writePoco.MetaData = new Dictionary<string, string>();
-                foreach (var property in properties)
-                {
-                    if (property.Value != null)
-                    {
-                        writePoco.MetaData.Add(property.DisplayName, property.Value.stringValue);
-                    }
-                }
-            }
-            writePoco.IsStep |= DataType == DataTypes.Boolean;
-            return writePoco;
-        }
+
     }
     /// <summary>
     /// Represents a single value at specified timestamp
@@ -171,6 +101,7 @@ namespace Cognite.OpcUa
         public readonly double doubleValue;
         public readonly string stringValue;
         public readonly bool isString;
+        public readonly bool historizing;
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="nodeId">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>

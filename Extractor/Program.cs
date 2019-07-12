@@ -27,7 +27,8 @@ namespace Cognite.OpcUa
             var services = new ServiceCollection();
             Configure(services);
             var provider = services.BuildServiceProvider();
-            Extractor extractor = new Extractor(fullConfig, provider.GetRequiredService<IHttpClientFactory>());
+            CDFPusher pusher = new CDFPusher(provider.GetRequiredService<IHttpClientFactory>(), fullConfig.CogniteConfig);
+            Extractor extractor = new Extractor(fullConfig, ;
             if (!extractor.Started)
             {
                 Logger.Shutdown();
