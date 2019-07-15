@@ -95,18 +95,18 @@ namespace Testing
                     }
                 }
             }
-            Assert.Equal(assetList.Count, 1);
-            Assert.Equal(tsList.Count, 1);
-            Assert.Equal(histTsList.Count, 1);
+            Assert.Single(assetList);
+            Assert.Single(tsList);
+            Assert.Single(histTsList);
             UAClient.GetNodeProperties(assetList.Concat(tsList).Concat(histTsList));
             Assert.NotNull(histTsList.First().properties);
-            Assert.Equal(histTsList.First().properties.Count, 2);
-            Assert.Equal(assetList.First().properties.Count, 2);
+            Assert.Equal(2, histTsList.First().properties.Count);
+            Assert.Equal(2, assetList.First().properties.Count);
             Extractor.SynchronizeNodes(tsList.Concat(histTsList));
-            Thread.Sleep(3000);
+            Thread.Sleep(2000);
             Assert.True(totalDps > 0, "Excepted some datapoints");
             int lastDps = totalDps;
-            Thread.Sleep(3000);
+            Thread.Sleep(2000);
             Assert.True(totalDps > lastDps, "Expected dps to be increasing");
             Environment.Exit(0);
         }
