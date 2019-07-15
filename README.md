@@ -2,11 +2,13 @@
 OPC-UA extractor using libraries from OPCFoundation see [here](https://github.com/OPCFoundation/UA-.NETStandard)
 
 ## How to use
+Install .net core 2.2 from [here](https://dotnet.microsoft.com/download).
+
 Add artifactory as a nuget source as outlined [here](https://cognitedata.atlassian.net/wiki/spaces/IDE/pages/711884992/Migrating+to+Artifactory)
 then simply run `dotnet restore` to install dependencies.
 
-To run, the simplest is just to install .net core 2.2 from [here](https://dotnet.microsoft.com/download) then run 
-`donet run [optional config file]`. If no .yml config file is specified, config.yml in the application directory is used.
+To run:
+`dotnet run [optional config file]`. If no .yml config file is specified, config.yml in the application directory is used.
 See the [example configuration](Extractor/config.example.yml) for a template.
 
 It is also possible to compile it to an executable, though it will obviously be system specific (TODO, do this automatically)
@@ -27,3 +29,5 @@ The config file should contain description of most config options, a few are not
 You will need .net core 2.2, and to set up artifactory as mentioned above. Then simply run `dotnet build` to compile,
 or `dotnet run` to compile and run. Make sure that the config file is moved to the build directory, either by specifying
 in the solution or by moving it manually.
+
+For testing metrics, a good solution is the prom-stack found [here](https://github.com/evnsio/prom-stack)
