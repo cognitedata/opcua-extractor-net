@@ -1,4 +1,4 @@
-import math
+﻿import math
 import sys
 import time
 
@@ -37,6 +37,16 @@ if __name__ == "__main__":
     myobj.add_property(idx, "Asset prop 1", ua.Variant("test", ua.VariantType.String))
     myobj.add_property(idx, "Asset prop 2", ua.Variant(123.21, ua.VariantType.Double))
 
+    myobj2 = myobj.add_object(idx, "MyObject2")
+    for i in range(0, 1000):
+        myobj2.add_variable(idx, "MyVariable" + str(i), ua.Variant(0, ua.VariantType.Double))
+        
+    myobj3 = myobj.add_object(idx, "MyObject3")
+    for j in range(0, 5):    
+        mydeepobj = myobj3
+        for i in range(0, 30):
+            mydeepobj = mydeepobj.add_object(idx, "MyObject " + str(i) + ", " + str(j))
+    
     mybool = myobj.add_variable(idx, "MyVariable bool", ua.Variant(False, ua.VariantType.Boolean))
     # Configure server to use sqlite as history database (default is a simple memory dict)
     server.iserver.history_manager.set_storage(HistorySQLite("my_datavalue_history.sql"))
