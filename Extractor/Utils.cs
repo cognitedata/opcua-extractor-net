@@ -5,10 +5,12 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Sdk;
+using YamlDotNet.RepresentationModel;
+using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa
 {
-    static class Utils
+    public static class Utils
     {
         private static readonly int retryCount = 3;
         public static bool BufferFileEmpty { get; set; }
@@ -106,6 +108,83 @@ namespace Cognite.OpcUa
             }
             File.Create(config.BufferFile).Close();
             BufferFileEmpty = true;
+        }
+        /// <summary>
+        /// Map yaml config to the FullConfig object
+        /// </summary>
+        /// <param name="configPath">Path to config file</param>
+        /// <returns>A <see cref="FullConfig"/> object representing the entire config file</returns>
+        public static FullConfig GetConfig(string configPath)
+        {
+            var config = ReadConfig(configPath);
+            FullConfig fullConfig = null;
+            try
+            {
+                var clientCfg = config.Children[new YamlScalarNode("client")];
+                var nsmaps = (YamlMappingNode)config.Children[new YamlScalarNode("nsmaps")];
+                var cogniteConfig = config.Children[new YamlScalarNode("cognite")];
+                var loggerConfig = config.Children[new YamlScalarNode("logging")];
+                var metricsConfig = config.Children[new YamlScalarNode("metrics")];
+                fullConfig = new FullConfig
+                {
+                    NSMaps = nsmaps,
+                    UAConfig = DeserializeNode<UAClientConfig>(clientCfg),
+                    CogniteConfig = DeserializeNode<CogniteClientConfig>(cogniteConfig),
+                    LoggerConfig = DeserializeNode<LoggerConfig>(loggerConfig),
+                    MetricsConfig = DeserializeNode<MetricsConfig>(metricsConfig)
+                };
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Failed to load config");
+                Console.WriteLine(e.Message);
+                Console.WriteLine(e.StackTrace);
+            }
+            return fullConfig;
+        }
+        /// <summary>
+        /// Reads config from file, then maps to a YamlDotNet tree
+        /// </summary>
+        /// <param name="configPath">Path to the config file</param>
+        /// <returns>The root <see cref="YamlMappingNode"/></returns>
+        public static YamlMappingNode ReadConfig(string configPath)
+        {
+            if (!File.Exists(configPath))
+            {
+                Console.WriteLine("Failed to open config file " + configPath);
+            }
+            string document = File.ReadAllText(configPath);
+            StringReader input = new StringReader(document);
+            YamlStream stream = new YamlStream();
+            stream.Load(input);
+
+            return (YamlMappingNode)stream.Documents[0].RootNode;
+        }
+        /// <summary>
+        /// Generic implementation of a small hack to use the YamlDotNet deserializer on individual nodes
+        /// </summary>
+        /// <typeparam name="T">Target type</typeparam>
+        /// <param name="node">The root node for the target object</param>
+        /// <returns>An instantiated instance of the target type</returns>
+        public static T DeserializeNode<T>(YamlNode node)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new StreamWriter(stream))
+            using (var reader = new StreamReader(stream))
+            {
+                new YamlStream(new YamlDocument[] { new YamlDocument(node) }).Save(writer);
+                writer.Flush();
+                stream.Position = 0;
+                try
+                {
+                    return new Deserializer().Deserialize<T>(reader);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Failed to load config: " + node);
+                    throw e;
+                }
+            }
         }
     }
 }
