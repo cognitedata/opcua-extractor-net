@@ -2,7 +2,6 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
-using Opc.Ua;
 
 namespace Testing
 {
@@ -10,7 +9,7 @@ namespace Testing
     {
         static int Main(string[] args)
         {
-            FullConfig fullConfig = Cognite.OpcUa.Utils.GetConfig(args.Length > 0 ? args[0] : "config.yml");
+            FullConfig fullConfig = Utils.GetConfig(args.Length > 0 ? args[0] : "config.yml");
             if (fullConfig == null) return -1;
             Logger.Startup(fullConfig.LoggerConfig);
             TestPusher pusher = new TestPusher();

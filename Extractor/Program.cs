@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Threading;
-using YamlDotNet.Serialization;
-using System.IO;
 using YamlDotNet.RepresentationModel;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
