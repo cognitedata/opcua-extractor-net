@@ -53,6 +53,7 @@ namespace Cognite.OpcUa
 
         public bool Start()
         {
+            if (UAClient.Started) return true;
             Logger.LogInfo("Start UAClient");
             try
             {

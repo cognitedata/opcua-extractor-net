@@ -5,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 using System.Collections.Generic;
 using Prometheus.Client.MetricPusher;
-using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
