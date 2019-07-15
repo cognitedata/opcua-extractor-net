@@ -46,6 +46,8 @@ namespace Cognite.OpcUa
             debug = config.CogniteConfig.Debug;
             runningPush = !debug;
             pusher.Extractor = this;
+            pusher.UAClient = UAClient;
+            Logger.LogInfo("Start UAClient");
             UAClient.Run().Wait();
             if (!UAClient.Started)
             {
@@ -58,7 +60,7 @@ namespace Cognite.OpcUa
             {
                 RootNode = ObjectIds.ObjectsFolder;
             }
-            pusher.RootNode = UAClient.GetUniqueId(RootNode);
+            pusher.RootNode = RootNode;
             Task.Run(async () =>
             {
                 while (runningPush)
@@ -139,25 +141,13 @@ namespace Cognite.OpcUa
             runningPush = false;
             while (pushingDatapoints) await Task.Delay(100);
         }
-        public void GetNodeProperties(IEnumerable<BufferedNode> nodes)
-        {
-            UAClient.GetNodeProperties(nodes);
-        }
         public void SynchronizeNodes(IEnumerable<BufferedVariable> variables)
         {
             UAClient.SynchronizeNodes(variables, HistoryDataHandler, SubscriptionHandler);
         }
-        public bool UseStep(BufferedVariable node)
-        {
-            return node.DataType == DataTypes.Boolean;
-        }
         public bool AllowTSMap(BufferedVariable node)
         {
             return UAClient.IsNumericType(node.DataType) && node.ValueRank == ValueRanks.Scalar;
-        }
-        public void ReadNodeData(IEnumerable<BufferedNode> nodes)
-        {
-            UAClient.ReadNodeData(nodes);
         }
         #endregion
 
@@ -174,15 +164,15 @@ namespace Cognite.OpcUa
         {
             if (node.NodeClass == NodeClass.Object)
             {
-                var bufferedNode = new BufferedNode(UAClient.GetUniqueId(node.NodeId),
-                        node.DisplayName.Text, UAClient.GetUniqueId(parentId));
+                var bufferedNode = new BufferedNode(UAClient.ToNodeId(node.NodeId),
+                        node.DisplayName.Text, parentId);
                 Logger.LogData(bufferedNode);
                 bufferedNodeQueue.Enqueue(bufferedNode);
             }
             else if (node.NodeClass == NodeClass.Variable)
             {
-                var bufferedNode = new BufferedVariable(UAClient.GetUniqueId(node.NodeId),
-                        node.DisplayName.Text, UAClient.GetUniqueId(parentId));
+                var bufferedNode = new BufferedVariable(UAClient.ToNodeId(node.NodeId),
+                        node.DisplayName.Text, parentId);
                 if (node.TypeDefinition == VariableTypeIds.PropertyType)
                 {
                     bufferedNode.IsProperty = true;
@@ -201,7 +191,7 @@ namespace Cognite.OpcUa
         /// <param name="item">Modified item</param>
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
-            string uniqueId = UAClient.GetUniqueId(item.ResolvedNodeId).ToString();
+            string uniqueId = UAClient.GetUniqueId(item.ResolvedNodeId);
             if (!buffersEmpty && pusher.NotInSync.Contains(uniqueId)) return;
 
             foreach (var datapoint in item.DequeueValues())
@@ -231,7 +221,7 @@ namespace Cognite.OpcUa
         /// <param name="nodeid">Id of the node in question</param>
         private void HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
         {
-            string uniqueId = UAClient.GetUniqueId(nodeid).ToString();
+            string uniqueId = UAClient.GetUniqueId(nodeid);
             if (final)
             {
                 lock (pusher.NotInSyncLock)

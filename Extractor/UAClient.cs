@@ -7,6 +7,7 @@ using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using System.Linq;
 using Prometheus.Client;
+using YamlDotNet.RepresentationModel;
 
 namespace Cognite.OpcUa
 {
@@ -21,6 +22,7 @@ namespace Cognite.OpcUa
         public Extractor Extractor { get; set; }
         private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
+        private readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
         private bool clientReconnecting;
         public bool Started { get; private set; }
 
@@ -47,6 +49,11 @@ namespace Cognite.OpcUa
         public UAClient(FullConfig config)
         {
             this.config = config.UAConfig;
+            nsmaps = new Dictionary<string, string>();
+            foreach (var node in config.NSMaps.Children)
+            {
+                nsmaps.Add(((YamlScalarNode)node.Key).Value, ((YamlScalarNode)node.Value).Value);
+            }
         }
         #region Session management
         /// <summary>
@@ -95,6 +102,7 @@ namespace Cognite.OpcUa
                 config.Autoaccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
+            Logger.LogInfo("Attempt to select endpoint from: " + config.EndpointURL);
             var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && config.Secure);
             var endpointConfiguration = EndpointConfiguration.Create(appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
@@ -314,7 +322,7 @@ namespace Cognite.OpcUa
                         {
                         new HistoryReadValueId
                         {
-                            NodeId = FromUniqueId(toRead.Id),
+                            NodeId = toRead.Id,
                             ContinuationPoint = results ? [0].ContinuationPoint
                         },
 
@@ -323,7 +331,7 @@ namespace Cognite.OpcUa
                         out _
                     );
                     numHistoryReads.Inc();
-                    callback(results, results[0].ContinuationPoint == null, FromUniqueId(toRead.Id));
+                    callback(results, results[0].ContinuationPoint == null, toRead.Id);
                 } while (results != null && results[0].ContinuationPoint != null);
             }
             catch (Exception e)
@@ -384,11 +392,11 @@ namespace Cognite.OpcUa
             }
             foreach (BufferedNode node in toSynch)
             {
-                if (!hasSubscription.Contains(FromUniqueId(node.Id)))
+                if (!hasSubscription.Contains(node.Id))
                 {
                     var monitor = new MonitoredItem(subscription.DefaultItem)
                     {
-                        StartNodeId = FromUniqueId(node.Id),
+                        StartNodeId = node.Id,
                         DisplayName = "Value: " + node.DisplayName
                     };
                     monitor.Notification += subscriptionHandler;
@@ -433,7 +441,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    callback(null, true, FromUniqueId(node.Id));
+                    callback(null, true, node.Id);
                 }
             }
         }
@@ -457,7 +465,7 @@ namespace Cognite.OpcUa
                     readValueIds.Add(new ReadValueId
                     {
                         AttributeId = attribute,
-                        NodeId = FromUniqueId(node.Id)
+                        NodeId = node.Id
                     });
                 }
                 if (node.IsVariable)
@@ -467,7 +475,7 @@ namespace Cognite.OpcUa
                         readValueIds.Add(new ReadValueId
                         {
                             AttributeId = attribute,
-                            NodeId = FromUniqueId(node.Id)
+                            NodeId = node.Id
                         });
                     }
                 }
@@ -583,16 +591,17 @@ namespace Cognite.OpcUa
         {
             var tasks = new List<Task>();
             var properties = new HashSet<BufferedVariable>();
+            Logger.LogInfo("Get properties for " + nodes.Count() + " nodes");
             foreach (var node in nodes)
             {
                 if (node.IsVariable)
                 {
                     tasks.Add(Task.Run(() =>
                     {
-                        var children = GetNodeChildren(FromUniqueId(node.Id), ReferenceTypeIds.HasProperty);
+                        var children = GetNodeChildren(node.Id, ReferenceTypeIds.HasProperty);
                         foreach (var child in children)
                         {
-                            var property = new BufferedVariable(GetUniqueId(child.NodeId),
+                            var property = new BufferedVariable(ToNodeId(child.NodeId),
                                 child.DisplayName.Text, node.Id)
                             { IsProperty = true };
                             properties.Add(property);
@@ -714,35 +723,6 @@ namespace Cognite.OpcUa
             return ConvertToString(datavalue.Value);
         }
         /// <summary>
-        /// Returns consistent unique string representation of an <see cref="ExpandedNodeId"/> or <see cref="NodeId"/>
-        /// </summary>
-        /// <param name="nodeid">Nodeid to be converted</param>
-        /// <returns>Unique string representation</returns>
-        public UniqueId GetUniqueId(ExpandedNodeId nodeid)
-        {
-            string namespaceUri = nodeid.NamespaceUri;
-            if (namespaceUri == null)
-            {
-                namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
-            }
-            return new UniqueId(namespaceUri, GetIdTypeChar(nodeid.IdType), nodeid.Identifier);
-        }
-        private char GetIdTypeChar(IdType idType)
-        {
-            switch (idType)
-            {
-                case IdType.Guid:
-                    return 'g';
-                case IdType.Numeric:
-                    return 'i';
-                case IdType.Opaque:
-                    return 'o';
-                case IdType.String:
-                    return 's';
-            }
-            return 'i';
-        }
-        /// <summary>
         /// Returns consistent unique string representation of a <see cref="NodeId"/> given its namespaceUri
         /// </summary>
         /// <remarks>
@@ -750,20 +730,41 @@ namespace Cognite.OpcUa
         /// to be used for mapping assets and timeseries in CDF to opcua nodes.
         /// To avoid having to send the entire namespaceUri to CDF, we allow mapping Uris to prefixes in the config file.
         /// </remarks>
-        /// <param name="namespaceUri">NamespaceUri of given node</param>
         /// <param name="nodeid">Nodeid to be converted</param>
         /// <returns>Unique string representation</returns>
-        private UniqueId GetUniqueId(string namespaceUri, NodeId nodeid)
+        public string GetUniqueId(ExpandedNodeId nodeid)
         {
-            return new UniqueId(namespaceUri, GetIdTypeChar(nodeid.IdType), nodeid.Identifier);
+            string namespaceUri = nodeid.NamespaceUri;
+            if (namespaceUri == null)
+            {
+                namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
+            }
+            string prefix;
+            if (nsmaps.TryGetValue(namespaceUri, out string prefixNode))
+            {
+                prefix = prefixNode;
+            }
+            else
+            {
+                prefix = namespaceUri;
+            }
+            // Strip the ns=namespaceIndex; part, as it may be inconsistent between sessions
+            // We still want the identifierType part of the id, so we just remove the first ocurrence of ns=..
+            // If we can find out if the value of the key alone is unique, then we can remove the identifierType, though I suspect
+            // that i=1 and s=1 (1 as string key) would be considered distinct.
+            string nodeidstr = nodeid.ToString();
+            string nsstr = "ns=" + nodeid.NamespaceIndex + ";";
+            int pos = nodeidstr.IndexOf(nsstr, StringComparison.CurrentCulture);
+            if (pos == 0)
+            {
+                nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
+            }
+            return config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
         }
+
         public bool IsNumericType(uint dataType)
         {
             return dataType >= DataTypes.Boolean && dataType <= DataTypes.Double;
-        }
-        public NodeId FromUniqueId(UniqueId uniqueId)
-        {
-            return new NodeId(uniqueId.value, (ushort)session.NamespaceUris.GetIndex(uniqueId.namespaceUri));
         }
         #endregion
     }

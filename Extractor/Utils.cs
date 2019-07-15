@@ -27,7 +27,6 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    Console.WriteLine("Try action");
                     return await action();
                 }
                 catch (Exception e)
