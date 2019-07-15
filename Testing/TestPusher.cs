@@ -108,7 +108,6 @@ namespace Testing
             int lastDps = totalDps;
             Thread.Sleep(2000);
             Assert.True(totalDps > lastDps, "Expected dps to be increasing");
-            Environment.Exit(0);
         }
         public async Task PushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
         {

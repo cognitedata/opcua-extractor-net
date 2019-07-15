@@ -16,7 +16,7 @@ namespace Cognite.OpcUa
     {
         private readonly UAClient UAClient;
         private bool buffersEmpty;
-		private FullConfig config;
+		private readonly FullConfig config;
         public NodeId RootNode { get; private set; }
         private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
         private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();

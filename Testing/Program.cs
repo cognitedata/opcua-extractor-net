@@ -1,7 +1,8 @@
-﻿using System;
+﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Xunit;
 
 namespace Testing
 {
@@ -21,36 +22,19 @@ namespace Testing
                 Logger.Shutdown();
                 return -1;
             }
-            var quitEvent = new ManualResetEvent(false);
-            Task runtask = Task.Run(() =>
-            {
-                try
-                {
-                    extractor.MapUAToCDF();
-                }
-                catch (Exception e)
-                {
-                    Logger.LogError("Failed to map directory");
-                    Logger.LogException(e);
-                    quitEvent.Set();
-                }
-            });
-            Console.CancelKeyPress += (sender, eArgs) =>
-            {
-                quitEvent.Set();
-                eArgs.Cancel = true;
-            };
-            Console.WriteLine("Press ^C to exit");
-            quitEvent.WaitOne(-1);
-            Logger.LogInfo("Shutting down extractor...");
-            extractor.Close();
-            Logger.Shutdown();
-            if (runtask != null && runtask.IsFaulted)
-            {
-                Logger.Shutdown();
-                extractor.Close();
-                return -1;
-            }
+			IList<Task> tasks = new List<Task>();
+            tasks.Add(Task.Run(() => extractor.MapUAToCDF()));
+			Thread.Sleep(6000);
+			tasks.Add(Task.Run(() => extractor.RestartExtractor()));
+			Thread.Sleep(2000);
+			tasks.Add(Task.Run(() => extractor.RestartExtractor()));
+			Thread.Sleep(50);
+			tasks.Add(Task.Run(() => extractor.RestartExtractor()));
+			Thread.Sleep(4000);
+			Task.WhenAll(tasks).Wait();
+            Assert.All(tasks, (task) => Assert.False(task.IsFaulted));
+			extractor.Close();
+			Logger.Shutdown();
             return 0;
         }
     }
