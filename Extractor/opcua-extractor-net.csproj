@@ -13,11 +13,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="CogniteSdk" Version="0.5.6" />
     <PackageReference Include="Prometheus.Client" Version="3.0.1" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\lib\Opc.Ua.Client\Opc.Ua.Client.csproj" />
-    <ProjectReference Include="..\lib\Opc.Ua.Configuration\Opc.Ua.Configuration.csproj" />
-    <ProjectReference Include="..\lib\Opc.Ua.Core\Opc.Ua.Core.csproj" />
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua" Version="1.4.355.26" />
   </ItemGroup>
   <ItemGroup>
     <None Remove="App.config" />
