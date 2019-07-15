@@ -6,21 +6,23 @@ using Xunit;
 
 namespace Testing
 {
-    class Program
+    public class PusherTests
     {
-        static int Main(string[] args)
+        [Fact]
+        public async Task TestBasicMapping()
         {
-            FullConfig fullConfig = Utils.GetConfig(args.Length > 0 ? args[0] : "config.yml");
-            if (fullConfig == null) return -1;
+            FullConfig fullConfig = Utils.GetConfig("config.yml");
+            if (fullConfig == null) return;
             Logger.Startup(fullConfig.LoggerConfig);
             TestPusher pusher = new TestPusher();
             UAClient client = new UAClient(fullConfig);
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             extractor.Start();
+            Assert.True(extractor.Started);
             if (!extractor.Started)
             {
                 Logger.Shutdown();
-                return -1;
+                return;
             }
 			IList<Task> tasks = new List<Task>();
             tasks.Add(Task.Run(() => extractor.MapUAToCDF()));
@@ -31,11 +33,11 @@ namespace Testing
 			Thread.Sleep(50);
 			tasks.Add(Task.Run(() => extractor.RestartExtractor()));
 			Thread.Sleep(4000);
-			Task.WhenAll(tasks).Wait();
+			await Task.WhenAll(tasks);
             Assert.All(tasks, (task) => Assert.False(task.IsFaulted));
 			extractor.Close();
 			Logger.Shutdown();
-            return 0;
+            return;
         }
     }
 }
