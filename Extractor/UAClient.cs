@@ -19,6 +19,7 @@ namespace Cognite.OpcUa
         private Session session;
         private SessionReconnectHandler reconnectHandler;
         public Extractor Extractor { get; set; }
+        private readonly object visitedNodesLock = new object();
         private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
         private readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
@@ -135,8 +136,11 @@ namespace Cognite.OpcUa
             reconnectHandler.Dispose();
             clientReconnecting = false;
             Logger.LogWarning("--- RECONNECTED ---");
-            visitedNodes.Clear();
             Task.Run(() => Extractor?.RestartExtractor());
+            lock (visitedNodesLock)
+            {
+                visitedNodes.Clear();
+            }
             connects.Inc();
             connected.Set(1);
             reconnectHandler = null;
@@ -207,8 +211,11 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
         public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback)
         {
-            visitedNodes.Clear();
-            visitedNodes.Add(root);
+            lock (visitedNodesLock)
+            {
+                visitedNodes.Clear();
+                visitedNodes.Add(root);
+            }
             try
             {
                 await Task.Run(() => BrowseDirectory(root, callback));
@@ -281,7 +288,10 @@ namespace Cognite.OpcUa
                 if (rd.NodeId == ObjectIds.Server) continue;
                 if (!string.IsNullOrWhiteSpace(config.IgnorePrefix) && rd.DisplayName.Text
                     .StartsWith(config.IgnorePrefix, StringComparison.CurrentCulture)) continue;
-                if (!visitedNodes.Add(ToNodeId(rd.NodeId))) continue;
+                lock (visitedNodesLock)
+                {
+                    if (!visitedNodes.Add(ToNodeId(rd.NodeId))) continue;
+                }
                 callback(rd, root);
                 if (rd.NodeClass == NodeClass.Variable) continue;
                 tasks.Add(Task.Run(() => BrowseDirectory(ToNodeId(rd.NodeId), callback)));
@@ -464,6 +474,7 @@ namespace Cognite.OpcUa
             var readValueIds = new ReadValueIdCollection();
             foreach (var node in nodes)
             {
+                if (node == null) continue;
                 foreach (var attribute in common)
                 {
                     readValueIds.Add(new ReadValueId

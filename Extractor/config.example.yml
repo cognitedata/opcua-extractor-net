@@ -50,7 +50,7 @@ cognite:
   DataPushDelay: 1000
   # Debug mode, if true, Extractor will not push to target
   Debug: false
-  # Buffer datapoints when the connection to CDF fails.
+  # Buffer non-historizing datapoints when the connection to CDF fails.
   BufferOnFailure: false
   # Buffer file path
   BufferFile: buffer.bin
