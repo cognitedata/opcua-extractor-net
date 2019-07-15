@@ -307,6 +307,8 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = config.MaxResults
             };
             HistoryReadResultCollection results = null;
+            int opCnt = 0;
+            int ptCnt = 0;
             IncOperations();
             try
             {
@@ -331,6 +333,8 @@ namespace Cognite.OpcUa
                     );
                     numHistoryReads.Inc();
                     callback(results, results[0].ContinuationPoint == null, toRead.Id);
+                    ptCnt += (int)(ExtensionObject.ToEncodeable(results[0].HistoryData) as HistoryData)?.DataValues.Count;
+                    opCnt++;
                 } while (results != null && results[0].ContinuationPoint != null);
             }
             catch (Exception e)
@@ -340,6 +344,7 @@ namespace Cognite.OpcUa
             finally
             {
                 DecOperations();
+                Logger.LogInfo("Fetched " + ptCnt + " historical datapoints with " + opCnt + " operations for node " + toRead.Id);
             }
         }
         /// <summary>

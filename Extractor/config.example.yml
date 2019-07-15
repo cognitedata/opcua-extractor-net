@@ -3,7 +3,7 @@
 client:
   # The URL of the OPC-UA server to connect to
   EndpointURL: opc.tcp://localhost:4840
-  # Auto accept connections, if this is true, no certificates will be used. Do not set to true in prod!
+  # Auto accept connections from unknown servers.
   Autoaccept: false
   # Maximum number of results to return when reading historical data. 0 for unlimited, though lower numbers give
   # higher reliability, as data is pushed to CDF after each read finishes
@@ -46,9 +46,9 @@ cognite:
   RootNodeNamespace:
   # Id of the root node, on the form "i=123" or "s=stringid" etc.
   RootNodeId: i=0
-  # Delay in ms between each push of data points to CDF
+  # Delay in ms between each push of data points to target
   DataPushDelay: 1000
-  # Debug mode, if true, Extractor will not push to CDF
+  # Debug mode, if true, Extractor will not push to target
   Debug: false
   # Buffer datapoints when the connection to CDF fails.
   BufferOnFailure: false

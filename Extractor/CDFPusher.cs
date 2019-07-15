@@ -68,6 +68,7 @@ namespace Cognite.OpcUa
             }
 
             if (count == 0) return;
+            if (config.Debug) return;
             var organizedDatapoints = new Dictionary<string, Tuple<IList<DataPointPoco>, Identity>>();
             foreach (BufferedDataPoint dataPoint in dataPointList)
             {
@@ -97,9 +98,7 @@ namespace Cognite.OpcUa
                 });
             }
 
-
             Logger.LogInfo("Push " + count + " datapoints to CDF");
-
             using (HttpClient httpClient = clientFactory.CreateClient())
             {
                 Client client = Client.Create(httpClient)
@@ -206,6 +205,11 @@ namespace Cognite.OpcUa
                 }
             }
             Logger.LogInfo("Testing " + count + " nodes against CDF");
+            if (config.Debug)
+            {
+                Extractor.SynchronizeNodes(tsList.Concat(histTsList));
+                return;
+            }
             using (HttpClient httpClient = clientFactory.CreateClient())
             {
                 Client client = Client.Create(httpClient)
@@ -268,9 +272,7 @@ namespace Cognite.OpcUa
             }
             // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
             // createSubscription service called here
-            Logger.LogInfo("Begin synchronize nodes");
             Extractor.SynchronizeNodes(tsList.Concat(histTsList));
-            Logger.LogInfo("End synchronize nodes");
         }
         /// <summary>
         /// Reset the pusher, preparing it to be restarted

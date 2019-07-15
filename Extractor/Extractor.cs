@@ -45,7 +45,6 @@ namespace Cognite.OpcUa
             UAClient.Extractor = this;
 
             debug = config.CogniteConfig.Debug;
-            runningPush = !debug;
             pusher.Extractor = this;
             pusher.UAClient = UAClient;
         }
@@ -257,7 +256,6 @@ namespace Cognite.OpcUa
             if (data == null) return;
 
             if (!(ExtensionObject.ToEncodeable(data[0].HistoryData) is HistoryData hdata) || hdata.DataValues == null) return;
-            Logger.LogInfo("Fetch " + hdata.DataValues.Count + " datapoints for nodeid " + nodeid);
             foreach (var datapoint in hdata.DataValues)
             {
                 var buffDp = new BufferedDataPoint(
