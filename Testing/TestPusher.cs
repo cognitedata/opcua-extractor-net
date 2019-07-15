@@ -20,7 +20,7 @@ namespace Testing
 
         public object NotInSyncLock { get; private set; } = new object();
         int totalDps;
-        public async Task PushDataPoints(ConcurrentQueue<BufferedDataPoint> dataPointQueue)
+        private void SyncPushDps(ConcurrentQueue<BufferedDataPoint> dataPointQueue)
         {
             var dataPointList = new List<BufferedDataPoint>();
             int count = 0;
@@ -32,8 +32,11 @@ namespace Testing
             Logger.LogInfo("Got " + count + " datapoints");
             totalDps += count;
         }
-
-        public async Task PushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
+        public async Task PushDataPoints(ConcurrentQueue<BufferedDataPoint> dataPointQueue)
+        {
+            await Task.Run(() => SyncPushDps(dataPointQueue));
+        }
+        private void SyncPushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
         {
             var nodeMap = new Dictionary<string, BufferedNode>();
             var assetList = new List<BufferedNode>();
@@ -73,7 +76,7 @@ namespace Testing
             }
             if (count == 0) return;
             UAClient.ReadNodeData(assetList.Concat(varList));
-            foreach(var node in varList)
+            foreach (var node in varList)
             {
                 if (node.IsProperty) continue;
                 if (Extractor.AllowTSMap(node))
@@ -106,6 +109,10 @@ namespace Testing
             Thread.Sleep(3000);
             Assert.True(totalDps > lastDps, "Expected dps to be increasing");
             Environment.Exit(0);
+        }
+        public async Task PushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
+        {
+            await Task.Run(() => SyncPushNodes(nodeQueue));
         }
 
         public void Reset()
