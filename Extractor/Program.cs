@@ -40,12 +40,6 @@ namespace Cognite.OpcUa
             CDFPusher pusher = new CDFPusher(provider.GetRequiredService<IHttpClientFactory>(), fullConfig.CogniteConfig);
             UAClient client = new UAClient(fullConfig);
             Extractor extractor = new Extractor(fullConfig, pusher, client);
-
-            if (!extractor.Started)
-            {
-                Logger.Shutdown();
-                return -1;
-            }
             try
             {
                 SetupMetrics(fullConfig.MetricsConfig);
@@ -56,36 +50,10 @@ namespace Cognite.OpcUa
                 Logger.LogException(e);
             }
 
-            var quitEvent = new ManualResetEvent(false);
-			Task runtask = Task.Run(() =>
-            {
-                try
-                {
-                    extractor.MapUAToCDF();
-                }
-                catch (Exception e)
-                {
-                    Logger.LogError("Failed to map directory");
-                    Logger.LogException(e);
-                    quitEvent.Set();
-                }
-            });
-            Console.CancelKeyPress += (sender, eArgs) =>
-            {
-                quitEvent.Set();
-                eArgs.Cancel = true;
-            };
-            Console.WriteLine("Press ^C to exit");
-            quitEvent.WaitOne(-1);
-            Logger.LogInfo("Shutting down extractor...");
+            Run(extractor);
+            Logger.LogInfo("Interrupted, shutting down extractor...");
             extractor.Close();
             Logger.Shutdown();
-            if (runtask != null && runtask.IsFaulted)
-            {
-                Logger.Shutdown();
-                extractor.Close();
-                return -1;
-            }
 			return 0;
         }
         /// <summary>
@@ -129,6 +97,39 @@ namespace Cognite.OpcUa
             var pusher = new MetricPusher(config.URL, config.Job, config.Instance, additionalHeaders);
             var worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));
             worker.Start();
+        }
+        private static void Run(Extractor extractor)
+        {
+            var quitEvent = new ManualResetEvent(false);
+            Console.CancelKeyPress += (sender, eArgs) =>
+            {
+                quitEvent.Set();
+                eArgs.Cancel = true;
+            };
+            Console.WriteLine("Press ^C to exit");
+            while (true)
+			{
+                bool failed = false;
+                if (extractor.Start())
+                {
+                    try
+                    {
+                        extractor.MapUAToCDF();
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.LogError("Failed to map directory");
+                        Logger.LogException(e);
+                        failed = true;
+                    }
+
+                    if (quitEvent.WaitOne(failed ? 4000 : -1)) return;
+                }
+                else
+                {
+                    if (quitEvent.WaitOne(4000)) return;
+                }
+			}
         }
     }
     public class UAClientConfig

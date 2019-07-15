@@ -16,6 +16,7 @@ namespace Cognite.OpcUa
     {
         private readonly UAClient UAClient;
         private bool buffersEmpty;
+		private FullConfig config;
         public NodeId RootNode { get; private set; }
         private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
         private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
@@ -40,17 +41,32 @@ namespace Cognite.OpcUa
         {
             this.pusher = pusher;
             this.UAClient = UAClient;
+			this.config = config;
             UAClient.Extractor = this;
 
             debug = config.CogniteConfig.Debug;
             runningPush = !debug;
             pusher.Extractor = this;
             pusher.UAClient = UAClient;
+        }
+        #region Interface
+
+        public bool Start()
+        {
             Logger.LogInfo("Start UAClient");
-            UAClient.Run().Wait();
+            try
+            {
+                UAClient.Run().Wait();
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to start UAClient");
+                Logger.LogException(e);
+                return false;
+            }
             if (!UAClient.Started)
             {
-                return;
+                return false;
             }
             Started = true;
             startTime.Set(DateTime.Now.Subtract(Epoch).TotalMilliseconds);
@@ -64,14 +80,22 @@ namespace Cognite.OpcUa
             {
                 while (runningPush)
                 {
-                    pushingDatapoints = true;
-                    await pusher.PushDataPoints(bufferedDPQueue);
-                    pushingDatapoints = false;
-                    Thread.Sleep(config.CogniteConfig.DataPushDelay);
+					try
+					{
+						pushingDatapoints = true;
+						await pusher.PushDataPoints(bufferedDPQueue);
+						pushingDatapoints = false;
+						Thread.Sleep(config.CogniteConfig.DataPushDelay);
+					}
+                    catch (Exception e)
+					{
+						Logger.LogError("Failed to push datapoints");
+						Logger.LogException(e);
+					}
                 }
             });
+            return true;
         }
-        #region Interface
         /// <summary>
         /// Restarts the extractor, to some extent, clears known asset ids, allows data to be pushed to CDF, and begins mapping the opcua
         /// directory again
