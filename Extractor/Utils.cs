@@ -29,7 +29,8 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    return await action();
+                    T result = await action();
+                    return result;
                 }
                 catch (Exception e)
                 {
@@ -42,9 +43,9 @@ namespace Cognite.OpcUa
                         }
                     }
                     Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
-                    Logger.LogException(e);
+                    // Logger.LogException(e);
                 }
-                Thread.Sleep(500 * (2 << i));
+                await Task.Delay(500 * (1 << i));
             }
             return default(T);
         }
@@ -102,6 +103,7 @@ namespace Cognite.OpcUa
                             Logger.LogWarning("Bad datapoint in file");
                             continue;
                         }
+                        Logger.LogData(buffDp);
                         bufferedDPQueue.Enqueue(buffDp);
                     }
                 }

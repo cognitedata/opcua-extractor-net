@@ -16,7 +16,7 @@ namespace Cognite.OpcUa
     {
         private readonly UAClient UAClient;
         private bool buffersEmpty;
-		private FullConfig config;
+		private readonly FullConfig config;
         public NodeId RootNode { get; private set; }
         private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
         private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
@@ -45,7 +45,6 @@ namespace Cognite.OpcUa
             UAClient.Extractor = this;
 
             debug = config.CogniteConfig.Debug;
-            runningPush = !debug;
             pusher.Extractor = this;
             pusher.UAClient = UAClient;
         }
@@ -53,6 +52,7 @@ namespace Cognite.OpcUa
 
         public bool Start()
         {
+            if (UAClient.Started) return true;
             Logger.LogInfo("Start UAClient");
             try
             {
@@ -256,7 +256,6 @@ namespace Cognite.OpcUa
             if (data == null) return;
 
             if (!(ExtensionObject.ToEncodeable(data[0].HistoryData) is HistoryData hdata) || hdata.DataValues == null) return;
-            Logger.LogInfo("Fetch " + hdata.DataValues.Count + " datapoints for nodeid " + nodeid);
             foreach (var datapoint in hdata.DataValues)
             {
                 var buffDp = new BufferedDataPoint(
