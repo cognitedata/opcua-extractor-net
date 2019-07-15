@@ -15,7 +15,7 @@ namespace Testing
             TestPusher pusher = new TestPusher();
             UAClient client = new UAClient(fullConfig);
             Extractor extractor = new Extractor(fullConfig, pusher, client);
-
+            extractor.Start();
             if (!extractor.Started)
             {
                 Logger.Shutdown();
