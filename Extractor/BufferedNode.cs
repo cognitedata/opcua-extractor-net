@@ -1,39 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using Opc.Ua;
 
 namespace Cognite.OpcUa
 {
-    public class UniqueId
-    {
-        public readonly string namespaceUri;
-        public readonly char identifierType;
-        public readonly object value;
-        public static string GlobalPrefix;
-        public static Dictionary<string, string> NSmaps;
-        public UniqueId(string namespaceUri, char identifierType, object value)
-        {
-            this.namespaceUri = namespaceUri;
-            this.identifierType = identifierType;
-            this.value = value;
-        }
-        public override string ToString()
-        {
-            if (!NSmaps.TryGetValue(namespaceUri, out string prefix))
-            {
-                prefix = namespaceUri;
-            }
-            return GlobalPrefix + "." + prefix + ":" + identifierType + "=" + value;
-        }
-    }
     /// <summary>
     /// Represents an opcua node.
     /// </summary>
     public class BufferedNode
     {
-        public readonly UniqueId Id;
+        public readonly NodeId Id;
         public readonly string DisplayName;
         public readonly bool IsVariable;
-        public readonly UniqueId ParentId;
+        public readonly NodeId ParentId;
         /// <summary>
         /// Description in opcua
         /// </summary>
@@ -42,8 +21,8 @@ namespace Cognite.OpcUa
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public BufferedNode(UniqueId Id, string DisplayName, UniqueId ParentId) : this(Id, DisplayName, false, ParentId) { }
-        protected BufferedNode(UniqueId Id, string DisplayName, bool IsVariable, UniqueId ParentId)
+        public BufferedNode(NodeId Id, string DisplayName, NodeId ParentId) : this(Id, DisplayName, false, ParentId) { }
+        protected BufferedNode(NodeId Id, string DisplayName, bool IsVariable, NodeId ParentId)
         {
             this.Id = Id;
             this.DisplayName = DisplayName;
@@ -83,7 +62,7 @@ namespace Cognite.OpcUa
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public BufferedVariable(UniqueId Id, string DisplayName, UniqueId ParentId) : base(Id, DisplayName, true, ParentId) { }
+        public BufferedVariable(NodeId Id, string DisplayName, NodeId ParentId) : base(Id, DisplayName, true, ParentId) { }
         /// <summary>
         /// Sets the datapoint to provided DataValue.
         /// </summary>
@@ -92,19 +71,19 @@ namespace Cognite.OpcUa
         /// <param name="client">Current client context</param>
         public void SetDataPoint(object value, DateTime SourceTimestamp, UAClient client)
         {
-            if (Value == null) return;
+            if (value == null) return;
             if (client.IsNumericType(DataType) || IsProperty)
             {
                 Value = new BufferedDataPoint(
                     (long)SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
-                    Id.ToString(),
+                    client.GetUniqueId(Id),
                     UAClient.ConvertToString(value));
             }
             else
             {
                 Value = new BufferedDataPoint(
                     (long)SourceTimestamp.Subtract(Extractor.Epoch).TotalMilliseconds,
-                    Id.ToString(),
+                    client.GetUniqueId(Id),
                     UAClient.ConvertToDouble(value));
             }
         }

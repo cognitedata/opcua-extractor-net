@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Opc.Ua;
 
 namespace Cognite.OpcUa
 {
@@ -9,11 +10,18 @@ namespace Cognite.OpcUa
         /// <summary>
         /// UniqueId representation of OPC-UA like root node. Mapping is expected to start from here.
         /// </summary>
-        UniqueId RootNode { get; set; }
+        NodeId RootNode { get; set; }
         /// <summary>
         /// Parent extractor
         /// </summary>
-        Extractor Extractor { get; set; }
+        Extractor Extractor { set; }
+        /// <summary>
+        /// The UAClient to use as source
+        /// </summary>
+        UAClient UAClient { set; }
+        /// <summary>
+        /// The set of uniqueIds discovered, but not yet synced with CDF
+        /// </summary>
         ISet<string> NotInSync { get; }
         object NotInSyncLock { get; }
         /// <summary>

@@ -8,6 +8,7 @@ using Cognite.Sdk;
 using Cognite.Sdk.Api;
 using Cognite.Sdk.Assets;
 using Cognite.Sdk.Timeseries;
+using Opc.Ua;
 using Prometheus.Client;
 
 namespace Cognite.OpcUa
@@ -20,10 +21,11 @@ namespace Cognite.OpcUa
         private readonly IHttpClientFactory clientFactory;
         private readonly CogniteClientConfig config;
         private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
-        private readonly IDictionary<string, long> nodeToAssetIds = new Dictionary<string, long>();
-        public Extractor Extractor { get; set; }
-        private UniqueId _rootId;
-        public UniqueId RootNode { get { return _rootId; } set { nodeToAssetIds.Add(value.ToString(), rootAsset); _rootId = value; } }
+        private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
+        public Extractor Extractor { private get; set; }
+        public UAClient UAClient { private get; set; }
+        private NodeId _rootId;
+        public NodeId RootNode { get { return _rootId; } set { nodeToAssetIds.Add(value.ToString(), rootAsset); _rootId = value; } }
         public ISet<string> NotInSync { get; }  = new HashSet<string>();
         public object NotInSyncLock { get; } = new object();
 
@@ -152,7 +154,7 @@ namespace Cognite.OpcUa
 
                     if (buffVar.IsProperty)
                     {
-                        nodeMap.TryGetValue(buffVar.ParentId.ToString(), out BufferedNode parent);
+                        nodeMap.TryGetValue(UAClient.GetUniqueId(buffVar.ParentId), out BufferedNode parent);
                         if (parent == null) continue;
                         if (parent.properties == null)
                         {
@@ -171,13 +173,13 @@ namespace Cognite.OpcUa
                     count++;
                     assetList.Add(buffer);
                 }
-                nodeMap.Add(buffer.Id.ToString(), buffer);
+                nodeMap.Add(UAClient.GetUniqueId(buffer.Id), buffer);
             }
             if (count == 0) return;
             Logger.LogInfo("Getting data for " + varList.Count() + " variables and " + assetList.Count() + " objects");
             try
             {
-                Extractor.ReadNodeData(assetList.Concat(varList));
+                UAClient.ReadNodeData(assetList.Concat(varList));
             }
             catch (Exception e)
             {
@@ -194,7 +196,7 @@ namespace Cognite.OpcUa
                         histTsList.Add(node);
                         lock (NotInSyncLock)
                         {
-                            NotInSync.Add(node.Id.ToString());
+                            NotInSync.Add(UAClient.GetUniqueId(node.Id));
                         }
                     }
                     else
@@ -292,7 +294,7 @@ namespace Cognite.OpcUa
             IDictionary<string, BufferedNode> assetIds = new Dictionary<string, BufferedNode>();
             foreach (BufferedNode node in assetList)
             {
-                assetIds.Add(node.Id.ToString(), node);
+                assetIds.Add(UAClient.GetUniqueId(node.Id), node);
             }
             // TODO: When v1 gets support for ExternalId on assets when associating timeseries, we can drop a lot of this.
             // Specifically anything related to NodeToAssetIds
@@ -313,7 +315,7 @@ namespace Cognite.OpcUa
                     Logger.LogInfo("Found " + readResults.Count() + " assets");
                     foreach (var resultItem in readResults)
                     {
-                        nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id.ToString(), resultItem.Id);
+                        nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
                     }
                 }
             }
@@ -346,7 +348,7 @@ namespace Cognite.OpcUa
                 }
                 try
                 {
-                    Extractor.GetNodeProperties(getMetaData);
+                    UAClient.GetNodeProperties(getMetaData);
                 }
                 catch (Exception e)
                 {
@@ -362,7 +364,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var resultItem in writeResults)
                     {
-                        nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id.ToString(), resultItem.Id);
+                        nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
                     }
                 }
                 IList<Identity> idsToMap = new List<Identity>();
@@ -381,7 +383,7 @@ namespace Cognite.OpcUa
                     {
                         foreach (var resultItem in readResults)
                         {
-                            nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id.ToString(), resultItem.Id);
+                            nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
                         }
                     }
                 }
@@ -398,8 +400,9 @@ namespace Cognite.OpcUa
             var tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
-                tsIds.Add(node.Id.ToString(), node);
-                nodeIsHistorizing[node.Id.ToString()] = false;
+                string externalId = UAClient.GetUniqueId(node.Id);
+                tsIds.Add(externalId, node);
+                nodeIsHistorizing[externalId] = false;
             }
 
             Logger.LogInfo("Test " + tsIds.Keys.Count + " timeseries");
@@ -442,7 +445,7 @@ namespace Cognite.OpcUa
                 {
                     getMetaData.Add(tsIds[externalid]);
                 }
-                Extractor.GetNodeProperties(getMetaData);
+                UAClient.GetNodeProperties(getMetaData);
                 foreach (string externalId in missingTSIds)
                 {
                     createTimeseries.Add(VariableToTimeseries(tsIds[externalId]));
@@ -461,8 +464,9 @@ namespace Cognite.OpcUa
             var tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
-                tsIds.Add(node.Id.ToString(), node);
-                nodeIsHistorizing[node.Id.ToString()] = true;
+                string externalId = UAClient.GetUniqueId(node.Id);
+                tsIds.Add(externalId, node);
+                nodeIsHistorizing[externalId] = true;
             }
 
             Logger.LogInfo("Test " + tsIds.Keys.Count + " historizing timeseries");
@@ -519,7 +523,7 @@ namespace Cognite.OpcUa
                 {
                     getMetaData.Add(tsIds[externalid]);
                 }
-                Extractor.GetNodeProperties(getMetaData);
+                UAClient.GetNodeProperties(getMetaData);
                 foreach (string externalId in missingTSIds)
                 {
                     createTimeseries.Add(VariableToTimeseries(tsIds[externalId]));
@@ -559,13 +563,14 @@ namespace Cognite.OpcUa
         /// <returns>Complete timeseries write poco</returns>
         private TimeseriesWritePoco VariableToTimeseries(BufferedVariable variable)
         {
+            string externalId = UAClient.GetUniqueId(variable.Id);
             var writePoco = new TimeseriesWritePoco
             {
                 Description = variable.Description,
-                ExternalId = variable.Id.ToString(),
-                AssetId = nodeToAssetIds[variable.ParentId.ToString()],
+                ExternalId = externalId,
+                AssetId = nodeToAssetIds[UAClient.GetUniqueId(variable.ParentId)],
                 Name = variable.DisplayName,
-                LegacyName = variable.Id.ToString()
+                LegacyName = externalId
             };
             if (variable.properties != null && variable.properties.Any())
             {
@@ -578,7 +583,7 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            writePoco.IsStep |= Extractor.UseStep(variable);
+            writePoco.IsStep |= variable.DataType == DataTypes.Boolean;
             return writePoco;
         }
         /// <summary>
@@ -595,16 +600,16 @@ namespace Cognite.OpcUa
             var writePoco = new AssetWritePoco
             {
                 Description = node.Description,
-                ExternalId = node.Id.ToString(),
+                ExternalId = UAClient.GetUniqueId(node.Id),
                 Name = node.DisplayName
             };
-            if (node.ParentId.ToString() == RootNode.ToString())
+            if (node.ParentId == RootNode)
             {
                 writePoco.ParentId = rootAsset;
             }
             else
             {
-                writePoco.ParentExternalId = node.ParentId.ToString();
+                writePoco.ParentExternalId = UAClient.GetUniqueId(node.ParentId);
             }
             Console.WriteLine("Attempt map properties");
             if (node.properties != null && node.properties.Any())
