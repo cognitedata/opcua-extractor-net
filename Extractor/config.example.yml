@@ -11,9 +11,9 @@ client:
   # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
   GlobalPrefix: gp
   # OPC-UA username, leave blank for anonymous user. (no authentication)
-  Username: "username"
+  Username:
   # OPC-UA password
-  Password: "password"
+  Password:
   # Use secured connection
   Secure: false
   # Specify prefix on DisplayName to ignore, leave empty for none
@@ -24,14 +24,14 @@ nsmaps:
   # Ex: "urn:cognite:net:server": cns
   # Saves space compared to using the full URL. Using the ns index is not safe
   # If not specified, the full URI is used instead.
-  "urn:freeopcua:python:server": fps
-  "http://examples.freeopcua.github.io": efg
+  # "urn:freeopcua:python:server": fps
+  # "http://examples.freeopcua.github.io": efg
 
 cognite:
   # The project to connect to in the API
-  Project: test
+  Project:
   # Cognite api key
-  ApiKey: test
+  ApiKey:
   # The root asset must exist, and will be mapped to the root node in opcua, no changes will be made to the root asset
   # Root assetid to map to root OPC-UA node
   RootAssetId: 0

@@ -52,6 +52,7 @@ namespace Cognite.OpcUa
             this.config = config.UAConfig;
             bulkConfig = config.BulkSizes;
             nsmaps = new Dictionary<string, string>();
+            if (config.NSMaps == null) return;
             foreach (var node in config.NSMaps.Children)
             {
                 nsmaps.Add(((YamlScalarNode)node.Key).Value, ((YamlScalarNode)node.Value).Value);
@@ -348,7 +349,6 @@ namespace Cognite.OpcUa
                             if (!visitedNodes.Add(ToNodeId(rd.NodeId))) continue;
                         }
                         callback(rd, parentId);
-                        Logger.LogInfo(rd.NodeClass.ToString());
                         if (rd.NodeClass == NodeClass.Variable) continue;
                         nextIds.Add(ToNodeId(rd.NodeId));
                     }

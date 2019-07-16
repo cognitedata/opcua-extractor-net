@@ -122,7 +122,7 @@ namespace Cognite.OpcUa
             try
             {
                 var clientCfg = config.Children[new YamlScalarNode("client")];
-                var nsmaps = (YamlMappingNode)config.Children[new YamlScalarNode("nsmaps")];
+                var nsmaps = config.Children[new YamlScalarNode("nsmaps")] as YamlMappingNode;
                 var cogniteConfig = config.Children[new YamlScalarNode("cognite")];
                 var loggerConfig = config.Children[new YamlScalarNode("logging")];
                 var metricsConfig = config.Children[new YamlScalarNode("metrics")];
