@@ -126,6 +126,7 @@ namespace Cognite.OpcUa
                 Logger.LogException(e);
             }
             UAClient.WaitForOperations().Wait();
+            Logger.LogInfo("Extractor closed");
         }
         /// <summary>
         /// Starts the extractor, calling BrowseDirectory on the root node, then pushes all nodes to CDF once finished.
