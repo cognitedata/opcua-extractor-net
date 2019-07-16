@@ -104,7 +104,7 @@ namespace Testing
                     }
                 }
             }
-            nodeTests.GetValueOrDefault("afterdata")?.Invoke(assetList, tsList, histTsList);
+            nodeTests?.GetValueOrDefault("afterdata")?.Invoke(assetList, tsList, histTsList);
             UAClient.GetNodeProperties(assetList.Concat(tsList).Concat(histTsList));
             nodeTests?.GetValueOrDefault("afterProperties")?.Invoke(assetList, tsList, histTsList);
             Extractor.SynchronizeNodes(tsList.Concat(histTsList));

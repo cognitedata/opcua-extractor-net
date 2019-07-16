@@ -42,6 +42,8 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_history_reads", "Number of historyread operations performed");
         private static readonly Counter numBrowse = Metrics
             .CreateCounter("opcua_browse_operations", "Number of browse operations performed");
+        private static readonly Gauge depth = Metrics
+            .CreateGauge("opcua_tree_depth", "Depth of node tree from rootnode");
 
         /// <summary>
         /// Constructor, does not start the client.
@@ -80,6 +82,7 @@ namespace Cognite.OpcUa
         public void Close()
         {
             session.CloseSession(null, true);
+            connected.Set(0);
         }
         /// <summary>
         /// Load security configuration for the session, then start the server.
@@ -330,15 +333,18 @@ namespace Cognite.OpcUa
         private void BrowseDirectory(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback)
         {
             var nextIds = roots.ToList();
+            int levelCnt = 0;
+            int nodeCnt = 0;
             do
             {
                 if (clientReconnecting) return;
                 var references = GetNodeChildren(nextIds);
                 nextIds.Clear();
+                levelCnt++;
                 foreach (var rdlist in references)
                 {
                     NodeId parentId = rdlist.Key;
-                    Logger.LogInfo("Found " + rdlist.Value.Count + " children of " + parentId);
+                    nodeCnt += rdlist.Value.Count;
                     foreach (var rd in rdlist.Value)
                     {
                         if (rd.NodeId == ObjectIds.Server) continue;
@@ -354,6 +360,8 @@ namespace Cognite.OpcUa
                     }
                 }
             } while (nextIds.Any());
+            Logger.LogInfo("Found " + nodeCnt + " nodes in " + levelCnt + " levels");
+            depth.Set(levelCnt);
         }
         #endregion
 
