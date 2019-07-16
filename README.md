@@ -19,6 +19,7 @@ The config file should contain description of most config options, a few are not
  has already been run, then new assets and timeseries will be created. The externalId will be on the form
  `[GlobalPrefix].[Mapped or full namespace];[Identifiertype and identifier]`. If GlobalPrefix is chosen to be unique within CDF
  then the ExternalId should remain unique.
+ Note that there is an exception to this if the IDs are longer than 128 characters in total. externalId in CDF is limited to 128 characters, but NodeIds may have identifiers of up to 4096 characters. To fit with CDF we cut off everything after the first 128 characters in the final ID. This means that if the namespaces are long enough, we potentially only get 70-80 characters from the identifier itself. If this creates duplicates then the duplicates will be ignored.
  - `RootAssetId`, `RootNamespaceId` and `RootNodeId` are used to designate the root node and root asset, these are mapped such
  that the RootAsset and RootNode will be in the same place in the final hierarchy. In theory, multiple extractors could
  run in parallel against different top level assets/nodes.
