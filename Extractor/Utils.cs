@@ -2,8 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Sdk;
 using YamlDotNet.RepresentationModel;
@@ -56,7 +54,7 @@ namespace Cognite.OpcUa
         /// <param name="dataPoints">List of points to be buffered</param>
         public static void WriteBufferToFile(IEnumerable<BufferedDataPoint> dataPoints,
             CogniteClientConfig config,
-            IDictionary<string, bool> nodeIsHistorizing)
+            IDictionary<string, bool> nodeIsHistorizing = null)
         {
             lock (fileLock)
             {
@@ -83,7 +81,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public static void ReadBufferFromFile(ConcurrentQueue<BufferedDataPoint> bufferedDPQueue,
             CogniteClientConfig config,
-            IDictionary<string, bool> nodeIsHistorizing)
+            IDictionary<string, bool> nodeIsHistorizing = null)
         {
             lock (fileLock)
             {

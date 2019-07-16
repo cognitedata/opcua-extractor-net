@@ -83,13 +83,13 @@ namespace Testing
                 if (dpRuns < 5)
                 {
                     totalStored += dpList.Count;
-                    Utils.WriteBufferToFile(dpList, fullConfig.CogniteConfig, null);
+                    Utils.WriteBufferToFile(dpList, fullConfig.CogniteConfig);
                 }
                 else if (dpRuns == 5)
                 {
                     Logger.LogInfo("Read from file...");
                     var queue = new ConcurrentQueue<BufferedDataPoint>();
-                    Utils.ReadBufferFromFile(queue, fullConfig.CogniteConfig, null);
+                    Utils.ReadBufferFromFile(queue, fullConfig.CogniteConfig);
                     Assert.Equal(totalStored, queue.Count);
                     quitEvent.Set();
                 }
