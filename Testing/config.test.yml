@@ -1,0 +1,83 @@
+﻿# Template for the config file, usage: "dotnet opcua-extractor-net.dll [configfile]".
+# Defaults to config.yml in same directory as executable.
+client:
+  # The URL of the OPC-UA server to connect to
+  EndpointURL: opc.tcp://localhost:4840
+  # Auto accept connections from unknown servers.
+  Autoaccept: false
+  # Polling interval in ms between each test of changes to a subscribed variable
+  # 0 updates at maximum rate set by server
+  PollingInterval: 0
+  # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
+  GlobalPrefix: gp
+  # OPC-UA username, leave blank for anonymous user. (no authentication)
+  Username: "username"
+  # OPC-UA password
+  Password: "password"
+  # Use secured connection
+  Secure: false
+  # Specify prefix on DisplayName to ignore, leave empty for none
+  IgnorePrefix:
+
+nsmaps:
+  # Map OPC-UA namespaces to prefixes in CDF. 
+  # Ex: "urn:cognite:net:server": cns
+  # Saves space compared to using the full URL. Using the ns index is not safe
+  # If not specified, the full URI is used instead.
+  "urn:freeopcua:python:server": fps
+  "http://examples.freeopcua.github.io": efg
+
+cognite:
+  # The project to connect to in the API
+  Project: test
+  # Cognite api key
+  ApiKey: test
+  # The root asset must exist, and will be mapped to the root node in opcua, no changes will be made to the root asset
+  # Root assetid to map to root OPC-UA node
+  RootAssetId: 0
+  # Root node in OPC-UA
+  RootNode:
+    # Full name of the namespace of the root node
+    NamespaceUri:
+    # Id of the root node, on the form "i=123" or "s=stringid" etc.
+    NodeId: i=0
+  # Delay in ms between each push of data points to target
+  DataPushDelay: 1000
+  # Debug mode, if true, Extractor will not push to target
+  Debug: false
+  # Buffer non-historizing datapoints when the connection to CDF fails.
+  BufferOnFailure: true
+  # Buffer file path
+  BufferFile: buffer.bin
+
+logging:
+  # Folder for logging output. Leave blank for console only
+  LogFolder:
+  # Whether or not to log mapped nodes. true/false
+  LogNodes: true
+  # Whether or not to log all data output. For debugging only. true/false
+  LogData: false
+
+metrics:
+  # Leave host or job blank to disable metrics
+  # URL of prometheus host, ex my.prometheus.server gives final endpoint my.prometheus.server/metrics/jobs/myjob, 
+  URL:
+  # Job tag value
+  Job:
+  # Prometheus username
+  Username:
+  # Prometheus password
+  Password:
+  # Time in ms between each push
+  PushInterval: 1000
+  # Instance tag for prometheus
+  Instance:
+
+bulksizes:
+  # Max sizes of various requests to CDF and OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
+  CDFAssets: 1000
+  CDFTimeseries: 1000
+  UABrowse: 1000
+  # Number of datapoints per request, 0 for server specified
+  UAHistoryRead: 1000
+  UAAttributes: 1000

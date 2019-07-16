@@ -16,7 +16,7 @@ namespace Testing
         [Fact]
         public async Task TestBasicMapping()
         {
-            FullConfig fullConfig = Utils.GetConfig("config.yml");
+            FullConfig fullConfig = Utils.GetConfig("config.test.yml");
             if (fullConfig == null) return;
             Logger.Startup(fullConfig.LoggerConfig);
             int totalDps = 0;
@@ -97,14 +97,55 @@ namespace Testing
             UAClient client = new UAClient(fullConfig);
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             extractor.Start();
-            Assert.True(extractor.Started);
             if (!extractor.Started)
             {
                 Logger.Shutdown();
                 return;
             }
             extractor.MapUAToCDF();
-            Assert.True(quitEvent.WaitOne(20000));
+            Assert.True(quitEvent.WaitOne(20000), "Timeout");
+            Assert.Equal(0, new System.IO.FileInfo(fullConfig.CogniteConfig.BufferFile).Length);
+            extractor.Close();
+            Logger.Shutdown();
+        }
+        [Trait("Category", "fullserver")]
+        [Trait("Tests", "Bulk")]
+        [Fact]
+        public void TestBulkRequests()
+        {
+            FullConfig fullConfig = Utils.GetConfig("config.test.yml");
+            if (fullConfig == null) return;
+            Logger.Startup(fullConfig.LoggerConfig);
+            int totalDps = 0;
+            var quitEvent = new ManualResetEvent(false);
+            TestPusher pusher = new TestPusher(new Dictionary<string, Action<List<BufferedNode>, List<BufferedVariable>, List<BufferedVariable>>>
+            {
+                { "afterdata", (assetList, tsList, histTsList) =>
+                {
+                    Assert.Equal(153, assetList.Count);
+                    Assert.Equal(2001, tsList.Count);
+                    Assert.Single(histTsList);
+                } },
+                { "afterSynchronize", (assetList, tsList, histTsList) =>
+                {
+                    Thread.Sleep(2000);
+                    Assert.True(totalDps > 0, "Expected some datapoints");
+                    int lastDps = totalDps;
+                    Thread.Sleep(2000);
+                    Assert.True(totalDps > lastDps, "Expected dp count to be increasing");
+                    quitEvent.Set();
+                } }
+            }, (dpList) => totalDps += dpList.Count);
+            UAClient client = new UAClient(fullConfig);
+            Extractor extractor = new Extractor(fullConfig, pusher, client);
+            extractor.Start();
+            if (!extractor.Started)
+            {
+                Logger.Shutdown();
+                return;
+            }
+            extractor.MapUAToCDF();
+            Assert.True(quitEvent.WaitOne(20000), "Timeout");
             extractor.Close();
             Logger.Shutdown();
         }

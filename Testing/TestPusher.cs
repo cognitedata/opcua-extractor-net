@@ -104,11 +104,11 @@ namespace Testing
                     }
                 }
             }
-            nodeTests?["afterdata"]?.Invoke(assetList, tsList, histTsList);
+            nodeTests.GetValueOrDefault("afterdata")?.Invoke(assetList, tsList, histTsList);
             UAClient.GetNodeProperties(assetList.Concat(tsList).Concat(histTsList));
-            nodeTests?["afterProperties"]?.Invoke(assetList, tsList, histTsList);
+            nodeTests?.GetValueOrDefault("afterProperties")?.Invoke(assetList, tsList, histTsList);
             Extractor.SynchronizeNodes(tsList.Concat(histTsList));
-            nodeTests?["afterSynchronize"]?.Invoke(assetList, tsList, histTsList);
+            nodeTests?.GetValueOrDefault("afterSynchronize")?.Invoke(assetList, tsList, histTsList);
         }
         public async Task PushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
         {
