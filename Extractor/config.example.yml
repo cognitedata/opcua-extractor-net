@@ -41,11 +41,12 @@ cognite:
   # The root asset must exist, and will be mapped to the root node in opcua, no changes will be made to the root asset
   # Root assetid to map to root OPC-UA node
   RootAssetId: 0
-  # Full name of the namespace of the root node
-  # RootNodeNamespace: http://examples.freeopcua.github.io
-  RootNodeNamespace:
-  # Id of the root node, on the form "i=123" or "s=stringid" etc.
-  RootNodeId: i=0
+  # Root node in OPC-UA
+  RootNode:
+    # Full name of the namespace of the root node
+    NamespaceUri:
+    # Id of the root node, on the form "i=123" or "s=stringid" etc.
+    NodeId: i=0
   # Delay in ms between each push of data points to target
   DataPushDelay: 1000
   # Debug mode, if true, Extractor will not push to target

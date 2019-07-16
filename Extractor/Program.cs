@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 using System.Collections.Generic;
 using Prometheus.Client.MetricPusher;
+using Opc.Ua;
 
 namespace Cognite.OpcUa
 {
@@ -133,7 +134,6 @@ namespace Cognite.OpcUa
     }
     public class UAClientConfig
     {
-        public int ReconnectPeriod { get; set; } = 1000;
         public string EndpointURL { get; set; }
         public bool Autoaccept { get; set; } = false;
         public uint MaxResults { get; set; } = 100;
@@ -150,8 +150,7 @@ namespace Cognite.OpcUa
         public string Project { get; set; }
         public string ApiKey { get; set; }
         public long RootAssetId { get; set; }
-        public string RootNodeNamespace { get; set; }
-        public string RootNodeId { get; set; }
+        public ProtoNodeId RootNode { get; set; }
         public int DataPushDelay { get; set; }
         public bool Debug { get; set; }
         public bool BufferOnFailure { get; set; }
@@ -179,5 +178,14 @@ namespace Cognite.OpcUa
         public string Password { get; set; }
         public int PushInterval { get; set; }
         public string Instance { get; set; }
+    }
+    public class ProtoNodeId
+    {
+        public string NamespaceUri { get; set; }
+        public string NodeId { get; set; }
+        public NodeId ToNodeId(UAClient client)
+        {
+            return client.ToNodeId(NodeId, NamespaceUri);
+        }
     }
 }

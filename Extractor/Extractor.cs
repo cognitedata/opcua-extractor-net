@@ -70,7 +70,7 @@ namespace Cognite.OpcUa
             }
             Started = true;
             startTime.Set(DateTime.Now.Subtract(Epoch).TotalMilliseconds);
-            RootNode = UAClient.ToNodeId(config.CogniteConfig.RootNodeId, config.CogniteConfig.RootNodeNamespace);
+            RootNode = config.CogniteConfig.RootNode.ToNodeId(UAClient);
             if (RootNode.IsNullNodeId)
             {
                 RootNode = ObjectIds.ObjectsFolder;

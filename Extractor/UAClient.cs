@@ -159,7 +159,7 @@ namespace Cognite.OpcUa
                     Logger.LogWarning("--- RECONNECTING ---");
                     clientReconnecting = true;
                     reconnectHandler = new SessionReconnectHandler();
-                    reconnectHandler.BeginReconnect(sender, config.ReconnectPeriod, ClientReconnectComplete);
+                    reconnectHandler.BeginReconnect(sender, 5000, ClientReconnectComplete);
                 }
             }
         }
@@ -819,7 +819,7 @@ namespace Cognite.OpcUa
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
             string extId = config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
-            // ExternalId is limited to 
+            // ExternalId is limited to 128 characters
             extId = extId.Trim();
             if (extId.Length > 128)
             {
