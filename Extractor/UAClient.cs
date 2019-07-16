@@ -237,13 +237,13 @@ namespace Cognite.OpcUa
         private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(IEnumerable<NodeId> parents, NodeId referenceTypes = null)
         {
             IncOperations();
-            var tobrowse = new BrowseDescriptionCollection();
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             int remaining = parents.Count();
             var lparents = parents;
             while (remaining > 0)
             {
                 int toTake = Math.Min(remaining, bulkConfig.UABrowse);
+                var tobrowse = new BrowseDescriptionCollection();
                 foreach (var id in lparents.Take(toTake))
                 {
                     tobrowse.Add(new BrowseDescription
@@ -259,7 +259,7 @@ namespace Cognite.OpcUa
                     session.Browse(
                         null,
                         null,
-                        10,
+                        0,
                         tobrowse,
                         out BrowseResultCollection results,
                         out _
@@ -305,6 +305,7 @@ namespace Cognite.OpcUa
                         numBrowse.Inc();
                     }
                     remaining -= toTake;
+                    lparents = lparents.Skip(toTake);
                 }
                 catch (Exception e)
                 {
