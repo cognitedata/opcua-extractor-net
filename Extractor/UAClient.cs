@@ -251,7 +251,10 @@ namespace Cognite.OpcUa
                         NodeId = id,
                         ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
                         IncludeSubtypes = true,
-                        NodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object
+                        NodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
+                        BrowseDirection = BrowseDirection.Forward,
+                        ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
+                            | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition
                     });
                 }
                 try
@@ -334,6 +337,7 @@ namespace Cognite.OpcUa
                 foreach (var rdlist in references)
                 {
                     NodeId parentId = rdlist.Key;
+                    Logger.LogInfo("Found " + rdlist.Value.Count + " children of " + parentId);
                     foreach (var rd in rdlist.Value)
                     {
                         if (rd.NodeId == ObjectIds.Server) continue;
@@ -344,6 +348,7 @@ namespace Cognite.OpcUa
                             if (!visitedNodes.Add(ToNodeId(rd.NodeId))) continue;
                         }
                         callback(rd, parentId);
+                        Logger.LogInfo(rd.NodeClass.ToString());
                         if (rd.NodeClass == NodeClass.Variable) continue;
                         nextIds.Add(ToNodeId(rd.NodeId));
                     }

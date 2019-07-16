@@ -204,10 +204,6 @@ namespace Cognite.OpcUa
                 Logger.LogData(bufferedNode);
                 bufferedNodeQueue.Enqueue(bufferedNode);
             }
-            else
-            {
-                throw new Exception("Invalid node type");
-            }
         }
         /// <summary>
         /// Handles notifications on subscribed items, pushes all new datapoints to the queue.

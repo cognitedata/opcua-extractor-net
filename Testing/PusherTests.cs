@@ -71,7 +71,7 @@ namespace Testing
         [Fact]
         public void TestBufferReadWrite()
         {
-            FullConfig fullConfig = Utils.GetConfig("config.yml");
+            FullConfig fullConfig = Utils.GetConfig("config.test.yml");
             if (fullConfig == null) return;
             Logger.Startup(fullConfig.LoggerConfig);
             int dpRuns = 0;
