@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
@@ -8,13 +9,37 @@ namespace Testing
 {
     public class PusherTests
     {
+        [Trait("Category", "basicserver")]
         [Fact]
         public async Task TestBasicMapping()
         {
             FullConfig fullConfig = Utils.GetConfig("config.yml");
             if (fullConfig == null) return;
             Logger.Startup(fullConfig.LoggerConfig);
-            TestPusher pusher = new TestPusher();
+            int totalDps = 0;
+            TestPusher pusher = new TestPusher(new Dictionary<string, System.Action<List<BufferedNode>, List<BufferedVariable>, List<BufferedVariable>>>
+            {
+                { "afterdata", (assetList, tsList, histTsList) =>
+                {
+                    Assert.Single(assetList);
+                    Assert.Single(tsList);
+                    Assert.Single(histTsList);
+                } },
+                { "afterProperties", (assetList, tsList, histTsList) =>
+                {
+                    Assert.NotNull(histTsList.First().properties);
+                    Assert.Equal(2, histTsList.First().properties.Count);
+                    Assert.Equal(2, assetList.First().properties.Count);
+                } },
+                { "afterSynchronize", (assetList, tsList, histTsList) =>
+                {
+                    Thread.Sleep(2000);
+                    Assert.True(totalDps > 0, "Expected some datapoints");
+                    int lastDps = totalDps;
+                    Thread.Sleep(2000);
+                    Assert.True(totalDps > lastDps, "Expected dp count to be increasing");
+                } }
+            }, (dpList) => totalDps += dpList.Count);
             UAClient client = new UAClient(fullConfig);
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             extractor.Start();

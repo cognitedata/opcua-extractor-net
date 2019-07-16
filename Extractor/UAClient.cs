@@ -382,12 +382,11 @@ namespace Cognite.OpcUa
                         false,
                         new HistoryReadValueIdCollection
                         {
-                        new HistoryReadValueId
-                        {
-                            NodeId = toRead.Id,
-                            ContinuationPoint = results ? [0].ContinuationPoint
-                        },
-
+                            new HistoryReadValueId
+                            {
+                                NodeId = toRead.Id,
+                                ContinuationPoint = results ? [0].ContinuationPoint
+                            },
                         },
                         out results,
                         out _
