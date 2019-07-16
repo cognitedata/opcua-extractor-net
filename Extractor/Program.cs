@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 using System.Collections.Generic;
 using Prometheus.Client.MetricPusher;
+using Opc.Ua;
 
 namespace Cognite.OpcUa
 {
@@ -36,7 +37,7 @@ namespace Cognite.OpcUa
             Configure(services);
             var provider = services.BuildServiceProvider();
 
-            CDFPusher pusher = new CDFPusher(provider.GetRequiredService<IHttpClientFactory>(), fullConfig.CogniteConfig);
+            CDFPusher pusher = new CDFPusher(provider.GetRequiredService<IHttpClientFactory>(), fullConfig);
             UAClient client = new UAClient(fullConfig);
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             try
@@ -133,10 +134,8 @@ namespace Cognite.OpcUa
     }
     public class UAClientConfig
     {
-        public int ReconnectPeriod { get; set; } = 1000;
         public string EndpointURL { get; set; }
         public bool Autoaccept { get; set; } = false;
-        public uint MaxResults { get; set; } = 100;
         public int PollingInterval { get; set; } = 500;
         public string GlobalPrefix { get; set; }
         public string Username { get; set; }
@@ -150,8 +149,7 @@ namespace Cognite.OpcUa
         public string Project { get; set; }
         public string ApiKey { get; set; }
         public long RootAssetId { get; set; }
-        public string RootNodeNamespace { get; set; }
-        public string RootNodeId { get; set; }
+        public ProtoNodeId RootNode { get; set; }
         public int DataPushDelay { get; set; }
         public bool Debug { get; set; }
         public bool BufferOnFailure { get; set; }
@@ -164,6 +162,7 @@ namespace Cognite.OpcUa
         public CogniteClientConfig CogniteConfig { get; set; }
         public LoggerConfig LoggerConfig { get; set; }
         public MetricsConfig MetricsConfig { get; set; }
+        public BulkSizes BulkSizes { get; set; }
     }
     public class LoggerConfig
     {
@@ -179,5 +178,22 @@ namespace Cognite.OpcUa
         public string Password { get; set; }
         public int PushInterval { get; set; }
         public string Instance { get; set; }
+    }
+    public class ProtoNodeId
+    {
+        public string NamespaceUri { get; set; }
+        public string NodeId { get; set; }
+        public NodeId ToNodeId(UAClient client)
+        {
+            return client.ToNodeId(NodeId, NamespaceUri);
+        }
+    }
+    public class BulkSizes
+    {
+        public int CDFAssets { get; set; }
+        public int CDFTimeseries { get; set; }
+        public int UABrowse { get; set; }
+        public int UAHistoryRead { get; set; }
+        public int UAAttributes { get; set; }
     }
 }
