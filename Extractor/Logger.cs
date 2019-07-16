@@ -19,6 +19,7 @@ namespace Cognite.OpcUa
         private static string logFolder;
         private static bool started;
 		private static bool logData;
+        private static bool logNodes;
 
         private enum Severity
         {
@@ -43,6 +44,7 @@ namespace Cognite.OpcUa
             }
 
 			logData = options.LogData;
+            logNodes = options.LogNodes;
 
             backgroundTask = LogInBackground();
         }
@@ -104,7 +106,7 @@ namespace Cognite.OpcUa
 
         public static void LogData(BufferedNode node)
 		{
-            if (logData)
+            if (logNodes)
             {
                 LogLines.Add(new LogLine
                 {

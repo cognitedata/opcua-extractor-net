@@ -218,7 +218,7 @@ namespace Cognite.OpcUa
             }
             try
             {
-                await Task.Run(() => BrowseDirectory(root, callback));
+                await Task.Run(() => BrowseDirectory(new List<NodeId> { root }, callback));
             }
             catch (Exception e)
             {
@@ -227,39 +227,78 @@ namespace Cognite.OpcUa
             }
         }
         /// <summary>
-        /// Returns a list of all nodes with a hierarchical reference to the parent
+        /// Get all children of the given list of parents as a map from parentId to list of children descriptions
         /// </summary>
-        /// <param name="parent">Parent of returned nodes</param>
-        /// <returns><see cref="ReferenceDescriptionCollection"/> containing descriptions of all found children</returns>
-        private ReferenceDescriptionCollection GetNodeChildren(NodeId parent, NodeId referenceTypes = null)
+        /// <param name="parents">List of parents to browse</param>
+        /// <param name="referenceTypes">Referencetype to browse, defaults to HierarchicalReferences</param>
+        /// <returns></returns>
+        private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(IEnumerable<NodeId> parents, NodeId referenceTypes = null)
         {
             IncOperations();
-            ReferenceDescriptionCollection references = null;
+            var tobrowse = new BrowseDescriptionCollection();
+            var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
+            foreach (var id in parents)
+            {
+                tobrowse.Add(new BrowseDescription
+                {
+                    NodeId = id,
+                    ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
+                    IncludeSubtypes = true,
+                    NodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object
+                });
+            }
             try
             {
                 session.Browse(
                     null,
                     null,
-                    parent,
-                    0,
-                    BrowseDirection.Forward,
-                    referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
-                    true,
-                    (uint)NodeClass.Variable | (uint)NodeClass.Object,
-                    out byte[] continuationPoint,
-                    out references
+                    10,
+                    tobrowse,
+                    out BrowseResultCollection results,
+                    out _
                 );
+                var indexMap = new NodeId[parents.Count()];
+                var continuationPoints = new ByteStringCollection();
+                int index = 0;
+                int bindex = 0;
+                int count = 0;
+                foreach (var result in results)
+                {
+                    NodeId nodeId = parents.ElementAt(bindex++);
+                    finalResults[nodeId] = result.References;
+                    count += result.References.Count;
+                    if (result.ContinuationPoint != null)
+                    {
+                        indexMap[index++] = nodeId;
+                        continuationPoints.Add(result.ContinuationPoint);
+                    }
+                }
                 numBrowse.Inc();
-                while (continuationPoint != null)
+                while (continuationPoints.Any())
                 {
                     session.BrowseNext(
                         null,
                         false,
-                        continuationPoint,
-                        out continuationPoint,
-                        out ReferenceDescriptionCollection tmpReferences
+                        continuationPoints,
+                        out BrowseResultCollection nextResults,
+                        out _
                     );
-                    references.AddRange(tmpReferences);
+                    int nindex = 0;
+                    int pindex = 0;
+                    count = 0;
+                    continuationPoints.Clear();
+                    foreach (var result in nextResults)
+                    {
+                        NodeId nodeId = indexMap[pindex++];
+                        finalResults[nodeId].AddRange(result.References);
+                        count += result.References.Count;
+                        if (result.ContinuationPoint != null)
+                        {
+                            indexMap[nindex++] = nodeId;
+                            continuationPoints.Add(result.ContinuationPoint);
+                        }
+                    }
+
                     numBrowse.Inc();
                 }
             }
@@ -271,32 +310,38 @@ namespace Cognite.OpcUa
             {
                 DecOperations();
             }
-            return references;
+            return finalResults;
         }
         /// <summary>
-        /// The main browse method, recursively calls itself on all object children
+        /// Get all children of root nodes recursively and invoke the callback for each.
         /// </summary>
-        /// <param name="root">Root node. Will not be sent to callback</param>
-        /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
-        private void BrowseDirectory(NodeId root, Action<ReferenceDescription, NodeId> callback)
+        /// <param name="roots">Root nodes to browse</param>
+        /// <param name="callback">Callback for each node</param>
+        private void BrowseDirectory(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback)
         {
-            if (clientReconnecting) return;
-            var references = GetNodeChildren(root);
-            List<Task> tasks = new List<Task>();
-            foreach (var rd in references)
+            var nextIds = roots.ToList();
+            do
             {
-                if (rd.NodeId == ObjectIds.Server) continue;
-                if (!string.IsNullOrWhiteSpace(config.IgnorePrefix) && rd.DisplayName.Text
-                    .StartsWith(config.IgnorePrefix, StringComparison.CurrentCulture)) continue;
-                lock (visitedNodesLock)
+                if (clientReconnecting) return;
+                var references = GetNodeChildren(nextIds);
+                nextIds.Clear();
+                foreach (var rdlist in references)
                 {
-                    if (!visitedNodes.Add(ToNodeId(rd.NodeId))) continue;
+                    NodeId parentId = rdlist.Key;
+                    foreach (var rd in rdlist.Value)
+                    {
+                        if (rd.NodeId == ObjectIds.Server) continue;
+                        if (!string.IsNullOrWhiteSpace(config.IgnorePrefix) && rd.DisplayName.Text
+                            .StartsWith(config.IgnorePrefix, StringComparison.CurrentCulture)) continue;
+                        lock (visitedNodesLock)
+                        {
+                            if (!visitedNodes.Add(ToNodeId(rd.NodeId))) continue;
+                        }
+                        callback(rd, parentId);
+                        nextIds.Add(ToNodeId(rd.NodeId));
+                    }
                 }
-                callback(rd, root);
-                if (rd.NodeClass == NodeClass.Variable) continue;
-                tasks.Add(Task.Run(() => BrowseDirectory(ToNodeId(rd.NodeId), callback)));
-            }
-            Task.WhenAll(tasks).Wait();
+            } while (nextIds.Any());
         }
         #endregion
 
@@ -414,11 +459,11 @@ namespace Cognite.OpcUa
                         DisplayName = "Value: " + node.DisplayName
                     };
                     monitor.Notification += subscriptionHandler;
-                    Logger.LogInfo("Add subscription to " + node.DisplayName);
                     subscription.AddItem(monitor);
                     count++;
                 }
             }
+            Logger.LogInfo("Add " + count + " subscriptions");
             lock (subscriptionLock)
             {
                 IncOperations();
@@ -604,29 +649,14 @@ namespace Cognite.OpcUa
         /// <param name="nodes">Nodes to be updated with properties</param>
         public void GetNodeProperties(IEnumerable<BufferedNode> nodes)
         {
-            var tasks = new List<Task>();
             var properties = new HashSet<BufferedVariable>();
             Logger.LogInfo("Get properties for " + nodes.Count() + " nodes");
+            var idsToCheck = new List<NodeId>();
             foreach (var node in nodes)
             {
                 if (node.IsVariable)
                 {
-                    tasks.Add(Task.Run(() =>
-                    {
-                        var children = GetNodeChildren(node.Id, ReferenceTypeIds.HasProperty);
-                        foreach (var child in children)
-                        {
-                            var property = new BufferedVariable(ToNodeId(child.NodeId),
-                                child.DisplayName.Text, node.Id)
-                            { IsProperty = true };
-                            properties.Add(property);
-                            if (node.properties == null)
-                            {
-                                node.properties = new List<BufferedVariable>();
-                            }
-                            node.properties.Add(property);
-                        }
-                    }));
+                    idsToCheck.Add(node.Id);
                 }
                 else
                 {
@@ -639,7 +669,21 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            Task.WhenAll(tasks).Wait();
+            var result = GetNodeChildren(idsToCheck, ReferenceTypeIds.HasProperty);
+            foreach (var parent in nodes)
+            {
+                if (!result.ContainsKey(parent.Id)) continue;
+                foreach (var child in result[parent.Id])
+                {
+                    var property = new BufferedVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
+                    properties.Add(property);
+                    if (parent.properties == null)
+                    {
+                        parent.properties = new List<BufferedVariable>();
+                    }
+                    parent.properties.Add(property);
+                }
+            }
             ReadNodeData(properties);
             ReadNodeValues(properties);
         }
@@ -774,7 +818,14 @@ namespace Cognite.OpcUa
             {
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
-            return config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
+            string extId = config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
+            // ExternalId is limited to 
+            extId = extId.Trim();
+            if (extId.Length > 128)
+            {
+                return extId.Substring(0, 128);
+            }
+            return extId;
         }
 
         public bool IsNumericType(uint dataType)

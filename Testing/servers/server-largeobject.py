@@ -38,7 +38,7 @@ if __name__ == "__main__":
     myobj.add_property(idx, "Asset prop 2", ua.Variant(123.21, ua.VariantType.Double))
 
     myobj2 = myobj.add_object(idx, "MyObject2")
-    for i in range(0, 1000):
+    for i in range(0, 1200):
         myobj2.add_variable(idx, "MyVariable" + str(i), ua.Variant(0, ua.VariantType.Double))
         
     myobj3 = myobj.add_object(idx, "MyObject3")
