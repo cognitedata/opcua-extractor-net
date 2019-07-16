@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Sdk;
@@ -127,13 +128,15 @@ namespace Cognite.OpcUa
                 var cogniteConfig = config.Children[new YamlScalarNode("cognite")];
                 var loggerConfig = config.Children[new YamlScalarNode("logging")];
                 var metricsConfig = config.Children[new YamlScalarNode("metrics")];
+                var bulkSizes = config.Children[new YamlScalarNode("bulksizes")];
                 fullConfig = new FullConfig
                 {
                     NSMaps = nsmaps,
                     UAConfig = DeserializeNode<UAClientConfig>(clientCfg),
                     CogniteConfig = DeserializeNode<CogniteClientConfig>(cogniteConfig),
                     LoggerConfig = DeserializeNode<LoggerConfig>(loggerConfig),
-                    MetricsConfig = DeserializeNode<MetricsConfig>(metricsConfig)
+                    MetricsConfig = DeserializeNode<MetricsConfig>(metricsConfig),
+                    BulkSizes = DeserializeNode<BulkSizes>(bulkSizes)
                 };
             }
             catch (Exception e)

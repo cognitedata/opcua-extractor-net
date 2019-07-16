@@ -16,6 +16,7 @@ namespace Cognite.OpcUa
     public class UAClient
     {
         private readonly UAClientConfig config;
+        private readonly BulkSizes bulkConfig;
         private Session session;
         private SessionReconnectHandler reconnectHandler;
         public Extractor Extractor { get; set; }
@@ -49,6 +50,7 @@ namespace Cognite.OpcUa
         public UAClient(FullConfig config)
         {
             this.config = config.UAConfig;
+            bulkConfig = config.BulkSizes;
             nsmaps = new Dictionary<string, string>();
             foreach (var node in config.NSMaps.Children)
             {
@@ -67,7 +69,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Logger.LogError("Erorr starting client");
+                Logger.LogError("Error starting client");
                 Logger.LogException(e);
             }
         }
@@ -237,78 +239,81 @@ namespace Cognite.OpcUa
             IncOperations();
             var tobrowse = new BrowseDescriptionCollection();
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            foreach (var id in parents)
+            int remaining = parents.Count();
+            var lparents = parents;
+            while (remaining > 0)
             {
-                tobrowse.Add(new BrowseDescription
+                int toTake = Math.Min(remaining, bulkConfig.UABrowse);
+                foreach (var id in lparents.Take(toTake))
                 {
-                    NodeId = id,
-                    ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
-                    IncludeSubtypes = true,
-                    NodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object
-                });
-            }
-            try
-            {
-                session.Browse(
-                    null,
-                    null,
-                    10,
-                    tobrowse,
-                    out BrowseResultCollection results,
-                    out _
-                );
-                var indexMap = new NodeId[parents.Count()];
-                var continuationPoints = new ByteStringCollection();
-                int index = 0;
-                int bindex = 0;
-                int count = 0;
-                foreach (var result in results)
-                {
-                    NodeId nodeId = parents.ElementAt(bindex++);
-                    finalResults[nodeId] = result.References;
-                    count += result.References.Count;
-                    if (result.ContinuationPoint != null)
+                    tobrowse.Add(new BrowseDescription
                     {
-                        indexMap[index++] = nodeId;
-                        continuationPoints.Add(result.ContinuationPoint);
-                    }
+                        NodeId = id,
+                        ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
+                        IncludeSubtypes = true,
+                        NodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object
+                    });
                 }
-                numBrowse.Inc();
-                while (continuationPoints.Any())
+                try
                 {
-                    session.BrowseNext(
+                    session.Browse(
                         null,
-                        false,
-                        continuationPoints,
-                        out BrowseResultCollection nextResults,
+                        null,
+                        10,
+                        tobrowse,
+                        out BrowseResultCollection results,
                         out _
                     );
-                    int nindex = 0;
-                    int pindex = 0;
-                    count = 0;
-                    continuationPoints.Clear();
-                    foreach (var result in nextResults)
+                    var indexMap = new NodeId[toTake];
+                    var continuationPoints = new ByteStringCollection();
+                    int index = 0;
+                    int bindex = 0;
+                    foreach (var result in results)
                     {
-                        NodeId nodeId = indexMap[pindex++];
-                        finalResults[nodeId].AddRange(result.References);
-                        count += result.References.Count;
+                        NodeId nodeId = lparents.ElementAt(bindex++);
+                        finalResults[nodeId] = result.References;
                         if (result.ContinuationPoint != null)
                         {
-                            indexMap[nindex++] = nodeId;
+                            indexMap[index++] = nodeId;
                             continuationPoints.Add(result.ContinuationPoint);
                         }
                     }
-
                     numBrowse.Inc();
+                    while (continuationPoints.Any())
+                    {
+                        session.BrowseNext(
+                            null,
+                            false,
+                            continuationPoints,
+                            out BrowseResultCollection nextResults,
+                            out _
+                        );
+                        int nindex = 0;
+                        int pindex = 0;
+                        continuationPoints.Clear();
+                        foreach (var result in nextResults)
+                        {
+                            NodeId nodeId = indexMap[pindex++];
+                            finalResults[nodeId].AddRange(result.References);
+                            if (result.ContinuationPoint != null)
+                            {
+                                indexMap[nindex++] = nodeId;
+                                continuationPoints.Add(result.ContinuationPoint);
+                            }
+                        }
+
+                        numBrowse.Inc();
+                    }
+                    remaining -= toTake;
                 }
-            }
-            catch (Exception e)
-            {
-                throw e;
-            }
-            finally
-            {
-                DecOperations();
+                catch (Exception e)
+                {
+                    throw e;
+                }
+                finally
+                {
+                    DecOperations();
+                }
             }
             return finalResults;
         }
@@ -359,7 +364,7 @@ namespace Cognite.OpcUa
             {
                 StartTime = toRead.LatestTimestamp,
                 EndTime = DateTime.Now.AddDays(1),
-                NumValuesPerNode = config.MaxResults
+                NumValuesPerNode = (uint)Math.Max(0, bulkConfig.UAHistoryRead)
             };
             HistoryReadResultCollection results = null;
             int opCnt = 0;
@@ -546,12 +551,14 @@ namespace Cognite.OpcUa
             {
                 var enumerator = readValueIds.GetEnumerator();
                 int remaining = readValueIds.Count;
-                int per = 1000;
+                int total = remaining;
+                int count = 0;
                 while (remaining > 0)
                 {
-                    Logger.LogInfo("Read " + Math.Min(remaining, per) + " attributes");
+                    count++;
+                    int toTake = Math.Min(remaining, bulkConfig.UAAttributes);
                     ReadValueIdCollection nextValues = new ReadValueIdCollection();
-                    for (int i = 0; i < Math.Min(remaining, per); i++)
+                    for (int i = 0; i < toTake; i++)
                     {
                         enumerator.MoveNext();
                         nextValues.Add(enumerator.Current);
@@ -564,10 +571,11 @@ namespace Cognite.OpcUa
                         out DataValueCollection lvalues,
                         out _
                     );
-                    attributeRequests.Inc(Math.Min(remaining, per));
+                    attributeRequests.Inc(toTake);
                     values = values.Concat(lvalues);
-                    remaining -= per;
+                    remaining -= toTake;
                 }
+                Logger.LogInfo("Read " + total + " attributes with " + count + " operations");
             }
             catch (Exception e)
             {

@@ -20,6 +20,7 @@ namespace Cognite.OpcUa
     {
         private readonly IHttpClientFactory clientFactory;
         private readonly CogniteClientConfig config;
+        private readonly BulkSizes bulkConfig;
         private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         public Extractor Extractor { private get; set; }
@@ -31,11 +32,12 @@ namespace Cognite.OpcUa
 
         private readonly long rootAsset = -1;
 
-        public CDFPusher(IHttpClientFactory clientFactory, CogniteClientConfig config)
+        public CDFPusher(IHttpClientFactory clientFactory, FullConfig config)
         {
-            this.config = config;
+            this.config = config.CogniteConfig;
             this.clientFactory = clientFactory;
-            rootAsset = config.RootAssetId;
+            bulkConfig = config.BulkSizes;
+            rootAsset = config.CogniteConfig.RootAssetId;
         }
 
         private static readonly Counter dataPointsCounter = Metrics
@@ -219,14 +221,13 @@ namespace Cognite.OpcUa
                 try
                 {
                     {
-                        int per = 1000;
                         int remaining = assetList.Count;
                         IEnumerable<BufferedNode> tempAssetList = assetList;
                         while (remaining > 0)
                         {
-                            await EnsureAssets(tempAssetList.Take(Math.Min(remaining, per)), client);
-                            tempAssetList = tempAssetList.Skip(Math.Min(remaining, per));
-                            remaining -= per;
+                            await EnsureAssets(tempAssetList.Take(Math.Min(remaining, bulkConfig.CDFAssets)), client);
+                            tempAssetList = tempAssetList.Skip(Math.Min(remaining, bulkConfig.CDFAssets));
+                            remaining -= bulkConfig.CDFAssets;
                         }
                         trackedAssets.Inc(assetList.Count);
 
@@ -241,26 +242,24 @@ namespace Cognite.OpcUa
                     // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
                     // fetching the timeseries itself
                     {
-                        int per = 1000;
                         int remaining = tsList.Count;
                         IEnumerable<BufferedVariable> tempTsList = tsList;
                         while (remaining > 0)
                         {
-                            await EnsureTimeseries(tempTsList.Take(Math.Min(remaining, per)), client);
-                            tempTsList = tempTsList.Skip(Math.Min(remaining, per));
-                            remaining -= per;
+                            await EnsureTimeseries(tempTsList.Take(Math.Min(remaining, bulkConfig.CDFTimeseries)), client);
+                            tempTsList = tempTsList.Skip(Math.Min(remaining, bulkConfig.CDFTimeseries));
+                            remaining -= bulkConfig.CDFTimeseries;
                         }
                         trackedTimeseres.Inc(tsList.Count);
                     }
                     {
-                        int per = 100;
                         int remaining = histTsList.Count;
                         IEnumerable<BufferedVariable> tempHistTsList = histTsList;
                         while (remaining > 0)
                         {
-                            await EnsureHistorizingTimeseries(tempHistTsList.Take(Math.Min(remaining, per)), client);
-                            tempHistTsList = tempHistTsList.Skip(Math.Min(remaining, per));
-                            remaining -= per;
+                            await EnsureHistorizingTimeseries(tempHistTsList.Take(Math.Min(remaining, bulkConfig.CDFTimeseries)), client);
+                            tempHistTsList = tempHistTsList.Skip(Math.Min(remaining, bulkConfig.CDFTimeseries));
+                            remaining -= bulkConfig.CDFTimeseries;
                         }
                         trackedTimeseres.Inc(histTsList.Count);
                     }

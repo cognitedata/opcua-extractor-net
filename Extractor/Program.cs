@@ -37,7 +37,7 @@ namespace Cognite.OpcUa
             Configure(services);
             var provider = services.BuildServiceProvider();
 
-            CDFPusher pusher = new CDFPusher(provider.GetRequiredService<IHttpClientFactory>(), fullConfig.CogniteConfig);
+            CDFPusher pusher = new CDFPusher(provider.GetRequiredService<IHttpClientFactory>(), fullConfig);
             UAClient client = new UAClient(fullConfig);
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             try
@@ -136,7 +136,6 @@ namespace Cognite.OpcUa
     {
         public string EndpointURL { get; set; }
         public bool Autoaccept { get; set; } = false;
-        public uint MaxResults { get; set; } = 100;
         public int PollingInterval { get; set; } = 500;
         public string GlobalPrefix { get; set; }
         public string Username { get; set; }
@@ -163,6 +162,7 @@ namespace Cognite.OpcUa
         public CogniteClientConfig CogniteConfig { get; set; }
         public LoggerConfig LoggerConfig { get; set; }
         public MetricsConfig MetricsConfig { get; set; }
+        public BulkSizes BulkSizes { get; set; }
     }
     public class LoggerConfig
     {
@@ -187,5 +187,13 @@ namespace Cognite.OpcUa
         {
             return client.ToNodeId(NodeId, NamespaceUri);
         }
+    }
+    public class BulkSizes
+    {
+        public int CDFAssets { get; set; }
+        public int CDFTimeseries { get; set; }
+        public int UABrowse { get; set; }
+        public int UAHistoryRead { get; set; }
+        public int UAAttributes { get; set; }
     }
 }
