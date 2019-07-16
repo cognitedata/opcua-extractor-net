@@ -344,6 +344,7 @@ namespace Cognite.OpcUa
                             if (!visitedNodes.Add(ToNodeId(rd.NodeId))) continue;
                         }
                         callback(rd, parentId);
+                        if (rd.NodeClass == NodeClass.Variable) continue;
                         nextIds.Add(ToNodeId(rd.NodeId));
                     }
                 }

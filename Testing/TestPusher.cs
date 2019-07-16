@@ -39,6 +39,7 @@ namespace Testing
                 dataPointList.Add(buffer);
             }
             Logger.LogInfo("Got " + count + " datapoints");
+            dpTest?.Invoke(dataPointList);
         }
         public async Task PushDataPoints(ConcurrentQueue<BufferedDataPoint> dataPointQueue)
         {
