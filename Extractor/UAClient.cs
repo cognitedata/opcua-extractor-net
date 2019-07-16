@@ -459,11 +459,11 @@ namespace Cognite.OpcUa
                         DisplayName = "Value: " + node.DisplayName
                     };
                     monitor.Notification += subscriptionHandler;
-                    Logger.LogInfo("Add subscription to " + node.DisplayName);
                     subscription.AddItem(monitor);
                     count++;
                 }
             }
+            Logger.LogInfo("Add " + count + " subscriptions");
             lock (subscriptionLock)
             {
                 IncOperations();
@@ -818,7 +818,14 @@ namespace Cognite.OpcUa
             {
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
-            return config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
+            string extId = config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
+            // ExternalId is limited to 
+            extId = extId.Trim();
+            if (extId.Length > 128)
+            {
+                return extId.Substring(0, 128);
+            }
+            return extId;
         }
 
         public bool IsNumericType(uint dataType)

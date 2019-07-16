@@ -124,7 +124,6 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    Logger.LogInfo("Succesfully pushed");
                     if (config.BufferOnFailure && !Utils.BufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
                     {
                         Utils.ReadBufferFromFile(dataPointQueue, config, nodeIsHistorizing);
