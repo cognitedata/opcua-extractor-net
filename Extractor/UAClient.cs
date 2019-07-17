@@ -375,7 +375,7 @@ namespace Cognite.OpcUa
         /// <param name="toRead">Variables to read for</param>
         /// <param name="callback">Callback, takes a <see cref="HistoryReadResultCollection"/>,
         /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
-        public void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
+        private void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
             Action<HistoryData, bool, NodeId> callback)
         {
             DateTime lowest = toRead.Select((bvar) => bvar.LatestTimestamp).Min();
@@ -383,7 +383,7 @@ namespace Cognite.OpcUa
             {
                 StartTime = lowest,
                 EndTime = DateTime.Now.AddDays(1),
-                NumValuesPerNode = (uint)Math.Max(0, bulkConfig.UAHistoryRead)
+                NumValuesPerNode = (uint)bulkConfig.UAHistoryReadPoints
             };
             int opCnt = 0;
             int ptCnt = 0;
@@ -487,7 +487,15 @@ namespace Cognite.OpcUa
             if (!groupedVariables.Any()) return;
             foreach (var nodes in groupedVariables.Values)
             {
-                Task.Run(() => DoHistoryRead(nodes, callback));
+                int remaining = nodes.Count;
+                IEnumerable<BufferedVariable> tempNodes = nodes;
+                while (remaining > 0)
+                {
+                    int toTake = Math.Min(bulkConfig.UAHistoryReadNodes, remaining);
+                    Task.Run(() => DoHistoryRead(tempNodes.Take(toTake), callback));
+                    remaining -= toTake;
+                    tempNodes = tempNodes.Skip(toTake);
+                }
             }
         }
         /// <summary>

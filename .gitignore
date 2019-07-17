@@ -12,6 +12,7 @@ bin/
 certificates/
 Logs/
 *.sql
+*.sql-journal
 
 # Config
 config.yml
