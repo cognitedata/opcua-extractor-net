@@ -14,7 +14,7 @@ namespace Cognite.OpcUa
         private static readonly int MaxFormattedExceptionLength = 100_000;
         private static readonly object StartedMutex = new object();
 
-        private static readonly BlockingCollection<LogLine> LogLines = new BlockingCollection<LogLine>();
+        private static BlockingCollection<LogLine> LogLines = new BlockingCollection<LogLine>();
         private static Task backgroundTask;
         private static string logFolder;
         private static bool started;
@@ -45,7 +45,10 @@ namespace Cognite.OpcUa
 
 			logData = options.LogData;
             logNodes = options.LogNodes;
-
+            if (LogLines.IsAddingCompleted)
+            {
+                LogLines = new BlockingCollection<LogLine>();
+            }
             backgroundTask = LogInBackground();
         }
 
@@ -53,6 +56,7 @@ namespace Cognite.OpcUa
         {
             LogLines.CompleteAdding();
             backgroundTask.Wait();
+            started = false;
         }
 
         private static async Task LogInBackground()

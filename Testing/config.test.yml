@@ -11,9 +11,9 @@ client:
   # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
   GlobalPrefix: gp
   # OPC-UA username, leave blank for anonymous user. (no authentication)
-  Username:
+  Username: "username"
   # OPC-UA password
-  Password:
+  Password: "password"
   # Use secured connection
   Secure: false
   # Specify prefix on DisplayName to ignore, leave empty for none
@@ -24,14 +24,14 @@ nsmaps:
   # Ex: "urn:cognite:net:server": cns
   # Saves space compared to using the full URL. Using the ns index is not safe
   # If not specified, the full URI is used instead.
-  # "urn:freeopcua:python:server": fps
-  # "http://examples.freeopcua.github.io": efg
+  "urn:freeopcua:python:server": fps
+  "http://examples.freeopcua.github.io": efg
 
 cognite:
   # The project to connect to in the API
-  Project:
+  Project: test
   # Cognite api key
-  ApiKey:
+  ApiKey: test
   # The root asset must exist, and will be mapped to the root node in opcua, no changes will be made to the root asset
   # Root assetid to map to root OPC-UA node
   RootAssetId: 0
@@ -46,7 +46,7 @@ cognite:
   # Debug mode, if true, Extractor will not push to target
   Debug: false
   # Buffer non-historizing datapoints when the connection to CDF fails.
-  BufferOnFailure: false
+  BufferOnFailure: true
   # Buffer file path
   BufferFile: buffer.bin
 
@@ -54,7 +54,7 @@ logging:
   # Folder for logging output. Leave blank for console only
   LogFolder:
   # Whether or not to log mapped nodes. true/false
-  LogNodes: false
+  LogNodes: true
   # Whether or not to log all data output. For debugging only. true/false
   LogData: false
 

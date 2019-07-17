@@ -42,6 +42,8 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_history_reads", "Number of historyread operations performed");
         private static readonly Counter numBrowse = Metrics
             .CreateCounter("opcua_browse_operations", "Number of browse operations performed");
+        private static readonly Gauge depth = Metrics
+            .CreateGauge("opcua_tree_depth", "Depth of node tree from rootnode");
 
         /// <summary>
         /// Constructor, does not start the client.
@@ -52,6 +54,7 @@ namespace Cognite.OpcUa
             this.config = config.UAConfig;
             bulkConfig = config.BulkSizes;
             nsmaps = new Dictionary<string, string>();
+            if (config.NSMaps == null) return;
             foreach (var node in config.NSMaps.Children)
             {
                 nsmaps.Add(((YamlScalarNode)node.Key).Value, ((YamlScalarNode)node.Value).Value);
@@ -79,6 +82,7 @@ namespace Cognite.OpcUa
         public void Close()
         {
             session.CloseSession(null, true);
+            connected.Set(0);
         }
         /// <summary>
         /// Load security configuration for the session, then start the server.
@@ -251,7 +255,10 @@ namespace Cognite.OpcUa
                         NodeId = id,
                         ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
                         IncludeSubtypes = true,
-                        NodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object
+                        NodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
+                        BrowseDirection = BrowseDirection.Forward,
+                        ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
+                            | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition
                     });
                 }
                 try
@@ -326,14 +333,18 @@ namespace Cognite.OpcUa
         private void BrowseDirectory(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback)
         {
             var nextIds = roots.ToList();
+            int levelCnt = 0;
+            int nodeCnt = 0;
             do
             {
                 if (clientReconnecting) return;
                 var references = GetNodeChildren(nextIds);
                 nextIds.Clear();
+                levelCnt++;
                 foreach (var rdlist in references)
                 {
                     NodeId parentId = rdlist.Key;
+                    nodeCnt += rdlist.Value.Count;
                     foreach (var rd in rdlist.Value)
                     {
                         if (rd.NodeId == ObjectIds.Server) continue;
@@ -344,10 +355,13 @@ namespace Cognite.OpcUa
                             if (!visitedNodes.Add(ToNodeId(rd.NodeId))) continue;
                         }
                         callback(rd, parentId);
+                        if (rd.NodeClass == NodeClass.Variable) continue;
                         nextIds.Add(ToNodeId(rd.NodeId));
                     }
                 }
             } while (nextIds.Any());
+            Logger.LogInfo("Found " + nodeCnt + " nodes in " + levelCnt + " levels");
+            depth.Set(levelCnt);
         }
         #endregion
 
@@ -382,12 +396,11 @@ namespace Cognite.OpcUa
                         false,
                         new HistoryReadValueIdCollection
                         {
-                        new HistoryReadValueId
-                        {
-                            NodeId = toRead.Id,
-                            ContinuationPoint = results ? [0].ContinuationPoint
-                        },
-
+                            new HistoryReadValueId
+                            {
+                                NodeId = toRead.Id,
+                                ContinuationPoint = results ? [0].ContinuationPoint
+                            },
                         },
                         out results,
                         out _

@@ -2,8 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Sdk;
 using YamlDotNet.RepresentationModel;
@@ -56,7 +54,7 @@ namespace Cognite.OpcUa
         /// <param name="dataPoints">List of points to be buffered</param>
         public static void WriteBufferToFile(IEnumerable<BufferedDataPoint> dataPoints,
             CogniteClientConfig config,
-            IDictionary<string, bool> nodeIsHistorizing)
+            IDictionary<string, bool> nodeIsHistorizing = null)
         {
             lock (fileLock)
             {
@@ -65,7 +63,7 @@ namespace Cognite.OpcUa
                     int count = 0;
                     foreach (var dp in dataPoints)
                     {
-                        if (nodeIsHistorizing[dp.Id]) continue;
+                        if (nodeIsHistorizing?[dp.Id] ?? false) continue;
                         count++;
                         BufferFileEmpty = false;
                         byte[] bytes = dp.ToStorableBytes();
@@ -83,7 +81,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public static void ReadBufferFromFile(ConcurrentQueue<BufferedDataPoint> bufferedDPQueue,
             CogniteClientConfig config,
-            IDictionary<string, bool> nodeIsHistorizing)
+            IDictionary<string, bool> nodeIsHistorizing = null)
         {
             lock (fileLock)
             {
@@ -99,7 +97,7 @@ namespace Cognite.OpcUa
                         int dRead = fs.Read(dataBytes, 0, size);
                         if (dRead < size) break;
                         var buffDp = new BufferedDataPoint(dataBytes);
-                        if (buffDp.Id == null || !nodeIsHistorizing.ContainsKey(buffDp.Id))
+                        if (buffDp.Id == null || (!nodeIsHistorizing?.ContainsKey(buffDp.Id) ?? false))
                         {
                             Logger.LogWarning("Bad datapoint in file");
                             continue;
@@ -124,7 +122,7 @@ namespace Cognite.OpcUa
             try
             {
                 var clientCfg = config.Children[new YamlScalarNode("client")];
-                var nsmaps = (YamlMappingNode)config.Children[new YamlScalarNode("nsmaps")];
+                var nsmaps = config.Children[new YamlScalarNode("nsmaps")] as YamlMappingNode;
                 var cogniteConfig = config.Children[new YamlScalarNode("cognite")];
                 var loggerConfig = config.Children[new YamlScalarNode("logging")];
                 var metricsConfig = config.Children[new YamlScalarNode("metrics")];
@@ -138,6 +136,16 @@ namespace Cognite.OpcUa
                     MetricsConfig = DeserializeNode<MetricsConfig>(metricsConfig),
                     BulkSizes = DeserializeNode<BulkSizes>(bulkSizes)
                 };
+                string envKey = Environment.GetEnvironmentVariable("COGNITE_API_KEY");
+                if (string.IsNullOrWhiteSpace(fullConfig.CogniteConfig.ApiKey) && !string.IsNullOrWhiteSpace(envKey))
+                {
+                    fullConfig.CogniteConfig.ApiKey = envKey;
+                }
+                string envProject = Environment.GetEnvironmentVariable("COGNITE_API_PROJECT");
+                if (string.IsNullOrWhiteSpace(fullConfig.CogniteConfig.Project) && !string.IsNullOrWhiteSpace(envProject))
+                {
+                    fullConfig.CogniteConfig.Project = envProject;
+                }
             }
             catch (Exception e)
             {

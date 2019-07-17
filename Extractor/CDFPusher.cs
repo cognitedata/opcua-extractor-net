@@ -230,7 +230,6 @@ namespace Cognite.OpcUa
                             remaining -= bulkConfig.CDFAssets;
                         }
                         trackedAssets.Inc(assetList.Count);
-
                     }
                     // At this point the assets should all be synchronized and mapped
                     // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.

@@ -11,6 +11,7 @@ namespace Cognite.OpcUa
 {
     class Program
     {
+        static MetricPushServer worker;
         /// <summary>
         /// Load config, start the <see cref="Logger"/>, start the <see cref="Extractor"/> then wait for exit signal
         /// </summary>
@@ -53,7 +54,9 @@ namespace Cognite.OpcUa
             Run(extractor);
             Logger.LogInfo("Interrupted, shutting down extractor...");
             extractor.Close();
+            worker.Stop();
             Logger.Shutdown();
+
 			return 0;
         }
         /// <summary>
@@ -95,7 +98,7 @@ namespace Cognite.OpcUa
                 additionalHeaders.Add("Authorization", "Basic " + encoded);
             }
             var pusher = new MetricPusher(config.URL, config.Job, config.Instance, additionalHeaders);
-            var worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));
+            worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));
             worker.Start();
         }
         private static void Run(Extractor extractor)

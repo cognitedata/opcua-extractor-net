@@ -19,7 +19,16 @@ namespace Testing
         public ISet<string> NotInSync { get; private set; } = new HashSet<string>();
 
         public object NotInSyncLock { get; private set; } = new object();
-        int totalDps;
+        private readonly Dictionary<string, Action<List<BufferedNode>, List<BufferedVariable>, List<BufferedVariable>>> nodeTests;
+        private readonly Action<List<BufferedDataPoint>> dpTest;
+
+        public TestPusher(Dictionary<string, Action<List<BufferedNode>, List<BufferedVariable>, List<BufferedVariable>>> nodeTests,
+            Action<List<BufferedDataPoint>> dpTest)
+        {
+            this.nodeTests = nodeTests;
+            this.dpTest = dpTest;
+        }
+
         private void SyncPushDps(ConcurrentQueue<BufferedDataPoint> dataPointQueue)
         {
             var dataPointList = new List<BufferedDataPoint>();
@@ -30,7 +39,7 @@ namespace Testing
                 dataPointList.Add(buffer);
             }
             Logger.LogInfo("Got " + count + " datapoints");
-            totalDps += count;
+            dpTest?.Invoke(dataPointList);
         }
         public async Task PushDataPoints(ConcurrentQueue<BufferedDataPoint> dataPointQueue)
         {
@@ -95,19 +104,11 @@ namespace Testing
                     }
                 }
             }
-            Assert.Single(assetList);
-            Assert.Single(tsList);
-            Assert.Single(histTsList);
+            nodeTests?.GetValueOrDefault("afterdata")?.Invoke(assetList, tsList, histTsList);
             UAClient.GetNodeProperties(assetList.Concat(tsList).Concat(histTsList));
-            Assert.NotNull(histTsList.First().properties);
-            Assert.Equal(2, histTsList.First().properties.Count);
-            Assert.Equal(2, assetList.First().properties.Count);
+            nodeTests?.GetValueOrDefault("afterProperties")?.Invoke(assetList, tsList, histTsList);
             Extractor.SynchronizeNodes(tsList.Concat(histTsList));
-            Thread.Sleep(2000);
-            Assert.True(totalDps > 0, "Excepted some datapoints");
-            int lastDps = totalDps;
-            Thread.Sleep(2000);
-            Assert.True(totalDps > lastDps, "Expected dps to be increasing");
+            nodeTests?.GetValueOrDefault("afterSynchronize")?.Invoke(assetList, tsList, histTsList);
         }
         public async Task PushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
         {
