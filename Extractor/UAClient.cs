@@ -629,31 +629,20 @@ namespace Cognite.OpcUa
             IncOperations();
             try
             {
-                var enumerator = readValueIds.GetEnumerator();
-                int remaining = readValueIds.Count;
-                int total = remaining;
                 int count = 0;
-                while (remaining > 0)
+                int total = readValueIds.Count;
+                foreach (var nextValues in Utils.ChunkBy(readValueIds, bulkConfig.UAAttributes))
                 {
                     count++;
-                    int toTake = Math.Min(remaining, bulkConfig.UAAttributes);
-                    ReadValueIdCollection nextValues = new ReadValueIdCollection();
-                    for (int i = 0; i < toTake; i++)
-                    {
-                        enumerator.MoveNext();
-                        nextValues.Add(enumerator.Current);
-                    }
                     session.Read(
                         null,
                         0,
                         TimestampsToReturn.Source,
-                        nextValues,
+                        new ReadValueIdCollection(nextValues),
                         out DataValueCollection lvalues,
                         out _
                     );
-                    attributeRequests.Inc(toTake);
                     values = values.Concat(lvalues);
-                    remaining -= toTake;
                 }
                 Logger.LogInfo("Read " + total + " attributes with " + count + " operations");
             }
