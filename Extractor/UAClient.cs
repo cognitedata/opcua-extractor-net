@@ -243,10 +243,10 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(IEnumerable<NodeId> parents, NodeId referenceTypes = null)
         {
-            IncOperations();
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             foreach (var lparents in Utils.ChunkBy(parents, bulkConfig.UABrowse))
             {
+                IncOperations();
                 var tobrowse = new BrowseDescriptionCollection();
                 foreach (var id in lparents)
                 {

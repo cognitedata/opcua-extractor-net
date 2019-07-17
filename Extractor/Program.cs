@@ -54,7 +54,7 @@ namespace Cognite.OpcUa
             Run(extractor);
             Logger.LogInfo("Interrupted, shutting down extractor...");
             extractor.Close();
-            worker.Stop();
+            worker?.Stop();
             Logger.Shutdown();
 
 			return 0;
