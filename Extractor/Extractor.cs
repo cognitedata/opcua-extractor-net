@@ -123,7 +123,7 @@ namespace Cognite.OpcUa
                 Logger.LogError("Failed to cleanly shut down UAClient");
                 Logger.LogException(e);
             }
-            UAClient.WaitForOperations().Wait();
+            UAClient.WaitForOperations().Wait(10000);
             Logger.LogInfo("Extractor closed");
         }
         /// <summary>
