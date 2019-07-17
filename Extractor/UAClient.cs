@@ -373,9 +373,7 @@ namespace Cognite.OpcUa
         private void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
             Action<HistoryData, bool, NodeId> callback)
         {
-            Console.WriteLine("Init read" + toRead.Count());
             DateTime lowest = DateTime.MinValue;
-            Console.WriteLine(toRead.Count());
             try
             {
                 lowest = toRead.Select((bvar) => { return bvar.LatestTimestamp; }).Min();
@@ -418,6 +416,7 @@ namespace Cognite.OpcUa
                         out HistoryReadResultCollection results,
                         out _
                     );
+                    numHistoryReads.Inc();
                     ids.Clear();
                     int prevIndex = 0;
                     int nextIndex = 0;
@@ -910,9 +909,9 @@ namespace Cognite.OpcUa
             string extId = config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
             // ExternalId is limited to 128 characters
             extId = extId.Trim();
-            if (extId.Length > 128)
+            if (extId.Length > 255)
             {
-                return extId.Substring(0, 128);
+                return extId.Substring(0, 255);
             }
             return extId;
         }

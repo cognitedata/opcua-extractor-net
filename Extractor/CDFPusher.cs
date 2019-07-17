@@ -577,10 +577,6 @@ namespace Cognite.OpcUa
         /// <returns>Full asset write poco</returns>
         private AssetWritePoco NodeToAsset(BufferedNode node)
         {
-            if (node.IsVariable)
-            {
-                throw new Exception("ToAsset called on variable");
-            }
             var writePoco = new AssetWritePoco
             {
                 Description = node.Description,
