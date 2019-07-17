@@ -26,6 +26,7 @@ namespace Cognite.OpcUa
         private readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
         private bool clientReconnecting;
         public bool Started { get; private set; }
+        private readonly TimeSpan historyGranularity;
 
         private int pendingOperations;
         private readonly object pendingOpLock = new object();
@@ -59,6 +60,8 @@ namespace Cognite.OpcUa
             {
                 nsmaps.Add(((YamlScalarNode)node.Key).Value, ((YamlScalarNode)node.Value).Value);
             }
+            historyGranularity = config.UAConfig.HistoryGranularity <= 0 ? TimeSpan.Zero
+                : TimeSpan.FromSeconds(config.UAConfig.HistoryGranularity);
         }
         #region Session management
         /// <summary>
@@ -577,7 +580,7 @@ namespace Cognite.OpcUa
                 }
                 numSubscriptions.Set(subscription.MonitoredItemCount);
             }
-            DoHistoryRead(toSynch, callback, TimeSpan.FromMinutes(15));
+            DoHistoryRead(toSynch, callback, historyGranularity);
         }
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 

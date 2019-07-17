@@ -145,6 +145,7 @@ namespace Cognite.OpcUa
         public string Password { get; set; }
         public bool Secure { get; set; }
         public string IgnorePrefix { get; set; }
+        public int HistoryGranularity { get; set; }
 
     }
     public class CogniteClientConfig

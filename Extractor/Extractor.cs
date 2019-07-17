@@ -97,14 +97,12 @@ namespace Cognite.OpcUa
             return true;
         }
         /// <summary>
-        /// Restarts the extractor, to some extent, clears known asset ids, allows data to be pushed to CDF, and begins mapping the opcua
+        /// Restarts the extractor, to some extent, clears known asset ids,
+        /// allows data to be pushed to CDF, and begins mapping the opcua
         /// directory again
         /// </summary>
         public void RestartExtractor()
         {
-            // In theory, a disconnect might be a server restart, which can cause namespaces to change.
-            // This invalidates our stored mapping, so we need to redo everything, remap structure, read history,
-            // synchronize history
             UAClient.WaitForOperations().Wait();
             buffersEmpty = false;
             MapUAToCDF();
@@ -227,7 +225,6 @@ namespace Cognite.OpcUa
                     return;
                 }
                 Logger.LogData(buffDp);
-                // Logger.LogData(new BufferedDataPoint(buffDp.ToStorableBytes().Skip(sizeof(ushort)).ToArray()));
 
                 if (debug) return;
                 bufferedDPQueue.Enqueue(buffDp);

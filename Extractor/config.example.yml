@@ -18,6 +18,9 @@ client:
   Secure: false
   # Specify prefix on DisplayName to ignore, leave empty for none
   IgnorePrefix:
+  # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
+  # be read together. Should not be smaller than usual average update rate
+  HistoryGranularity: 900
 
 nsmaps:
   # Map OPC-UA namespaces to prefixes in CDF. 
