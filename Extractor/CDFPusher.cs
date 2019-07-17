@@ -220,17 +220,11 @@ namespace Cognite.OpcUa
                     .SetProject(config.Project);
                 try
                 {
+                    foreach (var assets in Utils.ChunkBy(assetList, bulkConfig.CDFAssets))
                     {
-                        int remaining = assetList.Count;
-                        IEnumerable<BufferedNode> tempAssetList = assetList;
-                        while (remaining > 0)
-                        {
-                            await EnsureAssets(tempAssetList.Take(Math.Min(remaining, bulkConfig.CDFAssets)), client);
-                            tempAssetList = tempAssetList.Skip(Math.Min(remaining, bulkConfig.CDFAssets));
-                            remaining -= bulkConfig.CDFAssets;
-                        }
-                        trackedAssets.Inc(assetList.Count);
+                        await EnsureAssets(assets, client);
                     }
+                    trackedAssets.Inc(assetList.Count);
                     // At this point the assets should all be synchronized and mapped
                     // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
                     // This also sets the LastTimestamp property of each BufferedVariable
@@ -240,28 +234,17 @@ namespace Cognite.OpcUa
                     // node to assets map.
                     // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
                     // fetching the timeseries itself
+                    foreach (var timeseries in Utils.ChunkBy(tsList, bulkConfig.CDFTimeseries))
                     {
-                        int remaining = tsList.Count;
-                        IEnumerable<BufferedVariable> tempTsList = tsList;
-                        while (remaining > 0)
-                        {
-                            await EnsureTimeseries(tempTsList.Take(Math.Min(remaining, bulkConfig.CDFTimeseries)), client);
-                            tempTsList = tempTsList.Skip(Math.Min(remaining, bulkConfig.CDFTimeseries));
-                            remaining -= bulkConfig.CDFTimeseries;
-                        }
-                        trackedTimeseres.Inc(tsList.Count);
+                        await EnsureTimeseries(timeseries, client);
                     }
+                    trackedTimeseres.Inc(tsList.Count);
+
+                    foreach (var timeseries in Utils.ChunkBy(histTsList, bulkConfig.CDFTimeseries))
                     {
-                        int remaining = histTsList.Count;
-                        IEnumerable<BufferedVariable> tempHistTsList = histTsList;
-                        while (remaining > 0)
-                        {
-                            await EnsureHistorizingTimeseries(tempHistTsList.Take(Math.Min(remaining, bulkConfig.CDFTimeseries)), client);
-                            tempHistTsList = tempHistTsList.Skip(Math.Min(remaining, bulkConfig.CDFTimeseries));
-                            remaining -= bulkConfig.CDFTimeseries;
-                        }
-                        trackedTimeseres.Inc(histTsList.Count);
+                        await EnsureHistorizingTimeseries(timeseries, client);
                     }
+                    trackedTimeseres.Inc(histTsList.Count);
                 }
                 catch (Exception e)
                 {

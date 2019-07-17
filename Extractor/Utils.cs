@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Cognite.Sdk;
 using YamlDotNet.RepresentationModel;
@@ -198,6 +199,13 @@ namespace Cognite.OpcUa
                     throw e;
                 }
             }
+        }
+        public static IEnumerable<IEnumerable<T>> ChunkBy<T>(IEnumerable<T> input, int maxSize)
+        {
+            return input
+                .Select((x, i) => new { Index = i, Value = x })
+                .GroupBy(x => x.Index / maxSize)
+                .Select(x => x.Select(v => v.Value));
         }
     }
 }

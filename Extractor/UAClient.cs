@@ -245,13 +245,10 @@ namespace Cognite.OpcUa
         {
             IncOperations();
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            int remaining = parents.Count();
-            var lparents = parents;
-            while (remaining > 0)
+            foreach (var lparents in Utils.ChunkBy(parents, bulkConfig.UABrowse))
             {
-                int toTake = Math.Min(remaining, bulkConfig.UABrowse);
                 var tobrowse = new BrowseDescriptionCollection();
-                foreach (var id in lparents.Take(toTake))
+                foreach (var id in lparents)
                 {
                     tobrowse.Add(new BrowseDescription
                     {
@@ -274,7 +271,7 @@ namespace Cognite.OpcUa
                         out BrowseResultCollection results,
                         out _
                     );
-                    var indexMap = new NodeId[toTake];
+                    var indexMap = new NodeId[lparents.Count()];
                     var continuationPoints = new ByteStringCollection();
                     int index = 0;
                     int bindex = 0;
@@ -314,8 +311,6 @@ namespace Cognite.OpcUa
 
                         numBrowse.Inc();
                     }
-                    remaining -= toTake;
-                    lparents = lparents.Skip(toTake);
                 }
                 catch (Exception e)
                 {
@@ -378,7 +373,17 @@ namespace Cognite.OpcUa
         private void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
             Action<HistoryData, bool, NodeId> callback)
         {
-            DateTime lowest = toRead.Select((bvar) => bvar.LatestTimestamp).Min();
+            Console.WriteLine("Init read" + toRead.Count());
+            DateTime lowest = DateTime.MinValue;
+            Console.WriteLine(toRead.Count());
+            try
+            {
+                lowest = toRead.Select((bvar) => { return bvar.LatestTimestamp; }).Min();
+            }
+            catch (Exception e)
+            {
+                Logger.LogException(e);
+            }
             var details = new ReadRawModifiedDetails
             {
                 StartTime = lowest,
@@ -389,7 +394,7 @@ namespace Cognite.OpcUa
             int ptCnt = 0;
             IncOperations();
             var ids = new HistoryReadValueIdCollection();
-            var indexMap = new Dictionary<int, NodeId>();
+            var indexMap = new NodeId[toRead.Count()];
             int index = 0;
             foreach (var node in toRead)
             {
@@ -397,7 +402,7 @@ namespace Cognite.OpcUa
                 {
                     NodeId = node.Id,
                 });
-                indexMap.Add(index, node.Id);
+                indexMap[index] = node.Id;
                 index++;
             }
             try
@@ -421,7 +426,7 @@ namespace Cognite.OpcUa
                     {
                         var hdata = ExtensionObject.ToEncodeable(data.HistoryData) as HistoryData;
                         ptCnt += hdata?.DataValues?.Count ?? 0;
-                        callback(hdata, data.ContinuationPoint == null, indexMap[prevIndex]);
+                        callback(hdata, data == null || hdata == null || data.ContinuationPoint == null, indexMap[prevIndex]);
                         if (data.ContinuationPoint != null)
                         {
                             ids.Add(new HistoryReadValueId
@@ -487,14 +492,9 @@ namespace Cognite.OpcUa
             if (!groupedVariables.Any()) return;
             foreach (var nodes in groupedVariables.Values)
             {
-                int remaining = nodes.Count;
-                IEnumerable<BufferedVariable> tempNodes = nodes;
-                while (remaining > 0)
+                foreach (var nextNodes in Utils.ChunkBy(nodes, bulkConfig.UAHistoryReadNodes))
                 {
-                    int toTake = Math.Min(bulkConfig.UAHistoryReadNodes, remaining);
-                    Task.Run(() => DoHistoryRead(tempNodes.Take(toTake), callback));
-                    remaining -= toTake;
-                    tempNodes = tempNodes.Skip(toTake);
+                    Task.Run(() => DoHistoryRead(nextNodes, callback));
                 }
             }
         }

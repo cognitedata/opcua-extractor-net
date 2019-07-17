@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -74,6 +75,7 @@ namespace Testing
             FullConfig fullConfig = Utils.GetConfig("config.test.yml");
             if (fullConfig == null) return;
             Logger.Startup(fullConfig.LoggerConfig);
+            File.Create(fullConfig.CogniteConfig.BufferFile).Close();
             int dpRuns = 0;
             int totalStored = 0;
             var quitEvent = new ManualResetEvent(false);
@@ -104,7 +106,7 @@ namespace Testing
             }
             extractor.MapUAToCDF();
             Assert.True(quitEvent.WaitOne(20000), "Timeout");
-            Assert.Equal(0, new System.IO.FileInfo(fullConfig.CogniteConfig.BufferFile).Length);
+            Assert.Equal(0, new FileInfo(fullConfig.CogniteConfig.BufferFile).Length);
             extractor.Close();
             Logger.Shutdown();
         }
