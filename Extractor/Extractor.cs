@@ -239,7 +239,7 @@ namespace Cognite.OpcUa
         /// <param name="data">Collection of data to be handled</param>
         /// <param name="final">True if this is the final call for this node, and the lock may be removed</param>
         /// <param name="nodeid">Id of the node in question</param>
-        private void HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
+        private void HistoryDataHandler(HistoryData data, bool final, NodeId nodeid)
         {
             string uniqueId = UAClient.GetUniqueId(nodeid);
             if (final)
@@ -250,10 +250,10 @@ namespace Cognite.OpcUa
                     buffersEmpty = pusher.NotInSync.Count == 0;
                 }
             }
-            if (data == null) return;
+            if (data == null || data.DataValues == null) return;
 
-            if (!(ExtensionObject.ToEncodeable(data[0].HistoryData) is HistoryData hdata) || hdata.DataValues == null) return;
-            foreach (var datapoint in hdata.DataValues)
+            if (data.DataValues == null) return;
+            foreach (var datapoint in data.DataValues)
             {
                 var buffDp = new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(Epoch).TotalMilliseconds,

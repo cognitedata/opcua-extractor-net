@@ -26,7 +26,7 @@ namespace Testing
                 {
                     Assert.Single(assetList);
                     Assert.Single(tsList);
-                    Assert.Single(histTsList);
+                    Assert.Equal(2, histTsList.Count);
                 } },
                 { "afterProperties", (assetList, tsList, histTsList) =>
                 {

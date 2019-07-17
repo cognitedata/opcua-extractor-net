@@ -1,4 +1,4 @@
-import math
+﻿import math
 import sys
 import time
 
@@ -28,6 +28,9 @@ if __name__ == "__main__":
     myvar = myobj.add_variable(idx, "MyVariable", ua.Variant(0, ua.VariantType.Double))
     myvar.set_writable()  # Set MyVariable to be writable by clients
 
+    myvar2 = myobj.add_variable(idx, "MyVariable 2", ua.Variant(0, ua.VariantType.Double))
+    myvar.set_writable()  # Set MyVariable to be writable by clients
+
     mystring = myobj.add_variable(idx, "MyString", ua.Variant(None, ua.VariantType.String))
     mystring.set_writable()  # Set to be writable by clients
 
@@ -46,6 +49,7 @@ if __name__ == "__main__":
 
     # enable data change history for this particular node, must be called after start since it uses subscription
     server.historize_node_data_change(myvar, count=10000)
+    server.historize_node_data_change(myvar2, count=10000)
     # server.historize_node_data_change(mybool, count=1000)
 
     try:
@@ -56,6 +60,7 @@ if __name__ == "__main__":
             count += 0.1
             bcount += 1
             myvar.set_value(math.sin(count))
+            myvar2.set_value(math.cos(count))
             if (bcount % 10 == 0):
                 mybool.set_value(not mybool.get_value())
                 
