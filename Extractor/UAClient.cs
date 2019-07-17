@@ -26,6 +26,7 @@ namespace Cognite.OpcUa
         private readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
         private bool clientReconnecting;
         public bool Started { get; private set; }
+        private readonly TimeSpan historyGranularity;
 
         private int pendingOperations;
         private readonly object pendingOpLock = new object();
@@ -59,6 +60,8 @@ namespace Cognite.OpcUa
             {
                 nsmaps.Add(((YamlScalarNode)node.Key).Value, ((YamlScalarNode)node.Value).Value);
             }
+            historyGranularity = config.UAConfig.HistoryGranularity <= 0 ? TimeSpan.Zero
+                : TimeSpan.FromSeconds(config.UAConfig.HistoryGranularity);
         }
         #region Session management
         /// <summary>
@@ -242,13 +245,10 @@ namespace Cognite.OpcUa
         {
             IncOperations();
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            int remaining = parents.Count();
-            var lparents = parents;
-            while (remaining > 0)
+            foreach (var lparents in Utils.ChunkBy(parents, bulkConfig.UABrowse))
             {
-                int toTake = Math.Min(remaining, bulkConfig.UABrowse);
                 var tobrowse = new BrowseDescriptionCollection();
-                foreach (var id in lparents.Take(toTake))
+                foreach (var id in lparents)
                 {
                     tobrowse.Add(new BrowseDescription
                     {
@@ -271,7 +271,7 @@ namespace Cognite.OpcUa
                         out BrowseResultCollection results,
                         out _
                     );
-                    var indexMap = new NodeId[toTake];
+                    var indexMap = new NodeId[lparents.Count()];
                     var continuationPoints = new ByteStringCollection();
                     int index = 0;
                     int bindex = 0;
@@ -311,8 +311,6 @@ namespace Cognite.OpcUa
 
                         numBrowse.Inc();
                     }
-                    remaining -= toTake;
-                    lparents = lparents.Skip(toTake);
                 }
                 catch (Exception e)
                 {
@@ -367,24 +365,46 @@ namespace Cognite.OpcUa
 
         #region Get data
         /// <summary>
-        /// Read historydata for the requested node and call the callback after each call to HistoryRead
+        /// Read historydata for the requested nodes and call the callback after each call to HistoryRead
         /// </summary>
-        /// <param name="toRead">Variable to read for</param>
+        /// <param name="toRead">Variables to read for</param>
         /// <param name="callback">Callback, takes a <see cref="HistoryReadResultCollection"/>,
         /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
-        public void DoHistoryRead(BufferedVariable toRead,
-            Action<HistoryReadResultCollection, bool, NodeId> callback)
+        private void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
+            Action<HistoryData, bool, NodeId> callback)
         {
+            Console.WriteLine("Init read" + toRead.Count());
+            DateTime lowest = DateTime.MinValue;
+            Console.WriteLine(toRead.Count());
+            try
+            {
+                lowest = toRead.Select((bvar) => { return bvar.LatestTimestamp; }).Min();
+            }
+            catch (Exception e)
+            {
+                Logger.LogException(e);
+            }
             var details = new ReadRawModifiedDetails
             {
-                StartTime = toRead.LatestTimestamp,
+                StartTime = lowest,
                 EndTime = DateTime.Now.AddDays(1),
-                NumValuesPerNode = (uint)Math.Max(0, bulkConfig.UAHistoryRead)
+                NumValuesPerNode = (uint)bulkConfig.UAHistoryReadPoints
             };
-            HistoryReadResultCollection results = null;
             int opCnt = 0;
             int ptCnt = 0;
             IncOperations();
+            var ids = new HistoryReadValueIdCollection();
+            var indexMap = new NodeId[toRead.Count()];
+            int index = 0;
+            foreach (var node in toRead)
+            {
+                ids.Add(new HistoryReadValueId
+                {
+                    NodeId = node.Id,
+                });
+                indexMap[index] = node.Id;
+                index++;
+            }
             try
             {
                 do
@@ -392,24 +412,34 @@ namespace Cognite.OpcUa
                     session.HistoryRead(
                         null,
                         new ExtensionObject(details),
-                        TimestampsToReturn.Neither,
+                        TimestampsToReturn.Source,
                         false,
-                        new HistoryReadValueIdCollection
-                        {
-                            new HistoryReadValueId
-                            {
-                                NodeId = toRead.Id,
-                                ContinuationPoint = results ? [0].ContinuationPoint
-                            },
-                        },
-                        out results,
+                        ids,
+                        out HistoryReadResultCollection results,
                         out _
                     );
-                    numHistoryReads.Inc();
-                    callback(results, results[0].ContinuationPoint == null, toRead.Id);
-                    ptCnt += (int)(ExtensionObject.ToEncodeable(results[0].HistoryData) as HistoryData)?.DataValues.Count;
+                    ids.Clear();
+                    int prevIndex = 0;
+                    int nextIndex = 0;
                     opCnt++;
-                } while (results != null && results[0].ContinuationPoint != null);
+                    foreach (var data in results)
+                    {
+                        var hdata = ExtensionObject.ToEncodeable(data.HistoryData) as HistoryData;
+                        ptCnt += hdata?.DataValues?.Count ?? 0;
+                        callback(hdata, data == null || hdata == null || data.ContinuationPoint == null, indexMap[prevIndex]);
+                        if (data.ContinuationPoint != null)
+                        {
+                            ids.Add(new HistoryReadValueId
+                            {
+                                NodeId = indexMap[prevIndex],
+                                ContinuationPoint = data.ContinuationPoint
+                            });
+                            indexMap[nextIndex] = indexMap[prevIndex];
+                            nextIndex++;
+                        }
+                        prevIndex++;
+                    }
+                } while (ids.Any());
             }
             catch (Exception e)
             {
@@ -418,7 +448,54 @@ namespace Cognite.OpcUa
             finally
             {
                 DecOperations();
-                Logger.LogInfo("Fetched " + ptCnt + " historical datapoints with " + opCnt + " operations for node " + toRead.Id);
+                Logger.LogInfo("Fetched " + ptCnt + " historical datapoints with " + opCnt + " operations for " + index + " nodes");
+            }
+        }
+        public void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
+            Action<HistoryData, bool, NodeId> callback,
+            TimeSpan granularity)
+        {
+            if (granularity == TimeSpan.Zero)
+            {
+                foreach (var variable in toRead)
+                {
+                    if (variable.Historizing)
+                    {
+                        Task.Run(() => DoHistoryRead(new List<BufferedVariable> { variable }, callback));
+                    }
+                    else
+                    {
+                        callback(null, true, variable.Id);
+                    }
+                }
+                return;
+            }
+            int cnt = 0;
+            var groupedVariables = new Dictionary<long, IList<BufferedVariable>>();
+            foreach (var variable in toRead)
+            {
+                if (variable.Historizing)
+                {
+                    cnt++;
+                    long group = variable.LatestTimestamp.Ticks / granularity.Ticks;
+                    if (!groupedVariables.ContainsKey(group))
+                    {
+                        groupedVariables[group] = new List<BufferedVariable>();
+                    }
+                    groupedVariables[group].Add(variable);
+                }
+                else
+                {
+                    callback(null, true, variable.Id);
+                }
+            }
+            if (!groupedVariables.Any()) return;
+            foreach (var nodes in groupedVariables.Values)
+            {
+                foreach (var nextNodes in Utils.ChunkBy(nodes, bulkConfig.UAHistoryReadNodes))
+                {
+                    Task.Run(() => DoHistoryRead(nextNodes, callback));
+                }
             }
         }
         /// <summary>
@@ -430,7 +507,7 @@ namespace Cognite.OpcUa
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
         public void SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
-            Action<HistoryReadResultCollection, bool, NodeId> callback,
+            Action<HistoryData, bool, NodeId> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler)
         {
             int count = 0;
@@ -511,17 +588,7 @@ namespace Cognite.OpcUa
                 }
                 numSubscriptions.Set(subscription.MonitoredItemCount);
             }
-            foreach (BufferedVariable node in toSynch)
-            {
-                if (node.Historizing)
-                {
-                    Task.Run(() => DoHistoryRead(node, callback));
-                }
-                else
-                {
-                    callback(null, true, node.Id);
-                }
-            }
+            DoHistoryRead(toSynch, callback, historyGranularity);
         }
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 

@@ -145,6 +145,7 @@ namespace Cognite.OpcUa
         public string Password { get; set; }
         public bool Secure { get; set; }
         public string IgnorePrefix { get; set; }
+        public int HistoryGranularity { get; set; }
 
     }
     public class CogniteClientConfig
@@ -196,7 +197,10 @@ namespace Cognite.OpcUa
         public int CDFAssets { get; set; }
         public int CDFTimeseries { get; set; }
         public int UABrowse { get; set; }
-        public int UAHistoryRead { get; set; }
+        private int _uaHistoryReadPoints;
+        public int UAHistoryReadPoints { get { return _uaHistoryReadPoints; } set { _uaHistoryReadPoints = Math.Max(0, value); } }
+        private int _uaHistoryReadNodes;
+        public int UAHistoryReadNodes { get { return _uaHistoryReadNodes; } set { _uaHistoryReadNodes = Math.Max(1, value); } }
         public int UAAttributes { get; set; }
     }
 }

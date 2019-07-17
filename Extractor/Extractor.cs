@@ -97,14 +97,12 @@ namespace Cognite.OpcUa
             return true;
         }
         /// <summary>
-        /// Restarts the extractor, to some extent, clears known asset ids, allows data to be pushed to CDF, and begins mapping the opcua
+        /// Restarts the extractor, to some extent, clears known asset ids,
+        /// allows data to be pushed to CDF, and begins mapping the opcua
         /// directory again
         /// </summary>
         public void RestartExtractor()
         {
-            // In theory, a disconnect might be a server restart, which can cause namespaces to change.
-            // This invalidates our stored mapping, so we need to redo everything, remap structure, read history,
-            // synchronize history
             UAClient.WaitForOperations().Wait();
             buffersEmpty = false;
             MapUAToCDF();
@@ -227,7 +225,6 @@ namespace Cognite.OpcUa
                     return;
                 }
                 Logger.LogData(buffDp);
-                // Logger.LogData(new BufferedDataPoint(buffDp.ToStorableBytes().Skip(sizeof(ushort)).ToArray()));
 
                 if (debug) return;
                 bufferedDPQueue.Enqueue(buffDp);
@@ -239,7 +236,7 @@ namespace Cognite.OpcUa
         /// <param name="data">Collection of data to be handled</param>
         /// <param name="final">True if this is the final call for this node, and the lock may be removed</param>
         /// <param name="nodeid">Id of the node in question</param>
-        private void HistoryDataHandler(HistoryReadResultCollection data, bool final, NodeId nodeid)
+        private void HistoryDataHandler(HistoryData data, bool final, NodeId nodeid)
         {
             string uniqueId = UAClient.GetUniqueId(nodeid);
             if (final)
@@ -250,10 +247,10 @@ namespace Cognite.OpcUa
                     buffersEmpty = pusher.NotInSync.Count == 0;
                 }
             }
-            if (data == null) return;
+            if (data == null || data.DataValues == null) return;
 
-            if (!(ExtensionObject.ToEncodeable(data[0].HistoryData) is HistoryData hdata) || hdata.DataValues == null) return;
-            foreach (var datapoint in hdata.DataValues)
+            if (data.DataValues == null) return;
+            foreach (var datapoint in data.DataValues)
             {
                 var buffDp = new BufferedDataPoint(
                     (long)datapoint.SourceTimestamp.Subtract(Epoch).TotalMilliseconds,

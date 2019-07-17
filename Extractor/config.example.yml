@@ -18,6 +18,10 @@ client:
   Secure: false
   # Specify prefix on DisplayName to ignore, leave empty for none
   IgnorePrefix:
+  # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
+  # be read together. Should not be smaller than usual average update rate
+  # Leave at 0 to always read a single node each time.
+  HistoryGranularity: 900
 
 nsmaps:
   # Map OPC-UA namespaces to prefixes in CDF. 
@@ -79,5 +83,7 @@ bulksizes:
   CDFTimeseries: 1000
   UABrowse: 1000
   # Number of datapoints per request, 0 for server specified
-  UAHistoryRead: 1000
+  UAHistoryReadPoints: 1000
+  # Max number of simultaneous nodes
+  UAHistoryReadNodes: 100
   UAAttributes: 1000
