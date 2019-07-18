@@ -102,37 +102,38 @@ namespace Cognite.OpcUa
         }
         private static void Run(Extractor extractor)
         {
-            var quitEvent = new ManualResetEvent(false);
-            Console.CancelKeyPress += (sender, eArgs) =>
+            using (var quitEvent = new ManualResetEvent(false))
             {
-                quitEvent.Set();
-                eArgs.Cancel = true;
-            };
-            Console.WriteLine("Press ^C to exit");
-            while (true)
-			{
-                bool failed = false;
-                if (extractor.Start())
+                Console.CancelKeyPress += (sender, eArgs) =>
                 {
-                    try
+                    quitEvent.Set();
+                    eArgs.Cancel = true;
+                };
+                Console.WriteLine("Press ^C to exit");
+                while (true)
+                {
+                    bool failed = false;
+                    if (extractor.Start())
                     {
-                        extractor.MapUAToCDF().Wait();
-                    }
-                    catch (Exception e)
-                    {
-                        Logger.LogError("Failed to map directory");
-                        Logger.LogException(e);
-                        failed = true;
-                    }
+                        try
+                        {
+                            extractor.MapUAToCDF().Wait();
+                        }
+                        catch (Exception e)
+                        {
+                            Logger.LogError("Failed to map directory");
+                            Logger.LogException(e);
+                            failed = true;
+                        }
 
-                    if (quitEvent.WaitOne(failed ? 4000 : -1)) break;
+                        if (quitEvent.WaitOne(failed ? 4000 : -1)) return;
+                    }
+                    else
+                    {
+                        if (quitEvent.WaitOne(4000)) return;
+                    }
                 }
-                else
-                {
-                    if (quitEvent.WaitOne(4000)) break;
-                }
-			}
-            quitEvent.Dispose();
+            }
         }
     }
     public class UAClientConfig

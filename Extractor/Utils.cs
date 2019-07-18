@@ -47,7 +47,7 @@ namespace Cognite.OpcUa
                 }
                 await Task.Delay(500 * (1 << i));
             }
-            return default(T);
+            return default;
         }
         /// <summary>
         /// Write a list of datapoints to buffer file. Only writes non-historizing datapoints.
