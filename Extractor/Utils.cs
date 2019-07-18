@@ -200,6 +200,13 @@ namespace Cognite.OpcUa
                 }
             }
         }
+        /// <summary>
+        /// Divide input into a number of size limited chunks
+        /// </summary>
+        /// <typeparam name="T">Type in input enumerable</typeparam>
+        /// <param name="input">Input enumerable of any size</param>
+        /// <param name="maxSize">Maximum size of return enumerables</param>
+        /// <returns>A number of enumerables smaller or equal to maxSize</returns>
         public static IEnumerable<IEnumerable<T>> ChunkBy<T>(IEnumerable<T> input, int maxSize)
         {
             return input
