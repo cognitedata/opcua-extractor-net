@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Threading;
-using YamlDotNet.RepresentationModel;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 using System.Collections.Generic;
@@ -126,13 +125,14 @@ namespace Cognite.OpcUa
                         failed = true;
                     }
 
-                    if (quitEvent.WaitOne(failed ? 4000 : -1)) return;
+                    if (quitEvent.WaitOne(failed ? 4000 : -1)) break;
                 }
                 else
                 {
-                    if (quitEvent.WaitOne(4000)) return;
+                    if (quitEvent.WaitOne(4000)) break;
                 }
 			}
+            quitEvent.Dispose();
         }
     }
     public class UAClientConfig
@@ -146,7 +146,6 @@ namespace Cognite.OpcUa
         public bool Secure { get; set; }
         public string IgnorePrefix { get; set; }
         public int HistoryGranularity { get; set; }
-
     }
     public class CogniteClientConfig
     {
@@ -161,7 +160,7 @@ namespace Cognite.OpcUa
     }
     public class FullConfig
     {
-        public YamlMappingNode NSMaps { get; set; }
+        public Dictionary<string, string> NSMaps { get; set; }
         public UAClientConfig UAConfig { get; set; }
         public CogniteClientConfig CogniteConfig { get; set; }
         public LoggerConfig LoggerConfig { get; set; }

@@ -118,25 +118,13 @@ namespace Cognite.OpcUa
         /// <returns>A <see cref="FullConfig"/> object representing the entire config file</returns>
         public static FullConfig GetConfig(string configPath)
         {
-            var config = ReadConfig(configPath);
             FullConfig fullConfig = null;
             try
             {
-                var clientCfg = config.Children[new YamlScalarNode("client")];
-                var nsmaps = config.Children[new YamlScalarNode("nsmaps")] as YamlMappingNode;
-                var cogniteConfig = config.Children[new YamlScalarNode("cognite")];
-                var loggerConfig = config.Children[new YamlScalarNode("logging")];
-                var metricsConfig = config.Children[new YamlScalarNode("metrics")];
-                var bulkSizes = config.Children[new YamlScalarNode("bulksizes")];
-                fullConfig = new FullConfig
+                using (var rawConfig = new StringReader(File.ReadAllText(configPath)))
                 {
-                    NSMaps = nsmaps,
-                    UAConfig = DeserializeNode<UAClientConfig>(clientCfg),
-                    CogniteConfig = DeserializeNode<CogniteClientConfig>(cogniteConfig),
-                    LoggerConfig = DeserializeNode<LoggerConfig>(loggerConfig),
-                    MetricsConfig = DeserializeNode<MetricsConfig>(metricsConfig),
-                    BulkSizes = DeserializeNode<BulkSizes>(bulkSizes)
-                };
+                    fullConfig = new Deserializer().Deserialize<FullConfig>(rawConfig);
+                }
                 string envKey = Environment.GetEnvironmentVariable("COGNITE_API_KEY");
                 if (string.IsNullOrWhiteSpace(fullConfig.CogniteConfig.ApiKey) && !string.IsNullOrWhiteSpace(envKey))
                 {
@@ -147,6 +135,10 @@ namespace Cognite.OpcUa
                 {
                     fullConfig.CogniteConfig.Project = envProject;
                 }
+                foreach (var kvp in fullConfig.NSMaps)
+                {
+                    Console.WriteLine(kvp.Key + ", " + kvp.Value);
+                }
             }
             catch (Exception e)
             {
@@ -155,50 +147,6 @@ namespace Cognite.OpcUa
                 Console.WriteLine(e.StackTrace);
             }
             return fullConfig;
-        }
-        /// <summary>
-        /// Reads config from file, then maps to a YamlDotNet tree
-        /// </summary>
-        /// <param name="configPath">Path to the config file</param>
-        /// <returns>The root <see cref="YamlMappingNode"/></returns>
-        public static YamlMappingNode ReadConfig(string configPath)
-        {
-            if (!File.Exists(configPath))
-            {
-                Console.WriteLine("Failed to open config file " + configPath);
-            }
-            string document = File.ReadAllText(configPath);
-            StringReader input = new StringReader(document);
-            YamlStream stream = new YamlStream();
-            stream.Load(input);
-
-            return (YamlMappingNode)stream.Documents[0].RootNode;
-        }
-        /// <summary>
-        /// Generic implementation of a small hack to use the YamlDotNet deserializer on individual nodes
-        /// </summary>
-        /// <typeparam name="T">Target type</typeparam>
-        /// <param name="node">The root node for the target object</param>
-        /// <returns>An instantiated instance of the target type</returns>
-        public static T DeserializeNode<T>(YamlNode node)
-        {
-            using (var stream = new MemoryStream())
-            using (var writer = new StreamWriter(stream))
-            using (var reader = new StreamReader(stream))
-            {
-                new YamlStream(new YamlDocument[] { new YamlDocument(node) }).Save(writer);
-                writer.Flush();
-                stream.Position = 0;
-                try
-                {
-                    return new Deserializer().Deserialize<T>(reader);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine("Failed to load config: " + node);
-                    throw e;
-                }
-            }
         }
         /// <summary>
         /// Divide input into a number of size limited chunks
