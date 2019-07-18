@@ -226,7 +226,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var assets in Utils.ChunkBy(assetList, bulkConfig.CDFAssets))
                     {
-                        allOk &= !await EnsureAssets(assets, client);
+                        allOk &= await EnsureAssets(assets, client);
                     }
                     trackedAssets.Inc(assetList.Count);
                     // At this point the assets should all be synchronized and mapped
@@ -240,13 +240,13 @@ namespace Cognite.OpcUa
                     // fetching the timeseries itself
                     foreach (var timeseries in Utils.ChunkBy(tsList, bulkConfig.CDFTimeseries))
                     {
-                        allOk &= !await EnsureTimeseries(timeseries, client);
+                        allOk &= await EnsureTimeseries(timeseries, client);
                     }
                     trackedTimeseres.Inc(tsList.Count);
 
                     foreach (var timeseries in Utils.ChunkBy(histTsList, bulkConfig.CDFTimeseries))
                     {
-                        allOk &= !await EnsureHistorizingTimeseries(timeseries, client);
+                        allOk &= await EnsureHistorizingTimeseries(timeseries, client);
                     }
                     trackedTimeseres.Inc(histTsList.Count);
                 }
@@ -319,6 +319,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
+                    Logger.LogError("Failed to get assets");
                     allOk = false;
                     nodeEnsuringFailures.Inc();
                 }
@@ -375,6 +376,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
+                    Logger.LogError("Failed to create assets");
                     allOk = false;
                     nodeEnsuringFailures.Inc();
                 }
@@ -399,6 +401,7 @@ namespace Cognite.OpcUa
                     }
                     else
                     {
+                        Logger.LogError("Failed to get asset ids");
                         allOk = false;
                         nodeEnsuringFailures.Inc();
                     }
@@ -435,6 +438,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
+                    Logger.LogError("Failed to get timeseries");
                     allOk = false;
                     nodeEnsuringFailures.Inc();
                 }
@@ -476,6 +480,7 @@ namespace Cognite.OpcUa
                 }
                 if (await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS") == null)
                 {
+                    Logger.LogError("Failed to create TS");
                     allOk = false;
                     nodeEnsuringFailures.Inc();
                 }
@@ -526,6 +531,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
+                    Logger.LogError("Failed to get historizing timeseries");
                     allOk = false;
                     nodeEnsuringFailures.Inc();
                 }
@@ -567,6 +573,7 @@ namespace Cognite.OpcUa
                 }
                 if (await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create historizing TS") == null)
                 {
+                    Logger.LogError("Failed to create historizing TS");
                     allOk = false;
                     nodeEnsuringFailures.Inc();
                 }
@@ -596,6 +603,7 @@ namespace Cognite.OpcUa
                     }
                     else
                     {
+                        Logger.LogError("Failed to get historizing timeseries ids");
                         allOk = false;
                         nodeEnsuringFailures.Inc();
                     }
