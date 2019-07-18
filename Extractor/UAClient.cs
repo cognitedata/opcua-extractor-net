@@ -6,7 +6,6 @@ using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using System.Linq;
 using Prometheus.Client;
-using YamlDotNet.RepresentationModel;
 
 namespace Cognite.OpcUa
 {
@@ -60,12 +59,7 @@ namespace Cognite.OpcUa
         {
             this.config = config.UAConfig;
             bulkConfig = config.BulkSizes;
-            nsmaps = new Dictionary<string, string>();
-            if (config.NSMaps == null) return;
-            foreach (var node in config.NSMaps.Children)
-            {
-                nsmaps.Add(((YamlScalarNode)node.Key).Value, ((YamlScalarNode)node.Value).Value);
-            }
+            nsmaps = config.NSMaps;
             historyGranularity = config.UAConfig.HistoryGranularity <= 0 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.UAConfig.HistoryGranularity);
         }

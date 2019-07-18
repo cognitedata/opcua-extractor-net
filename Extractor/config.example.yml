@@ -1,6 +1,6 @@
 ﻿# Template for the config file, usage: "dotnet opcua-extractor-net.dll [configfile]".
 # Defaults to config.yml in same directory as executable.
-client:
+UAConfig:
   # The URL of the OPC-UA server to connect to
   EndpointURL: opc.tcp://localhost:4840
   # Auto accept connections from unknown servers.
@@ -23,7 +23,7 @@ client:
   # Leave at 0 to always read a single node each time.
   HistoryGranularity: 900
 
-nsmaps:
+NSMaps:
   # Map OPC-UA namespaces to prefixes in CDF. 
   # Ex: "urn:cognite:net:server": cns
   # Saves space compared to using the full URL. Using the ns index is not safe
@@ -31,7 +31,7 @@ nsmaps:
   # "urn:freeopcua:python:server": fps
   # "http://examples.freeopcua.github.io": efg
 
-cognite:
+CogniteConfig:
   # The project to connect to in the API
   Project:
   # Cognite api key
@@ -54,7 +54,7 @@ cognite:
   # Buffer file path
   BufferFile: buffer.bin
 
-logging:
+LoggerConfig:
   # Folder for logging output. Leave blank for console only
   LogFolder:
   # Whether or not to log mapped nodes. true/false
@@ -62,7 +62,7 @@ logging:
   # Whether or not to log all data output. For debugging only. true/false
   LogData: false
 
-metrics:
+MetricsConfig:
   # Leave host or job blank to disable metrics
   # URL of prometheus host, ex my.prometheus.server gives final endpoint my.prometheus.server/metrics/jobs/myjob, 
   URL:
@@ -77,7 +77,7 @@ metrics:
   # Instance tag for prometheus
   Instance:
 
-bulksizes:
+BulkSizes:
   # Max sizes of various requests to CDF and OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
   CDFAssets: 1000
   CDFTimeseries: 1000
