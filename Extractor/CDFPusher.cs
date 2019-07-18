@@ -56,7 +56,7 @@ namespace Cognite.OpcUa
 
         #region Interface
         /// <summary>
-        /// Dequeues up to 100000 points from the queue, then pushes them to CDF.
+        /// Dequeues up to 100000 points from the queue, then pushes them to CDF. On failure, writes to file if enabled.
         /// </summary>
         /// <param name="dataPointQueue">Queue to be emptied</param>
         public async Task PushDataPoints(ConcurrentQueue<BufferedDataPoint> dataPointQueue)
@@ -74,34 +74,18 @@ namespace Cognite.OpcUa
 
             if (count == 0) return;
             if (config.Debug) return;
-            var organizedDatapoints = new Dictionary<string, Tuple<IList<DataPointPoco>, Identity>>();
-            foreach (BufferedDataPoint dataPoint in dataPointList)
+            var finalDataPoints = dataPointList.GroupBy(dp => dp.Id, (id, points) =>
             {
-                if (!organizedDatapoints.TryGetValue(dataPoint.Id, out var dataPoints))
+                return new DataPointsWritePoco
                 {
-                    dataPoints = new Tuple<IList<DataPointPoco>, Identity>
-                    (
-                        new List<DataPointPoco>(),
-                        Identity.ExternalId(dataPoint.Id)
-                    );
-                    organizedDatapoints.Add(dataPoint.Id, dataPoints);
-                }
-                dataPoints.Item1.Add(new DataPointPoco
-                {
-                    TimeStamp = dataPoint.timestamp,
-                    Value = Numeric.Float(dataPoint.doubleValue)
-                });
-            }
-
-            var finalDataPoints = new List<DataPointsWritePoco>();
-            foreach (var dataPointTuple in organizedDatapoints.Values)
-            {
-                finalDataPoints.Add(new DataPointsWritePoco
-                {
-                    Identity = dataPointTuple.Item2,
-                    DataPoints = dataPointTuple.Item1
-                });
-            }
+                    Identity = Identity.ExternalId(id),
+                    DataPoints = points.Select(point => new DataPointPoco
+                    {
+                        TimeStamp = point.timestamp,
+                        Value = Numeric.Float(point.doubleValue)
+                    })
+                };
+            });
 
             Logger.LogInfo("Push " + count + " datapoints to CDF");
             using (HttpClient httpClient = clientFactory.CreateClient())
