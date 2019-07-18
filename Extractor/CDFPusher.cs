@@ -525,7 +525,7 @@ namespace Cognite.OpcUa
                         if (resultItem.DataPoints.Any())
                         {
                             tsIds[resultItem.ExternalId.Value].LatestTimestamp =
-                                Extractor.Epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
+                                DateTimeOffset.FromUnixTimeMilliseconds(resultItem.DataPoints.First().TimeStamp).DateTime;
                         }
                     }
                 }
@@ -597,7 +597,7 @@ namespace Cognite.OpcUa
                             if (resultItem.DataPoints.Any())
                             {
                                 tsIds[resultItem.ExternalId.Value].LatestTimestamp =
-                                    Extractor.Epoch.AddMilliseconds(resultItem.DataPoints.First().TimeStamp);
+                                    DateTimeOffset.FromUnixTimeMilliseconds(resultItem.DataPoints.First().TimeStamp).DateTime;
                             }
                         }
                     }

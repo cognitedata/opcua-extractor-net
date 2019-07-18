@@ -20,7 +20,6 @@ namespace Cognite.OpcUa
         public NodeId RootNode { get; private set; }
         private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
         private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
-        public static readonly DateTime Epoch = new DateTime(1970, 1, 1);
         private readonly bool debug;
         private bool pushingDatapoints;
         private bool runningPush = true;
@@ -69,7 +68,7 @@ namespace Cognite.OpcUa
                 return false;
             }
             Started = true;
-            startTime.Set(DateTime.Now.Subtract(Epoch).TotalMilliseconds);
+            startTime.Set(new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds());
             RootNode = config.CogniteConfig.RootNode.ToNodeId(UAClient);
             if (RootNode.IsNullNodeId)
             {
@@ -208,7 +207,7 @@ namespace Cognite.OpcUa
             foreach (var datapoint in item.DequeueValues())
             {
                 var buffDp = new BufferedDataPoint(
-                    (long)datapoint.SourceTimestamp.Subtract(Epoch).TotalMilliseconds,
+                    new DateTimeOffset(datapoint.SourceTimestamp).ToUnixTimeMilliseconds(),
                     uniqueId,
                     UAClient.ConvertToDouble(datapoint.Value)
                 );
@@ -246,7 +245,7 @@ namespace Cognite.OpcUa
             foreach (var datapoint in data.DataValues)
             {
                 var buffDp = new BufferedDataPoint(
-                    (long)datapoint.SourceTimestamp.Subtract(Epoch).TotalMilliseconds,
+                    new DateTimeOffset(datapoint.SourceTimestamp).ToUnixTimeMilliseconds(),
                     uniqueId,
                     UAClient.ConvertToDouble(datapoint.Value)
                 );
