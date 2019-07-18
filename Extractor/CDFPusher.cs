@@ -516,7 +516,7 @@ namespace Cognite.OpcUa
             try
             {
                 var readResults = await Utils.RetryAsync(() =>
-                    client.GetTimeseriesLatestDataAsync(pairedTsIds), "Failed to get historizing timeseries", true);
+                    client.GetLatestDataPointAsync(pairedTsIds), "Failed to get historizing timeseries", true);
                 if (readResults != null)
                 {
                     Logger.LogInfo("Found " + readResults.Count() + " historizing timeseries");
@@ -588,7 +588,7 @@ namespace Cognite.OpcUa
                 if (idsToMap.Any())
                 {
                     Logger.LogInfo("Get remaining " + idsToMap.Count + " historizing timeseries ids");
-                    var readResults = await Utils.RetryAsync(() => client.GetTimeseriesLatestDataAsync(idsToMap),
+                    var readResults = await Utils.RetryAsync(() => client.GetLatestDataPointAsync(idsToMap),
                         "Failed to get historizing timeseries ids");
                     if (readResults != null)
                     {
