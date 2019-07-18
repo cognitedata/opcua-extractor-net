@@ -33,7 +33,7 @@ namespace Cognite.OpcUa
         /// Push nodes, emptying the queue
         /// </summary>
         /// <param name="nodeQueue">Nodes to be pushed</param>
-        Task PushNodes(ConcurrentQueue<BufferedNode> nodeQueue);
+        Task<bool> PushNodes(ConcurrentQueue<BufferedNode> nodeQueue);
         /// <summary>
         /// Reset relevant persistent information in the pusher, preparing it to be restarted
         /// </summary>

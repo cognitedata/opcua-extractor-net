@@ -117,7 +117,7 @@ namespace Cognite.OpcUa
                 {
                     try
                     {
-                        extractor.MapUAToCDF();
+                        extractor.MapUAToCDF().Wait();
                     }
                     catch (Exception e)
                     {

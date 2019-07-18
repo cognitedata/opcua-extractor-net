@@ -50,6 +50,9 @@ namespace Cognite.OpcUa
             .CreateGauge("opcua_tracked_assets", "Number of objects on the opcua server mapped to assets in CDF");
         private static readonly Gauge trackedTimeseres = Metrics
             .CreateGauge("opcua_tracked_timeseries", "Number of variables on the opcua server mapped to timeseries in CDF");
+        private static readonly Counter nodeEnsuringFailures = Metrics
+            .CreateCounter("opcua_node_ensure_failures",
+            "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
 
         #region Interface
         /// <summary>
@@ -139,7 +142,7 @@ namespace Cognite.OpcUa
         /// Empty queue, fetch info for each relevant node, test results against CDF, then synchronize any variables
         /// </summary>
         /// <param name="nodeQueue">Queue to be emptied</param>
-        public async Task PushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
+        public async Task<bool> PushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
         {
             var nodeMap = new Dictionary<string, BufferedNode>();
             var assetList = new List<BufferedNode>();
@@ -147,6 +150,7 @@ namespace Cognite.OpcUa
             var histTsList = new List<BufferedVariable>();
             var tsList = new List<BufferedVariable>();
 
+            bool allOk = true;
             int count = 0;
             while (nodeQueue.TryDequeue(out BufferedNode buffer))
             {
@@ -177,7 +181,7 @@ namespace Cognite.OpcUa
                 }
                 nodeMap.Add(UAClient.GetUniqueId(buffer.Id), buffer);
             }
-            if (count == 0) return;
+            if (count == 0) return true;
             Logger.LogInfo("Getting data for " + varList.Count() + " variables and " + assetList.Count() + " objects");
             try
             {
@@ -211,7 +215,7 @@ namespace Cognite.OpcUa
             if (config.Debug)
             {
                 Extractor.SynchronizeNodes(tsList.Concat(histTsList));
-                return;
+                return true;
             }
             using (HttpClient httpClient = clientFactory.CreateClient())
             {
@@ -222,7 +226,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var assets in Utils.ChunkBy(assetList, bulkConfig.CDFAssets))
                     {
-                        await EnsureAssets(assets, client);
+                        allOk &= !await EnsureAssets(assets, client);
                     }
                     trackedAssets.Inc(assetList.Count);
                     // At this point the assets should all be synchronized and mapped
@@ -236,25 +240,36 @@ namespace Cognite.OpcUa
                     // fetching the timeseries itself
                     foreach (var timeseries in Utils.ChunkBy(tsList, bulkConfig.CDFTimeseries))
                     {
-                        await EnsureTimeseries(timeseries, client);
+                        allOk &= !await EnsureTimeseries(timeseries, client);
                     }
                     trackedTimeseres.Inc(tsList.Count);
 
                     foreach (var timeseries in Utils.ChunkBy(histTsList, bulkConfig.CDFTimeseries))
                     {
-                        await EnsureHistorizingTimeseries(timeseries, client);
+                        allOk &= !await EnsureHistorizingTimeseries(timeseries, client);
                     }
                     trackedTimeseres.Inc(histTsList.Count);
                 }
                 catch (Exception e)
                 {
+                    allOk = false;
                     Logger.LogError("Failed to push to CDF");
                     Logger.LogException(e);
                 }
             }
             // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
             // createSubscription service called here
-            Extractor.SynchronizeNodes(tsList.Concat(histTsList));
+            try
+            {
+                Extractor.SynchronizeNodes(tsList.Concat(histTsList));
+            }
+            catch (Exception e)
+            {
+                allOk = false;
+                Logger.LogError("Failed to synchronize nodes");
+                Logger.LogException(e);
+            }
+            return allOk;
         }
         /// <summary>
         /// Reset the pusher, preparing it to be restarted
@@ -273,7 +288,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="assetList">List of assets to be tested</param>
         /// <param name="client">Cognite client to be used</param>
-        private async Task EnsureAssets(IEnumerable<BufferedNode> assetList, Client client)
+        private async Task<bool> EnsureAssets(IEnumerable<BufferedNode> assetList, Client client)
         {
             IDictionary<string, BufferedNode> assetIds = new Dictionary<string, BufferedNode>();
             foreach (BufferedNode node in assetList)
@@ -286,7 +301,7 @@ namespace Cognite.OpcUa
             IList<Identity> assetIdentities = new List<Identity>(assetIds.Keys.Count);
 
             Logger.LogInfo("Test " + assetList.Count() + " assets");
-
+            bool allOk = true;
             foreach (var id in assetIds.Keys)
             {
                 assetIdentities.Add(Identity.ExternalId(id));
@@ -301,6 +316,11 @@ namespace Cognite.OpcUa
                     {
                         nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
                     }
+                }
+                else
+                {
+                    allOk = false;
+                    nodeEnsuringFailures.Inc();
                 }
             }
             catch (ResponseException ex)
@@ -318,6 +338,8 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
+                    allOk = false;
+                    nodeEnsuringFailures.Inc();
                     Logger.LogError("Failed to fetch asset ids");
                     Logger.LogException(ex);
                 }
@@ -351,6 +373,11 @@ namespace Cognite.OpcUa
                         nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
                     }
                 }
+                else
+                {
+                    allOk = false;
+                    nodeEnsuringFailures.Inc();
+                }
                 IList<Identity> idsToMap = new List<Identity>();
                 foreach (string id in assetIds.Keys)
                 {
@@ -370,17 +397,23 @@ namespace Cognite.OpcUa
                             nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
                         }
                     }
+                    else
+                    {
+                        allOk = false;
+                        nodeEnsuringFailures.Inc();
+                    }
                 }
             }
+            return allOk;
         }
         /// <summary>
         /// Test if given list of timeseries exists, then create any that do not, checking for properties.
         /// </summary>
         /// <param name="tsList">List of timeseries to be tested</param>
         /// <param name="client">Cognite client to be used</param>
-        private async Task EnsureTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
+        private async Task<bool> EnsureTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
         {
-            if (!tsList.Any()) return;
+            if (!tsList.Any()) return true;
             var tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
@@ -391,7 +424,7 @@ namespace Cognite.OpcUa
 
             Logger.LogInfo("Test " + tsIds.Keys.Count + " timeseries");
             var missingTSIds = new HashSet<string>();
-
+            bool allOk = true;
             try
             {
                 var readResults = await Utils.RetryAsync(() =>
@@ -399,6 +432,11 @@ namespace Cognite.OpcUa
                 if (readResults != null)
                 {
                     Logger.LogInfo("Found " + readResults.Count() + " timeseries");
+                }
+                else
+                {
+                    allOk = false;
+                    nodeEnsuringFailures.Inc();
                 }
             }
             catch (ResponseException ex)
@@ -416,6 +454,8 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
+                    allOk = false;
+                    nodeEnsuringFailures.Inc();
                     Logger.LogError("Failed to fetch timeseries data");
                     Logger.LogException(ex);
                 }
@@ -434,18 +474,24 @@ namespace Cognite.OpcUa
                 {
                     createTimeseries.Add(VariableToTimeseries(tsIds[externalId]));
                 }
-                await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS");
+                if (await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS") == null)
+                {
+                    allOk = false;
+                    nodeEnsuringFailures.Inc();
+                }
             }
+            return allOk;
         }
         /// <summary>
         /// Try to get latest timestamp from given list of timeseries, then create any not found and try again
         /// </summary>
         /// <param name="tsList">List of timeseries to be tested</param>
         /// <param name="client">Cognite client to be used</param>
-        private async Task EnsureHistorizingTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
+        private async Task<bool> EnsureHistorizingTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
         {
-            if (!tsList.Any()) return;
+            if (!tsList.Any()) return true;
             var tsIds = new Dictionary<string, BufferedVariable>();
+            bool allOk = true;
             foreach (BufferedVariable node in tsList)
             {
                 string externalId = UAClient.GetUniqueId(node.Id);
@@ -478,6 +524,11 @@ namespace Cognite.OpcUa
                         }
                     }
                 }
+                else
+                {
+                    allOk = false;
+                    nodeEnsuringFailures.Inc();
+                }
             }
             catch (ResponseException ex)
             {
@@ -494,6 +545,8 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
+                    allOk = false;
+                    nodeEnsuringFailures.Inc();
                     Logger.LogError("Failed to fetch historizing timeseries data");
                     Logger.LogException(ex);
                 }
@@ -512,7 +565,11 @@ namespace Cognite.OpcUa
                 {
                     createTimeseries.Add(VariableToTimeseries(tsIds[externalId]));
                 }
-                await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create historizing TS");
+                if (await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create historizing TS") == null)
+                {
+                    allOk = false;
+                    nodeEnsuringFailures.Inc();
+                }
                 var idsToMap = new HashSet<(Identity, string)>();
                 foreach (var key in tsIds.Keys)
                 {
@@ -537,8 +594,14 @@ namespace Cognite.OpcUa
                             }
                         }
                     }
+                    else
+                    {
+                        allOk = false;
+                        nodeEnsuringFailures.Inc();
+                    }
                 }
             }
+            return allOk;
         }
         /// <summary>
         /// Create timeseries poco to create this node in CDF
