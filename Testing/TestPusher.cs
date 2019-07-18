@@ -109,9 +109,10 @@ namespace Testing
             Extractor.SynchronizeNodes(tsList.Concat(histTsList));
             nodeTests?.GetValueOrDefault("afterSynchronize")?.Invoke(assetList, tsList, histTsList);
         }
-        public async Task PushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
+        public async Task<bool> PushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
         {
             await Task.Run(() => SyncPushNodes(nodeQueue));
+            return true;
         }
 
         public void Reset()

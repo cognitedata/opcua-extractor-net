@@ -105,7 +105,7 @@ namespace Cognite.OpcUa
         {
             UAClient.WaitForOperations().Wait();
             buffersEmpty = false;
-            MapUAToCDF();
+            MapUAToCDF().Wait();
         }
         /// <summary>
         /// Closes the extractor, mainly just shutting down the opcua client.
@@ -129,29 +129,22 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Starts the extractor, calling BrowseDirectory on the root node, then pushes all nodes to CDF once finished.
         /// </summary>
-        public void MapUAToCDF()
+        public async Task MapUAToCDF()
         {
             pusher.Reset();
 			Logger.LogInfo("Begin mapping directory");
             try
             {
-                UAClient.BrowseDirectoryAsync(RootNode, HandleNode).Wait();
+                await UAClient.BrowseDirectoryAsync(RootNode, HandleNode);
             }
             catch (Exception e)
             {
-                Logger.LogError("Failed to map directory");
-                Logger.LogException(e);
-                return;
+                throw e;
             }
             Logger.LogInfo("End mapping directory");
-            try
+            if (!await pusher.PushNodes(bufferedNodeQueue))
             {
-                pusher.PushNodes(bufferedNodeQueue).Wait();
-            }
-            catch (Exception e)
-            {
-                Logger.LogError("Failed to push nodes to CDF");
-                Logger.LogException(e);
+                throw new Exception("Pushing nodes to CDF failed");
             }
         }
         /// <summary>

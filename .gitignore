@@ -3,6 +3,7 @@
 .vs/
 *.swp
 .DS_Store
+.ionide/
 
 # C# specific
 obj/
@@ -13,6 +14,7 @@ certificates/
 Logs/
 *.sql
 *.sql-journal
+buffer.bin
 
 # Config
 config.yml

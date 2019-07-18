@@ -45,6 +45,12 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_browse_operations", "Number of browse operations performed");
         private static readonly Gauge depth = Metrics
             .CreateGauge("opcua_tree_depth", "Depth of node tree from rootnode");
+        private static readonly Counter attributeRequestFailures = Metrics
+            .CreateCounter("opcua_attribute_request_failures", "Number of failed requests for attributes to OPC-UA");
+        private static readonly Counter historyReadFailures = Metrics
+            .CreateCounter("opcua_history_read_fauilures", "Number of failed history read operations");
+        private static readonly Counter browseFailures = Metrics
+            .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
         /// <summary>
         /// Constructor, does not start the client.
@@ -314,6 +320,8 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception e)
                 {
+                    browseFailures.Inc();
+                    Logger.LogError("Failed during browse session");
                     throw e;
                 }
                 finally
@@ -374,14 +382,7 @@ namespace Cognite.OpcUa
             Action<HistoryData, bool, NodeId> callback)
         {
             DateTime lowest = DateTime.MinValue;
-            try
-            {
-                lowest = toRead.Select((bvar) => { return bvar.LatestTimestamp; }).Min();
-            }
-            catch (Exception e)
-            {
-                Logger.LogException(e);
-            }
+            lowest = toRead.Select((bvar) => { return bvar.LatestTimestamp; }).Min();
             var details = new ReadRawModifiedDetails
             {
                 StartTime = lowest,
@@ -442,6 +443,8 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
+                historyReadFailures.Inc();
+                Logger.LogError("Failed during HistoryRead");
                 throw e;
             }
             finally
@@ -579,6 +582,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception e)
                 {
+                    Logger.LogError("Failed to create subscriptions");
                     throw e;
                 }
                 finally
@@ -642,12 +646,15 @@ namespace Cognite.OpcUa
                         out DataValueCollection lvalues,
                         out _
                     );
+                    attributeRequests.Inc();
                     values = values.Concat(lvalues);
                 }
                 Logger.LogInfo("Read " + total + " attributes with " + count + " operations");
             }
             catch (Exception e)
             {
+                Logger.LogError("Failed to fetch attributes from opcua");
+                attributeRequestFailures.Inc();
                 throw e;
             }
             finally
