@@ -19,9 +19,15 @@ namespace Testing
         readonly Dictionary<string, TimeseriesDummy> timeseries = new Dictionary<string, TimeseriesDummy>();
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
-        public DummyFactory(string project)
+        public MockMode mode;
+        public enum MockMode
+        {
+            None, Some, All
+        }
+        public DummyFactory(string project, MockMode mode)
         {
             this.project = project;
+            this.mode = mode;
         }
 
         public HttpClient CreateClient(string name = "client")
@@ -74,11 +80,47 @@ namespace Testing
             }
             if (missing.Any())
             {
+                IList<string> finalMissing;
+                if (mode == MockMode.All)
+                {
+                    foreach (var id in missing)
+                    {
+                        MockAsset(id);
+                    }
+                    string res = JsonConvert.SerializeObject(new AssetReadWrapper
+                    {
+                        items = found.Concat(missing).Select(aid => assets[aid])
+                    });
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(res)
+                    };
+                }
+                if (mode == MockMode.Some)
+                {
+                    finalMissing = new List<string>();
+                    int count = 1;
+                    foreach (var id in missing)
+                    {
+                        if (count++ % 2 == 0)
+                        {
+                            MockAsset(id);
+                        }
+                        else
+                        {
+                            finalMissing.Add(id);
+                        }
+                    }
+                }
+                else
+                {
+                    finalMissing = missing;
+                }
                 string result = JsonConvert.SerializeObject(new ErrorWrapper
                 {
                     error = new ErrorContent
                     {
-                        missing = missing.Select(id => new Identity { externalId = id }),
+                        missing = finalMissing.Select(id => new Identity { externalId = id }),
                         code = 400,
                         message = "missing"
                     }
@@ -137,11 +179,47 @@ namespace Testing
             }
             if (missing.Any())
             {
+                IList<string> finalMissing;
+                if (mode == MockMode.All)
+                {
+                    foreach (var id in missing)
+                    {
+                        MockTimeseries(id);
+                    }
+                    string res = JsonConvert.SerializeObject(new TimeseriesReadWrapper
+                    {
+                        items = found.Concat(missing).Select(tid => timeseries[tid])
+                    });
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(res)
+                    };
+                }
+                if (mode == MockMode.Some)
+                {
+                    finalMissing = new List<string>();
+                    int count = 1;
+                    foreach (var id in missing)
+                    {
+                        if (count++ % 2 == 0)
+                        {
+                            MockTimeseries(id);
+                        }
+                        else
+                        {
+                            finalMissing.Add(id);
+                        }
+                    }
+                }
+                else
+                {
+                    finalMissing = missing;
+                }
                 string result = JsonConvert.SerializeObject(new ErrorWrapper
                 {
                     error = new ErrorContent
                     {
-                        missing = missing.Select(id => new Identity { externalId = id }),
+                        missing = finalMissing.Select(id => new Identity { externalId = id }),
                         code = 400,
                         message = "missing"
                     }
@@ -187,6 +265,37 @@ namespace Testing
             {
                 Content = new StringContent("{}")
             };
+        }
+
+        private AssetDummy MockAsset(string externalId)
+        {
+            var asset = new AssetDummy
+            {
+                externalId = externalId,
+                name = "test",
+                description = "",
+                metadata = new Dictionary<string, string>(),
+                id = assetIdCounter++,
+                createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds(),
+                lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds(),
+                rootId = 123
+            };
+            assets.Add(externalId, asset);
+            return asset;
+        }
+
+        private TimeseriesDummy MockTimeseries(string externalId)
+        {
+            var ts = new TimeseriesDummy
+            {
+                id = timeseriesIdCounter++,
+                isString = false,
+                isStep = false,
+                createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds(),
+                externalId = externalId
+            };
+            timeseries.Add(externalId, ts);
+            return ts;
         }
     }
     public class AssetDummy

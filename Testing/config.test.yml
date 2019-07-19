@@ -58,7 +58,7 @@ LoggerConfig:
   # Folder for logging output. Leave blank for console only
   LogFolder:
   # Whether or not to log mapped nodes. true/false
-  LogNodes: true
+  LogNodes: false
   # Whether or not to log all data output. For debugging only. true/false
   LogData: false
 

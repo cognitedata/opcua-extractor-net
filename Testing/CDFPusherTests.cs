@@ -8,16 +8,20 @@ namespace Testing
 {
     public class CDFPusherTests
     {
-        [Trait("Category", "fullserver")]
+        [Trait("Category", "both")]
         [Trait("Tests", "cdfpusher")]
-        [Fact]
-        public async Task TestBasicPushing()
+        [Theory]
+        [InlineData(DummyFactory.MockMode.All)]
+        [InlineData(DummyFactory.MockMode.Some)]
+        [InlineData(DummyFactory.MockMode.None)]
+        public async Task TestBasicPushing(DummyFactory.MockMode mode)
         {
             FullConfig fullConfig = Utils.GetConfig("config.test.yml");
             if (fullConfig == null) return;
             Logger.Startup(fullConfig.LoggerConfig);
+            Logger.LogInfo("Testing with MockMode " + mode.ToString());
             UAClient client = new UAClient(fullConfig);
-            var pusher = new CDFPusher(new DummyFactory(fullConfig.CogniteConfig.Project), fullConfig);
+            var pusher = new CDFPusher(new DummyFactory(fullConfig.CogniteConfig.Project, mode), fullConfig);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             extractor.Start();
@@ -29,6 +33,7 @@ namespace Testing
             await extractor.MapUAToCDF();
             Thread.Sleep(4000);
             extractor.Close();
+            Logger.Shutdown();
         }
     }
 }
