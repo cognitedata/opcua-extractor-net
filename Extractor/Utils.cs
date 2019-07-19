@@ -33,13 +33,13 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception e)
                 {
+                    Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
                     if (e.GetType() == typeof(ResponseException) && (i == retryCount - 1 || expectResponseException))
                     {
                         var re = (ResponseException)e;
                         throw re;
                     }
-                    Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
-                    Logger.LogException(e);
+                    //Logger.LogException(e);
                 }
                 await Task.Delay(500 * (1 << i));
             }

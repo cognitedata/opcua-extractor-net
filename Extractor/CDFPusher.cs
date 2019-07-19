@@ -141,7 +141,6 @@ namespace Cognite.OpcUa
             var histTsList = new List<BufferedVariable>();
             var tsList = new List<BufferedVariable>();
 
-            bool allOk = true;
             while (nodeQueue.TryDequeue(out BufferedNode buffer))
             {
                 if (buffer.IsVariable && buffer is BufferedVariable buffVar)
@@ -211,7 +210,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var assets in Utils.ChunkBy(assetList, bulkConfig.CDFAssets))
                     {
-                        allOk &= await EnsureAssets(assets, client);
+                        if (!await EnsureAssets(assets, client)) return false;
                     }
                     trackedAssets.Inc(assetList.Count);
                     // At this point the assets should all be synchronized and mapped
@@ -225,21 +224,21 @@ namespace Cognite.OpcUa
                     // fetching the timeseries itself
                     foreach (var timeseries in Utils.ChunkBy(tsList, bulkConfig.CDFTimeseries))
                     {
-                        allOk &= await EnsureTimeseries(timeseries, client);
+                        if (!await EnsureTimeseries(timeseries, client)) return false;
                     }
                     trackedTimeseres.Inc(tsList.Count);
 
                     foreach (var timeseries in Utils.ChunkBy(histTsList, bulkConfig.CDFTimeseries))
                     {
-                        allOk &= await EnsureHistorizingTimeseries(timeseries, client);
+                        if (!await EnsureHistorizingTimeseries(timeseries, client)) return false;
                     }
                     trackedTimeseres.Inc(histTsList.Count);
                 }
                 catch (Exception e)
                 {
-                    allOk = false;
                     Logger.LogError("Failed to push to CDF");
                     Logger.LogException(e);
+                    return false;
                 }
             }
             // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
@@ -250,11 +249,11 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                allOk = false;
                 Logger.LogError("Failed to synchronize nodes");
                 Logger.LogException(e);
+                return false;
             }
-            return allOk;
+            return true;
         }
         /// <summary>
         /// Reset the pusher, preparing it to be restarted
@@ -282,7 +281,6 @@ namespace Cognite.OpcUa
             ISet<string> missingAssetIds = new HashSet<string>();
 
             Logger.LogInfo("Test " + assetList.Count() + " assets");
-            bool allOk = true;
 
             var assetIdentities = assetIds.Keys.Select(Identity.ExternalId);
             try
@@ -299,8 +297,8 @@ namespace Cognite.OpcUa
                 else
                 {
                     Logger.LogError("Failed to get assets");
-                    allOk = false;
                     nodeEnsuringFailures.Inc();
+                    return false;
                 }
             }
             catch (ResponseException ex)
@@ -318,10 +316,10 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    allOk = false;
                     nodeEnsuringFailures.Inc();
                     Logger.LogError("Failed to fetch asset ids");
                     Logger.LogException(ex);
+                    return false;
                 }
             }
             if (missingAssetIds.Any())
@@ -349,8 +347,8 @@ namespace Cognite.OpcUa
                 else
                 {
                     Logger.LogError("Failed to create assets");
-                    allOk = false;
                     nodeEnsuringFailures.Inc();
+                    return false;
                 }
                 var idsToMap = assetIds.Keys
                     .Where(id => !missingAssetIds.Contains(id))
@@ -370,12 +368,12 @@ namespace Cognite.OpcUa
                     else
                     {
                         Logger.LogError("Failed to get asset ids");
-                        allOk = false;
                         nodeEnsuringFailures.Inc();
+                        return false;
                     }
                 }
             }
-            return allOk;
+            return true;
         }
         /// <summary>
         /// Test if given list of timeseries exists, then create any that do not, checking for properties.
@@ -396,7 +394,6 @@ namespace Cognite.OpcUa
 
             Logger.LogInfo("Test " + tsIds.Keys.Count + " timeseries");
             var missingTSIds = new HashSet<string>();
-            bool allOk = true;
             try
             {
                 var readResults = await Utils.RetryAsync(() =>
@@ -408,8 +405,8 @@ namespace Cognite.OpcUa
                 else
                 {
                     Logger.LogError("Failed to get timeseries");
-                    allOk = false;
                     nodeEnsuringFailures.Inc();
+                    return false;
                 }
             }
             catch (ResponseException ex)
@@ -427,10 +424,10 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    allOk = false;
                     nodeEnsuringFailures.Inc();
                     Logger.LogError("Failed to fetch timeseries data");
                     Logger.LogException(ex);
+                    return false;
                 }
             }
             if (missingTSIds.Any())
@@ -443,11 +440,11 @@ namespace Cognite.OpcUa
                 if (await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS") == null)
                 {
                     Logger.LogError("Failed to create TS");
-                    allOk = false;
                     nodeEnsuringFailures.Inc();
+                    return false;
                 }
             }
-            return allOk;
+            return true;
         }
         /// <summary>
         /// Try to get latest timestamp from given list of timeseries, then create any not found and try again
@@ -459,7 +456,6 @@ namespace Cognite.OpcUa
         {
             if (!tsList.Any()) return true;
             var tsIds = new Dictionary<string, BufferedVariable>();
-            bool allOk = true;
             foreach (BufferedVariable node in tsList)
             {
                 string externalId = UAClient.GetUniqueId(node.Id);
@@ -490,8 +486,8 @@ namespace Cognite.OpcUa
                 else
                 {
                     Logger.LogError("Failed to get historizing timeseries");
-                    allOk = false;
                     nodeEnsuringFailures.Inc();
+                    return false;
                 }
             }
             catch (ResponseException ex)
@@ -509,10 +505,10 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    allOk = false;
                     nodeEnsuringFailures.Inc();
                     Logger.LogError("Failed to fetch historizing timeseries data");
                     Logger.LogException(ex);
+                    return false;
                 }
             }
             if (missingTSIds.Any())
@@ -526,8 +522,8 @@ namespace Cognite.OpcUa
                 if (await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create historizing TS") == null)
                 {
                     Logger.LogError("Failed to create historizing TS");
-                    allOk = false;
                     nodeEnsuringFailures.Inc();
+                    return false;
                 }
 
                 var idsToMap = tsIds.Keys
@@ -553,12 +549,12 @@ namespace Cognite.OpcUa
                     else
                     {
                         Logger.LogError("Failed to get historizing timeseries ids");
-                        allOk = false;
                         nodeEnsuringFailures.Inc();
+                        return false;
                     }
                 }
             }
-            return allOk;
+            return true;
         }
         /// <summary>
         /// Create timeseries poco to create this node in CDF
