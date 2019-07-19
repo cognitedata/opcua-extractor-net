@@ -19,10 +19,11 @@ namespace Testing
         readonly Dictionary<string, TimeseriesDummy> timeseries = new Dictionary<string, TimeseriesDummy>();
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
+        public bool AllowPush { get; set; } = true;
         public MockMode mode;
         public enum MockMode
         {
-            None, Some, All
+            None, Some, All, FailAsset
         }
         public DummyFactory(string project, MockMode mode)
         {
@@ -92,6 +93,21 @@ namespace Testing
                         items = found.Concat(missing).Select(aid => assets[aid])
                     });
                     return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(res)
+                    };
+                }
+                if (mode == MockMode.FailAsset)
+                {
+                    string res = JsonConvert.SerializeObject(new ErrorWrapper
+                    {
+                        error = new ErrorContent
+                        {
+                            code = 400,
+                            message = "weird failure"
+                        }
+                    });
+                    return new HttpResponseMessage(HttpStatusCode.BadRequest)
                     {
                         Content = new StringContent(res)
                     };
@@ -261,6 +277,20 @@ namespace Testing
 
         private HttpResponseMessage HandleTimeseriesData()
         {
+            if (!AllowPush)
+            {
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
+                    {
+                        error = new ErrorContent
+                        {
+                            code = 501,
+                            message = "bad something or other"
+                        }
+                    }))
+                };
+            }
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{}")

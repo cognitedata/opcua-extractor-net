@@ -82,6 +82,7 @@ namespace Cognite.OpcUa
         {
             lock (fileLock)
             {
+                int count = 0;
                 using (FileStream fs = new FileStream(config.BufferFile, FileMode.OpenOrCreate, FileAccess.Read))
                 {
                     byte[] sizeBytes = new byte[sizeof(ushort)];
@@ -99,10 +100,12 @@ namespace Cognite.OpcUa
                             Logger.LogWarning("Bad datapoint in file");
                             continue;
                         }
+                        count++;
                         Logger.LogData(buffDp);
                         bufferedDPQueue.Enqueue(buffDp);
                     }
                 }
+                Logger.LogInfo("Read " + count + " points from file");
             }
             File.Create(config.BufferFile).Close();
             BufferFileEmpty = true;

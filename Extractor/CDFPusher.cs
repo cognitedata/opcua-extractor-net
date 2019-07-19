@@ -90,7 +90,17 @@ namespace Cognite.OpcUa
                 Client client = Client.Create(httpClient)
                     .AddHeader("api-key", config.ApiKey)
                     .SetProject(config.Project);
-                if (!await Utils.RetryAsync(async () => await client.InsertDataAsync(finalDataPoints), "Failed to insert into CDF"))
+                bool success;
+                try
+                {
+                    success = await Utils.RetryAsync(async () =>
+                        await client.InsertDataAsync(finalDataPoints), "Failed to insert into CDF");
+                }
+                catch (ResponseException)
+                {
+                    success = false;
+                }
+                if (!success)
                 {
                     Logger.LogError("Failed to insert " + count + " datapoints into CDF");
                     dataPointPushFailures.Inc();
@@ -295,7 +305,7 @@ namespace Cognite.OpcUa
             }
             catch (ResponseException ex)
             {
-                if (ex.Code == 400)
+                if (ex.Code == 400 && ex.Missing.Any())
                 {
                     foreach (var missing in ex.Missing)
                     {
