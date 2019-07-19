@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Testing
 {
-    public class PusherTests
+    public class UAClientTests
     {
         [Trait("Category", "basicserver")]
         [Trait("Tests", "Mapping")]

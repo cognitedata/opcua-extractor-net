@@ -38,7 +38,7 @@ CogniteConfig:
   ApiKey: test
   # The root asset must exist, and will be mapped to the root node in opcua, no changes will be made to the root asset
   # Root assetid to map to root OPC-UA node
-  RootAssetId: 0
+  RootAssetId: 123
   # Root node in OPC-UA
   RootNode:
     # Full name of the namespace of the root node
