@@ -33,13 +33,13 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception e)
                 {
+                    Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
                     if (e.GetType() == typeof(ResponseException) && (i == retryCount - 1 || expectResponseException))
                     {
                         var re = (ResponseException)e;
                         throw re;
                     }
-                    Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
-                    Logger.LogException(e);
+                    //Logger.LogException(e);
                 }
                 await Task.Delay(500 * (1 << i));
             }
@@ -82,6 +82,7 @@ namespace Cognite.OpcUa
         {
             lock (fileLock)
             {
+                int count = 0;
                 using (FileStream fs = new FileStream(config.BufferFile, FileMode.OpenOrCreate, FileAccess.Read))
                 {
                     byte[] sizeBytes = new byte[sizeof(ushort)];
@@ -99,10 +100,12 @@ namespace Cognite.OpcUa
                             Logger.LogWarning("Bad datapoint in file");
                             continue;
                         }
+                        count++;
                         Logger.LogData(buffDp);
                         bufferedDPQueue.Enqueue(buffDp);
                     }
                 }
+                Logger.LogInfo("Read " + count + " points from file");
             }
             File.Create(config.BufferFile).Close();
             BufferFileEmpty = true;
