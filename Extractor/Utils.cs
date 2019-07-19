@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Cognite.Sdk;
-using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa
@@ -34,16 +33,13 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception e)
                 {
-                    if (e.GetType() == typeof(ResponseException))
+                    if (e.GetType() == typeof(ResponseException) && (i == retryCount - 1 || expectResponseException))
                     {
                         var re = (ResponseException)e;
-                        if (i == retryCount - 1 || expectResponseException)
-                        {
-                            throw re;
-                        }
+                        throw re;
                     }
                     Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
-                    // Logger.LogException(e);
+                    Logger.LogException(e);
                 }
                 await Task.Delay(500 * (1 << i));
             }

@@ -75,14 +75,14 @@ namespace Cognite.OpcUa
             if (client.IsNumericType(DataType) || IsProperty)
             {
                 Value = new BufferedDataPoint(
-                    new DateTimeOffset(SourceTimestamp).ToUnixTimeMilliseconds(),
+                    new DateTimeOffset(SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp).ToUnixTimeMilliseconds(),
                     client.GetUniqueId(Id),
                     UAClient.ConvertToString(value));
             }
             else
             {
                 Value = new BufferedDataPoint(
-                    new DateTimeOffset(SourceTimestamp).ToUnixTimeMilliseconds(),
+                    new DateTimeOffset(SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp).ToUnixTimeMilliseconds(),
                     client.GetUniqueId(Id),
                     UAClient.ConvertToDouble(value));
             }

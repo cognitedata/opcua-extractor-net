@@ -32,10 +32,11 @@ namespace Cognite.OpcUa
             .CreateGauge("opcua_start_time", "Start time for the extractor");
 
         /// <summary>
-        /// Primary constructor, creates and starts the UAClient and starts the dataPushTimer.
+        /// Constructor
         /// </summary>
-        /// <param name="config"></param>
-        /// <param name="pusher"></param>
+        /// <param name="config">Full config object</param>
+        /// <param name="pusher">Pusher to be used</param>
+        /// <param name="UAClient">UAClient to use</param>
         public Extractor(FullConfig config, IPusher pusher, UAClient UAClient)
         {
             this.pusher = pusher;
@@ -49,6 +50,10 @@ namespace Cognite.OpcUa
         }
         #region Interface
 
+        /// <summary>
+        /// Start the extractor, starting the data-push and the UAClient
+        /// </summary>
+        /// <returns>True on success</returns>
         public bool Start()
         {
             if (UAClient.Started) return true;
@@ -149,16 +154,24 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Disables pushing to CDF, then waits until the final push has been completed
         /// </summary>
-        /// <returns></returns>
         public async Task WaitForFinalPush()
         {
             runningPush = false;
             while (pushingDatapoints) await Task.Delay(100);
         }
+        /// <summary>
+        /// Starts synchronization of nodes with opcua using normal callbacks
+        /// </summary>
+        /// <param name="variables">Variables to be synchronized</param>
         public void SynchronizeNodes(IEnumerable<BufferedVariable> variables)
         {
             UAClient.SynchronizeNodes(variables, HistoryDataHandler, SubscriptionHandler);
         }
+        /// <summary>
+        /// Is the variable allowed to be mapped to a timeseries?
+        /// </summary>
+        /// <param name="node">Variable to be tested</param>
+        /// <returns>True if variable may be mapped to a timeseries</returns>
         public bool AllowTSMap(BufferedVariable node)
         {
             return UAClient.IsNumericType(node.DataType) && node.ValueRank == ValueRanks.Scalar;
