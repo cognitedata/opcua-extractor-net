@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Opc.Ua;
 
@@ -19,11 +18,6 @@ namespace Cognite.OpcUa
         /// The UAClient to use as source
         /// </summary>
         UAClient UAClient { set; }
-        /// <summary>
-        /// The set of uniqueIds discovered, but not yet synced with CDF
-        /// </summary>
-        ISet<string> NotInSync { get; }
-        object NotInSyncLock { get; }
         /// <summary>
         /// Push data points, emptying the queue
         /// </summary>

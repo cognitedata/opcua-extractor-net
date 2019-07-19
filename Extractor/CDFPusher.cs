@@ -27,8 +27,6 @@ namespace Cognite.OpcUa
         public UAClient UAClient { private get; set; }
         private NodeId _rootId;
         public NodeId RootNode { get { return _rootId; } set { nodeToAssetIds.Add(value.ToString(), rootAsset); _rootId = value; } }
-        public ISet<string> NotInSync { get; }  = new HashSet<string>();
-        public object NotInSyncLock { get; } = new object();
 
         private readonly long rootAsset = -1;
 
@@ -177,9 +175,9 @@ namespace Cognite.OpcUa
                     if (node.Historizing)
                     {
                         histTsList.Add(node);
-                        lock (NotInSyncLock)
+                        lock (Extractor.NotInSyncLock)
                         {
-                            NotInSync.Add(UAClient.GetUniqueId(node.Id));
+                            Extractor.NotInSync.Add(UAClient.GetUniqueId(node.Id));
                         }
                     }
                     else

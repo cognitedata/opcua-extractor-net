@@ -24,6 +24,11 @@ namespace Cognite.OpcUa
         private bool pushingDatapoints;
         private bool runningPush = true;
         private readonly IPusher pusher;
+        /// <summary>
+        /// The set of uniqueIds discovered, but not yet synced with the pusher
+        /// </summary>
+        public ISet<string> NotInSync { get; } = new HashSet<string>();
+        public object NotInSyncLock { get; } = new object();
 
         public bool Started { get; private set; }
 
@@ -215,7 +220,7 @@ namespace Cognite.OpcUa
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
             string uniqueId = UAClient.GetUniqueId(item.ResolvedNodeId);
-            if (!buffersEmpty && pusher.NotInSync.Contains(uniqueId)) return;
+            if (!buffersEmpty && NotInSync.Contains(uniqueId)) return;
 
             foreach (var datapoint in item.DequeueValues())
             {
@@ -246,10 +251,10 @@ namespace Cognite.OpcUa
             string uniqueId = UAClient.GetUniqueId(nodeid);
             if (final)
             {
-                lock (pusher.NotInSyncLock)
+                lock (NotInSyncLock)
                 {
-                    pusher.NotInSync.Remove(uniqueId);
-                    buffersEmpty = pusher.NotInSync.Count == 0;
+                    NotInSync.Remove(uniqueId);
+                    buffersEmpty = NotInSync.Count == 0;
                 }
             }
             if (data == null || data.DataValues == null) return;

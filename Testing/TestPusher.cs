@@ -15,9 +15,6 @@ namespace Testing
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
 
-        public ISet<string> NotInSync { get; private set; } = new HashSet<string>();
-
-        public object NotInSyncLock { get; private set; } = new object();
         private readonly Dictionary<string, Action<List<BufferedNode>, List<BufferedVariable>, List<BufferedVariable>>> nodeTests;
         private readonly Action<List<BufferedDataPoint>> dpTest;
 
@@ -92,9 +89,9 @@ namespace Testing
                     if (node.Historizing)
                     {
                         histTsList.Add(node);
-                        lock (NotInSyncLock)
+                        lock (Extractor.NotInSyncLock)
                         {
-                            NotInSync.Add(UAClient.GetUniqueId(node.Id));
+                            Extractor.NotInSync.Add(UAClient.GetUniqueId(node.Id));
                         }
                     }
                     else
