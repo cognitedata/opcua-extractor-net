@@ -677,10 +677,8 @@ namespace Cognite.OpcUa
             {
                 enumerator.MoveNext();
                 node.Description = enumerator.Current.GetValue("");
-                if (node.IsVariable)
+                if (node.IsVariable && node is BufferedVariable vnode)
                 {
-                    BufferedVariable vnode = node as BufferedVariable;
-                    if (node == null) continue;
                     enumerator.MoveNext();
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
                     if (dataType.IdType == IdType.Numeric)
