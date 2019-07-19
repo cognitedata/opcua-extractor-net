@@ -124,6 +124,7 @@ namespace Cognite.OpcUa
         /// Empty queue, fetch info for each relevant node, test results against CDF, then synchronize any variables
         /// </summary>
         /// <param name="nodeQueue">Queue to be emptied</param>
+        /// <returns>True if no operation failed unexpectedly</returns>
         public async Task<bool> PushNodes(ConcurrentQueue<BufferedNode> nodeQueue)
         {
             var nodeMap = new Dictionary<string, BufferedNode>();
@@ -264,6 +265,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="assetList">List of assets to be tested</param>
         /// <param name="client">Cognite client to be used</param>
+        /// <returns>True if no operation failed unexpectedly</returns>
         private async Task<bool> EnsureAssets(IEnumerable<BufferedNode> assetList, Client client)
         {
             var assetIds = assetList.ToDictionary(node => UAClient.GetUniqueId(node.Id));
@@ -372,6 +374,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="tsList">List of timeseries to be tested</param>
         /// <param name="client">Cognite client to be used</param>
+        /// <returns>True if no operation failed unexpectedly</returns>
         private async Task<bool> EnsureTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
         {
             if (!tsList.Any()) return true;
@@ -443,6 +446,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="tsList">List of timeseries to be tested</param>
         /// <param name="client">Cognite client to be used</param>
+        /// <returns>True if no operation failed unexpectedly</returns>
         private async Task<bool> EnsureHistorizingTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
         {
             if (!tsList.Any()) return true;

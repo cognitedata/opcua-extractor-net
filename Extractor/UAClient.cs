@@ -192,6 +192,9 @@ namespace Cognite.OpcUa
                 }
             }
         }
+        /// <summary>
+        /// Safely increment number of active opcua operations
+        /// </summary>
         private void IncOperations()
         {
             lock (pendingOpLock)
@@ -199,6 +202,9 @@ namespace Cognite.OpcUa
                 pendingOperations++;
             }
         }
+        /// <summary>
+        /// Safely decrement number of active opcua operations
+        /// </summary>
         private void DecOperations()
         {
             lock (pendingOpLock)
@@ -206,6 +212,10 @@ namespace Cognite.OpcUa
                 pendingOperations--;
             }
         }
+        /// <summary>
+        /// Wait for all opcua operations to finish
+        /// </summary>
+        /// <returns></returns>
         public async Task WaitForOperations()
         {
             while (pendingOperations > 0) await Task.Delay(100);
@@ -247,10 +257,8 @@ namespace Cognite.OpcUa
             foreach (var lparents in Utils.ChunkBy(parents, bulkConfig.UABrowse))
             {
                 IncOperations();
-                var tobrowse = new BrowseDescriptionCollection();
-                foreach (var id in lparents)
-                {
-                    tobrowse.Add(new BrowseDescription
+                var tobrowse = new BrowseDescriptionCollection(lparents.Select(id =>
+                    new BrowseDescription
                     {
                         NodeId = id,
                         ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
@@ -259,8 +267,8 @@ namespace Cognite.OpcUa
                         BrowseDirection = BrowseDirection.Forward,
                         ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
                             | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition
-                    });
-                }
+                    }
+                ));
                 try
                 {
                     session.Browse(
@@ -506,22 +514,8 @@ namespace Cognite.OpcUa
             Action<HistoryData, bool, NodeId> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler)
         {
-            int count = 0;
-            var toSynch = new List<BufferedVariable>();
-
-            foreach (var node in nodeList)
-            {
-                if (node != null
-                    && node.DataType >= DataTypes.Boolean
-                    && node.DataType <= DataTypes.Double
-                    && node.IsVariable
-                    && node.ValueRank == ValueRanks.Scalar)
-                {
-                    count++;
-                    toSynch.Add(node);
-                }
-            }
-            if (count == 0) return;
+            var toSynch = nodeList.Where(node => IsNumericType(node.DataType) && node.ValueRank == ValueRanks.Scalar);
+            if (!toSynch.Any()) return;
             Subscription subscription = null;
             foreach (var sub in session.Subscriptions)
             {
@@ -535,7 +529,7 @@ namespace Cognite.OpcUa
             {
                 subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
             }
-            count = 0;
+            int count = 0;
             var hasSubscription = new HashSet<NodeId>();
             foreach (var item in subscription.MonitoredItems)
             {
