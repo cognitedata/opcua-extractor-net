@@ -19,7 +19,7 @@ The config file should contain description of most config options, a few are not
  has already been run, then new assets and timeseries will be created. The externalId will be on the form
  `[GlobalPrefix].[Mapped or full namespace]:[Identifiertype and identifier]`. If GlobalPrefix is chosen to be unique within CDF
  then the ExternalId should remain unique.
- Note that there is an exception to this if the IDs are longer than 128 characters in total. externalId in CDF is limited to 128 characters, but NodeIds may have identifiers of up to 4096 characters. To fit with CDF we cut off everything after the first 128 characters in the final ID. This means that if the namespaces are long enough, we potentially only get 70-80 characters from the identifier itself. If this creates duplicates then the duplicates will be ignored.
+ Note that there is an exception to this if the IDs are longer than 128 characters in total. externalId in CDF is limited to 256 characters, but NodeIds may have identifiers of up to 4096 characters. To fit with CDF we cut off everything after the first 256 characters in the final ID. This means that if the namespaces are long enough, we potentially only get 180 - 200 characters from the identifier itself. If this creates duplicates then the duplicates will be ignored.
  - `RootAssetId`, `RootNamespaceId` and `RootNodeId` are used to designate the root node and root asset, these are mapped such
  that the RootAsset and RootNode will be in the same place in the final hierarchy. In theory, multiple extractors could
  run in parallel against different top level assets/nodes.
@@ -36,8 +36,8 @@ For testing metrics, a good solution is the prom-stack found [here](https://gith
 ### Testing
 There is a test script under Testing/test.sh. To add more tests, either add to an existing category by specifying an XUnit trait Category either basicserver or fullserver.
 
- * Basicserver, server-test1.py, is a small server with two historizing nodes and a few objects.
- * Fullserver, server-test2.py has around 2000 variables and a 30 layer deep tree of 150 objects.
+ - Basicserver, server-test1.py, is a small server with two historizing nodes and a few objects.
+ - Fullserver, server-test2.py has around 2000 variables and a 30 layer deep tree of 150 objects.
 
 To add more servers just add them to the servers folder, then edit the test.sh script to stop the previous server and start the new one in a screen session. See the existing code for examples.
  
