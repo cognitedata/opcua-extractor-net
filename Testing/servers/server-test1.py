@@ -13,6 +13,7 @@ sys.path.insert(0, "..")
 if __name__ == "__main__":
 
     # setup our server
+    print("Starting basic server")
     server = Server()
     server.set_endpoint("opc.tcp://0.0.0.0:4840/freeopcua/server/")
 

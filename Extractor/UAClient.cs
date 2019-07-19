@@ -516,7 +516,7 @@ namespace Cognite.OpcUa
         {
             var toSynch = nodeList.Where(node => IsNumericType(node.DataType) && node.ValueRank == ValueRanks.Scalar);
             if (!toSynch.Any()) return;
-            var subscription = session.Subscriptions.First(sub => sub.DisplayName != "NodeChangeListener");
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName != "NodeChangeListener");
             if (subscription == null)
             {
                 subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };

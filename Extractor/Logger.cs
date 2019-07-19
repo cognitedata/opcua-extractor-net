@@ -20,6 +20,7 @@ namespace Cognite.OpcUa
         private static bool started;
 		private static bool logData;
         private static bool logNodes;
+        private static bool logConsole;
 
         private enum Severity
         {
@@ -32,7 +33,7 @@ namespace Cognite.OpcUa
             {
                 if (started)
                 {
-                    throw new Exception("Logger already started");
+                    return;
                 }
 
                 started = true;
@@ -45,6 +46,7 @@ namespace Cognite.OpcUa
 
 			logData = options.LogData;
             logNodes = options.LogNodes;
+            logConsole = options.LogConsole;
             if (LogLines.IsAddingCompleted)
             {
                 LogLines = new BlockingCollection<LogLine>();
@@ -209,11 +211,13 @@ namespace Cognite.OpcUa
             string msg = line.Message ?? FormatException(line.Exception);
 
             string logMsg = $"{line.Time} {line.Severity.ToString().PadRight(7)} {msg}";
-            ConsoleColor old = Console.ForegroundColor;
-            Console.ForegroundColor = ToColor(line.Severity);
-            Console.Out.WriteLine(logMsg);
-            Console.ForegroundColor = old;
-
+            if (logConsole)
+            {
+                ConsoleColor old = Console.ForegroundColor;
+                Console.ForegroundColor = ToColor(line.Severity);
+                Console.Out.WriteLine(logMsg);
+                Console.ForegroundColor = old;
+            }
             if (logFolder != null)
             {
                 var hour = line.Time.Date.AddHours(line.Time.Hour);

@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Testing
 {
-    public class PusherTests
+    public class UAClientTests
     {
         [Trait("Category", "basicserver")]
         [Trait("Tests", "Mapping")]
@@ -48,11 +48,6 @@ namespace Testing
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             extractor.Start();
             Assert.True(extractor.Started);
-            if (!extractor.Started)
-            {
-                Logger.Shutdown();
-                return;
-            }
             var tasks = new List<Task>
             {
                 Task.Run(extractor.MapUAToCDF)
@@ -67,15 +62,15 @@ namespace Testing
 			await Task.WhenAll(tasks);
             Assert.All(tasks, (task) => Assert.False(task.IsFaulted));
 			extractor.Close();
-			Logger.Shutdown();
         }
         [Trait("Category", "basicserver")]
         [Trait("Tests", "Buffer")]
         [Fact]
-        public void TestBufferReadWrite()
+        public async Task TestBufferReadWrite()
         {
             FullConfig fullConfig = Utils.GetConfig("config.test.yml");
             if (fullConfig == null) return;
+            fullConfig.CogniteConfig.BufferFile = "testbuffer.bin";
             Logger.Startup(fullConfig.LoggerConfig);
             File.Create(fullConfig.CogniteConfig.BufferFile).Close();
             int dpRuns = 0;
@@ -102,25 +97,20 @@ namespace Testing
                 UAClient client = new UAClient(fullConfig);
                 Extractor extractor = new Extractor(fullConfig, pusher, client);
                 extractor.Start();
-                if (!extractor.Started)
-                {
-                    Logger.Shutdown();
-                    return;
-                }
-                extractor.MapUAToCDF().Wait();
+                Assert.True(extractor.Started);
+                await extractor.MapUAToCDF();
                 Assert.True(quitEvent.WaitOne(20000), "Timeout");
                 extractor.Close();
             }
             Assert.Equal(0, new FileInfo(fullConfig.CogniteConfig.BufferFile).Length);
-            Logger.Shutdown();
         }
         [Trait("Category", "fullserver")]
         [Trait("Tests", "Bulk")]
         [Fact]
-        public void TestBulkRequests()
+        public async Task TestBulkRequests()
         {
             FullConfig fullConfig = Utils.GetConfig("config.test.yml");
-            if (fullConfig == null) return;
+            if (fullConfig == null) throw new Exception("No config");
             Logger.Startup(fullConfig.LoggerConfig);
             int totalDps = 0;
             using (var quitEvent = new ManualResetEvent(false))
@@ -146,17 +136,11 @@ namespace Testing
                 UAClient client = new UAClient(fullConfig);
                 Extractor extractor = new Extractor(fullConfig, pusher, client);
                 extractor.Start();
-                if (!extractor.Started)
-                {
-                    Logger.Shutdown();
-                    return;
-                }
-                extractor.MapUAToCDF().Wait();
+                Assert.True(extractor.Started);
+                await extractor.MapUAToCDF();
                 Assert.True(quitEvent.WaitOne(20000), "Timeout");
                 extractor.Close();
             }
-
-            Logger.Shutdown();
         }
     }
 }

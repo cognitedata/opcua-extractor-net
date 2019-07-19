@@ -1,0 +1,379 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using Cognite.OpcUa;
+using Newtonsoft.Json;
+#pragma warning disable IDE1006 // Naming Styles
+
+namespace Testing
+{
+    public class DummyFactory : IHttpClientFactory
+    {
+        readonly object handlerLock = new object();
+        readonly string project;
+        readonly Dictionary<string, AssetDummy> assets = new Dictionary<string, AssetDummy>();
+        readonly Dictionary<string, TimeseriesDummy> timeseries = new Dictionary<string, TimeseriesDummy>();
+        long assetIdCounter = 1;
+        long timeseriesIdCounter = 1;
+        public MockMode mode;
+        public enum MockMode
+        {
+            None, Some, All
+        }
+        public DummyFactory(string project, MockMode mode)
+        {
+            this.project = project;
+            this.mode = mode;
+        }
+
+        public HttpClient CreateClient(string name = "client")
+        {
+            return new HttpClient(new HttpMessageHandlerStub(MessageHandler));
+        }
+
+        private async Task<HttpResponseMessage> MessageHandler(HttpRequestMessage req, CancellationToken cancellationToken)
+        {
+            string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "");
+            var content = await req.Content.ReadAsStringAsync();
+            lock (handlerLock)
+            {
+                switch (reqPath)
+                {
+                    case "/assets/byids":
+                        return HandleAssetsByIds(content);
+                    case "/assets":
+                        return HandleCreateAssets(content);
+                    case "/timeseries/byids":
+                        return HandleGetTimeseries(content);
+                    case "/timeseries":
+                        return HandleCreateTimeseries(content);
+                    case "/timeseries/data":
+                        return HandleTimeseriesData();
+                    case "/timeseries/data/latest":
+                        return HandleGetTimeseries(content);
+                    default:
+                        Logger.LogWarning("Unknown path: " + reqPath);
+                        return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                }
+            }
+        }
+
+        private HttpResponseMessage HandleAssetsByIds(string content)
+        {
+            var ids = JsonConvert.DeserializeObject<IdentityListWrapper>(content);
+            var found = new List<string>();
+            var missing = new List<string>();
+            foreach (var id in ids.items)
+            {
+                if (assets.ContainsKey(id.externalId))
+                {
+                    found.Add(id.externalId);
+                }
+                else
+                {
+                    missing.Add(id.externalId);
+                }
+            }
+            if (missing.Any())
+            {
+                IList<string> finalMissing;
+                if (mode == MockMode.All)
+                {
+                    foreach (var id in missing)
+                    {
+                        MockAsset(id);
+                    }
+                    string res = JsonConvert.SerializeObject(new AssetReadWrapper
+                    {
+                        items = found.Concat(missing).Select(aid => assets[aid])
+                    });
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(res)
+                    };
+                }
+                if (mode == MockMode.Some)
+                {
+                    finalMissing = new List<string>();
+                    int count = 1;
+                    foreach (var id in missing)
+                    {
+                        if (count++ % 2 == 0)
+                        {
+                            MockAsset(id);
+                        }
+                        else
+                        {
+                            finalMissing.Add(id);
+                        }
+                    }
+                }
+                else
+                {
+                    finalMissing = missing;
+                }
+                string result = JsonConvert.SerializeObject(new ErrorWrapper
+                {
+                    error = new ErrorContent
+                    {
+                        missing = finalMissing.Select(id => new Identity { externalId = id }),
+                        code = 400,
+                        message = "missing"
+                    }
+                });
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                {
+                    Content = new StringContent(result)
+                };
+            }
+            else
+            {
+                string result = JsonConvert.SerializeObject(new AssetReadWrapper
+                {
+                    items = found.Select(id => assets[id])
+                });
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(result)
+                };
+            }
+        }
+
+        private HttpResponseMessage HandleCreateAssets(string content)
+        {
+            var newAssets = JsonConvert.DeserializeObject<AssetReadWrapper>(content);
+            foreach (var asset in newAssets.items)
+            {
+                asset.id = assetIdCounter++;
+                asset.createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
+                asset.lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
+                asset.rootId = 123;
+                assets.Add(asset.externalId, asset);
+            }
+            string result = JsonConvert.SerializeObject(newAssets);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(result)
+            };
+        }
+
+        private HttpResponseMessage HandleGetTimeseries(string content)
+        {
+            var ids = JsonConvert.DeserializeObject<IdentityListWrapper>(content);
+            var found = new List<string>();
+            var missing = new List<string>();
+            foreach (var id in ids.items)
+            {
+                if (timeseries.ContainsKey(id.externalId))
+                {
+                    found.Add(id.externalId);
+                }
+                else
+                {
+                    missing.Add(id.externalId);
+                }
+            }
+            if (missing.Any())
+            {
+                IList<string> finalMissing;
+                if (mode == MockMode.All)
+                {
+                    foreach (var id in missing)
+                    {
+                        MockTimeseries(id);
+                    }
+                    string res = JsonConvert.SerializeObject(new TimeseriesReadWrapper
+                    {
+                        items = found.Concat(missing).Select(tid => timeseries[tid])
+                    });
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(res)
+                    };
+                }
+                if (mode == MockMode.Some)
+                {
+                    finalMissing = new List<string>();
+                    int count = 1;
+                    foreach (var id in missing)
+                    {
+                        if (count++ % 2 == 0)
+                        {
+                            MockTimeseries(id);
+                        }
+                        else
+                        {
+                            finalMissing.Add(id);
+                        }
+                    }
+                }
+                else
+                {
+                    finalMissing = missing;
+                }
+                string result = JsonConvert.SerializeObject(new ErrorWrapper
+                {
+                    error = new ErrorContent
+                    {
+                        missing = finalMissing.Select(id => new Identity { externalId = id }),
+                        code = 400,
+                        message = "missing"
+                    }
+                });
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                {
+                    Content = new StringContent(result)
+                };
+            }
+            else
+            {
+                string result = JsonConvert.SerializeObject(new TimeseriesReadWrapper
+                {
+                    items = found.Select(id => timeseries[id])
+                });
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(result)
+                };
+            }
+        }
+
+        private HttpResponseMessage HandleCreateTimeseries(string content)
+        {
+            var newTimeseries = JsonConvert.DeserializeObject<TimeseriesReadWrapper>(content);
+            foreach (var ts in newTimeseries.items)
+            {
+                ts.id = timeseriesIdCounter++;
+                ts.createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
+                ts.lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
+                timeseries.Add(ts.externalId, ts);
+            }
+            string result = JsonConvert.SerializeObject(newTimeseries);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(result)
+            };
+        }
+
+        private HttpResponseMessage HandleTimeseriesData()
+        {
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}")
+            };
+        }
+
+        private AssetDummy MockAsset(string externalId)
+        {
+            var asset = new AssetDummy
+            {
+                externalId = externalId,
+                name = "test",
+                description = "",
+                metadata = new Dictionary<string, string>(),
+                id = assetIdCounter++,
+                createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds(),
+                lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds(),
+                rootId = 123
+            };
+            assets.Add(externalId, asset);
+            return asset;
+        }
+
+        private TimeseriesDummy MockTimeseries(string externalId)
+        {
+            var ts = new TimeseriesDummy
+            {
+                id = timeseriesIdCounter++,
+                isString = false,
+                isStep = false,
+                createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds(),
+                externalId = externalId
+            };
+            timeseries.Add(externalId, ts);
+            return ts;
+        }
+    }
+    public class AssetDummy
+    {
+        public string externalId { get; set; }
+        public string name { get; set; }
+        public string description { get; set; }
+        public Dictionary<string, string> metadata { get; set; }
+        public long id { get; set; }
+        public long createdTime { get; set; }
+        public long lastUpdatedTime { get; set; }
+        public long rootId { get; set; }
+    }
+    public class AssetReadWrapper
+    {
+        public IEnumerable<AssetDummy> items { get; set; }
+    }
+    public class Identity
+    {
+        public string externalId { get; set; }
+    }
+    public class IdentityListWrapper
+    {
+        public IEnumerable<Identity> items { get; set; }
+    }
+    public class ErrorContent
+    {
+        public int code { get; set; }
+        public string message { get; set; }
+        public IEnumerable<Identity> missing { get; set; }
+    }
+    public class ErrorWrapper
+    {
+        public ErrorContent error { get; set; }
+    }
+    public class TimeseriesReadWrapper
+    {
+        public IEnumerable<TimeseriesDummy> items { get; set; }
+    }
+    public class TimeseriesDummy
+    {
+        public TimeseriesDummy()
+        {
+            datapoints = new List<DataPoint>
+            {
+                new DataPoint
+                {
+                    timestamp = new DateTimeOffset(DateTime.Now.Subtract(TimeSpan.FromMinutes(15))).ToUnixTimeMilliseconds(),
+                    value = 0
+                }
+            };
+        }
+        public long id { get; set; }
+        public bool isString { get; set; }
+        public bool isStep { get; set; }
+        public long createdTime { get; set; }
+        public long lastUpdatedTime { get; set; }
+        public string externalId { get; set; }
+        public IEnumerable<DataPoint> datapoints { get; set; }
+    }
+    public class DataPoint
+    {
+        public long timestamp { get; set; }
+        public double value { get; set; }
+    }
+    public class HttpMessageHandlerStub : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _sendAsync;
+
+        public HttpMessageHandlerStub(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> sendAsync)
+        {
+            _sendAsync = sendAsync;
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return await _sendAsync(request, cancellationToken);
+        }
+    }
+}
+#pragma warning restore IDE1006 // Naming Styles
