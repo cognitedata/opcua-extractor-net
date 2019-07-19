@@ -59,7 +59,7 @@ namespace Cognite.OpcUa
         {
             this.config = config.UAConfig;
             bulkConfig = config.BulkSizes;
-            nsmaps = config.NSMaps;
+            nsmaps = config.NSMaps ?? new Dictionary<string, string>();
             historyGranularity = config.UAConfig.HistoryGranularity <= 0 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.UAConfig.HistoryGranularity);
         }
