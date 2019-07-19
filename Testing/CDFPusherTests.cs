@@ -17,7 +17,11 @@ namespace Testing
         public async Task TestBasicPushing(DummyFactory.MockMode mode)
         {
             FullConfig fullConfig = Utils.GetConfig("config.test.yml");
-            if (fullConfig == null) return;
+            if (fullConfig == null)
+            {
+                Logger.LogError("No config");
+                return;
+            }
             Logger.Startup(fullConfig.LoggerConfig);
             Logger.LogInfo("Testing with MockMode " + mode.ToString());
             UAClient client = new UAClient(fullConfig);
@@ -25,15 +29,10 @@ namespace Testing
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             extractor.Start();
-            if (!extractor.Started)
-            {
-                Logger.Shutdown();
-                return;
-            }
+            Assert.True(extractor.Started);
             await extractor.MapUAToCDF();
             Thread.Sleep(4000);
             extractor.Close();
-            Logger.Shutdown();
         }
     }
 }

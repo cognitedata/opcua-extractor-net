@@ -61,6 +61,8 @@ LoggerConfig:
   LogNodes: false
   # Whether or not to log all data output. For debugging only. true/false
   LogData: false
+  # true if the logger should log to console
+  LogConsole: true
 
 MetricsConfig:
   # Leave host or job blank to disable metrics

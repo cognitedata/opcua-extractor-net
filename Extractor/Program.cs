@@ -173,6 +173,7 @@ namespace Cognite.OpcUa
         public string LogFolder { get; set; }
         public bool LogData { get; set; }
         public bool LogNodes { get; set; }
+        public bool LogConsole { get; set; }
     }
     public class MetricsConfig
     {

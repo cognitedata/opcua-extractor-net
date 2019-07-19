@@ -131,10 +131,6 @@ namespace Cognite.OpcUa
                 {
                     fullConfig.CogniteConfig.Project = envProject;
                 }
-                foreach (var kvp in fullConfig.NSMaps)
-                {
-                    Console.WriteLine(kvp.Key + ", " + kvp.Value);
-                }
             }
             catch (Exception e)
             {
