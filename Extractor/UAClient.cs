@@ -516,28 +516,19 @@ namespace Cognite.OpcUa
         {
             var toSynch = nodeList.Where(node => IsNumericType(node.DataType) && node.ValueRank == ValueRanks.Scalar);
             if (!toSynch.Any()) return;
-            Subscription subscription = null;
-            foreach (var sub in session.Subscriptions)
-            {
-                if (sub.DisplayName != "NodeChangeListener")
-                {
-                    subscription = sub;
-                    break;
-                }
-            }
+            var subscription = session.Subscriptions.First(sub => sub.DisplayName != "NodeChangeListener");
             if (subscription == null)
             {
                 subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
             }
             int count = 0;
-            var hasSubscription = new HashSet<NodeId>();
-            foreach (var item in subscription.MonitoredItems)
-            {
-                hasSubscription.Add(item.ResolvedNodeId);
-            }
-            foreach (BufferedNode node in toSynch)
-            {
-                if (!hasSubscription.Contains(node.Id))
+            var hasSubscription = subscription.MonitoredItems
+                .Select(sub => sub.ResolvedNodeId)
+                .ToHashSet();
+
+            subscription.AddItems(toSynch
+                .Where(node => !hasSubscription.Contains(node.Id))
+                .Select(node =>
                 {
                     var monitor = new MonitoredItem(subscription.DefaultItem)
                     {
@@ -545,10 +536,11 @@ namespace Cognite.OpcUa
                         DisplayName = "Value: " + node.DisplayName
                     };
                     monitor.Notification += subscriptionHandler;
-                    subscription.AddItem(monitor);
                     count++;
-                }
-            }
+                    return monitor;
+                })
+            );
+
             Logger.LogInfo("Add " + count + " subscriptions");
             lock (subscriptionLock)
             {
@@ -897,7 +889,11 @@ namespace Cognite.OpcUa
             }
             return extId;
         }
-
+        /// <summary>
+        /// Check datatype is numeric and allowed to be mapped to CDF
+        /// </summary>
+        /// <param name="dataType">Datatype to be tested</param>
+        /// <returns>True if datatype is numeric</returns>
         public bool IsNumericType(uint dataType)
         {
             return dataType >= DataTypes.Boolean && dataType <= DataTypes.Double;
