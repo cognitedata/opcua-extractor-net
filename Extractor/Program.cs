@@ -92,9 +92,9 @@ namespace Cognite.OpcUa
                 string encoded = Convert.ToBase64String(
                     System.Text.Encoding
                         .GetEncoding("ISO-8859-1")
-                        .GetBytes(config.Username + ":" + config.Password)
+                        .GetBytes($"{config.Username}:{config.Password}")
                 );
-                additionalHeaders.Add("Authorization", "Basic " + encoded);
+                additionalHeaders.Add("Authorization", $"Basic {encoded}");
             }
             var pusher = new MetricPusher(config.URL, config.Job, config.Instance, additionalHeaders);
             worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));

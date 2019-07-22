@@ -83,7 +83,7 @@ namespace Cognite.OpcUa
                     })
                 });
 
-            Logger.LogInfo("Push " + count + " datapoints to CDF");
+            Logger.LogInfo($"Push {count} datapoints to CDF");
             using (HttpClient httpClient = clientFactory.CreateClient())
             {
                 httpClient.Timeout = TimeSpan.FromSeconds(30);
@@ -102,7 +102,7 @@ namespace Cognite.OpcUa
                 }
                 if (!success)
                 {
-                    Logger.LogError("Failed to insert " + count + " datapoints into CDF");
+                    Logger.LogError($"Failed to insert {count} datapoints into CDF");
                     dataPointPushFailures.Inc();
                     if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile))
                     {
@@ -167,7 +167,7 @@ namespace Cognite.OpcUa
                 nodeMap.Add(UAClient.GetUniqueId(buffer.Id), buffer);
             }
             if (varList.Count == 0 && assetList.Count == 0) return true;
-            Logger.LogInfo("Getting data for " + varList.Count + " variables and " + assetList.Count + " objects");
+            Logger.LogInfo($"Getting data for {varList.Count} variables and {assetList.Count} objects");
             try
             {
                 UAClient.ReadNodeData(assetList.Concat(varList));
@@ -195,7 +195,7 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            Logger.LogInfo("Testing " + (varList.Count + assetList.Count) + " nodes against CDF");
+            Logger.LogInfo($"Testing {varList.Count + assetList.Count} nodes against CDF");
             if (config.Debug)
             {
                 Extractor.SynchronizeNodes(tsList.Concat(histTsList));
@@ -280,7 +280,7 @@ namespace Cognite.OpcUa
             // Specifically anything related to NodeToAssetIds
             ISet<string> missingAssetIds = new HashSet<string>();
 
-            Logger.LogInfo("Test " + assetList.Count() + " assets");
+            Logger.LogInfo($"Test {assetList.Count()} assets");
 
             var assetIdentities = assetIds.Keys.Select(Identity.ExternalId);
             try
@@ -288,7 +288,7 @@ namespace Cognite.OpcUa
                 var readResults = await Utils.RetryAsync(() => client.GetAssetsByIdsAsync(assetIdentities), "Failed to get assets", true);
                 if (readResults != null)
                 {
-                    Logger.LogInfo("Found " + readResults.Count() + " assets");
+                    Logger.LogInfo($"Found {readResults.Count()} assets");
                     foreach (var resultItem in readResults)
                     {
                         nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
@@ -312,7 +312,7 @@ namespace Cognite.OpcUa
                             missingAssetIds.Add(value.ToString());
                         }
                     }
-                    Logger.LogInfo("Found " + ex.Missing.Count() + " missing assets");
+                    Logger.LogInfo($"Found {ex.Missing.Count()} missing assets");
                 }
                 else
                 {
@@ -324,7 +324,7 @@ namespace Cognite.OpcUa
             }
             if (missingAssetIds.Any())
             {
-                Logger.LogInfo("Create " + missingAssetIds.Count + " new assets");
+                Logger.LogInfo($"Create {missingAssetIds.Count} new assets");
 
                 var getMetaData = missingAssetIds.Select(id => assetIds[id]);
                 try
@@ -356,7 +356,7 @@ namespace Cognite.OpcUa
 
                 if (idsToMap.Any())
                 {
-                    Logger.LogInfo("Get remaining " + idsToMap.Count() + " assetids");
+                    Logger.LogInfo($"Get remaining {idsToMap.Count()} assetids");
                     var readResults = await Utils.RetryAsync(() => client.GetAssetsByIdsAsync(idsToMap), "Failed to get asset ids");
                     if (readResults != null)
                     {
@@ -392,7 +392,7 @@ namespace Cognite.OpcUa
                 nodeIsHistorizing[externalId] = false;
             }
 
-            Logger.LogInfo("Test " + tsIds.Keys.Count + " timeseries");
+            Logger.LogInfo($"Test {tsIds.Keys.Count} timeseries");
             var missingTSIds = new HashSet<string>();
             try
             {
@@ -400,7 +400,7 @@ namespace Cognite.OpcUa
                     client.GetTimeseriesByIdsAsync(tsIds.Keys), "Failed to get timeseries", true);
                 if (readResults != null)
                 {
-                    Logger.LogInfo("Found " + readResults.Count() + " timeseries");
+                    Logger.LogInfo($"Found {readResults.Count()} timeseries");
                 }
                 else
                 {
@@ -420,7 +420,7 @@ namespace Cognite.OpcUa
                             missingTSIds.Add(value.ToString());
                         }
                     }
-                    Logger.LogInfo("Found " + ex.Missing.Count() + " missing timeseries");
+                    Logger.LogInfo($"Found {ex.Missing.Count()} missing timeseries");
                 }
                 else
                 {
@@ -432,7 +432,7 @@ namespace Cognite.OpcUa
             }
             if (missingTSIds.Any())
             {
-                Logger.LogInfo("Create " + missingTSIds.Count + " new timeseries");
+                Logger.LogInfo($"Create {missingTSIds.Count} new timeseries");
 
                 var getMetaData = missingTSIds.Select(id => tsIds[id]);
                 UAClient.GetNodeProperties(getMetaData);
@@ -463,7 +463,7 @@ namespace Cognite.OpcUa
                 nodeIsHistorizing[externalId] = true;
             }
 
-            Logger.LogInfo("Test " + tsIds.Keys.Count + " historizing timeseries");
+            Logger.LogInfo($"Test {tsIds.Keys.Count} historizing timeseries");
             var missingTSIds = new HashSet<string>();
 
             var pairedTsIds = tsIds.Keys.Select<string, (Identity, string)>(key => (Identity.ExternalId(key), null));
@@ -473,7 +473,7 @@ namespace Cognite.OpcUa
                     client.GetLatestDataPointAsync(pairedTsIds), "Failed to get historizing timeseries", true);
                 if (readResults != null)
                 {
-                    Logger.LogInfo("Found " + readResults.Count() + " historizing timeseries");
+                    Logger.LogInfo($"Found {readResults.Count()} historizing timeseries");
                     foreach (var resultItem in readResults)
                     {
                         if (resultItem.DataPoints.Any())
@@ -501,7 +501,7 @@ namespace Cognite.OpcUa
                             missingTSIds.Add(value.ToString());
                         }
                     }
-                    Logger.LogInfo("Found " + ex.Missing.Count() + " missing historizing timeseries");
+                    Logger.LogInfo($"Found {ex.Missing.Count()} missing historizing timeseries");
                 }
                 else
                 {
@@ -513,7 +513,7 @@ namespace Cognite.OpcUa
             }
             if (missingTSIds.Any())
             {
-                Logger.LogInfo("Create " + missingTSIds.Count + " new historizing timeseries");
+                Logger.LogInfo($"Create {missingTSIds.Count} new historizing timeseries");
 
                 var getMetaData = missingTSIds.Select(id => tsIds[id]);
                 UAClient.GetNodeProperties(getMetaData);
@@ -532,7 +532,7 @@ namespace Cognite.OpcUa
 
                 if (idsToMap.Any())
                 {
-                    Logger.LogInfo("Get remaining " + idsToMap.Count() + " historizing timeseries ids");
+                    Logger.LogInfo($"Get remaining {idsToMap.Count()} historizing timeseries ids");
                     var readResults = await Utils.RetryAsync(() => client.GetLatestDataPointAsync(idsToMap),
                         "Failed to get historizing timeseries ids");
                     if (readResults != null)

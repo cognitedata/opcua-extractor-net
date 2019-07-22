@@ -111,11 +111,11 @@ namespace Cognite.OpcUa
                 config.Autoaccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
-            Logger.LogInfo("Attempt to select endpoint from: " + config.EndpointURL);
+            Logger.LogInfo($"Attempt to select endpoint from: {config.EndpointURL}");
             var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && config.Secure);
             var endpointConfiguration = EndpointConfiguration.Create(appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            Logger.LogInfo("Attempt to connect to endpoint: " + endpoint.Description.SecurityPolicyUri);
+            Logger.LogInfo($"Attempt to connect to endpoint with security: {endpoint.Description.SecurityPolicyUri}");
             session = await Session.Create(
                 appconfig,
                 endpoint,
@@ -132,7 +132,7 @@ namespace Cognite.OpcUa
             Started = true;
             connects.Inc();
             connected.Set(1);
-            Logger.LogInfo("Successfully connected to server at " + config.EndpointURL);
+            Logger.LogInfo($"Successfully connected to server at {config.EndpointURL}");
         }
         /// <summary>
         /// Event triggered after a succesfull reconnect.
@@ -184,11 +184,11 @@ namespace Cognite.OpcUa
                 // TODO Verify client acceptance here somehow?
                 if (config.Autoaccept)
                 {
-                    Logger.LogWarning("Accepted Bad Certificate " + eventArgs.Certificate.Subject);
+                    Logger.LogWarning($"Accepted Bad Certificate {eventArgs.Certificate.Subject}");
                 }
                 else
                 {
-                    Logger.LogInfo("Rejected Bad Certificate " + eventArgs.Certificate.Subject);
+                    Logger.LogInfo($"Rejected Bad Certificate {eventArgs.Certificate.Subject}");
                 }
             }
         }
@@ -368,7 +368,7 @@ namespace Cognite.OpcUa
                     }
                 }
             } while (nextIds.Any());
-            Logger.LogInfo("Found " + nodeCnt + " nodes in " + levelCnt + " levels");
+            Logger.LogInfo($"Found {nodeCnt} nodes in {levelCnt} levels");
             depth.Set(levelCnt);
         }
         #endregion
@@ -452,7 +452,7 @@ namespace Cognite.OpcUa
             finally
             {
                 DecOperations();
-                Logger.LogInfo("Fetched " + ptCnt + " historical datapoints with " + opCnt + " operations for " + index + " nodes");
+                Logger.LogInfo($"Fetched {ptCnt} historical datapoints with {opCnt} operations for {index} nodes");
             }
         }
         public void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
@@ -541,7 +541,7 @@ namespace Cognite.OpcUa
                 })
             );
 
-            Logger.LogInfo("Add " + count + " subscriptions");
+            Logger.LogInfo($"Add {count} subscriptions");
             lock (subscriptionLock)
             {
                 IncOperations();
@@ -629,7 +629,7 @@ namespace Cognite.OpcUa
                     attributeRequests.Inc();
                     values = values.Concat(lvalues);
                 }
-                Logger.LogInfo("Read " + total + " attributes with " + count + " operations");
+                Logger.LogInfo($"Read {total} attributes with {count} operations");
             }
             catch (Exception e)
             {
@@ -712,7 +712,7 @@ namespace Cognite.OpcUa
         public void GetNodeProperties(IEnumerable<BufferedNode> nodes)
         {
             var properties = new HashSet<BufferedVariable>();
-            Logger.LogInfo("Get properties for " + nodes.Count() + " nodes");
+            Logger.LogInfo($"Get properties for {nodes.Count()} nodes");
             var idsToCheck = new List<NodeId>();
             foreach (var node in nodes)
             {
@@ -821,15 +821,15 @@ namespace Cognite.OpcUa
             }
             if (value.GetType() == typeof(Range))
             {
-                return "(" + ((Range)value).Low + ", " + ((Range)value).High + ")";
+                return $"({((Range)value).Low}, {((Range)value).High})";
             }
             if (value.GetType() == typeof(EUInformation))
             {
-                return ((EUInformation)value).DisplayName + ": " + ((EUInformation)value).Description;
+                return $"{((EUInformation)value).DisplayName}: {((EUInformation)value).Description}";
             }
             if (value.GetType() == typeof(EnumValueType))
             {
-                return ((EnumValueType)value).DisplayName + ": " + ((EnumValueType)value).Value;
+                return $"{((EnumValueType)value).DisplayName}: {((EnumValueType)value).Value}";
             }
             return value.ToString();
         }
@@ -874,13 +874,13 @@ namespace Cognite.OpcUa
             // If we can find out if the value of the key alone is unique, then we can remove the identifierType, though I suspect
             // that i=1 and s=1 (1 as string key) would be considered distinct.
             string nodeidstr = nodeid.ToString();
-            string nsstr = "ns=" + nodeid.NamespaceIndex + ";";
+            string nsstr = $"ns={nodeid.NamespaceIndex};";
             int pos = nodeidstr.IndexOf(nsstr, StringComparison.CurrentCulture);
             if (pos == 0)
             {
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
-            string extId = config.GlobalPrefix + "." + prefix + ":" + nodeidstr;
+            string extId = $"{config.GlobalPrefix}.{prefix}:{nodeidstr}";
             // ExternalId is limited to 128 characters
             extId = extId.Trim();
             if (extId.Length > 255)
