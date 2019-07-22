@@ -34,7 +34,7 @@ namespace Testing
                 Assert.True(buffer.timestamp > 0L, "Invalid timestamp");
                 dataPointList.Add(buffer);
             }
-            Logger.LogInfo("Got " + count + " datapoints");
+            Logger.LogInfo($"Got {count} datapoints");
             dpTest?.Invoke(dataPointList);
         }
         public async Task PushDataPoints(ConcurrentQueue<BufferedDataPoint> dataPointQueue)

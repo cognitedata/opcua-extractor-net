@@ -100,13 +100,12 @@ namespace Cognite.OpcUa
 		{
             if (logData)
 			{
-				LogLines.Add(new LogLine
-				{
-					Time = DateTime.Now,
-					Message = "Update " + dp.Id + ": " + (dp.isString ? dp.stringValue : dp.doubleValue.ToString())
-                        + " at " + dp.timestamp,
+                LogLines.Add(new LogLine
+                {
+                    Time = DateTime.Now,
+                    Message = $"Update {dp.Id}: {(dp.isString ? dp.stringValue : dp.doubleValue.ToString())} at {dp.timestamp}",
                     Severity = Severity.Verbose
-				});
+                });
 			}
 		}
 
@@ -117,7 +116,7 @@ namespace Cognite.OpcUa
                 LogLines.Add(new LogLine
                 {
                     Time = DateTime.Now,
-                    Message = "Found node " + node.Id + ": " + node.DisplayName,
+                    Message = $"Found node {node.Id}: {node.DisplayName}",
                     Severity = Severity.Verbose
                 });
             }

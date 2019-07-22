@@ -37,12 +37,12 @@ namespace Cognite.OpcUa
                     {
                         if (!expectResponseException)
                         {
-                            Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
+                            Logger.LogWarning($"{failureMessage}, {e.Message}: attempt {(i + 1)}/{retryCount}");
                         }
                         var re = (ResponseException)e;
                         throw re;
                     }
-                    Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
+                    Logger.LogWarning($"{failureMessage}, {e.Message}: attempt {(i + 1)}/{retryCount}");
                     //Logger.LogException(e);
                 }
                 await Task.Delay(500 * (1 << i));
@@ -72,7 +72,7 @@ namespace Cognite.OpcUa
                     }
                     if (count > 0)
                     {
-                        Logger.LogInfo("Write " + count + " datapoints to file");
+                        Logger.LogInfo($"Write {count} datapoints to file");
                     }
                 }
             }
@@ -109,7 +109,7 @@ namespace Cognite.OpcUa
                         bufferedDPQueue.Enqueue(buffDp);
                     }
                 }
-                Logger.LogInfo("Read " + count + " points from file");
+                Logger.LogInfo($"Read {count} points from file");
             }
             File.Create(config.BufferFile).Close();
             BufferFileEmpty = true;
