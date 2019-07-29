@@ -1,0 +1,13 @@
+source https://www.nuget.org/api/v2
+source https://cognite.jfrog.io/cognite/api/nuget/nuget
+storage: none
+
+nuget coverlet.msbuild 2.6.3
+nuget Microsoft.NET.Test.Sdk 16.2.0
+nuget xunit 2.4.1
+nuget xunit.runner.visualstudio 2.4.1
+nuget Fusion.NET 0.8.15
+nuget Microsoft.Extensions.Http 2.2.0
+nuget OPCFoundation.NetStandard.Opc.Ua 1.4.355.26
+nuget Prometheus.Client.MetricPusher 1.0.1
+nuget YamlDotNet 6.1.1
