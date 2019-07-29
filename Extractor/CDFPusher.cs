@@ -4,10 +4,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Cognite.Sdk;
-using Cognite.Sdk.Api;
-using Cognite.Sdk.Assets;
-using Cognite.Sdk.Timeseries;
+using Com.Cognite.V1.Timeseries.Proto;
+using Fusion;
+using Fusion.Api;
+using Fusion.Assets;
+using Fusion.Timeseries;
 using Opc.Ua;
 using Prometheus.Client;
 
@@ -73,37 +74,39 @@ namespace Cognite.OpcUa
             if (count == 0) return;
             if (config.Debug) return;
             var finalDataPoints = dataPointList.GroupBy(dp => dp.Id, (id, points) =>
-                new DataPointsWritePoco
+            {
+                var item = new DataPointInsertionItem
                 {
-                    Identity = Identity.ExternalId(id),
-                    DataPoints = points.Select(point => new DataPointPoco
+                    ExternalId = id,
+                    NumericDatapoints = new NumericDatapoints()
+                };
+                item.NumericDatapoints.Datapoints.AddRange(points.Select(point =>
+                    new NumericDatapoint
                     {
-                        TimeStamp = point.timestamp,
-                        Value = Numeric.Float(point.doubleValue)
-                    })
-                });
-
+                        Timestamp = point.timestamp,
+                        Value = point.doubleValue
+                    }
+                ));
+                return item;
+            });
+            var req = new DataPointInsertionRequest();
+            req.Items.AddRange(finalDataPoints);
             Logger.LogInfo($"Push {count} datapoints to CDF");
-            using (HttpClient httpClient = clientFactory.CreateClient())
+			using (HttpClient httpClient = clientFactory.CreateClient())
             {
                 httpClient.Timeout = TimeSpan.FromSeconds(30);
                 Client client = Client.Create(httpClient)
                     .AddHeader("api-key", config.ApiKey)
                     .SetProject(config.Project);
-                bool success;
                 try
                 {
-                    success = await Utils.RetryAsync(async () =>
-                        await client.InsertDataAsync(finalDataPoints), "Failed to insert into CDF");
+                    await Utils.RetryAsync(async () =>
+                        await client.InsertDataAsync(req), "Failed to insert into CDF");
                 }
                 catch (ResponseException)
                 {
-                    success = false;
-                }
-                if (!success)
-                {
                     Logger.LogError($"Failed to insert {count} datapoints into CDF");
-                    dataPointPushFailures.Inc();
+					dataPointPushFailures.Inc();
                     if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile))
                     {
                         try
@@ -116,16 +119,14 @@ namespace Cognite.OpcUa
                             Logger.LogException(ex);
                         }
                     }
+                    return;
                 }
-                else
+                if (config.BufferOnFailure && !Utils.BufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
                 {
-                    if (config.BufferOnFailure && !Utils.BufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
-                    {
-                        Utils.ReadBufferFromFile(dataPointQueue, config, nodeIsHistorizing);
-                    }
-                    dataPointsCounter.Inc(count);
-                    dataPointPushes.Inc();
+                    Utils.ReadBufferFromFile(dataPointQueue, config, nodeIsHistorizing);
                 }
+                dataPointsCounter.Inc(count);
+                dataPointPushes.Inc();
             }
         }
         /// <summary>
@@ -397,7 +398,7 @@ namespace Cognite.OpcUa
             try
             {
                 var readResults = await Utils.RetryAsync(() =>
-                    client.GetTimeseriesByIdsAsync(tsIds.Keys), "Failed to get timeseries", true);
+                    client.GetTimeseriesByIdsAsync(tsIds.Keys.Select(Identity.ExternalId)), "Failed to get timeseries", true);
                 if (readResults != null)
                 {
                     Logger.LogInfo($"Found {readResults.Count()} timeseries");
@@ -476,10 +477,10 @@ namespace Cognite.OpcUa
                     Logger.LogInfo($"Found {readResults.Count()} historizing timeseries");
                     foreach (var resultItem in readResults)
                     {
-                        if (resultItem.DataPoints.Any())
+                        if (resultItem.NumericDataPoints.Any())
                         {
-                            tsIds[resultItem.ExternalId.Value].LatestTimestamp =
-                                DateTimeOffset.FromUnixTimeMilliseconds(resultItem.DataPoints.First().TimeStamp).DateTime;
+                            tsIds[resultItem.ExternalId].LatestTimestamp =
+                                DateTimeOffset.FromUnixTimeMilliseconds(resultItem.NumericDataPoints.First().TimeStamp).DateTime;
                         }
                     }
                 }
@@ -539,10 +540,10 @@ namespace Cognite.OpcUa
                     {
                         foreach (var resultItem in readResults)
                         {
-                            if (resultItem.DataPoints.Any())
+                            if (resultItem.NumericDataPoints.Any())
                             {
-                                tsIds[resultItem.ExternalId.Value].LatestTimestamp =
-                                    DateTimeOffset.FromUnixTimeMilliseconds(resultItem.DataPoints.First().TimeStamp).DateTime;
+                                tsIds[resultItem.ExternalId].LatestTimestamp =
+                                    DateTimeOffset.FromUnixTimeMilliseconds(resultItem.NumericDataPoints.First().TimeStamp).DateTime;
                             }
                         }
                     }

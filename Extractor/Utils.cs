@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Cognite.Sdk;
+using Fusion;
 using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa
@@ -48,6 +48,32 @@ namespace Cognite.OpcUa
                 await Task.Delay(500 * (1 << i));
             }
             return default;
+        }
+        public static async Task RetryAsync(Func<Task> action, string failureMessage, bool expectResponseException = false)
+        {
+            for (int i = 0; i < retryCount; i++)
+            {
+                try
+                {
+                    await action();
+                    return;
+                }
+                catch (Exception e)
+                {
+                    if (e.GetType() == typeof(ResponseException) && (i == retryCount - 1 || expectResponseException))
+                    {
+                        if (!expectResponseException)
+                        {
+                            Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
+                        }
+                        var re = (ResponseException)e;
+                        throw re;
+                    }
+                    Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
+                    //Logger.LogException(e);
+                }
+                await Task.Delay(500 * (1 << i));
+            }
         }
         /// <summary>
         /// Write a list of datapoints to buffer file. Only writes non-historizing datapoints.
