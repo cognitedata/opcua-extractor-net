@@ -9,12 +9,7 @@
     <None Remove="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <None Update="opc.ua.net.extractor.Config.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config.yml">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
+    <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
   </ItemGroup>
   <Import Project="../.paket/Paket.Restore.targets" />
 </Project>

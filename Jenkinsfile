@@ -32,7 +32,7 @@ podTemplate(
     containerTemplate(name: 'dotnet-mono',
         image: 'eu.gcr.io/cognitedata/dotnet-mono:2.2-sdk',
         envVars: [
-            // secretEnvVar(key: 'CODECOV_TOKEN', secretName: 'codecov-tokens', secretKey: 'opcua-extractor-net'),
+            secretEnvVar(key: 'CODECOV_TOKEN', secretName: 'codecov-tokens', secretKey: 'opcua-extractor-net'),
             // /codecov-script/upload-report.sh relies on the following
             // Jenkins and Github environment variables.
             envVar(key: 'JENKINS_URL', value: env.JENKINS_URL),
@@ -97,9 +97,9 @@ podTemplate(
                 sh('./test.sh')
                 archiveArtifacts artifacts: 'coverage.lcov', fingerprint: true
             }
-            //stage("Upload report to codecov.io") {
-            //  sh('bash </codecov-script/upload-report.sh')
-            //}
+            stage("Upload report to codecov.io") {
+                sh('bash </codecov-script/upload-report.sh')
+            }
         }
         container('docker') {
             stage("Build Docker images") {
