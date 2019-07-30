@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp2.2</TargetFramework>
+    <RootNamespace>opcua_extractor_net</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
+  </ItemGroup>
+  <Import Project="../.paket/Paket.Restore.targets" />
+</Project>

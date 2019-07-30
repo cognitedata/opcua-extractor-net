@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Cognite.OpcUa;
 using Xunit;
 
-namespace Testing
+namespace Test
 {
     public class UAClientTests
     {
@@ -17,8 +17,7 @@ namespace Testing
         [Fact]
         public async Task TestBasicMapping()
         {
-            FullConfig fullConfig = Utils.GetConfig("config.test.yml");
-            if (fullConfig == null) return;
+            var fullConfig = Common.BuildConfig("basic", 0);
             Logger.Startup(fullConfig.LoggerConfig);
             int totalDps = 0;
             TestPusher pusher = new TestPusher(new Dictionary<string, Action<List<BufferedNode>, List<BufferedVariable>, List<BufferedVariable>>>
@@ -54,11 +53,6 @@ namespace Testing
             };
             Thread.Sleep(3000);
 			tasks.Add(Task.Run(extractor.RestartExtractor));
-			Thread.Sleep(2000);
-			tasks.Add(Task.Run(extractor.RestartExtractor));
-			Thread.Sleep(50);
-			tasks.Add(Task.Run(extractor.RestartExtractor));
-			Thread.Sleep(3000);
 			await Task.WhenAll(tasks);
             Assert.All(tasks, (task) => Assert.False(task.IsFaulted));
 			extractor.Close();
@@ -68,9 +62,7 @@ namespace Testing
         [Fact]
         public async Task TestBufferReadWrite()
         {
-            FullConfig fullConfig = Utils.GetConfig("config.test.yml");
-            if (fullConfig == null) return;
-            fullConfig.CogniteConfig.BufferFile = "testbuffer.bin";
+            var fullConfig = Common.BuildConfig("basic", 1);
             Logger.Startup(fullConfig.LoggerConfig);
             File.Create(fullConfig.CogniteConfig.BufferFile).Close();
             int dpRuns = 0;
@@ -109,8 +101,7 @@ namespace Testing
         [Fact]
         public async Task TestBulkRequests()
         {
-            FullConfig fullConfig = Utils.GetConfig("config.test.yml");
-            if (fullConfig == null) throw new Exception("No config");
+            var fullConfig = Common.BuildConfig("full", 2);
             Logger.Startup(fullConfig.LoggerConfig);
             int totalDps = 0;
             using (var quitEvent = new ManualResetEvent(false))

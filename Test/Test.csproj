@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp2.2</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Extractor\Extractor.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="servers\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="config.test.yml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <Import Project="../.paket/Paket.Restore.targets" />
+</Project>

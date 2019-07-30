@@ -18,7 +18,7 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         static int Main(string[] args)
         {
-            FullConfig fullConfig = Utils.GetConfig(args.Length > 0 ? args[0] : "config.yml");
+            FullConfig fullConfig = Utils.GetConfig(args.Length > 0 ? args[0] : "config/config.yml");
             if (fullConfig == null) return -1;
             try
             {

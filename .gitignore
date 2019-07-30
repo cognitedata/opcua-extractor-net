@@ -8,6 +8,7 @@
 # C# specific
 obj/
 bin/
+build/
 
 # Temp data
 certificates/
@@ -17,6 +18,7 @@ Logs/
 buffer.bin
 *.lcov
 coverage.json
+paket-files/
 
 # Config
 config.yml
