@@ -7,7 +7,7 @@ using Cognite.OpcUa;
 using Opc.Ua;
 using Xunit;
 
-namespace Testing
+namespace Test
 {
     public class TestPusher : IPusher
     {

@@ -9,7 +9,7 @@ using Cognite.OpcUa;
 using Newtonsoft.Json;
 #pragma warning disable IDE1006 // Naming Styles
 
-namespace Testing
+namespace Test
 {
     public class DummyFactory : IHttpClientFactory
     {

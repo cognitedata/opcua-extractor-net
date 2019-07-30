@@ -5,24 +5,24 @@ using System.Threading.Tasks;
 using Cognite.OpcUa;
 using Xunit;
 
-namespace Testing
+namespace Test
 {
     public class CDFPusherTests
     {
         [Trait("Category", "both")]
         [Trait("Tests", "cdfpusher")]
         [Theory]
-        [InlineData(DummyFactory.MockMode.All)]
-        [InlineData(DummyFactory.MockMode.Some)]
-        [InlineData(DummyFactory.MockMode.None)]
-        [InlineData(DummyFactory.MockMode.FailAsset)]
-        public async Task TestBasicPushing(DummyFactory.MockMode mode)
+        [InlineData(DummyFactory.MockMode.All, "basic")]
+        [InlineData(DummyFactory.MockMode.Some, "basic")]
+        [InlineData(DummyFactory.MockMode.None, "basic")]
+        [InlineData(DummyFactory.MockMode.FailAsset, "basic")]
+        [InlineData(DummyFactory.MockMode.All, "full")]
+        [InlineData(DummyFactory.MockMode.Some, "full")]
+        [InlineData(DummyFactory.MockMode.None, "full")]
+        [InlineData(DummyFactory.MockMode.FailAsset, "full")]
+        public async Task TestBasicPushing(DummyFactory.MockMode mode, string serverType)
         {
-            FullConfig fullConfig = Utils.GetConfig("config.test.yml");
-            if (fullConfig == null)
-            {
-                throw new Exception("No config");
-            }
+            var fullConfig = Common.BuildConfig(serverType, 3);
             Logger.Startup(fullConfig.LoggerConfig);
             Logger.LogInfo("Testing with MockMode " + mode.ToString());
             UAClient client = new UAClient(fullConfig);
@@ -51,9 +51,7 @@ namespace Testing
         [Fact]
         public async Task TestAutoBuffering()
         {
-            FullConfig fullConfig = Utils.GetConfig("config.test.yml");
-            fullConfig.CogniteConfig.BufferFile = "autobuffer.bin";
-            fullConfig.CogniteConfig.BufferOnFailure = true;
+            var fullConfig = Common.BuildConfig("basic", 4);
             if (fullConfig == null)
             {
                 throw new Exception("No config");
