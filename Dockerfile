@@ -3,7 +3,10 @@ FROM eu.gcr.io/cognitedata/dotnet-mono:2.2-sdk
 WORKDIR /build
 COPY . .
 
+RUN apt-get update && apt-get install -y libxml2-utils
+
+RUN ./credentials.sh
 RUN mono .paket/paket.exe install
 RUN dotnet build
 
-ENTRYPOINT ["dotnet", "Extractor.dll"]
+RUN dotnet publish -c Release -o /build/deploy Extractor

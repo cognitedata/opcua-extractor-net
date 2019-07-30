@@ -8,6 +8,7 @@
 # C# specific
 obj/
 bin/
+build/
 
 # Temp data
 certificates/
