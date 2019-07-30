@@ -9,7 +9,7 @@ namespace Test
         {
             var fullConfig = Utils.GetConfig("config.test.yml");
             if (fullConfig == null) throw new Exception("Failed to load config file");
-            fullConfig.CogniteConfig.BufferFile = $"buffer{index}";
+            fullConfig.CogniteConfig.BufferFile = $"buffer{index}.bin";
             if (serverType == "basic")
             {
                 fullConfig.UAConfig.EndpointURL = "opc.tcp://localhost:4840";

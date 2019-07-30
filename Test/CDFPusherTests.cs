@@ -64,6 +64,7 @@ namespace Test
             extractor.Start();
             Assert.True(extractor.Started);
             await extractor.MapUAToCDF();
+            File.Create(fullConfig.CogniteConfig.BufferFile).Close();
             factory.AllowPush = false;
             bool gotData = false;
             for (int i = 0; i < 20; i++)
