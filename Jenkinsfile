@@ -80,7 +80,6 @@ podTemplate(
             }
             stage('Start servers') {
                 sh('Test/startservers.sh')
-                sh('sleep 4') // Give servers a moment to start
             }
         }
         container('dotnet-mono') {
