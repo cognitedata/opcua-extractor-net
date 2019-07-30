@@ -53,11 +53,6 @@ namespace Test
             };
             Thread.Sleep(3000);
 			tasks.Add(Task.Run(extractor.RestartExtractor));
-			Thread.Sleep(2000);
-			tasks.Add(Task.Run(extractor.RestartExtractor));
-			Thread.Sleep(50);
-			tasks.Add(Task.Run(extractor.RestartExtractor));
-			Thread.Sleep(3000);
 			await Task.WhenAll(tasks);
             Assert.All(tasks, (task) => Assert.False(task.IsFaulted));
 			extractor.Close();

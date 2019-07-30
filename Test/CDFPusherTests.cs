@@ -42,7 +42,6 @@ namespace Test
                     throw e;
                 }
             }
-            Thread.Sleep(4000);
             extractor.Close();
         }
         [Trait("Category", "basicserver")]
@@ -66,11 +65,29 @@ namespace Test
             Assert.True(extractor.Started);
             await extractor.MapUAToCDF();
             factory.AllowPush = false;
-            Thread.Sleep(10000);
-            Assert.True(new FileInfo(fullConfig.CogniteConfig.BufferFile).Length > 0, "Some data must be written");
+            bool gotData = false;
+            for (int i = 0; i < 20; i++)
+            {
+                if (new FileInfo(fullConfig.CogniteConfig.BufferFile).Length > 0)
+                {
+                    gotData = true;
+                    break;
+                }
+                Thread.Sleep(1000);
+            }
+            Assert.True(gotData, "Some data must be written");
             factory.AllowPush = true;
-            Thread.Sleep(4000);
-            Assert.Equal(0, new FileInfo(fullConfig.CogniteConfig.BufferFile).Length);
+            gotData = false;
+            for (int i = 0; i < 20; i++)
+            {
+                if (new FileInfo(fullConfig.CogniteConfig.BufferFile).Length == 0)
+                {
+                    gotData = true;
+                    break;
+                }
+                Thread.Sleep(1000);
+            }
+            Assert.True(gotData, "Expecting file to be emptied");
             extractor.Close();
 
         }
