@@ -98,7 +98,7 @@ namespace Cognite.OpcUa
                 ApplicationType = ApplicationType.Client,
                 ConfigSectionName = "opc.ua.net.extractor"
             };
-            var appconfig = await application.LoadApplicationConfiguration("config/opc.ua.net.extractor.Config.xml", false);
+            var appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
             if (!validAppCert)
             {

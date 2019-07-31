@@ -18,7 +18,8 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         static int Main(string[] args)
         {
-            FullConfig fullConfig = Utils.GetConfig(args.Length > 0 ? args[0] : "config/config.yml");
+            FullConfig fullConfig = Utils.GetConfig(args.Length > 0 ? $"{args[0]}/config.yml" : "config/config.yml");
+            fullConfig.UAConfig.ConfigRoot = args.Length > 0 ? args[0] : "config";
             if (fullConfig == null) return -1;
             try
             {
@@ -138,6 +139,7 @@ namespace Cognite.OpcUa
     }
     public class UAClientConfig
     {
+        public string ConfigRoot { get; set; } = "config";
         public string EndpointURL { get; set; }
         public bool Autoaccept { get; set; } = false;
         public int PollingInterval { get; set; } = 500;

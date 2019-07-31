@@ -107,7 +107,7 @@ podTemplate(
                         + 'docker login -u _json_key -p "$(cat /jenkins-docker-builder/credentials.json)" https://eu.gcr.io')
 
                 sh('cp /nuget-credentials/nuget.config ./nuget.config')
-                sh("docker build -f Dockerfile.build .")
+                // sh("docker build -f Dockerfile.build .")
                 // Building twice to get sensible output. The second build will be quick.
                 sh("image=\$(docker build -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
                        + "&& id=\$(docker create \$image)"
