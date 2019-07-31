@@ -13,8 +13,8 @@ Add artifactory as a nuget source as outlined [here](https://cognitedata.atlassi
 then simply run `dotnet restore` to install dependencies.
 
 To run:
-`dotnet run [optional config directory]`. If no .yml config file is specified, config.yml in the application directory is used.
-See the [example configuration](Extractor/config.example.yml) for a template.
+`dotnet run [optional config directory]`. If no config directory is specified, [application dir]/config is used.
+See the [example configuration](config/config.example.yml) for a template.
 
 ### Using Docker
 Simply download and run the latest build from [here](https://console.cloud.google.com/gcr/images/cognitedata/EU/opcua-extractor-net?gcrImageListsize=30)

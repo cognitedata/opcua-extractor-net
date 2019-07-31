@@ -3,4 +3,4 @@ VOLUME /config
 COPY /deploy /extractor
 WORKDIR /extractor
 
-ENTRYPOINT ["dotnet", "/extractor/Extractor.dll"]
+ENTRYPOINT ["dotnet", "/extractor/Extractor.dll", "/config"]
