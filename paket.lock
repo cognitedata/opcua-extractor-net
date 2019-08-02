@@ -108,10 +108,14 @@ NUGET
       Microsoft.Extensions.DependencyInjection.Abstractions (>= 2.2) - restriction: >= netstandard2.0
       Microsoft.Extensions.FileProviders.Abstractions (>= 2.2) - restriction: >= netstandard2.0
       Microsoft.Extensions.Logging.Abstractions (>= 2.2) - restriction: >= netstandard2.0
-    Microsoft.Extensions.Http (2.2)
+    Microsoft.Extensions.Http (2.2) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection.Abstractions (>= 2.2) - restriction: >= netstandard2.0
       Microsoft.Extensions.Logging (>= 2.2) - restriction: >= netstandard2.0
       Microsoft.Extensions.Options (>= 2.2) - restriction: >= netstandard2.0
+    Microsoft.Extensions.Http.Polly (2.2)
+      Microsoft.Extensions.Http (>= 2.2) - restriction: >= netstandard2.0
+      Polly (>= 6.0.1) - restriction: >= netstandard2.0
+      Polly.Extensions.Http (>= 2.0.1) - restriction: >= netstandard2.0
     Microsoft.Extensions.Logging (2.2) - restriction: >= netstandard2.0
       Microsoft.Extensions.Configuration.Binder (>= 2.2) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection.Abstractions (>= 2.2) - restriction: >= netstandard2.0
@@ -230,6 +234,9 @@ NUGET
       System.ServiceModel.Primitives (>= 4.5.3) - restriction: || (&& (< net46) (>= netstandard1.3) (< netstandard2.0)) (&& (< net46) (>= netstandard2.0))
       System.Threading.Thread (>= 4.3) - restriction: && (< net46) (>= netstandard1.3) (< netstandard2.0)
       System.Xml.XmlSerializer (>= 4.3) - restriction: && (< net46) (>= netstandard1.3) (< netstandard2.0)
+    Polly (7.1) - restriction: >= netstandard2.0
+    Polly.Extensions.Http (3.0) - restriction: >= netstandard2.0
+      Polly (>= 7.1) - restriction: >= netstandard1.1
     Portable.BouncyCastle (1.8.5) - restriction: >= netstandard1.3
       NETStandard.Library (>= 1.6.1) - restriction: || (&& (< net40) (>= netstandard1.0) (< netstandard1.3)) (&& (< net40) (>= netstandard1.3) (< netstandard2.0))
     Prometheus.Client (3.0.1) - restriction: >= netstandard1.3
@@ -1066,7 +1073,7 @@ NUGET
       Microsoft.NET.Test.Sdk (>= 15.0) - restriction: >= netcoreapp1.0
     YamlDotNet (6.1.1)
   remote: https://cognite.jfrog.io/cognite/api/nuget/nuget
-    Fusion.NET (0.8.15)
+    Fusion.NET (0.8.18)
       FSharp.Core (>= 4.6.2) - restriction: >= netstandard2.0
       Fusion.NET.Protobuf (>= 0.9) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 2.2) - restriction: >= netstandard2.0

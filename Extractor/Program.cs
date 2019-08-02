@@ -3,8 +3,11 @@ using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 using System.Collections.Generic;
+using Polly;
 using Prometheus.Client.MetricPusher;
 using Opc.Ua;
+using Fusion.Api;
+using Polly.Extensions.Http;
 
 namespace Cognite.OpcUa
 {
@@ -38,7 +41,7 @@ namespace Cognite.OpcUa
             Configure(services);
             var provider = services.BuildServiceProvider();
 
-            CDFPusher pusher = new CDFPusher(provider.GetRequiredService<IHttpClientFactory>(), fullConfig);
+            CDFPusher pusher = new CDFPusher(provider, fullConfig);
             UAClient client = new UAClient(fullConfig);
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             try
@@ -72,9 +75,22 @@ namespace Cognite.OpcUa
             if (string.IsNullOrWhiteSpace(config.CogniteConfig.Project)) throw new Exception("Invalid Project");
             if (string.IsNullOrWhiteSpace(config.CogniteConfig.ApiKey)) throw new Exception("Invalid api-key");
         }
-        public static void Configure(IServiceCollection services)
+        private static void Configure(IServiceCollection services)
         {
-            services.AddHttpClient();
+            services.AddHttpClient<Client>()
+                .AddPolicyHandler(GetRetryPolicy())
+                .AddPolicyHandler(GetTimeoutPolicy());
+        }
+
+        private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+        {
+            return HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .WaitAndRetryAsync(6, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+        }
+        private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
+        {
+            return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(120));
         }
         /// <summary>
         /// Starts prometheus pushgateway client
