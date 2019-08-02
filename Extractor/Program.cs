@@ -21,7 +21,8 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         static int Main(string[] args)
         {
-            FullConfig fullConfig = Utils.GetConfig(args.Length > 0 ? $"{args[0]}/config.yml" : "config/config.yml");
+            var configDir = Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR");
+            FullConfig fullConfig = Utils.GetConfig(string.IsNullOrEmpty(configDir) ? "config/config.yml" : $"{configDir}/config.yml");
             fullConfig.UAConfig.ConfigRoot = args.Length > 0 ? args[0] : "config";
             if (fullConfig == null) return -1;
             try

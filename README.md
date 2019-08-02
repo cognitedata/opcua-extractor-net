@@ -13,17 +13,26 @@ Add artifactory as a nuget source as outlined [here](https://cognitedata.atlassi
 then simply run `dotnet restore` to install dependencies.
 
 To run:
-`dotnet run [optional config directory]`. If no config directory is specified, [application dir]/config is used.
-See the [example configuration](config/config.example.yml) for a template.
+`dotnet run`.
+
+There are a few environment variables that may be used:
+ - COGNITE_API_KEY
+ - COGNITE_API_PROJECT
+ - OPCUA_LOGGER_DIR
+ - OPCUA_CONFIG_DIR
+
+For the first three, environment variables overwrite config options. For CONFIG_DIR, default is `[application dir]/config`
+
+See the [example configuration](config/config.example.yml) for a config template.
 
 ### Using Docker
 Simply download and run the latest build from [here](https://console.cloud.google.com/gcr/images/cognitedata/EU/opcua-extractor-net?gcrImageListsize=30)
 
-Config, both opcua config `opc.ua.extractor.Config.xml` and `config.yml` are located in a volume /config. Example:
+Config, both opcua config `opc.ua.extractor.Config.xml` and `config.yml` are located in a volume /config, and logfiles if enabled will be located in volume /logs. Example:
 
-`docker run -v "$(pwd)/config:/config" eu.gcr.io/cognitedata/opcua-extractor-net:tag`
+`docker run -v "$(pwd)/config:/config" -v "$(pwd)/logs:/logs" eu.gcr.io/cognitedata/opcua-extractor-net:tag`
 
-which would run the build tagged with `tag` using config stored in `current_dir/config`.
+which would run the build tagged with `tag` using config stored in `current_dir/config`, and output logs to `current_dir/logs`
 
 ### Configuration
 The config file should contain description of most config options, a few are notable
