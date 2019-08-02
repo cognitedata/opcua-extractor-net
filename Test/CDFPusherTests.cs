@@ -3,6 +3,8 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Fusion.Api;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Test
@@ -26,7 +28,8 @@ namespace Test
             Logger.Startup(fullConfig.LoggerConfig);
             Logger.LogInfo("Testing with MockMode " + mode.ToString());
             UAClient client = new UAClient(fullConfig);
-            var pusher = new CDFPusher(new DummyFactory(fullConfig.CogniteConfig.Project, mode), fullConfig);
+            var factory = new DummyFactory(fullConfig.CogniteConfig.Project, mode);
+            var pusher = new CDFPusher(GetDummyProvider(factory), fullConfig);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             extractor.Start();
@@ -58,7 +61,7 @@ namespace Test
             Logger.Startup(fullConfig.LoggerConfig);
             UAClient client = new UAClient(fullConfig);
             var factory = new DummyFactory(fullConfig.CogniteConfig.Project, DummyFactory.MockMode.None);
-            var pusher = new CDFPusher(factory, fullConfig);
+            var pusher = new CDFPusher(GetDummyProvider(factory), fullConfig);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             extractor.Start();
@@ -91,6 +94,13 @@ namespace Test
             Assert.True(gotData, "Expecting file to be emptied");
             extractor.Close();
 
+        }
+        public static IServiceProvider GetDummyProvider(DummyFactory factory)
+        {
+            var services = new ServiceCollection();
+            services.AddHttpClient<Client>()
+                .ConfigurePrimaryHttpMessageHandler(() => factory.GetHandler());
+            return services.BuildServiceProvider();
         }
     }
 }

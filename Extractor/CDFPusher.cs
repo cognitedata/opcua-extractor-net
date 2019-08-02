@@ -2,13 +2,13 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
 using System.Threading.Tasks;
 using Com.Cognite.V1.Timeseries.Proto;
 using Fusion;
 using Fusion.Api;
 using Fusion.Assets;
 using Fusion.Timeseries;
+using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus.Client;
 
@@ -19,7 +19,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public class CDFPusher : IPusher
     {
-        private readonly IHttpClientFactory clientFactory;
+        private readonly IServiceProvider clientProvider;
         private readonly CogniteClientConfig config;
         private readonly BulkSizes bulkConfig;
         private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
@@ -31,12 +31,19 @@ namespace Cognite.OpcUa
 
         private readonly long rootAsset = -1;
 
-        public CDFPusher(IHttpClientFactory clientFactory, FullConfig config)
+        public CDFPusher(IServiceProvider clientProvider, FullConfig config)
         {
             this.config = config.CogniteConfig;
-            this.clientFactory = clientFactory;
+            this.clientProvider = clientProvider;
             bulkConfig = config.BulkSizes;
             rootAsset = config.CogniteConfig.RootAssetId;
+        }
+
+        private Client GetClient()
+        {
+            return clientProvider.GetRequiredService<Client>()
+                .AddHeader("api-key", config.ApiKey)
+                .SetProject(config.Project);
         }
 
         private static readonly Counter dataPointsCounter = Metrics
@@ -92,42 +99,36 @@ namespace Cognite.OpcUa
             var req = new DataPointInsertionRequest();
             req.Items.AddRange(finalDataPoints);
             Logger.LogInfo($"Push {count} datapoints to CDF");
-			using (HttpClient httpClient = clientFactory.CreateClient())
+            var client = GetClient();
+            try
             {
-                httpClient.Timeout = TimeSpan.FromSeconds(30);
-                Client client = Client.Create(httpClient)
-                    .AddHeader("api-key", config.ApiKey)
-                    .SetProject(config.Project);
-                try
-                {
-                    await Utils.RetryAsync(async () =>
-                        await client.InsertDataAsync(req), "Failed to insert into CDF");
-                }
-                catch (ResponseException)
-                {
-                    Logger.LogError($"Failed to insert {count} datapoints into CDF");
-					dataPointPushFailures.Inc();
-                    if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile))
-                    {
-                        try
-                        {
-                            Utils.WriteBufferToFile(dataPointList, config, nodeIsHistorizing);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.LogError("Failed to write buffer to file");
-                            Logger.LogException(ex);
-                        }
-                    }
-                    return;
-                }
-                if (config.BufferOnFailure && !Utils.BufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
-                {
-                    Utils.ReadBufferFromFile(dataPointQueue, config, nodeIsHistorizing);
-                }
-                dataPointsCounter.Inc(count);
-                dataPointPushes.Inc();
+                await Utils.RetryAsync(async () =>
+                    await client.InsertDataAsync(req), "Failed to insert into CDF");
             }
+            catch (ResponseException)
+            {
+                Logger.LogError($"Failed to insert {count} datapoints into CDF");
+				dataPointPushFailures.Inc();
+                if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile))
+                {
+                    try
+                    {
+                        Utils.WriteBufferToFile(dataPointList, config, nodeIsHistorizing);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Failed to write buffer to file");
+                        Logger.LogException(ex);
+                    }
+                }
+                return;
+            }
+            if (config.BufferOnFailure && !Utils.BufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
+            {
+                Utils.ReadBufferFromFile(dataPointQueue, config, nodeIsHistorizing);
+            }
+            dataPointsCounter.Inc(count);
+            dataPointPushes.Inc();
         }
         /// <summary>
         /// Empty queue, fetch info for each relevant node, test results against CDF, then synchronize any variables
@@ -202,45 +203,40 @@ namespace Cognite.OpcUa
                 Extractor.SynchronizeNodes(tsList.Concat(histTsList));
                 return true;
             }
-            using (HttpClient httpClient = clientFactory.CreateClient())
+            var client = GetClient();
+            try
             {
-                Client client = Client.Create(httpClient)
-                    .AddHeader("api-key", config.ApiKey)
-                    .SetProject(config.Project);
-                try
+                foreach (var task in Utils.ChunkBy(assetList, bulkConfig.CDFAssets).Select(assets => EnsureAssets(assets)))
                 {
-                    foreach (var assets in Utils.ChunkBy(assetList, bulkConfig.CDFAssets))
-                    {
-                        if (!await EnsureAssets(assets, client)) return false;
-                    }
-                    trackedAssets.Inc(assetList.Count);
-                    // At this point the assets should all be synchronized and mapped
-                    // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
-                    // This also sets the LastTimestamp property of each BufferedVariable
-                    // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
-                    // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
-                    // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
-                    // node to assets map.
-                    // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
-                    // fetching the timeseries itself
-                    foreach (var timeseries in Utils.ChunkBy(tsList, bulkConfig.CDFTimeseries))
-                    {
-                        if (!await EnsureTimeseries(timeseries, client)) return false;
-                    }
-                    trackedTimeseres.Inc(tsList.Count);
+                    if (!await task) return false;
+                }
+                trackedAssets.Inc(assetList.Count);
+                // At this point the assets should all be synchronized and mapped
+                // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
+                // This also sets the LastTimestamp property of each BufferedVariable
+                // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
+                // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
+                // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
+                // node to assets map.
+                // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
+                // fetching the timeseries itself
+                foreach (var task in Utils.ChunkBy(tsList, bulkConfig.CDFTimeseries).Select(timeseries => EnsureTimeseries(timeseries)))
+                {
+                    if (!await task) return false;
+                }
+                trackedTimeseres.Inc(tsList.Count);
 
-                    foreach (var timeseries in Utils.ChunkBy(histTsList, bulkConfig.CDFTimeseries))
-                    {
-                        if (!await EnsureHistorizingTimeseries(timeseries, client)) return false;
-                    }
-                    trackedTimeseres.Inc(histTsList.Count);
-                }
-                catch (Exception e)
+                foreach (var task in Utils.ChunkBy(histTsList, bulkConfig.CDFTimeseries).Select(timeseries => EnsureHistorizingTimeseries(timeseries)))
                 {
-                    Logger.LogError("Failed to push to CDF");
-                    Logger.LogException(e);
-                    return false;
+                    if (!await task) return false;
                 }
+                trackedTimeseres.Inc(histTsList.Count);
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to push to CDF");
+                Logger.LogException(e);
+                return false;
             }
             // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
             // createSubscription service called here
@@ -274,7 +270,7 @@ namespace Cognite.OpcUa
         /// <param name="assetList">List of assets to be tested</param>
         /// <param name="client">Cognite client to be used</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        private async Task<bool> EnsureAssets(IEnumerable<BufferedNode> assetList, Client client)
+        private async Task<bool> EnsureAssets(IEnumerable<BufferedNode> assetList)
         {
             var assetIds = assetList.ToDictionary(node => UAClient.GetUniqueId(node.Id));
             // TODO: When v1 gets support for ExternalId on assets when associating timeseries, we can drop a lot of this.
@@ -282,7 +278,7 @@ namespace Cognite.OpcUa
             ISet<string> missingAssetIds = new HashSet<string>();
 
             Logger.LogInfo($"Test {assetList.Count()} assets");
-
+            var client = GetClient();
             var assetIdentities = assetIds.Keys.Select(Identity.ExternalId);
             try
             {
@@ -382,7 +378,7 @@ namespace Cognite.OpcUa
         /// <param name="tsList">List of timeseries to be tested</param>
         /// <param name="client">Cognite client to be used</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        private async Task<bool> EnsureTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
+        private async Task<bool> EnsureTimeseries(IEnumerable<BufferedVariable> tsList)
         {
             if (!tsList.Any()) return true;
             var tsIds = new Dictionary<string, BufferedVariable>();
@@ -395,6 +391,7 @@ namespace Cognite.OpcUa
 
             Logger.LogInfo($"Test {tsIds.Keys.Count} timeseries");
             var missingTSIds = new HashSet<string>();
+            var client = GetClient();
             try
             {
                 var readResults = await Utils.RetryAsync(() =>
@@ -453,7 +450,7 @@ namespace Cognite.OpcUa
         /// <param name="tsList">List of timeseries to be tested</param>
         /// <param name="client">Cognite client to be used</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        private async Task<bool> EnsureHistorizingTimeseries(IEnumerable<BufferedVariable> tsList, Client client)
+        private async Task<bool> EnsureHistorizingTimeseries(IEnumerable<BufferedVariable> tsList)
         {
             if (!tsList.Any()) return true;
             var tsIds = new Dictionary<string, BufferedVariable>();
@@ -468,6 +465,7 @@ namespace Cognite.OpcUa
             var missingTSIds = new HashSet<string>();
 
             var pairedTsIds = tsIds.Keys.Select<string, (Identity, string)>(key => (Identity.ExternalId(key), null));
+            var client = GetClient();
             try
             {
                 var readResults = await Utils.RetryAsync(() =>

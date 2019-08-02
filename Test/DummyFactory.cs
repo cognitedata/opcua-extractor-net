@@ -11,7 +11,7 @@ using Newtonsoft.Json;
 
 namespace Test
 {
-    public class DummyFactory : IHttpClientFactory
+    public class DummyFactory
     {
         readonly object handlerLock = new object();
         readonly string project;
@@ -31,9 +31,9 @@ namespace Test
             this.mode = mode;
         }
 
-        public HttpClient CreateClient(string name = "client")
+        public HttpMessageHandler GetHandler(string name = "client")
         {
-            return new HttpClient(new HttpMessageHandlerStub(MessageHandler));
+            return new HttpMessageHandlerStub(MessageHandler);
         }
 
         private async Task<HttpResponseMessage> MessageHandler(HttpRequestMessage req, CancellationToken cancellationToken)
