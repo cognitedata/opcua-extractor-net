@@ -79,7 +79,7 @@ podTemplate(
                 sh('pip list')
             }
             stage('Start servers') {
-                sh('Test/startservers.sh')
+                sh('./startservers.sh')
             }
         }
         container('dotnet-mono') {
