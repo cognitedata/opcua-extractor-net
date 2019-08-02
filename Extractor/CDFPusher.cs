@@ -206,7 +206,7 @@ namespace Cognite.OpcUa
             var client = GetClient();
             try
             {
-                foreach (var task in Utils.ChunkBy(assetList, bulkConfig.CDFAssets).Select(assets => EnsureAssets(assets)))
+                foreach (var task in Utils.ChunkBy(assetList, bulkConfig.CDFAssets).Select(EnsureAssets))
                 {
                     if (!await task) return false;
                 }
@@ -220,13 +220,13 @@ namespace Cognite.OpcUa
                 // node to assets map.
                 // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
                 // fetching the timeseries itself
-                foreach (var task in Utils.ChunkBy(tsList, bulkConfig.CDFTimeseries).Select(timeseries => EnsureTimeseries(timeseries)))
+                foreach (var task in Utils.ChunkBy(tsList, bulkConfig.CDFTimeseries).Select(EnsureTimeseries))
                 {
                     if (!await task) return false;
                 }
                 trackedTimeseres.Inc(tsList.Count);
 
-                foreach (var task in Utils.ChunkBy(histTsList, bulkConfig.CDFTimeseries).Select(timeseries => EnsureHistorizingTimeseries(timeseries)))
+                foreach (var task in Utils.ChunkBy(histTsList, bulkConfig.CDFTimeseries).Select(EnsureHistorizingTimeseries))
                 {
                     if (!await task) return false;
                 }
@@ -268,7 +268,6 @@ namespace Cognite.OpcUa
         /// Test if given list of assets exists, then create any that do not, checking for properties.
         /// </summary>
         /// <param name="assetList">List of assets to be tested</param>
-        /// <param name="client">Cognite client to be used</param>
         /// <returns>True if no operation failed unexpectedly</returns>
         private async Task<bool> EnsureAssets(IEnumerable<BufferedNode> assetList)
         {
@@ -376,7 +375,6 @@ namespace Cognite.OpcUa
         /// Test if given list of timeseries exists, then create any that do not, checking for properties.
         /// </summary>
         /// <param name="tsList">List of timeseries to be tested</param>
-        /// <param name="client">Cognite client to be used</param>
         /// <returns>True if no operation failed unexpectedly</returns>
         private async Task<bool> EnsureTimeseries(IEnumerable<BufferedVariable> tsList)
         {
