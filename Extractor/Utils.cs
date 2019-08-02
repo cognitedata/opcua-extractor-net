@@ -155,15 +155,20 @@ namespace Cognite.OpcUa
                     fullConfig = new Deserializer().Deserialize<FullConfig>(rawConfig);
                 }
                 string envKey = Environment.GetEnvironmentVariable("COGNITE_API_KEY");
-                if (string.IsNullOrWhiteSpace(fullConfig.CogniteConfig.ApiKey) && !string.IsNullOrWhiteSpace(envKey))
+                if (!string.IsNullOrWhiteSpace(envKey))
                 {
                     fullConfig.CogniteConfig.ApiKey = envKey;
                 }
                 string envProject = Environment.GetEnvironmentVariable("COGNITE_API_PROJECT");
-                if (string.IsNullOrWhiteSpace(fullConfig.CogniteConfig.Project) && !string.IsNullOrWhiteSpace(envProject))
+                if (!string.IsNullOrWhiteSpace(envProject))
                 {
                     fullConfig.CogniteConfig.Project = envProject;
                 }
+				string envLogdir = Environment.GetEnvironmentVariable("OPCUA_LOGGER_DIR");
+                if (!string.IsNullOrWhiteSpace(envLogdir))
+				{
+					fullConfig.LoggerConfig.LogFolder = envLogdir;
+				}
             }
             catch (Exception e)
             {
