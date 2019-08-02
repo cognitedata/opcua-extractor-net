@@ -63,11 +63,22 @@ podTemplate(
     node(label) {
         container('jnlp') {
             stage('Checkout') {
-                checkout(scm)
-                imageRevision = sh(returnStdout: true, script: 'git rev-parse --short=8 HEAD').trim()
-                buildDate = sh(returnStdout: true, script: 'date +%Y-%m-%dT%H%M').trim()
+                checkout([$class: 'GitSCM',
+                  branches: scm.branches,
+                  extensions: [
+                    [ $class: 'SubmoduleOption',
+                      disableSubmodules: false,
+                      parentCredentials: true,
+                      recursiveSubmodules: true,
+                      reference: '',
+                      trackingSubmodules: false],
+                    [ $class: 'CleanCheckout' ]
+                  ],
+                  userRemoteConfigs: scm.userRemoteConfigs
+                ])
                 dockerImageName = "eu.gcr.io/cognitedata/opcua-extractor-net"
-                dockerImageTag = "${buildDate}-${imageRevision}"
+                version = sh(returnStdout: true, script: "git describe --tags HEAD || true").trim()
+                version = version.replaceFirst(/-(\d+)-.*/, '-build.$1')
             }
         }
         container('test-servers') {
@@ -107,18 +118,17 @@ podTemplate(
                         + 'docker login -u _json_key -p "$(cat /jenkins-docker-builder/credentials.json)" https://eu.gcr.io')
 
                 sh('cp /nuget-credentials/nuget.config ./nuget.config')
-                // sh("docker build -f Dockerfile.build .")
                 // Building twice to get sensible output. The second build will be quick.
                 sh("image=\$(docker build -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
                        + "&& id=\$(docker create \$image)"
                        + "&& docker cp \$id:/build/deploy ."
                        + "&& docker rm -v \$id"
-                       + "&& docker build -t ${dockerImageName}:${dockerImageTag} .")
+                       + "&& docker build -t ${dockerImageName}:${version} .")
                 sh('docker images | head')
             }
             if (env.BRANCH_NAME == 'master') {
                 stage('Push Docker images') {
-                    sh("docker push ${dockerImageName}:${dockerImageTag}")
+                    sh("docker push ${dockerImageName}:${version}")
                 }
             }
         }
