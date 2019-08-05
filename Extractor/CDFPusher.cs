@@ -102,10 +102,9 @@ namespace Cognite.OpcUa
             var client = GetClient();
             try
             {
-                await Utils.RetryAsync(async () =>
-                    await client.InsertDataAsync(req), "Failed to insert into CDF");
+                await client.InsertDataAsync(req);
             }
-            catch (ResponseException)
+            catch (Exception)
             {
                 Logger.LogError($"Failed to insert {count} datapoints into CDF");
 				dataPointPushFailures.Inc();
@@ -281,20 +280,11 @@ namespace Cognite.OpcUa
             var assetIdentities = assetIds.Keys.Select(Identity.ExternalId);
             try
             {
-                var readResults = await Utils.RetryAsync(() => client.GetAssetsByIdsAsync(assetIdentities), "Failed to get assets", true);
-                if (readResults != null)
+                var readResults = await client.GetAssetsByIdsAsync(assetIdentities);
+                Logger.LogInfo($"Found {readResults.Count()} assets");
+                foreach (var resultItem in readResults)
                 {
-                    Logger.LogInfo($"Found {readResults.Count()} assets");
-                    foreach (var resultItem in readResults)
-                    {
-                        nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
-                    }
-                }
-                else
-                {
-                    Logger.LogError("Failed to get assets");
-                    nodeEnsuringFailures.Inc();
-                    return false;
+                    nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
                 }
             }
             catch (ResponseException ex)
@@ -313,10 +303,17 @@ namespace Cognite.OpcUa
                 else
                 {
                     nodeEnsuringFailures.Inc();
-                    Logger.LogError("Failed to fetch asset ids");
+                    Logger.LogError("Failed to get assets");
                     Logger.LogException(ex);
                     return false;
                 }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to get assets");
+                Logger.LogException(ex);
+                nodeEnsuringFailures.Inc();
+                return false;
             }
             if (missingAssetIds.Any())
             {
@@ -329,20 +326,24 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception e)
                 {
+                    Logger.LogError("Failed to get node properties");
+                    nodeEnsuringFailures.Inc();
                     Logger.LogException(e);
+                    return false;
                 }
                 var createAssets = missingAssetIds.Select(id => NodeToAsset(assetIds[id]));
-                var writeResults = await Utils.RetryAsync(() => client.CreateAssetsAsync(createAssets), "Failed to create assets");
-                if (writeResults != null)
+                try
                 {
+                    var writeResults = await client.CreateAssetsAsync(createAssets);
                     foreach (var resultItem in writeResults)
                     {
                         nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
                     }
                 }
-                else
+                catch (Exception ex)
                 {
                     Logger.LogError("Failed to create assets");
+                    Logger.LogException(ex);
                     nodeEnsuringFailures.Inc();
                     return false;
                 }
@@ -353,17 +354,18 @@ namespace Cognite.OpcUa
                 if (idsToMap.Any())
                 {
                     Logger.LogInfo($"Get remaining {idsToMap.Count()} assetids");
-                    var readResults = await Utils.RetryAsync(() => client.GetAssetsByIdsAsync(idsToMap), "Failed to get asset ids");
-                    if (readResults != null)
+                    try
                     {
+                        var readResults = await client.GetAssetsByIdsAsync(idsToMap);
                         foreach (var resultItem in readResults)
                         {
                             nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
                         }
                     }
-                    else
+                    catch (Exception e)
                     {
                         Logger.LogError("Failed to get asset ids");
+                        Logger.LogException(e);
                         nodeEnsuringFailures.Inc();
                         return false;
                     }
@@ -392,18 +394,8 @@ namespace Cognite.OpcUa
             var client = GetClient();
             try
             {
-                var readResults = await Utils.RetryAsync(() =>
-                    client.GetTimeseriesByIdsAsync(tsIds.Keys.Select(Identity.ExternalId)), "Failed to get timeseries", true);
-                if (readResults != null)
-                {
-                    Logger.LogInfo($"Found {readResults.Count()} timeseries");
-                }
-                else
-                {
-                    Logger.LogError("Failed to get timeseries");
-                    nodeEnsuringFailures.Inc();
-                    return false;
-                }
+                var readResults = await client.GetTimeseriesByIdsAsync(tsIds.Keys.Select(Identity.ExternalId));
+                Logger.LogInfo($"Found {readResults.Count()} timeseries");
             }
             catch (ResponseException ex)
             {
@@ -426,6 +418,13 @@ namespace Cognite.OpcUa
                     return false;
                 }
             }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to get timeseries");
+                Logger.LogException(ex);
+                nodeEnsuringFailures.Inc();
+                return false;
+            }
             if (missingTSIds.Any())
             {
                 Logger.LogInfo($"Create {missingTSIds.Count} new timeseries");
@@ -433,9 +432,14 @@ namespace Cognite.OpcUa
                 var getMetaData = missingTSIds.Select(id => tsIds[id]);
                 UAClient.GetNodeProperties(getMetaData);
                 var createTimeseries = getMetaData.Select(VariableToTimeseries);
-                if (await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create TS") == null)
+                try
+                {
+                    await client.CreateTimeseriesAsync(createTimeseries);
+                }
+                catch (Exception e)
                 {
                     Logger.LogError("Failed to create TS");
+                    Logger.LogException(e);
                     nodeEnsuringFailures.Inc();
                     return false;
                 }
@@ -446,7 +450,6 @@ namespace Cognite.OpcUa
         /// Try to get latest timestamp from given list of timeseries, then create any not found and try again
         /// </summary>
         /// <param name="tsList">List of timeseries to be tested</param>
-        /// <param name="client">Cognite client to be used</param>
         /// <returns>True if no operation failed unexpectedly</returns>
         private async Task<bool> EnsureHistorizingTimeseries(IEnumerable<BufferedVariable> tsList)
         {
@@ -466,25 +469,15 @@ namespace Cognite.OpcUa
             var client = GetClient();
             try
             {
-                var readResults = await Utils.RetryAsync(() =>
-                    client.GetLatestDataPointAsync(pairedTsIds), "Failed to get historizing timeseries", true);
-                if (readResults != null)
+                var readResults = await client.GetLatestDataPointAsync(pairedTsIds);
+                Logger.LogInfo($"Found {readResults.Count()} historizing timeseries");
+                foreach (var resultItem in readResults)
                 {
-                    Logger.LogInfo($"Found {readResults.Count()} historizing timeseries");
-                    foreach (var resultItem in readResults)
+                    if (resultItem.NumericDataPoints.Any())
                     {
-                        if (resultItem.NumericDataPoints.Any())
-                        {
-                            tsIds[resultItem.ExternalId].LatestTimestamp =
-                                DateTimeOffset.FromUnixTimeMilliseconds(resultItem.NumericDataPoints.First().TimeStamp).DateTime;
-                        }
+                        tsIds[resultItem.ExternalId].LatestTimestamp =
+                            DateTimeOffset.FromUnixTimeMilliseconds(resultItem.NumericDataPoints.First().TimeStamp).DateTime;
                     }
-                }
-                else
-                {
-                    Logger.LogError("Failed to get historizing timeseries");
-                    nodeEnsuringFailures.Inc();
-                    return false;
                 }
             }
             catch (ResponseException ex)
@@ -508,6 +501,13 @@ namespace Cognite.OpcUa
                     return false;
                 }
             }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to get historizing timeseries");
+                Logger.LogException(ex);
+                nodeEnsuringFailures.Inc();
+                return false;
+            }
             if (missingTSIds.Any())
             {
                 Logger.LogInfo($"Create {missingTSIds.Count} new historizing timeseries");
@@ -515,10 +515,14 @@ namespace Cognite.OpcUa
                 var getMetaData = missingTSIds.Select(id => tsIds[id]);
                 UAClient.GetNodeProperties(getMetaData);
                 var createTimeseries = getMetaData.Select(VariableToTimeseries);
-
-                if (await Utils.RetryAsync(() => client.CreateTimeseriesAsync(createTimeseries), "Failed to create historizing TS") == null)
+                try
+                {
+                    await client.CreateTimeseriesAsync(createTimeseries);
+                }
+                catch (Exception ex)
                 {
                     Logger.LogError("Failed to create historizing TS");
+                    Logger.LogException(ex);
                     nodeEnsuringFailures.Inc();
                     return false;
                 }
@@ -530,10 +534,9 @@ namespace Cognite.OpcUa
                 if (idsToMap.Any())
                 {
                     Logger.LogInfo($"Get remaining {idsToMap.Count()} historizing timeseries ids");
-                    var readResults = await Utils.RetryAsync(() => client.GetLatestDataPointAsync(idsToMap),
-                        "Failed to get historizing timeseries ids");
-                    if (readResults != null)
+                    try
                     {
+                        var readResults = await client.GetLatestDataPointAsync(idsToMap);
                         foreach (var resultItem in readResults)
                         {
                             if (resultItem.NumericDataPoints.Any())
@@ -543,9 +546,10 @@ namespace Cognite.OpcUa
                             }
                         }
                     }
-                    else
+                    catch (Exception ex)
                     {
                         Logger.LogError("Failed to get historizing timeseries ids");
+                        Logger.LogException(ex);
                         nodeEnsuringFailures.Inc();
                         return false;
                     }

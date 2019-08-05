@@ -11,70 +11,8 @@ namespace Cognite.OpcUa
 {
     public static class Utils
     {
-        private static readonly int retryCount = 3;
         public static bool BufferFileEmpty { get; set; }
         private static readonly object fileLock = new object();
-        /// <summary>
-        /// Retry the given asynchronous action a fixed number of times, logging each failure, and delaying with exponential backoff.
-        /// </summary>
-        /// <typeparam name="T">Expected return type</typeparam>
-        /// <param name="action">Asynchronous action to be performed</param>
-        /// <param name="failureMessage">Message to log on failure, in addition to attempt number</param>
-        /// <param name="expectResponseException">If true, expect a <see cref="ResponseException"/> and throw it immediately if found</param>
-        /// <returns>The expected return type, result of the asynchronous call</returns>
-        public static async Task<T> RetryAsync<T>(Func<Task<T>> action, string failureMessage, bool expectResponseException = false)
-        {
-            for (int i = 0; i < retryCount; i++)
-            {
-                try
-                {
-                    T result = await action();
-                    return result;
-                }
-                catch (Exception e)
-                {
-                    if (e.GetType() == typeof(ResponseException) && (i == retryCount - 1 || expectResponseException))
-                    {
-                        if (!expectResponseException)
-                        {
-                            Logger.LogWarning($"{failureMessage}, {e.Message}: attempt {(i + 1)}/{retryCount}");
-                        }
-                        var re = (ResponseException)e;
-                        throw re;
-                    }
-                    Logger.LogWarning($"{failureMessage}, {e.Message}: attempt {(i + 1)}/{retryCount}");
-                    //Logger.LogException(e);
-                }
-                await Task.Delay(500 * (1 << i));
-            }
-            return default;
-        }
-        public static async Task RetryAsync(Func<Task> action, string failureMessage, bool expectResponseException = false)
-        {
-            for (int i = 0; i < retryCount; i++)
-            {
-                try
-                {
-                    await action();
-                    return;
-                }
-                catch (Exception e)
-                {
-                    if (e.GetType() == typeof(ResponseException) && (i == retryCount - 1 || expectResponseException))
-                    {
-                        if (!expectResponseException)
-                        {
-                            Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
-                        }
-                        var re = (ResponseException)e;
-                        throw re;
-                    }
-                    Logger.LogWarning(failureMessage + ", " + e.Message + ": attempt " + (i + 1) + "/" + retryCount);
-                    //Logger.LogException(e);
-                }
-                await Task.Delay(500 * (1 << i));
-            }
-        }
         /// <summary>
         /// Write a list of datapoints to buffer file. Only writes non-historizing datapoints.
         /// </summary>
