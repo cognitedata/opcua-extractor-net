@@ -20,7 +20,6 @@ namespace Cognite.OpcUa
         public NodeId RootNode { get; private set; }
         private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
         private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
-        private readonly bool debug;
         private bool pushingDatapoints;
         private bool runningPush = true;
         private readonly IPusher pusher;
@@ -49,7 +48,6 @@ namespace Cognite.OpcUa
 			this.config = config;
             UAClient.Extractor = this;
 
-            debug = config.CogniteConfig.Debug;
             pusher.Extractor = this;
             pusher.UAClient = UAClient;
         }
@@ -236,7 +234,6 @@ namespace Cognite.OpcUa
                 }
                 Logger.LogData(buffDp);
 
-                if (debug) return;
                 bufferedDPQueue.Enqueue(buffDp);
             }
         }

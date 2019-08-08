@@ -17,6 +17,23 @@ namespace Cognite.OpcUa
         /// Description in opcua
         /// </summary>
         public string Description { get; set; }
+        public virtual string ToDebugDescription()
+        {
+            string propertyString = "properties: {";
+            if (properties != null)
+            {
+                foreach (var prop in properties)
+                {
+                    propertyString += $"{prop.DisplayName} : {prop.Value.stringValue},\n";
+                }
+            }
+            propertyString += "}";
+
+            string ret = $"DisplayName: {DisplayName}\n"
+                + $"ParentId: {ParentId?.ToString()}\n"
+                + propertyString + "\n";
+            return ret;
+        }
         public IList<BufferedVariable> properties;
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
@@ -59,6 +76,24 @@ namespace Cognite.OpcUa
         /// Value of variable as string or double
         /// </summary>
         public BufferedDataPoint Value { get; private set; }
+        public override string ToDebugDescription()
+        {
+            string propertyString = "properties: {";
+            if (properties != null)
+            {
+                foreach (var prop in properties)
+                {
+                    propertyString += $"{prop.DisplayName} : {prop.Value.stringValue},\n";
+                }
+            }
+            propertyString += "}";
+
+            string ret = $"DisplayName: {DisplayName}\n"
+                + $"ParentId: {ParentId?.ToString()}\n"
+                + $"Historizing: {Historizing}\n"
+                + propertyString + "\n";
+            return ret;
+        }
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>

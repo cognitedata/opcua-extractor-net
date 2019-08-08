@@ -19,6 +19,7 @@ namespace Test
         readonly Dictionary<string, TimeseriesDummy> timeseries = new Dictionary<string, TimeseriesDummy>();
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
+        public long RequestCount { get; private set; }
         public bool AllowPush { get; set; } = true;
         public MockMode mode;
         public enum MockMode
@@ -42,6 +43,7 @@ namespace Test
             var content = await req.Content.ReadAsStringAsync();
             lock (handlerLock)
             {
+                RequestCount++;
                 switch (reqPath)
                 {
                     case "/assets/byids":

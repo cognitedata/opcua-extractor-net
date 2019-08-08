@@ -95,6 +95,28 @@ namespace Test
             extractor.Close();
 
         }
+        [Trait("Tests", "basicserver")]
+        [Trait("Tests", "cdfpusher")]
+        [Fact]
+        public async Task TestDebugMode()
+        {
+            var fullConfig = Common.BuildConfig("basic", 5);
+            if (fullConfig == null) throw new Exception("No config");
+            fullConfig.CogniteConfig.Debug = true;
+
+            Logger.Startup(fullConfig.LoggerConfig);
+            UAClient client = new UAClient(fullConfig);
+            var factory = new DummyFactory(fullConfig.CogniteConfig.Project, DummyFactory.MockMode.None);
+            var pusher = new CDFPusher(GetDummyProvider(factory), fullConfig);
+
+            Extractor extractor = new Extractor(fullConfig, pusher, client);
+            extractor.Start();
+            Assert.True(extractor.Started);
+            await extractor.MapUAToCDF();
+            Thread.Sleep(2000);
+            Assert.Equal(0, factory.RequestCount);
+            extractor.Close();
+        }
         public static IServiceProvider GetDummyProvider(DummyFactory factory)
         {
             var services = new ServiceCollection();
