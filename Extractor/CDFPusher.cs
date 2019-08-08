@@ -77,6 +77,7 @@ namespace Cognite.OpcUa
                     dataPointList.Add(buffer);
                 }
             }
+            Logger.LogInfo($"Push {count} datapoints to CDF");
 
             if (count == 0) return;
             if (config.Debug) return;
@@ -98,7 +99,6 @@ namespace Cognite.OpcUa
             });
             var req = new DataPointInsertionRequest();
             req.Items.AddRange(finalDataPoints);
-            Logger.LogInfo($"Push {count} datapoints to CDF");
             var client = GetClient();
             try
             {
@@ -199,7 +199,16 @@ namespace Cognite.OpcUa
             Logger.LogInfo($"Testing {varList.Count + assetList.Count} nodes against CDF");
             if (config.Debug)
             {
+                UAClient.GetNodeProperties(assetList.Concat(varList));
                 Extractor.SynchronizeNodes(tsList.Concat(histTsList));
+                foreach (var node in assetList)
+                {
+                    Logger.LogInfo(node.ToDebugDescription());
+                }
+                foreach (var node in varList)
+                {
+                    Logger.LogInfo(node.ToDebugDescription());
+                }
                 return true;
             }
             var client = GetClient();

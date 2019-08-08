@@ -146,6 +146,7 @@ namespace Cognite.OpcUa
                         }
 
                         if (quitEvent.WaitOne(failed ? 4000 : -1)) return;
+                        if (failed) Thread.Sleep(1000);
                     }
                     else
                     {
@@ -159,7 +160,7 @@ namespace Cognite.OpcUa
     {
         public string ConfigRoot { get; set; } = "config";
         public string EndpointURL { get; set; }
-        public bool Autoaccept { get; set; } = false;
+        public bool Autoaccept { get; set; } = true;
         public int PollingInterval { get; set; } = 500;
         public string GlobalPrefix { get; set; }
         public string Username { get; set; }

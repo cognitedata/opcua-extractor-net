@@ -23,7 +23,6 @@ namespace Cognite.OpcUa
         private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
         private readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
-        private bool clientReconnecting;
         public bool Started { get; private set; }
         private readonly TimeSpan historyGranularity;
 
@@ -139,11 +138,9 @@ namespace Cognite.OpcUa
         /// </summary>
         private void ClientReconnectComplete(object sender, EventArgs eventArgs)
         {
-            if (!clientReconnecting) return;
             if (!ReferenceEquals(sender, reconnectHandler)) return;
             session = reconnectHandler.Session;
             reconnectHandler.Dispose();
-            clientReconnecting = false;
             Logger.LogWarning("--- RECONNECTED ---");
             Task.Run(() => Extractor?.RestartExtractor());
             lock (visitedNodesLock)
@@ -166,7 +163,6 @@ namespace Cognite.OpcUa
                 {
                     connected.Set(0);
                     Logger.LogWarning("--- RECONNECTING ---");
-                    clientReconnecting = true;
                     reconnectHandler = new SessionReconnectHandler();
                     reconnectHandler.BeginReconnect(sender, 5000, ClientReconnectComplete);
                 }
@@ -180,7 +176,7 @@ namespace Cognite.OpcUa
         {
             if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
             {
-                eventArgs.Accept = config.Autoaccept;
+                eventArgs.Accept = true;
                 // TODO Verify client acceptance here somehow?
                 if (config.Autoaccept)
                 {
@@ -345,7 +341,6 @@ namespace Cognite.OpcUa
             int nodeCnt = 0;
             do
             {
-                if (clientReconnecting) return;
                 var references = GetNodeChildren(nextIds);
                 nextIds.Clear();
                 levelCnt++;
@@ -526,51 +521,55 @@ namespace Cognite.OpcUa
                 .Select(sub => sub.ResolvedNodeId)
                 .ToHashSet();
 
-            subscription.AddItems(toSynch
-                .Where(node => !hasSubscription.Contains(node.Id))
-                .Select(node =>
-                {
-                    var monitor = new MonitoredItem(subscription.DefaultItem)
-                    {
-                        StartNodeId = node.Id,
-                        DisplayName = "Value: " + node.DisplayName
-                    };
-                    monitor.Notification += subscriptionHandler;
-                    count++;
-                    return monitor;
-                })
-            );
-
-            Logger.LogInfo($"Add {count} subscriptions");
-            lock (subscriptionLock)
+            foreach (var chunk in Utils.ChunkBy(toSynch, 1000))
             {
-                IncOperations();
-                try
-                {
-                    if (count > 0)
+                subscription.AddItems(chunk
+                    .Where(node => !hasSubscription.Contains(node.Id))
+                    .Select(node =>
                     {
-                        if (subscription.Created)
+                        var monitor = new MonitoredItem(subscription.DefaultItem)
                         {
-                            subscription.CreateItems();
-                        }
-                        else
+                            StartNodeId = node.Id,
+                            DisplayName = "Value: " + node.DisplayName
+                        };
+                        monitor.Notification += subscriptionHandler;
+                        count++;
+                        return monitor;
+                    })
+                );
+
+                Logger.LogInfo($"Add {count} subscriptions");
+                lock (subscriptionLock)
+                {
+                    IncOperations();
+                    try
+                    {
+                        if (count > 0)
                         {
-                            session.AddSubscription(subscription);
-                            subscription.Create();
+                            if (subscription.Created)
+                            {
+                                subscription.CreateItems();
+                            }
+                            else
+                            {
+                                session.AddSubscription(subscription);
+                                subscription.Create();
+                            }
                         }
                     }
+                    catch (Exception e)
+                    {
+                        Logger.LogError("Failed to create subscriptions");
+                        throw e;
+                    }
+                    finally
+                    {
+                        DecOperations();
+                    }
+                    numSubscriptions.Set(subscription.MonitoredItemCount);
                 }
-                catch (Exception e)
-                {
-                    Logger.LogError("Failed to create subscriptions");
-                    throw e;
-                }
-                finally
-                {
-                    DecOperations();
-                }
-                numSubscriptions.Set(subscription.MonitoredItemCount);
             }
+ 
             DoHistoryRead(toSynch, callback, historyGranularity);
         }
         /// <summary>
