@@ -119,7 +119,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public void Close()
         {
-            WaitForFinalPush().Wait();
+            WaitForFinalPush().Wait(10000);
             if (!UAClient.Started) return;
             try
             {
