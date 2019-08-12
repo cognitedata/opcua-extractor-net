@@ -79,6 +79,7 @@ podTemplate(
                 dockerImageName = "eu.gcr.io/cognitedata/opcua-extractor-net"
                 version = sh(returnStdout: true, script: "git describe --tags HEAD || true").trim()
                 version = version.replaceFirst(/-(\d+)-.*/, '-build.$1')
+                lastTag = sh(returnStdout: true, script: "git describe --tags --abbrev=0").trim()
             }
         }
         container('test-servers') {
@@ -103,12 +104,34 @@ podTemplate(
             stage('Build') {
                 sh('dotnet build')
             }
-            stage('Run tests') {
-                sh('./test.sh')
-                archiveArtifacts artifacts: 'coverage.lcov', fingerprint: true
+            timeout(5) {
+                stage('Run tests') {
+                    sh('./test.sh')
+                    archiveArtifacts artifacts: 'coverage.lcov', fingerprint: true
+                }
             }
             stage("Upload report to codecov.io") {
                 sh('bash </codecov-script/upload-report.sh')
+            }
+            if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
+                stage('Install deploy dependencies') {
+                    sh('apt-get update && apt-get install -y jq sed zip gawk')
+                    sh('git clone https://github.com/whiteinge/ok.sh.git')
+                }
+                stage('Build release versions') {
+                    sh('dotnet publish -c Release -r win-x64 --self-contained true Extractor/')
+                    sh('dotnet publish -c Release -r win81-x64 --self-contained true Extractor/')
+                    sh('dotnet publish -c Release -r linux-x64 --self-contained true Extractor/')
+                    sh('zip -r win-x64.zip Extractor/bin/Release/netcoreapp2.2/win-x64/')
+                    sh('zip -r win81-x64.zip Extractor/bin/Release/netcoreapp2.2/win81-x64/')
+                    sh('zip -r linux-x64.zip Extractor/bin/Release/netcoreapp2.2/linux-x64/')
+
+                }
+                stage('Deploy to github release') {
+                    withCredentials([usernamePassword(credentialsId: '5ad41c53-4df7-4ca8-a276-9822375568b3', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
+                        sh("GITHUB_TOKEN=$ghpassword sh deploy.sh cognitedata opcua-extractor-net ${version} ./ok.sh/ok.sh win-x64.zip win81-x64.zip linux-x64.zip")
+                    }               
+                }
             }
         }
         container('docker') {
