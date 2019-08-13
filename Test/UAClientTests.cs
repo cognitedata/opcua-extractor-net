@@ -10,6 +10,7 @@ using Xunit;
 
 namespace Test
 {
+    [CollectionDefinition("Client_tests", DisableParallelization = true)]
     public class UAClientTests
     {
         [Trait("Category", "basicserver")]
@@ -36,26 +37,47 @@ namespace Test
                 } },
                 { "afterSynchronize", (assetList, tsList, histTsList) =>
                 {
-                    Thread.Sleep(2000);
-                    Assert.True(totalDps > 0, "Expected some datapoints");
+                    bool gotDatapoints = false;
+                    for (int i = 0; i < 20; i++)
+                    {
+                        if (totalDps > 0)
+                        {
+                            gotDatapoints = true;
+                            break;
+                        }
+                        Thread.Sleep(1000);
+                    }
+                    Assert.True(gotDatapoints, "Expected some datapoints");
+                    gotDatapoints = false;
                     int lastDps = totalDps;
-                    Thread.Sleep(2000);
-                    Assert.True(totalDps > lastDps, "Expected dp count to be increasing");
+                                            for (int i = 0; i < 20; i++)
+                    {
+                        if (totalDps > lastDps)
+                        {
+                            gotDatapoints = true;
+                            break;
+                        }
+                        Thread.Sleep(1000);
+                    }
+                    Assert.True(gotDatapoints, "Expected dp count to be increasing");
                 } }
             }, (dpList) => totalDps += dpList.Count);
             UAClient client = new UAClient(fullConfig);
             Extractor extractor = new Extractor(fullConfig, pusher, client);
-            extractor.Start();
-            Assert.True(extractor.Started);
-            var tasks = new List<Task>
+            using (var source = new CancellationTokenSource())
             {
-                Task.Run(extractor.MapUAToCDF)
-            };
-            Thread.Sleep(3000);
-			tasks.Add(Task.Run(extractor.RestartExtractor));
-			await Task.WhenAll(tasks);
-            Assert.All(tasks, (task) => Assert.False(task.IsFaulted));
-			extractor.Close();
+                var runTask = extractor.RunExtractor(source.Token);
+                pusher.EndCB = () => { Thread.Sleep(3000); source.Cancel(); };
+                try
+                {
+                    await runTask;
+                }
+                catch (Exception e)
+                {
+                    if (!Common.TestRunResult(e)) throw;
+                }
+                extractor.Close();
+            }
         }
         [Trait("Category", "basicserver")]
         [Trait("Tests", "Buffer")]
@@ -67,6 +89,7 @@ namespace Test
             File.Create(fullConfig.CogniteConfig.BufferFile).Close();
             int dpRuns = 0;
             int totalStored = 0;
+            using (var source = new CancellationTokenSource())
             using (var quitEvent = new ManualResetEvent(false))
             {
                 TestPusher pusher = new TestPusher(null, (dpList) =>
@@ -75,23 +98,30 @@ namespace Test
                     if (dpRuns < 5)
                     {
                         totalStored += dpList.Count;
-                        Utils.WriteBufferToFile(dpList, fullConfig.CogniteConfig);
+                        Utils.WriteBufferToFile(dpList, fullConfig.CogniteConfig, source.Token);
                     }
                     else if (dpRuns == 5)
                     {
                         Logger.LogInfo("Read from file...");
                         var queue = new ConcurrentQueue<BufferedDataPoint>();
-                        Utils.ReadBufferFromFile(queue, fullConfig.CogniteConfig);
+                        Utils.ReadBufferFromFile(queue, fullConfig.CogniteConfig, source.Token);
                         Assert.Equal(totalStored, queue.Count);
                         quitEvent.Set();
                     }
                 });
                 UAClient client = new UAClient(fullConfig);
                 Extractor extractor = new Extractor(fullConfig, pusher, client);
-                extractor.Start();
-                Assert.True(extractor.Started);
-                await extractor.MapUAToCDF();
+                var runTask = extractor.RunExtractor(source.Token);
                 Assert.True(quitEvent.WaitOne(20000), "Timeout");
+                source.Cancel();
+                try
+                {
+                    await runTask;
+                }
+                catch (Exception e)
+                {
+                    if (!Common.TestRunResult(e)) throw;
+                }
                 extractor.Close();
             }
             Assert.Equal(0, new FileInfo(fullConfig.CogniteConfig.BufferFile).Length);
@@ -104,6 +134,7 @@ namespace Test
             var fullConfig = Common.BuildConfig("full", 2);
             Logger.Startup(fullConfig.LoggerConfig);
             int totalDps = 0;
+            using (var source = new CancellationTokenSource())
             using (var quitEvent = new ManualResetEvent(false))
             {
                 TestPusher pusher = new TestPusher(new Dictionary<string, Action<List<BufferedNode>, List<BufferedVariable>, List<BufferedVariable>>>
@@ -116,20 +147,45 @@ namespace Test
                     } },
                     { "afterSynchronize", (assetList, tsList, histTsList) =>
                     {
-                        Thread.Sleep(2000);
-                        Assert.True(totalDps > 0, "Expected some datapoints");
+                        bool gotDatapoints = false;
+                        for (int i = 0; i < 20; i++)
+                        {
+                            if (totalDps > 0)
+                            {
+                                gotDatapoints = true;
+                                break;
+                            }
+                            Thread.Sleep(1000);
+                        }
+                        Assert.True(gotDatapoints, "Expected some datapoints");
+                        gotDatapoints = false;
                         int lastDps = totalDps;
-                        Thread.Sleep(2000);
-                        Assert.True(totalDps > lastDps, "Expected dp count to be increasing");
-                        quitEvent.Set();
+                                                for (int i = 0; i < 20; i++)
+                        {
+                            if (totalDps > lastDps)
+                            {
+                                gotDatapoints = true;
+                                break;
+                            }
+                            Thread.Sleep(1000);
+                        }
+                        Assert.True(gotDatapoints, "Expected dp count to be increasing");
+                        if (!source.IsCancellationRequested) quitEvent.Set();
                     } }
                 }, (dpList) => totalDps += dpList.Count);
                 UAClient client = new UAClient(fullConfig);
                 Extractor extractor = new Extractor(fullConfig, pusher, client);
-                extractor.Start();
-                Assert.True(extractor.Started);
-                await extractor.MapUAToCDF();
-                Assert.True(quitEvent.WaitOne(20000), "Timeout");
+                var runTask = extractor.RunExtractor(source.Token);
+                Assert.True(quitEvent.WaitOne(30000), "Timeout");
+                source.Cancel();
+                try
+                {
+                    await runTask;
+                }
+                catch (Exception e)
+                {
+                    if (!Common.TestRunResult(e)) throw;
+                }
                 extractor.Close();
             }
         }

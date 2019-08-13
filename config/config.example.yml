@@ -22,6 +22,8 @@ UAConfig:
   # be read together. Should not be smaller than usual average update rate
   # Leave at 0 to always read a single node each time.
   HistoryGranularity: 900
+  # If true, force restart the uaclient on disconnect. Required for some servers
+  ForceRestart: false
 
 NSMaps:
   # Map OPC-UA namespaces to prefixes in CDF. 

@@ -6,6 +6,7 @@ using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using System.Linq;
 using Prometheus.Client;
+using System.Threading;
 
 namespace Cognite.OpcUa
 {
@@ -24,7 +25,9 @@ namespace Cognite.OpcUa
         private readonly object subscriptionLock = new object();
         private readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
         public bool Started { get; private set; }
+        public bool Failed { get; private set; }
         private readonly TimeSpan historyGranularity;
+        private CancellationToken liveToken;
 
         private int pendingOperations;
         private readonly object pendingOpLock = new object();
@@ -66,8 +69,9 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Entrypoint for starting the opcua session. Must be called before any further requests can be made.
         /// </summary>
-        public async Task Run()
+        public async Task Run(CancellationToken token)
         {
+            liveToken = token;
             try
             {
                 await StartSession();
@@ -91,6 +95,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task StartSession()
         {
+            visitedNodes.Clear();
             var application = new ApplicationInstance
             {
                 ApplicationName = ".NET OPC-UA Extractor",
@@ -142,7 +147,7 @@ namespace Cognite.OpcUa
             session = reconnectHandler.Session;
             reconnectHandler.Dispose();
             Logger.LogWarning("--- RECONNECTED ---");
-            Task.Run(() => Extractor?.RestartExtractor());
+            Task.Run(() => Extractor?.RestartExtractor(liveToken));
             lock (visitedNodesLock)
             {
                 visitedNodes.Clear();
@@ -163,8 +168,23 @@ namespace Cognite.OpcUa
                 {
                     connected.Set(0);
                     Logger.LogWarning("--- RECONNECTING ---");
-                    reconnectHandler = new SessionReconnectHandler();
-                    reconnectHandler.BeginReconnect(sender, 5000, ClientReconnectComplete);
+                    if (!config.ForceRestart && !liveToken.IsCancellationRequested)
+                    {
+                        reconnectHandler = new SessionReconnectHandler();
+                        reconnectHandler.BeginReconnect(sender, 5000, ClientReconnectComplete);
+                    }
+                    else
+                    {
+                        Failed = true;
+                        try
+                        {
+                            session.Close();
+                        }
+                        catch
+                        {
+                            Logger.LogWarning("Client failed to close");
+                        }
+                    }
                 }
             }
         }
@@ -224,7 +244,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="root">Initial node to start mapping. Will not be sent to callback</param>
         /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
-        public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback)
+        public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
         {
             lock (visitedNodesLock)
             {
@@ -233,7 +253,7 @@ namespace Cognite.OpcUa
             }
             try
             {
-                await Task.Run(() => BrowseDirectory(new List<NodeId> { root }, callback));
+                await Task.Run(() => BrowseDirectory(new List<NodeId> { root }, callback, token), token);
             }
             catch (Exception e)
             {
@@ -247,7 +267,7 @@ namespace Cognite.OpcUa
         /// <param name="parents">List of parents to browse</param>
         /// <param name="referenceTypes">Referencetype to browse, defaults to HierarchicalReferences</param>
         /// <returns></returns>
-        private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(IEnumerable<NodeId> parents, NodeId referenceTypes = null)
+        private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(IEnumerable<NodeId> parents, CancellationToken token, NodeId referenceTypes = null)
         {
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             foreach (var lparents in Utils.ChunkBy(parents, bulkConfig.UABrowse))
@@ -290,7 +310,7 @@ namespace Cognite.OpcUa
                         }
                     }
                     numBrowse.Inc();
-                    while (continuationPoints.Any())
+                    while (continuationPoints.Any() && !token.IsCancellationRequested)
                     {
                         session.BrowseNext(
                             null,
@@ -316,11 +336,11 @@ namespace Cognite.OpcUa
                         numBrowse.Inc();
                     }
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     browseFailures.Inc();
                     Logger.LogError("Failed during browse session");
-                    throw e;
+                    throw;
                 }
                 finally
                 {
@@ -334,14 +354,14 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="roots">Root nodes to browse</param>
         /// <param name="callback">Callback for each node</param>
-        private void BrowseDirectory(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback)
+        private void BrowseDirectory(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
         {
             var nextIds = roots.ToList();
             int levelCnt = 0;
             int nodeCnt = 0;
             do
             {
-                var references = GetNodeChildren(nextIds);
+                var references = GetNodeChildren(nextIds, token);
                 nextIds.Clear();
                 levelCnt++;
                 foreach (var rdlist in references)
@@ -376,7 +396,8 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback, takes a <see cref="HistoryReadResultCollection"/>,
         /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
         private void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
-            Action<HistoryData, bool, NodeId> callback)
+            Action<HistoryData, bool, NodeId> callback,
+            CancellationToken token)
         {
             DateTime lowest = DateTime.MinValue;
             lowest = toRead.Select((bvar) => { return bvar.LatestTimestamp; }).Min();
@@ -436,13 +457,13 @@ namespace Cognite.OpcUa
                         }
                         prevIndex++;
                     }
-                } while (ids.Any());
+                } while (ids.Any() && !token.IsCancellationRequested);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 historyReadFailures.Inc();
                 Logger.LogError("Failed during HistoryRead");
-                throw e;
+                throw;
             }
             finally
             {
@@ -452,7 +473,8 @@ namespace Cognite.OpcUa
         }
         public void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
             Action<HistoryData, bool, NodeId> callback,
-            TimeSpan granularity)
+            TimeSpan granularity,
+            CancellationToken token)
         {
             if (granularity == TimeSpan.Zero)
             {
@@ -460,7 +482,7 @@ namespace Cognite.OpcUa
                 {
                     if (variable.Historizing)
                     {
-                        Task.Run(() => DoHistoryRead(new List<BufferedVariable> { variable }, callback));
+                        Task.Run(() => DoHistoryRead(new List<BufferedVariable> { variable }, callback, token), token);
                     }
                     else
                     {
@@ -493,7 +515,7 @@ namespace Cognite.OpcUa
             {
                 foreach (var nextNodes in Utils.ChunkBy(nodes, bulkConfig.UAHistoryReadNodes))
                 {
-                    Task.Run(() => DoHistoryRead(nextNodes, callback));
+                    Task.Run(() => DoHistoryRead(nextNodes, callback, token));
                 }
             }
         }
@@ -507,7 +529,8 @@ namespace Cognite.OpcUa
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
         public void SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
             Action<HistoryData, bool, NodeId> callback,
-            MonitoredItemNotificationEventHandler subscriptionHandler)
+            MonitoredItemNotificationEventHandler subscriptionHandler,
+            CancellationToken token)
         {
             var toSynch = nodeList.Where(node => IsNumericType(node.DataType) && node.ValueRank == ValueRanks.Scalar);
             if (!toSynch.Any()) return;
@@ -523,6 +546,7 @@ namespace Cognite.OpcUa
 
             foreach (var chunk in Utils.ChunkBy(toSynch, 1000))
             {
+                if (token.IsCancellationRequested) break;
                 subscription.AddItems(chunk
                     .Where(node => !hasSubscription.Contains(node.Id))
                     .Select(node =>
@@ -557,10 +581,10 @@ namespace Cognite.OpcUa
                             }
                         }
                     }
-                    catch (Exception e)
+                    catch (Exception)
                     {
                         Logger.LogError("Failed to create subscriptions");
-                        throw e;
+                        throw;
                     }
                     finally
                     {
@@ -570,7 +594,7 @@ namespace Cognite.OpcUa
                 }
             }
  
-            DoHistoryRead(toSynch, callback, historyGranularity);
+            DoHistoryRead(toSynch, callback, historyGranularity, token);
         }
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
@@ -581,7 +605,8 @@ namespace Cognite.OpcUa
         /// <returns>A list of <see cref="DataValue"/>s</returns>
         private IEnumerable<DataValue> GetNodeAttributes(IEnumerable<BufferedNode> nodes,
             IEnumerable<uint> common,
-            IEnumerable<uint> variables)
+            IEnumerable<uint> variables,
+            CancellationToken token)
         {
             if (!nodes.Any()) return new List<DataValue>();
             var readValueIds = new ReadValueIdCollection();
@@ -616,6 +641,7 @@ namespace Cognite.OpcUa
                 int total = readValueIds.Count;
                 foreach (var nextValues in Utils.ChunkBy(readValueIds, bulkConfig.UAAttributes))
                 {
+                    if (token.IsCancellationRequested) break;
                     count++;
                     session.Read(
                         null,
@@ -630,11 +656,11 @@ namespace Cognite.OpcUa
                 }
                 Logger.LogInfo($"Read {total} attributes with {count} operations");
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 Logger.LogError("Failed to fetch attributes from opcua");
                 attributeRequestFailures.Inc();
-                throw e;
+                throw;
             }
             finally
             {
@@ -646,7 +672,7 @@ namespace Cognite.OpcUa
         /// Gets Description for all nodes, and DataType, Historizing and ValueRank for Variable nodes, then updates the given list of nodes
         /// </summary>
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
-        public void ReadNodeData(IEnumerable<BufferedNode> nodes)
+        public void ReadNodeData(IEnumerable<BufferedNode> nodes, CancellationToken token)
         {
             var values = GetNodeAttributes(nodes, new List<uint>
             {
@@ -656,10 +682,11 @@ namespace Cognite.OpcUa
                 Attributes.DataType,
                 Attributes.Historizing,
                 Attributes.ValueRank
-            });
+            }, token);
             var enumerator = values.GetEnumerator();
             foreach (BufferedNode node in nodes)
             {
+                if (token.IsCancellationRequested) return;
                 enumerator.MoveNext();
                 node.Description = enumerator.Current.GetValue("");
                 if (node.IsVariable && node is BufferedVariable vnode)
@@ -686,11 +713,12 @@ namespace Cognite.OpcUa
         /// Due to this, only nodes with ValueRank -1 (Scalar) will be fetched.
         /// </remarks>
         /// <param name="nodes">List of variables to be updated</param>
-        public void ReadNodeValues(IEnumerable<BufferedVariable> nodes)
+        public void ReadNodeValues(IEnumerable<BufferedVariable> nodes, CancellationToken token)
         {
             var values = GetNodeAttributes(nodes.Where((BufferedVariable buff) => buff.ValueRank == ValueRanks.Scalar),
                 new List<uint>(),
-                new List<uint> { Attributes.Value }
+                new List<uint> { Attributes.Value },
+                token
             );
             var enumerator = values.GetEnumerator();
             foreach (var node in nodes)
@@ -708,7 +736,7 @@ namespace Cognite.OpcUa
         /// Gets properties for variables in nodes given, then updates all properties in given list of nodes with relevant data and values.
         /// </summary>
         /// <param name="nodes">Nodes to be updated with properties</param>
-        public void GetNodeProperties(IEnumerable<BufferedNode> nodes)
+        public void GetNodeProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
         {
             var properties = new HashSet<BufferedVariable>();
             Logger.LogInfo($"Get properties for {nodes.Count()} nodes");
@@ -730,7 +758,7 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            var result = GetNodeChildren(idsToCheck, ReferenceTypeIds.HasProperty);
+            var result = GetNodeChildren(idsToCheck, token, ReferenceTypeIds.HasProperty);
             foreach (var parent in nodes)
             {
                 if (!result.ContainsKey(parent.Id)) continue;
@@ -745,8 +773,8 @@ namespace Cognite.OpcUa
                     parent.properties.Add(property);
                 }
             }
-            ReadNodeData(properties);
-            ReadNodeValues(properties);
+            ReadNodeData(properties, token);
+            ReadNodeValues(properties, token);
         }
         #endregion
 
