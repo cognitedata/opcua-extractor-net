@@ -4,8 +4,8 @@ NUGET
     coverlet.msbuild (2.6.3)
     Fable.Core (3.0) - restriction: && (< net46) (>= netstandard2.0)
       FSharp.Core (>= 4.5.2) - restriction: >= netstandard2.0
-    FSharp.Core (4.6.2) - restriction: >= netstandard2.0
-    Google.Protobuf (3.9) - restriction: >= netstandard2.0
+    FSharp.Core (4.7) - restriction: >= netstandard2.0
+    Google.Protobuf (3.9.1) - restriction: >= netstandard2.0
       System.Memory (>= 4.5.2) - restriction: && (< net45) (>= netstandard2.0)
     Microsoft.AspNetCore.Connections.Abstractions (2.2) - restriction: >= netstandard2.0
       Microsoft.AspNetCore.Http.Features (>= 2.2) - restriction: >= netstandard2.0
@@ -1073,7 +1073,7 @@ NUGET
       Microsoft.NET.Test.Sdk (>= 15.0) - restriction: >= netcoreapp1.0
     YamlDotNet (6.1.1)
   remote: https://cognite.jfrog.io/cognite/api/nuget/nuget
-    Fusion.NET (0.8.18)
+    Fusion.NET (0.8.21)
       FSharp.Core (>= 4.6.2) - restriction: >= netstandard2.0
       Fusion.NET.Protobuf (>= 0.9) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 2.2) - restriction: >= netstandard2.0

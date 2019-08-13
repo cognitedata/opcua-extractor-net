@@ -9,6 +9,7 @@ using Xunit;
 
 namespace Test
 {
+    [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
     public class CDFPusherTests
     {
         [Trait("Category", "both")]
@@ -32,17 +33,15 @@ namespace Test
             var pusher = new CDFPusher(GetDummyProvider(factory), fullConfig);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
-            extractor.Start();
-            Assert.True(extractor.Started);
             try
             {
-                await extractor.MapUAToCDF();
+                await extractor.RunExtractor(CancellationToken.None, true);
             }
             catch (Exception e)
             {
                 if (mode != DummyFactory.MockMode.FailAsset)
                 {
-                    throw e;
+                    if (!Common.TestRunResult(e)) throw;
                 }
             }
             extractor.Close();
@@ -64,36 +63,46 @@ namespace Test
             var pusher = new CDFPusher(GetDummyProvider(factory), fullConfig);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
-            extractor.Start();
-            Assert.True(extractor.Started);
-            await extractor.MapUAToCDF();
-            File.Create(fullConfig.CogniteConfig.BufferFile).Close();
-            factory.AllowPush = false;
-            bool gotData = false;
-            for (int i = 0; i < 20; i++)
+            using (var source = new CancellationTokenSource())
             {
-                if (new FileInfo(fullConfig.CogniteConfig.BufferFile).Length > 0)
-                {
-                    gotData = true;
-                    break;
-                }
-                Thread.Sleep(1000);
-            }
-            Assert.True(gotData, "Some data must be written");
-            factory.AllowPush = true;
-            gotData = false;
-            for (int i = 0; i < 20; i++)
-            {
-                if (new FileInfo(fullConfig.CogniteConfig.BufferFile).Length == 0)
-                {
-                    gotData = true;
-                    break;
-                }
-                Thread.Sleep(1000);
-            }
-            Assert.True(gotData, "Expecting file to be emptied");
-            extractor.Close();
+                var runTask = extractor.RunExtractor(source.Token);
 
+                File.Create(fullConfig.CogniteConfig.BufferFile).Close();
+                factory.AllowPush = false;
+                bool gotData = false;
+                for (int i = 0; i < 20; i++)
+                {
+                    if (new FileInfo(fullConfig.CogniteConfig.BufferFile).Length > 0)
+                    {
+                        gotData = true;
+                        break;
+                    }
+                    Thread.Sleep(1000);
+                }
+                Assert.True(gotData, "Some data must be written");
+                factory.AllowPush = true;
+                gotData = false;
+                for (int i = 0; i < 20; i++)
+                {
+                    if (new FileInfo(fullConfig.CogniteConfig.BufferFile).Length == 0)
+                    {
+                        gotData = true;
+                        break;
+                    }
+                    Thread.Sleep(1000);
+                }
+                Assert.True(gotData, "Expecting file to be emptied");
+                source.Cancel();
+                try
+                {
+                    await runTask;
+                }
+                catch (Exception e)
+                {
+                    if (!Common.TestRunResult(e)) throw;
+                }
+                extractor.Close();
+            }
         }
         [Trait("Tests", "basicserver")]
         [Trait("Tests", "cdfpusher")]
@@ -110,12 +119,22 @@ namespace Test
             var pusher = new CDFPusher(GetDummyProvider(factory), fullConfig);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
-            extractor.Start();
-            Assert.True(extractor.Started);
-            await extractor.MapUAToCDF();
-            Thread.Sleep(2000);
-            Assert.Equal(0, factory.RequestCount);
-            extractor.Close();
+            using (var source = new CancellationTokenSource())
+            {
+                var runTask = extractor.RunExtractor(source.Token);
+                Thread.Sleep(2000);
+                source.Cancel();
+                try
+                {
+                    await runTask;
+                }
+                catch (Exception e)
+                {
+                    if (!Common.TestRunResult(e)) throw;
+                }
+                Assert.Equal(0, factory.RequestCount);
+                extractor.Close();
+            }
         }
         public static IServiceProvider GetDummyProvider(DummyFactory factory)
         {

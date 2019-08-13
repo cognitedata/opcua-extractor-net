@@ -10,4 +10,4 @@ nuget Microsoft.Extensions.Http.Polly 2.2.0
 nuget OPCFoundation.NetStandard.Opc.Ua 1.4.355.26
 nuget Prometheus.Client.MetricPusher 1.0.1
 nuget YamlDotNet 6.1.1
-nuget Fusion.NET
+nuget Fusion.NET 0.8.21

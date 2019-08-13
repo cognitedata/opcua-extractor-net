@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
@@ -20,8 +21,6 @@ namespace Cognite.OpcUa
         public NodeId RootNode { get; private set; }
         private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
         private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
-        private bool pushingDatapoints;
-        private bool runningPush = true;
         private readonly IPusher pusher;
         /// <summary>
         /// The set of uniqueIds discovered, but not yet synced with the pusher
@@ -57,23 +56,25 @@ namespace Cognite.OpcUa
         /// Start the extractor, starting the data-push and the UAClient
         /// </summary>
         /// <returns>True on success</returns>
-        public bool Start()
+        public async Task RunExtractor(CancellationToken token, bool quitAfterMap = false)
         {
-            if (UAClient.Started) return true;
-            Logger.LogInfo("Start UAClient");
-            try
-            {
-                UAClient.Run().Wait();
-            }
-            catch (Exception e)
-            {
-                Logger.LogError("Failed to start UAClient");
-                Logger.LogException(e);
-                return false;
-            }
             if (!UAClient.Started)
             {
-                return false;
+                Logger.LogInfo("Start UAClient");
+                try
+                {
+                    UAClient.Run(token).Wait();
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError("Failed to start UAClient");
+                    Logger.LogException(e);
+                    throw;
+                }
+                if (!UAClient.Started)
+                {
+                    throw new Exception("UAClient failed to start");
+                }
             }
             Started = true;
             startTime.Set(new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds());
@@ -83,43 +84,75 @@ namespace Cognite.OpcUa
                 RootNode = ObjectIds.ObjectsFolder;
             }
             pusher.RootNode = RootNode;
-            Task.Run(async () =>
+
+            IEnumerable<Task> tasks = new List<Task>
             {
-                while (runningPush)
+                Task.Run(async () =>
                 {
-					try
-					{
-						pushingDatapoints = true;
-						await pusher.PushDataPoints(bufferedDPQueue);
-						pushingDatapoints = false;
-						Thread.Sleep(config.CogniteConfig.DataPushDelay);
-					}
-                    catch (Exception e)
-					{
-						Logger.LogError("Failed to push datapoints");
-						Logger.LogException(e);
-					}
+                    while (!token.IsCancellationRequested && !UAClient.Failed)
+                    {
+                        try
+                        {
+                            await pusher.PushDataPoints(bufferedDPQueue, token);
+                            await Task.Delay(config.CogniteConfig.DataPushDelay, token);
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            break;
+                        }
+                        catch (Exception e)
+                        {
+                            Logger.LogError("Failed to push datapoints");
+                            Logger.LogException(e);
+                        }
+                    }
+                }),
+                MapUAToCDF(token)
+            };
+
+            Task failedTask = null;
+            while (tasks.Any() && tasks.All(task => !task.IsFaulted))
+            {
+                try
+                {
+                    await Task.WhenAny(tasks);
                 }
-            });
-            return true;
+                catch (Exception)
+                {
+                    Logger.LogError("Task failed unexpectedly");
+                }
+                if (quitAfterMap) return;
+                failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
+                if (failedTask != null) break;
+                tasks = tasks.Where(task => !task.IsCompleted);
+            }
+            if (!token.IsCancellationRequested)
+            {
+                if (failedTask != null)
+                {
+                    Logger.LogException(failedTask.Exception);
+                    throw failedTask.Exception;
+                }
+                throw new Exception("Processes quit without failing");
+            }
+            throw new TaskCanceledException();
         }
         /// <summary>
         /// Restarts the extractor, to some extent, clears known asset ids,
         /// allows data to be pushed to CDF, and begins mapping the opcua
         /// directory again
         /// </summary>
-        public void RestartExtractor()
+        public void RestartExtractor(CancellationToken token)
         {
             UAClient.WaitForOperations().Wait();
             buffersEmpty = false;
-            MapUAToCDF().Wait();
+            MapUAToCDF(token).Wait();
         }
         /// <summary>
         /// Closes the extractor, mainly just shutting down the opcua client.
         /// </summary>
         public void Close()
         {
-            WaitForFinalPush().Wait(10000);
             if (!UAClient.Started) return;
             try
             {
@@ -136,39 +169,31 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Starts the extractor, calling BrowseDirectory on the root node, then pushes all nodes to CDF once finished.
         /// </summary>
-        public async Task MapUAToCDF()
+        private async Task MapUAToCDF(CancellationToken token)
         {
             pusher.Reset();
 			Logger.LogInfo("Begin mapping directory");
             try
             {
-                await UAClient.BrowseDirectoryAsync(RootNode, HandleNode);
+                await UAClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                throw e;
+                throw;
             }
             Logger.LogInfo("End mapping directory");
-            if (!await pusher.PushNodes(bufferedNodeQueue))
+            if (!await pusher.PushNodes(bufferedNodeQueue, token))
             {
                 throw new Exception("Pushing nodes to CDF failed");
             }
         }
         /// <summary>
-        /// Disables pushing to CDF, then waits until the final push has been completed
-        /// </summary>
-        public async Task WaitForFinalPush()
-        {
-            runningPush = false;
-            while (pushingDatapoints) await Task.Delay(100);
-        }
-        /// <summary>
         /// Starts synchronization of nodes with opcua using normal callbacks
         /// </summary>
         /// <param name="variables">Variables to be synchronized</param>
-        public void SynchronizeNodes(IEnumerable<BufferedVariable> variables)
+        public void SynchronizeNodes(IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
-            UAClient.SynchronizeNodes(variables, HistoryDataHandler, SubscriptionHandler);
+            UAClient.SynchronizeNodes(variables, HistoryDataHandler, SubscriptionHandler, token);
         }
         /// <summary>
         /// Is the variable allowed to be mapped to a timeseries?

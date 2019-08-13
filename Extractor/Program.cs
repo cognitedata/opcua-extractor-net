@@ -8,6 +8,7 @@ using Prometheus.Client.MetricPusher;
 using Opc.Ua;
 using Fusion.Api;
 using Polly.Extensions.Http;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
@@ -17,9 +18,8 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Load config, start the <see cref="Logger"/>, start the <see cref="Extractor"/> then wait for exit signal
         /// </summary>
-        /// <param name="args"></param>
         /// <returns></returns>
-        static int Main(string[] args)
+        static int Main()
         {
             var configDir = Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR");
             configDir = string.IsNullOrEmpty(configDir) ? "config/" : configDir;
@@ -39,13 +39,11 @@ namespace Cognite.OpcUa
 
             Logger.Startup(fullConfig.LoggerConfig);
 
+
             var services = new ServiceCollection();
             Configure(services);
             var provider = services.BuildServiceProvider();
 
-            CDFPusher pusher = new CDFPusher(provider, fullConfig);
-            UAClient client = new UAClient(fullConfig);
-            Extractor extractor = new Extractor(fullConfig, pusher, client);
             try
             {
                 SetupMetrics(fullConfig.MetricsConfig);
@@ -56,13 +54,46 @@ namespace Cognite.OpcUa
                 Logger.LogException(e);
             }
 
-            Run(extractor);
-            Logger.LogInfo("Interrupted, shutting down extractor...");
-            extractor.Close();
-            worker?.Stop();
-            Logger.Shutdown();
-
-			return 0;
+            CancellationTokenSource source = null;
+            using (var quitEvent = new ManualResetEvent(false))
+            {
+                bool canceled = false;
+                Console.CancelKeyPress += (sender, eArgs) =>
+                {
+                    quitEvent.Set();
+                    eArgs.Cancel = true;
+                    source?.Cancel();
+                    canceled = true;
+                };
+                while (true)
+                {
+                    using (source = new CancellationTokenSource())
+                    {
+                        if (canceled)
+                        {
+                            Logger.LogWarning("Extractor stopped manually");
+                            Logger.Shutdown();
+                            return 0;
+                        }
+                        try
+                        {
+                            Run(fullConfig, quitEvent, provider, source);
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            Logger.LogWarning("Extractor stopped manually");
+                            Logger.Shutdown();
+                            return 0;
+                        }
+                        catch (Exception e)
+                        {
+                            Logger.LogError("Uncaught exception in Run");
+                            Logger.LogException(e);
+                        }
+                        Thread.Sleep(1000);
+                    }
+                }
+            }
         }
         /// <summary>
         /// Tests that the config is correct and valid
@@ -119,41 +150,48 @@ namespace Cognite.OpcUa
             worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));
             worker.Start();
         }
-        private static void Run(Extractor extractor)
+        private static void Run(FullConfig config, ManualResetEvent quitEvent, ServiceProvider provider, CancellationTokenSource source)
         {
-            using (var quitEvent = new ManualResetEvent(false))
-            {
-                Console.CancelKeyPress += (sender, eArgs) =>
+            UAClient client = new UAClient(config);
+            CDFPusher pusher = new CDFPusher(provider, config);
+            Extractor extractor = new Extractor(config, pusher, client);
+
+            Task runTask = extractor.RunExtractor(source.Token)
+                .ContinueWith(task =>
                 {
                     quitEvent.Set();
-                    eArgs.Cancel = true;
-                };
-                Console.WriteLine("Press ^C to exit");
-                while (true)
-                {
-                    bool failed = false;
-                    if (extractor.Start())
+                    if (task.IsFaulted)
                     {
-                        try
-                        {
-                            extractor.MapUAToCDF().Wait();
-                        }
-                        catch (Exception e)
-                        {
-                            Logger.LogError("Failed to map directory");
-                            Logger.LogException(e);
-                            failed = true;
-                        }
+                        throw task.Exception;
+                    }
+                });
 
-                        if (quitEvent.WaitOne(failed ? 4000 : -1)) return;
-                        if (failed) Thread.Sleep(1000);
-                    }
-                    else
-                    {
-                        if (quitEvent.WaitOne(4000)) return;
-                    }
-                }
+            quitEvent.WaitOne(-1);
+            try
+            {
+                runTask.Wait();
             }
+            catch (Exception)
+            {
+                Logger.LogError("RunTask failed unexpectedly");
+            }
+
+            if (source.IsCancellationRequested)
+            {
+                extractor.Close();
+                throw new TaskCanceledException();
+            }
+            if (runTask.IsFaulted)
+            {
+                source.Cancel();
+                if (runTask.Exception.InnerException is TaskCanceledException)
+                {
+                    extractor.Close();
+                    throw new TaskCanceledException();
+                }
+                throw runTask.Exception;
+            }
+
         }
     }
     public class UAClientConfig
@@ -168,6 +206,7 @@ namespace Cognite.OpcUa
         public bool Secure { get; set; }
         public string IgnorePrefix { get; set; }
         public int HistoryGranularity { get; set; }
+        public bool ForceRestart { get; set; }
     }
     public class CogniteClientConfig
     {

@@ -3,8 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
-using Fusion;
+using System.Threading;
 using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa
@@ -19,6 +18,7 @@ namespace Cognite.OpcUa
         /// <param name="dataPoints">List of points to be buffered</param>
         public static void WriteBufferToFile(IEnumerable<BufferedDataPoint> dataPoints,
             CogniteClientConfig config,
+            CancellationToken token,
             IDictionary<string, bool> nodeIsHistorizing = null)
         {
             lock (fileLock)
@@ -28,6 +28,7 @@ namespace Cognite.OpcUa
                     int count = 0;
                     foreach (var dp in dataPoints)
                     {
+                        if (token.IsCancellationRequested) return;
                         if (nodeIsHistorizing?[dp.Id] ?? false) continue;
                         count++;
                         BufferFileEmpty = false;
@@ -46,6 +47,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public static void ReadBufferFromFile(ConcurrentQueue<BufferedDataPoint> bufferedDPQueue,
             CogniteClientConfig config,
+            CancellationToken token,
             IDictionary<string, bool> nodeIsHistorizing = null)
         {
             lock (fileLock)
@@ -54,7 +56,7 @@ namespace Cognite.OpcUa
                 using (FileStream fs = new FileStream(config.BufferFile, FileMode.OpenOrCreate, FileAccess.Read))
                 {
                     byte[] sizeBytes = new byte[sizeof(ushort)];
-                    while (true)
+                    while (!token.IsCancellationRequested)
                     {
                         int read = fs.Read(sizeBytes, 0, sizeBytes.Length);
                         if (read < sizeBytes.Length) break;
