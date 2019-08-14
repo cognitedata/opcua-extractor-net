@@ -26,6 +26,7 @@ namespace Cognite.OpcUa
         private readonly LoggerConfig loggerConfig;
         private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
+        private const string appId = "OPC-UA Extractor";
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
         private NodeId _rootId;
@@ -46,6 +47,7 @@ namespace Cognite.OpcUa
         {
             return clientProvider.GetRequiredService<Client>()
                 .AddHeader("api-key", config.ApiKey)
+                .AddHeader("x-cdp-app", appId)
                 .SetProject(config.Project);
         }
 
