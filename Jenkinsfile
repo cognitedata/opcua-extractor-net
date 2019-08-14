@@ -17,18 +17,6 @@ podTemplate(
         resourceLimitCpu: '1000m',
         resourceLimitMemory: '500Mi',
         ttyEnabled: true),
-    containerTemplate(
-        name: 'test-servers',
-        image: 'python:3.6',
-        command: '/bin/cat -',
-        resourceRequestCpu: '1000m',
-        resourceRequestMemory: '800Mi',
-        resourceLimitCpu: '1000m',
-        resourceLimitMemory: '800Mi',
-        envVars: [
-            envVar(key: 'PYTHONPATH', value: '/usr/local/bin')
-        ],
-        ttyEnabled: true),
     containerTemplate(name: 'dotnet-mono',
         image: 'eu.gcr.io/cognitedata/dotnet-mono:2.2-sdk',
         envVars: [
@@ -40,6 +28,8 @@ podTemplate(
             envVar(key: 'BUILD_NUMBER', value: env.BUILD_NUMBER),
             envVar(key: 'BUILD_URL', value: env.BUILD_URL),
             envVar(key: 'CHANGE_ID', value: env.CHANGE_ID),
+            envVar(key: 'LC_ALL', value: 'C.UTF-8'),
+            envVar(key: 'LANG', value: 'C.UTF-8')
         ],
         resourceRequestCpu: '1500m',
         resourceRequestMemory: '3000Mi',
@@ -78,29 +68,23 @@ podTemplate(
                 ])
                 dockerImageName = "eu.gcr.io/cognitedata/opcua-extractor-net"
                 version = sh(returnStdout: true, script: "git describe --tags HEAD || true").trim()
-                version = version.replaceFirst(/-(\d+)-.*/, '-build.$1')
+                version = version.replaceFirst(/-(\d+)-.*/, '-pre.$1')
                 lastTag = sh(returnStdout: true, script: "git describe --tags --abbrev=0").trim()
-            }
-        }
-        container('test-servers') {
-            stage('Install pipenv') {
-                sh('pip install pipenv')
-            }
-            stage('Install server dependencies') {
-                sh('pipenv install -d --system')
-                sh('pip list')
-            }
-            stage('Start servers') {
-                sh('./startservers.sh')
             }
         }
         container('dotnet-mono') {
             stage('Install dependencies') {
-                sh('apt-get update && apt-get install -y libxml2-utils')
+                sh('apt-get update && apt-get install -y libxml2-utils python3-pip')
+                sh('pip3 install pipenv')
+                sh('pipenv install -d --system')           
                 sh('cp /nuget-credentials/nuget.config ./nuget.config')
                 sh('./credentials.sh')
                 sh('mono .paket/paket.exe install')
             }
+            stage('Start servers') {
+                sh('./startservers.sh')
+            }
+
             stage('Build') {
                 sh('dotnet build')
             }
@@ -114,22 +98,18 @@ podTemplate(
                 sh('bash </codecov-script/upload-report.sh')
             }
             if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
-                stage('Install deploy dependencies') {
-                    sh('apt-get update && apt-get install -y jq sed zip gawk')
-                    sh('git clone https://github.com/whiteinge/ok.sh.git')
-                }
                 stage('Build release versions') {
+                    sh('apt-get update && apt-get install -y zip')
                     sh('dotnet publish -c Release -r win-x64 --self-contained true Extractor/')
                     sh('dotnet publish -c Release -r win81-x64 --self-contained true Extractor/')
                     sh('dotnet publish -c Release -r linux-x64 --self-contained true Extractor/')
-                    sh('zip -r win-x64.zip Extractor/bin/Release/netcoreapp2.2/win-x64/')
-                    sh('zip -r win81-x64.zip Extractor/bin/Release/netcoreapp2.2/win81-x64/')
-                    sh('zip -r linux-x64.zip Extractor/bin/Release/netcoreapp2.2/linux-x64/')
-
+                    sh("zip -r win-x64.$version.zip Extractor/bin/Release/netcoreapp2.2/win-x64/ config/")
+                    sh("zip -r win81-x64.$version.zip Extractor/bin/Release/netcoreapp2.2/win81-x64/ config/")
+                    sh("zip -r linux-x64.$version.zip Extractor/bin/Release/netcoreapp2.2/linux-x64/ config/")
                 }
                 stage('Deploy to github release') {
                     withCredentials([usernamePassword(credentialsId: '5ad41c53-4df7-4ca8-a276-9822375568b3', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
-                        sh("GITHUB_TOKEN=$ghpassword sh deploy.sh cognitedata opcua-extractor-net ${version} ./ok.sh/ok.sh win-x64.zip win81-x64.zip linux-x64.zip")
+                        sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version win-x64.$version.zip win81-x64.$version.zip linux-x64.$version.zip")
                     }               
                 }
             }

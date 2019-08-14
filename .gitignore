@@ -4,6 +4,7 @@
 *.swp
 .DS_Store
 .ionide/
+.idea/
 
 # C# specific
 obj/
