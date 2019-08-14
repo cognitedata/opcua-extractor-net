@@ -70,6 +70,9 @@ podTemplate(
                 version = sh(returnStdout: true, script: "git describe --tags HEAD || true").trim()
                 version = version.replaceFirst(/-(\d+)-.*/, '-pre.$1')
                 lastTag = sh(returnStdout: true, script: "git describe --tags --abbrev=0").trim()
+                echo "$version"
+                echo "$lastTag"
+                echo "${env.BRANCH_NAME}"
             }
         }
         container('dotnet-mono') {
@@ -100,12 +103,9 @@ podTemplate(
             if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
                 stage('Build release versions') {
                     sh('apt-get update && apt-get install -y zip')
-                    sh('dotnet publish -c Release -r win-x64 --self-contained true Extractor/')
-                    sh('dotnet publish -c Release -r win81-x64 --self-contained true Extractor/')
-                    sh('dotnet publish -c Release -r linux-x64 --self-contained true Extractor/')
-                    sh("zip -r win-x64.${version}.zip Extractor/bin/Release/netcoreapp2.2/win-x64/ config/")
-                    sh("zip -r win81-x64.${version}.zip Extractor/bin/Release/netcoreapp2.2/win81-x64/ config/")
-                    sh("zip -r linux-x64.${version}.zip Extractor/bin/Release/netcoreapp2.2/linux-x64/ config/")
+                    packProject('win-x64', "$version", "run.bat")
+                    packProject('win81-x64', "$version", "run.bat")
+                    packProject('linux-x64', "$version", "run.sh")
                 }
                 stage('Deploy to github release') {
                     withCredentials([usernamePassword(credentialsId: '5ad41c53-4df7-4ca8-a276-9822375568b3', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
@@ -137,3 +137,15 @@ podTemplate(
         }
     }
 }
+
+void packProject(String configuration, String version, String executor) {
+    sh("dotnet publish -c Release -r $configuration --self-contained true Extractor/")
+    sh("mkdir -p ./${configuration}/bin/")
+    sh("mv Extractor/bin/Release/netcoreapp2.2/${configuration}/publish/* ./${configuration}/bin/")
+    sh("cp -r ./config ./${configuration}/")
+    sh("cp ./Extractor/${executor} ./${configuration}/")
+    dir("$configuration") {
+        sh("zip -r ../${configuration}.${version}.zip *")
+    }
+}
+

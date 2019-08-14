@@ -5,7 +5,7 @@ import sys
 
 if __name__ == "__main__":
     if len(sys.argv) < 5:
-        print("Usage: deploy.py organization repository token commit tag [file1, file2, ...]")
+        print("Usage: deploy.py organization repository token tag [file1, file2, ...]")
         exit(-1)
 
     org_name = sys.argv[1]
