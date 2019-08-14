@@ -103,13 +103,13 @@ podTemplate(
                     sh('dotnet publish -c Release -r win-x64 --self-contained true Extractor/')
                     sh('dotnet publish -c Release -r win81-x64 --self-contained true Extractor/')
                     sh('dotnet publish -c Release -r linux-x64 --self-contained true Extractor/')
-                    sh("zip -r win-x64.$version.zip Extractor/bin/Release/netcoreapp2.2/win-x64/ config/")
-                    sh("zip -r win81-x64.$version.zip Extractor/bin/Release/netcoreapp2.2/win81-x64/ config/")
-                    sh("zip -r linux-x64.$version.zip Extractor/bin/Release/netcoreapp2.2/linux-x64/ config/")
+                    sh("zip -r win-x64.${version}.zip Extractor/bin/Release/netcoreapp2.2/win-x64/ config/")
+                    sh("zip -r win81-x64.${version}.zip Extractor/bin/Release/netcoreapp2.2/win81-x64/ config/")
+                    sh("zip -r linux-x64.${version}.zip Extractor/bin/Release/netcoreapp2.2/linux-x64/ config/")
                 }
                 stage('Deploy to github release') {
                     withCredentials([usernamePassword(credentialsId: '5ad41c53-4df7-4ca8-a276-9822375568b3', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
-                        sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version win-x64.$version.zip win81-x64.$version.zip linux-x64.$version.zip")
+                        sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version win-x64.${version}.zip win81-x64.${version}.zip linux-x64.${version}.zip")
                     }               
                 }
             }
