@@ -34,27 +34,34 @@ Config, both opcua config `opc.ua.extractor.Config.xml` and `config.yml` are loc
 
 which would run the build tagged with `tag` using config stored in `current_dir/config`, and output logs to `current_dir/logs`
 
+### Binaries
+There will be binaries for the most recent release here on github. There are three different builds:
+ - windows81 x64, which should work for windows server 2012.
+ - windows x64, which should work for newer versions of windows (the 81 will probably work for never versions as well)
+ - linux x64, which should work on linux.
+There is a "run" script in each, which just launches the executable from the top directory, meaning that the config folder included will be used.
+
 ### Configuration
 The config file should contain description of most config options, a few are notable
  - `GlobalPrefix` and the `NSMaps` category are used to create ExternalIds, and if these are changed after the extractor
  has already been run, then new assets and timeseries will be created. The externalId will be on the form
  `[GlobalPrefix].[Mapped or full namespace]:[Identifiertype and identifier]`. If GlobalPrefix is chosen to be unique within the project then the ExternalId should remain unique.
  Note that there is an exception to this if the IDs are longer than 128 characters in total. externalId in CDF is limited to 256 characters, but NodeIds may have identifiers of up to 4096 characters. To fit with CDF we cut off everything after the first 256 characters in the final ID. This means that if the namespaces are long enough, we potentially only get 180 - 200 characters from the identifier itself. If this creates duplicates then the duplicates will be ignored.
- - `RootAssetId`, `RootNamespaceId` and `RootNodeId` are used to designate the root node and root asset, these are mapped such
+ - `RootAsset` and `RootNode` are used to designate the root node and root asset, these are mapped such
  that the RootAsset and RootNode will be in the same place in the final hierarchy. In theory, multiple extractors could
- run in parallel against different top level assets/nodes.
+ run in parallel against different top level assets/nodes. If no node is specified, the objects folder (top level node in opcua) is used. If no root asset is specified, a new root asset will be generated using normal naming rules.
  - Buffering is done by setting `BufferOnFailure` to true and specifying a `BufferFile`. If this is done, the extractor
  will write non-historizing datapoints to a binary file when the connection to CDF is down.
 
 ## Development
 You will need .net core 2.2, and to set up artifactory as mentioned above. Then simply run `dotnet build` to compile,
-or `dotnet run` to compile and run. Make sure that the config file is moved to the build directory, either by specifying
-in the solution or by moving it manually.
+or `dotnet run` to compile and run. Make sure that the config folder is moved to the build directory, either by specifying
+in the solution or by moving it manually if using visual studio.
 
 For testing metrics, a good solution is the prom-stack found [here](https://github.com/evnsio/prom-stack)
 
 ### Testing
-There is a test script under Testing/test.sh. To run the tests locally, you should first start the python test servers, using `Test/startservers.sh`. There are two test servers currently.
+There is a test script under Testing/test.sh. To run the tests locally, you should first start the python test servers, using `startservers.sh`. There are two test servers currently.
 
  - Basicserver, server-test1.py, is a small server with two historizing nodes and a few objects. 4840
  - Fullserver, server-test2.py has around 2000 variables and a 30 layer deep tree of 150 objects. 4841
