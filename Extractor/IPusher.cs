@@ -8,10 +8,6 @@ namespace Cognite.OpcUa
     public interface IPusher
     {
         /// <summary>
-        /// UniqueId representation of OPC-UA like root node. Mapping is expected to start from here.
-        /// </summary>
-        NodeId RootNode { get; set; }
-        /// <summary>
         /// Parent extractor
         /// </summary>
         Extractor Extractor { set; }

@@ -112,6 +112,7 @@ namespace Test
             var fullConfig = Common.BuildConfig("basic", 5);
             if (fullConfig == null) throw new Exception("No config");
             fullConfig.CogniteConfig.Debug = true;
+            fullConfig.CogniteConfig.ApiKey = null;
 
             Logger.Startup(fullConfig.LoggerConfig);
             UAClient client = new UAClient(fullConfig);

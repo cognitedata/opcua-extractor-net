@@ -9,6 +9,7 @@ using Opc.Ua;
 using Fusion;
 using System.Threading.Tasks;
 using Polly.Timeout;
+using System.Runtime.ExceptionServices;
 
 namespace Cognite.OpcUa
 {
@@ -163,6 +164,7 @@ namespace Cognite.OpcUa
                 .ContinueWith(task =>
                 {
                     quitEvent.Set();
+                    source.Cancel();
                     if (task.IsFaulted)
                     {
                         throw task.Exception;
@@ -179,22 +181,21 @@ namespace Cognite.OpcUa
                 Logger.LogError("RunTask failed unexpectedly");
             }
 
-            if (source.IsCancellationRequested)
-            {
-                extractor.Close();
-                throw new TaskCanceledException();
-            }
             if (runTask.IsFaulted)
             {
-                source.Cancel();
                 if (runTask.Exception.InnerException is TaskCanceledException)
                 {
                     extractor.Close();
                     throw new TaskCanceledException();
                 }
-                throw runTask.Exception;
+                ExceptionDispatchInfo.Capture(runTask.Exception).Throw();
             }
 
+            if (source.IsCancellationRequested)
+            {
+                extractor.Close();
+                throw new TaskCanceledException();
+            }
         }
     }
     public class UAClientConfig
@@ -216,7 +217,7 @@ namespace Cognite.OpcUa
         public string Project { get; set; }
         public string ApiKey { get; set; }
         public string Host { get; set; }
-        public long RootAssetId { get; set; }
+        public string RootAsset { get; set; }
         public ProtoNodeId RootNode { get; set; }
         public int DataPushDelay { get; set; }
         public bool Debug { get; set; }

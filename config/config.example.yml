@@ -40,15 +40,15 @@ CogniteConfig:
   ApiKey:
   # Cognite service url
   Host: "https://api.cognitedata.com"
-  # The root asset must exist, and will be mapped to the root node in opcua, no changes will be made to the root asset
-  # Root assetid to map to root OPC-UA node
-  RootAssetId: 0
-  # Root node in OPC-UA
+  # Root asset externalId to map to root OPC-UA node
+  # Leave empty to autogenerate based on root node.
+  RootAsset: "UARoot"
+  # Root node in OPC-UA. Leave empty to use the objects folder.
   RootNode:
-    # Full name of the namespace of the root node
+    # Full name of the namespace of the root node.
     NamespaceUri:
     # Id of the root node, on the form "i=123" or "s=stringid" etc.
-    NodeId: i=0
+    NodeId:
   # Delay in ms between each push of data points to target
   DataPushDelay: 1000
   # Debug mode, if true, Extractor will not push to target
