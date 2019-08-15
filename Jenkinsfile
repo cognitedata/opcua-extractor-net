@@ -144,6 +144,7 @@ void packProject(String configuration, String version, String executor) {
     sh("mv Extractor/bin/Release/netcoreapp2.2/${configuration}/publish/* ./${configuration}/bin/")
     sh("cp -r ./config ./${configuration}/")
     sh("cp ./Extractor/${executor} ./${configuration}/")
+    sh("cp ./LICENSE.md ./${configuration}/")
     dir("$configuration") {
         sh("zip -r ../${configuration}.${version}.zip *")
     }
