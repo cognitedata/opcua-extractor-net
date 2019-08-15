@@ -25,7 +25,7 @@ namespace Test
             {
                 { "afterdata", (assetList, tsList, histTsList) =>
                 {
-                    Assert.Single(assetList);
+                    Assert.Equal(2, assetList.Count);
                     Assert.Single(tsList);
                     Assert.Equal(2, histTsList.Count);
                 } },
@@ -33,7 +33,7 @@ namespace Test
                 {
                     Assert.NotNull(histTsList.First().properties);
                     Assert.Equal(2, histTsList.First().properties.Count);
-                    Assert.Equal(2, assetList.First().properties.Count);
+                    Assert.Equal(2, assetList.ElementAt(1).properties.Count);
                 } },
                 { "afterSynchronize", (assetList, tsList, histTsList) =>
                 {
@@ -141,7 +141,7 @@ namespace Test
                 {
                     { "afterdata", (assetList, tsList, histTsList) =>
                     {
-                        Assert.Equal(153, assetList.Count);
+                        Assert.Equal(154, assetList.Count);
                         Assert.Equal(2001, tsList.Count);
                         Assert.Single(histTsList);
                     } },

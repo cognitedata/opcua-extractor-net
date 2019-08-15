@@ -24,6 +24,7 @@ namespace Cognite.OpcUa
         private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
         private readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
+        private readonly Dictionary<NodeId, string> rootNodes = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         public bool Failed { get; private set; }
         private readonly TimeSpan historyGranularity;
@@ -253,6 +254,9 @@ namespace Cognite.OpcUa
             }
             try
             {
+                var rootNode = GetRootNode(root);
+                if (rootNode == null) throw new Exception("Root node does not exist");
+                callback(rootNode, null);
                 await Task.Run(() => BrowseDirectory(new List<NodeId> { root }, callback, token), token);
             }
             catch (Exception e)
@@ -260,6 +264,30 @@ namespace Cognite.OpcUa
                 Logger.LogError("Failed to browse directory");
                 Logger.LogException(e);
             }
+        }
+        /// <summary>
+        /// Get the root node and return it as a reference description.
+        /// </summary>
+        /// <param name="nodeId">Id of the root node</param>
+        /// <returns>A partial description of the root node</returns>
+        private ReferenceDescription GetRootNode(NodeId nodeId)
+        {
+            var root = session.ReadNode(nodeId);
+            if (root == null || root.NodeId == NodeId.Null) return null;
+            return new ReferenceDescription
+            {
+                NodeId = root.NodeId,
+                BrowseName = root.BrowseName,
+                DisplayName = root.DisplayName,
+                NodeClass = root.NodeClass,
+                ReferenceTypeId = null,
+                IsForward = false,
+                TypeDefinition = root.TypeDefinitionId
+            };
+        }
+        public void AddRootNode(NodeId nodeId, string externalId)
+        {
+            rootNodes[nodeId] = externalId;
         }
         /// <summary>
         /// Get all children of the given list of parents as a map from parentId to list of children descriptions
@@ -562,7 +590,7 @@ namespace Cognite.OpcUa
                     })
                 );
 
-                Logger.LogInfo($"Add {count} subscriptions");
+                Logger.LogInfo($"Add {chunk.Count()} subscriptions");
                 lock (subscriptionLock)
                 {
                     IncOperations();
@@ -593,7 +621,7 @@ namespace Cognite.OpcUa
                     numSubscriptions.Set(subscription.MonitoredItemCount);
                 }
             }
- 
+            Logger.LogInfo($"Added {count} subscriptions");
             DoHistoryRead(toSynch, callback, historyGranularity, token);
         }
         /// <summary>
@@ -796,6 +824,7 @@ namespace Cognite.OpcUa
         /// <returns>Resulting NodeId</returns>
         public NodeId ToNodeId(string identifier, string namespaceUri)
         {
+            if (identifier == null || namespaceUri == null) return NodeId.Null;
             string nsString = "ns=" + session.NamespaceUris.GetIndex(namespaceUri);
             if (session.NamespaceUris.GetIndex(namespaceUri) == -1)
             {
@@ -882,6 +911,8 @@ namespace Cognite.OpcUa
         /// <returns>Unique string representation</returns>
         public string GetUniqueId(ExpandedNodeId nodeid)
         {
+            if (rootNodes.ContainsKey((NodeId)nodeid)) return rootNodes[(NodeId)nodeid];
+
             string namespaceUri = nodeid.NamespaceUri;
             if (namespaceUri == null)
             {

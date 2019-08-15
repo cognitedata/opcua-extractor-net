@@ -5,14 +5,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
-using Opc.Ua;
 using Xunit;
 
 namespace Test
 {
     public class TestPusher : IPusher
     {
-        public NodeId RootNode { get; set; }
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
         public Action EndCB { private get; set; }

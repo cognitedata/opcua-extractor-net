@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
@@ -83,7 +84,10 @@ namespace Cognite.OpcUa
             {
                 RootNode = ObjectIds.ObjectsFolder;
             }
-            pusher.RootNode = RootNode;
+            if (config.CogniteConfig.RootAsset != null)
+            {
+                UAClient.AddRootNode(RootNode, config.CogniteConfig.RootAsset);
+            }
 
             IEnumerable<Task> tasks = new List<Task>
             {
@@ -131,7 +135,7 @@ namespace Cognite.OpcUa
                 if (failedTask != null)
                 {
                     Logger.LogException(failedTask.Exception);
-                    throw failedTask.Exception;
+                    ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
                 }
                 throw new Exception("Processes quit without failing");
             }

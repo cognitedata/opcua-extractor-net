@@ -27,10 +27,6 @@ namespace Cognite.OpcUa
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
-        private NodeId _rootId;
-        public NodeId RootNode { get { return _rootId; } set { nodeToAssetIds.Add(value.ToString(), rootAsset); _rootId = value; } }
-
-        private readonly long rootAsset = -1;
 
         public CDFPusher(IServiceProvider clientProvider, FullConfig config)
         {
@@ -38,7 +34,6 @@ namespace Cognite.OpcUa
             this.clientProvider = clientProvider;
             loggerConfig = config.LoggerConfig;
             bulkConfig = config.BulkSizes;
-            rootAsset = config.CogniteConfig.RootAssetId;
         }
 
         private Client GetClient()
@@ -249,6 +244,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
+                if (e is TaskCanceledException) throw;
                 Logger.LogError("Failed to push to CDF");
                 Logger.LogException(e);
                 return false;
@@ -261,6 +257,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
+                if (e is TaskCanceledException) throw;
                 Logger.LogError("Failed to synchronize nodes");
                 Logger.LogException(e);
                 return false;
@@ -611,11 +608,7 @@ namespace Cognite.OpcUa
                 ExternalId = UAClient.GetUniqueId(node.Id),
                 Name = node.DisplayName
             };
-            if (node.ParentId == RootNode)
-            {
-                writePoco.ParentId = rootAsset;
-            }
-            else
+            if (node.ParentId != null && !node.ParentId.IsNullNodeId)
             {
                 writePoco.ParentExternalId = UAClient.GetUniqueId(node.ParentId);
             }
