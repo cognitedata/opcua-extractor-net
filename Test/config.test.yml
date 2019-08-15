@@ -36,6 +36,8 @@ CogniteConfig:
   Project: test
   # Cognite api key
   ApiKey: test
+  # Cognite service url
+  Host: "https://api.cognitedata.com"
   # The root asset must exist, and will be mapped to the root node in opcua, no changes will be made to the root asset
   # Root assetid to map to root OPC-UA node
   RootAssetId: 123

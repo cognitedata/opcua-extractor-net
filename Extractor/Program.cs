@@ -6,9 +6,9 @@ using System.Collections.Generic;
 using Polly;
 using Prometheus.Client.MetricPusher;
 using Opc.Ua;
-using Fusion.Api;
-using Polly.Extensions.Http;
+using Fusion;
 using System.Threading.Tasks;
+using Polly.Timeout;
 
 namespace Cognite.OpcUa
 {
@@ -114,12 +114,15 @@ namespace Cognite.OpcUa
                 .AddPolicyHandler(GetRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
         }
-
         private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
         {
-            return HttpPolicyExtensions
-                .HandleTransientHttpError()
-                .WaitAndRetryAsync(6, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+            int maxRetryAttempt = (int)Math.Ceiling(Math.Log(60000 / 500, 2));
+            return Policy
+                .HandleResult<HttpResponseMessage>(msg =>
+                    !msg.IsSuccessStatusCode && msg.StatusCode != System.Net.HttpStatusCode.BadRequest)
+                .Or<TimeoutRejectedException>()
+                .WaitAndRetryForeverAsync(retryAttempt =>
+                    TimeSpan.FromMilliseconds(retryAttempt > maxRetryAttempt ? 60000 : Math.Pow(2, retryAttempt)));
         }
         private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
         {
@@ -212,6 +215,7 @@ namespace Cognite.OpcUa
     {
         public string Project { get; set; }
         public string ApiKey { get; set; }
+        public string Host { get; set; }
         public long RootAssetId { get; set; }
         public ProtoNodeId RootNode { get; set; }
         public int DataPushDelay { get; set; }

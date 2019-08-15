@@ -6,9 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Com.Cognite.V1.Timeseries.Proto;
 using Fusion;
-using Fusion.Api;
 using Fusion.Assets;
-using Fusion.Timeseries;
+using Fusion.TimeSeries;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus.Client;
@@ -37,7 +36,7 @@ namespace Cognite.OpcUa
         {
             this.config = config.CogniteConfig;
             this.clientProvider = clientProvider;
-            this.loggerConfig = config.LoggerConfig;
+            loggerConfig = config.LoggerConfig;
             bulkConfig = config.BulkSizes;
             rootAsset = config.CogniteConfig.RootAssetId;
         }
@@ -46,7 +45,9 @@ namespace Cognite.OpcUa
         {
             return clientProvider.GetRequiredService<Client>()
                 .AddHeader("api-key", config.ApiKey)
-                .SetProject(config.Project);
+                .SetAppId("OPC-UA Extractor")
+                .SetProject(config.Project)
+                .SetServiceUrl(config.Host);
         }
 
         private static readonly Counter dataPointsCounter = Metrics
@@ -108,7 +109,7 @@ namespace Cognite.OpcUa
             var client = GetClient();
             try
             {
-                await client.InsertDataAsync(req, token);
+                await client.DataPoints.InsertAsync(req, token);
             }
             catch (Exception)
             {
@@ -295,7 +296,7 @@ namespace Cognite.OpcUa
             var assetIdentities = assetIds.Keys.Select(Identity.ExternalId);
             try
             {
-                var readResults = await client.GetAssetsByIdsAsync(assetIdentities, token);
+                var readResults = await client.Assets.GetByIdsAsync(assetIdentities, token);
                 Logger.LogInfo($"Found {readResults.Count()} assets");
                 foreach (var resultItem in readResults)
                 {
@@ -349,7 +350,7 @@ namespace Cognite.OpcUa
                 var createAssets = missingAssetIds.Select(id => NodeToAsset(assetIds[id]));
                 try
                 {
-                    var writeResults = await client.CreateAssetsAsync(createAssets, token);
+                    var writeResults = await client.Assets.CreateAsync(createAssets, token);
                     foreach (var resultItem in writeResults)
                     {
                         nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
@@ -371,7 +372,7 @@ namespace Cognite.OpcUa
                     Logger.LogInfo($"Get remaining {idsToMap.Count()} assetids");
                     try
                     {
-                        var readResults = await client.GetAssetsByIdsAsync(idsToMap, token);
+                        var readResults = await client.Assets.GetByIdsAsync(idsToMap, token);
                         foreach (var resultItem in readResults)
                         {
                             nodeToAssetIds.TryAdd(UAClient.GetUniqueId(assetIds[resultItem.ExternalId].Id), resultItem.Id);
@@ -409,7 +410,7 @@ namespace Cognite.OpcUa
             var client = GetClient();
             try
             {
-                var readResults = await client.GetTimeseriesByIdsAsync(tsIds.Keys.Select(Identity.ExternalId), token);
+                var readResults = await client.TimeSeries.GetByIdsAsync(tsIds.Keys.Select(Identity.ExternalId), token);
                 Logger.LogInfo($"Found {readResults.Count()} timeseries");
             }
             catch (ResponseException ex)
@@ -449,7 +450,7 @@ namespace Cognite.OpcUa
                 var createTimeseries = getMetaData.Select(VariableToTimeseries);
                 try
                 {
-                    await client.CreateTimeseriesAsync(createTimeseries, token);
+                    await client.TimeSeries.CreateAsync(createTimeseries, token);
                 }
                 catch (Exception e)
                 {
@@ -484,7 +485,7 @@ namespace Cognite.OpcUa
             var client = GetClient();
             try
             {
-                var readResults = await client.GetLatestDataPointAsync(pairedTsIds, token);
+                var readResults = await client.DataPoints.GetLatestAsync(pairedTsIds, token);
                 Logger.LogInfo($"Found {readResults.Count()} historizing timeseries");
                 foreach (var resultItem in readResults)
                 {
@@ -532,7 +533,7 @@ namespace Cognite.OpcUa
                 var createTimeseries = getMetaData.Select(VariableToTimeseries);
                 try
                 {
-                    await client.CreateTimeseriesAsync(createTimeseries, token);
+                    await client.TimeSeries.CreateAsync(createTimeseries, token);
                 }
                 catch (Exception ex)
                 {
@@ -551,7 +552,7 @@ namespace Cognite.OpcUa
                     Logger.LogInfo($"Get remaining {idsToMap.Count()} historizing timeseries ids");
                     try
                     {
-                        var readResults = await client.GetLatestDataPointAsync(idsToMap, token);
+                        var readResults = await client.DataPoints.GetLatestAsync(idsToMap, token);
                         foreach (var resultItem in readResults)
                         {
                             if (resultItem.NumericDataPoints.Any())
@@ -577,10 +578,10 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="variable">Variable to be converted</param>
         /// <returns>Complete timeseries write poco</returns>
-        private TimeseriesWritePoco VariableToTimeseries(BufferedVariable variable)
+        private WritePoco VariableToTimeseries(BufferedVariable variable)
         {
             string externalId = UAClient.GetUniqueId(variable.Id);
-            var writePoco = new TimeseriesWritePoco
+            var writePoco = new WritePoco
             {
                 Description = variable.Description,
                 ExternalId = externalId,
@@ -602,9 +603,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="node">Node to be converted</param>
         /// <returns>Full asset write poco</returns>
-        private AssetWritePoco NodeToAsset(BufferedNode node)
+        private Asset NodeToAsset(BufferedNode node)
         {
-            var writePoco = new AssetWritePoco
+            var writePoco = new Asset
             {
                 Description = node.Description,
                 ExternalId = UAClient.GetUniqueId(node.Id),
