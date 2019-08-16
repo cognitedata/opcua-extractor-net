@@ -20,17 +20,18 @@ There are a few environment variables that may be used:
  - COGNITE_API_PROJECT
  - OPCUA_LOGGER_DIR
  - OPCUA_CONFIG_DIR
+ - OPCUA_CERTIFICATE_DIR
 
-For the first three, environment variables overwrite config options. For CONFIG_DIR, default is `[application dir]/config`
+For the first three, environment variables overwrite config options. For CONFIG_DIR, default is `[application dir]/config`, CERTIFICATE_DIR is used for opcua certificates, and defaults to `[application dir]/certificates`.
 
 See the [example configuration](config/config.example.yml) for a config template.
 
 ### Using Docker
 Simply download and run the latest build from [here](https://console.cloud.google.com/gcr/images/cognitedata/EU/opcua-extractor-net?gcrImageListsize=30)
 
-Config, both opcua config `opc.ua.extractor.Config.xml` and `config.yml` are located in a volume /config, and logfiles if enabled will be located in volume /logs. Example:
+Config, both opcua config `opc.ua.extractor.Config.xml` and `config.yml` are located in a volume /config, and logfiles if enabled will be located in volume /logs, certificates are located in subfolders of the volume /certificates. Example:
 
-`docker run -v "$(pwd)/config:/config" -v "$(pwd)/logs:/logs" eu.gcr.io/cognitedata/opcua-extractor-net:tag`
+`docker run -v "$(pwd)/config:/config" -v "$(pwd)/logs:/logs" -v "$(pwd)/certificates:/certificates eu.gcr.io/cognitedata/opcua-extractor-net:tag`
 
 which would run the build tagged with `tag` using config stored in `current_dir/config`, and output logs to `current_dir/logs`
 

@@ -121,6 +121,15 @@ namespace Cognite.OpcUa
                 ConfigSectionName = "opc.ua.net.extractor"
             };
             var appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
+            var certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
+            if (!string.IsNullOrEmpty(certificateDir))
+            {
+                appconfig.SecurityConfiguration.ApplicationCertificate.StorePath = $"{certificateDir}/instance";
+                appconfig.SecurityConfiguration.TrustedIssuerCertificates.StorePath = $"{certificateDir}/pki/issuer";
+                appconfig.SecurityConfiguration.TrustedPeerCertificates.StorePath = $"{certificateDir}/pki/trusted";
+                appconfig.SecurityConfiguration.RejectedCertificateStore.StorePath = $"{certificateDir}/pki/rejected";
+            }
+
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
             if (!validAppCert)
             {
@@ -216,7 +225,7 @@ namespace Cognite.OpcUa
             {
                 eventArgs.Accept = true;
                 // TODO Verify client acceptance here somehow?
-                if (config.Autoaccept)
+                if (eventArgs.Accept)
                 {
                     Logger.LogWarning($"Accepted Bad Certificate {eventArgs.Certificate.Subject}");
                 }
@@ -698,6 +707,7 @@ namespace Cognite.OpcUa
                     );
                     attributeRequests.Inc();
                     values = values.Concat(lvalues);
+                    Logger.LogInfo($"Read {lvalues.Count} attributes");
                 }
                 Logger.LogInfo($"Read {total} attributes with {count} operations");
             }
