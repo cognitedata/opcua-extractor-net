@@ -109,7 +109,7 @@ podTemplate(
                 }
                 stage('Deploy to github release') {
                     withCredentials([usernamePassword(credentialsId: '5ad41c53-4df7-4ca8-a276-9822375568b3', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
-                        sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version win-x64.${version}.zip win81-x64.${version}.zip linux-x64.${version}.zip")
+                        sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version opcua-extractor.win-x64.${version}.zip opcua-extractor.win81-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip")
                     }               
                 }
             }
@@ -146,7 +146,8 @@ void packProject(String configuration, String version, String executor) {
     sh("cp ./Extractor/${executor} ./${configuration}/")
     sh("cp ./LICENSE.md ./${configuration}/")
     dir("$configuration") {
-        sh("zip -r ../${configuration}.${version}.zip *")
+        sh("zip -r ../opcua-extractor.${configuration}.${version}.zip *")
     }
+    sh("rm -r ./${configuration}")
 }
 

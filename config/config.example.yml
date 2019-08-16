@@ -1,5 +1,5 @@
-﻿# Template for the config file, usage: "dotnet opcua-extractor-net.dll [configfile]".
-# Defaults to config.yml in same directory as executable.
+﻿# Template for the config file,
+# Defaults to config.yml in ./config.
 UAConfig:
   # The URL of the OPC-UA server to connect to
   EndpointURL: opc.tcp://localhost:4840
@@ -7,7 +7,7 @@ UAConfig:
   Autoaccept: false
   # Polling interval in ms between each test of changes to a subscribed variable
   # 0 updates at maximum rate set by server
-  PollingInterval: 0
+  PollingInterval: 1000
   # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
   GlobalPrefix: gp
   # OPC-UA username, leave blank for anonymous user. (no authentication)
