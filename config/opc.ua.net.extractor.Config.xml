@@ -74,7 +74,7 @@
   </ClientConfiguration>
   
   <TraceConfiguration>
-    <OutputFilePath>../Logs/Opc.Ua.CoreSampleClient.log.txt</OutputFilePath>
+    <OutputFilePath>./logs/opcua-core.log</OutputFilePath>
     <DeleteOnLoad>true</DeleteOnLoad>
     <!-- Show Only Errors -->
     <!-- <TraceMasks>1</TraceMasks> -->
