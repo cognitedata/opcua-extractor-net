@@ -32,6 +32,9 @@ namespace Test
         public UAClient UAClient { private get; set; }
         public Action EndCB { private get; set; }
 
+        public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
+        public ConcurrentQueue<BufferedNode> BufferedNodeQueue { get; } = new ConcurrentQueue<BufferedNode>();
+
         private readonly Dictionary<string, Action<List<BufferedNode>, List<BufferedVariable>, List<BufferedVariable>>> nodeTests;
         private readonly Action<List<BufferedDataPoint>> dpTest;
 
@@ -54,9 +57,9 @@ namespace Test
             Logger.LogInfo($"Got {count} datapoints");
             dpTest?.Invoke(dataPointList);
         }
-        public async Task PushDataPoints(ConcurrentQueue<BufferedDataPoint> dataPointQueue, CancellationToken token)
+        public async Task PushDataPoints(CancellationToken token)
         {
-            await Task.Run(() => SyncPushDps(dataPointQueue));
+            await Task.Run(() => SyncPushDps(BufferedDPQueue));
         }
         private void SyncPushNodes(ConcurrentQueue<BufferedNode> nodeQueue, CancellationToken token)
         {
@@ -124,9 +127,9 @@ namespace Test
             nodeTests?.GetValueOrDefault("afterSynchronize")?.Invoke(assetList, tsList, histTsList);
             EndCB?.Invoke();
         }
-        public async Task<bool> PushNodes(ConcurrentQueue<BufferedNode> nodeQueue, CancellationToken token)
+        public async Task<bool> PushNodes(CancellationToken token)
         {
-            await Task.Run(() => SyncPushNodes(nodeQueue, token));
+            await Task.Run(() => SyncPushNodes(BufferedNodeQueue, token));
             return true;
         }
 

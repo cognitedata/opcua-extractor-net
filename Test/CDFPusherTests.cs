@@ -17,10 +17,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
-using Fusion;
+using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -46,8 +47,9 @@ namespace Test
             Logger.Startup(fullConfig.LoggerConfig);
             Logger.LogInfo("Testing with MockMode " + mode.ToString());
             UAClient client = new UAClient(fullConfig);
-            var factory = new DummyFactory(fullConfig.CogniteConfig.Project, mode);
-            var pusher = new CDFPusher(GetDummyProvider(factory), fullConfig);
+            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            var factory = new DummyFactory(config.Project, mode);
+            var pusher = new CDFPusher(GetDummyProvider(factory), config);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             try
@@ -76,20 +78,21 @@ namespace Test
             }
             Logger.Startup(fullConfig.LoggerConfig);
             UAClient client = new UAClient(fullConfig);
-            var factory = new DummyFactory(fullConfig.CogniteConfig.Project, DummyFactory.MockMode.None);
-            var pusher = new CDFPusher(GetDummyProvider(factory), fullConfig);
+            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
+            var pusher = new CDFPusher(GetDummyProvider(factory), config);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             using (var source = new CancellationTokenSource())
             {
                 var runTask = extractor.RunExtractor(source.Token);
 
-                File.Create(fullConfig.CogniteConfig.BufferFile).Close();
+                File.Create(config.BufferFile).Close();
                 factory.AllowPush = false;
                 bool gotData = false;
                 for (int i = 0; i < 20; i++)
                 {
-                    if (new FileInfo(fullConfig.CogniteConfig.BufferFile).Length > 0)
+                    if (new FileInfo(config.BufferFile).Length > 0)
                     {
                         gotData = true;
                         break;
@@ -101,7 +104,7 @@ namespace Test
                 gotData = false;
                 for (int i = 0; i < 20; i++)
                 {
-                    if (new FileInfo(fullConfig.CogniteConfig.BufferFile).Length == 0)
+                    if (new FileInfo(config.BufferFile).Length == 0)
                     {
                         gotData = true;
                         break;
@@ -128,13 +131,14 @@ namespace Test
         {
             var fullConfig = Common.BuildConfig("basic", 5);
             if (fullConfig == null) throw new Exception("No config");
-            fullConfig.CogniteConfig.Debug = true;
-            fullConfig.CogniteConfig.ApiKey = null;
+            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            config.Debug = true;
+            config.ApiKey = null;
 
             Logger.Startup(fullConfig.LoggerConfig);
             UAClient client = new UAClient(fullConfig);
-            var factory = new DummyFactory(fullConfig.CogniteConfig.Project, DummyFactory.MockMode.None);
-            var pusher = new CDFPusher(GetDummyProvider(factory), fullConfig);
+            var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
+            var pusher = new CDFPusher(GetDummyProvider(factory), config);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             using (var source = new CancellationTokenSource())

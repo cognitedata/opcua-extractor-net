@@ -22,6 +22,18 @@ UAConfig:
   # be read together. Should not be smaller than usual average update rate
   # Leave at 0 to always read a single node each time.
   HistoryGranularity: 900
+  # Root node in OPC-UA. Leave empty to use the objects folder.
+  RootNode:
+    # Full name of the namespace of the root node.
+    NamespaceUri:
+    # Id of the root node, on the form "i=123" or "s=stringid" etc.
+    NodeId:
+  # Override mappings from externalId to opc-ua node, on the form
+  # "externalId": { namespaceUri: "uri", NodeId: "i=123" }
+  NameOverrides:
+    "UARoot":
+      NamespaceUri:
+      NodeId:
 
 NSMaps:
   # Map OPC-UA namespaces to prefixes in CDF. 
@@ -31,30 +43,25 @@ NSMaps:
   "urn:freeopcua:python:server": fps
   "http://examples.freeopcua.github.io": efg
 
-CogniteConfig:
-  # The project to connect to in the API
-  Project: test
-  # Cognite api key
-  ApiKey: test
-  # Cognite service url
-  Host: "https://api.cognitedata.com"
-  # The root asset must exist, and will be mapped to the root node in opcua, no changes will be made to the root asset
-  # Root assetid to map to root OPC-UA node
-  RootAsset: 123
-  # Root node in OPC-UA
-  RootNode:
-    # Full name of the namespace of the root node
-    NamespaceUri:
-    # Id of the root node, on the form "i=123" or "s=stringid" etc.
-    NodeId:
-  # Delay in ms between each push of data points to target
-  DataPushDelay: 1000
-  # Debug mode, if true, Extractor will not push to target
-  Debug: false
-  # Buffer non-historizing datapoints when the connection to CDF fails.
-  BufferOnFailure: true
-  # Buffer file path
-  BufferFile: buffer.bin
+Pushers:
+  - !cdf
+    # The project to connect to in the API
+    Project: test
+    # Cognite api key
+    ApiKey: test
+    # Cognite service url
+    Host: "https://api.cognitedata.com"
+    # Delay in ms between each push of data points to target
+    DataPushDelay: 1000
+    # Debug mode, if true, Extractor will not push to target
+    Debug: false
+    # Buffer non-historizing datapoints when the connection to CDF fails.
+    BufferOnFailure: true
+    # Buffer file path
+    BufferFile: buffer.bin
+    # Chunk sizes for bulk requests to CDF
+    AssetsBulk: 1000
+    TimeseriesBulk: 1000
 
 LoggerConfig:
   # Folder for logging output. Leave blank for console only
@@ -82,9 +89,7 @@ MetricsConfig:
   Instance:
 
 BulkSizes:
-  # Max sizes of various requests to CDF and OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
-  CDFAssets: 1000
-  CDFTimeseries: 1000
+  # Max sizes of various requests to OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
   UABrowse: 1000
   # Number of datapoints per request, 0 for server specified
   UAHistoryReadPoints: 1000

@@ -103,7 +103,8 @@ namespace Test
         {
             var fullConfig = Common.BuildConfig("basic", 1);
             Logger.Startup(fullConfig.LoggerConfig);
-            File.Create(fullConfig.CogniteConfig.BufferFile).Close();
+            var config = fullConfig.Pushers.First() as CogniteClientConfig;
+            File.Create(config.BufferFile).Close();
             int dpRuns = 0;
             int totalStored = 0;
             using (var source = new CancellationTokenSource())
@@ -115,13 +116,13 @@ namespace Test
                     if (dpRuns < 5)
                     {
                         totalStored += dpList.Count;
-                        Utils.WriteBufferToFile(dpList, fullConfig.CogniteConfig, source.Token);
+                        Utils.WriteBufferToFile(dpList, config, source.Token);
                     }
                     else if (dpRuns == 5)
                     {
                         Logger.LogInfo("Read from file...");
                         var queue = new ConcurrentQueue<BufferedDataPoint>();
-                        Utils.ReadBufferFromFile(queue, fullConfig.CogniteConfig, source.Token);
+                        Utils.ReadBufferFromFile(queue, config, source.Token);
                         Assert.Equal(totalStored, queue.Count);
                         quitEvent.Set();
                     }
@@ -141,7 +142,7 @@ namespace Test
                 }
                 extractor.Close();
             }
-            Assert.Equal(0, new FileInfo(fullConfig.CogniteConfig.BufferFile).Length);
+            Assert.Equal(0, new FileInfo(config.BufferFile).Length);
         }
         [Trait("Category", "fullserver")]
         [Trait("Tests", "Bulk")]

@@ -22,12 +22,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Com.Cognite.V1.Timeseries.Proto;
-using Fusion;
-using Fusion.Assets;
-using Fusion.TimeSeries;
+using CogniteSdk;
+using CogniteSdk.Assets;
+using CogniteSdk.TimeSeries;
+using CogniteSdk.DataPoints;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus.Client;
+using Oryx;
 
 namespace Cognite.OpcUa
 {
@@ -38,19 +40,19 @@ namespace Cognite.OpcUa
     {
         private readonly IServiceProvider clientProvider;
         private readonly CogniteClientConfig config;
-        private readonly BulkSizes bulkConfig;
-        private readonly LoggerConfig loggerConfig;
         private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
 
-        public CDFPusher(IServiceProvider clientProvider, FullConfig config)
+        public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
+        private readonly ConcurrentQueue<BufferedNode> _bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
+        public ConcurrentQueue<BufferedNode> BufferedNodeQueue { get { return _bufferedNodeQueue; } }
+
+        public CDFPusher(IServiceProvider clientProvider, CogniteClientConfig config)
         {
-            this.config = config.CogniteConfig;
+            this.config = config;
             this.clientProvider = clientProvider;
-            loggerConfig = config.LoggerConfig;
-            bulkConfig = config.BulkSizes;
         }
 
         private Client GetClient()
@@ -81,23 +83,20 @@ namespace Cognite.OpcUa
         /// Dequeues up to 100000 points from the queue, then pushes them to CDF. On failure, writes to file if enabled.
         /// </summary>
         /// <param name="dataPointQueue">Queue to be emptied</param>
-        public async Task PushDataPoints(ConcurrentQueue<BufferedDataPoint> dataPointQueue, CancellationToken token)
+        public async Task PushDataPoints(CancellationToken token)
         {
             var dataPointList = new List<BufferedDataPoint>();
 
             int count = 0;
-            while (dataPointQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
+            while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
             {
                 if (buffer.timestamp > 0L)
                 {
                     dataPointList.Add(buffer);
                 }
             }
-            if (loggerConfig.LogData || count != 0)
-            {
-                Logger.LogInfo($"Push {count} datapoints to CDF");
-            }
             if (count == 0) return;
+            Logger.LogInfo($"Push {count} datapoints to CDF");
 
             if (config.Debug) return;
             var finalDataPoints = dataPointList.GroupBy(dp => dp.Id, (id, points) =>
@@ -143,7 +142,7 @@ namespace Cognite.OpcUa
             }
             if (config.BufferOnFailure && !Utils.BufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
             {
-                Utils.ReadBufferFromFile(dataPointQueue, config, token, nodeIsHistorizing);
+                Utils.ReadBufferFromFile(BufferedDPQueue, config, token, nodeIsHistorizing);
             }
             dataPointsCounter.Inc(count);
             dataPointPushes.Inc();
@@ -153,7 +152,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="nodeQueue">Queue to be emptied</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        public async Task<bool> PushNodes(ConcurrentQueue<BufferedNode> nodeQueue, CancellationToken token)
+        public async Task<bool> PushNodes(CancellationToken token)
         {
             var nodeMap = new Dictionary<string, BufferedNode>();
             var assetList = new List<BufferedNode>();
@@ -161,7 +160,7 @@ namespace Cognite.OpcUa
             var histTsList = new List<BufferedVariable>();
             var tsList = new List<BufferedVariable>();
 
-            while (nodeQueue.TryDequeue(out BufferedNode buffer))
+            while (BufferedNodeQueue.TryDequeue(out BufferedNode buffer))
             {
                 if (buffer.IsVariable && buffer is BufferedVariable buffVar)
                 {
@@ -233,7 +232,7 @@ namespace Cognite.OpcUa
             var client = GetClient();
             try
             {
-                foreach (var task in Utils.ChunkBy(assetList, bulkConfig.CDFAssets).Select(items => EnsureAssets(items, token)))
+                foreach (var task in Utils.ChunkBy(assetList, config.AssetsBulk).Select(items => EnsureAssets(items, token)))
                 {
                     if (!await task) return false;
                 }
@@ -247,13 +246,13 @@ namespace Cognite.OpcUa
                 // node to assets map.
                 // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
                 // fetching the timeseries itself
-                foreach (var task in Utils.ChunkBy(tsList, bulkConfig.CDFTimeseries).Select(items => EnsureTimeseries(items, token)))
+                foreach (var task in Utils.ChunkBy(tsList, config.TimeseriesBulk).Select(items => EnsureTimeseries(items, token)))
                 {
                     if (!await task) return false;
                 }
                 trackedTimeseres.Inc(tsList.Count);
 
-                foreach (var task in Utils.ChunkBy(histTsList, bulkConfig.CDFTimeseries).Select(items => EnsureHistorizingTimeseries(items, token)))
+                foreach (var task in Utils.ChunkBy(histTsList, config.TimeseriesBulk).Select(items => EnsureHistorizingTimeseries(items, token)))
                 {
                     if (!await task) return false;
                 }
@@ -592,10 +591,10 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="variable">Variable to be converted</param>
         /// <returns>Complete timeseries write poco</returns>
-        private WritePoco VariableToTimeseries(BufferedVariable variable)
+        private TimeSeriesEntity VariableToTimeseries(BufferedVariable variable)
         {
             string externalId = UAClient.GetUniqueId(variable.Id);
-            var writePoco = new WritePoco
+            var writePoco = new TimeSeriesEntity
             {
                 Description = variable.Description,
                 ExternalId = externalId,
@@ -617,9 +616,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="node">Node to be converted</param>
         /// <returns>Full asset write poco</returns>
-        private Asset NodeToAsset(BufferedNode node)
+        private AssetEntity NodeToAsset(BufferedNode node)
         {
-            var writePoco = new Asset
+            var writePoco = new AssetEntity
             {
                 Description = node.Description,
                 ExternalId = UAClient.GetUniqueId(node.Id),

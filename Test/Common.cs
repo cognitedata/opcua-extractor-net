@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
 
@@ -27,7 +28,8 @@ namespace Test
         {
             var fullConfig = Utils.GetConfig("config.test.yml");
             if (fullConfig == null) throw new Exception("Failed to load config file");
-            fullConfig.CogniteConfig.BufferFile = $"buffer{index}.bin";
+            var cogniteConfig = fullConfig.Pushers.First() as CogniteClientConfig;
+            cogniteConfig.BufferFile = $"buffer{index}.bin";
             if (serverType == "basic")
             {
                 fullConfig.UAConfig.EndpointURL = "opc.tcp://localhost:4840";

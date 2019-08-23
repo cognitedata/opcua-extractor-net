@@ -35,15 +35,17 @@ namespace Cognite.OpcUa
         /// Push data points, emptying the queue
         /// </summary>
         /// <param name="dataPointQueue">Data points to be pushed</param>
-        Task PushDataPoints(ConcurrentQueue<BufferedDataPoint> dataPointQueue, CancellationToken token);
+        Task PushDataPoints(CancellationToken token);
         /// <summary>
         /// Push nodes, emptying the queue
         /// </summary>
         /// <param name="nodeQueue">Nodes to be pushed</param>
-        Task<bool> PushNodes(ConcurrentQueue<BufferedNode> nodeQueue, CancellationToken token);
+        Task<bool> PushNodes(CancellationToken token);
         /// <summary>
         /// Reset relevant persistent information in the pusher, preparing it to be restarted
         /// </summary>
         void Reset();
+        ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; }
+        ConcurrentQueue<BufferedNode> BufferedNodeQueue { get; }
     }
 }
