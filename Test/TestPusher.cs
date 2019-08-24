@@ -51,7 +51,7 @@ namespace Test
             int count = 0;
             while (dataPointQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
             {
-                Assert.True(buffer.timestamp > 0L, "Invalid timestamp");
+                Assert.True(buffer.timestamp > DateTime.MinValue, "Invalid timestamp");
                 dataPointList.Add(buffer);
             }
             Logger.LogInfo($"Got {count} datapoints");

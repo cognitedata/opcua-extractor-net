@@ -133,8 +133,8 @@ namespace Cognite.OpcUa
                 });
             }).Append(MapUAToCDF(token));
 
-            Task failedTask = null;
-            while (tasks.Any() && tasks.All(task => !task.IsFaulted))
+            Task failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
+            while (tasks.Any() && failedTask == null)
             {
                 try
                 {
@@ -144,10 +144,10 @@ namespace Cognite.OpcUa
                 {
                     Logger.LogError("Task failed unexpectedly");
                 }
-                if (quitAfterMap) return;
                 failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
+                if (quitAfterMap) return;
                 if (failedTask != null) break;
-                tasks = tasks.Where(task => !task.IsCompleted);
+                tasks = tasks.Where(task => !task.IsCompleted && !task.IsFaulted && !task.IsCanceled);
             }
             if (!token.IsCancellationRequested)
             {
@@ -282,7 +282,7 @@ namespace Cognite.OpcUa
             foreach (var datapoint in item.DequeueValues())
             {
                 var buffDp = new BufferedDataPoint(
-                    new DateTimeOffset(datapoint.SourceTimestamp).ToUnixTimeMilliseconds(),
+                    datapoint.SourceTimestamp,
                     uniqueId,
                     UAClient.ConvertToDouble(datapoint.Value)
                 );
@@ -321,7 +321,7 @@ namespace Cognite.OpcUa
             foreach (var datapoint in data.DataValues)
             {
                 var buffDp = new BufferedDataPoint(
-                    new DateTimeOffset(datapoint.SourceTimestamp).ToUnixTimeMilliseconds(),
+                    datapoint.SourceTimestamp,
                     uniqueId,
                     UAClient.ConvertToDouble(datapoint.Value)
                 );

@@ -109,7 +109,10 @@ namespace Cognite.OpcUa
             {
                 using (var rawConfig = new StringReader(File.ReadAllText(configPath)))
                 {
-                    var deserializer = new DeserializerBuilder().WithTagMapping("!cdf", typeof(CogniteClientConfig)).Build();
+                    var deserializer = new DeserializerBuilder()
+                        .WithTagMapping("!cdf", typeof(CogniteClientConfig))
+                        .WithTagMapping("!influx", typeof(InfluxClientConfig))
+                        .Build();
                     fullConfig = deserializer.Deserialize<FullConfig>(rawConfig);
                 }
 				string envLogdir = Environment.GetEnvironmentVariable("OPCUA_LOGGER_DIR");

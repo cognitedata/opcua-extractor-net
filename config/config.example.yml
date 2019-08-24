@@ -49,6 +49,7 @@ NSMaps:
 # to push multiple times to the same system, for example in order to push to multiple projects in CDF.
 # List of accepted tags:
 # - !cdf, A pusher for CDF.
+# - !influx, Pusher for InfluxDB
 Pushers:
   - !cdf
     # The project to connect to in the API
@@ -68,6 +69,21 @@ Pushers:
     # Chunk sizes for bulk requests to CDF
     AssetsBulk: 1000
     TimeseriesBulk: 1000
+  - !influx
+    # Host URI, ex localhost:8086
+    Host:
+    # Influx username
+    Username:
+    # Influx password
+    Password:
+    # Database to connect to, will not be created automatically
+    Database:
+    # Delay in ms between each push of data points to target
+    DataPushDelay: 1000
+    # Debug mode, if true, Extractor will not push to target
+    Debug:
+    # Max number of points to send in each request to influx
+    PointChunkSize: 100000
 
 LoggerConfig:
   # Folder for logging output. Leave blank for console only

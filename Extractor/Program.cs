@@ -91,9 +91,10 @@ namespace Cognite.OpcUa
                     {
                         if (canceled)
                         {
+                            Console.WriteLine("Shut down");
                             Logger.LogWarning("Extractor stopped manually");
                             Logger.Shutdown();
-                            return 0;
+                            break;
                         }
                         try
                         {
@@ -101,19 +102,21 @@ namespace Cognite.OpcUa
                         }
                         catch (TaskCanceledException)
                         {
+                            Console.WriteLine("Shut down");
                             Logger.LogWarning("Extractor stopped manually");
-                            Logger.Shutdown();
-                            return 0;
+                            break;
                         }
                         catch (Exception e)
                         {
                             Logger.LogError("Uncaught exception in Run");
                             Logger.LogException(e);
                         }
-                        Thread.Sleep(1000);
+                        Task.Delay(1000, source.Token).Wait();
                     }
                 }
             }
+            Logger.Shutdown();
+            return 0;
         }
         /// <summary>
         /// Tests that the config is correct and valid
@@ -181,7 +184,6 @@ namespace Cognite.OpcUa
             Task runTask = extractor.RunExtractor(source.Token)
                 .ContinueWith(task =>
                 {
-                    quitEvent.Set();
                     source.Cancel();
                     if (task.IsFaulted)
                     {
@@ -189,7 +191,6 @@ namespace Cognite.OpcUa
                     }
                 });
 
-            quitEvent.WaitOne(-1);
             try
             {
                 runTask.Wait();
@@ -250,6 +251,18 @@ namespace Cognite.OpcUa
         public override IPusher ToPusher(IServiceProvider provider)
         {
             return new CDFPusher(provider, this);
+        }
+    }
+    public class InfluxClientConfig : PusherConfig
+    {
+        public string Host { get; set; }
+        public string Username { get; set; }
+        public string Password { get; set; }
+        public string Database { get; set; }
+        public int PointChunkSize { get; set; } = 100000;
+        public override IPusher ToPusher(IServiceProvider _)
+        {
+            return new InfluxPusher(this);
         }
     }
     public class FullConfig

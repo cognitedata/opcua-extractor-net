@@ -7,3 +7,4 @@ Microsoft.Extensions.Http.Polly
 Polly
 Polly.Extensions.Http
 CogniteSdk
+InfluxDB.LineProtocol

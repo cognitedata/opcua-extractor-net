@@ -90,7 +90,7 @@ namespace Cognite.OpcUa
             int count = 0;
             while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
             {
-                if (buffer.timestamp > 0L)
+                if (buffer.timestamp > DateTime.MinValue)
                 {
                     dataPointList.Add(buffer);
                 }
@@ -109,7 +109,7 @@ namespace Cognite.OpcUa
                 item.NumericDatapoints.Datapoints.AddRange(points.Select(point =>
                     new NumericDatapoint
                     {
-                        Timestamp = point.timestamp,
+                        Timestamp = new DateTimeOffset(point.timestamp).ToUnixTimeMilliseconds(),
                         Value = point.doubleValue
                     }
                 ));

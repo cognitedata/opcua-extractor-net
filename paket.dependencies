@@ -11,3 +11,4 @@ nuget OPCFoundation.NetStandard.Opc.Ua 1.4.355.26
 nuget Prometheus.Client.MetricPusher 1.0.1
 nuget YamlDotNet 6.1.1
 nuget CogniteSdk 0.10.1
+nuget InfluxDB.LineProtocol 1.1.0
