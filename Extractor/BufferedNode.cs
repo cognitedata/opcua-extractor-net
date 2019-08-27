@@ -127,14 +127,14 @@ namespace Cognite.OpcUa
             if (client.IsNumericType(DataType) || IsProperty)
             {
                 Value = new BufferedDataPoint(
-                    new DateTimeOffset(SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp).ToUnixTimeMilliseconds(),
+                    SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp,
                     client.GetUniqueId(Id),
                     UAClient.ConvertToString(value));
             }
             else
             {
                 Value = new BufferedDataPoint(
-                    new DateTimeOffset(SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp).ToUnixTimeMilliseconds(),
+                    SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp,
                     client.GetUniqueId(Id),
                     UAClient.ConvertToDouble(value));
             }
@@ -146,7 +146,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public class BufferedDataPoint
     {
-        public readonly long timestamp;
+        public readonly DateTime timestamp;
         public readonly string Id;
         public readonly double doubleValue;
         public readonly string stringValue;
@@ -155,7 +155,7 @@ namespace Cognite.OpcUa
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public BufferedDataPoint(long timestamp, string Id, double value)
+        public BufferedDataPoint(DateTime timestamp, string Id, double value)
         {
             this.timestamp = timestamp;
             this.Id = Id;
@@ -165,7 +165,7 @@ namespace Cognite.OpcUa
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public BufferedDataPoint(long timestamp, string Id, string value)
+        public BufferedDataPoint(DateTime timestamp, string Id, string value)
         {
             this.timestamp = timestamp;
             this.Id = Id;
@@ -189,7 +189,7 @@ namespace Cognite.OpcUa
             byte[] bytes = new byte[size + sizeof(ushort)];
             Buffer.BlockCopy(externalId.ToCharArray(), 0, bytes, sizeof(ushort), externalId.Length * sizeof(char));
             Buffer.BlockCopy(BitConverter.GetBytes(doubleValue), 0, bytes, sizeof(ushort) + externalId.Length * sizeof(char), sizeof(double));
-            Buffer.BlockCopy(BitConverter.GetBytes(timestamp), 0, bytes, sizeof(ushort) + externalId.Length * sizeof(char)
+            Buffer.BlockCopy(BitConverter.GetBytes(new DateTimeOffset(timestamp).ToUnixTimeMilliseconds()), 0, bytes, sizeof(ushort) + externalId.Length * sizeof(char)
                 + sizeof(double), sizeof(long));
             Buffer.BlockCopy(BitConverter.GetBytes(size), 0, bytes, 0, sizeof(ushort));
             return bytes;
@@ -202,7 +202,7 @@ namespace Cognite.OpcUa
         public BufferedDataPoint(byte[] bytes)
         {
             if (bytes.Length < sizeof(long) + sizeof(double)) return;
-            timestamp = BitConverter.ToInt64(bytes, bytes.Length - sizeof(long));
+            timestamp = DateTimeOffset.FromUnixTimeMilliseconds(BitConverter.ToInt64(bytes, bytes.Length - sizeof(long))).DateTime;
             doubleValue = BitConverter.ToDouble(bytes, bytes.Length - sizeof(double) - sizeof(long));
             char[] chars = new char[(bytes.Length - sizeof(long) - sizeof(double))/sizeof(char)];
             Buffer.BlockCopy(bytes, 0, chars, 0, bytes.Length - sizeof(long) - sizeof(double));

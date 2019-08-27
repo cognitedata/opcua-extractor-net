@@ -109,17 +109,11 @@ namespace Cognite.OpcUa
             {
                 using (var rawConfig = new StringReader(File.ReadAllText(configPath)))
                 {
-                    fullConfig = new Deserializer().Deserialize<FullConfig>(rawConfig);
-                }
-                string envKey = Environment.GetEnvironmentVariable("COGNITE_API_KEY");
-                if (!string.IsNullOrWhiteSpace(envKey))
-                {
-                    fullConfig.CogniteConfig.ApiKey = envKey;
-                }
-                string envProject = Environment.GetEnvironmentVariable("COGNITE_API_PROJECT");
-                if (!string.IsNullOrWhiteSpace(envProject))
-                {
-                    fullConfig.CogniteConfig.Project = envProject;
+                    var deserializer = new DeserializerBuilder()
+                        .WithTagMapping("!cdf", typeof(CogniteClientConfig))
+                        .WithTagMapping("!influx", typeof(InfluxClientConfig))
+                        .Build();
+                    fullConfig = deserializer.Deserialize<FullConfig>(rawConfig);
                 }
 				string envLogdir = Environment.GetEnvironmentVariable("OPCUA_LOGGER_DIR");
                 if (!string.IsNullOrWhiteSpace(envLogdir))

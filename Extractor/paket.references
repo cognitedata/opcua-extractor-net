@@ -6,4 +6,5 @@ YamlDotNet
 Microsoft.Extensions.Http.Polly
 Polly
 Polly.Extensions.Http
-Fusion.NET
+CogniteSdk
+InfluxDB.LineProtocol

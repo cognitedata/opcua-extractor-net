@@ -23,10 +23,11 @@ using System.Collections.Generic;
 using Polly;
 using Prometheus.Client.MetricPusher;
 using Opc.Ua;
-using Fusion;
+using CogniteSdk;
 using System.Threading.Tasks;
 using Polly.Timeout;
 using System.Runtime.ExceptionServices;
+using System.Linq;
 
 namespace Cognite.OpcUa
 {
@@ -43,6 +44,7 @@ namespace Cognite.OpcUa
             configDir = string.IsNullOrEmpty(configDir) ? "config/" : configDir;
             FullConfig fullConfig = Utils.GetConfig($"{configDir}/config.yml");
             fullConfig.UAConfig.ConfigRoot = configDir;
+
             if (fullConfig == null) return -1;
             try
             {
@@ -89,9 +91,10 @@ namespace Cognite.OpcUa
                     {
                         if (canceled)
                         {
+                            Console.WriteLine("Shut down");
                             Logger.LogWarning("Extractor stopped manually");
                             Logger.Shutdown();
-                            return 0;
+                            break;
                         }
                         try
                         {
@@ -99,19 +102,21 @@ namespace Cognite.OpcUa
                         }
                         catch (TaskCanceledException)
                         {
+                            Console.WriteLine("Shut down");
                             Logger.LogWarning("Extractor stopped manually");
-                            Logger.Shutdown();
-                            return 0;
+                            break;
                         }
                         catch (Exception e)
                         {
                             Logger.LogError("Uncaught exception in Run");
                             Logger.LogException(e);
                         }
-                        Thread.Sleep(1000);
+                        Task.Delay(1000, source.Token).Wait();
                     }
                 }
             }
+            Logger.Shutdown();
+            return 0;
         }
         /// <summary>
         /// Tests that the config is correct and valid
@@ -123,8 +128,6 @@ namespace Cognite.OpcUa
             if (string.IsNullOrWhiteSpace(config.UAConfig.EndpointURL)) throw new Exception("Invalid EndpointURL");
             if (string.IsNullOrWhiteSpace(config.UAConfig.GlobalPrefix)) throw new Exception("Invalid GlobalPrefix");
             if (config.UAConfig.PollingInterval < 0) throw new Exception("PollingInterval must be a positive number");
-            if (!config.CogniteConfig.Debug && string.IsNullOrWhiteSpace(config.CogniteConfig.Project)) throw new Exception("Invalid Project");
-            if (!config.CogniteConfig.Debug && string.IsNullOrWhiteSpace(config.CogniteConfig.ApiKey)) throw new Exception("Invalid api-key");
         }
         private static void Configure(IServiceCollection services)
         {
@@ -174,13 +177,13 @@ namespace Cognite.OpcUa
         private static void Run(FullConfig config, ManualResetEvent quitEvent, ServiceProvider provider, CancellationTokenSource source)
         {
             UAClient client = new UAClient(config);
-            CDFPusher pusher = new CDFPusher(provider, config);
-            Extractor extractor = new Extractor(config, pusher, client);
+            // As it turns out, linq does some insane stuff when you use the result of a "select" query that does transformation.
+            var pushers = config.Pushers.Select(pusher => pusher.ToPusher(provider)).ToList();
+            Extractor extractor = new Extractor(config, pushers, client);
 
             Task runTask = extractor.RunExtractor(source.Token)
                 .ContinueWith(task =>
                 {
-                    quitEvent.Set();
                     source.Cancel();
                     if (task.IsFaulted)
                     {
@@ -188,7 +191,6 @@ namespace Cognite.OpcUa
                     }
                 });
 
-            quitEvent.WaitOne(-1);
             try
             {
                 runTask.Wait();
@@ -228,27 +230,49 @@ namespace Cognite.OpcUa
         public string IgnorePrefix { get; set; }
         public int HistoryGranularity { get; set; }
         public bool ForceRestart { get; set; }
+        public ProtoNodeId RootNode { get; set; }
+        public Dictionary<string, ProtoNodeId> NameOverrides { get; set; }
     }
-    public class CogniteClientConfig
+    public abstract class PusherConfig
+    {
+        public bool Debug { get; set; }
+        public int DataPushDelay { get; set; }
+        public abstract IPusher ToPusher(IServiceProvider provider);
+    }
+    public class CogniteClientConfig : PusherConfig
     {
         public string Project { get; set; }
         public string ApiKey { get; set; }
         public string Host { get; set; }
-        public string RootAsset { get; set; }
-        public ProtoNodeId RootNode { get; set; }
-        public int DataPushDelay { get; set; }
-        public bool Debug { get; set; }
         public bool BufferOnFailure { get; set; }
         public string BufferFile { get; set; }
+        public int AssetsBulk { get; set; }
+        public int TimeseriesBulk { get; set; }
+        public override IPusher ToPusher(IServiceProvider provider)
+        {
+            return new CDFPusher(provider, this);
+        }
+    }
+    public class InfluxClientConfig : PusherConfig
+    {
+        public string Host { get; set; }
+        public string Username { get; set; }
+        public string Password { get; set; }
+        public string Database { get; set; }
+        public int PointChunkSize { get; set; } = 100000;
+        public override IPusher ToPusher(IServiceProvider _)
+        {
+            return new InfluxPusher(this);
+        }
     }
     public class FullConfig
     {
         public Dictionary<string, string> NSMaps { get; set; }
         public UAClientConfig UAConfig { get; set; }
-        public CogniteClientConfig CogniteConfig { get; set; }
         public LoggerConfig LoggerConfig { get; set; }
         public MetricsConfig MetricsConfig { get; set; }
         public BulkSizes BulkSizes { get; set; }
+        public List<PusherConfig> Pushers { get; set; }
     }
     public class LoggerConfig
     {
@@ -272,13 +296,16 @@ namespace Cognite.OpcUa
         public string NodeId { get; set; }
         public NodeId ToNodeId(UAClient client)
         {
-            return client.ToNodeId(NodeId, NamespaceUri);
+            var node = client.ToNodeId(NodeId, NamespaceUri);
+            if (node.IsNullNodeId)
+            {
+                return ObjectIds.ObjectsFolder;
+            }
+            return node;
         }
     }
     public class BulkSizes
     {
-        public int CDFAssets { get; set; }
-        public int CDFTimeseries { get; set; }
         public int UABrowse { get; set; }
         private int _uaHistoryReadPoints;
         public int UAHistoryReadPoints { get { return _uaHistoryReadPoints; } set { _uaHistoryReadPoints = Math.Max(0, value); } }

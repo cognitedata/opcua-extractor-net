@@ -41,7 +41,7 @@ namespace Cognite.OpcUa
         private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
         private readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
-        private readonly Dictionary<NodeId, string> rootNodes = new Dictionary<NodeId, string>();
+        private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         public bool Failed { get; private set; }
         private readonly TimeSpan historyGranularity;
@@ -311,9 +311,9 @@ namespace Cognite.OpcUa
                 TypeDefinition = root.TypeDefinitionId
             };
         }
-        public void AddRootNode(NodeId nodeId, string externalId)
+        public void AddNodeOverride(NodeId nodeId, string externalId)
         {
-            rootNodes[nodeId] = externalId;
+            nodeOverrides[nodeId] = externalId;
         }
         /// <summary>
         /// Get all children of the given list of parents as a map from parentId to list of children descriptions
@@ -938,7 +938,7 @@ namespace Cognite.OpcUa
         /// <returns>Unique string representation</returns>
         public string GetUniqueId(ExpandedNodeId nodeid)
         {
-            if (rootNodes.ContainsKey((NodeId)nodeid)) return rootNodes[(NodeId)nodeid];
+            if (nodeOverrides.ContainsKey((NodeId)nodeid)) return nodeOverrides[(NodeId)nodeid];
 
             string namespaceUri = nodeid.NamespaceUri;
             if (namespaceUri == null)

@@ -16,7 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.ExceptionServices;
@@ -37,9 +36,7 @@ namespace Cognite.OpcUa
         private bool buffersEmpty;
 		private readonly FullConfig config;
         public NodeId RootNode { get; private set; }
-        private readonly ConcurrentQueue<BufferedDataPoint> bufferedDPQueue = new ConcurrentQueue<BufferedDataPoint>();
-        private readonly ConcurrentQueue<BufferedNode> bufferedNodeQueue = new ConcurrentQueue<BufferedNode>();
-        private readonly IPusher pusher;
+        private readonly IEnumerable<IPusher> pushers;
         /// <summary>
         /// The set of uniqueIds discovered, but not yet synced with the pusher
         /// </summary>
@@ -52,21 +49,28 @@ namespace Cognite.OpcUa
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
 
+        public Extractor(FullConfig config, IEnumerable<IPusher> pushers, UAClient UAClient)
+        {
+            this.pushers = pushers;
+            this.UAClient = UAClient;
+            this.config = config;
+            UAClient.Extractor = this;
+            Logger.LogInfo($"Building extractor with {pushers.Count()} pushers");
+            foreach (var pusher in pushers)
+            {
+                pusher.Extractor = this;
+                pusher.UAClient = UAClient;
+            }
+        }
+
         /// <summary>
         /// Constructor
         /// </summary>
         /// <param name="config">Full config object</param>
         /// <param name="pusher">Pusher to be used</param>
         /// <param name="UAClient">UAClient to use</param>
-        public Extractor(FullConfig config, IPusher pusher, UAClient UAClient)
+        public Extractor(FullConfig config, IPusher pusher, UAClient UAClient) : this(config, new List<IPusher> { pusher }, UAClient)
         {
-            this.pusher = pusher;
-            this.UAClient = UAClient;
-			this.config = config;
-            UAClient.Extractor = this;
-
-            pusher.Extractor = this;
-            pusher.UAClient = UAClient;
         }
         #region Interface
 
@@ -96,26 +100,25 @@ namespace Cognite.OpcUa
             }
             Started = true;
             startTime.Set(new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds());
-            RootNode = config.CogniteConfig.RootNode.ToNodeId(UAClient);
-            if (RootNode.IsNullNodeId)
+            RootNode = config.UAConfig.RootNode.ToNodeId(UAClient);
+            if (config.UAConfig.NameOverrides != null)
             {
-                RootNode = ObjectIds.ObjectsFolder;
-            }
-            if (config.CogniteConfig.RootAsset != null)
-            {
-                UAClient.AddRootNode(RootNode, config.CogniteConfig.RootAsset);
+                foreach (var kvp in config.UAConfig.NameOverrides)
+                {
+                    UAClient.AddNodeOverride(kvp.Value.ToNodeId(UAClient), kvp.Key);
+                }
             }
 
-            IEnumerable<Task> tasks = new List<Task>
+            IEnumerable<Task> tasks = pushers.Select(pusher =>
             {
-                Task.Run(async () =>
+                return Task.Run(async () =>
                 {
                     while (!token.IsCancellationRequested && !UAClient.Failed)
                     {
                         try
                         {
-                            await pusher.PushDataPoints(bufferedDPQueue, token);
-                            await Task.Delay(config.CogniteConfig.DataPushDelay, token);
+                            await pusher.PushDataPoints(token);
+                            await Task.Delay(config.Pushers.First().DataPushDelay, token);
                         }
                         catch (TaskCanceledException)
                         {
@@ -123,16 +126,15 @@ namespace Cognite.OpcUa
                         }
                         catch (Exception e)
                         {
-                            Logger.LogError("Failed to push datapoints");
+                            Logger.LogError($"Failed to push datapoints on pusher of type {pusher.GetType().Name}");
                             Logger.LogException(e);
                         }
                     }
-                }),
-                MapUAToCDF(token)
-            };
+                });
+            }).Append(MapUAToCDF(token));
 
-            Task failedTask = null;
-            while (tasks.Any() && tasks.All(task => !task.IsFaulted))
+            Task failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
+            while (tasks.Any() && failedTask == null)
             {
                 try
                 {
@@ -142,10 +144,10 @@ namespace Cognite.OpcUa
                 {
                     Logger.LogError("Task failed unexpectedly");
                 }
-                if (quitAfterMap) return;
                 failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
+                if (quitAfterMap) return;
                 if (failedTask != null) break;
-                tasks = tasks.Where(task => !task.IsCompleted);
+                tasks = tasks.Where(task => !task.IsCompleted && !task.IsFaulted && !task.IsCanceled);
             }
             if (!token.IsCancellationRequested)
             {
@@ -192,8 +194,11 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task MapUAToCDF(CancellationToken token)
         {
-            pusher.Reset();
-			Logger.LogInfo("Begin mapping directory");
+            foreach (var pusher in pushers)
+            {
+                pusher.Reset();
+            }
+            Logger.LogInfo("Begin mapping directory");
             try
             {
                 await UAClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
@@ -203,9 +208,11 @@ namespace Cognite.OpcUa
                 throw;
             }
             Logger.LogInfo("End mapping directory");
-            if (!await pusher.PushNodes(bufferedNodeQueue, token))
+            var pushes = pushers.Select(pusher => pusher.PushNodes(token));
+            var result = await Task.WhenAll(pushes);
+            if (!result.All(res => res))
             {
-                throw new Exception("Pushing nodes to CDF failed");
+                throw new Exception("Pushing nodes failed");
             }
         }
         /// <summary>
@@ -243,7 +250,10 @@ namespace Cognite.OpcUa
                 var bufferedNode = new BufferedNode(UAClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
                 Logger.LogData(bufferedNode);
-                bufferedNodeQueue.Enqueue(bufferedNode);
+                foreach (var pusher in pushers)
+                {
+                    pusher.BufferedNodeQueue.Enqueue(bufferedNode);
+                }
             }
             else if (node.NodeClass == NodeClass.Variable)
             {
@@ -254,7 +264,10 @@ namespace Cognite.OpcUa
                     bufferedNode.IsProperty = true;
                 }
                 Logger.LogData(bufferedNode);
-                bufferedNodeQueue.Enqueue(bufferedNode);
+                foreach (var pusher in pushers)
+                {
+                    pusher.BufferedNodeQueue.Enqueue(bufferedNode);
+                }
             }
         }
         /// <summary>
@@ -269,7 +282,7 @@ namespace Cognite.OpcUa
             foreach (var datapoint in item.DequeueValues())
             {
                 var buffDp = new BufferedDataPoint(
-                    new DateTimeOffset(datapoint.SourceTimestamp).ToUnixTimeMilliseconds(),
+                    datapoint.SourceTimestamp,
                     uniqueId,
                     UAClient.ConvertToDouble(datapoint.Value)
                 );
@@ -279,8 +292,10 @@ namespace Cognite.OpcUa
                     return;
                 }
                 Logger.LogData(buffDp);
-
-                bufferedDPQueue.Enqueue(buffDp);
+                foreach (var pusher in pushers)
+                {
+                    pusher.BufferedDPQueue.Enqueue(buffDp);
+                }
             }
         }
         /// <summary>
@@ -306,12 +321,15 @@ namespace Cognite.OpcUa
             foreach (var datapoint in data.DataValues)
             {
                 var buffDp = new BufferedDataPoint(
-                    new DateTimeOffset(datapoint.SourceTimestamp).ToUnixTimeMilliseconds(),
+                    datapoint.SourceTimestamp,
                     uniqueId,
                     UAClient.ConvertToDouble(datapoint.Value)
                 );
                 Logger.LogData(buffDp);
-                bufferedDPQueue.Enqueue(buffDp);
+                foreach (var pusher in pushers)
+                {
+                    pusher.BufferedDPQueue.Enqueue(buffDp);
+                }
             }
         }
         #endregion
