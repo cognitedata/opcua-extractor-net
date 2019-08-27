@@ -63,7 +63,7 @@ For testing metrics, a good solution is the prom-stack found [here](https://gith
 
 Before building, the solution has to be granted access to the Cognite private nuget repository:
 
- .paket/paket.exe config add-credentials https://cognite.jfrog.io/cognite/api/nuget/nuget --username $USERNAME --password $PASSWORD
+`.paket/paket.exe config add-credentials https://cognite.jfrog.io/cognite/api/nuget/nuget --username $USERNAME --password $PASSWORD`
 
 where `$USERNAME` is your @cognite.com identity before the @ and `$PASSWORD` is the API token from https://cognite.jfrog.io/.
 
