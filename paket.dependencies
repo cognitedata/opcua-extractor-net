@@ -12,3 +12,4 @@ nuget Prometheus.Client.MetricPusher 1.0.1
 nuget YamlDotNet 6.1.1
 nuget CogniteSdk 0.10.1
 nuget InfluxDB.LineProtocol 1.1.0
+nuget AdysTech.InfluxDB.Client.Net.Core 0.8.0

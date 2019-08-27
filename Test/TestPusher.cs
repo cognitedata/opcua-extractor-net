@@ -31,9 +31,9 @@ namespace Test
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
         public Action EndCB { private get; set; }
+        public PusherConfig BaseConfig { get; private set; }
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
-        public ConcurrentQueue<BufferedNode> BufferedNodeQueue { get; } = new ConcurrentQueue<BufferedNode>();
 
         private readonly Dictionary<string, Action<List<BufferedNode>, List<BufferedVariable>, List<BufferedVariable>>> nodeTests;
         private readonly Action<List<BufferedDataPoint>> dpTest;
@@ -43,6 +43,7 @@ namespace Test
         {
             this.nodeTests = nodeTests;
             this.dpTest = dpTest;
+            BaseConfig = new CogniteClientConfig() { DataPushDelay = 1000, Debug = false };
         }
 
         private void SyncPushDps(ConcurrentQueue<BufferedDataPoint> dataPointQueue)
@@ -61,47 +62,12 @@ namespace Test
         {
             await Task.Run(() => SyncPushDps(BufferedDPQueue));
         }
-        private void SyncPushNodes(ConcurrentQueue<BufferedNode> nodeQueue, CancellationToken token)
+        private void SyncPushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
-            var nodeMap = new Dictionary<string, BufferedNode>();
-            var assetList = new List<BufferedNode>();
-            var varList = new List<BufferedVariable>();
             var histTsList = new List<BufferedVariable>();
             var tsList = new List<BufferedVariable>();
 
-            int count = 0;
-            while (nodeQueue.TryDequeue(out BufferedNode buffer))
-            {
-                if (buffer.IsVariable)
-                {
-                    var buffVar = (BufferedVariable)buffer;
-
-                    if (buffVar.IsProperty)
-                    {
-                        nodeMap.TryGetValue(UAClient.GetUniqueId(buffVar.ParentId), out BufferedNode parent);
-                        if (parent == null) continue;
-                        if (parent.properties == null)
-                        {
-                            parent.properties = new List<BufferedVariable>();
-                        }
-                        parent.properties.Add(buffVar);
-                    }
-                    else
-                    {
-                        count++;
-                        varList.Add(buffVar);
-                    }
-                }
-                else
-                {
-                    count++;
-                    assetList.Add(buffer);
-                }
-                nodeMap.TryAdd(UAClient.GetUniqueId(buffer.Id), buffer);
-            }
-            if (count == 0) return;
-            UAClient.ReadNodeData(assetList.Concat(varList), token);
-            foreach (var node in varList)
+            foreach (var node in variables)
             {
                 if (node.IsProperty) continue;
                 if (Extractor.AllowTSMap(node))
@@ -109,10 +75,6 @@ namespace Test
                     if (node.Historizing)
                     {
                         histTsList.Add(node);
-                        lock (Extractor.NotInSyncLock)
-                        {
-                            Extractor.NotInSync.Add(UAClient.GetUniqueId(node.Id));
-                        }
                     }
                     else
                     {
@@ -120,16 +82,16 @@ namespace Test
                     }
                 }
             }
-            nodeTests?.GetValueOrDefault("afterdata")?.Invoke(assetList, tsList, histTsList);
-            UAClient.GetNodeProperties(assetList.Concat(tsList).Concat(histTsList), token);
-            nodeTests?.GetValueOrDefault("afterProperties")?.Invoke(assetList, tsList, histTsList);
+            nodeTests?.GetValueOrDefault("afterdata")?.Invoke(nodes.ToList(), tsList, histTsList);
+            UAClient.GetNodeProperties(nodes.Concat(tsList).Concat(histTsList), token);
+            nodeTests?.GetValueOrDefault("afterProperties")?.Invoke(nodes.ToList(), tsList, histTsList);
             Extractor.SynchronizeNodes(tsList.Concat(histTsList), token);
-            nodeTests?.GetValueOrDefault("afterSynchronize")?.Invoke(assetList, tsList, histTsList);
+            nodeTests?.GetValueOrDefault("afterSynchronize")?.Invoke(nodes.ToList(), tsList, histTsList);
             EndCB?.Invoke();
         }
-        public async Task<bool> PushNodes(CancellationToken token)
+        public async Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
-            await Task.Run(() => SyncPushNodes(BufferedNodeQueue, token));
+            await Task.Run(() => SyncPushNodes(nodes, variables, token));
             return true;
         }
 

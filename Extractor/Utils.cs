@@ -126,6 +126,7 @@ namespace Cognite.OpcUa
                 Console.WriteLine("Failed to load config");
                 Console.WriteLine(e.Message);
                 Console.WriteLine(e.StackTrace);
+                throw;
             }
             return fullConfig;
         }

@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -23,6 +24,7 @@ namespace Cognite.OpcUa
 {
     public interface IPusher
     {
+        PusherConfig BaseConfig { get; }
         /// <summary>
         /// Parent extractor
         /// </summary>
@@ -40,12 +42,11 @@ namespace Cognite.OpcUa
         /// Push nodes, emptying the queue
         /// </summary>
         /// <param name="nodeQueue">Nodes to be pushed</param>
-        Task<bool> PushNodes(CancellationToken token);
+        Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token);
         /// <summary>
         /// Reset relevant persistent information in the pusher, preparing it to be restarted
         /// </summary>
         void Reset();
         ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; }
-        ConcurrentQueue<BufferedNode> BufferedNodeQueue { get; }
     }
 }
