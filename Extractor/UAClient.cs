@@ -770,6 +770,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">List of variables to be updated</param>
         public void ReadNodeValues(IEnumerable<BufferedVariable> nodes, CancellationToken token)
         {
+            nodes = nodes.Where(node => !node.DataRead).ToList();
             var values = GetNodeAttributes(nodes.Where((BufferedVariable buff) => buff.ValueRank == ValueRanks.Scalar),
                 new List<uint>(),
                 new List<uint> { Attributes.Value },
@@ -778,6 +779,7 @@ namespace Cognite.OpcUa
             var enumerator = values.GetEnumerator();
             foreach (var node in nodes)
             {
+                node.DataRead = true;
                 if (node.ValueRank == ValueRanks.Scalar)
                 {
                     enumerator.MoveNext();
@@ -965,7 +967,7 @@ namespace Cognite.OpcUa
             {
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
-            string extId = $"{config.GlobalPrefix}.{prefix}:{nodeidstr}";
+            string extId = $"{config.GlobalPrefix}.{prefix}:{nodeidstr}".Replace("\n", "");
             // ExternalId is limited to 128 characters
             extId = extId.Trim();
             if (extId.Length > 255)

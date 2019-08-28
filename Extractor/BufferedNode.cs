@@ -30,6 +30,7 @@ namespace Cognite.OpcUa
         public readonly string DisplayName;
         public readonly bool IsVariable;
         public readonly NodeId ParentId;
+        public bool PropertiesRead { get; set; } = false;
         /// <summary>
         /// Description in opcua
         /// </summary>
@@ -88,11 +89,20 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Latest timestamp historizing value was read from CDF
         /// </summary>
-        public DateTime LatestTimestamp { get; set; } = new DateTime(1970, 1, 1);
+        private DateTime _latestTimestamp = new DateTime(1970, 1, 1);
+        public DateTime LatestTimestamp
+        {
+            get { return _latestTimestamp; }
+            set
+            {
+                if (_latestTimestamp == new DateTime(1970, 1, 1) || value < _latestTimestamp) _latestTimestamp = value;
+            }
+        }
         /// <summary>
         /// Value of variable as string or double
         /// </summary>
         public BufferedDataPoint Value { get; private set; }
+        public bool DataRead { get; set; } = false;
         public override string ToDebugDescription()
         {
             string propertyString = "properties: {";

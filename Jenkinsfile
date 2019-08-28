@@ -35,7 +35,14 @@ podTemplate(
         resourceRequestMemory: '3000Mi',
         resourceLimitCpu: '1500m',
         resourceLimitMemory: '3000Mi',
-        ttyEnabled: true)
+        ttyEnabled: true),
+	containerTemplate(name: 'influxdb',
+		image: 'influxdb:1.7.7',
+		resourceRequestCpu: '1000m',
+		resourceRequestMemory: '500Mi',
+		resourceLimitCpu: '1000m',
+        resourceLimitMemory: '500Mi',
+        ttyEnabled: true),
     ],
     volumes: [
         secretVolume(
@@ -75,6 +82,12 @@ podTemplate(
                 echo "${env.BRANCH_NAME}"
             }
         }
+		container('influxdb') {
+			stage('Build DB') {
+				sh("influx --execute 'DROP DATABASE testdb'")
+				sh("influx --execute 'CREATE DATABASE testdb'")
+			}
+		}
         container('dotnet-mono') {
             stage('Install dependencies') {
                 sh('apt-get update && apt-get install -y libxml2-utils python3-pip')

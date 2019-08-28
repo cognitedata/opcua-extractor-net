@@ -1,5 +1,5 @@
-﻿# Template for the config file,
-# Defaults to config.yml in ./config.
+﻿# Template for the config file, usage: "dotnet opcua-extractor-net.dll [configfile]".
+# Defaults to config.yml in same directory as executable.
 UAConfig:
   # The URL of the OPC-UA server to connect to
   EndpointURL: opc.tcp://localhost:4840
@@ -7,13 +7,13 @@ UAConfig:
   Autoaccept: false
   # Polling interval in ms between each test of changes to a subscribed variable
   # 0 updates at maximum rate set by server
-  PollingInterval: 1000
+  PollingInterval: 0
   # Global prefix for externalId in CDF. Required, and should be completely unique to prevent name conflicts in CDF.
   GlobalPrefix: gp
   # OPC-UA username, leave blank for anonymous user. (no authentication)
-  Username:
+  Username: "username"
   # OPC-UA password
-  Password:
+  Password: "password"
   # Use secured connection
   Secure: false
   # Specify prefix on DisplayName to ignore, leave empty for none
@@ -22,8 +22,6 @@ UAConfig:
   # be read together. Should not be smaller than usual average update rate
   # Leave at 0 to always read a single node each time.
   HistoryGranularity: 900
-  # If true, force restart the uaclient on disconnect. Required for some servers
-  ForceRestart: false
   # Root node in OPC-UA. Leave empty to use the objects folder.
   RootNode:
     # Full name of the namespace of the root node.
@@ -33,7 +31,7 @@ UAConfig:
   # Override mappings from externalId to opc-ua node, on the form
   # "externalId": { namespaceUri: "uri", NodeId: "i=123" }
   NameOverrides:
-    "UARoot": 
+    "UARoot":
       NamespaceUri:
       NodeId:
 
@@ -42,42 +40,19 @@ NSMaps:
   # Ex: "urn:cognite:net:server": cns
   # Saves space compared to using the full URL. Using the ns index is not safe
   # If not specified, the full URI is used instead.
-  # "urn:freeopcua:python:server": fps
-  # "http://examples.freeopcua.github.io": efg
+  "urn:freeopcua:python:server": fps
+  "http://examples.freeopcua.github.io": efg
 
-# List of pushers, the type must be identified using a Yaml tag. Each element results in a pusher, so it is possible
-# to push multiple times to the same system, for example in order to push to multiple projects in CDF.
-# List of accepted tags:
-# - !cdf, A pusher for CDF.
-# - !influx, Pusher for InfluxDB
 Pushers:
-  - !cdf
-    # The project to connect to in the API
-    Project:
-    # Cognite api key
-    ApiKey:
-    # Cognite service url
-    Host: "https://api.cognitedata.com"
-    # Delay in ms between each push of data points to target
-    DataPushDelay: 1000
-    # Debug mode, if true, Extractor will not push to target
-    Debug: false
-    # Buffer non-historizing datapoints when the connection to CDF fails.
-    BufferOnFailure: false
-    # Buffer file path
-    BufferFile: buffer.bin
-    # Chunk sizes for bulk requests to CDF
-    AssetsBulk: 1000
-    TimeseriesBulk: 1000
   - !influx
     # Host URI, ex localhost:8086
-    Host:
+    Host: "http://localhost:8086"
     # Influx username
-    Username:
+    Username: 
     # Influx password
     Password:
     # Database to connect to, will not be created automatically
-    Database:
+    Database: "testdb"
     # Delay in ms between each push of data points to target
     DataPushDelay: 1000
     # Debug mode, if true, Extractor will not push to target

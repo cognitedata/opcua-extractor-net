@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.ExceptionServices;
@@ -37,6 +38,13 @@ namespace Cognite.OpcUa
 		private readonly FullConfig config;
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
+        private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
+
+        // Concurrent reading of properties
+        private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
+        private readonly object propertySetLock = new object();
+        private readonly List<Task> propertyReadTasks = new List<Task>();
+
         /// <summary>
         /// The set of uniqueIds discovered, but not yet synced with the pusher
         /// </summary>
@@ -113,12 +121,13 @@ namespace Cognite.OpcUa
             {
                 return Task.Run(async () =>
                 {
+                    Logger.LogInfo("Start push loop");
                     while (!token.IsCancellationRequested && !UAClient.Failed)
                     {
                         try
                         {
                             await pusher.PushDataPoints(token);
-                            await Task.Delay(config.Pushers.First().DataPushDelay, token);
+                            await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
                         }
                         catch (TaskCanceledException)
                         {
@@ -131,7 +140,7 @@ namespace Cognite.OpcUa
                         }
                     }
                 });
-            }).Append(MapUAToCDF(token));
+            }).Append(MapUAToCDF(token)).ToList();
 
             Task failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
             while (tasks.Any() && failedTask == null)
@@ -208,11 +217,106 @@ namespace Cognite.OpcUa
                 throw;
             }
             Logger.LogInfo("End mapping directory");
-            var pushes = pushers.Select(pusher => pusher.PushNodes(token));
+            var varList = new List<BufferedVariable>();
+            var nodeList = new List<BufferedNode>();
+            var nodeMap = new Dictionary<string, BufferedNode>();
+            var tsList = new List<BufferedVariable>();
+
+            while (commonQueue.TryDequeue(out BufferedNode buffer))
+            {
+                if (buffer.IsVariable && buffer is BufferedVariable buffVar)
+                {
+                    if (buffVar.IsProperty)
+                    {
+                        nodeMap.TryGetValue(UAClient.GetUniqueId(buffVar.ParentId), out BufferedNode parent);
+                        if (parent == null) continue;
+                        if (parent.properties == null)
+                        {
+                            parent.properties = new List<BufferedVariable>();
+                        }
+                        parent.properties.Add(buffVar);
+                    }
+                    else
+                    {
+                        varList.Add(buffVar);
+                    }
+                }
+                else
+                {
+                    nodeList.Add(buffer);
+                }
+                nodeMap.Add(UAClient.GetUniqueId(buffer.Id), buffer);
+            }
+            Logger.LogInfo($"Getting data for {varList.Count} variables and {nodeList.Count} objects");
+            try
+            {
+                UAClient.ReadNodeData(nodeList.Concat(varList), token);
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to read node data");
+                Logger.LogException(e);
+            }
+            foreach (var node in varList)
+            {
+                if (AllowTSMap(node))
+                {
+                    tsList.Add(node);
+                    if (node.Historizing)
+                    {
+                        lock (NotInSyncLock)
+                        {
+                            NotInSync.Add(UAClient.GetUniqueId(node.Id));
+                        }
+                    }
+                }
+            }
+
+            var pushes = pushers.Select(pusher => pusher.PushNodes(nodeList, tsList, token));
             var result = await Task.WhenAll(pushes);
             if (!result.All(res => res))
             {
                 throw new Exception("Pushing nodes failed");
+            }
+            if (pushers.Any() && pushers.First().GetType().Name == "TestPusher") return;
+            Logger.LogInfo("Synchronizing nodes");
+            try
+            {
+                SynchronizeNodes(tsList, token);
+            }
+            catch (Exception e)
+            {
+                if (e is TaskCanceledException) throw;
+                Logger.LogError("Failed to synchronize nodes");
+                Logger.LogException(e);
+                throw;
+            }
+        }
+        public async Task ReadProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
+        {
+            Task newTask = null;
+            lock (propertySetLock)
+            {
+                nodes = nodes.Where(node => !pendingProperties.Contains(node.Id) && !node.PropertiesRead);
+                if (nodes.Any())
+                {
+                    newTask = Task.Run(() => UAClient.GetNodeProperties(nodes, token));
+                    propertyReadTasks.Add(newTask);
+                }
+            }
+            await Task.WhenAll(propertyReadTasks);
+            lock (propertySetLock)
+            {
+                if (!pendingProperties.Any()) return;
+                foreach (var node in nodes)
+                {
+                    node.PropertiesRead = true;
+                    pendingProperties.Remove(node.Id);
+                }
+                if (newTask != null)
+                {
+                    propertyReadTasks.Remove(newTask);
+                }
             }
         }
         /// <summary>
@@ -250,10 +354,7 @@ namespace Cognite.OpcUa
                 var bufferedNode = new BufferedNode(UAClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
                 Logger.LogData(bufferedNode);
-                foreach (var pusher in pushers)
-                {
-                    pusher.BufferedNodeQueue.Enqueue(bufferedNode);
-                }
+                commonQueue.Enqueue(bufferedNode);
             }
             else if (node.NodeClass == NodeClass.Variable)
             {
@@ -264,10 +365,7 @@ namespace Cognite.OpcUa
                     bufferedNode.IsProperty = true;
                 }
                 Logger.LogData(bufferedNode);
-                foreach (var pusher in pushers)
-                {
-                    pusher.BufferedNodeQueue.Enqueue(bufferedNode);
-                }
+                commonQueue.Enqueue(bufferedNode);
             }
         }
         /// <summary>

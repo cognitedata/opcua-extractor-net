@@ -24,12 +24,14 @@ namespace Test
 {
     public static class Common
     {
-        public static FullConfig BuildConfig(string serverType, int index)
+        public static FullConfig BuildConfig(string serverType, int index, string configname = "config.test.yml")
         {
-            var fullConfig = Utils.GetConfig("config.test.yml");
+            var fullConfig = Utils.GetConfig(configname);
             if (fullConfig == null) throw new Exception("Failed to load config file");
-            var cogniteConfig = fullConfig.Pushers.First() as CogniteClientConfig;
-            cogniteConfig.BufferFile = $"buffer{index}.bin";
+            if (fullConfig.Pushers.First() is CogniteClientConfig cogniteConfig)
+            {
+                cogniteConfig.BufferFile = $"buffer{index}.bin";
+            }
             if (serverType == "basic")
             {
                 fullConfig.UAConfig.EndpointURL = "opc.tcp://localhost:4840";
