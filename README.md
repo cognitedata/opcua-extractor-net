@@ -61,6 +61,12 @@ in the solution or by moving it manually if using visual studio.
 
 For testing metrics, a good solution is the prom-stack found [here](https://github.com/evnsio/prom-stack)
 
+Before building, the solution has to be granted access to the Cognite private nuget repository:
+
+`.paket/paket.exe config add-credentials https://cognite.jfrog.io/cognite/api/nuget/nuget --username $USERNAME --password $PASSWORD`
+
+where `$USERNAME` is your @cognite.com identity before the @ and `$PASSWORD` is the API token from https://cognite.jfrog.io/.
+
 ### Testing
 There is a test script under Testing/test.sh. To run the tests locally, you should first start the python test servers, using `startservers.sh`. There are two test servers currently.
 
