@@ -39,6 +39,12 @@ namespace Cognite.OpcUa
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
+
+        // Concurrent reading of properties
+        private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
+        private readonly object propertySetLock = new object();
+        private readonly List<Task> propertyReadTasks = new List<Task>();
+
         /// <summary>
         /// The set of uniqueIds discovered, but not yet synced with the pusher
         /// </summary>
@@ -284,6 +290,33 @@ namespace Cognite.OpcUa
                 Logger.LogError("Failed to synchronize nodes");
                 Logger.LogException(e);
                 throw;
+            }
+        }
+        public async Task ReadProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
+        {
+            Task newTask = null;
+            lock (propertySetLock)
+            {
+                nodes = nodes.Where(node => !pendingProperties.Contains(node.Id) && !node.PropertiesRead);
+                if (nodes.Any())
+                {
+                    newTask = Task.Run(() => UAClient.GetNodeProperties(nodes, token));
+                    propertyReadTasks.Add(newTask);
+                }
+            }
+            await Task.WhenAll(propertyReadTasks);
+            lock (propertySetLock)
+            {
+                if (!pendingProperties.Any()) return;
+                foreach (var node in nodes)
+                {
+                    node.PropertiesRead = true;
+                    pendingProperties.Remove(node.Id);
+                }
+                if (newTask != null)
+                {
+                    propertyReadTasks.Remove(newTask);
+                }
             }
         }
         /// <summary>

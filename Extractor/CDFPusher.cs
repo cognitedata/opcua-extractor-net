@@ -175,7 +175,8 @@ namespace Cognite.OpcUa
             Logger.LogInfo($"Testing {variables.Count() + nodes.Count()} nodes against CDF");
             if (config.Debug)
             {
-                UAClient.GetNodeProperties(nodes.Concat(variables), token);
+
+                await Extractor.ReadProperties(nodes.Concat(variables), token);
                 foreach (var node in nodes)
                 {
                     Logger.LogInfo(node.ToDebugDescription());
@@ -298,7 +299,7 @@ namespace Cognite.OpcUa
                 var getMetaData = missingAssetIds.Select(id => assetIds[id]);
                 try
                 {
-                    UAClient.GetNodeProperties(getMetaData, token);
+                    await Extractor.ReadProperties(getMetaData, token);
                 }
                 catch (Exception e)
                 {
@@ -406,7 +407,7 @@ namespace Cognite.OpcUa
                 Logger.LogInfo($"Create {missingTSIds.Count} new timeseries");
 
                 var getMetaData = missingTSIds.Select(id => tsIds[id]);
-                UAClient.GetNodeProperties(getMetaData, token);
+                await Extractor.ReadProperties(getMetaData, token);
                 var createTimeseries = getMetaData.Select(VariableToTimeseries);
                 try
                 {
@@ -489,7 +490,7 @@ namespace Cognite.OpcUa
                 Logger.LogInfo($"Create {missingTSIds.Count} new historizing timeseries");
 
                 var getMetaData = missingTSIds.Select(id => tsIds[id]);
-                UAClient.GetNodeProperties(getMetaData, token);
+                await Extractor.ReadProperties(getMetaData, token);
                 var createTimeseries = getMetaData.Select(VariableToTimeseries);
                 try
                 {

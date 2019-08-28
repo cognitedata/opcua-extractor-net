@@ -795,13 +795,11 @@ namespace Cognite.OpcUa
         /// <param name="nodes">Nodes to be updated with properties</param>
         public void GetNodeProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
         {
-            nodes = nodes.Where(node => !node.PropertiesRead).ToList();
             var properties = new HashSet<BufferedVariable>();
             Logger.LogInfo($"Get properties for {nodes.Count()} nodes");
             var idsToCheck = new List<NodeId>();
             foreach (var node in nodes)
             {
-                node.PropertiesRead = true;
                 if (node.IsVariable)
                 {
                     idsToCheck.Add(node.Id);

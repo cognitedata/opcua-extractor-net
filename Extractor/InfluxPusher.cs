@@ -4,8 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using InfluxDB.LineProtocol.Client;
-using InfluxDB.LineProtocol.Payload;
+using AdysTech.InfluxDB.Client.Net;
 
 namespace Cognite.OpcUa
 {
@@ -18,12 +17,12 @@ namespace Cognite.OpcUa
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
         private readonly InfluxClientConfig config;
-        private readonly LineProtocolClient client;
+        private readonly InfluxDBClient client;
         public InfluxPusher(InfluxClientConfig config)
         {
             this.config = config;
             BaseConfig = config;
-            client = new LineProtocolClient(new Uri(config.Host), config.Database, config.Username, config.Password);
+            client = new InfluxDBClient(config.Host, config.Username, config.Password);
         }
         public async Task PushDataPoints(CancellationToken token)
         {
@@ -39,35 +38,49 @@ namespace Cognite.OpcUa
             }
             var tasks = Utils.ChunkBy(dataPointList, config.PointChunkSize).Select(async points =>
             {
-                var linePoints = dataPointList.Select(point =>
-                    new LineProtocolPoint(
-                        point.Id,
-                        new Dictionary<string, object> { { "value", point.isString ? point.stringValue : (object)point.doubleValue } },
-                        null,
-                        point.timestamp
-                    ));
-                var payload = new LineProtocolPayload();
-                foreach (var point in linePoints)
+                var influxPoints = dataPointList.Select(point =>
                 {
-                    payload.Add(point);
-                }
-                Logger.LogInfo($"Push {points.Count()} points to InfluxDB");
-                if (!config.Debug)
-                {
-                    var result = await client.WriteAsync(payload, token);
-                    if (!result.Success)
+                    var dp = new InfluxDatapoint<double>
                     {
-                        failing = true;
-                        throw new Exception(result.ErrorMessage);
-                    }
-                    failing = false;
-                }
+                        UtcTimestamp = point.timestamp,
+                        MeasurementName = point.Id,
+                    };
+                    dp.Fields.Add("value", point.doubleValue);
+                    return dp;
+                });
+                Logger.LogInfo($"Push {points.Count()} points to InfluxDB");
+                await client.PostPointsAsync(config.Database, influxPoints, 10000);
             });
             await Task.WhenAll(tasks);
         }
 
         public async Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
+            var historizingVariables = variables.Where(variable => variable.Historizing);
+            if (!historizingVariables.Any()) return true;
+            var getLastTasks = variables.Select(async variable =>
+            {
+                var values = await client.QueryMultiSeriesAsync(config.Database, $"SELECT last(value) FROM \"{UAClient.GetUniqueId(variable.Id)}\"");
+                if (values.Any() && values.First().HasEntries)
+                {
+                    DateTime timestamp = values.First().Entries[0].Time;
+                    variable.LatestTimestamp = timestamp;
+                }
+                else
+                {
+                    variable.LatestTimestamp = new DateTime(1970, 1, 1);
+                }
+            });
+            try
+            {
+                await Task.WhenAll(getLastTasks);
+            }
+            catch (Exception e)
+            {
+                Logger.LogError("Failed to get timestamps from influxdb");
+                Logger.LogException(e);
+                return false;
+            }
             return true;
         }
 
