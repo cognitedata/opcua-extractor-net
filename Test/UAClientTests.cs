@@ -23,6 +23,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Serilog;
 using Xunit;
 
 namespace Test
@@ -36,7 +37,7 @@ namespace Test
         public async Task TestBasicMapping()
         {
             var fullConfig = Common.BuildConfig("basic", 0);
-            Logger.Startup(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.LoggerConfig);
             int totalDps = 0;
             TestPusher pusher = new TestPusher(new Dictionary<string, Action<List<BufferedNode>, List<BufferedVariable>, List<BufferedVariable>>>
             {
@@ -102,7 +103,7 @@ namespace Test
         public async Task TestBufferReadWrite()
         {
             var fullConfig = Common.BuildConfig("basic", 1);
-            Logger.Startup(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.LoggerConfig);
             var config = fullConfig.Pushers.First() as CogniteClientConfig;
             File.Create(config.BufferFile).Close();
             int dpRuns = 0;
@@ -120,7 +121,7 @@ namespace Test
                     }
                     else if (dpRuns == 5)
                     {
-                        Logger.LogInfo("Read from file...");
+                        Log.Information("Read from file...");
                         var queue = new ConcurrentQueue<BufferedDataPoint>();
                         Utils.ReadBufferFromFile(queue, config, source.Token);
                         Assert.Equal(totalStored, queue.Count);
@@ -150,7 +151,7 @@ namespace Test
         public async Task TestBulkRequests()
         {
             var fullConfig = Common.BuildConfig("full", 2);
-            Logger.Startup(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.LoggerConfig);
             int totalDps = 0;
             using (var source = new CancellationTokenSource())
             using (var quitEvent = new ManualResetEvent(false))

@@ -23,6 +23,7 @@ using System.Threading.Tasks;
 using Cognite.OpcUa;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using Xunit;
 
 namespace Test
@@ -44,8 +45,8 @@ namespace Test
         public async Task TestBasicPushing(DummyFactory.MockMode mode, string serverType)
         {
             var fullConfig = Common.BuildConfig(serverType, 3);
-            Logger.Startup(fullConfig.LoggerConfig);
-            Logger.LogInfo("Testing with MockMode " + mode.ToString());
+            Logger.Configure(fullConfig.LoggerConfig);
+            Log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
             UAClient client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             var factory = new DummyFactory(config.Project, mode);
@@ -76,7 +77,7 @@ namespace Test
             {
                 throw new Exception("No config");
             }
-            Logger.Startup(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.LoggerConfig);
             UAClient client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
@@ -135,7 +136,7 @@ namespace Test
             config.Debug = true;
             config.ApiKey = null;
 
-            Logger.Startup(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.LoggerConfig);
             UAClient client = new UAClient(fullConfig);
             var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
             var pusher = new CDFPusher(GetDummyProvider(factory), config);

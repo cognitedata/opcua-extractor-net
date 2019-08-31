@@ -22,6 +22,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Serilog;
 using Xunit;
 
 namespace Test
@@ -55,7 +56,7 @@ namespace Test
                 Assert.True(buffer.timestamp > DateTime.MinValue, "Invalid timestamp");
                 dataPointList.Add(buffer);
             }
-            Logger.LogInfo($"Got {count} datapoints");
+            Log.Information("Got {NumDummyDatapoints} datapoints", count);
             dpTest?.Invoke(dataPointList);
         }
         public async Task PushDataPoints(CancellationToken token)

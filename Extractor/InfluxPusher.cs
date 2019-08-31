@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -48,7 +49,7 @@ namespace Cognite.OpcUa
                     dp.Fields.Add("value", point.doubleValue);
                     return dp;
                 });
-                Logger.LogInfo($"Push {points.Count()} points to InfluxDB");
+                Log.Information("Push {NumInfluxPointsToPush} points to InfluxDB", points.Count());
                 await client.PostPointsAsync(config.Database, influxPoints, 10000);
             });
             await Task.WhenAll(tasks);
@@ -77,8 +78,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Logger.LogError("Failed to get timestamps from influxdb");
-                Logger.LogException(e);
+                Log.Error(e, "Failed to get timestamps from influxdb");
                 return false;
             }
             return true;

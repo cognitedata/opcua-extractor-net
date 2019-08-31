@@ -85,15 +85,24 @@ Pushers:
     # Max number of points to send in each request to influx
     PointChunkSize: 100000
 
+# Log levels: 'verbose', 'debug', 'information', 'warning', 'error', 'fatal'.
 LoggerConfig:
-  # Folder for logging output. Leave blank for console only
+  # Writes log events at this level to the Console. 
+  # If not present, or if the level is invalid, Console is not used. 
+  ConsoleLevel: "information"
+  # Writes log events at this level to a file. Logs will roll over to new files daily.
+  # If not present, or if the level is invalid, logging to file is disabled.
+  FileLevel:
+  # Folder for logging output. If not present, logging to file is disabled.
   LogFolder:
-  # Whether or not to log mapped nodes. true/false
-  LogNodes: false
-  # Whether or not to log all data output. For debugging only. true/false
-  LogData: false
-  # true if the logger should log to console
-  LogConsole: true
+  # Maximum number of logs files that are kept in the log folder.
+  RetentionLimit: 31
+  # File containing the credentials used for authentication with GCP.
+  # If present, sends log events Stackdriver.
+  # Events at all levels are sent.
+  StackdriverCredentials:
+  # Name to be assigned to the Stackdriver log.
+  StackdriverLogName:
 
 MetricsConfig:
   # Leave host or job blank to disable metrics

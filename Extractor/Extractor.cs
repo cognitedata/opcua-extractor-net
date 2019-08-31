@@ -25,6 +25,7 @@ using System.Threading.Tasks;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus.Client;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -63,7 +64,7 @@ namespace Cognite.OpcUa
             this.UAClient = UAClient;
             this.config = config;
             UAClient.Extractor = this;
-            Logger.LogInfo($"Building extractor with {pushers.Count()} pushers");
+            Log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
             foreach (var pusher in pushers)
             {
                 pusher.Extractor = this;
@@ -90,15 +91,14 @@ namespace Cognite.OpcUa
         {
             if (!UAClient.Started)
             {
-                Logger.LogInfo("Start UAClient");
+                Log.Information("Start UAClient");
                 try
                 {
                     UAClient.Run(token).Wait();
                 }
                 catch (Exception e)
                 {
-                    Logger.LogError("Failed to start UAClient");
-                    Logger.LogException(e);
+                    Log.Error(e, "Failed to start UAClient");
                     throw;
                 }
                 if (!UAClient.Started)
@@ -121,7 +121,7 @@ namespace Cognite.OpcUa
             {
                 return Task.Run(async () =>
                 {
-                    Logger.LogInfo("Start push loop");
+                    Log.Information("Start push loop");
                     while (!token.IsCancellationRequested && !UAClient.Failed)
                     {
                         try
@@ -135,8 +135,7 @@ namespace Cognite.OpcUa
                         }
                         catch (Exception e)
                         {
-                            Logger.LogError($"Failed to push datapoints on pusher of type {pusher.GetType().Name}");
-                            Logger.LogException(e);
+                            Log.Error(e, "Failed to push datapoints on pusher of type {FailedPusherName}", pusher.GetType().Name);
                         }
                     }
                 });
@@ -151,7 +150,6 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception)
                 {
-                    Logger.LogError("Task failed unexpectedly");
                 }
                 failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
                 if (quitAfterMap) return;
@@ -162,7 +160,7 @@ namespace Cognite.OpcUa
             {
                 if (failedTask != null)
                 {
-                    Logger.LogException(failedTask.Exception);
+                    Log.Error(failedTask.Exception, "Task failed unexpectedly");
                     ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
                 }
                 throw new Exception("Processes quit without failing");
@@ -192,11 +190,10 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Logger.LogError("Failed to cleanly shut down UAClient");
-                Logger.LogException(e);
+                Log.Error(e, "Failed to cleanly shut down UAClient");
             }
             UAClient.WaitForOperations().Wait(10000);
-            Logger.LogInfo("Extractor closed");
+            Log.Information("Extractor closed");
         }
         /// <summary>
         /// Starts the extractor, calling BrowseDirectory on the root node, then pushes all nodes to CDF once finished.
@@ -207,7 +204,7 @@ namespace Cognite.OpcUa
             {
                 pusher.Reset();
             }
-            Logger.LogInfo("Begin mapping directory");
+            Log.Debug("Begin mapping directory");
             try
             {
                 await UAClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
@@ -216,7 +213,7 @@ namespace Cognite.OpcUa
             {
                 throw;
             }
-            Logger.LogInfo("End mapping directory");
+            Log.Debug("End mapping directory");
             var varList = new List<BufferedVariable>();
             var nodeList = new List<BufferedNode>();
             var nodeMap = new Dictionary<string, BufferedNode>();
@@ -247,15 +244,14 @@ namespace Cognite.OpcUa
                 }
                 nodeMap.Add(UAClient.GetUniqueId(buffer.Id), buffer);
             }
-            Logger.LogInfo($"Getting data for {varList.Count} variables and {nodeList.Count} objects");
+            Log.Information("Getting data for {NumVariables} variables and {NumObjects} objects", varList.Count, nodeList.Count);
             try
             {
                 UAClient.ReadNodeData(nodeList.Concat(varList), token);
             }
             catch (Exception e)
             {
-                Logger.LogError("Failed to read node data");
-                Logger.LogException(e);
+                Log.Error(e, "Failed to read node data");
             }
             foreach (var node in varList)
             {
@@ -279,7 +275,7 @@ namespace Cognite.OpcUa
                 throw new Exception("Pushing nodes failed");
             }
             if (pushers.Any() && pushers.First().GetType().Name == "TestPusher") return;
-            Logger.LogInfo("Synchronizing nodes");
+            Log.Information("Synchronize {NumNodesToSynch} nodes", tsList.Count);
             try
             {
                 SynchronizeNodes(tsList, token);
@@ -287,8 +283,7 @@ namespace Cognite.OpcUa
             catch (Exception e)
             {
                 if (e is TaskCanceledException) throw;
-                Logger.LogError("Failed to synchronize nodes");
-                Logger.LogException(e);
+                Log.Error(e, "Failed to synchronize nodes");
                 throw;
             }
         }
@@ -353,7 +348,7 @@ namespace Cognite.OpcUa
             {
                 var bufferedNode = new BufferedNode(UAClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
-                Logger.LogData(bufferedNode);
+                Log.Debug(bufferedNode.ToDebugDescription());
                 commonQueue.Enqueue(bufferedNode);
             }
             else if (node.NodeClass == NodeClass.Variable)
@@ -364,7 +359,7 @@ namespace Cognite.OpcUa
                 {
                     bufferedNode.IsProperty = true;
                 }
-                Logger.LogData(bufferedNode);
+                Log.Debug(bufferedNode.ToDebugDescription());
                 commonQueue.Enqueue(bufferedNode);
             }
         }
@@ -386,10 +381,10 @@ namespace Cognite.OpcUa
                 );
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Logger.LogWarning("Bad datapoint: " + buffDp.Id);
+                    Log.Warning("Bad datapoint: {BadDatapointExternalId}", buffDp.Id);
                     return;
                 }
-                Logger.LogData(buffDp);
+                Log.Debug(buffDp.ToDebugDescription());
                 foreach (var pusher in pushers)
                 {
                     pusher.BufferedDPQueue.Enqueue(buffDp);
@@ -423,7 +418,7 @@ namespace Cognite.OpcUa
                     uniqueId,
                     UAClient.ConvertToDouble(datapoint.Value)
                 );
-                Logger.LogData(buffDp);
+                Log.Debug(buffDp.ToDebugDescription());
                 foreach (var pusher in pushers)
                 {
                     pusher.BufferedDPQueue.Enqueue(buffDp);

@@ -24,6 +24,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
 using Newtonsoft.Json;
+using Serilog;
 #pragma warning disable IDE1006 // Naming Styles
 
 namespace Test
@@ -76,7 +77,7 @@ namespace Test
                     case "/timeseries/data/latest":
                         return HandleGetTimeseries(content);
                     default:
-                        Logger.LogWarning("Unknown path: " + reqPath);
+                        Log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
                         return new HttpResponseMessage(HttpStatusCode.InternalServerError);
                 }
             }

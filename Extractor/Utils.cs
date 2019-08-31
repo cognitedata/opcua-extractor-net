@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -54,7 +55,7 @@ namespace Cognite.OpcUa
                     }
                     if (count > 0)
                     {
-                        Logger.LogInfo($"Write {count} datapoints to file");
+                        Log.Information("Write {NumDatapointsToPersist} datapoints to file", count);
                     }
                 }
             }
@@ -84,15 +85,15 @@ namespace Cognite.OpcUa
                         var buffDp = new BufferedDataPoint(dataBytes);
                         if (buffDp.Id == null || (!nodeIsHistorizing?.ContainsKey(buffDp.Id) ?? false))
                         {
-                            Logger.LogWarning("Bad datapoint in file");
+                            Log.Warning("Bad datapoint in file");
                             continue;
                         }
                         count++;
-                        Logger.LogData(buffDp);
+                        Log.Debug(buffDp.ToDebugDescription());
                         bufferedDPQueue.Enqueue(buffDp);
                     }
                 }
-                Logger.LogInfo($"Read {count} points from file");
+                Log.Information("Read {NumDatapointsToRead} points from file", count);
             }
             File.Create(config.BufferFile).Close();
             BufferFileEmpty = true;
