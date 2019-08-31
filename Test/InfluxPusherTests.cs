@@ -17,7 +17,7 @@ namespace Test
         {
             var fullConfig = Common.BuildConfig("basic", 6, "config.influxtest.yml");
             if (fullConfig == null) throw new Exception("Bad config");
-            Logger.Startup(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.LoggerConfig);
             UAClient client = new UAClient(fullConfig);
             var config = (InfluxClientConfig)fullConfig.Pushers.First();
             var pusher = new InfluxPusher(config);

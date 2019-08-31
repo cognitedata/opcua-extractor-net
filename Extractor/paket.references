@@ -8,3 +8,9 @@ Polly
 Polly.Extensions.Http
 CogniteSdk
 AdysTech.InfluxDB.Client.Net.Core
+Serilog
+Serilog.Sinks.GoogleCloudLogging
+Serilog.Formatting.Compact
+Serilog.Sinks.Console
+Serilog.Sinks.Async
+Serilog.Sinks.File

@@ -219,5 +219,9 @@ namespace Cognite.OpcUa
             Id = new string(chars);
             isString = false;
         }
+        public string ToDebugDescription()
+        {
+            return $"Update timeseries {Id} to {(isString ? stringValue : doubleValue.ToString())} at {timestamp.ToString()}";
+        }
     }
 }

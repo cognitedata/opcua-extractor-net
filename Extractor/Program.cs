@@ -28,6 +28,7 @@ using System.Threading.Tasks;
 using Polly.Timeout;
 using System.Runtime.ExceptionServices;
 using System.Linq;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -57,7 +58,7 @@ namespace Cognite.OpcUa
                 return -1;
             }
 
-            Logger.Startup(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.LoggerConfig);
 
 
             var services = new ServiceCollection();
@@ -70,8 +71,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Logger.LogError("Failed to start metrics pusher");
-                Logger.LogException(e);
+                Log.Error(e, "Failed to start metrics pusher");
             }
 
             CancellationTokenSource source = null;
@@ -91,9 +91,7 @@ namespace Cognite.OpcUa
                     {
                         if (canceled)
                         {
-                            Console.WriteLine("Shut down");
-                            Logger.LogWarning("Extractor stopped manually");
-                            Logger.Shutdown();
+                            Log.Warning("Extractor stopped manually");
                             break;
                         }
                         try
@@ -102,20 +100,18 @@ namespace Cognite.OpcUa
                         }
                         catch (TaskCanceledException)
                         {
-                            Console.WriteLine("Shut down");
-                            Logger.LogWarning("Extractor stopped manually");
+                            Log.Warning("Extractor stopped manually");
                             break;
                         }
                         catch (Exception e)
                         {
-                            Logger.LogError("Uncaught exception in Run");
-                            Logger.LogException(e);
+                            Log.Error(e, "Uncaught exception in Run");
                         }
                         Task.Delay(1000, source.Token).Wait();
                     }
                 }
             }
-            Logger.Shutdown();
+            Log.CloseAndFlush();
             return 0;
         }
         /// <summary>
@@ -157,7 +153,7 @@ namespace Cognite.OpcUa
         {
             if (string.IsNullOrWhiteSpace(config.URL) || string.IsNullOrWhiteSpace(config.Job))
             {
-                Logger.LogWarning("Unable to start metrics, missing URL or Job");
+                Log.Warning("Unable to start metrics, missing URL or Job");
                 return;
             }
             var additionalHeaders = new Dictionary<string, string>();
@@ -197,7 +193,6 @@ namespace Cognite.OpcUa
             }
             catch (Exception)
             {
-                Logger.LogError("RunTask failed unexpectedly");
             }
 
             if (runTask.IsFaulted)
@@ -276,10 +271,12 @@ namespace Cognite.OpcUa
     }
     public class LoggerConfig
     {
+        public string ConsoleLevel { get; set; }
+        public string FileLevel { get; set; }
         public string LogFolder { get; set; }
-        public bool LogData { get; set; }
-        public bool LogNodes { get; set; }
-        public bool LogConsole { get; set; }
+        public int RetentionLimit { get; set; } = 31;
+        public string StackdriverCredentials { get; set; }
+        public string StackdriverLogName { get; set; }
     }
     public class MetricsConfig
     {

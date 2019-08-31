@@ -24,6 +24,7 @@ using Opc.Ua.Configuration;
 using System.Linq;
 using Prometheus.Client;
 using System.Threading;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -96,8 +97,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Logger.LogError("Error starting client");
-                Logger.LogException(e);
+                Log.Error(e, "Error starting client");
             }
         }
         /// <summary>
@@ -133,7 +133,7 @@ namespace Cognite.OpcUa
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
             if (!validAppCert)
             {
-                Logger.LogWarning("Missing application certificate, using insecure connection.");
+                Log.Warning("Missing application certificate, using insecure connection.");
             }
             else
             {
@@ -142,11 +142,11 @@ namespace Cognite.OpcUa
                 config.Autoaccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
-            Logger.LogInfo($"Attempt to select endpoint from: {config.EndpointURL}");
+            Log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointURL);
             var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && config.Secure);
             var endpointConfiguration = EndpointConfiguration.Create(appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            Logger.LogInfo($"Attempt to connect to endpoint with security: {endpoint.Description.SecurityPolicyUri}");
+            Log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri}", endpoint.Description.SecurityPolicyUri);
             session = await Session.Create(
                 appconfig,
                 endpoint,
@@ -163,7 +163,7 @@ namespace Cognite.OpcUa
             Started = true;
             connects.Inc();
             connected.Set(1);
-            Logger.LogInfo($"Successfully connected to server at {config.EndpointURL}");
+            Log.Information("Successfully connected to server at {EndpointURL}", config.EndpointURL);
         }
         /// <summary>
         /// Event triggered after a succesfull reconnect.
@@ -173,7 +173,7 @@ namespace Cognite.OpcUa
             if (!ReferenceEquals(sender, reconnectHandler)) return;
             session = reconnectHandler.Session;
             reconnectHandler.Dispose();
-            Logger.LogWarning("--- RECONNECTED ---");
+            Log.Warning("--- RECONNECTED ---");
             Task.Run(() => Extractor?.RestartExtractor(liveToken));
             lock (visitedNodesLock)
             {
@@ -190,11 +190,11 @@ namespace Cognite.OpcUa
         {
             if (eventArgs.Status != null && ServiceResult.IsNotGood(eventArgs.Status))
             {
-                Logger.LogWarning(eventArgs.Status.ToString());
+                Log.Warning(eventArgs.Status.ToString());
                 if (reconnectHandler == null)
                 {
                     connected.Set(0);
-                    Logger.LogWarning("--- RECONNECTING ---");
+                    Log.Warning("--- RECONNECTING ---");
                     if (!config.ForceRestart && !liveToken.IsCancellationRequested)
                     {
                         reconnectHandler = new SessionReconnectHandler();
@@ -209,7 +209,7 @@ namespace Cognite.OpcUa
                         }
                         catch
                         {
-                            Logger.LogWarning("Client failed to close");
+                            Log.Warning("Client failed to close");
                         }
                     }
                 }
@@ -227,11 +227,11 @@ namespace Cognite.OpcUa
                 // TODO Verify client acceptance here somehow?
                 if (eventArgs.Accept)
                 {
-                    Logger.LogWarning($"Accepted Bad Certificate {eventArgs.Certificate.Subject}");
+                    Log.Warning("Accepted Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
                 }
                 else
                 {
-                    Logger.LogInfo($"Rejected Bad Certificate {eventArgs.Certificate.Subject}");
+                    Log.Error("Rejected Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
                 }
             }
         }
@@ -287,8 +287,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Logger.LogError("Failed to browse directory");
-                Logger.LogException(e);
+                Log.Error(e, "Failed to browse directory");
             }
         }
         /// <summary>
@@ -393,7 +392,7 @@ namespace Cognite.OpcUa
                 catch (Exception)
                 {
                     browseFailures.Inc();
-                    Logger.LogError("Failed during browse session");
+                    Log.Error("Failed during browse session");
                     throw;
                 }
                 finally
@@ -437,7 +436,7 @@ namespace Cognite.OpcUa
                     }
                 }
             } while (nextIds.Any());
-            Logger.LogInfo($"Found {nodeCnt} nodes in {levelCnt} levels");
+            Log.Information("Found {NumUANodes} nodes in {NumNodeLevels} levels", nodeCnt, levelCnt);
             depth.Set(levelCnt);
         }
         #endregion
@@ -516,13 +515,14 @@ namespace Cognite.OpcUa
             catch (Exception)
             {
                 historyReadFailures.Inc();
-                Logger.LogError("Failed during HistoryRead");
+                Log.Error("Failed during HistoryRead");
                 throw;
             }
             finally
             {
                 DecOperations();
-                Logger.LogInfo($"Fetched {ptCnt} historical datapoints with {opCnt} operations for {index} nodes");
+                Log.Information("Fetched {NumHistoricalPoints} historical datapoints with {NumHistoryReadOperations} operations for {NumHistoryReadNodes} nodes",
+                    ptCnt, opCnt, index);
             }
         }
         public void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
@@ -616,7 +616,7 @@ namespace Cognite.OpcUa
                     })
                 );
 
-                Logger.LogInfo($"Add {chunk.Count()} subscriptions");
+                Log.Information("Add {NumAddedSubscriptions} subscriptions", chunk.Count());
                 lock (subscriptionLock)
                 {
                     IncOperations();
@@ -637,7 +637,7 @@ namespace Cognite.OpcUa
                     }
                     catch (Exception)
                     {
-                        Logger.LogError("Failed to create subscriptions");
+                        Log.Error("Failed to create subscriptions");
                         throw;
                     }
                     finally
@@ -647,7 +647,7 @@ namespace Cognite.OpcUa
                     numSubscriptions.Set(subscription.MonitoredItemCount);
                 }
             }
-            Logger.LogInfo($"Added {count} subscriptions");
+            Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
             DoHistoryRead(toSynch, callback, historyGranularity, token);
         }
         /// <summary>
@@ -692,7 +692,6 @@ namespace Cognite.OpcUa
             try
             {
                 int count = 0;
-                int total = readValueIds.Count;
                 foreach (var nextValues in Utils.ChunkBy(readValueIds, bulkConfig.UAAttributes))
                 {
                     if (token.IsCancellationRequested) break;
@@ -707,13 +706,13 @@ namespace Cognite.OpcUa
                     );
                     attributeRequests.Inc();
                     values = values.Concat(lvalues);
-                    Logger.LogInfo($"Read {lvalues.Count} attributes");
+                    Log.Information("Read {NumAttributesRead} attributes", lvalues.Count);
                 }
-                Logger.LogInfo($"Read {total} attributes with {count} operations");
+                Log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations", readValueIds.Count, count);
             }
             catch (Exception)
             {
-                Logger.LogError("Failed to fetch attributes from opcua");
+                Log.Error("Failed to fetch attributes from opcua");
                 attributeRequestFailures.Inc();
                 throw;
             }
@@ -796,7 +795,7 @@ namespace Cognite.OpcUa
         public void GetNodeProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
         {
             var properties = new HashSet<BufferedVariable>();
-            Logger.LogInfo($"Get properties for {nodes.Count()} nodes");
+            Log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
             var idsToCheck = new List<NodeId>();
             foreach (var node in nodes)
             {
