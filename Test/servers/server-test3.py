@@ -1,0 +1,69 @@
+﻿import math
+import sys
+import time
+
+from opcua import Server, ua
+from opcua.server.history_sql import HistorySQLite
+
+sys.path.insert(0, "..")
+
+
+
+
+if __name__ == "__main__":
+
+    # setup our server
+    print("Starting basic server")
+    server = Server()
+    server.set_endpoint("opc.tcp://0.0.0.0:4842/freeopcua/server/")
+
+    # setup our own namespace, not really necessary but should as spec
+    uri = "http://examples.freeopcua.github.io"
+    idx = server.register_namespace(uri)
+
+    # get Objects node, this is where we should put our custom stuff
+    objects = server.get_objects_node()
+
+    # populating our address space
+    myobj = objects.add_object(idx, "MyObject")
+    
+    myvar = myobj.add_variable(idx, "MyArray", ua.Variant([1.0, 2.0, 3.0, 4.0], ua.VariantType.Double))
+    myvar.set_array_dimensions([4])
+    myvar.set_writable()  # Set MyVariable to be writable by clients
+
+    myvar2 = myobj.add_variable(idx, "MyStringArray", ua.Variant(["word", "word2"], ua.VariantType.String))
+    myvar2.set_writable()
+    myvar2.set_array_dimensions([2])
+
+    mystring = myobj.add_variable(idx, "MyString", ua.Variant(None, ua.VariantType.String))
+    mystring.set_writable()  # Set to be writable by clients
+
+    myvar.add_property(idx, "TS property 1", ua.Variant("test", ua.VariantType.String))
+    myvar.add_property(idx, "TS property 2", ua.Variant(123.20, ua.VariantType.Double))
+
+    myobj.add_property(idx, "Asset prop 1", ua.Variant("test", ua.VariantType.String))
+    myobj.add_property(idx, "Asset prop 2", ua.Variant(123.21, ua.VariantType.Double))
+
+    # Configure server to use sqlite as history database (default is a simple memory dict)
+    server.iserver.history_manager.set_storage(HistorySQLite("my_datavalue_history.sql"))
+
+    # starting!
+    server.start()
+
+    # enable data change history for this particular node, must be called after start since it uses subscription
+    # server.historize_node_data_change(myvar, count=10000)
+    # server.historize_node_data_change(mybool, count=1000)
+
+    try:
+        count = 0
+        bcount = 0
+        while True:
+            time.sleep(1)
+            count += 0.1
+            bcount += 1
+            myvar.set_value([math.sin(count), math.cos(count), count, -1 * count])
+            myvar2.set_value(["word: " + str(bcount), "word2: " + str(bcount)])
+
+    finally:
+        # close connection, remove subscriptions, etc
+        server.stop()
