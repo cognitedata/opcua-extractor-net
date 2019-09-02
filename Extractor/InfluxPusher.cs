@@ -61,7 +61,7 @@ namespace Cognite.OpcUa
             if (!historizingVariables.Any()) return true;
             var getLastTasks = variables.Select(async variable =>
             {
-                var values = await client.QueryMultiSeriesAsync(config.Database, $"SELECT last(value) FROM \"{UAClient.GetUniqueId(variable.Id)}\"");
+                var values = await client.QueryMultiSeriesAsync(config.Database, $"SELECT last(value) FROM \"{UAClient.GetUniqueId(variable.Id, variable.Index)}\"");
                 if (values.Any() && values.First().HasEntries)
                 {
                     DateTime timestamp = values.First().Entries[0].Time;

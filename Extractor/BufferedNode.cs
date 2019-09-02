@@ -86,16 +86,27 @@ namespace Cognite.OpcUa
         /// True if variable is a property
         /// </summary>
         public bool IsProperty { get; set; }
+        private DateTime _latestTimestamp = new DateTime(1970, 1, 1);
         /// <summary>
         /// Latest timestamp historizing value was read from CDF
         /// </summary>
-        private DateTime _latestTimestamp = new DateTime(1970, 1, 1);
         public DateTime LatestTimestamp
         {
             get { return _latestTimestamp; }
             set
             {
-                if (_latestTimestamp == new DateTime(1970, 1, 1) || value < _latestTimestamp) _latestTimestamp = value;
+                var tsRef = Index != -1 ? ArrayParent.LatestTimestamp : _latestTimestamp;
+                if (tsRef == new DateTime(1970, 1, 1) || value < tsRef)
+                {
+                    if (Index != -1)
+                    {
+                        ArrayParent.LatestTimestamp = value;
+                    }
+                    else
+                    {
+                        _latestTimestamp = value;
+                    }
+                }
             }
         }
         /// <summary>
@@ -121,6 +132,15 @@ namespace Cognite.OpcUa
                 + propertyString + "\n";
             return ret;
         }
+        public BufferedVariable ArrayParent { get; private set; } = null;
+        /// <summary>
+        /// Fixed dimensions of the array-type variable, if any
+        /// </summary>
+        public int[] ArrayDimensions { get; set; } = null;
+        /// <summary>
+        /// Index of the variable in array, if relevant. -1 if the variable is scalar.
+        /// </summary>
+        public int Index { get; private set; } = -1;
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
@@ -134,7 +154,7 @@ namespace Cognite.OpcUa
         public void SetDataPoint(object value, DateTime SourceTimestamp, UAClient client)
         {
             if (value == null) return;
-            if (client.IsNumericType(DataType) || IsProperty)
+            if (!client.IsNumericType(DataType) || IsProperty)
             {
                 Value = new BufferedDataPoint(
                     SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp,
@@ -149,7 +169,16 @@ namespace Cognite.OpcUa
                     UAClient.ConvertToDouble(value));
             }
         }
-
+        public BufferedVariable(BufferedVariable other, int index) : base(other.Id, other.DisplayName + $"[{index}]", true, other.Id)
+        {
+            ArrayParent = other;
+            Index = index;
+            LatestTimestamp = other.LatestTimestamp;
+            Historizing = other.Historizing;
+            DataType = other.DataType;
+            ValueRank = other.ValueRank;
+            ArrayDimensions = other.ArrayDimensions;
+        }
     }
     /// <summary>
     /// Represents a single value at specified timestamp
