@@ -13,7 +13,7 @@ sys.path.insert(0, "..")
 if __name__ == "__main__":
 
     # setup our server
-    print("Starting basic server")
+    print("Starting array server")
     server = Server()
     server.set_endpoint("opc.tcp://0.0.0.0:4842/freeopcua/server/")
 
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     server.start()
 
     # enable data change history for this particular node, must be called after start since it uses subscription
-    # server.historize_node_data_change(myvar, count=10000)
+    server.historize_node_data_change(myvar, count=10000)
     # server.historize_node_data_change(mybool, count=1000)
 
     try:

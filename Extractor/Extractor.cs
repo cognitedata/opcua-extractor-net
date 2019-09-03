@@ -387,7 +387,7 @@ namespace Cognite.OpcUa
             {
                 var ret = new List<BufferedDataPoint>();
                 var values = (Array)value.Value;
-                for (int i = 0; i < variable.ArrayDimensions[0]; i++)
+                for (int i = 0; i < Math.Min(variable.ArrayDimensions[0], values.Length); i++)
                 {
                     ret.Add(UAClient.IsNumericType(variable.DataType)
                         ? new BufferedDataPoint(

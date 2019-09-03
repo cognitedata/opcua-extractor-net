@@ -43,7 +43,6 @@ namespace Cognite.OpcUa
             {
                 string path = $"{config.LogFolder}{Path.DirectorySeparatorChar}log.log";
                 logConfig.WriteTo.Async(p => p.File(
-                    new CompactJsonFormatter(),
                     path,
                     rollingInterval: RollingInterval.Day,
                     retainedFileCountLimit: config.RetentionLimit,

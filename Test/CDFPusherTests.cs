@@ -112,7 +112,7 @@ namespace Test
                     }
                     Thread.Sleep(1000);
                 }
-                Assert.True(gotData, "Expecting file to be emptied");
+                Assert.True(gotData, $"Expecting file to be emptied, but it contained {new FileInfo(config.BufferFile).Length} bytes of data");
                 source.Cancel();
                 try
                 {
@@ -165,6 +165,47 @@ namespace Test
             services.AddHttpClient<Client>()
                 .ConfigurePrimaryHttpMessageHandler(() => factory.GetHandler());
             return services.BuildServiceProvider();
+        }
+        [Trait("Category", "ArrayServer")]
+        [Fact]
+        public async Task TestArrayData()
+        {
+            var fullConfig = Common.BuildConfig("array", 6);
+            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            fullConfig.UAConfig.AllowStringVariables = true;
+            fullConfig.UAConfig.MaxArraySize = 4;
+            Logger.Configure(fullConfig.LoggerConfig);
+
+            UAClient client = new UAClient(fullConfig);
+            var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
+            var pusher = new CDFPusher(GetDummyProvider(factory), config);
+
+            Extractor extractor = new Extractor(fullConfig, pusher, client);
+            using (var source = new CancellationTokenSource())
+            {
+                var gotData = false;
+                var runTask = extractor.RunExtractor(source.Token);
+                for (int i = 0; i < 10; i++)
+                {
+                    if (factory.assets.Count == 4 && factory.timeseries.Count == 7)
+                    {
+                        gotData = true;
+                        break;
+                    }
+                    Thread.Sleep(1000);
+                }
+                Assert.True(gotData, $"Expected to get 4 assets and got {factory.assets.Count}, 7 timeseries and got {factory.timeseries.Count}");
+                source.Cancel();
+                try
+                {
+                    await runTask;
+                }
+                catch (Exception e)
+                {
+                    if (!Common.TestRunResult(e)) throw;
+                }
+                extractor.Close();
+            }
         }
     }
 }
