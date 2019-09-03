@@ -50,7 +50,7 @@ if __name__ == "__main__":
     
     mybool = myobj.add_variable(idx, "MyVariable bool", ua.Variant(False, ua.VariantType.Boolean))
     # Configure server to use sqlite as history database (default is a simple memory dict)
-    server.iserver.history_manager.set_storage(HistorySQLite("my_datavalue_history.sql"))
+    server.iserver.history_manager.set_storage(HistorySQLite("my_datavalue_history_2.sql"))
 
     # starting!
     server.start()

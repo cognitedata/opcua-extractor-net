@@ -45,7 +45,7 @@ if __name__ == "__main__":
     myobj.add_property(idx, "Asset prop 2", ua.Variant(123.21, ua.VariantType.Double))
 
     # Configure server to use sqlite as history database (default is a simple memory dict)
-    server.iserver.history_manager.set_storage(HistorySQLite("my_datavalue_history.sql"))
+    server.iserver.history_manager.set_storage(HistorySQLite("my_datavalue_history_3.sql"))
 
     # starting!
     server.start()

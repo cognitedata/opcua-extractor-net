@@ -161,7 +161,6 @@ namespace Cognite.OpcUa
             {
                 if (failedTask != null)
                 {
-                    Log.Error(failedTask.Exception, "Task failed unexpectedly");
                     ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
                 }
                 throw new Exception("Processes quit without failing");
@@ -293,12 +292,12 @@ namespace Cognite.OpcUa
             Log.Information("Synchronize {NumNodesToSynch} nodes", tsList.Count);
             try
             {
-                SynchronizeNodes(tsList, token);
+                await SynchronizeNodes(tsList, token);
             }
             catch (Exception e)
             {
                 if (e is TaskCanceledException) throw;
-                Log.Error(e, "Failed to synchronize nodes");
+                Log.Error("Failed to synchronize nodes");
                 throw;
             }
         }
@@ -333,9 +332,9 @@ namespace Cognite.OpcUa
         /// Starts synchronization of nodes with opcua using normal callbacks
         /// </summary>
         /// <param name="variables">Variables to be synchronized</param>
-        public void SynchronizeNodes(IEnumerable<BufferedVariable> variables, CancellationToken token)
+        public async Task SynchronizeNodes(IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
-            UAClient.SynchronizeNodes(variables, HistoryDataHandler, SubscriptionHandler, token);
+            await UAClient.SynchronizeNodes(variables, HistoryDataHandler, SubscriptionHandler, token);
         }
         /// <summary>
         /// Is the variable allowed to be mapped to a timeseries?
@@ -386,6 +385,11 @@ namespace Cognite.OpcUa
             if (variable.ArrayDimensions != null && variable.ArrayDimensions.Length > 0 && variable.ArrayDimensions[0] > 0)
             {
                 var ret = new List<BufferedDataPoint>();
+                if (!(value.Value is Array))
+                {
+                    Log.Warning("Bad datapoint on variable {BadPointName}, {BadPointValue}", uniqueId, value.Value.ToString());
+                    return new BufferedDataPoint[0];
+                }
                 var values = (Array)value.Value;
                 for (int i = 0; i < Math.Min(variable.ArrayDimensions[0], values.Length); i++)
                 {

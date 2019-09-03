@@ -513,10 +513,10 @@ namespace Cognite.OpcUa
                     }
                 } while (ids.Any() && !token.IsCancellationRequested);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 historyReadFailures.Inc();
-                Log.Error(e, "Failed during HistoryRead");
+                Log.Error("Failed during HistoryRead");
                 throw;
             }
             finally
@@ -526,23 +526,32 @@ namespace Cognite.OpcUa
                     ptCnt, opCnt, index);
             }
         }
-        public void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
+        public async Task DoHistoryRead(IEnumerable<BufferedVariable> toRead,
             Action<HistoryData, bool, NodeId> callback,
             TimeSpan granularity,
             CancellationToken token)
         {
+            var tasks = new List<Task>();
             if (granularity == TimeSpan.Zero)
             {
                 foreach (var variable in toRead)
                 {
                     if (variable.Historizing)
                     {
-                        Task.Run(() => DoHistoryRead(new List<BufferedVariable> { variable }, callback, token), token);
+                        tasks.Add(Task.Run(() => DoHistoryRead(new List<BufferedVariable> { variable }, callback, token), token));
                     }
                     else
                     {
                         callback(null, true, variable.Id);
                     }
+                }
+                try
+                {
+                    await Task.WhenAll(tasks);
+                }
+                catch (Exception)
+                {
+                    throw;
                 }
                 return;
             }
@@ -570,8 +579,16 @@ namespace Cognite.OpcUa
             {
                 foreach (var nextNodes in Utils.ChunkBy(nodes, bulkConfig.UAHistoryReadNodes))
                 {
-                    Task.Run(() => DoHistoryRead(nextNodes, callback, token));
+                    tasks.Add(Task.Run(() => DoHistoryRead(nextNodes, callback, token)));
                 }
+            }
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception)
+            {
+                throw;
             }
         }
         /// <summary>
@@ -582,7 +599,7 @@ namespace Cognite.OpcUa
         /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
-        public void SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
+        public async Task SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
             Action<HistoryData, bool, NodeId> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
@@ -648,7 +665,7 @@ namespace Cognite.OpcUa
                 }
             }
             Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
-            DoHistoryRead(nodeList, callback, historyGranularity, token);
+            await DoHistoryRead(nodeList, callback, historyGranularity, token);
         }
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
