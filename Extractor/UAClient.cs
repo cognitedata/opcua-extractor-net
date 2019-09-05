@@ -424,8 +424,9 @@ namespace Cognite.OpcUa
                     foreach (var rd in rdlist.Value)
                     {
                         if (rd.NodeId == ObjectIds.Server) continue;
-                        if (!string.IsNullOrWhiteSpace(config.IgnorePrefix) && rd.DisplayName.Text
-                            .StartsWith(config.IgnorePrefix, StringComparison.CurrentCulture)) continue;
+                        if (config.IgnorePrefix != null && config.IgnorePrefix.Any(prefix =>
+                            rd.DisplayName.Text.StartsWith(prefix, StringComparison.CurrentCulture))
+                            || config.IgnoreName != null && config.IgnoreName.Contains(rd.DisplayName.Text)) continue;
                         lock (visitedNodesLock)
                         {
                             if (!visitedNodes.Add(ToNodeId(rd.NodeId))) continue;
@@ -525,23 +526,32 @@ namespace Cognite.OpcUa
                     ptCnt, opCnt, index);
             }
         }
-        public void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
+        public async Task DoHistoryRead(IEnumerable<BufferedVariable> toRead,
             Action<HistoryData, bool, NodeId> callback,
             TimeSpan granularity,
             CancellationToken token)
         {
+            var tasks = new List<Task>();
             if (granularity == TimeSpan.Zero)
             {
                 foreach (var variable in toRead)
                 {
                     if (variable.Historizing)
                     {
-                        Task.Run(() => DoHistoryRead(new List<BufferedVariable> { variable }, callback, token), token);
+                        tasks.Add(Task.Run(() => DoHistoryRead(new List<BufferedVariable> { variable }, callback, token), token));
                     }
                     else
                     {
                         callback(null, true, variable.Id);
                     }
+                }
+                try
+                {
+                    await Task.WhenAll(tasks);
+                }
+                catch (Exception)
+                {
+                    throw;
                 }
                 return;
             }
@@ -569,8 +579,16 @@ namespace Cognite.OpcUa
             {
                 foreach (var nextNodes in Utils.ChunkBy(nodes, bulkConfig.UAHistoryReadNodes))
                 {
-                    Task.Run(() => DoHistoryRead(nextNodes, callback, token));
+                    tasks.Add(Task.Run(() => DoHistoryRead(nextNodes, callback, token)));
                 }
+            }
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception)
+            {
+                throw;
             }
         }
         /// <summary>
@@ -581,13 +599,12 @@ namespace Cognite.OpcUa
         /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
-        public void SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
+        public async Task SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
             Action<HistoryData, bool, NodeId> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
-            var toSynch = nodeList.Where(node => IsNumericType(node.DataType) && node.ValueRank == ValueRanks.Scalar);
-            if (!toSynch.Any()) return;
+            if (!nodeList.Any()) return;
             var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName != "NodeChangeListener");
             if (subscription == null)
             {
@@ -598,7 +615,7 @@ namespace Cognite.OpcUa
                 .Select(sub => sub.ResolvedNodeId)
                 .ToHashSet();
 
-            foreach (var chunk in Utils.ChunkBy(toSynch, 1000))
+            foreach (var chunk in Utils.ChunkBy(nodeList, 1000))
             {
                 if (token.IsCancellationRequested) break;
                 subscription.AddItems(chunk
@@ -648,7 +665,7 @@ namespace Cognite.OpcUa
                 }
             }
             Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
-            DoHistoryRead(toSynch, callback, historyGranularity, token);
+            await DoHistoryRead(nodeList, callback, historyGranularity, token);
         }
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
@@ -728,15 +745,21 @@ namespace Cognite.OpcUa
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         public void ReadNodeData(IEnumerable<BufferedNode> nodes, CancellationToken token)
         {
-            var values = GetNodeAttributes(nodes, new List<uint>
-            {
-                Attributes.Description
-            }, new List<uint>
+            nodes = nodes.Where(node => !node.IsVariable || node is BufferedVariable variable && variable.Index == -1);
+            var variableAttributes = new List<uint>
             {
                 Attributes.DataType,
                 Attributes.Historizing,
                 Attributes.ValueRank
-            }, token);
+            };
+            if (config.MaxArraySize > 0)
+            {
+                variableAttributes.Add(Attributes.ArrayDimensions);
+            }
+            var values = GetNodeAttributes(nodes, new List<uint>
+            {
+                Attributes.Description
+            }, variableAttributes, token);
             var enumerator = values.GetEnumerator();
             foreach (BufferedNode node in nodes)
             {
@@ -755,6 +778,11 @@ namespace Cognite.OpcUa
                     vnode.Historizing = enumerator.Current.GetValue(false);
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
+                    if (config.MaxArraySize > 0)
+                    {
+                        enumerator.MoveNext();
+                        vnode.ArrayDimensions = (int[])enumerator.Current.GetValue(typeof(int[]));
+                    }
                 }
             }
         }
@@ -769,7 +797,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">List of variables to be updated</param>
         public void ReadNodeValues(IEnumerable<BufferedVariable> nodes, CancellationToken token)
         {
-            nodes = nodes.Where(node => !node.DataRead).ToList();
+            nodes = nodes.Where(node => !node.DataRead && node.Index == -1).ToList();
             var values = GetNodeAttributes(nodes.Where((BufferedVariable buff) => buff.ValueRank == ValueRanks.Scalar),
                 new List<uint>(),
                 new List<uint> { Attributes.Value },
@@ -801,7 +829,10 @@ namespace Cognite.OpcUa
             {
                 if (node.IsVariable)
                 {
-                    idsToCheck.Add(node.Id);
+                    if (node is BufferedVariable variable && variable.Index == -1)
+                    {
+                        idsToCheck.Add(node.Id);
+                    }
                 }
                 else
                 {
@@ -937,7 +968,7 @@ namespace Cognite.OpcUa
         /// </remarks>
         /// <param name="nodeid">Nodeid to be converted</param>
         /// <returns>Unique string representation</returns>
-        public string GetUniqueId(ExpandedNodeId nodeid)
+        public string GetUniqueId(ExpandedNodeId nodeid, int index = -1)
         {
             if (nodeOverrides.ContainsKey((NodeId)nodeid)) return nodeOverrides[(NodeId)nodeid];
 
@@ -967,11 +998,21 @@ namespace Cognite.OpcUa
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
             string extId = $"{config.GlobalPrefix}.{prefix}:{nodeidstr}".Replace("\n", "");
+
             // ExternalId is limited to 128 characters
             extId = extId.Trim();
             if (extId.Length > 255)
             {
+                if (index > -1)
+                {
+                    var indexSub = $"{index}";
+                    return extId.Substring(0, 255 - indexSub.Length) + indexSub;
+                }
                 return extId.Substring(0, 255);
+            }
+            if (index > -1)
+            {
+                extId += $"[{index}]";
             }
             return extId;
         }

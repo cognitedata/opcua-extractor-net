@@ -22,7 +22,6 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using Cognite.OpcUa;
 using Newtonsoft.Json;
 using Serilog;
 #pragma warning disable IDE1006 // Naming Styles
@@ -33,8 +32,8 @@ namespace Test
     {
         readonly object handlerLock = new object();
         readonly string project;
-        readonly Dictionary<string, AssetDummy> assets = new Dictionary<string, AssetDummy>();
-        readonly Dictionary<string, TimeseriesDummy> timeseries = new Dictionary<string, TimeseriesDummy>();
+        public readonly Dictionary<string, AssetDummy> assets = new Dictionary<string, AssetDummy>();
+        public readonly Dictionary<string, TimeseriesDummy> timeseries = new Dictionary<string, TimeseriesDummy>();
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
         public long RequestCount { get; private set; }

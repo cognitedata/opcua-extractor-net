@@ -222,11 +222,15 @@ namespace Cognite.OpcUa
         public string Username { get; set; }
         public string Password { get; set; }
         public bool Secure { get; set; }
-        public string IgnorePrefix { get; set; }
+        public IEnumerable<string> IgnorePrefix { get; set; }
+        public IEnumerable<string> IgnoreName { get; set; }
         public int HistoryGranularity { get; set; }
         public bool ForceRestart { get; set; }
         public ProtoNodeId RootNode { get; set; }
         public Dictionary<string, ProtoNodeId> NameOverrides { get; set; }
+        public IEnumerable<ProtoNodeId> IgnoreDataTypes { get; set; }
+        public int MaxArraySize { get; set; }
+        public bool AllowStringVariables { get; set; }
     }
     public abstract class PusherConfig
     {

@@ -16,8 +16,22 @@ UAConfig:
   Password:
   # Use secured connection
   Secure: false
-  # Specify prefix on DisplayName to ignore, leave empty for none
+  # Specify prefixes on DisplayName to ignore.
   IgnorePrefix:
+	# -prefix1
+  # Specify specific DisplayNames to ignore.
+  IgnoreName::
+	# -name1
+  # List of NodeIds corresponding to DataTypes that should be ignored.
+  IgnoreDataTypes:
+  #	- NamespaceUri:
+  #	  NodeId:
+  # Maximum size of array variables. Only arrays with the ArrayDimensions property in opc-ua specified will be used,
+  # leave at 0 to only allow scalar values.
+  # Note that some server implementations have issues with the ArrayDimensions property, so it is not fetched at all if MaxArraySize is 0
+  MaxArraySize: 0
+  # Set to true to allow fetching string variables. This means that all variables with non-numeric type is converted to string in some way.
+  AllowStringVariables: false
   # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
   # be read together. Should not be smaller than usual average update rate
   # Leave at 0 to always read a single node each time.

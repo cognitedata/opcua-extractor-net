@@ -40,6 +40,7 @@ namespace Cognite.OpcUa
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
+        public ConcurrentDictionary<NodeId, BufferedVariable> ActiveVariables { get; } = new ConcurrentDictionary<NodeId, BufferedVariable>();  
 
         // Concurrent reading of properties
         private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
@@ -160,7 +161,6 @@ namespace Cognite.OpcUa
             {
                 if (failedTask != null)
                 {
-                    Log.Error(failedTask.Exception, "Task failed unexpectedly");
                     ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
                 }
                 throw new Exception("Processes quit without failing");
@@ -218,6 +218,7 @@ namespace Cognite.OpcUa
             var nodeList = new List<BufferedNode>();
             var nodeMap = new Dictionary<string, BufferedNode>();
             var tsList = new List<BufferedVariable>();
+            var fullTsList = new List<BufferedVariable>();
 
             while (commonQueue.TryDequeue(out BufferedNode buffer))
             {
@@ -258,6 +259,19 @@ namespace Cognite.OpcUa
                 if (AllowTSMap(node))
                 {
                     tsList.Add(node);
+                    ActiveVariables[node.Id] = node;
+                    if (node.ArrayDimensions != null && node.ArrayDimensions.Length > 0 && node.ArrayDimensions[0] > 0)
+                    {
+                        for (int i = 0; i < node.ArrayDimensions[0]; i++)
+                        {
+                            fullTsList.Add(new BufferedVariable(node, i));
+                        }
+                        nodeList.Add(node);
+                    }
+                    else
+                    {
+                        fullTsList.Add(node);
+                    }
                     if (node.Historizing)
                     {
                         lock (NotInSyncLock)
@@ -268,7 +282,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            var pushes = pushers.Select(pusher => pusher.PushNodes(nodeList, tsList, token));
+            var pushes = pushers.Select(pusher => pusher.PushNodes(nodeList, fullTsList, token)).ToList();
             var result = await Task.WhenAll(pushes);
             if (!result.All(res => res))
             {
@@ -278,12 +292,12 @@ namespace Cognite.OpcUa
             Log.Information("Synchronize {NumNodesToSynch} nodes", tsList.Count);
             try
             {
-                SynchronizeNodes(tsList, token);
+                await SynchronizeNodes(tsList, token);
             }
             catch (Exception e)
             {
                 if (e is TaskCanceledException) throw;
-                Log.Error(e, "Failed to synchronize nodes");
+                Log.Error("Failed to synchronize nodes");
                 throw;
             }
         }
@@ -318,9 +332,9 @@ namespace Cognite.OpcUa
         /// Starts synchronization of nodes with opcua using normal callbacks
         /// </summary>
         /// <param name="variables">Variables to be synchronized</param>
-        public void SynchronizeNodes(IEnumerable<BufferedVariable> variables, CancellationToken token)
+        public async Task SynchronizeNodes(IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
-            UAClient.SynchronizeNodes(variables, HistoryDataHandler, SubscriptionHandler, token);
+            await UAClient.SynchronizeNodes(variables, HistoryDataHandler, SubscriptionHandler, token);
         }
         /// <summary>
         /// Is the variable allowed to be mapped to a timeseries?
@@ -329,7 +343,10 @@ namespace Cognite.OpcUa
         /// <returns>True if variable may be mapped to a timeseries</returns>
         public bool AllowTSMap(BufferedVariable node)
         {
-            return UAClient.IsNumericType(node.DataType) && node.ValueRank == ValueRanks.Scalar;
+            return (UAClient.IsNumericType(node.DataType) || config.UAConfig.AllowStringVariables)
+                && (node.ValueRank == ValueRanks.Scalar
+                    || config.UAConfig.MaxArraySize > 0 && node.ArrayDimensions != null && node.ArrayDimensions.Length == 1
+                    && node.ArrayDimensions[0] > 0 && node.ArrayDimensions[0] <= config.UAConfig.MaxArraySize);
         }
         #endregion
 
@@ -363,6 +380,42 @@ namespace Cognite.OpcUa
                 commonQueue.Enqueue(bufferedNode);
             }
         }
+        private IEnumerable<BufferedDataPoint> ToDataPoint(DataValue value, BufferedVariable variable, string uniqueId)
+        {
+            if (variable.ArrayDimensions != null && variable.ArrayDimensions.Length > 0 && variable.ArrayDimensions[0] > 0)
+            {
+                var ret = new List<BufferedDataPoint>();
+                if (!(value.Value is Array))
+                {
+                    Log.Warning("Bad datapoint on variable {BadPointName}, {BadPointValue}", uniqueId, value.Value.ToString());
+                    return new BufferedDataPoint[0];
+                }
+                var values = (Array)value.Value;
+                for (int i = 0; i < Math.Min(variable.ArrayDimensions[0], values.Length); i++)
+                {
+                    ret.Add(UAClient.IsNumericType(variable.DataType)
+                        ? new BufferedDataPoint(
+                            value.SourceTimestamp,
+                            $"{uniqueId}[{i}]",
+                            UAClient.ConvertToDouble(values.GetValue(i)))
+                        : new BufferedDataPoint(
+                            value.SourceTimestamp,
+                            $"{uniqueId}[{i}]",
+                            UAClient.ConvertToString(values.GetValue(i)))
+                        );
+                }
+                return ret;
+            }
+            return new BufferedDataPoint[1] { UAClient.IsNumericType(variable.DataType)
+                ? new BufferedDataPoint(
+                    value.SourceTimestamp,
+                    uniqueId,
+                    UAClient.ConvertToDouble(value.Value))
+                : new BufferedDataPoint(
+                    value.SourceTimestamp,
+                    uniqueId,
+                    UAClient.ConvertToString(value.Value)) };
+        }
         /// <summary>
         /// Handles notifications on subscribed items, pushes all new datapoints to the queue.
         /// </summary>
@@ -371,23 +424,26 @@ namespace Cognite.OpcUa
         {
             string uniqueId = UAClient.GetUniqueId(item.ResolvedNodeId);
             if (!buffersEmpty && NotInSync.Contains(uniqueId)) return;
+            var variable = ActiveVariables[item.ResolvedNodeId];
 
             foreach (var datapoint in item.DequeueValues())
             {
-                var buffDp = new BufferedDataPoint(
-                    datapoint.SourceTimestamp,
-                    uniqueId,
-                    UAClient.ConvertToDouble(datapoint.Value)
-                );
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Log.Warning("Bad datapoint: {BadDatapointExternalId}", buffDp.Id);
-                    return;
+                    Log.Warning("Bad datapoint: {BadDatapointExternalId}", uniqueId);
+                    continue;
                 }
-                Log.Debug(buffDp.ToDebugDescription());
+                var buffDps = ToDataPoint(datapoint, variable, uniqueId);
+                foreach (var buffDp in buffDps)
+                {
+                    Log.Debug(buffDp.ToDebugDescription());
+                }
                 foreach (var pusher in pushers)
                 {
-                    pusher.BufferedDPQueue.Enqueue(buffDp);
+                    foreach (var buffDp in buffDps)
+                    {
+                        pusher.BufferedDPQueue.Enqueue(buffDp);
+                    }
                 }
             }
         }
@@ -409,19 +465,27 @@ namespace Cognite.OpcUa
                 }
             }
             if (data == null || data.DataValues == null) return;
+            var variable = ActiveVariables[nodeid];
 
             if (data.DataValues == null) return;
             foreach (var datapoint in data.DataValues)
             {
-                var buffDp = new BufferedDataPoint(
-                    datapoint.SourceTimestamp,
-                    uniqueId,
-                    UAClient.ConvertToDouble(datapoint.Value)
-                );
-                Log.Debug(buffDp.ToDebugDescription());
+                if (StatusCode.IsNotGood(datapoint.StatusCode))
+                {
+                    Log.Warning("Bad datapoint: {BadDatapointExternalId}", uniqueId);
+                    continue;
+                }
+                var buffDps = ToDataPoint(datapoint, variable, uniqueId);
+                foreach (var buffDp in buffDps)
+                {
+                    Log.Debug(buffDp.ToDebugDescription());
+                }
                 foreach (var pusher in pushers)
                 {
-                    pusher.BufferedDPQueue.Enqueue(buffDp);
+                    foreach (var buffDp in buffDps)
+                    {
+                        pusher.BufferedDPQueue.Enqueue(buffDp);
+                    }
                 }
             }
         }

@@ -108,16 +108,30 @@ namespace Cognite.OpcUa
             {
                 var item = new DataPointInsertionItem
                 {
-                    ExternalId = id,
-                    NumericDatapoints = new NumericDatapoints()
+                    ExternalId = id
                 };
-                item.NumericDatapoints.Datapoints.AddRange(points.Select(point =>
-                    new NumericDatapoint
-                    {
-                        Timestamp = new DateTimeOffset(point.timestamp).ToUnixTimeMilliseconds(),
-                        Value = point.doubleValue
-                    }
-                ));
+                if (points.First().isString)
+                {
+                    item.StringDatapoints = new StringDatapoints();
+                    item.StringDatapoints.Datapoints.AddRange(points.Select(point =>
+                        new StringDatapoint
+                        {
+                            Timestamp = new DateTimeOffset(point.timestamp).ToUnixTimeMilliseconds(),
+                            Value = point.stringValue
+                        }
+                    ));
+                }
+                else
+                {
+                    item.NumericDatapoints = new NumericDatapoints();
+                    item.NumericDatapoints.Datapoints.AddRange(points.Select(point =>
+                        new NumericDatapoint
+                        {
+                            Timestamp = new DateTimeOffset(point.timestamp).ToUnixTimeMilliseconds(),
+                            Value = point.doubleValue
+                        }
+                    ));
+                }
                 return item;
             });
             var req = new DataPointInsertionRequest();
@@ -127,9 +141,9 @@ namespace Cognite.OpcUa
             {
                 await client.DataPoints.InsertAsync(req, token);
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                Log.Warning("Failed to insert {NumFailedDatapoints} into CDF", count);
+                Log.Error(e, "Failed to insert {NumFailedDatapoints} into CDF", count);
 				dataPointPushFailures.Inc();
                 if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile))
                 {
@@ -363,7 +377,7 @@ namespace Cognite.OpcUa
             var tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
-                string externalId = UAClient.GetUniqueId(node.Id);
+                string externalId = UAClient.GetUniqueId(node.Id, node.Index);
                 tsIds.Add(externalId, node);
                 nodeIsHistorizing[externalId] = false;
             }
@@ -433,7 +447,7 @@ namespace Cognite.OpcUa
             var tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
-                string externalId = UAClient.GetUniqueId(node.Id);
+                string externalId = UAClient.GetUniqueId(node.Id, node.Index);
                 tsIds.Add(externalId, node);
                 nodeIsHistorizing[externalId] = true;
             }
@@ -501,7 +515,7 @@ namespace Cognite.OpcUa
                 }
 
                 var idsToMap = tsIds.Keys
-                    .Where(key => !missingTSIds.Contains(key))
+                    .Where(key => !missingTSIds.Contains(key) && tsIds[key].Index < 1)
                     .Select<string, (Identity, string)>(key => (Identity.ExternalId(key), null));
 
                 if (idsToMap.Any())
@@ -536,14 +550,16 @@ namespace Cognite.OpcUa
         /// <returns>Complete timeseries write poco</returns>
         private TimeSeriesEntity VariableToTimeseries(BufferedVariable variable)
         {
-            string externalId = UAClient.GetUniqueId(variable.Id);
+            string externalId = UAClient.GetUniqueId(variable.Id, variable.Index);
             var writePoco = new TimeSeriesEntity
             {
                 Description = variable.Description,
                 ExternalId = externalId,
                 AssetId = nodeToAssetIds[variable.ParentId],
                 Name = variable.DisplayName,
-                LegacyName = externalId
+                LegacyName = externalId,
+                IsString = !UAClient.IsNumericType(variable.DataType),
+                IsStep = variable.DataType == DataTypes.Boolean
             };
             if (variable.properties != null && variable.properties.Any())
             {
@@ -551,7 +567,6 @@ namespace Cognite.OpcUa
                     .Where(prop => prop.Value != null)
                     .ToDictionary(prop => prop.DisplayName, prop => prop.Value.stringValue);
             }
-            writePoco.IsStep |= variable.DataType == DataTypes.Boolean;
             return writePoco;
         }
         /// <summary>

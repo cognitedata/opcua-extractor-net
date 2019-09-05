@@ -40,6 +40,10 @@ namespace Test
             {
                 fullConfig.UAConfig.EndpointURL = "opc.tcp://localhost:4841";
             }
+            else if (serverType == "array")
+            {
+                fullConfig.UAConfig.EndpointURL = "opc.tcp://localhost:4842";
+            }
             return fullConfig;
         }
         public static bool TestRunResult(Exception e)
