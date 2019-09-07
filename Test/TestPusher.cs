@@ -63,7 +63,7 @@ namespace Test
         {
             await Task.Run(() => SyncPushDps(BufferedDPQueue));
         }
-        private void SyncPushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
+        public async Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
             var histTsList = new List<BufferedVariable>();
             var tsList = new List<BufferedVariable>();
@@ -86,13 +86,9 @@ namespace Test
             nodeTests?.GetValueOrDefault("afterdata")?.Invoke(nodes.ToList(), tsList, histTsList);
             UAClient.GetNodeProperties(nodes.Concat(tsList).Concat(histTsList), token);
             nodeTests?.GetValueOrDefault("afterProperties")?.Invoke(nodes.ToList(), tsList, histTsList);
-            Extractor.SynchronizeNodes(tsList.Concat(histTsList), token);
+            await Extractor.SynchronizeNodes(tsList.Concat(histTsList), token);
             nodeTests?.GetValueOrDefault("afterSynchronize")?.Invoke(nodes.ToList(), tsList, histTsList);
             EndCB?.Invoke();
-        }
-        public async Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
-        {
-            await Task.Run(() => SyncPushNodes(nodes, variables, token));
             return true;
         }
 
