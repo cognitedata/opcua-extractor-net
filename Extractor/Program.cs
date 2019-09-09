@@ -225,45 +225,49 @@ namespace Cognite.OpcUa
     {
         public string ConfigRoot { get; set; } = "config";
         public string EndpointURL { get; set; }
-        public bool Autoaccept { get; set; } = true;
+        public bool AutoAccept { get; set; } = true;
         public int PollingInterval { get; set; } = 500;
         public string Username { get; set; }
         public string Password { get; set; }
-        public bool Secure { get; set; }
-        public int HistoryGranularity { get; set; }
-        public bool ForceRestart { get; set; }
-        public int BrowseChunk { get; set; }
-        private int _uaHistoryReadPoints;
+        public bool Secure { get; set; } = false;
+        public int HistoryGranularity { get; set; } = 600;
+        public bool ForceRestart { get; set; } = false;
+        public int BrowseChunk { get { return _browseChunk; } set { _browseChunk = Math.Max(0, value); } }
+        private int _browseChunk = 1000;
         public int HistoryReadChunk { get { return _uaHistoryReadPoints; } set { _uaHistoryReadPoints = Math.Max(0, value); } }
-        private int _uaHistoryReadNodes;
+        private int _uaHistoryReadPoints = 1000;
         public int HistoryReadNodesChunk { get { return _uaHistoryReadNodes; } set { _uaHistoryReadNodes = Math.Max(1, value); } }
-        public int AttributesChunk { get; set; }
+        private int _uaHistoryReadNodes = 100;
+        public int AttributesChunk { get { return _attributesChunk; } set { _attributesChunk = Math.Max(0, value); } }
+        private int _attributesChunk = 1000;
     }
     public class ExtractionConfig
     {
         public string GlobalPrefix { get; set; }
         public IEnumerable<string> IgnorePrefix { get; set; }
         public IEnumerable<string> IgnoreName { get; set; }
-        public ProtoNodeId RootNode { get; set; }
+        public ProtoNodeId RootNode { get { return _rootNode; } set { _rootNode = value ?? _rootNode; } }
+        private ProtoNodeId _rootNode = new ProtoNodeId();
         public Dictionary<string, ProtoNodeId> NameOverrides { get; set; }
         public IEnumerable<ProtoNodeId> IgnoreDataTypes { get; set; }
-        public int MaxArraySize { get; set; }
-        public bool AllowStringVariables { get; set; }
-        public Dictionary<string, string> NSMaps { get; set; }
+        public int MaxArraySize { get; set; } = 0;
+        public bool AllowStringVariables { get; set; } = false;
+        public Dictionary<string, string> NSMaps { get { return _nsMaps; } set { _nsMaps = value ?? _nsMaps; } }
+        private Dictionary<string, string> _nsMaps = new Dictionary<string, string>();
     }
     public abstract class PusherConfig
     {
-        public bool Debug { get; set; }
-        public int DataPushDelay { get; set; }
+        public bool Debug { get; set; } = false;
+        public int DataPushDelay { get; set; } = 1000;
         public abstract IPusher ToPusher(IServiceProvider provider);
     }
     public class CogniteClientConfig : PusherConfig
     {
         public string Project { get; set; }
         public string ApiKey { get; set; }
-        public string Host { get; set; }
-        public bool BufferOnFailure { get; set; }
-        public string BufferFile { get; set; }
+        public string Host { get; set; } = "https://api.cognitedata.com";
+        public bool BufferOnFailure { get; set; } = false;
+        public string BufferFile { get; set; } = "buffer.bin";
         public override IPusher ToPusher(IServiceProvider provider)
         {
             return new CDFPusher(provider, this);
@@ -283,11 +287,16 @@ namespace Cognite.OpcUa
     }
     public class FullConfig
     {
-        public UAClientConfig UAConfig { get; set; }
-        public LoggerConfig LoggerConfig { get; set; }
-        public MetricsConfig MetricsConfig { get; set; }
-        public List<PusherConfig> Pushers { get; set; }
-        public ExtractionConfig ExtractionConfig { get; set; }
+        public UAClientConfig UAConfig { get { return _uaConfig; } set { _uaConfig = value ?? _uaConfig; } }
+        private UAClientConfig _uaConfig = new UAClientConfig();
+        public LoggerConfig LoggerConfig { get { return _loggerConfig; } set { _loggerConfig = value ?? _loggerConfig; } }
+        private LoggerConfig _loggerConfig = new LoggerConfig();
+        public MetricsConfig MetricsConfig { get { return _metricsConfig; } set { _metricsConfig = value ?? _metricsConfig; } }
+        private MetricsConfig _metricsConfig = new MetricsConfig();
+        public List<PusherConfig> Pushers { get { return _pushers; } set { _pushers = value ?? _pushers; } }
+        private List<PusherConfig> _pushers = new List<PusherConfig>();
+        public ExtractionConfig ExtractionConfig { get { return _extractionConfig; } set { _extractionConfig = value ?? _extractionConfig; } }
+        private ExtractionConfig _extractionConfig;
     }
     public class LoggerConfig
     {
@@ -304,7 +313,7 @@ namespace Cognite.OpcUa
         public string Job { get; set; }
         public string Username { get; set; }
         public string Password { get; set; }
-        public int PushInterval { get; set; }
+        public int PushInterval { get; set; } = 1000;
         public string Instance { get; set; }
     }
     public class ProtoNodeId

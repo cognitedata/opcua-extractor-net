@@ -3,113 +3,22 @@
 UAConfig:
     # The URL of the OPC-UA server to connect to
     EndpointURL: opc.tcp://localhost:4840
-    # Auto accept connections from unknown servers.
-    Autoaccept: false
-    # Polling interval in ms between each test of changes to a subscribed variable
-    # 0 updates at maximum rate set by server
-    PollingInterval: 1000
-    # OPC-UA username, leave blank for anonymous user. (no authentication)
-    Username:
-    # OPC-UA password
-    Password:
-    # Use secured connection
-    Secure: false
-    # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
-    # be read together. Should not be smaller than usual average update rate
-    # Leave at 0 to always read a single node each time.
-    HistoryGranularity: 900
-    # If true, force restart the uaclient on disconnect. Required for some servers
-    ForceRestart: false
-    # Max sizes of various requests to OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
-    BrowseChunk: 1000
-    # Number of datapoints per request, 0 for server specified
-    HistoryReadChunk: 1000
-    # Max number of simultaneous nodes per historyRead request
-    HistoryReadNodesChunk: 100
-    AttributesChunk: 1000
 
 Pushers:
     - !influx
         # Host URI, ex localhost:8086
         Host: "http://localhost:8086"
-        # Influx username
-        Username: 
-        # Influx password
-        Password:
         # Database to connect to, will not be created automatically
         Database: "testdb"
-        # Delay in ms between each push of data points to target
-        DataPushDelay: 1000
-        # Debug mode, if true, Extractor will not push to target
-        Debug:
-        # Max number of points to send in each request to influx
-        PointChunkSize: 100000
 
 LoggerConfig:
     # Writes log events at this level to the Console. 
     # If not present, or if the level is invalid, Console is not used. 
     ConsoleLevel: "information"
-    # Writes log events at this level to a file. Logs will roll over to new files daily.
-    # If not present, or if the level is invalid, logging to file is disabled.
-    FileLevel:
-    # Folder for logging output. If not present, logging to file is disabled.
-    LogFolder:
-    # Maximum number of logs files that are kept in the log folder.
-    RetentionLimit: 31
-    # File containing the credentials used for authentication with GCP.
-    # If present, sends log events Stackdriver.
-    # Events at all levels are sent.
-    StackdriverCredentials:
-    # Name to be assigned to the Stackdriver log.
-    StackdriverLogName:
-
-MetricsConfig:
-    # Leave host or job blank to disable metrics
-    # URL of prometheus host, ex my.prometheus.server gives final endpoint my.prometheus.server/metrics/jobs/myjob, 
-    URL:
-    # Job tag value
-    Job:
-    # Prometheus username
-    Username:
-    # Prometheus password
-    Password:
-    # Time in ms between each push
-    PushInterval: 1000
-    # Instance tag for prometheus
-    Instance:
 
 ExtractionConfig:
     # Global prefix for externalId. Should be unique to prevent name conflicts.
     GlobalPrefix: gp
-    # Specify prefixes on DisplayName to ignore.
-    IgnorePrefix:
-        # -prefix1
-    # Specify specific DisplayNames to ignore.
-    IgnoreName:
-        # -name1
-    # List of NodeIds corresponding to DataTypes that should be ignored.
-    IgnoreDataTypes:
-        # - NamespaceUri:
-        #	NodeId:
-    # Maximum size of array variables. Only arrays with the ArrayDimensions property in opc-ua specified will be used,
-    # leave at 0 to only allow scalar values.
-    # Note that some server implementations have issues with the ArrayDimensions property, so it is not fetched at all if MaxArraySize is 0
-    MaxArraySize: 0
-    # Set to true to allow fetching string variables. This means that all variables with non-numeric type is converted to string in some way.
-    AllowStringVariables: false
-    # Root node in OPC-UA. Leave empty to use the objects folder.
-    RootNode:
-        # Full name of the namespace of the root node.
-        NamespaceUri:
-        # Id of the root node, on the form "i=123" or "s=stringid" etc.
-        NodeId:
-    # Override mappings from externalId to opc-ua node, on the form
-    # "externalId": { namespaceUri: "uri", NodeId: "i=123" }
-    NameOverrides:
-        # "UARoot": 
-        #     NamespaceUri:
-        #     NodeId:
-  
     NSMaps:
         # Map OPC-UA namespaces to prefixes in CDF. 
         # Ex: "urn:cognite:net:server": cns

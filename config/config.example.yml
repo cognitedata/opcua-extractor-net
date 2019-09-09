@@ -1,13 +1,17 @@
 ﻿# Template for the config file,
 # Defaults to config.yml in ./config.
+# The values here are generally the default values, except for the contents of lists etc.
+# Your config file can contain only a subset of these config options.
 UAConfig:
     # The URL of the OPC-UA server to connect to
     EndpointURL: opc.tcp://localhost:4840
     # Auto accept connections from unknown servers.
-    Autoaccept: false
+    # There is not yet a feature to accept new certificates, but you can manually move rejected certificates to accepted.
+    # Paths are defined in opc.ua.net.extractor.Config.xml
+    AutoAccept: false
     # Polling interval in ms between each test of changes to a subscribed variable
     # 0 updates at maximum rate set by server
-    PollingInterval: 1000
+    PollingInterval: 500
     # OPC-UA username, leave blank for anonymous user. (no authentication)
     Username:
     # OPC-UA password

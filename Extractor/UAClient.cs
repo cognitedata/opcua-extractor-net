@@ -79,7 +79,6 @@ namespace Cognite.OpcUa
         {
             this.config = config.UAConfig;
             extractionConfig = config.ExtractionConfig;
-            extractionConfig.NSMaps = extractionConfig.NSMaps ?? new Dictionary<string, string>();
             historyGranularity = config.UAConfig.HistoryGranularity <= 0 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.UAConfig.HistoryGranularity);
         }
@@ -138,7 +137,7 @@ namespace Cognite.OpcUa
             {
                 appconfig.ApplicationUri = Opc.Ua.Utils.GetApplicationUriFromCertificate(
                     appconfig.SecurityConfiguration.ApplicationCertificate.Certificate);
-                config.Autoaccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
+                config.AutoAccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
             Log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointURL);
@@ -222,7 +221,7 @@ namespace Cognite.OpcUa
         {
             if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
             {
-                eventArgs.Accept = true;
+                eventArgs.Accept = config.AutoAccept;
                 // TODO Verify client acceptance here somehow?
                 if (eventArgs.Accept)
                 {
