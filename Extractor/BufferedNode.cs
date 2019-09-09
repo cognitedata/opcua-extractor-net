@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Opc.Ua;
 
 namespace Cognite.OpcUa
@@ -37,12 +38,12 @@ namespace Cognite.OpcUa
         public string Description { get; set; }
         public virtual string ToDebugDescription()
         {
-            string propertyString = "properties: {";
+            string propertyString = "properties: {" + (properties != null && properties.Any() ? "\n" : "");
             if (properties != null)
             {
                 foreach (var prop in properties)
                 {
-                    propertyString += $"{prop.DisplayName} : {prop.Value.stringValue},\n";
+                    propertyString += $"    {prop.DisplayName} : {prop.Value?.stringValue ?? "??"},\n";
                 }
             }
             propertyString += "}";
@@ -65,6 +66,38 @@ namespace Cognite.OpcUa
             this.ParentId = ParentId;
         }
     }
+    public class BufferedDataType
+    {
+        public readonly uint identifier;
+        public readonly bool isStep;
+        public readonly bool isString;
+        public BufferedDataType(NodeId rawDataType)
+        {
+            if (rawDataType.IdType == IdType.Numeric)
+            {
+                identifier = (uint)rawDataType.Identifier;
+                isString = identifier < DataTypes.Boolean || identifier > DataTypes.Double;
+                isStep = identifier == DataTypes.Boolean;
+            }
+            else
+            {
+                isString = true;
+            }
+        }
+        public BufferedDataType(ProtoDataType protoDataType, NodeId rawDataType) : this(rawDataType)
+        {
+            isStep = protoDataType.IsStep;
+            isString = false;
+        }
+        public override string ToString()
+        {
+            return $"DataType: {{\n" +
+                $"    numIdentifier: {identifier}\n" +
+                $"    isStep: {isStep}\n" +
+                $"    isString: {isString}\n" +
+                $"}}";
+        }
+    }
     /// <summary>
     /// Represents an opcua variable, which may be either a piece of metadata or a cdf timeseries
     /// </summary>
@@ -73,7 +106,16 @@ namespace Cognite.OpcUa
         /// <summary>
         /// DataType in opcua
         /// </summary>
-        public uint DataType { get; set; }
+        public BufferedDataType DataType { get; private set; }
+        public void SetDataType(NodeId dataType, Dictionary<NodeId, ProtoDataType> numericalTypeMap)
+        {
+            if (numericalTypeMap.ContainsKey(dataType))
+            {
+                var proto = numericalTypeMap[dataType];
+                DataType = new BufferedDataType(proto, dataType);
+            }
+            DataType = new BufferedDataType(dataType);
+        }
         /// <summary>
         /// True if the opcua node stores its own history
         /// </summary>
@@ -116,7 +158,7 @@ namespace Cognite.OpcUa
         public bool DataRead { get; set; } = false;
         public override string ToDebugDescription()
         {
-            string propertyString = "properties: {";
+            string propertyString = "properties: {" + (properties != null && properties.Any() ? "\n" : "");
             if (properties != null)
             {
                 foreach (var prop in properties)
@@ -129,7 +171,8 @@ namespace Cognite.OpcUa
             string ret = $"DisplayName: {DisplayName}\n"
                 + $"ParentId: {ParentId?.ToString()}\n"
                 + $"Historizing: {Historizing}\n"
-                + propertyString + "\n";
+                + propertyString + "\n"
+                + DataType?.ToString() + "\n";
             return ret;
         }
         public BufferedVariable ArrayParent { get; private set; } = null;
@@ -154,7 +197,7 @@ namespace Cognite.OpcUa
         public void SetDataPoint(object value, DateTime SourceTimestamp, UAClient client)
         {
             if (value == null) return;
-            if (!client.IsNumericType(DataType) || IsProperty)
+            if (DataType.isString || IsProperty)
             {
                 Value = new BufferedDataPoint(
                     SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp,

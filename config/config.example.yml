@@ -142,3 +142,12 @@ ExtractionConfig:
         # If not specified, the full URI is used instead.
         # "urn:freeopcua:python:server": fps
         # "http://examples.freeopcua.github.io": efg
+    # Add custom numeric types using their nodeId. IsStep indicates whether the datatype is discrete.
+    # This also overwrite default behavior, so it is possible to make Integer discrete, etc.
+    # Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type or similar, 
+    # in which case each element needs a conversion
+    CustomNumericTypes:
+    #    - NodeId: 
+    #          NamespaceUri:
+    #          NodeId:
+    #      IsStep: false

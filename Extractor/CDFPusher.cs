@@ -558,8 +558,8 @@ namespace Cognite.OpcUa
                 AssetId = nodeToAssetIds[variable.ParentId],
                 Name = variable.DisplayName,
                 LegacyName = externalId,
-                IsString = !UAClient.IsNumericType(variable.DataType),
-                IsStep = variable.DataType == DataTypes.Boolean
+                IsString = variable.DataType.isString,
+                IsStep = variable.DataType.isStep
             };
             if (variable.properties != null && variable.properties.Any())
             {

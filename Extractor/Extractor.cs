@@ -282,11 +282,16 @@ namespace Cognite.OpcUa
                 }
             }
 
+
             var pushes = pushers.Select(pusher => pusher.PushNodes(nodeList, fullTsList, token)).ToList();
             var result = await Task.WhenAll(pushes);
             if (!result.All(res => res))
             {
                 throw new Exception("Pushing nodes failed");
+            }
+            foreach (var node in nodeList.Concat(varList))
+            {
+                Log.Debug(node.ToDebugDescription());
             }
             if (pushers.Any() && pushers.First().GetType().Name == "TestPusher") return;
             Log.Information("Synchronize {NumNodesToSynch} nodes", tsList.Count);
@@ -343,7 +348,7 @@ namespace Cognite.OpcUa
         /// <returns>True if variable may be mapped to a timeseries</returns>
         public bool AllowTSMap(BufferedVariable node)
         {
-            return (UAClient.IsNumericType(node.DataType) || config.ExtractionConfig.AllowStringVariables)
+            return (!node.DataType.isString || config.ExtractionConfig.AllowStringVariables)
                 && (node.ValueRank == ValueRanks.Scalar
                     || config.ExtractionConfig.MaxArraySize > 0 && node.ArrayDimensions != null && node.ArrayDimensions.Length == 1
                     && node.ArrayDimensions[0] > 0 && node.ArrayDimensions[0] <= config.ExtractionConfig.MaxArraySize);
@@ -365,7 +370,7 @@ namespace Cognite.OpcUa
             {
                 var bufferedNode = new BufferedNode(UAClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
-                Log.Debug(bufferedNode.ToDebugDescription());
+                Log.Verbose(bufferedNode.DisplayName);
                 commonQueue.Enqueue(bufferedNode);
             }
             else if (node.NodeClass == NodeClass.Variable)
@@ -376,7 +381,7 @@ namespace Cognite.OpcUa
                 {
                     bufferedNode.IsProperty = true;
                 }
-                Log.Debug(bufferedNode.ToDebugDescription());
+                Log.Verbose(bufferedNode.DisplayName);
                 commonQueue.Enqueue(bufferedNode);
             }
         }
@@ -393,28 +398,28 @@ namespace Cognite.OpcUa
                 var values = (Array)value.Value;
                 for (int i = 0; i < Math.Min(variable.ArrayDimensions[0], values.Length); i++)
                 {
-                    ret.Add(UAClient.IsNumericType(variable.DataType)
+                    ret.Add(variable.DataType.isString
                         ? new BufferedDataPoint(
                             value.SourceTimestamp,
                             $"{uniqueId}[{i}]",
-                            UAClient.ConvertToDouble(values.GetValue(i)))
+                            UAClient.ConvertToString(values.GetValue(i)))
                         : new BufferedDataPoint(
                             value.SourceTimestamp,
                             $"{uniqueId}[{i}]",
-                            UAClient.ConvertToString(values.GetValue(i)))
+                            UAClient.ConvertToDouble(values.GetValue(i)))
                         );
                 }
                 return ret;
             }
-            return new BufferedDataPoint[1] { UAClient.IsNumericType(variable.DataType)
+            return new BufferedDataPoint[1] { variable.DataType.isString
                 ? new BufferedDataPoint(
                     value.SourceTimestamp,
                     uniqueId,
-                    UAClient.ConvertToDouble(value.Value))
+                    UAClient.ConvertToString(value.Value))
                 : new BufferedDataPoint(
                     value.SourceTimestamp,
                     uniqueId,
-                    UAClient.ConvertToString(value.Value)) };
+                    UAClient.ConvertToDouble(value.Value)) };
         }
         /// <summary>
         /// Handles notifications on subscribed items, pushes all new datapoints to the queue.
@@ -436,7 +441,7 @@ namespace Cognite.OpcUa
                 var buffDps = ToDataPoint(datapoint, variable, uniqueId);
                 foreach (var buffDp in buffDps)
                 {
-                    Log.Debug(buffDp.ToDebugDescription());
+                    Log.Verbose(buffDp.ToDebugDescription());
                 }
                 foreach (var pusher in pushers)
                 {
@@ -478,7 +483,7 @@ namespace Cognite.OpcUa
                 var buffDps = ToDataPoint(datapoint, variable, uniqueId);
                 foreach (var buffDp in buffDps)
                 {
-                    Log.Debug(buffDp.ToDebugDescription());
+                    Log.Verbose(buffDp.ToDebugDescription());
                 }
                 foreach (var pusher in pushers)
                 {
