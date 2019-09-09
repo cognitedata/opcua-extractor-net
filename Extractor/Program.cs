@@ -254,6 +254,7 @@ namespace Cognite.OpcUa
         public bool AllowStringVariables { get; set; } = false;
         public Dictionary<string, string> NSMaps { get { return _nsMaps; } set { _nsMaps = value ?? _nsMaps; } }
         private Dictionary<string, string> _nsMaps = new Dictionary<string, string>();
+        public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
     }
     public abstract class PusherConfig
     {
@@ -329,5 +330,10 @@ namespace Cognite.OpcUa
             }
             return node;
         }
+    }
+    public class ProtoDataType
+    {
+        public ProtoNodeId NodeId { get; set; }
+        public bool IsStep { get; set; } = false;
     }
 }

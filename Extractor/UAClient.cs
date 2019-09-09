@@ -42,6 +42,7 @@ namespace Cognite.OpcUa
         private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
+        private Dictionary<NodeId, ProtoDataType> numericDataTypes = new Dictionary<NodeId, ProtoDataType>();
         public bool Started { get; private set; }
         public bool Failed { get; private set; }
         private readonly TimeSpan historyGranularity;
@@ -162,6 +163,11 @@ namespace Cognite.OpcUa
             connects.Inc();
             connected.Set(1);
             Log.Information("Successfully connected to server at {EndpointURL}", config.EndpointURL);
+
+            if (extractionConfig.CustomNumericTypes != null)
+            {
+                numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
+            }
         }
         /// <summary>
         /// Event triggered after a succesfull reconnect.
@@ -172,6 +178,10 @@ namespace Cognite.OpcUa
             session = reconnectHandler.Session;
             reconnectHandler.Dispose();
             Log.Warning("--- RECONNECTED ---");
+            if (extractionConfig.CustomNumericTypes != null)
+            {
+                numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
+            }
             Task.Run(() => Extractor?.RestartExtractor(liveToken));
             lock (visitedNodesLock)
             {
@@ -180,6 +190,7 @@ namespace Cognite.OpcUa
             connects.Inc();
             connected.Set(1);
             reconnectHandler = null;
+
         }
         /// <summary>
         /// Called on client keep alive, handles the case where the server has stopped responding and the connection timed out.
@@ -768,10 +779,7 @@ namespace Cognite.OpcUa
                 {
                     enumerator.MoveNext();
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
-                    if (dataType.IdType == IdType.Numeric)
-                    {
-                        vnode.DataType = (uint)dataType.Identifier;
-                    }
+                    vnode.SetDataType(dataType, numericDataTypes);
                     enumerator.MoveNext();
                     vnode.Historizing = enumerator.Current.GetValue(false);
                     enumerator.MoveNext();
@@ -1013,15 +1021,6 @@ namespace Cognite.OpcUa
                 extId += $"[{index}]";
             }
             return extId;
-        }
-        /// <summary>
-        /// Check datatype is numeric and allowed to be mapped to CDF
-        /// </summary>
-        /// <param name="dataType">Datatype to be tested</param>
-        /// <returns>True if datatype is numeric</returns>
-        public bool IsNumericType(uint dataType)
-        {
-            return dataType >= DataTypes.Boolean && dataType <= DataTypes.Double;
         }
         #endregion
     }
