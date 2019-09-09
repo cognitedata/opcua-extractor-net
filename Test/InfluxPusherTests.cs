@@ -28,7 +28,7 @@ namespace Test
                 var runTask = extractor.RunExtractor(source.Token);
                 var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
                 bool gotData = false;
-                for (int i = 0; i < 10; i++)
+                for (int i = 0; i < 20; i++)
                 {
                     var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=2\"");
                     if (read.Count > 0 && read.First().HasEntries)
@@ -38,7 +38,7 @@ namespace Test
                     }
                     Thread.Sleep(1000);
                 }
-                Assert.True(gotData);
+                Assert.True(gotData, "Expecting to find some data in influxdb");
                 source.Cancel();
                 try
                 {
@@ -57,8 +57,8 @@ namespace Test
         public async Task TestArrayData()
         {
             var fullConfig = Common.BuildConfig("array", 6, "config.influxtest.yml");
-            fullConfig.UAConfig.MaxArraySize = 4;
-            fullConfig.UAConfig.AllowStringVariables = true;
+            fullConfig.ExtractionConfig.MaxArraySize = 4;
+            fullConfig.ExtractionConfig.AllowStringVariables = true;
             Logger.Configure(fullConfig.LoggerConfig);
             UAClient client = new UAClient(fullConfig);
             var config = (InfluxClientConfig)fullConfig.Pushers.First();
@@ -70,7 +70,7 @@ namespace Test
                 var runTask = extractor.RunExtractor(source.Token);
                 var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
                 bool gotData = false;
-                for (int i = 0; i < 10; i++)
+                for (int i = 0; i < 20; i++)
                 {
                     var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=2[3]\"");
                     var read2 = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=3[1]\"");

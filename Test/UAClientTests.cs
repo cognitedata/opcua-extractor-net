@@ -68,7 +68,7 @@ namespace Test
                     Assert.True(gotDatapoints, "Expected some datapoints");
                     gotDatapoints = false;
                     int lastDps = totalDps;
-                                            for (int i = 0; i < 20; i++)
+                    for (int i = 0; i < 20; i++)
                     {
                         if (totalDps > lastDps)
                         {

@@ -34,14 +34,13 @@ namespace Cognite.OpcUa
     public class UAClient
     {
         private readonly UAClientConfig config;
-        private readonly BulkSizes bulkConfig;
+        private readonly ExtractionConfig extractionConfig;
         private Session session;
         private SessionReconnectHandler reconnectHandler;
         public Extractor Extractor { get; set; }
         private readonly object visitedNodesLock = new object();
         private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
-        private readonly Dictionary<string, string> nsmaps = new Dictionary<string, string>();
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         public bool Failed { get; private set; }
@@ -79,8 +78,7 @@ namespace Cognite.OpcUa
         public UAClient(FullConfig config)
         {
             this.config = config.UAConfig;
-            bulkConfig = config.BulkSizes;
-            nsmaps = config.NSMaps ?? new Dictionary<string, string>();
+            extractionConfig = config.ExtractionConfig;
             historyGranularity = config.UAConfig.HistoryGranularity <= 0 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.UAConfig.HistoryGranularity);
         }
@@ -139,7 +137,7 @@ namespace Cognite.OpcUa
             {
                 appconfig.ApplicationUri = Opc.Ua.Utils.GetApplicationUriFromCertificate(
                     appconfig.SecurityConfiguration.ApplicationCertificate.Certificate);
-                config.Autoaccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
+                config.AutoAccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
             Log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointURL);
@@ -223,7 +221,7 @@ namespace Cognite.OpcUa
         {
             if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
             {
-                eventArgs.Accept = true;
+                eventArgs.Accept = config.AutoAccept;
                 // TODO Verify client acceptance here somehow?
                 if (eventArgs.Accept)
                 {
@@ -323,7 +321,7 @@ namespace Cognite.OpcUa
         private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(IEnumerable<NodeId> parents, CancellationToken token, NodeId referenceTypes = null)
         {
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            foreach (var lparents in Utils.ChunkBy(parents, bulkConfig.UABrowse))
+            foreach (var lparents in Utils.ChunkBy(parents, config.BrowseChunk))
             {
                 IncOperations();
                 var tobrowse = new BrowseDescriptionCollection(lparents.Select(id =>
@@ -424,9 +422,9 @@ namespace Cognite.OpcUa
                     foreach (var rd in rdlist.Value)
                     {
                         if (rd.NodeId == ObjectIds.Server) continue;
-                        if (config.IgnorePrefix != null && config.IgnorePrefix.Any(prefix =>
+                        if (extractionConfig.IgnorePrefix != null && extractionConfig.IgnorePrefix.Any(prefix =>
                             rd.DisplayName.Text.StartsWith(prefix, StringComparison.CurrentCulture))
-                            || config.IgnoreName != null && config.IgnoreName.Contains(rd.DisplayName.Text)) continue;
+                            || extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(rd.DisplayName.Text)) continue;
                         lock (visitedNodesLock)
                         {
                             if (!visitedNodes.Add(ToNodeId(rd.NodeId))) continue;
@@ -459,7 +457,7 @@ namespace Cognite.OpcUa
             {
                 StartTime = lowest,
                 EndTime = DateTime.Now.AddDays(1),
-                NumValuesPerNode = (uint)bulkConfig.UAHistoryReadPoints
+                NumValuesPerNode = (uint)config.HistoryReadChunk
             };
             int opCnt = 0;
             int ptCnt = 0;
@@ -577,7 +575,7 @@ namespace Cognite.OpcUa
             if (!groupedVariables.Any()) return;
             foreach (var nodes in groupedVariables.Values)
             {
-                foreach (var nextNodes in Utils.ChunkBy(nodes, bulkConfig.UAHistoryReadNodes))
+                foreach (var nextNodes in Utils.ChunkBy(nodes, config.HistoryReadNodesChunk))
                 {
                     tasks.Add(Task.Run(() => DoHistoryRead(nextNodes, callback, token)));
                 }
@@ -709,7 +707,7 @@ namespace Cognite.OpcUa
             try
             {
                 int count = 0;
-                foreach (var nextValues in Utils.ChunkBy(readValueIds, bulkConfig.UAAttributes))
+                foreach (var nextValues in Utils.ChunkBy(readValueIds, config.AttributesChunk))
                 {
                     if (token.IsCancellationRequested) break;
                     count++;
@@ -752,7 +750,7 @@ namespace Cognite.OpcUa
                 Attributes.Historizing,
                 Attributes.ValueRank
             };
-            if (config.MaxArraySize > 0)
+            if (extractionConfig.MaxArraySize > 0)
             {
                 variableAttributes.Add(Attributes.ArrayDimensions);
             }
@@ -778,7 +776,7 @@ namespace Cognite.OpcUa
                     vnode.Historizing = enumerator.Current.GetValue(false);
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
-                    if (config.MaxArraySize > 0)
+                    if (extractionConfig.MaxArraySize > 0)
                     {
                         enumerator.MoveNext();
                         vnode.ArrayDimensions = (int[])enumerator.Current.GetValue(typeof(int[]));
@@ -978,7 +976,7 @@ namespace Cognite.OpcUa
                 namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
             }
             string prefix;
-            if (nsmaps.TryGetValue(namespaceUri, out string prefixNode))
+            if (extractionConfig.NSMaps.TryGetValue(namespaceUri, out string prefixNode))
             {
                 prefix = prefixNode;
             }
@@ -997,7 +995,7 @@ namespace Cognite.OpcUa
             {
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
-            string extId = $"{config.GlobalPrefix}.{prefix}:{nodeidstr}".Replace("\n", "");
+            string extId = $"{extractionConfig.GlobalPrefix}.{prefix}:{nodeidstr}".Replace("\n", "");
 
             // ExternalId is limited to 128 characters
             extId = extId.Trim();

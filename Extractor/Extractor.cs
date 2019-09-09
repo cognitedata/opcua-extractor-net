@@ -109,10 +109,10 @@ namespace Cognite.OpcUa
             }
             Started = true;
             startTime.Set(new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds());
-            RootNode = config.UAConfig.RootNode.ToNodeId(UAClient);
-            if (config.UAConfig.NameOverrides != null)
+            RootNode = config.ExtractionConfig.RootNode.ToNodeId(UAClient);
+            if (config.ExtractionConfig.NameOverrides != null)
             {
-                foreach (var kvp in config.UAConfig.NameOverrides)
+                foreach (var kvp in config.ExtractionConfig.NameOverrides)
                 {
                     UAClient.AddNodeOverride(kvp.Value.ToNodeId(UAClient), kvp.Key);
                 }
@@ -343,10 +343,10 @@ namespace Cognite.OpcUa
         /// <returns>True if variable may be mapped to a timeseries</returns>
         public bool AllowTSMap(BufferedVariable node)
         {
-            return (UAClient.IsNumericType(node.DataType) || config.UAConfig.AllowStringVariables)
+            return (UAClient.IsNumericType(node.DataType) || config.ExtractionConfig.AllowStringVariables)
                 && (node.ValueRank == ValueRanks.Scalar
-                    || config.UAConfig.MaxArraySize > 0 && node.ArrayDimensions != null && node.ArrayDimensions.Length == 1
-                    && node.ArrayDimensions[0] > 0 && node.ArrayDimensions[0] <= config.UAConfig.MaxArraySize);
+                    || config.ExtractionConfig.MaxArraySize > 0 && node.ArrayDimensions != null && node.ArrayDimensions.Length == 1
+                    && node.ArrayDimensions[0] > 0 && node.ArrayDimensions[0] <= config.ExtractionConfig.MaxArraySize);
         }
         #endregion
 

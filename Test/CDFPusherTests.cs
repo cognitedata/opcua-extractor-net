@@ -172,8 +172,8 @@ namespace Test
         {
             var fullConfig = Common.BuildConfig("array", 6);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
-            fullConfig.UAConfig.AllowStringVariables = true;
-            fullConfig.UAConfig.MaxArraySize = 4;
+            fullConfig.ExtractionConfig.AllowStringVariables = true;
+            fullConfig.ExtractionConfig.MaxArraySize = 4;
             Logger.Configure(fullConfig.LoggerConfig);
 
             UAClient client = new UAClient(fullConfig);
