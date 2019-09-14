@@ -305,6 +305,7 @@ namespace Cognite.OpcUa
                 Log.Error("Failed to synchronize nodes");
                 throw;
             }
+            UAClient.SubscribeToEvents(new List<NodeId> { ObjectIds.Server }, new List<NodeId> { ObjectTypeIds.BaseEventType }, nodeList.Concat(varList).Select(node => node.Id), EventSubscriptionHandler);
         }
         public async Task ReadProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
         {
@@ -477,6 +478,20 @@ namespace Cognite.OpcUa
                     }
                 }
             }
+        }
+        private void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
+        {
+            Log.Information("Trigger event handler");
+            var filters = (item.Status.Filter as EventFilter).SelectClauses;
+            var triggeredEvent = eventArgs.NotificationValue as EventFieldList;
+            //foreach (var triggeredEvent in item.DequeueEvents())
+            //{
+                Log.Information("Trigger event");
+                for (int i = 0; i < filters.Count; i++)
+                {
+                    Log.Information(filters[i].BrowsePath[0] + ":" + triggeredEvent.EventFields[i].Value);
+                }
+            //}
         }
         /// <summary>
         /// Callback for HistoryRead operations. Simply pushes all datapoints to the queue.

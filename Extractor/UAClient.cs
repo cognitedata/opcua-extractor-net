@@ -657,10 +657,14 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             if (!nodeList.Any()) return;
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName != "NodeChangeListener");
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "DataChangeListener");
             if (subscription == null)
             {
-                subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
+                subscription = new Subscription(session.DefaultSubscription)
+                {
+                    PublishingInterval = config.PollingInterval,
+                    DisplayName = "DataChangeListener"
+                };
             }
             int count = 0;
             var hasSubscription = subscription.MonitoredItems
@@ -914,6 +918,125 @@ namespace Cognite.OpcUa
             }
             ReadNodeData(properties, token);
             ReadNodeValues(properties, token);
+        }
+        public EventFilter BuildEventFilter(IEnumerable<NodeId> eventIds, IEnumerable<NodeId> nodeIds)
+        {
+            /*
+             * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds AND SourceNode IN nodeIds;
+             * using the internal query language in OPC-UA
+             */
+            var whereClause = new ContentFilter();
+            var eventListOperand = new SimpleAttributeOperand
+            {
+                TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                AttributeId = Attributes.Value
+            };
+            eventListOperand.BrowsePath.Add(BrowseNames.EventType);
+            var eventOperands = eventIds.Select(id =>
+                new LiteralOperand
+                {
+                    Value = new Variant(id)
+                });
+
+            whereClause.Push(FilterOperator.Equals, eventListOperand, eventIds.First());
+
+            /*var nodeListOperand = new SimpleAttributeOperand
+            {
+                TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                AttributeId = Attributes.Value
+            };
+            nodeListOperand.BrowsePath.Add("SourceNode");
+            var nodeOperands = nodeIds.Select(id =>
+                new LiteralOperand
+                {
+                    Value = id
+                });
+            whereClause.Push(FilterOperator.InList, nodeOperands.ToArray());*/
+            foreach (var id in eventIds)
+            {
+                Log.Information(id.ToString());
+            }
+            var selectClauses = new SimpleAttributeOperandCollection();
+            foreach (var browseName in new List<string> {"Message", "EventId", "SourceNode", "Time", "EventType"})
+            {
+                var operand = new SimpleAttributeOperand
+                {
+                    AttributeId = Attributes.Value,
+                    TypeDefinitionId = ObjectTypeIds.BaseEventType
+                };
+                operand.BrowsePath.Add(browseName);
+                selectClauses.Add(operand);
+            }
+            return new EventFilter
+            {
+                WhereClause = whereClause,
+                SelectClauses = selectClauses
+            };
+
+        }
+        public void SubscribeToEvents(IEnumerable<NodeId> emitters,
+            IEnumerable<NodeId> eventIds,
+            IEnumerable<NodeId> nodeIds,
+            MonitoredItemNotificationEventHandler subscriptionHandler)
+        {
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "EventListener");
+            if (subscription == null)
+            {
+                subscription = new Subscription(session.DefaultSubscription)
+                {
+                    PublishingInterval = config.PollingInterval,
+                    DisplayName = "EventListener"
+                };
+            }
+            int count = 0;
+            var hasSubscription = subscription.MonitoredItems
+                .Select(sub => sub.ResolvedNodeId)
+                .ToHashSet();
+            var filter = BuildEventFilter(eventIds, nodeIds);
+            foreach (var emitter in emitters)
+            {
+                if (!hasSubscription.Contains(emitter))
+                {
+                    var item = new MonitoredItem
+                    {
+                        StartNodeId = emitter,
+                        Filter = filter,
+                        AttributeId = Attributes.EventNotifier
+                    };
+                    count++;
+                    item.Notification += subscriptionHandler;
+                    subscription.AddItem(item);
+                }
+            }
+            lock (subscriptionLock)
+            {
+                IncOperations();
+                try
+                {
+                    if (count > 0)
+                    {
+                        if (subscription.Created)
+                        {
+                            subscription.CreateItems();
+                        }
+                        else
+                        {
+                            session.AddSubscription(subscription);
+                            subscription.Create();
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    Log.Error("Failed to create subscriptions");
+                    throw;
+                }
+                finally
+                {
+                    DecOperations();
+                }
+            }
+            Log.Information("Created {EventSubCount} event subscriptions", count);
         }
         #endregion
 
