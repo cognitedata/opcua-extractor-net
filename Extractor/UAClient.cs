@@ -423,7 +423,11 @@ namespace Cognite.OpcUa
             int nodeCnt = 0;
             do
             {
-                var references = GetNodeChildren(nextIds, token);
+                var references = Utils.ChunkBy(nextIds, config.BrowseNodesChunk)
+                    .Select(ids => GetNodeChildren(nextIds, token))
+                    .SelectMany(dict => dict)
+                    .ToDictionary(val => val.Key, val => val.Value);
+
                 nextIds.Clear();
                 levelCnt++;
                 foreach (var rdlist in references)

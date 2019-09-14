@@ -107,10 +107,9 @@ namespace Cognite.OpcUa
                         {
                             Log.Error(e, "Exception in Run");
                         }
-                        if (source.IsCancellationRequested) continue;
                         try
                         {
-                            Task.Delay(1000, source.Token).Wait();
+                            Task.Delay(1000, source.IsCancellationRequested ? CancellationToken.None : source.Token).Wait();
                         }
                         catch (TaskCanceledException)
                         {
@@ -232,6 +231,8 @@ namespace Cognite.OpcUa
         public bool Secure { get; set; } = false;
         public int HistoryGranularity { get; set; } = 600;
         public bool ForceRestart { get; set; } = false;
+        public int BrowseNodesChunk { get { return _browseNodesChunk; } set { _browseNodesChunk = Math.Max(1, value); } }
+        private int _browseNodesChunk = 1000;
         public int BrowseChunk { get { return _browseChunk; } set { _browseChunk = Math.Max(0, value); } }
         private int _browseChunk = 1000;
         public int HistoryReadChunk { get { return _uaHistoryReadPoints; } set { _uaHistoryReadPoints = Math.Max(0, value); } }
