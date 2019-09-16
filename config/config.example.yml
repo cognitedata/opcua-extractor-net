@@ -25,7 +25,10 @@ UAConfig:
     # If true, force restart the uaclient on disconnect. Required for some servers
     ForceRestart: false
     # Max sizes of various requests to OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
+    # Maximum number of results per browse or browseNext operation
     BrowseChunk: 1000
+    #Max number of nodes to browse at the same time. Higher is much faster, but may be restricted by the server.
+    BrowseNodesChunk: 1000
     # Number of datapoints per request, 0 for server specified
     HistoryReadChunk: 1000
     # Max number of simultaneous nodes per historyRead request
