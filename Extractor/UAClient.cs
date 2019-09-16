@@ -638,7 +638,8 @@ namespace Cognite.OpcUa
                         var monitor = new MonitoredItem(subscription.DefaultItem)
                         {
                             StartNodeId = node.Id,
-                            DisplayName = "Value: " + node.DisplayName
+                            DisplayName = "Value: " + node.DisplayName,
+                            SamplingInterval = config.PollingInterval
                         };
                         monitor.Notification += subscriptionHandler;
                         count++;
