@@ -297,7 +297,10 @@ namespace Cognite.OpcUa
             Log.Information("Synchronize {NumNodesToSynch} nodes", tsList.Count);
             try
             {
-                await SynchronizeNodes(tsList, token);
+                UAClient.SubscribeToNodes(tsList, SubscriptionHandler, token);
+                UAClient.SubscribeToEvents(new List<NodeId> { ObjectIds.Server }, new List<NodeId> { ObjectTypeIds.BaseEventType },
+                    nodeList.Concat(varList).Select(node => node.Id), EventSubscriptionHandler);
+                await UAClient.DoHistoryRead(tsList, HistoryDataHandler, token);
             }
             catch (Exception e)
             {
@@ -305,7 +308,6 @@ namespace Cognite.OpcUa
                 Log.Error("Failed to synchronize nodes");
                 throw;
             }
-            UAClient.SubscribeToEvents(new List<NodeId> { ObjectIds.Server }, new List<NodeId> { ObjectTypeIds.BaseEventType }, nodeList.Concat(varList).Select(node => node.Id), EventSubscriptionHandler);
         }
         public async Task ReadProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
         {
@@ -333,14 +335,6 @@ namespace Cognite.OpcUa
                     propertyReadTasks.Remove(newTask);
                 }
             }
-        }
-        /// <summary>
-        /// Starts synchronization of nodes with opcua using normal callbacks
-        /// </summary>
-        /// <param name="variables">Variables to be synchronized</param>
-        public async Task SynchronizeNodes(IEnumerable<BufferedVariable> variables, CancellationToken token)
-        {
-            await UAClient.SynchronizeNodes(variables, HistoryDataHandler, SubscriptionHandler, token);
         }
         /// <summary>
         /// Is the variable allowed to be mapped to a timeseries?
@@ -481,17 +475,33 @@ namespace Cognite.OpcUa
         }
         private void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
-            Log.Information("Trigger event handler");
-            var filters = (item.Status.Filter as EventFilter).SelectClauses;
             var triggeredEvent = eventArgs.NotificationValue as EventFieldList;
-            //foreach (var triggeredEvent in item.DequeueEvents())
-            //{
-                Log.Information("Trigger event");
-                for (int i = 0; i < filters.Count; i++)
+            if (triggeredEvent == null)
+            {
+                Log.Warning("No event in event subscription notification: {}", item.StartNodeId);
+                return;
+            }
+            var eventFields = triggeredEvent.EventFields;
+            try
+            {
+                var buffEvent = new BufferedEvent
                 {
-                    Log.Information(filters[i].BrowsePath[0] + ":" + triggeredEvent.EventFields[i].Value);
+                    Message = ((LocalizedText)eventFields[0].Value).Text,
+                    EventId = config.ExtractionConfig.GlobalPrefix + "." + Convert.ToBase64String((byte[])eventFields[1].Value),
+                    SourceNode = (NodeId)eventFields[2].Value,
+                    Time = (DateTime)eventFields[3].Value,
+                    EventType = (NodeId)eventFields[4].Value
+                };
+                Log.Debug(buffEvent.ToDebugDescription());
+                foreach (var pusher in pushers)
+                {
+                    pusher.BufferedEventQueue.Enqueue(buffEvent);
                 }
-            //}
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Failed to construct bufferedEvent from raw fields");
+            }
         }
         /// <summary>
         /// Callback for HistoryRead operations. Simply pushes all datapoints to the queue.

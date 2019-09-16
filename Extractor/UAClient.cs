@@ -494,14 +494,14 @@ namespace Cognite.OpcUa
         }
         #endregion
 
-        #region Get data
+        #region synchronization
         /// <summary>
         /// Read historydata for the requested nodes and call the callback after each call to HistoryRead
         /// </summary>
         /// <param name="toRead">Variables to read for</param>
         /// <param name="callback">Callback, takes a <see cref="HistoryReadResultCollection"/>,
         /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
-        private void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
+        private void DoHistoryReadChunk(IEnumerable<BufferedVariable> toRead,
             Action<HistoryData, bool, NodeId> callback,
             CancellationToken token)
         {
@@ -580,11 +580,10 @@ namespace Cognite.OpcUa
         }
         public async Task DoHistoryRead(IEnumerable<BufferedVariable> toRead,
             Action<HistoryData, bool, NodeId> callback,
-            TimeSpan granularity,
             CancellationToken token)
         {
             var tasks = new List<Task>();
-            if (granularity == TimeSpan.Zero)
+            if (historyGranularity == TimeSpan.Zero)
             {
                 foreach (var variable in toRead)
                 {
@@ -614,7 +613,7 @@ namespace Cognite.OpcUa
                 if (variable.Historizing)
                 {
                     cnt++;
-                    long group = variable.LatestTimestamp.Ticks / granularity.Ticks;
+                    long group = variable.LatestTimestamp.Ticks / historyGranularity.Ticks;
                     if (!groupedVariables.ContainsKey(group))
                     {
                         groupedVariables[group] = new List<BufferedVariable>();
@@ -631,7 +630,7 @@ namespace Cognite.OpcUa
             {
                 foreach (var nextNodes in Utils.ChunkBy(nodes, config.HistoryReadNodesChunk))
                 {
-                    tasks.Add(Task.Run(() => DoHistoryRead(nextNodes, callback, token)));
+                    tasks.Add(Task.Run(() => DoHistoryReadChunk(nextNodes, callback, token)));
                 }
             }
             try
@@ -644,15 +643,14 @@ namespace Cognite.OpcUa
             }
         }
         /// <summary>
-        /// Synchronizes a list of nodes with the server, creating subscriptions and reading historical data where necessary.
+        /// Create subscriptions for given list of nodes
         /// </summary>
         /// <param name="nodeList">List of buffered variables to synchronize</param>
         /// <param name="callback">Callback used for DoHistoryRead. Takes a <see cref="HistoryReadResultCollection"/>,
         /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
-        public async Task SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
-            Action<HistoryData, bool, NodeId> callback,
+        public void SubscribeToNodes(IEnumerable<BufferedVariable> nodeList,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
@@ -722,8 +720,6 @@ namespace Cognite.OpcUa
                 }
             }
             Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
-
-            await DoHistoryRead(nodeList, callback, historyGranularity, token);
         }
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
@@ -932,30 +928,30 @@ namespace Cognite.OpcUa
                 AttributeId = Attributes.Value
             };
             eventListOperand.BrowsePath.Add(BrowseNames.EventType);
-            var eventOperands = eventIds.Select(id =>
-                new LiteralOperand
-                {
-                    Value = new Variant(id)
-                });
-
-            whereClause.Push(FilterOperator.Equals, eventListOperand, eventIds.First());
-
-            /*var nodeListOperand = new SimpleAttributeOperand
-            {
-                TypeDefinitionId = ObjectTypeIds.BaseEventType,
-                AttributeId = Attributes.Value
-            };
-            nodeListOperand.BrowsePath.Add("SourceNode");
-            var nodeOperands = nodeIds.Select(id =>
+            IEnumerable<FilterOperand> eventOperands = eventIds.Select(id =>
                 new LiteralOperand
                 {
                     Value = id
                 });
-            whereClause.Push(FilterOperator.InList, nodeOperands.ToArray());*/
-            foreach (var id in eventIds)
+            // This does not do what it looks like, rather it replaces whatever operation exists in the where clause and returns 
+            // this operation as a ContentFilterElement.
+            var elem1 = whereClause.Push(FilterOperator.InList, eventOperands.Prepend(eventListOperand).ToArray());
+
+            var nodeListOperand = new SimpleAttributeOperand
             {
-                Log.Information(id.ToString());
-            }
+                TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                AttributeId = Attributes.Value
+            };
+            nodeListOperand.BrowsePath.Add(BrowseNames.SourceNode);
+            IEnumerable<FilterOperand> nodeOperands = nodeIds.Select(id =>
+                new LiteralOperand
+                {
+                    Value = id
+                });
+
+            var elem2 = whereClause.Push(FilterOperator.InList, nodeOperands.Prepend(nodeListOperand).ToArray());
+            whereClause.Push(FilterOperator.And, elem1, elem2);
+
             var selectClauses = new SimpleAttributeOperandCollection();
             foreach (var browseName in new List<string> {"Message", "EventId", "SourceNode", "Time", "EventType"})
             {
@@ -1028,7 +1024,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception)
                 {
-                    Log.Error("Failed to create subscriptions");
+                    Log.Error("Failed to create event subscriptions");
                     throw;
                 }
                 finally

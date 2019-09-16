@@ -295,4 +295,20 @@ namespace Cognite.OpcUa
             return $"Update timeseries {Id} to {(isString ? stringValue : doubleValue.ToString())} at {timestamp.ToString()}";
         }
     }
+    public class BufferedEvent
+    {
+        public string Message { get; set; }
+        public string EventId { get; set; } // Base64
+        public NodeId SourceNode { get; set; }
+        public DateTime Time { get; set; }
+        public NodeId EventType { get; set; }
+        public string ToDebugDescription()
+        {
+            return $"EventId: {EventId}\n"
+                + $"    Message: {Message}\n"
+                + $"    SourceNodeId: {SourceNode}\n"
+                + $"    Time: {Time}\n"
+                + $"    EventTypeId: {EventType}\n";
+        }
+    }
 }

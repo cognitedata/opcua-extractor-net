@@ -17,6 +17,7 @@ namespace Cognite.OpcUa
         public bool failing;
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
+        public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
         private readonly InfluxClientConfig config;
         private readonly InfluxDBClient client;
         public InfluxPusher(InfluxClientConfig config)

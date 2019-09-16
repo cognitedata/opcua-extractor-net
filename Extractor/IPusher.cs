@@ -48,5 +48,6 @@ namespace Cognite.OpcUa
         /// </summary>
         void Reset();
         ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; }
+        ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; }
     }
 }

@@ -47,6 +47,7 @@ namespace Cognite.OpcUa
         public PusherConfig BaseConfig { get; private set; }
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
+        public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
 
         public CDFPusher(IServiceProvider clientProvider, CogniteClientConfig config)
         {
