@@ -1,4 +1,4 @@
-﻿# Template for the config file,
+# Template for the config file,
 # Defaults to config.yml in ./config.
 # The values here are generally the default values, except for the contents of lists etc.
 # Your config file can contain only a subset of these config options.
@@ -107,8 +107,9 @@ MetricsConfig:
     Instance:
 
 ExtractionConfig:
-    # Global prefix for externalId. Should be unique to prevent name conflicts.
-    GlobalPrefix: gp
+    # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.
+    # The externalId is: IdPrefix + NSMaps[nodeId.NamespaceUri] + nodeId.Identifier
+    IdPrefix: "gp:"
     # Specify prefixes on DisplayName to ignore.
     IgnorePrefix:
         # -prefix1

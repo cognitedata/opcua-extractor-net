@@ -1036,7 +1036,7 @@ namespace Cognite.OpcUa
             {
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
-            string extId = $"{extractionConfig.GlobalPrefix}.{prefix}:{nodeidstr}".Replace("\n", "");
+            string extId = $"{extractionConfig.IdPrefix}{prefix}{nodeidstr}".Replace("\n", "");
 
             // ExternalId is limited to 128 characters
             extId = extId.Trim();
