@@ -44,7 +44,7 @@ namespace Cognite.OpcUa
             var configDir = Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR");
             configDir = string.IsNullOrEmpty(configDir) ? "config/" : configDir;
             FullConfig fullConfig = Utils.GetConfig($"{configDir}/config.yml");
-            fullConfig.UAConfig.ConfigRoot = configDir;
+            fullConfig.Source.ConfigRoot = configDir;
 
             if (fullConfig == null) return -1;
             try
@@ -58,7 +58,7 @@ namespace Cognite.OpcUa
                 return -1;
             }
 
-            Logger.Configure(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.Logging);
 
 
             var services = new ServiceCollection();
@@ -67,7 +67,7 @@ namespace Cognite.OpcUa
 
             try
             {
-                SetupMetrics(fullConfig.MetricsConfig);
+                SetupMetrics(fullConfig.Metrics);
             }
             catch (Exception e)
             {
@@ -129,8 +129,8 @@ namespace Cognite.OpcUa
         /// <exception cref="Exception">On invalid config</exception>
         private static void ValidateConfig(FullConfig config)
         {
-            if (string.IsNullOrWhiteSpace(config.UAConfig.EndpointURL)) throw new Exception("Invalid EndpointURL");
-            if (config.UAConfig.PollingInterval < 0) throw new Exception("PollingInterval must be a positive number");
+            if (string.IsNullOrWhiteSpace(config.Source.EndpointURL)) throw new Exception("Invalid EndpointURL");
+            if (config.Source.PollingInterval < 0) throw new Exception("PollingInterval must be a positive number");
         }
         private static void Configure(IServiceCollection services)
         {
@@ -289,15 +289,15 @@ namespace Cognite.OpcUa
     }
     public class FullConfig
     {
-        public UAClientConfig UAConfig { get { return _uaConfig; } set { _uaConfig = value ?? _uaConfig; } }
+        public UAClientConfig Source { get { return _uaConfig; } set { _uaConfig = value ?? _uaConfig; } }
         private UAClientConfig _uaConfig = new UAClientConfig();
-        public LoggerConfig LoggerConfig { get { return _loggerConfig; } set { _loggerConfig = value ?? _loggerConfig; } }
+        public LoggerConfig Logging { get { return _loggerConfig; } set { _loggerConfig = value ?? _loggerConfig; } }
         private LoggerConfig _loggerConfig = new LoggerConfig();
-        public MetricsConfig MetricsConfig { get { return _metricsConfig; } set { _metricsConfig = value ?? _metricsConfig; } }
+        public MetricsConfig Metrics { get { return _metricsConfig; } set { _metricsConfig = value ?? _metricsConfig; } }
         private MetricsConfig _metricsConfig = new MetricsConfig();
         public List<PusherConfig> Pushers { get { return _pushers; } set { _pushers = value ?? _pushers; } }
         private List<PusherConfig> _pushers = new List<PusherConfig>();
-        public ExtractionConfig ExtractionConfig { get { return _extractionConfig; } set { _extractionConfig = value ?? _extractionConfig; } }
+        public ExtractionConfig Extraction { get { return _extractionConfig; } set { _extractionConfig = value ?? _extractionConfig; } }
         private ExtractionConfig _extractionConfig;
     }
     public class LoggerConfig

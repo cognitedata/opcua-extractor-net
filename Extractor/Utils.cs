@@ -119,7 +119,7 @@ namespace Cognite.OpcUa
 				string envLogdir = Environment.GetEnvironmentVariable("OPCUA_LOGGER_DIR");
                 if (!string.IsNullOrWhiteSpace(envLogdir))
 				{
-					fullConfig.LoggerConfig.LogFolder = envLogdir;
+					fullConfig.Logging.LogFolder = envLogdir;
 				}
             }
             catch (Exception e)

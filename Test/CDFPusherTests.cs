@@ -45,7 +45,7 @@ namespace Test
         public async Task TestBasicPushing(DummyFactory.MockMode mode, string serverType)
         {
             var fullConfig = Common.BuildConfig(serverType, 3);
-            Logger.Configure(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.Logging);
             Log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
             UAClient client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
@@ -77,7 +77,7 @@ namespace Test
             {
                 throw new Exception("No config");
             }
-            Logger.Configure(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.Logging);
             UAClient client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
@@ -136,7 +136,7 @@ namespace Test
             config.Debug = true;
             config.ApiKey = null;
 
-            Logger.Configure(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.Logging);
             UAClient client = new UAClient(fullConfig);
             var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
             var pusher = new CDFPusher(GetDummyProvider(factory), config);
@@ -172,9 +172,9 @@ namespace Test
         {
             var fullConfig = Common.BuildConfig("array", 6);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
-            fullConfig.ExtractionConfig.AllowStringVariables = true;
-            fullConfig.ExtractionConfig.MaxArraySize = 4;
-            Logger.Configure(fullConfig.LoggerConfig);
+            fullConfig.Extraction.AllowStringVariables = true;
+            fullConfig.Extraction.MaxArraySize = 4;
+            Logger.Configure(fullConfig.Logging);
 
             UAClient client = new UAClient(fullConfig);
             var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);

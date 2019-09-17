@@ -17,7 +17,7 @@ namespace Test
         {
             var fullConfig = Common.BuildConfig("basic", 6, "config.influxtest.yml");
             if (fullConfig == null) throw new Exception("Bad config");
-            Logger.Configure(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.Logging);
             UAClient client = new UAClient(fullConfig);
             var config = (InfluxClientConfig)fullConfig.Pushers.First();
             var pusher = new InfluxPusher(config);
@@ -57,9 +57,9 @@ namespace Test
         public async Task TestArrayData()
         {
             var fullConfig = Common.BuildConfig("array", 6, "config.influxtest.yml");
-            fullConfig.ExtractionConfig.MaxArraySize = 4;
-            fullConfig.ExtractionConfig.AllowStringVariables = true;
-            Logger.Configure(fullConfig.LoggerConfig);
+            fullConfig.Extraction.MaxArraySize = 4;
+            fullConfig.Extraction.AllowStringVariables = true;
+            Logger.Configure(fullConfig.Logging);
             UAClient client = new UAClient(fullConfig);
             var config = (InfluxClientConfig)fullConfig.Pushers.First();
             var pusher = new InfluxPusher(config);

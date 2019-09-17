@@ -78,10 +78,10 @@ namespace Cognite.OpcUa
         /// <param name="config">Full configuartion object</param>
         public UAClient(FullConfig config)
         {
-            this.config = config.UAConfig;
-            extractionConfig = config.ExtractionConfig;
-            historyGranularity = config.UAConfig.HistoryGranularity <= 0 ? TimeSpan.Zero
-                : TimeSpan.FromSeconds(config.UAConfig.HistoryGranularity);
+            this.config = config.Source;
+            extractionConfig = config.Extraction;
+            historyGranularity = config.Source.HistoryGranularity <= 0 ? TimeSpan.Zero
+                : TimeSpan.FromSeconds(config.Source.HistoryGranularity);
         }
         #region Session management
         /// <summary>
