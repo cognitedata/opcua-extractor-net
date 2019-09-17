@@ -366,11 +366,13 @@ namespace Cognite.OpcUa
         /// <param name="parentId">Id of the parent node</param>
         private void HandleNode(ReferenceDescription node, NodeId parentId)
         {
+            Log.Verbose("HandleNode {parent} {node}", parentId, node);
+
             if (node.NodeClass == NodeClass.Object)
             {
                 var bufferedNode = new BufferedNode(UAClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
-                Log.Verbose(bufferedNode.DisplayName);
+                Log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
                 commonQueue.Enqueue(bufferedNode);
             }
             else if (node.NodeClass == NodeClass.Variable)
@@ -381,7 +383,7 @@ namespace Cognite.OpcUa
                 {
                     bufferedNode.IsProperty = true;
                 }
-                Log.Verbose(bufferedNode.DisplayName);
+                Log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
                 commonQueue.Enqueue(bufferedNode);
             }
         }
@@ -441,7 +443,7 @@ namespace Cognite.OpcUa
                 var buffDps = ToDataPoint(datapoint, variable, uniqueId);
                 foreach (var buffDp in buffDps)
                 {
-                    Log.Verbose(buffDp.ToDebugDescription());
+                    Log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
                 }
                 foreach (var pusher in pushers)
                 {
@@ -483,7 +485,7 @@ namespace Cognite.OpcUa
                 var buffDps = ToDataPoint(datapoint, variable, uniqueId);
                 foreach (var buffDp in buffDps)
                 {
-                    Log.Verbose(buffDp.ToDebugDescription());
+                    Log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
                 }
                 foreach (var pusher in pushers)
                 {

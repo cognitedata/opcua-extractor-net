@@ -1,4 +1,4 @@
-﻿/* Cognite Extractor for OPC-UA
+/* Cognite Extractor for OPC-UA
 Copyright (C) 2019 Cognite AS
 
 This program is free software; you can redistribute it and/or
@@ -282,6 +282,7 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
         public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
         {
+            Log.Debug("BrowseDirectoryAsync {root}", root);
             lock (visitedNodesLock)
             {
                 visitedNodes.Clear();
@@ -355,15 +356,24 @@ namespace Cognite.OpcUa
                         0,
                         tobrowse,
                         out BrowseResultCollection results,
-                        out _
+                        out DiagnosticInfoCollection diagnostics
                     );
+
+                    foreach (var d in diagnostics)
+                    {
+                        Log.Warning("GetNodeChildren Browse diagnostics {msg}", d);
+                    }
+
                     var indexMap = new NodeId[lparents.Count()];
                     var continuationPoints = new ByteStringCollection();
                     int index = 0;
                     int bindex = 0;
+                    Log.Debug("GetNodeChildren lparents {count}", lparents.Count());
+                    Log.Debug("GetNodeChildren results {count}", results.Count);
                     foreach (var result in results)
                     {
                         NodeId nodeId = lparents.ElementAt(bindex++);
+                        Log.Debug("GetNodeChildren Browse result {nodeId}", nodeId);
                         finalResults[nodeId] = result.References;
                         if (result.ContinuationPoint != null)
                         {
@@ -379,14 +389,21 @@ namespace Cognite.OpcUa
                             false,
                             continuationPoints,
                             out BrowseResultCollection nextResults,
-                            out _
+                            out DiagnosticInfoCollection diagnosticsNext
                         );
+
+                        foreach (var d in diagnosticsNext)
+                        {
+                            Log.Warning("GetNodeChildren BrowseNext diagnostics {msg}", d);
+                        }
+
                         int nindex = 0;
                         int pindex = 0;
                         continuationPoints.Clear();
                         foreach (var result in nextResults)
                         {
                             NodeId nodeId = indexMap[pindex++];
+                            Log.Debug("GetNodeChildren BrowseNext result {nodeId}", nodeId);
                             finalResults[nodeId].AddRange(result.References);
                             if (result.ContinuationPoint != null)
                             {
@@ -436,16 +453,27 @@ namespace Cognite.OpcUa
                     nodeCnt += rdlist.Value.Count;
                     foreach (var rd in rdlist.Value)
                     {
-                        if (rd.NodeId == ObjectIds.Server) continue;
+                        if (rd.NodeId == ObjectIds.Server)
+                            continue;
                         if (extractionConfig.IgnorePrefix != null && extractionConfig.IgnorePrefix.Any(prefix =>
                             rd.DisplayName.Text.StartsWith(prefix, StringComparison.CurrentCulture))
-                            || extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(rd.DisplayName.Text)) continue;
+                            || extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(rd.DisplayName.Text))
+                        {
+                            Log.Debug("Ignoring filtered {expandedNodeId} {nodeId}", rd.NodeId, ToNodeId(rd.NodeId));
+                            continue;
+                        }
                         lock (visitedNodesLock)
                         {
-                            if (!visitedNodes.Add(ToNodeId(rd.NodeId))) continue;
+                            if (!visitedNodes.Add(ToNodeId(rd.NodeId)))
+                            {
+                                // if (Log.IsEnabled(Debug))
+                                Log.Debug("Ignoring visited {expandedNodeId} {nodeId}", rd.NodeId, ToNodeId(rd.NodeId));
+                                continue;
+                            }
                         }
                         callback(rd, parentId);
-                        if (rd.NodeClass == NodeClass.Variable) continue;
+                        if (rd.NodeClass == NodeClass.Variable)
+                            continue;
                         nextIds.Add(ToNodeId(rd.NodeId));
                     }
                 }
