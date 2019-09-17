@@ -1,4 +1,4 @@
-/* Cognite Extractor for OPC-UA
+﻿/* Cognite Extractor for OPC-UA
 Copyright (C) 2019 Cognite AS
 
 This program is free software; you can redistribute it and/or
@@ -245,7 +245,7 @@ namespace Cognite.OpcUa
     public class ExtractionConfig
     {
         public string IdPrefix { get; set; }
-        public IEnumerable<string> IgnorePrefix { get; set; }
+        public IEnumerable<string> IgnoreNamePrefix { get; set; }
         public IEnumerable<string> IgnoreName { get; set; }
         public ProtoNodeId RootNode { get { return _rootNode; } set { _rootNode = value ?? _rootNode; } }
         private ProtoNodeId _rootNode = new ProtoNodeId();
