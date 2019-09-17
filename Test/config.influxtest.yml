@@ -17,12 +17,12 @@ LoggerConfig:
     ConsoleLevel: "information"
 
 ExtractionConfig:
-    # Global prefix for externalId. Should be unique to prevent name conflicts.
-    GlobalPrefix: gp
+    # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations .
+    IdPrefix: "gp."
     NSMaps:
         # Map OPC-UA namespaces to prefixes in CDF. 
         # Ex: "urn:cognite:net:server": cns
         # Saves space compared to using the full URL. Using the ns index is not safe
         # If not specified, the full URI is used instead.
-        "urn:freeopcua:python:server": fps
-        "http://examples.freeopcua.github.io": efg
+        "urn:freeopcua:python:server": "fps:"
+        "http://examples.freeopcua.github.io": "efg:"
