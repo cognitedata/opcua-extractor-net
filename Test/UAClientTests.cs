@@ -37,7 +37,7 @@ namespace Test
         public async Task TestBasicMapping()
         {
             var fullConfig = Common.BuildConfig("basic", 0);
-            Logger.Configure(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.Logging);
             int totalDps = 0;
             TestPusher pusher = new TestPusher(new Dictionary<string, Action<List<BufferedNode>, List<BufferedVariable>, List<BufferedVariable>>>
             {
@@ -103,7 +103,7 @@ namespace Test
         public async Task TestBufferReadWrite()
         {
             var fullConfig = Common.BuildConfig("basic", 1);
-            Logger.Configure(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.Logging);
             var config = fullConfig.Pushers.First() as CogniteClientConfig;
             File.Create(config.BufferFile).Close();
             int dpRuns = 0;
@@ -151,7 +151,7 @@ namespace Test
         public async Task TestBulkRequests()
         {
             var fullConfig = Common.BuildConfig("full", 2);
-            Logger.Configure(fullConfig.LoggerConfig);
+            Logger.Configure(fullConfig.Logging);
             int totalDps = 0;
             using (var source = new CancellationTokenSource())
             using (var quitEvent = new ManualResetEvent(false))

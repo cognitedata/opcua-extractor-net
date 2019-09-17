@@ -1,6 +1,4 @@
-﻿# Template for the config file, usage: "dotnet opcua-extractor-net.dll [configfile]".
-# Defaults to config.yml in same directory as executable.
-UAConfig:
+﻿Source:
     # The URL of the OPC-UA server to connect to
     EndpointURL: "opc.tcp://localhost:4840"
 
@@ -15,12 +13,12 @@ Pushers:
         # Buffer file path
         BufferFile: buffer.bin
 
-LoggerConfig:
+Logging:
     # Writes log events at this level to the Console. 
     # If not present, or if the level is invalid, Console is not used. 
     ConsoleLevel: "information"
 
-ExtractionConfig:
+Extraction:
     # Global prefix for externalId. Should be unique to prevent name conflicts.
     IdPrefix: "gp."
   

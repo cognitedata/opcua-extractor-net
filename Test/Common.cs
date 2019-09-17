@@ -34,15 +34,15 @@ namespace Test
             }
             if (serverType == "basic")
             {
-                fullConfig.UAConfig.EndpointURL = "opc.tcp://localhost:4840";
+                fullConfig.Source.EndpointURL = "opc.tcp://localhost:4840";
             }
             else if (serverType == "full")
             {
-                fullConfig.UAConfig.EndpointURL = "opc.tcp://localhost:4841";
+                fullConfig.Source.EndpointURL = "opc.tcp://localhost:4841";
             }
             else if (serverType == "array")
             {
-                fullConfig.UAConfig.EndpointURL = "opc.tcp://localhost:4842";
+                fullConfig.Source.EndpointURL = "opc.tcp://localhost:4842";
             }
             return fullConfig;
         }
