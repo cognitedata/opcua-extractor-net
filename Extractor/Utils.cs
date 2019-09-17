@@ -106,29 +106,19 @@ namespace Cognite.OpcUa
         public static FullConfig GetConfig(string configPath)
         {
             FullConfig fullConfig = null;
-            try
+            using (var rawConfig = new StringReader(File.ReadAllText(configPath)))
             {
-                using (var rawConfig = new StringReader(File.ReadAllText(configPath)))
-                {
-                    var deserializer = new DeserializerBuilder()
-                        .WithTagMapping("!cdf", typeof(CogniteClientConfig))
-                        .WithTagMapping("!influx", typeof(InfluxClientConfig))
-                        .Build();
-                    fullConfig = deserializer.Deserialize<FullConfig>(rawConfig);
-                }
-				string envLogdir = Environment.GetEnvironmentVariable("OPCUA_LOGGER_DIR");
-                if (!string.IsNullOrWhiteSpace(envLogdir))
-				{
-					fullConfig.Logging.LogFolder = envLogdir;
-				}
+                var deserializer = new DeserializerBuilder()
+                    .WithTagMapping("!cdf", typeof(CogniteClientConfig))
+                    .WithTagMapping("!influx", typeof(InfluxClientConfig))
+                    .Build();
+                fullConfig = deserializer.Deserialize<FullConfig>(rawConfig);
             }
-            catch (Exception e)
-            {
-                Console.WriteLine("Failed to load config");
-                Console.WriteLine(e.Message);
-                Console.WriteLine(e.StackTrace);
-                throw;
-            }
+			string envLogdir = Environment.GetEnvironmentVariable("OPCUA_LOGGER_DIR");
+            if (!string.IsNullOrWhiteSpace(envLogdir))
+			{
+				fullConfig.Logging.LogFolder = envLogdir;
+			}
             return fullConfig;
         }
         /// <summary>

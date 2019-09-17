@@ -39,27 +39,39 @@ namespace Cognite.OpcUa
         /// Load config, start the <see cref="Logger"/>, start the <see cref="Extractor"/> then wait for exit signal
         /// </summary>
         /// <returns></returns>
-        static int Main()
+        static int Main(String[] args)
         {
+            // Temporary logger config for capturing logs during configuration.
+            Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
+
             var configDir = Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR");
             configDir = string.IsNullOrEmpty(configDir) ? "config/" : configDir;
-            FullConfig fullConfig = Utils.GetConfig($"{configDir}/config.yml");
+            FullConfig fullConfig = null;
+            try
+            {
+                var configFile = System.IO.Path.Combine(configDir, "config.yml");
+                Log.Information($"Loading config from {configFile}");
+                fullConfig = Utils.GetConfig(configFile);
+            }
+            catch (YamlDotNet.Core.YamlException e)
+            {
+                Log.Error("Failed to load config at {start}: {msg}", e.Start, e.InnerException?.Message ?? e.Message);
+                return -1;
+            }
+
             fullConfig.Source.ConfigRoot = configDir;
 
-            if (fullConfig == null) return -1;
             try
             {
                 ValidateConfig(fullConfig);
             }
             catch (Exception e)
             {
-                Console.WriteLine("Failed to load config");
-                Console.WriteLine(e.Message);
+                Log.Error(e, "Failed to validate config");
                 return -1;
             }
 
             Logger.Configure(fullConfig.Logging);
-
 
             var services = new ServiceCollection();
             Configure(services);
