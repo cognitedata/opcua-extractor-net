@@ -1,4 +1,4 @@
-# Template for the config file,
+﻿# Template for the config file,
 # Defaults to config.yml in ./config.
 # The values here are generally the default values, except for the contents of lists etc.
 # Your config file can contain only a subset of these config options.
@@ -111,7 +111,7 @@ ExtractionConfig:
     # The externalId is: IdPrefix + NSMaps[nodeId.NamespaceUri] + nodeId.Identifier
     IdPrefix: "gp:"
     # Specify prefixes on DisplayName to ignore.
-    IgnorePrefix:
+    IgnoreNamePrefix:
         # -prefix1
     # Specify specific DisplayNames to ignore.
     IgnoreName:

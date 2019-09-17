@@ -455,7 +455,7 @@ namespace Cognite.OpcUa
                     {
                         if (rd.NodeId == ObjectIds.Server)
                             continue;
-                        if (extractionConfig.IgnorePrefix != null && extractionConfig.IgnorePrefix.Any(prefix =>
+                        if (extractionConfig.IgnoreNamePrefix != null && extractionConfig.IgnoreNamePrefix.Any(prefix =>
                             rd.DisplayName.Text.StartsWith(prefix, StringComparison.CurrentCulture))
                             || extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(rd.DisplayName.Text))
                         {
