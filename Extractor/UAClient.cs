@@ -424,7 +424,7 @@ namespace Cognite.OpcUa
             do
             {
                 var references = Utils.ChunkBy(nextIds, config.BrowseNodesChunk)
-                    .Select(ids => GetNodeChildren(nextIds, token))
+                    .Select(ids => GetNodeChildren(ids, token))
                     .SelectMany(dict => dict)
                     .ToDictionary(val => val.Key, val => val.Value);
 
@@ -638,7 +638,8 @@ namespace Cognite.OpcUa
                         var monitor = new MonitoredItem(subscription.DefaultItem)
                         {
                             StartNodeId = node.Id,
-                            DisplayName = "Value: " + node.DisplayName
+                            DisplayName = "Value: " + node.DisplayName,
+                            SamplingInterval = config.PollingInterval
                         };
                         monitor.Notification += subscriptionHandler;
                         count++;
