@@ -110,9 +110,9 @@ namespace Cognite.OpcUa
             Started = true;
             startTime.Set(new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds());
             RootNode = config.Extraction.RootNode.ToNodeId(UAClient);
-            if (config.Extraction.NameOverrides != null)
+            if (config.Extraction.NodeMap != null)
             {
-                foreach (var kvp in config.Extraction.NameOverrides)
+                foreach (var kvp in config.Extraction.NodeMap)
                 {
                     UAClient.AddNodeOverride(kvp.Value.ToNodeId(UAClient), kvp.Key);
                 }
