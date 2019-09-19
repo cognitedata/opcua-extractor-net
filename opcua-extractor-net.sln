@@ -1,9 +1,23 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Extractor", "Extractor\Extractor.csproj", "{05A543F7-06ED-41FF-BC48-0E7FBD2BB3CF}"
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29306.81
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Extractor", "Extractor\Extractor.csproj", "{05A543F7-06ED-41FF-BC48-0E7FBD2BB3CF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", "{F853916C-CA29-48F9-99BF-3482B07CC85B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Test", "Test\Test.csproj", "{F853916C-CA29-48F9-99BF-3482B07CC85B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Misc", "Misc", "{F9D856F4-28DD-4A99-A325-E37860B8FDB4}"
+	ProjectSection(SolutionItems) = preProject
+		CONTRIBUTORS.md = CONTRIBUTORS.md
+		Dockerfile = Dockerfile
+		Dockerfile.build = Dockerfile.build
+		Jenkinsfile = Jenkinsfile
+		LICENSE.md = LICENSE.md
+		README.md = README.md
+		startservers.sh = startservers.sh
+		stopservers.sh = stopservers.sh
+		test.sh = test.sh
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -19,5 +33,11 @@ Global
 		{F853916C-CA29-48F9-99BF-3482B07CC85B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F853916C-CA29-48F9-99BF-3482B07CC85B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F853916C-CA29-48F9-99BF-3482B07CC85B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {801363C6-DCE6-4CA6-9935-27119F06737B}
 	EndGlobalSection
 EndGlobal
