@@ -1,9 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp2.2</TargetFramework>
     <RootNamespace>opcua_extractor_net</RootNamespace>
+    <AssemblyName>OpcuaExtractor</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="App.config" />
