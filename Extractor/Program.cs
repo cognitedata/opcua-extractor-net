@@ -261,7 +261,7 @@ namespace Cognite.OpcUa
         public IEnumerable<string> IgnoreName { get; set; }
         public ProtoNodeId RootNode { get { return _rootNode; } set { _rootNode = value ?? _rootNode; } }
         private ProtoNodeId _rootNode = new ProtoNodeId();
-        public Dictionary<string, ProtoNodeId> NameOverrides { get; set; }
+        public Dictionary<string, ProtoNodeId> NodeMap { get; set; }
         public IEnumerable<ProtoNodeId> IgnoreDataTypes { get; set; }
         public int MaxArraySize { get; set; } = 0;
         public bool AllowStringVariables { get; set; } = false;
