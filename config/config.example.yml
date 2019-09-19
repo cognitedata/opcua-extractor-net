@@ -134,7 +134,7 @@ Extraction:
         # Id of the root node, on the form "i=123" or "s=stringid" etc.
         NodeId:
     # Override mappings from externalId to opc-ua node, on the form
-    # "externalId": { namespaceUri: "uri", NodeId: "i=123" }
+    # "externalId": { NamespaceUri: "uri", NodeId: "i=123" }
     NodeMap:
         "UARoot": 
             NamespaceUri:
