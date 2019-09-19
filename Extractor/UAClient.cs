@@ -35,6 +35,7 @@ namespace Cognite.OpcUa
     {
         private readonly UAClientConfig config;
         private readonly ExtractionConfig extractionConfig;
+        private readonly EventConfig eventConfig;
         private Session session;
         private SessionReconnectHandler reconnectHandler;
         public Extractor Extractor { get; set; }
@@ -80,6 +81,7 @@ namespace Cognite.OpcUa
         {
             this.config = config.Source;
             extractionConfig = config.Extraction;
+            eventConfig = config.Events;
             historyGranularity = config.Source.HistoryGranularity <= 0 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.Source.HistoryGranularity);
         }
@@ -341,7 +343,11 @@ namespace Cognite.OpcUa
         /// <param name="parents">List of parents to browse</param>
         /// <param name="referenceTypes">Referencetype to browse, defaults to HierarchicalReferences</param>
         /// <returns></returns>
-        private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(IEnumerable<NodeId> parents, CancellationToken token, NodeId referenceTypes = null)
+        private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(
+            IEnumerable<NodeId> parents,
+            CancellationToken token,
+            NodeId referenceTypes,
+            uint nodeClassMask)
         {
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             foreach (var lparents in Utils.ChunkBy(parents, config.BrowseChunk))
@@ -353,7 +359,7 @@ namespace Cognite.OpcUa
                         NodeId = id,
                         ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
                         IncludeSubtypes = true,
-                        NodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
+                        NodeClassMask = nodeClassMask,
                         BrowseDirection = BrowseDirection.Forward,
                         ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
                             | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition
@@ -444,7 +450,12 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="roots">Root nodes to browse</param>
         /// <param name="callback">Callback for each node</param>
-        private void BrowseDirectory(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
+        private void BrowseDirectory(
+            IEnumerable<NodeId> roots,
+            Action<ReferenceDescription, NodeId> callback,
+            CancellationToken token,
+            NodeId referenceTypes = null,
+            uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object)
         {
             var nextIds = roots.ToList();
             int levelCnt = 0;
@@ -452,7 +463,7 @@ namespace Cognite.OpcUa
             do
             {
                 var references = Utils.ChunkBy(nextIds, config.BrowseNodesChunk)
-                    .Select(ids => GetNodeChildren(ids, token))
+                    .Select(ids => GetNodeChildren(ids, token, referenceTypes, nodeClassMask))
                     .SelectMany(dict => dict)
                     .ToDictionary(val => val.Key, val => val.Value);
 
@@ -491,6 +502,202 @@ namespace Cognite.OpcUa
             } while (nextIds.Any());
             Log.Information("Found {NumUANodes} nodes in {NumNodeLevels} levels", nodeCnt, levelCnt);
             depth.Set(levelCnt);
+        }
+        #endregion
+
+        #region Get node data
+        /// <summary>
+        /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
+        /// </summary>
+        /// <param name="nodes">List of nodes to fetch attributes for</param>
+        /// <param name="common">List of attributes to fetch for all nodes</param>
+        /// <param name="variables">List of attributes to fetch for variable nodes only</param>
+        /// <returns>A list of <see cref="DataValue"/>s</returns>
+        private IEnumerable<DataValue> GetNodeAttributes(IEnumerable<BufferedNode> nodes,
+            IEnumerable<uint> common,
+            IEnumerable<uint> variables,
+            CancellationToken token)
+        {
+            if (!nodes.Any()) return new List<DataValue>();
+            var readValueIds = new ReadValueIdCollection();
+            foreach (var node in nodes)
+            {
+                if (node == null) continue;
+                foreach (var attribute in common)
+                {
+                    readValueIds.Add(new ReadValueId
+                    {
+                        AttributeId = attribute,
+                        NodeId = node.Id
+                    });
+                }
+                if (node.IsVariable)
+                {
+                    foreach (var attribute in variables)
+                    {
+                        readValueIds.Add(new ReadValueId
+                        {
+                            AttributeId = attribute,
+                            NodeId = node.Id
+                        });
+                    }
+                }
+            }
+            IEnumerable<DataValue> values = new DataValueCollection();
+            IncOperations();
+            try
+            {
+                int count = 0;
+                foreach (var nextValues in Utils.ChunkBy(readValueIds, config.AttributesChunk))
+                {
+                    if (token.IsCancellationRequested) break;
+                    count++;
+                    session.Read(
+                        null,
+                        0,
+                        TimestampsToReturn.Source,
+                        new ReadValueIdCollection(nextValues),
+                        out DataValueCollection lvalues,
+                        out _
+                    );
+                    attributeRequests.Inc();
+                    values = values.Concat(lvalues);
+                    Log.Information("Read {NumAttributesRead} attributes", lvalues.Count);
+                }
+                Log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations", readValueIds.Count, count);
+            }
+            catch (Exception)
+            {
+                Log.Error("Failed to fetch attributes from opcua");
+                attributeRequestFailures.Inc();
+                throw;
+            }
+            finally
+            {
+                DecOperations();
+            }
+            return values;
+        }
+        /// <summary>
+        /// Gets Description for all nodes, and DataType, Historizing and ValueRank for Variable nodes, then updates the given list of nodes
+        /// </summary>
+        /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
+        public void ReadNodeData(IEnumerable<BufferedNode> nodes, CancellationToken token)
+        {
+            nodes = nodes.Where(node => !node.IsVariable || node is BufferedVariable variable && variable.Index == -1);
+            var variableAttributes = new List<uint>
+            {
+                Attributes.DataType,
+                Attributes.Historizing,
+                Attributes.ValueRank
+            };
+            if (extractionConfig.MaxArraySize > 0)
+            {
+                variableAttributes.Add(Attributes.ArrayDimensions);
+            }
+            var values = GetNodeAttributes(nodes, new List<uint>
+            {
+                Attributes.Description
+            }, variableAttributes, token);
+            var enumerator = values.GetEnumerator();
+            foreach (BufferedNode node in nodes)
+            {
+                if (token.IsCancellationRequested) return;
+                enumerator.MoveNext();
+                node.Description = enumerator.Current.GetValue("");
+                if (node.IsVariable && node is BufferedVariable vnode)
+                {
+                    enumerator.MoveNext();
+                    NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
+                    vnode.SetDataType(dataType, numericDataTypes);
+                    enumerator.MoveNext();
+                    vnode.Historizing = config.History && enumerator.Current.GetValue(false);
+                    enumerator.MoveNext();
+                    vnode.ValueRank = enumerator.Current.GetValue(0);
+                    if (extractionConfig.MaxArraySize > 0)
+                    {
+                        enumerator.MoveNext();
+                        vnode.ArrayDimensions = (int[])enumerator.Current.GetValue(typeof(int[]));
+                    }
+                }
+            }
+        }
+        /// <summary>
+        /// Gets the values of the given list of variables, then updates each variable with a BufferedDataPoint
+        /// </summary>
+        /// <remarks>
+        /// Note that there is a fixed maximum message size, and we here fetch a large number of values at the same time.
+        /// To avoid complications, avoid fetching data of unknown large size here.
+        /// Due to this, only nodes with ValueRank -1 (Scalar) will be fetched.
+        /// </remarks>
+        /// <param name="nodes">List of variables to be updated</param>
+        public void ReadNodeValues(IEnumerable<BufferedVariable> nodes, CancellationToken token)
+        {
+            nodes = nodes.Where(node => !node.DataRead && node.Index == -1).ToList();
+            var values = GetNodeAttributes(nodes.Where((BufferedVariable buff) => buff.ValueRank == ValueRanks.Scalar),
+                new List<uint>(),
+                new List<uint> { Attributes.Value },
+                token
+            );
+            var enumerator = values.GetEnumerator();
+            foreach (var node in nodes)
+            {
+                node.DataRead = true;
+                if (node.ValueRank == ValueRanks.Scalar)
+                {
+                    enumerator.MoveNext();
+                    node.SetDataPoint(enumerator.Current?.Value,
+                        enumerator.Current == null ? enumerator.Current.SourceTimestamp : DateTime.MinValue,
+                        this);
+                }
+            }
+        }
+        /// <summary>
+        /// Gets properties for variables in nodes given, then updates all properties in given list of nodes with relevant data and values.
+        /// </summary>
+        /// <param name="nodes">Nodes to be updated with properties</param>
+        public void GetNodeProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
+        {
+            var properties = new HashSet<BufferedVariable>();
+            Log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
+            var idsToCheck = new List<NodeId>();
+            foreach (var node in nodes)
+            {
+                if (node.IsVariable)
+                {
+                    if (node is BufferedVariable variable && variable.Index == -1)
+                    {
+                        idsToCheck.Add(node.Id);
+                    }
+                }
+                else
+                {
+                    if (node.properties != null)
+                    {
+                        foreach (var property in node.properties)
+                        {
+                            properties.Add(property);
+                        }
+                    }
+                }
+            }
+            var result = GetNodeChildren(idsToCheck, token, ReferenceTypeIds.HasProperty, (uint)NodeClass.Variable);
+            foreach (var parent in nodes)
+            {
+                if (!result.ContainsKey(parent.Id)) continue;
+                foreach (var child in result[parent.Id])
+                {
+                    var property = new BufferedVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
+                    properties.Add(property);
+                    if (parent.properties == null)
+                    {
+                        parent.properties = new List<BufferedVariable>();
+                    }
+                    parent.properties.Add(property);
+                }
+            }
+            ReadNodeData(properties, token);
+            ReadNodeValues(properties, token);
         }
         #endregion
 
@@ -721,259 +928,11 @@ namespace Cognite.OpcUa
             }
             Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
         }
-        /// <summary>
-        /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
-        /// </summary>
-        /// <param name="nodes">List of nodes to fetch attributes for</param>
-        /// <param name="common">List of attributes to fetch for all nodes</param>
-        /// <param name="variables">List of attributes to fetch for variable nodes only</param>
-        /// <returns>A list of <see cref="DataValue"/>s</returns>
-        private IEnumerable<DataValue> GetNodeAttributes(IEnumerable<BufferedNode> nodes,
-            IEnumerable<uint> common,
-            IEnumerable<uint> variables,
-            CancellationToken token)
-        {
-            if (!nodes.Any()) return new List<DataValue>();
-            var readValueIds = new ReadValueIdCollection();
-            foreach (var node in nodes)
-            {
-                if (node == null) continue;
-                foreach (var attribute in common)
-                {
-                    readValueIds.Add(new ReadValueId
-                    {
-                        AttributeId = attribute,
-                        NodeId = node.Id
-                    });
-                }
-                if (node.IsVariable)
-                {
-                    foreach (var attribute in variables)
-                    {
-                        readValueIds.Add(new ReadValueId
-                        {
-                            AttributeId = attribute,
-                            NodeId = node.Id
-                        });
-                    }
-                }
-            }
-            IEnumerable<DataValue> values = new DataValueCollection();
-            IncOperations();
-            try
-            {
-                int count = 0;
-                foreach (var nextValues in Utils.ChunkBy(readValueIds, config.AttributesChunk))
-                {
-                    if (token.IsCancellationRequested) break;
-                    count++;
-                    session.Read(
-                        null,
-                        0,
-                        TimestampsToReturn.Source,
-                        new ReadValueIdCollection(nextValues),
-                        out DataValueCollection lvalues,
-                        out _
-                    );
-                    attributeRequests.Inc();
-                    values = values.Concat(lvalues);
-                    Log.Information("Read {NumAttributesRead} attributes", lvalues.Count);
-                }
-                Log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations", readValueIds.Count, count);
-            }
-            catch (Exception)
-            {
-                Log.Error("Failed to fetch attributes from opcua");
-                attributeRequestFailures.Inc();
-                throw;
-            }
-            finally
-            {
-                DecOperations();
-            }
-            return values;
-        }
-        /// <summary>
-        /// Gets Description for all nodes, and DataType, Historizing and ValueRank for Variable nodes, then updates the given list of nodes
-        /// </summary>
-        /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
-        public void ReadNodeData(IEnumerable<BufferedNode> nodes, CancellationToken token)
-        {
-            nodes = nodes.Where(node => !node.IsVariable || node is BufferedVariable variable && variable.Index == -1);
-            var variableAttributes = new List<uint>
-            {
-                Attributes.DataType,
-                Attributes.Historizing,
-                Attributes.ValueRank
-            };
-            if (extractionConfig.MaxArraySize > 0)
-            {
-                variableAttributes.Add(Attributes.ArrayDimensions);
-            }
-            var values = GetNodeAttributes(nodes, new List<uint>
-            {
-                Attributes.Description
-            }, variableAttributes, token);
-            var enumerator = values.GetEnumerator();
-            foreach (BufferedNode node in nodes)
-            {
-                if (token.IsCancellationRequested) return;
-                enumerator.MoveNext();
-                node.Description = enumerator.Current.GetValue("");
-                if (node.IsVariable && node is BufferedVariable vnode)
-                {
-                    enumerator.MoveNext();
-                    NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
-                    vnode.SetDataType(dataType, numericDataTypes);
-                    enumerator.MoveNext();
-                    // config to disable history for all nodes
-                    vnode.Historizing = config.History && enumerator.Current.GetValue(false);
-                    enumerator.MoveNext();
-                    vnode.ValueRank = enumerator.Current.GetValue(0);
-                    if (extractionConfig.MaxArraySize > 0)
-                    {
-                        enumerator.MoveNext();
-                        vnode.ArrayDimensions = (int[])enumerator.Current.GetValue(typeof(int[]));
-                    }
-                }
-            }
-        }
-        /// <summary>
-        /// Gets the values of the given list of variables, then updates each variable with a BufferedDataPoint
-        /// </summary>
-        /// <remarks>
-        /// Note that there is a fixed maximum message size, and we here fetch a large number of values at the same time.
-        /// To avoid complications, avoid fetching data of unknown large size here.
-        /// Due to this, only nodes with ValueRank -1 (Scalar) will be fetched.
-        /// </remarks>
-        /// <param name="nodes">List of variables to be updated</param>
-        public void ReadNodeValues(IEnumerable<BufferedVariable> nodes, CancellationToken token)
-        {
-            nodes = nodes.Where(node => !node.DataRead && node.Index == -1).ToList();
-            var values = GetNodeAttributes(nodes.Where((BufferedVariable buff) => buff.ValueRank == ValueRanks.Scalar),
-                new List<uint>(),
-                new List<uint> { Attributes.Value },
-                token
-            );
-            var enumerator = values.GetEnumerator();
-            foreach (var node in nodes)
-            {
-                node.DataRead = true;
-                if (node.ValueRank == ValueRanks.Scalar)
-                {
-                    enumerator.MoveNext();
-                    node.SetDataPoint(enumerator.Current?.Value,
-                        enumerator.Current == null ? enumerator.Current.SourceTimestamp : DateTime.MinValue,
-                        this);
-                }
-            }
-        }
-        /// <summary>
-        /// Gets properties for variables in nodes given, then updates all properties in given list of nodes with relevant data and values.
-        /// </summary>
-        /// <param name="nodes">Nodes to be updated with properties</param>
-        public void GetNodeProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
-        {
-            var properties = new HashSet<BufferedVariable>();
-            Log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
-            var idsToCheck = new List<NodeId>();
-            foreach (var node in nodes)
-            {
-                if (node.IsVariable)
-                {
-                    if (node is BufferedVariable variable && variable.Index == -1)
-                    {
-                        idsToCheck.Add(node.Id);
-                    }
-                }
-                else
-                {
-                    if (node.properties != null)
-                    {
-                        foreach (var property in node.properties)
-                        {
-                            properties.Add(property);
-                        }
-                    }
-                }
-            }
-            var result = GetNodeChildren(idsToCheck, token, ReferenceTypeIds.HasProperty);
-            foreach (var parent in nodes)
-            {
-                if (!result.ContainsKey(parent.Id)) continue;
-                foreach (var child in result[parent.Id])
-                {
-                    var property = new BufferedVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
-                    properties.Add(property);
-                    if (parent.properties == null)
-                    {
-                        parent.properties = new List<BufferedVariable>();
-                    }
-                    parent.properties.Add(property);
-                }
-            }
-            ReadNodeData(properties, token);
-            ReadNodeValues(properties, token);
-        }
-        public EventFilter BuildEventFilter(IEnumerable<NodeId> eventIds, IEnumerable<NodeId> nodeIds)
-        {
-            /*
-             * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds AND SourceNode IN nodeIds;
-             * using the internal query language in OPC-UA
-             */
-            var whereClause = new ContentFilter();
-            var eventListOperand = new SimpleAttributeOperand
-            {
-                TypeDefinitionId = ObjectTypeIds.BaseEventType,
-                AttributeId = Attributes.Value
-            };
-            eventListOperand.BrowsePath.Add(BrowseNames.EventType);
-            IEnumerable<FilterOperand> eventOperands = eventIds.Select(id =>
-                new LiteralOperand
-                {
-                    Value = id
-                });
-            // This does not do what it looks like, rather it replaces whatever operation exists in the where clause and returns 
-            // this operation as a ContentFilterElement.
-            var elem1 = whereClause.Push(FilterOperator.InList, eventOperands.Prepend(eventListOperand).ToArray());
-
-            var nodeListOperand = new SimpleAttributeOperand
-            {
-                TypeDefinitionId = ObjectTypeIds.BaseEventType,
-                AttributeId = Attributes.Value
-            };
-            nodeListOperand.BrowsePath.Add(BrowseNames.SourceNode);
-            IEnumerable<FilterOperand> nodeOperands = nodeIds.Select(id =>
-                new LiteralOperand
-                {
-                    Value = id
-                });
-
-            var elem2 = whereClause.Push(FilterOperator.InList, nodeOperands.Prepend(nodeListOperand).ToArray());
-            whereClause.Push(FilterOperator.And, elem1, elem2);
-
-            var selectClauses = new SimpleAttributeOperandCollection();
-            foreach (var browseName in new List<string> {"Message", "EventId", "SourceNode", "Time", "EventType"})
-            {
-                var operand = new SimpleAttributeOperand
-                {
-                    AttributeId = Attributes.Value,
-                    TypeDefinitionId = ObjectTypeIds.BaseEventType
-                };
-                operand.BrowsePath.Add(browseName);
-                selectClauses.Add(operand);
-            }
-            return new EventFilter
-            {
-                WhereClause = whereClause,
-                SelectClauses = selectClauses
-            };
-
-        }
-        public void SubscribeToEvents(IEnumerable<NodeId> emitters,
+        public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> SubscribeToEvents(IEnumerable<NodeId> emitters,
             IEnumerable<NodeId> eventIds,
             IEnumerable<NodeId> nodeIds,
-            MonitoredItemNotificationEventHandler subscriptionHandler)
+            MonitoredItemNotificationEventHandler subscriptionHandler,
+            CancellationToken token)
         {
             var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "EventListener");
             if (subscription == null)
@@ -988,7 +947,11 @@ namespace Cognite.OpcUa
             var hasSubscription = subscription.MonitoredItems
                 .Select(sub => sub.ResolvedNodeId)
                 .ToHashSet();
-            var filter = BuildEventFilter(eventIds, nodeIds);
+
+            var collector = new EventFieldCollector(this, eventIds);
+            var fields = collector.GetEventIdFields(token);
+
+            var filter = BuildEventFilter(fields, nodeIds);
             foreach (var emitter in emitters)
             {
                 if (!hasSubscription.Contains(emitter))
@@ -1033,6 +996,139 @@ namespace Cognite.OpcUa
                 }
             }
             Log.Information("Created {EventSubCount} event subscriptions", count);
+            return fields;
+        }
+        #endregion
+
+        #region events
+        private EventFilter BuildEventFilter(Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> eventFields, IEnumerable<NodeId> nodeIds)
+        {
+            /*
+             * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds AND SourceNode IN nodeIds;
+             * using the internal query language in OPC-UA
+             */
+            var whereClause = new ContentFilter();
+            var eventListOperand = new SimpleAttributeOperand
+            {
+                TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                AttributeId = Attributes.Value
+            };
+            eventListOperand.BrowsePath.Add(BrowseNames.EventType);
+            IEnumerable<FilterOperand> eventOperands = eventFields.Keys.Select(id =>
+                new LiteralOperand
+                {
+                    Value = id
+                });
+            // This does not do what it looks like, rather it replaces whatever operation exists in the where clause and returns 
+            // this operation as a ContentFilterElement.
+            var elem1 = whereClause.Push(FilterOperator.InList, eventOperands.Prepend(eventListOperand).ToArray());
+
+            var nodeListOperand = new SimpleAttributeOperand
+            {
+                TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                AttributeId = Attributes.Value
+            };
+            nodeListOperand.BrowsePath.Add(BrowseNames.SourceNode);
+            IEnumerable<FilterOperand> nodeOperands = nodeIds.Select(id =>
+                new LiteralOperand
+                {
+                    Value = id
+                });
+
+            var elem2 = whereClause.Push(FilterOperator.InList, nodeOperands.Prepend(nodeListOperand).ToArray());
+            whereClause.Push(FilterOperator.And, elem1, elem2);
+
+            var fieldList = eventFields
+                .Aggregate((IEnumerable<(NodeId, QualifiedName)>)new List<(NodeId, QualifiedName)>(), (agg, kvp) => agg.Concat(kvp.Value))
+                .GroupBy(variable => variable.Item2)
+                .Select(items => items.FirstOrDefault());
+
+            if (!fieldList.Any())
+            {
+                Log.Warning("Missing valid event fields, no results will be returned");
+            }
+            var selectClauses = new SimpleAttributeOperandCollection();
+            foreach (var field in fieldList)
+            {
+                if (eventConfig.ExcludeProperties.Contains(field.Item2.Name)
+                    || eventConfig.BaseExcludeProperties.Contains(field.Item2.Name) && field.Item1 == ObjectTypeIds.BaseEventType) continue;
+                var operand = new SimpleAttributeOperand
+                {
+                    AttributeId = Attributes.Value,
+                    TypeDefinitionId = field.Item1
+                };
+                operand.BrowsePath.Add(field.Item2);
+                selectClauses.Add(operand);
+                Log.Information("Select event attribute {id}: {name}", field.Item1, field.Item2);
+            }
+            return new EventFilter
+            {
+                WhereClause = whereClause,
+                SelectClauses = selectClauses
+            };
+        }
+        private class EventFieldCollector
+        {
+            readonly UAClient UAClient;
+            readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> properties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
+            readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> localProperties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
+            readonly IEnumerable<NodeId> targetEventIds;
+            public EventFieldCollector(UAClient parent, IEnumerable<NodeId> targetEventIds)
+            {
+                UAClient = parent;
+                this.targetEventIds = targetEventIds;
+            }
+            public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventIdFields(CancellationToken token)
+            {
+                properties[ObjectTypeIds.BaseEventType] = new List<ReferenceDescription>();
+                localProperties[ObjectTypeIds.BaseEventType] = new List<ReferenceDescription>();
+
+                UAClient.BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType },
+                    EventTypeCallback, token, ReferenceTypeIds.HierarchicalReferences, (uint)NodeClass.ObjectType | (uint)NodeClass.Variable);
+                var propVariables = new Dictionary<ExpandedNodeId, (NodeId, QualifiedName)>();
+                foreach (var kvp in localProperties)
+                {
+                    foreach (var description in kvp.Value)
+                    {
+                        if (!propVariables.ContainsKey(description.NodeId))
+                        {
+                            propVariables[description.NodeId] = (kvp.Key, description.BrowseName);
+                        }
+                    }
+                }
+                return targetEventIds
+                    .Where(id => properties.ContainsKey(id))
+                    .ToDictionary(id => id, id => properties[id]
+                        .Where(desc => propVariables.ContainsKey(desc.NodeId))
+                        .Select(desc => propVariables[desc.NodeId]));
+            }
+            private void EventTypeCallback(ReferenceDescription child, NodeId parent)
+            {
+                var id = UAClient.ToNodeId(child.NodeId);
+                if (child.NodeClass == NodeClass.ObjectType && !properties.ContainsKey(id))
+                {
+                    var parentProperties = new List<ReferenceDescription>();
+                    if (properties.ContainsKey(parent))
+                    {
+                        foreach (var prop in properties[parent])
+                        {
+                            parentProperties.Add(prop);
+                        }
+                    }
+                    properties[id] = parentProperties;
+                    localProperties[id] = new List<ReferenceDescription>();
+                }
+                if (child.ReferenceTypeId == ReferenceTypeIds.HasProperty)
+                {
+                    properties[parent] = properties[parent].Append(child);
+                    localProperties[parent] = localProperties[parent].Append(child);
+                }
+                else
+                {
+                    Log.Information("Found new event class: {id}", child.NodeId);
+                }
+            }
+
         }
         #endregion
 

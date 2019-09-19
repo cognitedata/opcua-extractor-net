@@ -28,6 +28,7 @@ namespace Cognite.OpcUa
         }
         public async Task PushDataPoints(CancellationToken token)
         {
+            BufferedEventQueue.Clear();
             var dataPointList = new List<BufferedDataPoint>();
 
             int count = 0;

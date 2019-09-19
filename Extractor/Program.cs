@@ -332,7 +332,9 @@ namespace Cognite.OpcUa
         public List<PusherConfig> Pushers { get { return _pushers; } set { _pushers = value ?? _pushers; } }
         private List<PusherConfig> _pushers = new List<PusherConfig>();
         public ExtractionConfig Extraction { get { return _extractionConfig; } set { _extractionConfig = value ?? _extractionConfig; } }
-        private ExtractionConfig _extractionConfig;
+        private ExtractionConfig _extractionConfig = new ExtractionConfig();
+        public EventConfig Events { get { return _eventConfig; } set { _eventConfig = value ?? _eventConfig; } }
+        private EventConfig _eventConfig = new EventConfig();
     }
     public class LoggerConfig
     {
@@ -352,16 +354,26 @@ namespace Cognite.OpcUa
         public int PushInterval { get; set; } = 1000;
         public string Instance { get; set; }
     }
+    public class EventConfig
+    {
+        public IEnumerable<ProtoNodeId> EventIds { get; set; }
+        public IEnumerable<ProtoNodeId> EmitterIds { get; set; }
+        public IEnumerable<string> ExcludeProperties { get { return _excludeProperties; } set { _excludeProperties = value ?? _excludeProperties; } }
+        private IEnumerable<string> _excludeProperties = new List<string>();
+        public IEnumerable<string> BaseExcludeProperties { get; } = new List<string> { "LocalTime", "ReceiveTime", "SourceName" };
+        public Dictionary<string, string> DestinationNameMap { get { return _destinationNameMap; } set { _destinationNameMap = value ?? _destinationNameMap; } }
+        private Dictionary<string, string> _destinationNameMap = new Dictionary<string, string>();
+    }
     public class ProtoNodeId
     {
         public string NamespaceUri { get; set; }
         public string NodeId { get; set; }
-        public NodeId ToNodeId(UAClient client)
+        public NodeId ToNodeId(UAClient client, NodeId defaultValue = null)
         {
             var node = client.ToNodeId(NodeId, NamespaceUri);
             if (node.IsNullNodeId)
             {
-                return ObjectIds.ObjectsFolder;
+                return defaultValue ?? ObjectIds.ObjectsFolder;
             }
             return node;
         }

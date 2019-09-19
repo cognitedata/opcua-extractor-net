@@ -47,6 +47,7 @@ namespace Cognite.OpcUa
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
 
+        public ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> ActiveEvents { get; } = new ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>>();
         /// <summary>
         /// The set of uniqueIds discovered, but not yet synced with the pusher
         /// </summary>
@@ -298,8 +299,21 @@ namespace Cognite.OpcUa
             try
             {
                 UAClient.SubscribeToNodes(tsList, SubscriptionHandler, token);
-                UAClient.SubscribeToEvents(new List<NodeId> { ObjectIds.Server }, new List<NodeId> { ObjectTypeIds.BaseEventType },
-                    nodeList.Concat(varList).Select(node => node.Id), EventSubscriptionHandler);
+                if (config.Events.EmitterIds != null && config.Events.EventIds != null && config.Events.EmitterIds.Any() && config.Events.EventIds.Any())
+                {
+                    var eventFields = UAClient.SubscribeToEvents(
+                        config.Events.EmitterIds.Select(proto => proto.ToNodeId(UAClient, ObjectIds.Server)).ToList(),
+                        config.Events.EventIds.Select(proto => proto.ToNodeId(UAClient, ObjectTypeIds.BaseEventType)).ToList(),
+                        nodeList.Concat(varList).Select(node => node.Id),
+                        EventSubscriptionHandler,
+                        token);
+
+                    foreach (var field in eventFields)
+                    {
+                        ActiveEvents[field.Key] = field.Value;
+                    }
+                }
+
                 await UAClient.DoHistoryRead(tsList, HistoryDataHandler, token);
             }
             catch (Exception e)
@@ -475,22 +489,57 @@ namespace Cognite.OpcUa
         }
         private void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
-            var triggeredEvent = eventArgs.NotificationValue as EventFieldList;
-            if (triggeredEvent == null)
+            if (!(eventArgs.NotificationValue is EventFieldList triggeredEvent))
             {
                 Log.Warning("No event in event subscription notification: {}", item.StartNodeId);
                 return;
             }
             var eventFields = triggeredEvent.EventFields;
+            if (!(item.Filter is EventFilter filter))
+            {
+                Log.Warning("Triggered event without filter");
+                return;
+            }
+
+            var eventIdIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType && atr.BrowsePath[0] == BrowseNames.EventType);
+            if (eventIdIndex < 0)
+            {
+                Log.Warning("Triggered event has no type, ignoring.");
+                return;
+            }
+            var eventId = eventFields[eventIdIndex].Value as NodeId;
+            var targetEventFields = ActiveEvents[eventId];
+
+            var extractedProperties = new Dictionary<string, object>();
+
+            for (int i = 0; i < filter.SelectClauses.Count; i++)
+            {
+                var clause = filter.SelectClauses[i];
+                if (targetEventFields.Any(field => field.Item1 == clause.TypeDefinitionId && field.Item2 == clause.BrowsePath[0] && clause.BrowsePath.Count == 1))
+                {
+                    var name = clause.BrowsePath[0].Name;
+                    if (config.Events.DestinationNameMap.ContainsKey(name) && name != "EventId" && name != "SourceNode" && name != "EventType")
+                    {
+                        name = config.Events.DestinationNameMap[name];
+                    }
+                    if (!extractedProperties.ContainsKey(name) || extractedProperties[name] == null)
+                    {
+                        extractedProperties[name] = eventFields[i].Value;
+                    }
+                }
+            }
             try
             {
                 var buffEvent = new BufferedEvent
                 {
-                    Message = ((LocalizedText)eventFields[0].Value).Text,
-                    EventId = config.ExtractionConfig.GlobalPrefix + "." + Convert.ToBase64String((byte[])eventFields[1].Value),
-                    SourceNode = (NodeId)eventFields[2].Value,
-                    Time = (DateTime)eventFields[3].Value,
-                    EventType = (NodeId)eventFields[4].Value
+                    Message = UAClient.ConvertToString(extractedProperties.GetValueOrDefault("Message")),
+                    EventId = config.Extraction.IdPrefix + Convert.ToBase64String((byte[])extractedProperties["EventId"]),
+                    SourceNode = (NodeId)extractedProperties["SourceNode"],
+                    Time = (DateTime)extractedProperties.GetValueOrDefault("Time"),
+                    EventType = (NodeId)extractedProperties["EventType"],
+                    MetaData = extractedProperties
+                        .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode" && kvp.Key != "Time" && kvp.Key != "EventType")
+                        .ToDictionary(kvp => kvp.Key, kvp => UAClient.ConvertToString(kvp.Value))
                 };
                 Log.Debug(buffEvent.ToDebugDescription());
                 foreach (var pusher in pushers)
