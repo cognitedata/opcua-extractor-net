@@ -267,8 +267,8 @@ namespace Cognite.OpcUa
         public IEnumerable<ProtoNodeId> IgnoreDataTypes { get; set; }
         public int MaxArraySize { get; set; } = 0;
         public bool AllowStringVariables { get; set; } = false;
-        public Dictionary<string, string> NSMaps { get { return _nsMaps; } set { _nsMaps = value ?? _nsMaps; } }
-        private Dictionary<string, string> _nsMaps = new Dictionary<string, string>();
+        public Dictionary<string, string> NamespaceMap { get { return _namespaceMap; } set { _namespaceMap = value ?? _namespaceMap; } }
+        private Dictionary<string, string> _namespaceMap = new Dictionary<string, string>();
         public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
     }
     public abstract class PusherConfig
