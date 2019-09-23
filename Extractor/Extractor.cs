@@ -129,6 +129,7 @@ namespace Cognite.OpcUa
                         try
                         {
                             await pusher.PushDataPoints(token);
+                            await pusher.PushEvents(token);
                             await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
                         }
                         catch (TaskCanceledException)
@@ -518,6 +519,7 @@ namespace Cognite.OpcUa
                 if (targetEventFields.Any(field => field.Item1 == clause.TypeDefinitionId && field.Item2 == clause.BrowsePath[0] && clause.BrowsePath.Count == 1))
                 {
                     var name = clause.BrowsePath[0].Name;
+                    if (config.Events.ExcludeProperties.Contains(name) || config.Events.BaseExcludeProperties.Contains(name)) continue;
                     if (config.Events.DestinationNameMap.ContainsKey(name) && name != "EventId" && name != "SourceNode" && name != "EventType")
                     {
                         name = config.Events.DestinationNameMap[name];
@@ -539,7 +541,7 @@ namespace Cognite.OpcUa
                     EventType = (NodeId)extractedProperties["EventType"],
                     MetaData = extractedProperties
                         .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode" && kvp.Key != "Time" && kvp.Key != "EventType")
-                        .ToDictionary(kvp => kvp.Key, kvp => UAClient.ConvertToString(kvp.Value))
+                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
                 };
                 Log.Debug(buffEvent.ToDebugDescription());
                 foreach (var pusher in pushers)

@@ -198,6 +198,8 @@ Events:
     # overrides in DestinationNameMap. If multiple properties are mapped to the same value, the first non-null is used.
 
     # If "StartTime", "EndTime" or "SubType" are specified, either directly or through the map, these are used as event properties instead of metadata.
+    # StartTime and EndTime should be either DateTime, or a number corresponding to the number of milliseconds since January 1 1970.
+    # If no StartTime or EndTime are specified, both are set to the "Time" property of BaseEventType.
     # "Type" may be overriden case-by-case using "NameOverrides" in Extraction configuration, or in a dynamic way here. If no "Type" is specified,
     # it is generated from Event NodeId in the same way ExternalIds are generated for normal nodes.
     DestinationNameMap:

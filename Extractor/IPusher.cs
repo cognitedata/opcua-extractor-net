@@ -41,8 +41,11 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push nodes, emptying the queue
         /// </summary>
-        /// <param name="nodeQueue">Nodes to be pushed</param>
         Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token);
+        /// <summary>
+        /// Push events, emptying the event queue
+        /// </summary>
+        Task PushEvents(CancellationToken token);
         /// <summary>
         /// Reset relevant persistent information in the pusher, preparing it to be restarted
         /// </summary>

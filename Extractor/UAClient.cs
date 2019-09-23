@@ -951,6 +951,11 @@ namespace Cognite.OpcUa
             var collector = new EventFieldCollector(this, eventIds);
             var fields = collector.GetEventIdFields(token);
 
+            foreach (var kvp in fields)
+            {
+                Log.Information(kvp.Key + ", " + kvp.Value.Count());
+            }
+
             var filter = BuildEventFilter(fields, nodeIds);
             foreach (var emitter in emitters)
             {
@@ -1122,10 +1127,6 @@ namespace Cognite.OpcUa
                 {
                     properties[parent] = properties[parent].Append(child);
                     localProperties[parent] = localProperties[parent].Append(child);
-                }
-                else
-                {
-                    Log.Information("Found new event class: {id}", child.NodeId);
                 }
             }
 

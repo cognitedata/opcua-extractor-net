@@ -306,7 +306,7 @@ namespace Cognite.OpcUa
         public NodeId SourceNode { get; set; }
         public DateTime Time { get; set; }
         public NodeId EventType { get; set; }
-        public Dictionary<string, string> MetaData { get; set; }
+        public Dictionary<string, object> MetaData { get; set; }
         public string ToDebugDescription()
         {
             var metadata = "{";

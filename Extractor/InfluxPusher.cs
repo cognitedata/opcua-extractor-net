@@ -28,7 +28,6 @@ namespace Cognite.OpcUa
         }
         public async Task PushDataPoints(CancellationToken token)
         {
-            BufferedEventQueue.Clear();
             var dataPointList = new List<BufferedDataPoint>();
 
             int count = 0;
@@ -55,6 +54,11 @@ namespace Cognite.OpcUa
                 await client.PostPointsAsync(config.Database, influxPoints, 10000);
             });
             await Task.WhenAll(tasks);
+        }
+        public Task PushEvents(CancellationToken token)
+        {
+            BufferedEventQueue.Clear();
+            return Task.CompletedTask;
         }
 
         public async Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
