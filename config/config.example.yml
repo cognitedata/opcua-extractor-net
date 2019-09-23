@@ -109,44 +109,52 @@ Metrics:
 
 Extraction:
     # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.
-    # The externalId is: IdPrefix + NSMaps[nodeId.NamespaceUri] + nodeId.Identifier
+    # The externalId is: IdPrefix + NamespaceMap[nodeId.NamespaceUri] + nodeId.Identifier
     IdPrefix: "gp:"
+    
     # Specify prefixes on DisplayName to ignore.
     IgnoreNamePrefix:
         # -prefix1
+    
     # Specify specific DisplayNames to ignore.
     IgnoreName:
         # -name1
+    
     # List of NodeIds corresponding to DataTypes that should be ignored.
     IgnoreDataTypes:
         # - NamespaceUri:
         #	NodeId:
+    
     # Maximum size of array variables. Only arrays with the ArrayDimensions property in opc-ua specified will be used,
     # leave at 0 to only allow scalar values.
     # Note that some server implementations have issues with the ArrayDimensions property, so it is not fetched at all if MaxArraySize is 0
     MaxArraySize: 0
+    
     # Set to true to allow fetching string variables. This means that all variables with non-numeric type is converted to string in some way.
     AllowStringVariables: false
-    # Root node in OPC-UA. Leave empty to use the objects folder.
+    
+    # Source node in the OPC-UA server. Leave empty to use the top level Objects node.
     RootNode:
         # Full name of the namespace of the root node.
         NamespaceUri:
         # Id of the root node, on the form "i=123" or "s=stringid" etc.
         NodeId:
-    # Override mappings from externalId to opc-ua node, on the form
-    # "externalId": { NamespaceUri: "uri", NodeId: "i=123" }
+
+    # Override mappings between OPC UA node id and externalId, allowing e.g. the RootNode to be mapped to
+    # a particular asset in CDF. Applies to both assets and time series.
+    # NodeMap:
+    #   - "externalId": { NamespaceUri: "uri", NodeId: "i=123" }
     NodeMap:
-        "UARoot": 
-            NamespaceUri:
-            NodeId:
   
-    NSMaps:
-        # Map OPC-UA namespaces to prefixes in CDF. 
-        # Ex: "urn:cognite:net:server": cns
-        # Saves space compared to using the full URL. Using the ns index is not safe
-        # If not specified, the full URI is used instead.
-        # "urn:freeopcua:python:server": fps
-        # "http://examples.freeopcua.github.io": efg
+    # Map OPC-UA namespaces to prefixes in CDF. If not mapped, the full namespace URI is used.
+    # Saves space compared to using the full URL. Using the ns index is not safe as the order can change on the server.
+    # For example:
+    # NamespaceMap:
+    #  - "urn:cognite:net:server": cns
+    #  - "urn:freeopcua:python:server": fps
+    #  - "http://examples.freeopcua.github.io": efg
+    NamespaceMap:
+
     # Add custom numeric types using their nodeId. IsStep indicates whether the datatype is discrete.
     # This also overwrite default behavior, so it is possible to make Integer discrete, etc.
     # Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type or similar, 

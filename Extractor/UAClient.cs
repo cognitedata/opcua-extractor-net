@@ -1017,7 +1017,7 @@ namespace Cognite.OpcUa
                 namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
             }
             string prefix;
-            if (extractionConfig.NSMaps.TryGetValue(namespaceUri, out string prefixNode))
+            if (extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode))
             {
                 prefix = prefixNode;
             }

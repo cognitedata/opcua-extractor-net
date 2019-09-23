@@ -44,9 +44,9 @@ There is a "run" script in each, which just launches the executable from the top
 
 ### Configuration
 The config file should contain description of most config options, a few are notable
- - `GlobalPrefix` and the `NSMaps` category are used to create ExternalIds, and if these are changed after the extractor
+ - `Extraction.IdPrefix` and the `NamespaceMap` category are used to create ExternalIds, and if these are changed after the extractor
  has already been run, then new assets and timeseries will be created. The externalId will be on the form
- `[GlobalPrefix].[Mapped or full namespace]:[Identifiertype and identifier]`. If GlobalPrefix is chosen to be unique within the project then the ExternalId should remain unique.
+ `[Extraction.IdPrefix].[Mapped or full namespace]:[Identifiertype and identifier]`. If `Extraction.IdPrefix` is chosen to be unique within the project then the ExternalId should remain unique.
  Note that there is an exception to this if the IDs are longer than 128 characters in total. externalId in CDF is limited to 256 characters, but NodeIds may have identifiers of up to 4096 characters. To fit with CDF we cut off everything after the first 256 characters in the final ID. This means that if the namespaces are long enough, we potentially only get 180 - 200 characters from the identifier itself. If this creates duplicates then the duplicates will be ignored.
  - `RootAsset` and `RootNode` are used to designate the root node and root asset, these are mapped such
  that the RootAsset and RootNode will be in the same place in the final hierarchy. In theory, multiple extractors could
