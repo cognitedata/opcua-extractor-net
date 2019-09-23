@@ -46,6 +46,8 @@ namespace Test
         {
             var fullConfig = Common.BuildConfig(serverType, 3);
             Logger.Configure(fullConfig.Logging);
+            Log.Information("Starting OPC UA Extractor version {version}", Cognite.OpcUa.Version.GetVersion());
+            Log.Information("Revision information: {status}", Cognite.OpcUa.Version.Status());
             Log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
             UAClient client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();

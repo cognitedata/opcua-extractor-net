@@ -59,7 +59,8 @@ namespace Cognite.OpcUa
                 return -1;
             }
 
-            Log.Information("Starting OPC UA Extractor version {version}", "0.x-alpha");
+            Log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
+            Log.Information("Revision information: {status}", Version.Status());
 
             fullConfig.Source.ConfigRoot = configDir;
 
