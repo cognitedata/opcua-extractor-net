@@ -121,7 +121,7 @@ podTemplate(
                     packProject('linux-x64', "$version", "run.sh")
                 }
                 stage('Deploy to github release') {
-                    withCredentials([usernamePassword(credentialsId: '5ad41c53-4df7-4ca8-a276-9822375568b3', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
+                    withCredentials([usernamePassword(credentialsId: 'jenkins-cognite', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
                         sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version opcua-extractor.win-x64.${version}.zip opcua-extractor.win81-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip")
                     }               
                 }
