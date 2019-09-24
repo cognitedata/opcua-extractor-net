@@ -363,6 +363,9 @@ namespace Cognite.OpcUa
         public IEnumerable<string> BaseExcludeProperties { get; } = new List<string> { "LocalTime", "ReceiveTime", "SourceName" };
         public Dictionary<string, string> DestinationNameMap { get { return _destinationNameMap; } set { _destinationNameMap = value ?? _destinationNameMap; } }
         private Dictionary<string, string> _destinationNameMap = new Dictionary<string, string>();
+        public bool DoHistoryRead { get; set; } = false;
+        public string ReceiveTimeProperty { get; set; } = "ReceiveTime";
+        public int HistoryReadChunk { get; set; } = 1000;
     }
     public class ProtoNodeId
     {

@@ -176,11 +176,10 @@ namespace Cognite.OpcUa
         {
             var eventList = new List<BufferedEvent>();
             int count = 0;
-            while (BufferedEventQueue.TryDequeue(out BufferedEvent buffEvent))
+            while (BufferedEventQueue.TryDequeue(out BufferedEvent buffEvent) && count++ < 1000)
             {
                 if (nodeToAssetIds.ContainsKey(buffEvent.SourceNode) || config.Debug)
                 {
-                    count++;
                     eventList.Add(buffEvent);
                 }
                 else
@@ -195,11 +194,35 @@ namespace Cognite.OpcUa
             }
             Log.Information("Push {NumEventsToPush} events to CDF", count);
             if (config.Debug) return;
-            var events = eventList.Select(evt => EventToCDFEvent(evt));
+            IEnumerable<EventEntity> events = eventList.Select(evt => EventToCDFEvent(evt)).ToList();
             var client = GetClient();
             try
             {
                 await client.Events.CreateAsync(events, token);
+            }
+            catch (ResponseException ex)
+            {
+                if (ex.Duplicated.Any())
+                {
+                    var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString());
+                    events = events.Where(evt => !duplicates.Contains(evt.ExternalId));
+                    try
+                    {
+                        await client.Events.CreateAsync(events, token);
+                    }
+                    catch (Exception exc)
+                    {
+                        Log.Error(exc, "Failed to push {NumFailedEvents} events to CDF", count);
+                        eventPushFailures.Inc();
+                        return;
+                    }
+                }
+                else
+                {
+                    Log.Error(ex, "Failed to push {NumFailedEvents} events to CDF", count);
+                    eventPushFailures.Inc();
+                    return;
+                }
             }
             catch (Exception ex)
             {

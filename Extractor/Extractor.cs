@@ -36,6 +36,7 @@ namespace Cognite.OpcUa
     {
         private readonly UAClient UAClient;
         private bool buffersEmpty;
+        private bool eventsBuffersEmpty;
         private readonly FullConfig config;
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
@@ -51,8 +52,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// The set of uniqueIds discovered, but not yet synced with the pusher
         /// </summary>
-        public ISet<string> NotInSync { get; } = new HashSet<string>();
-        public object NotInSyncLock { get; } = new object();
+        private ISet<NodeId> NotInSync { get; } = new HashSet<NodeId>();
+        private ISet<NodeId> EventsNotInSync { get; } = new HashSet<NodeId>();
+        private object NotInSyncLock { get; } = new object();
+        private object EventsNotInSyncLock { get; } = new object();
 
         public bool Started { get; private set; }
 
@@ -130,6 +133,7 @@ namespace Cognite.OpcUa
                         {
                             await pusher.PushDataPoints(token);
                             await pusher.PushEvents(token);
+                            Utils.WriteDateToFile(DateTime.Now);
                             await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
                         }
                         catch (TaskCanceledException)
@@ -278,7 +282,7 @@ namespace Cognite.OpcUa
                     {
                         lock (NotInSyncLock)
                         {
-                            NotInSync.Add(UAClient.GetUniqueId(node.Id));
+                            NotInSync.Add(node.Id);
                         }
                     }
                 }
@@ -302,20 +306,30 @@ namespace Cognite.OpcUa
                 UAClient.SubscribeToNodes(tsList, SubscriptionHandler, token);
                 if (config.Events.EmitterIds != null && config.Events.EventIds != null && config.Events.EmitterIds.Any() && config.Events.EventIds.Any())
                 {
+                    var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(UAClient, ObjectIds.Server)).ToList();
                     var eventFields = UAClient.SubscribeToEvents(
-                        config.Events.EmitterIds.Select(proto => proto.ToNodeId(UAClient, ObjectIds.Server)).ToList(),
+                        emitters,
                         config.Events.EventIds.Select(proto => proto.ToNodeId(UAClient, ObjectTypeIds.BaseEventType)).ToList(),
                         nodeList.Concat(varList).Select(node => node.Id),
                         EventSubscriptionHandler,
                         token);
-
+                    if (config.Events.DoHistoryRead)
+                    {
+                        lock (EventsNotInSync)
+                        {
+                            foreach (var emitter in emitters)
+                            {
+                                EventsNotInSync.Add(emitter);
+                            }
+                        }
+                    }
                     foreach (var field in eventFields)
                     {
                         ActiveEvents[field.Key] = field.Value;
                     }
                 }
 
-                await UAClient.DoHistoryRead(tsList, HistoryDataHandler, token);
+                await UAClient.HistoryReadData(tsList, HistoryDataHandler, token);
             }
             catch (Exception e)
             {
@@ -464,7 +478,7 @@ namespace Cognite.OpcUa
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
             string uniqueId = UAClient.GetUniqueId(item.ResolvedNodeId);
-            if (!buffersEmpty && NotInSync.Contains(uniqueId)) return;
+            if (!buffersEmpty && NotInSync.Contains(item.ResolvedNodeId)) return;
             var variable = ActiveVariables[item.ResolvedNodeId];
 
             foreach (var datapoint in item.DequeueValues())
@@ -488,28 +502,16 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        private void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
+        private BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields)
         {
-            if (!(eventArgs.NotificationValue is EventFieldList triggeredEvent))
-            {
-                Log.Warning("No event in event subscription notification: {}", item.StartNodeId);
-                return;
-            }
-            var eventFields = triggeredEvent.EventFields;
-            if (!(item.Filter is EventFilter filter))
-            {
-                Log.Warning("Triggered event without filter");
-                return;
-            }
-
-            var eventIdIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType && atr.BrowsePath[0] == BrowseNames.EventType);
-            if (eventIdIndex < 0)
+            var eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType && atr.BrowsePath[0] == BrowseNames.EventType);
+            if (eventTypeIndex < 0)
             {
                 Log.Warning("Triggered event has no type, ignoring.");
-                return;
+                return null;
             }
-            var eventId = eventFields[eventIdIndex].Value as NodeId;
-            var targetEventFields = ActiveEvents[eventId];
+            var eventType = eventFields[eventTypeIndex].Value as NodeId;
+            var targetEventFields = ActiveEvents[eventType];
 
             var extractedProperties = new Dictionary<string, object>();
 
@@ -543,15 +545,34 @@ namespace Cognite.OpcUa
                         .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode" && kvp.Key != "Time" && kvp.Key != "EventType")
                         .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
                 };
-                Log.Debug(buffEvent.ToDebugDescription());
-                foreach (var pusher in pushers)
-                {
-                    pusher.BufferedEventQueue.Enqueue(buffEvent);
-                }
+                return buffEvent;
             }
             catch (Exception e)
             {
                 Log.Error(e, "Failed to construct bufferedEvent from raw fields");
+                return null;
+            }
+        }
+        private void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
+        {
+            if (!(eventArgs.NotificationValue is EventFieldList triggeredEvent))
+            {
+                Log.Warning("No event in event subscription notification: {}", item.StartNodeId);
+                return;
+            }
+            var eventFields = triggeredEvent.EventFields;
+            if (!(item.Filter is EventFilter filter))
+            {
+                Log.Warning("Triggered event without filter");
+                return;
+            }
+            if (!eventsBuffersEmpty && EventsNotInSync.Contains(item.ResolvedNodeId)) return;
+            var buffEvent = ConstructEvent(filter, eventFields);
+            if (buffEvent == null) return;
+            Log.Debug(buffEvent.ToDebugDescription());
+            foreach (var pusher in pushers)
+            {
+                pusher.BufferedEventQueue.Enqueue(buffEvent);
             }
         }
         /// <summary>
@@ -560,21 +581,29 @@ namespace Cognite.OpcUa
         /// <param name="data">Collection of data to be handled</param>
         /// <param name="final">True if this is the final call for this node, and the lock may be removed</param>
         /// <param name="nodeid">Id of the node in question</param>
-        private void HistoryDataHandler(HistoryData data, bool final, NodeId nodeid)
+        private int HistoryDataHandler(IEncodeable rawData, bool final, NodeId nodeid, HistoryReadDetails details)
         {
-            string uniqueId = UAClient.GetUniqueId(nodeid);
             if (final)
             {
                 lock (NotInSyncLock)
                 {
-                    NotInSync.Remove(uniqueId);
-                    buffersEmpty = NotInSync.Count == 0;
+                    NotInSync.Remove(nodeid);
+                    buffersEmpty = !NotInSync.Any();
                 }
             }
-            if (data == null || data.DataValues == null) return;
+            if (rawData == null) return 0;
+            if (!(rawData is HistoryData data))
+            {
+                Log.Warning("Incorrect result type of history read data");
+                return 0;
+            }
+            string uniqueId = UAClient.GetUniqueId(nodeid);
+
+            if (data == null || data.DataValues == null) return 0;
             var variable = ActiveVariables[nodeid];
 
-            if (data.DataValues == null) return;
+            if (data.DataValues == null) return 0;
+            int cnt = 0;
             foreach (var datapoint in data.DataValues)
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
@@ -586,6 +615,7 @@ namespace Cognite.OpcUa
                 foreach (var buffDp in buffDps)
                 {
                     Log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
+                    cnt++;
                 }
                 foreach (var pusher in pushers)
                 {
@@ -595,6 +625,48 @@ namespace Cognite.OpcUa
                     }
                 }
             }
+            return cnt;
+        }
+        private int HistoryEventHandler(IEncodeable rawEvts, bool final, NodeId nodeid, HistoryReadDetails details)
+        {
+            if (final)
+            {
+                lock (EventsNotInSyncLock)
+                {
+                    EventsNotInSync.Remove(nodeid);
+                    eventsBuffersEmpty = !EventsNotInSync.Any();
+                }
+            }
+            if (rawEvts == null) return 0;
+            if (!(rawEvts is HistoryEvent evts))
+            {
+                Log.Warning("Incorrect return type of history read events");
+                return 0;
+            }
+            if (!(details is ReadEventDetails eventDetails))
+            {
+                Log.Warning("Incorrect details type of history read events");
+                return 0;
+            }
+            var filter = eventDetails.Filter;
+            if (filter == null)
+            {
+                Log.Warning("No event filter, ignoring");
+                return 0;
+            }
+            if (evts == null || evts.Events == null) return 0;
+            int cnt = 0;
+            foreach (var evt in evts.Events)
+            {
+                var buffEvt = ConstructEvent(filter, evt.EventFields);
+                if (buffEvt == null) continue;
+                foreach (var pusher in pushers)
+                {
+                    pusher.BufferedEventQueue.Enqueue(buffEvt);
+                }
+                cnt++;
+            }
+            return cnt;
         }
         #endregion
     }

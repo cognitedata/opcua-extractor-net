@@ -48,6 +48,7 @@ namespace Cognite.OpcUa
         public bool Failed { get; private set; }
         private readonly TimeSpan historyGranularity;
         private CancellationToken liveToken;
+        private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> eventFields;
 
         private int pendingOperations;
         private readonly object pendingOpLock = new object();
@@ -703,36 +704,30 @@ namespace Cognite.OpcUa
 
         #region synchronization
         /// <summary>
-        /// Read historydata for the requested nodes and call the callback after each call to HistoryRead
+        /// General method to perform history-read operations for a list of nodes, with a given callback and HistoryReadDetails
         /// </summary>
-        /// <param name="toRead">Variables to read for</param>
-        /// <param name="callback">Callback, takes a <see cref="HistoryReadResultCollection"/>,
-        /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
-        private void DoHistoryReadChunk(IEnumerable<BufferedVariable> toRead,
-            Action<HistoryData, bool, NodeId> callback,
+        /// <param name="details"></param>
+        /// <param name="toRead"></param>
+        /// <param name="callback"></param>
+        /// <param name="token"></param>
+        private void DoHistoryRead(HistoryReadDetails details,
+            IEnumerable<NodeId> toRead,
+            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
         {
-            DateTime lowest = DateTime.MinValue;
-            lowest = toRead.Select((bvar) => { return bvar.LatestTimestamp; }).Min();
-            var details = new ReadRawModifiedDetails
-            {
-                StartTime = lowest,
-                EndTime = DateTime.Now.AddDays(1),
-                NumValuesPerNode = (uint)config.HistoryReadChunk
-            };
             int opCnt = 0;
             int ptCnt = 0;
             IncOperations();
             var ids = new HistoryReadValueIdCollection();
             var indexMap = new NodeId[toRead.Count()];
             int index = 0;
-            foreach (var node in toRead)
+            foreach (var id in toRead)
             {
                 ids.Add(new HistoryReadValueId
                 {
-                    NodeId = node.Id,
+                    NodeId = id,
                 });
-                indexMap[index] = node.Id;
+                indexMap[index] = id;
                 index++;
             }
             try
@@ -755,9 +750,8 @@ namespace Cognite.OpcUa
                     opCnt++;
                     foreach (var data in results)
                     {
-                        var hdata = ExtensionObject.ToEncodeable(data.HistoryData) as HistoryData;
-                        ptCnt += hdata?.DataValues?.Count ?? 0;
-                        callback(hdata, data == null || hdata == null || data.ContinuationPoint == null, indexMap[prevIndex]);
+                        var hdata = ExtensionObject.ToEncodeable(data.HistoryData);
+                        ptCnt += callback(hdata, data == null || hdata == null || data.ContinuationPoint == null, indexMap[prevIndex], details);
                         if (data.ContinuationPoint != null)
                         {
                             ids.Add(new HistoryReadValueId
@@ -785,8 +779,35 @@ namespace Cognite.OpcUa
                     ptCnt, opCnt, index);
             }
         }
-        public async Task DoHistoryRead(IEnumerable<BufferedVariable> toRead,
-            Action<HistoryData, bool, NodeId> callback,
+        /// <summary>
+        /// Read historydata for the requested nodes and call the callback after each call to HistoryRead
+        /// </summary>
+        /// <param name="toRead">Variables to read for</param>
+        /// <param name="callback">Callback, takes a <see cref="HistoryReadResultCollection"/>,
+        /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
+        private void HistoryReadDataChunk(IEnumerable<BufferedVariable> toRead,
+            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
+            CancellationToken token)
+        {
+            DateTime lowest = DateTime.MinValue;
+            lowest = toRead.Select((bvar) => { return bvar.LatestTimestamp; }).Min();
+            var details = new ReadRawModifiedDetails
+            {
+                StartTime = lowest,
+                EndTime = DateTime.Now.AddDays(1),
+                NumValuesPerNode = (uint)config.HistoryReadChunk
+            };
+            try
+            {
+                DoHistoryRead(details, toRead.Select(bv => bv.Id), callback, token);
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+        public async Task HistoryReadData(IEnumerable<BufferedVariable> toRead,
+            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
         {
             var tasks = new List<Task>();
@@ -796,11 +817,11 @@ namespace Cognite.OpcUa
                 {
                     if (variable.Historizing)
                     {
-                        tasks.Add(Task.Run(() => DoHistoryRead(new List<BufferedVariable> { variable }, callback, token), token));
+                        tasks.Add(Task.Run(() => HistoryReadDataChunk(new List<BufferedVariable> { variable }, callback, token), token));
                     }
                     else
                     {
-                        callback(null, true, variable.Id);
+                        callback(null, true, variable.Id, null);
                     }
                 }
                 try
@@ -829,7 +850,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    callback(null, true, variable.Id);
+                    callback(null, true, variable.Id, null);
                 }
             }
             if (!groupedVariables.Any()) return;
@@ -837,12 +858,41 @@ namespace Cognite.OpcUa
             {
                 foreach (var nextNodes in Utils.ChunkBy(nodes, config.HistoryReadNodesChunk))
                 {
-                    tasks.Add(Task.Run(() => DoHistoryReadChunk(nextNodes, callback, token)));
+                    tasks.Add(Task.Run(() => HistoryReadDataChunk(nextNodes, callback, token)));
                 }
             }
             try
             {
                 await Task.WhenAll(tasks);
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+        public void HistoryReadEvents(IEnumerable<NodeId> emitters,
+            IEnumerable<NodeId> eventIds,
+            IEnumerable<NodeId> nodeIds,
+            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
+            CancellationToken token)
+        {
+            if (eventFields == null)
+            {
+                var collector = new EventFieldCollector(this, eventIds);
+                eventFields = collector.GetEventIdFields(token);
+            }
+            var latestTime = Utils.ReadDateFromFile();
+            var filter = BuildEventFilter(nodeIds, latestTime);
+            var details = new ReadEventDetails
+            {
+                StartTime = latestTime == DateTime.Now ? DateTime.Now : latestTime.Subtract(TimeSpan.FromMinutes(10)),
+                EndTime = DateTime.Now.AddDays(1),
+                NumValuesPerNode = (uint)eventConfig.HistoryReadChunk,
+                Filter = filter
+            };
+            try
+            {
+                DoHistoryRead(details, emitters, callback, token);
             }
             catch (Exception)
             {
@@ -948,15 +998,13 @@ namespace Cognite.OpcUa
                 .Select(sub => sub.ResolvedNodeId)
                 .ToHashSet();
 
-            var collector = new EventFieldCollector(this, eventIds);
-            var fields = collector.GetEventIdFields(token);
-
-            foreach (var kvp in fields)
+            if (eventFields == null)
             {
-                Log.Information(kvp.Key + ", " + kvp.Value.Count());
+                var collector = new EventFieldCollector(this, eventIds);
+                eventFields = collector.GetEventIdFields(token);
             }
 
-            var filter = BuildEventFilter(fields, nodeIds);
+            var filter = BuildEventFilter(nodeIds);
             foreach (var emitter in emitters)
             {
                 if (!hasSubscription.Contains(emitter))
@@ -1001,16 +1049,18 @@ namespace Cognite.OpcUa
                 }
             }
             Log.Information("Created {EventSubCount} event subscriptions", count);
-            return fields;
+            return eventFields;
         }
         #endregion
 
         #region events
-        private EventFilter BuildEventFilter(Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> eventFields, IEnumerable<NodeId> nodeIds)
+        private EventFilter BuildEventFilter(IEnumerable<NodeId> nodeIds,
+            DateTime? receivedAfter = null)
         {
             /*
              * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds AND SourceNode IN nodeIds;
              * using the internal query language in OPC-UA
+             * If receivedAfter is specified, then also "AND [ReceiveTimeProperty] > receivedAfter"
              */
             var whereClause = new ContentFilter();
             var eventListOperand = new SimpleAttributeOperand
@@ -1041,7 +1091,23 @@ namespace Cognite.OpcUa
                 });
 
             var elem2 = whereClause.Push(FilterOperator.InList, nodeOperands.Prepend(nodeListOperand).ToArray());
-            whereClause.Push(FilterOperator.And, elem1, elem2);
+            var elem3 = whereClause.Push(FilterOperator.And, elem1, elem2);
+
+            if (receivedAfter != null && receivedAfter > DateTime.MinValue)
+            {
+                var eventTimeOperand = new SimpleAttributeOperand
+                {
+                    TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                    AttributeId = Attributes.Value
+                };
+                eventTimeOperand.BrowsePath.Add(eventConfig.ReceiveTimeProperty);
+                var timeOperand = new LiteralOperand
+                {
+                    Value = receivedAfter.Value
+                };
+                var elem4 = whereClause.Push(FilterOperator.GreaterThan, eventTimeOperand, timeOperand);
+                whereClause.Push(FilterOperator.And, elem3, elem4);
+            }
 
             var fieldList = eventFields
                 .Aggregate((IEnumerable<(NodeId, QualifiedName)>)new List<(NodeId, QualifiedName)>(), (agg, kvp) => agg.Concat(kvp.Value))

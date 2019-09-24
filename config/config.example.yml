@@ -204,5 +204,11 @@ Events:
     # it is generated from Event NodeId in the same way ExternalIds are generated for normal nodes.
     DestinationNameMap:
         #Property1: SubType
-
->>>>>>> Add configuration for events
+    # Set to true to enable history read of events. Events will be read from opc-ua history on startup.
+    EnableHistoryRead: false
+    # Attribute to use for filtering history read. The last time read is stored locally, in latest.bin, and only events received by the server after this time are history read.
+    # This should be the browsename of the attribute that stores the local server time when an event is received. One of "ReceiveTime", "Time", "LocalTime".
+    # Leave empty to always read the full history on startup. (This might be slow if there is a lot of history).
+    ReceiveTimeProperty: "ReceiveTime"
+    # Max number of events per history read operation.
+    HistoryReadChunk: 1000
