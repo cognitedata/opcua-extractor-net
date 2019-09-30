@@ -58,6 +58,8 @@ namespace Cognite.OpcUa
         private object EventsNotInSyncLock { get; } = new object();
 
         private HashSet<NodeId> managedNodes;
+        private bool pushEvents = false;
+        private bool pushData = false;
 
         public bool Started { get; private set; }
 
@@ -134,7 +136,10 @@ namespace Cognite.OpcUa
                         try
                         {
                             await pusher.PushDataPoints(token);
-                            await pusher.PushEvents(token);
+                            if (pushEvents)
+                            {
+                                await pusher.PushEvents(token);
+                            }
                             Utils.WriteDateToFile(DateTime.Now);
                             await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
                         }
@@ -290,7 +295,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-
+            pushData = fullTsList.Any();
             var pushes = pushers.Select(pusher => pusher.PushNodes(nodeList, fullTsList, token)).ToList();
             var result = await Task.WhenAll(pushes);
             if (!result.All(res => res))
@@ -308,6 +313,7 @@ namespace Cognite.OpcUa
                 UAClient.SubscribeToNodes(tsList, SubscriptionHandler, token);
                 if (config.Events.EmitterIds != null && config.Events.EventIds != null && config.Events.EmitterIds.Any() && config.Events.EventIds.Any())
                 {
+                    pushEvents = true;
                     var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(UAClient, ObjectIds.Server)).ToList();
                     managedNodes = nodeList.Concat(varList).Select(node => node.Id).ToHashSet();
                     var eventFields = UAClient.SubscribeToEvents(
