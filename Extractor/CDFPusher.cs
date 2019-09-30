@@ -649,10 +649,10 @@ namespace Cognite.OpcUa
             string externalId = UAClient.GetUniqueId(variable.Id, variable.Index);
             var writePoco = new TimeSeriesEntity
             {
-                Description = variable.Description,
+                Description = Utils.Truncate(variable.Description, 1000),
                 ExternalId = externalId,
                 AssetId = nodeToAssetIds[variable.ParentId],
-                Name = variable.DisplayName,
+                Name = Utils.Truncate(variable.DisplayName, 255),
                 LegacyName = externalId,
                 IsString = variable.DataType.isString,
                 IsStep = variable.DataType.isStep
@@ -661,7 +661,8 @@ namespace Cognite.OpcUa
             {
                 writePoco.MetaData = variable.properties
                     .Where(prop => prop.Value != null)
-                    .ToDictionary(prop => prop.DisplayName, prop => prop.Value.stringValue);
+                    .Take(16)
+                    .ToDictionary(prop => Utils.Truncate(prop.DisplayName, 32), prop => Utils.Truncate(prop.Value.stringValue, 256));
             }
             return writePoco;
         }
@@ -674,9 +675,9 @@ namespace Cognite.OpcUa
         {
             var writePoco = new AssetEntity
             {
-                Description = node.Description,
+                Description = Utils.Truncate(node.Description, 500),
                 ExternalId = UAClient.GetUniqueId(node.Id),
-                Name = node.DisplayName
+                Name = string.IsNullOrEmpty(node.DisplayName) ? Utils.Truncate(UAClient.GetUniqueId(node.Id), 140) : Utils.Truncate(node.DisplayName, 140)
             };
             if (node.ParentId != null && !node.ParentId.IsNullNodeId)
             {
@@ -686,7 +687,8 @@ namespace Cognite.OpcUa
             {
                 writePoco.MetaData = node.properties
                     .Where(prop => prop.Value != null)
-                    .ToDictionary(prop => prop.DisplayName, prop => prop.Value.stringValue);
+                    .Take(16)
+                    .ToDictionary(prop => Utils.Truncate(prop.DisplayName, 32), prop => Utils.Truncate(prop.Value.stringValue, 256));
             }
             return writePoco;
         }
@@ -702,28 +704,29 @@ namespace Cognite.OpcUa
             }
         }
         private static HashSet<string> ExcludeMetaData = new HashSet<string> {
-            "StartTime", "EndTime", "Type", "SubType"
+            "StartTime", "EndTime", "Type", "SubType", "CDFSource"
         };
 
         private EventEntity EventToCDFEvent(BufferedEvent evt)
         {
             var entity = new EventEntity
             {
-                Description = evt.Message,
+                Description = Utils.Truncate(evt.Message, 500),
                 StartTime = evt.MetaData.ContainsKey("StartTime") ? GetTimestampValue(evt.MetaData["StartTime"]) : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                EndTime = evt.MetaData.ContainsKey("EndTime") ? GetTimestampValue(evt.MetaData["StartTime"]) : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
+                EndTime = evt.MetaData.ContainsKey("EndTime") ? GetTimestampValue(evt.MetaData["EndTime"]) : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
                 AssetIds = new List<long> { nodeToAssetIds[evt.SourceNode] },
-                ExternalId = evt.EventId,
-                Type = evt.MetaData.ContainsKey("Type") ? UAClient.ConvertToString(evt.MetaData["Type"]) : UAClient.GetUniqueId(evt.EventType),
-                Source = evt.MetaData.ContainsKey("CDFSource") ? UAClient.ConvertToString(evt.MetaData["CDFSource"]) : UAClient.GetUniqueId(evt.SourceNode)
+                ExternalId = Utils.Truncate(evt.EventId, 255),
+                Type = Utils.Truncate(evt.MetaData.ContainsKey("Type") ? UAClient.ConvertToString(evt.MetaData["Type"]) : UAClient.GetUniqueId(evt.EventType), 64),
+                Source = Utils.Truncate(evt.MetaData.ContainsKey("CDFSource") ? UAClient.ConvertToString(evt.MetaData["CDFSource"]) : UAClient.GetUniqueId(evt.SourceNode), 128)
             };
             if (evt.MetaData.ContainsKey("SubType"))
             {
-                entity.SubType = UAClient.ConvertToString(evt.MetaData["SubType"]);
+                entity.SubType = Utils.Truncate(UAClient.ConvertToString(evt.MetaData["SubType"]), 64);
             }
             var metaData = evt.MetaData
                 .Where(kvp => !ExcludeMetaData.Contains(kvp.Key))
-                .ToDictionary(kvp => kvp.Key, kvp => UAClient.ConvertToString(kvp.Value));
+                .Take(16)
+                .ToDictionary(kvp => Utils.Truncate(kvp.Key, 32), kvp => Utils.Truncate(UAClient.ConvertToString(kvp.Value), 256));
             if (metaData.Any())
             {
                 entity.MetaData = metaData;

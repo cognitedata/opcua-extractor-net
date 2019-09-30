@@ -159,5 +159,10 @@ namespace Cognite.OpcUa
                 .GroupBy(x => x.Index / maxSize)
                 .Select(x => x.Select(v => v.Value));
         }
+        public static string Truncate(string str, int maxLength)
+        {
+            if (string.IsNullOrEmpty(str) || str.Length <= maxLength) return str;
+            return str.Substring(0, maxLength);
+        }
     }
 }

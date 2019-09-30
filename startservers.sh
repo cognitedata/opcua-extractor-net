@@ -6,5 +6,3 @@ python3 servers/server-test1.py  &
 python3 servers/server-test2.py  &
 python3 servers/server-test3.py  &
 python3 servers/server-test4.py  &
-
-sleep 10
