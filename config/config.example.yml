@@ -164,3 +164,5 @@ Extraction:
     #          NamespaceUri:
     #          NodeId:
     #      IsStep: false
+    # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
+    NonFiniteReplacement:

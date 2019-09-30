@@ -271,6 +271,15 @@ namespace Cognite.OpcUa
         public Dictionary<string, string> NamespaceMap { get { return _namespaceMap; } set { _namespaceMap = value ?? _namespaceMap; } }
         private Dictionary<string, string> _namespaceMap = new Dictionary<string, string>();
         public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
+        public double? NonFiniteReplacement
+        {
+            get { return _nonFiniteReplacement; }
+            set
+            {
+                _nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
+            }
+        }
+        private double? _nonFiniteReplacement = null;
     }
     public abstract class PusherConfig
     {

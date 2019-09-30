@@ -36,11 +36,11 @@ namespace Cognite.OpcUa
     {
         private readonly UAClient UAClient;
         private bool buffersEmpty;
-		private readonly FullConfig config;
+        private readonly FullConfig config;
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
-        public ConcurrentDictionary<NodeId, BufferedVariable> ActiveVariables { get; } = new ConcurrentDictionary<NodeId, BufferedVariable>();  
+        public ConcurrentDictionary<NodeId, BufferedVariable> ActiveVariables { get; } = new ConcurrentDictionary<NodeId, BufferedVariable>();
 
         // Concurrent reading of properties
         private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
@@ -400,7 +400,7 @@ namespace Cognite.OpcUa
                 var values = (Array)value.Value;
                 for (int i = 0; i < Math.Min(variable.ArrayDimensions[0], values.Length); i++)
                 {
-                    ret.Add(variable.DataType.isString
+                    var dp = variable.DataType.isString
                         ? new BufferedDataPoint(
                             value.SourceTimestamp,
                             $"{uniqueId}[{i}]",
@@ -408,12 +408,23 @@ namespace Cognite.OpcUa
                         : new BufferedDataPoint(
                             value.SourceTimestamp,
                             $"{uniqueId}[{i}]",
-                            UAClient.ConvertToDouble(values.GetValue(i)))
-                        );
+                            UAClient.ConvertToDouble(values.GetValue(i)));
+                    if (!dp.isString && !double.IsFinite(dp.doubleValue))
+                    {
+                        if (config.Extraction.NonFiniteReplacement != null)
+                        {
+                            dp.doubleValue = config.Extraction.NonFiniteReplacement.Value;
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }
+                    ret.Add(dp);
                 }
                 return ret;
             }
-            return new BufferedDataPoint[1] { variable.DataType.isString
+            var sdp = variable.DataType.isString
                 ? new BufferedDataPoint(
                     value.SourceTimestamp,
                     uniqueId,
@@ -421,7 +432,20 @@ namespace Cognite.OpcUa
                 : new BufferedDataPoint(
                     value.SourceTimestamp,
                     uniqueId,
-                    UAClient.ConvertToDouble(value.Value)) };
+                    UAClient.ConvertToDouble(value.Value));
+
+            if (!sdp.isString && !double.IsFinite(sdp.doubleValue))
+            {
+                if (config.Extraction.NonFiniteReplacement != null)
+                {
+                    sdp.doubleValue = config.Extraction.NonFiniteReplacement.Value;
+                }
+                else
+                {
+                    return new BufferedDataPoint[0];
+                }
+            }
+            return new BufferedDataPoint[1] { sdp };
         }
         /// <summary>
         /// Handles notifications on subscribed items, pushes all new datapoints to the queue.

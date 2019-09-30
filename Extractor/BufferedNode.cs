@@ -230,10 +230,9 @@ namespace Cognite.OpcUa
     {
         public readonly DateTime timestamp;
         public readonly string Id;
-        public readonly double doubleValue;
-        public readonly string stringValue;
+        public double doubleValue;
+        public string stringValue;
         public readonly bool isString;
-        public readonly bool historizing;
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
