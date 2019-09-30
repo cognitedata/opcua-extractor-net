@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netcoreapp2.2</TargetFramework>
@@ -12,6 +12,9 @@
     <Folder Include="servers\" />
   </ItemGroup>
   <ItemGroup>
+    <None Update="config.events.yml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="config.test.yml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

@@ -206,7 +206,7 @@ namespace Cognite.OpcUa
                 Value = new BufferedDataPoint(
                     SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp,
                     client.GetUniqueId(Id),
-                    UAClient.ConvertToString(value));
+                    client.ConvertToString(value));
             }
             else
             {

@@ -202,10 +202,14 @@ Events:
     # If no StartTime or EndTime are specified, both are set to the "Time" property of BaseEventType.
     # "Type" may be overriden case-by-case using "NameOverrides" in Extraction configuration, or in a dynamic way here. If no "Type" is specified,
     # it is generated from Event NodeId in the same way ExternalIds are generated for normal nodes.
+    # "Source" is by default the externalId of the node that actually caused the event, as CDF does not support events on timeseries.
+    # It may also be overridden here by mapping something to "CDFSource"
     DestinationNameMap:
         #Property1: SubType
-    # Set to true to enable history read of events. Events will be read from opc-ua history on startup.
-    EnableHistoryRead: false
+    # Emitters that should be read for historical events. Leave empty to disable history read of events.
+    HistorizingEmitterIds:
+        #-   NamespaceUri:
+        #    NodeId:
     # Attribute to use for filtering history read. The last time read is stored locally, in latest.bin, and only events received by the server after this time are history read.
     # This should be the browsename of the attribute that stores the local server time when an event is received. One of "ReceiveTime", "Time", "LocalTime".
     # Leave empty to always read the full history on startup. (This might be slow if there is a lot of history).

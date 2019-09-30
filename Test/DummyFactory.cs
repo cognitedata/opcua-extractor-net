@@ -34,8 +34,10 @@ namespace Test
         readonly string project;
         public readonly Dictionary<string, AssetDummy> assets = new Dictionary<string, AssetDummy>();
         public readonly Dictionary<string, TimeseriesDummy> timeseries = new Dictionary<string, TimeseriesDummy>();
+        public readonly Dictionary<string, EventDummy> events = new Dictionary<string, EventDummy>();
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
+        long eventIdCounter = 1;
         public long RequestCount { get; private set; }
         public bool AllowPush { get; set; } = true;
         public MockMode mode;
@@ -75,6 +77,8 @@ namespace Test
                         return HandleTimeseriesData();
                     case "/timeseries/data/latest":
                         return HandleGetTimeseries(content);
+                    case "/events":
+                        return HandleCreateEvents(content);
                     default:
                         Log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
                         return new HttpResponseMessage(HttpStatusCode.InternalServerError);
@@ -316,6 +320,23 @@ namespace Test
             };
         }
 
+        private HttpResponseMessage HandleCreateEvents(string content)
+        {
+            var newEvents = JsonConvert.DeserializeObject<EventWrapper>(content);
+            foreach (var ev in newEvents.items)
+            {
+                ev.id = eventIdCounter++;
+                ev.createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
+                ev.lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
+                events.Add(ev.externalId, ev);
+            }
+            string result = JsonConvert.SerializeObject(newEvents);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(result)
+            };
+        }
+
         private AssetDummy MockAsset(string externalId)
         {
             var asset = new AssetDummy
@@ -404,11 +425,31 @@ namespace Test
         public long lastUpdatedTime { get; set; }
         public string externalId { get; set; }
         public IEnumerable<DataPoint> datapoints { get; set; }
+        public string name { get; set; }
     }
     public class DataPoint
     {
         public long timestamp { get; set; }
         public double value { get; set; }
+    }
+    public class EventDummy
+    {
+        public long id { get; set; }
+        public string externalId { get; set; }
+        public long startTime { get; set; }
+        public long endTime { get; set; }
+        public string type { get; set; }
+        public string subtype { get; set; }
+        public string description { get; set; }
+        public IDictionary<string, string> metadata { get; set; }
+        public IEnumerable<long> assetIds { get; set; }
+        public string source { get; set; }
+        public long createdTime { get; set; }
+        public long lastUpdatedTime { get; set; }
+    }
+    public class EventWrapper
+    {
+        public IEnumerable<EventDummy> items { get; set; }
     }
     public class HttpMessageHandlerStub : HttpMessageHandler
     {

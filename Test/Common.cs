@@ -19,6 +19,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Test
 {
@@ -44,6 +45,10 @@ namespace Test
             {
                 fullConfig.Source.EndpointURL = "opc.tcp://localhost:4842";
             }
+            else if (serverType == "events")
+            {
+                fullConfig.Source.EndpointURL = "opc.tcp://localhost:4843";
+            }
             return fullConfig;
         }
         public static bool TestRunResult(Exception e)
@@ -53,6 +58,15 @@ namespace Test
                 return false;
             }
             return true;
+        }
+        public static IServiceProvider GetDummyProvider(DummyFactory factory)
+        {
+            var services = new ServiceCollection();
+            services.AddHttpClient<DataCDFClient>()
+                .ConfigurePrimaryHttpMessageHandler(() => factory.GetHandler());
+            services.AddHttpClient<ContextCDFClient>()
+                .ConfigurePrimaryHttpMessageHandler(() => factory.GetHandler());
+            return services.BuildServiceProvider();
         }
     }
 }

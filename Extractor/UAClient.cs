@@ -1244,7 +1244,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="value">Object to convert</param>
         /// <returns>Metadata suitable string</returns>
-        public static string ConvertToString(object value)
+        public string ConvertToString(object value)
         {
             if (value == null) return "";
             if (value.GetType().IsArray)
@@ -1259,6 +1259,14 @@ namespace Cognite.OpcUa
                     }
                 }
                 return result + "]";
+            }
+            if (value.GetType() == typeof(NodeId))
+            {
+                return GetUniqueId((NodeId)value);
+            }
+            if (value.GetType() == typeof(ExpandedNodeId))
+            {
+                return GetUniqueId((NodeId)value);
             }
             if (value.GetType() == typeof(LocalizedText))
             {
@@ -1287,7 +1295,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="datavalue">Datavalue to convert</param>
         /// <returns>Metadata suitable string</returns>
-        public static string ConvertToString(DataValue datavalue)
+        public string ConvertToString(DataValue datavalue)
         {
             if (datavalue == null) return "";
             return ConvertToString(datavalue.Value);

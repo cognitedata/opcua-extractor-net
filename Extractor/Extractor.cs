@@ -53,9 +53,11 @@ namespace Cognite.OpcUa
         /// The set of uniqueIds discovered, but not yet synced with the pusher
         /// </summary>
         private ISet<NodeId> NotInSync { get; } = new HashSet<NodeId>();
-        private ISet<NodeId> EventsNotInSync { get; } = new HashSet<NodeId>();
+        public ISet<NodeId> EventsNotInSync { get; } = new HashSet<NodeId>();
         private object NotInSyncLock { get; } = new object();
         private object EventsNotInSyncLock { get; } = new object();
+
+        private HashSet<NodeId> managedNodes;
 
         public bool Started { get; private set; }
 
@@ -307,25 +309,32 @@ namespace Cognite.OpcUa
                 if (config.Events.EmitterIds != null && config.Events.EventIds != null && config.Events.EmitterIds.Any() && config.Events.EventIds.Any())
                 {
                     var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(UAClient, ObjectIds.Server)).ToList();
+                    managedNodes = nodeList.Concat(varList).Select(node => node.Id).ToHashSet();
                     var eventFields = UAClient.SubscribeToEvents(
                         emitters,
                         config.Events.EventIds.Select(proto => proto.ToNodeId(UAClient, ObjectTypeIds.BaseEventType)).ToList(),
-                        nodeList.Concat(varList).Select(node => node.Id),
+                        managedNodes,
                         EventSubscriptionHandler,
                         token);
-                    if (config.Events.DoHistoryRead)
+                    foreach (var field in eventFields)
                     {
+                        ActiveEvents[field.Key] = field.Value;
+                    }
+                    if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
+                    {
+                        var histEmitters = config.Events.HistorizingEmitterIds.Select(proto => proto.ToNodeId(UAClient, ObjectIds.Server)).ToList();
                         lock (EventsNotInSync)
                         {
-                            foreach (var emitter in emitters)
+                            foreach (var emitter in histEmitters)
                             {
                                 EventsNotInSync.Add(emitter);
                             }
                         }
-                    }
-                    foreach (var field in eventFields)
-                    {
-                        ActiveEvents[field.Key] = field.Value;
+                        UAClient.HistoryReadEvents(histEmitters,
+                            config.Events.EventIds.Select(proto => proto.ToNodeId(UAClient, ObjectTypeIds.BaseEventType)).ToList(),
+                            managedNodes,
+                            HistoryEventHandler,
+                            token);
                     }
                 }
 
@@ -511,6 +520,8 @@ namespace Cognite.OpcUa
                 return null;
             }
             var eventType = eventFields[eventTypeIndex].Value as NodeId;
+            // Many servers don't handle filtering on history data.
+            if (!ActiveEvents.ContainsKey(eventType)) return null;
             var targetEventFields = ActiveEvents[eventType];
 
             var extractedProperties = new Dictionary<string, object>();
@@ -534,6 +545,8 @@ namespace Cognite.OpcUa
             }
             try
             {
+                var sourceNode = extractedProperties["SourceNode"];
+                if (!managedNodes.Contains(sourceNode)) return null;
                 var buffEvent = new BufferedEvent
                 {
                     Message = UAClient.ConvertToString(extractedProperties.GetValueOrDefault("Message")),

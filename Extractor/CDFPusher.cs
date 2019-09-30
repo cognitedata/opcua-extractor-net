@@ -57,9 +57,12 @@ namespace Cognite.OpcUa
             this.clientProvider = clientProvider;
         }
 
-        private Client GetClient()
+        private Client GetClient(string name = "Context")
         {
-            return clientProvider.GetRequiredService<Client>()
+            Client client = name == "Context"
+                ? (Client)clientProvider.GetRequiredService<ContextCDFClient>()
+                : clientProvider.GetRequiredService<DataCDFClient>();
+            return client
                 .AddHeader("api-key", config.ApiKey)
                 .SetAppId("OPC-UA Extractor")
                 .SetProject(config.Project)
@@ -143,14 +146,14 @@ namespace Cognite.OpcUa
             });
             var req = new DataPointInsertionRequest();
             req.Items.AddRange(finalDataPoints);
-            var client = GetClient();
+            var client = GetClient("Data");
             try
             {
                 await client.DataPoints.InsertAsync(req, token);
             }
             catch (Exception e)
             {
-                Log.Error(e, "Failed to insert {NumFailedDatapoints} into CDF", count);
+                Log.Error(e, "Failed to insert {NumFailedDatapoints} datapoints into CDF", count);
 				dataPointPushFailures.Inc();
                 if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile))
                 {
@@ -195,7 +198,7 @@ namespace Cognite.OpcUa
             Log.Information("Push {NumEventsToPush} events to CDF", count);
             if (config.Debug) return;
             IEnumerable<EventEntity> events = eventList.Select(evt => EventToCDFEvent(evt)).ToList();
-            var client = GetClient();
+            var client = GetClient("Data");
             try
             {
                 await client.Events.CreateAsync(events, token);
@@ -205,6 +208,8 @@ namespace Cognite.OpcUa
                 if (ex.Duplicated.Any())
                 {
                     var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString());
+                    Log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count());
+
                     events = events.Where(evt => !duplicates.Contains(evt.ExternalId));
                     try
                     {
@@ -710,6 +715,7 @@ namespace Cognite.OpcUa
                 AssetIds = new List<long> { nodeToAssetIds[evt.SourceNode] },
                 ExternalId = evt.EventId,
                 Type = evt.MetaData.ContainsKey("Type") ? UAClient.ConvertToString(evt.MetaData["Type"]) : UAClient.GetUniqueId(evt.EventType),
+                Source = evt.MetaData.ContainsKey("CDFSource") ? UAClient.ConvertToString(evt.MetaData["CDFSource"]) : UAClient.GetUniqueId(evt.SourceNode)
             };
             if (evt.MetaData.ContainsKey("SubType"))
             {

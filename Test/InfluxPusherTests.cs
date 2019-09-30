@@ -56,7 +56,7 @@ namespace Test
         [Fact]
         public async Task TestArrayData()
         {
-            var fullConfig = Common.BuildConfig("array", 6, "config.influxtest.yml");
+            var fullConfig = Common.BuildConfig("array", 7, "config.influxtest.yml");
             fullConfig.Extraction.MaxArraySize = 4;
             fullConfig.Extraction.AllowStringVariables = true;
             Logger.Configure(fullConfig.Logging);
