@@ -5,7 +5,6 @@ verify_ssl = true
 
 [packages]
 cryptography = "*"
-dateutil = "*"
 lxml = "*"
 pytz = "*"
 PyGithub = "*"
