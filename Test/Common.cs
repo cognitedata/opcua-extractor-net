@@ -16,13 +16,35 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
 using Microsoft.Extensions.DependencyInjection;
+using Xunit.Abstractions;
 
 namespace Test
 {
+    public class MakeConsoleWork : IDisposable
+    {
+        private readonly ITestOutputHelper _output;
+        private readonly TextWriter _originalOut;
+        private readonly TextWriter _textWriter;
+
+        public MakeConsoleWork(ITestOutputHelper output)
+        {
+            _output = output;
+            _originalOut = Console.Out;
+            _textWriter = new StringWriter();
+            Console.SetOut(_textWriter);
+        }
+
+        public void Dispose()
+        {
+            _output.WriteLine(_textWriter.ToString());
+            Console.SetOut(_originalOut);
+        }
+    }
     public static class Common
     {
         public static FullConfig BuildConfig(string serverType, int index, string configname = "config.test.yml")

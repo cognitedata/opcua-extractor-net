@@ -8,7 +8,7 @@ cryptography = "*"
 lxml = "*"
 pytz = "*"
 PyGithub = "*"
-
+python-dateutil = "*"
 
 [requires]
 python_version = "3.7"

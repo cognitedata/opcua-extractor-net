@@ -5,12 +5,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Test
 {
     [CollectionDefinition("Influx_tests", DisableParallelization = true)]
-    public class InfluxPusherTests
+    public class InfluxPusherTests : MakeConsoleWork
     {
+        public InfluxPusherTests(ITestOutputHelper output) : base(output) { }
         [Trait("Category", "basicserver")]
         [Fact]
         public async Task TestInfluxPusher()

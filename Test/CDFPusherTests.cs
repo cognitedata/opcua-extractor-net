@@ -25,12 +25,14 @@ using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Test
 {
     [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
-    public class CDFPusherTests
+    public class CDFPusherTests : MakeConsoleWork
     {
+        public CDFPusherTests(ITestOutputHelper output) : base(output) { }
         [Trait("Category", "both")]
         [Trait("Tests", "cdfpusher")]
         [Theory]
