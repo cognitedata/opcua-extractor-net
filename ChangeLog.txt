@@ -1,0 +1,14 @@
+***********************************
+*     OPC UA Extractor
+*        Change Log
+***********************************
+
+0.6.0  2019-10-01
+------------------
+* Fixed: reading RootNode on Prediktor.
+* Added: NonFiniteReplacement config.
+
+
+0.5.0  2019-09-23
+------------------
+* ...
