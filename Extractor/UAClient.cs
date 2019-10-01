@@ -307,18 +307,29 @@ namespace Cognite.OpcUa
         /// <returns>A partial description of the root node</returns>
         private ReferenceDescription GetRootNode(NodeId nodeId)
         {
-            var root = session.ReadNode(nodeId);
-            if (root == null || root.NodeId == NodeId.Null) return null;
-            return new ReferenceDescription
+            var attributes = new List<uint>
             {
-                NodeId = root.NodeId,
-                BrowseName = root.BrowseName,
-                DisplayName = root.DisplayName,
-                NodeClass = root.NodeClass,
-                ReferenceTypeId = null,
-                IsForward = false,
-                TypeDefinition = root.TypeDefinitionId
+                Attributes.NodeId,
+                Attributes.BrowseName,
+                Attributes.DisplayName,
+                Attributes.NodeClass
             };
+            var readValueIds = attributes.Select(attr => new ReadValueId { NodeId = nodeId, AttributeId = attr }).ToList();
+            session.Read(null, 0, TimestampsToReturn.Neither, new ReadValueIdCollection(readValueIds), out DataValueCollection results, out _);
+            var refd = new ReferenceDescription();
+            var enumerator = results.GetEnumerator();
+            enumerator.MoveNext();
+            refd.NodeId = enumerator.Current.GetValue(NodeId.Null);
+            if (refd.NodeId == NodeId.Null) return null;
+            enumerator.MoveNext();
+            refd.BrowseName = enumerator.Current.GetValue(QualifiedName.Null);
+            enumerator.MoveNext();
+            refd.DisplayName = enumerator.Current.GetValue(LocalizedText.Null);
+            enumerator.MoveNext();
+            refd.NodeClass = (NodeClass)enumerator.Current.GetValue<int>(0);
+            refd.ReferenceTypeId = null;
+            refd.IsForward = true;
+            return refd;
         }
         public void AddNodeOverride(NodeId nodeId, string externalId)
         {
