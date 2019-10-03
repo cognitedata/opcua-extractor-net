@@ -1,4 +1,4 @@
-﻿/* Cognite Extractor for OPC-UA
+/* Cognite Extractor for OPC-UA
 Copyright (C) 2019 Cognite AS
 
 This program is free software; you can redistribute it and/or
@@ -298,6 +298,12 @@ namespace Cognite.OpcUa
         {
             return new CDFPusher(provider, this);
         }
+
+        // Limits can change without notice in CDF API end-points.
+        // The limit on number of time series on the "latest" end-point is currently 100.
+        public int LatestChunk { get; set; } = 100;
+        public int TimeSeriesChunk { get; set; } = 1000;
+        public int AssetChunk { get; set; } = 1000;
     }
     public class InfluxClientConfig : PusherConfig
     {

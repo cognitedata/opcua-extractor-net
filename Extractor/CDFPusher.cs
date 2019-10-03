@@ -212,7 +212,7 @@ namespace Cognite.OpcUa
             var client = GetClient();
             try
             {
-                foreach (var task in Utils.ChunkBy(nodes, 1000).Select(items => EnsureAssets(items, token)))
+                foreach (var task in Utils.ChunkBy(nodes, config.AssetChunk).Select(items => EnsureAssets(items, token)))
                 {
                     if (!await task) return false;
                 }
@@ -226,13 +226,13 @@ namespace Cognite.OpcUa
                 // node to assets map.
                 // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
                 // fetching the timeseries itself
-                foreach (var task in Utils.ChunkBy(tsList, 1000).Select(items => EnsureTimeseries(items, token)))
+                foreach (var task in Utils.ChunkBy(tsList, config.TimeSeriesChunk).Select(items => EnsureTimeseries(items, token)))
                 {
                     if (!await task) return false;
                 }
                 trackedTimeseres.Inc(tsList.Count);
 
-                foreach (var task in Utils.ChunkBy(histTsList, 1000).Select(items => EnsureHistorizingTimeseries(items, token)))
+                foreach (var task in Utils.ChunkBy(histTsList, config.LatestChunk).Select(items => EnsureHistorizingTimeseries(items, token)))
                 {
                     if (!await task) return false;
                 }
