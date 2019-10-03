@@ -45,6 +45,7 @@ namespace Cognite.OpcUa
         private Dictionary<NodeId, ProtoDataType> numericDataTypes = new Dictionary<NodeId, ProtoDataType>();
         public bool Started { get; private set; }
         public bool Failed { get; private set; }
+        private readonly TimeSpan historyGranularity;
         private CancellationToken liveToken;
 
         private int pendingOperations;
@@ -79,6 +80,8 @@ namespace Cognite.OpcUa
         {
             this.config = config.Source;
             extractionConfig = config.Extraction;
+            historyGranularity = config.Source.HistoryGranularity <= 0 ? TimeSpan.Zero
+                : TimeSpan.FromSeconds(config.Source.HistoryGranularity);
         }
         #region Session management
         /// <summary>
@@ -644,9 +647,12 @@ namespace Cognite.OpcUa
         /// Synchronizes a list of nodes with the server, creating subscriptions and reading historical data where necessary.
         /// </summary>
         /// <param name="nodeList">List of buffered variables to synchronize</param>
+        /// <param name="callback">Callback used for DoHistoryRead. Takes a <see cref="HistoryReadResultCollection"/>,
+        /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
-        public void SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
+        public async Task SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
+            Action<HistoryData, bool, NodeId> callback,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
@@ -654,7 +660,6 @@ namespace Cognite.OpcUa
             var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName != "NodeChangeListener");
             if (subscription == null)
             {
-                // Not disposed? May cause memory leak on re-connects to server.
                 subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
             }
             int count = 0;
@@ -713,7 +718,7 @@ namespace Cognite.OpcUa
                 }
             }
             Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
-            // await DoHistoryRead(nodeList, callback, historyGranularity, token);
+            await DoHistoryRead(nodeList, callback, historyGranularity, token);
         }
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 

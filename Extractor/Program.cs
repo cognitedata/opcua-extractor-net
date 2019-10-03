@@ -39,7 +39,7 @@ namespace Cognite.OpcUa
         /// Load config, start the <see cref="Logger"/>, start the <see cref="Extractor"/> then wait for exit signal
         /// </summary>
         /// <returns></returns>
-        static int Main(String[] _)
+        static int Main(String[] args)
         {
             // Temporary logger config for capturing logs during configuration.
             Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
@@ -111,7 +111,7 @@ namespace Cognite.OpcUa
                         }
                         try
                         {
-                            Run(fullConfig, provider, source);
+                            Run(fullConfig, quitEvent, provider, source);
                         }
                         catch (TaskCanceledException)
                         {
@@ -192,7 +192,7 @@ namespace Cognite.OpcUa
             worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));
             worker.Start();
         }
-        private static void Run(FullConfig config, ServiceProvider provider, CancellationTokenSource source)
+        private static void Run(FullConfig config, ManualResetEvent quitEvent, ServiceProvider provider, CancellationTokenSource source)
         {
             UAClient client = new UAClient(config);
             // As it turns out, linq does some insane stuff when you use the result of a "select" query that does transformation.
