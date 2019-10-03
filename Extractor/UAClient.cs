@@ -719,10 +719,7 @@ namespace Cognite.OpcUa
             }
             Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
 
-            if (config.History)
-            {
-                await DoHistoryRead(nodeList, callback, historyGranularity, token);
-            }
+            await DoHistoryRead(nodeList, callback, historyGranularity, token);
         }
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
@@ -829,7 +826,8 @@ namespace Cognite.OpcUa
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
                     vnode.SetDataType(dataType, numericDataTypes);
                     enumerator.MoveNext();
-                    vnode.Historizing = enumerator.Current.GetValue(false);
+                    // config to disable history for all nodes
+                    vnode.Historizing = config.History && enumerator.Current.GetValue(false);
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
                     if (extractionConfig.MaxArraySize > 0)
