@@ -1,4 +1,4 @@
-/* Cognite Extractor for OPC-UA
+﻿/* Cognite Extractor for OPC-UA
 Copyright (C) 2019 Cognite AS
 
 This program is free software; you can redistribute it and/or
@@ -248,14 +248,16 @@ namespace Cognite.OpcUa
         public bool ForceRestart { get; set; } = false;
         public int BrowseNodesChunk { get { return _browseNodesChunk; } set { _browseNodesChunk = Math.Max(1, value); } }
         private int _browseNodesChunk = 1000;
-        public int BrowseChunk { get { return _browseChunk; } set { _browseChunk = Math.Max(0, value); } }
+        public int BrowseChunk { get { return _browseChunk; } set { _browseChunk = Math.Max(1, value); } }
         private int _browseChunk = 1000;
-        public int HistoryReadChunk { get { return _uaHistoryReadPoints; } set { _uaHistoryReadPoints = Math.Max(0, value); } }
+        public int HistoryReadChunk { get { return _uaHistoryReadPoints; } set { _uaHistoryReadPoints = Math.Max(1, value); } }
         private int _uaHistoryReadPoints = 1000;
         public int HistoryReadNodesChunk { get { return _uaHistoryReadNodes; } set { _uaHistoryReadNodes = Math.Max(1, value); } }
         private int _uaHistoryReadNodes = 100;
-        public int AttributesChunk { get { return _attributesChunk; } set { _attributesChunk = Math.Max(0, value); } }
+        public int AttributesChunk { get { return _attributesChunk; } set { _attributesChunk = Math.Max(1, value); } }
         private int _attributesChunk = 1000;
+        public int SubscriptionChunk { get { return _subscriptionChunk; } set { _subscriptionChunk = Math.Max(1, value); } }
+        private int _subscriptionChunk = 1000;
     }
     public class ExtractionConfig
     {

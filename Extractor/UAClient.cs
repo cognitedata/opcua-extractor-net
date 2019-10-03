@@ -667,7 +667,7 @@ namespace Cognite.OpcUa
                 .Select(sub => sub.ResolvedNodeId)
                 .ToHashSet();
 
-            foreach (var chunk in Utils.ChunkBy(nodeList, 1000))
+            foreach (var chunk in Utils.ChunkBy(nodeList, config.SubscriptionChunk))
             {
                 if (token.IsCancellationRequested) break;
                 subscription.AddItems(chunk
