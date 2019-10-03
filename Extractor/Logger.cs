@@ -56,9 +56,11 @@ namespace Cognite.OpcUa
                     string json = r.ReadToEnd();
                     var jsonObj = JsonConvert.DeserializeObject<GpcCredentials>(json);
 
-                    var resourceLabels = new Dictionary<string, string>();
-                    resourceLabels.Add("email_id", jsonObj.ClientEmail);
-                    resourceLabels.Add("unique_id", jsonObj.ClientId);
+                    var resourceLabels = new Dictionary<string, string>
+                    {
+                        { "email_id", jsonObj.ClientEmail },
+                        { "unique_id", jsonObj.ClientId }
+                    };
 
                     var gcConfig = new GoogleCloudLoggingSinkOptions(
                         jsonObj.ProjectId,
