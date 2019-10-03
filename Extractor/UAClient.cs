@@ -718,7 +718,11 @@ namespace Cognite.OpcUa
                 }
             }
             Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
-            await DoHistoryRead(nodeList, callback, historyGranularity, token);
+
+            if (config.History)
+            {
+                await DoHistoryRead(nodeList, callback, historyGranularity, token);
+            }
         }
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 

@@ -1,4 +1,4 @@
-﻿# Template for the config file,
+# Template for the config file,
 # Defaults to config.yml in ./config.
 # The values here are generally the default values, except for the contents of lists etc.
 # Your config file can contain only a subset of these config options. Any extra options will
@@ -30,6 +30,8 @@ Source:
     BrowseChunk: 1000
     #Max number of nodes to browse at the same time. Higher is much faster, but may be restricted by the server.
     BrowseNodesChunk: 1000
+    # Enable/disable history synchronization from the OPC-UA server to CDF:
+    History: true
     # Number of datapoints per request, 0 for server specified
     HistoryReadChunk: 1000
     # Max number of simultaneous nodes per historyRead request

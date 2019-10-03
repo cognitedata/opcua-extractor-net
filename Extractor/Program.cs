@@ -1,4 +1,4 @@
-/* Cognite Extractor for OPC-UA
+﻿/* Cognite Extractor for OPC-UA
 Copyright (C) 2019 Cognite AS
 
 This program is free software; you can redistribute it and/or
@@ -244,6 +244,7 @@ namespace Cognite.OpcUa
         public string Username { get; set; }
         public string Password { get; set; }
         public bool Secure { get; set; } = false;
+        public bool History { get; set; } = true;
         public int HistoryGranularity { get; set; } = 600;
         public bool ForceRestart { get; set; } = false;
         public int BrowseNodesChunk { get { return _browseNodesChunk; } set { _browseNodesChunk = Math.Max(1, value); } }
