@@ -3,5 +3,5 @@
 version=$1
 echo "Release version $version"
 git tag -m "Version $version" $version
-git push --tags
-echo "Wait for release to apper on github"
+git push $version
+echo "Wait for release to appear on github"
