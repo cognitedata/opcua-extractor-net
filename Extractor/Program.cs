@@ -1,4 +1,4 @@
-﻿/* Cognite Extractor for OPC-UA
+/* Cognite Extractor for OPC-UA
 Copyright (C) 2019 Cognite AS
 
 This program is free software; you can redistribute it and/or
@@ -175,7 +175,7 @@ namespace Cognite.OpcUa
         {
             if (string.IsNullOrWhiteSpace(config.URL) || string.IsNullOrWhiteSpace(config.Job))
             {
-                Log.Warning("Unable to start metrics, missing URL or Job");
+                Log.Information("Not pushing metrics, missing URL or Job");
                 return;
             }
             var additionalHeaders = new Dictionary<string, string>();
