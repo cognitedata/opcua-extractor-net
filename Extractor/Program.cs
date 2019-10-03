@@ -255,7 +255,8 @@ namespace Cognite.OpcUa
         private int _uaHistoryReadPoints = 1000;
         public int HistoryReadNodesChunk { get { return _uaHistoryReadNodes; } set { _uaHistoryReadNodes = Math.Max(1, value); } }
         private int _uaHistoryReadNodes = 100;
-        public int AttributesChunk { get { return _attributesChunk; } set { _attributesChunk = Math.Max(1, value); } }
+        // 0 means server defined:
+        public int AttributesChunk { get { return _attributesChunk; } set { _attributesChunk = Math.Max(0, value); } }
         private int _attributesChunk = 1000;
         public int SubscriptionChunk { get { return _subscriptionChunk; } set { _subscriptionChunk = Math.Max(1, value); } }
         private int _subscriptionChunk = 1000;
