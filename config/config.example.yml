@@ -30,11 +30,14 @@ Source:
     BrowseChunk: 1000
     #Max number of nodes to browse at the same time. Higher is much faster, but may be restricted by the server.
     BrowseNodesChunk: 1000
+    # Enable/disable history synchronization from the OPC-UA server to CDF:
+    History: true
     # Number of datapoints per request, 0 for server specified
     HistoryReadChunk: 1000
     # Max number of simultaneous nodes per historyRead request
     HistoryReadNodesChunk: 100
     AttributesChunk: 1000
+    SubscriptionChunk: 1000
 
 # List of pushers, the type must be identified using a Yaml tag. Each element results in a pusher, so it is possible
 # to push multiple times to the same system, for example in order to push to multiple projects in CDF.
@@ -57,6 +60,11 @@ Pushers:
         BufferOnFailure: false
         # Buffer file path
         BufferFile: buffer.bin
+        # Chunk sizes in CDF requests
+        LatestChunk: 100
+        TimeSeriesChunk: 1000
+        AssetChunk: 1000
+
     - !influx
         # Host URI, ex localhost:8086
         Host:
@@ -143,16 +151,16 @@ Extraction:
     # Override mappings between OPC UA node id and externalId, allowing e.g. the RootNode to be mapped to
     # a particular asset in CDF. Applies to both assets and time series.
     # NodeMap:
-    #   - "externalId": { NamespaceUri: "uri", NodeId: "i=123" }
+    #   "externalId": { NamespaceUri: "uri", NodeId: "i=123" }
     NodeMap:
   
     # Map OPC-UA namespaces to prefixes in CDF. If not mapped, the full namespace URI is used.
     # Saves space compared to using the full URL. Using the ns index is not safe as the order can change on the server.
     # For example:
     # NamespaceMap:
-    #  - "urn:cognite:net:server": cns
-    #  - "urn:freeopcua:python:server": fps
-    #  - "http://examples.freeopcua.github.io": efg
+    #   "urn:cognite:net:server": cns
+    #   "urn:freeopcua:python:server": fps
+    #   "http://examples.freeopcua.github.io": efg
     NamespaceMap:
 
     # Add custom numeric types using their nodeId. IsStep indicates whether the datatype is discrete.

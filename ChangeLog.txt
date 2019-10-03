@@ -3,6 +3,10 @@
 *        Change Log
 ***********************************
 
+To be released
+------------------
+* Configurable chunk sizes to CDF and OPC UA server.
+
 0.6.0  2019-10-01
 ------------------
 * Fixed: reading RootNode on Prediktor.

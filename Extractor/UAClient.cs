@@ -667,7 +667,7 @@ namespace Cognite.OpcUa
                 .Select(sub => sub.ResolvedNodeId)
                 .ToHashSet();
 
-            foreach (var chunk in Utils.ChunkBy(nodeList, 1000))
+            foreach (var chunk in Utils.ChunkBy(nodeList, config.SubscriptionChunk))
             {
                 if (token.IsCancellationRequested) break;
                 subscription.AddItems(chunk
@@ -718,6 +718,7 @@ namespace Cognite.OpcUa
                 }
             }
             Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
+
             await DoHistoryRead(nodeList, callback, historyGranularity, token);
         }
         /// <summary>
@@ -825,7 +826,8 @@ namespace Cognite.OpcUa
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
                     vnode.SetDataType(dataType, numericDataTypes);
                     enumerator.MoveNext();
-                    vnode.Historizing = enumerator.Current.GetValue(false);
+                    // config to disable history for all nodes
+                    vnode.Historizing = config.History && enumerator.Current.GetValue(false);
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
                     if (extractionConfig.MaxArraySize > 0)

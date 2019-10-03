@@ -39,7 +39,7 @@ namespace Cognite.OpcUa
         /// Load config, start the <see cref="Logger"/>, start the <see cref="Extractor"/> then wait for exit signal
         /// </summary>
         /// <returns></returns>
-        static int Main(String[] args)
+        static int Main(String[] _)
         {
             // Temporary logger config for capturing logs during configuration.
             Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
@@ -111,7 +111,7 @@ namespace Cognite.OpcUa
                         }
                         try
                         {
-                            Run(fullConfig, quitEvent, provider, source);
+                            Run(fullConfig, provider, source);
                         }
                         catch (TaskCanceledException)
                         {
@@ -175,7 +175,7 @@ namespace Cognite.OpcUa
         {
             if (string.IsNullOrWhiteSpace(config.URL) || string.IsNullOrWhiteSpace(config.Job))
             {
-                Log.Warning("Unable to start metrics, missing URL or Job");
+                Log.Information("Not pushing metrics, missing URL or Job");
                 return;
             }
             var additionalHeaders = new Dictionary<string, string>();
@@ -192,7 +192,7 @@ namespace Cognite.OpcUa
             worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));
             worker.Start();
         }
-        private static void Run(FullConfig config, ManualResetEvent quitEvent, ServiceProvider provider, CancellationTokenSource source)
+        private static void Run(FullConfig config, ServiceProvider provider, CancellationTokenSource source)
         {
             UAClient client = new UAClient(config);
             // As it turns out, linq does some insane stuff when you use the result of a "select" query that does transformation.
@@ -244,18 +244,22 @@ namespace Cognite.OpcUa
         public string Username { get; set; }
         public string Password { get; set; }
         public bool Secure { get; set; } = false;
+        public bool History { get; set; } = true;
         public int HistoryGranularity { get; set; } = 600;
         public bool ForceRestart { get; set; } = false;
         public int BrowseNodesChunk { get { return _browseNodesChunk; } set { _browseNodesChunk = Math.Max(1, value); } }
         private int _browseNodesChunk = 1000;
-        public int BrowseChunk { get { return _browseChunk; } set { _browseChunk = Math.Max(0, value); } }
+        public int BrowseChunk { get { return _browseChunk; } set { _browseChunk = Math.Max(1, value); } }
         private int _browseChunk = 1000;
-        public int HistoryReadChunk { get { return _uaHistoryReadPoints; } set { _uaHistoryReadPoints = Math.Max(0, value); } }
+        public int HistoryReadChunk { get { return _uaHistoryReadPoints; } set { _uaHistoryReadPoints = Math.Max(1, value); } }
         private int _uaHistoryReadPoints = 1000;
         public int HistoryReadNodesChunk { get { return _uaHistoryReadNodes; } set { _uaHistoryReadNodes = Math.Max(1, value); } }
         private int _uaHistoryReadNodes = 100;
+        // 0 means server defined:
         public int AttributesChunk { get { return _attributesChunk; } set { _attributesChunk = Math.Max(0, value); } }
         private int _attributesChunk = 1000;
+        public int SubscriptionChunk { get { return _subscriptionChunk; } set { _subscriptionChunk = Math.Max(1, value); } }
+        private int _subscriptionChunk = 1000;
     }
     public class ExtractionConfig
     {
@@ -298,6 +302,12 @@ namespace Cognite.OpcUa
         {
             return new CDFPusher(provider, this);
         }
+
+        // Limits can change without notice in CDF API end-points.
+        // The limit on number of time series on the "latest" end-point is currently 100.
+        public int LatestChunk { get; set; } = 100;
+        public int TimeSeriesChunk { get; set; } = 1000;
+        public int AssetChunk { get; set; } = 1000;
     }
     public class InfluxClientConfig : PusherConfig
     {
