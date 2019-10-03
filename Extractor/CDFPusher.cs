@@ -29,7 +29,6 @@ using CogniteSdk.DataPoints;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus.Client;
-using Oryx;
 using Serilog;
 
 namespace Cognite.OpcUa

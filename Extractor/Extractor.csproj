@@ -22,9 +22,9 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </EmbeddedResource>
   </ItemGroup>
-  <Import Project="..\.paket\Paket.Restore.targets" />
   <PropertyGroup>
-	<GitCleanVersion></GitCleanVersion>
+    <GitCleanVersion>
+    </GitCleanVersion>
   </PropertyGroup>
   <PropertyGroup>
     <PreBuildEvent>
@@ -32,6 +32,6 @@ mkdir "$(MSBuildProjectDirectory)/Properties"
 git describe --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
 git log -1  --format="%25%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
 </PreBuildEvent>
-
   </PropertyGroup>
+  <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>
