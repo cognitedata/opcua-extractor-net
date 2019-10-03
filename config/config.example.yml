@@ -1,4 +1,4 @@
-# Template for the config file,
+﻿# Template for the config file,
 # Defaults to config.yml in ./config.
 # The values here are generally the default values, except for the contents of lists etc.
 # Your config file can contain only a subset of these config options. Any extra options will
@@ -37,6 +37,7 @@ Source:
     # Max number of simultaneous nodes per historyRead request
     HistoryReadNodesChunk: 100
     AttributesChunk: 1000
+    SubscriptionChunk: 1000
 
 # List of pushers, the type must be identified using a Yaml tag. Each element results in a pusher, so it is possible
 # to push multiple times to the same system, for example in order to push to multiple projects in CDF.
@@ -59,6 +60,11 @@ Pushers:
         BufferOnFailure: false
         # Buffer file path
         BufferFile: buffer.bin
+        # Chunk sizes in CDF requests
+        LatestChunk: 100
+        TimeSeriesChunk: 1000
+        AssetChunk: 1000
+
     - !influx
         # Host URI, ex localhost:8086
         Host:
