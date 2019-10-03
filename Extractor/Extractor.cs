@@ -297,7 +297,7 @@ namespace Cognite.OpcUa
             Log.Information("Synchronize {NumNodesToSynch} nodes", tsList.Count);
             try
             {
-                await SynchronizeNodes(tsList, token);
+                SynchronizeNodes(tsList, token);
             }
             catch (Exception e)
             {
@@ -337,9 +337,9 @@ namespace Cognite.OpcUa
         /// Starts synchronization of nodes with opcua using normal callbacks
         /// </summary>
         /// <param name="variables">Variables to be synchronized</param>
-        public async Task SynchronizeNodes(IEnumerable<BufferedVariable> variables, CancellationToken token)
+        public void SynchronizeNodes(IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
-            await UAClient.SynchronizeNodes(variables, HistoryDataHandler, SubscriptionHandler, token);
+            UAClient.SynchronizeNodes(variables, SubscriptionHandler, token);
         }
         /// <summary>
         /// Is the variable allowed to be mapped to a timeseries?
@@ -478,6 +478,7 @@ namespace Cognite.OpcUa
                 }
             }
         }
+#pragma warning disable IDE0051 // Remove unused private members
         /// <summary>
         /// Callback for HistoryRead operations. Simply pushes all datapoints to the queue.
         /// </summary>
@@ -485,6 +486,7 @@ namespace Cognite.OpcUa
         /// <param name="final">True if this is the final call for this node, and the lock may be removed</param>
         /// <param name="nodeid">Id of the node in question</param>
         private void HistoryDataHandler(HistoryData data, bool final, NodeId nodeid)
+#pragma warning restore IDE0051 // Remove unused private members
         {
             string uniqueId = UAClient.GetUniqueId(nodeid);
             if (final)
