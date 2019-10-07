@@ -2,9 +2,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.2</TargetFramework>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
     <RootNamespace>Cognite.OpcUa</RootNamespace>
     <AssemblyName>OpcuaExtractor</AssemblyName>
+    <PublishTrimmed>true</PublishTrimmed>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="App.config" />
@@ -32,6 +33,9 @@ mkdir "$(MSBuildProjectDirectory)/Properties"
 git describe --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
 git log -1  --format="%25%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
 </PreBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <Optimize>true</Optimize>
   </PropertyGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

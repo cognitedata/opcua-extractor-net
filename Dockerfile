@@ -1,4 +1,4 @@
-FROM eu.gcr.io/cognitedata/dotnet-mono:2.2-sdk
+FROM eu.gcr.io/cognitedata/dotnet-mono:3.0-sdk
 VOLUME /config
 VOLUME /logs
 VOLUME /certificates

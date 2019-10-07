@@ -1,4 +1,4 @@
-FROM eu.gcr.io/cognitedata/dotnet-mono:2.2-sdk
+FROM eu.gcr.io/cognitedata/dotnet-mono:3.0-sdk
 
 WORKDIR /build
 COPY . .
@@ -9,4 +9,4 @@ RUN ./credentials.sh
 RUN mono .paket/paket.exe install
 RUN dotnet build
 
-RUN dotnet publish -c Release -o /build/deploy Extractor
+RUN dotnet publish -c Release -o /build/deploy /p:PublishTrimmed="false" Extractor

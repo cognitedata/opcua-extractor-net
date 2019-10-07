@@ -18,7 +18,7 @@ podTemplate(
         resourceLimitMemory: '500Mi',
         ttyEnabled: true),
     containerTemplate(name: 'dotnet-mono',
-        image: 'eu.gcr.io/cognitedata/dotnet-mono:2.2-sdk',
+        image: 'eu.gcr.io/cognitedata/dotnet-mono:3.0-sdk',
         envVars: [
             secretEnvVar(key: 'CODECOV_TOKEN', secretName: 'codecov-tokens', secretKey: 'opcua-extractor-net'),
             // /codecov-script/upload-report.sh relies on the following
@@ -108,7 +108,7 @@ podTemplate(
             }
 
             stage('Build') {
-                sh('dotnet build')
+                sh('dotnet build -r linux-x64')
             }
             timeout(5) {
                 stage('Run tests') {
@@ -122,9 +122,9 @@ podTemplate(
             if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
                 stage('Build release versions') {
                     sh('apt-get update && apt-get install -y zip')
-                    packProject('win-x64', "$version", "run.bat")
-                    packProject('win81-x64', "$version", "run.bat")
-                    packProject('linux-x64', "$version", "run.sh")
+                    packProject('win-x64', "$version", false)
+                    packProject('win81-x64', "$version", false)
+                    packProject('linux-x64', "$version", true)
                 }
                 stage('Deploy to github release') {
                     withCredentials([usernamePassword(credentialsId: 'jenkins-cognite', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
@@ -157,13 +157,15 @@ podTemplate(
     }
 }
 
-void packProject(String configuration, String version, String executor) {
-    sh("dotnet publish -c Release -r $configuration --self-contained true Extractor/")
-    sh("mkdir -p ./${configuration}/bin/")
-    sh("mv Extractor/bin/Release/netcoreapp2.2/${configuration}/publish/* ./${configuration}/bin/")
+void packProject(String configuration, String version, boolean linux) {
+    sh("dotnet publish -c Release -r $configuration --self-contained true /p:PublishSingleFile=\"true\" Extractor/")
+    sh("mkdir -p ./${configuration}/")
+    sh("mv Extractor/bin/Release/netcoreapp3.0/${configuration}/publish/* ./${configuration}/")
     sh("cp -r ./config ./${configuration}/")
-    sh("cp ./Extractor/${executor} ./${configuration}/")
     sh("cp ./LICENSE.md ./${configuration}/")
+    if (linux) {
+        sh("chmod +x ./${configuration}/OpcuaExtractor")
+    }
     dir("$configuration") {
         sh("zip -r ../opcua-extractor.${configuration}.${version}.zip *")
     }
