@@ -1276,9 +1276,9 @@ namespace Cognite.OpcUa
             {
                 return ConvertToString(((ExtensionObject)value).Body);
             }
-            if (value.GetType() == typeof(Range))
+            if (value.GetType() == typeof(Opc.Ua.Range))
             {
-                return $"({((Range)value).Low}, {((Range)value).High})";
+                return $"({((Opc.Ua.Range)value).Low}, {((Opc.Ua.Range)value).High})";
             }
             if (value.GetType() == typeof(EUInformation))
             {
