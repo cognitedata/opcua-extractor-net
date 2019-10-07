@@ -704,7 +704,7 @@ namespace Cognite.OpcUa
             }
         }
         private static HashSet<string> ExcludeMetaData = new HashSet<string> {
-            "StartTime", "EndTime", "Type", "SubType", "CDFSource"
+            "StartTime", "EndTime", "Type", "SubType"
         };
 
         private EventEntity EventToCDFEvent(BufferedEvent evt)
@@ -716,9 +716,12 @@ namespace Cognite.OpcUa
                 EndTime = evt.MetaData.ContainsKey("EndTime") ? GetTimestampValue(evt.MetaData["EndTime"]) : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
                 AssetIds = new List<long> { nodeToAssetIds[evt.SourceNode] },
                 ExternalId = Utils.Truncate(evt.EventId, 255),
-                Type = Utils.Truncate(evt.MetaData.ContainsKey("Type") ? UAClient.ConvertToString(evt.MetaData["Type"]) : UAClient.GetUniqueId(evt.EventType), 64),
-                Source = Utils.Truncate(evt.MetaData.ContainsKey("CDFSource") ? UAClient.ConvertToString(evt.MetaData["CDFSource"]) : UAClient.GetUniqueId(evt.SourceNode), 128)
+                Type = Utils.Truncate(evt.MetaData.ContainsKey("Type") ? UAClient.ConvertToString(evt.MetaData["Type"]) : UAClient.GetUniqueId(evt.EventType), 64)
             };
+            if (!evt.MetaData.ContainsKey("SourceNode"))
+            {
+                evt.MetaData["SourceNode"] = UAClient.GetUniqueId(evt.SourceNode);
+            }
             if (evt.MetaData.ContainsKey("SubType"))
             {
                 entity.SubType = Utils.Truncate(UAClient.ConvertToString(evt.MetaData["SubType"]), 64);

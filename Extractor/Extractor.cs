@@ -135,7 +135,10 @@ namespace Cognite.OpcUa
                     {
                         try
                         {
-                            await pusher.PushDataPoints(token);
+                            if (pushData)
+                            {
+                                await pusher.PushDataPoints(token);
+                            }
                             if (pushEvents)
                             {
                                 await pusher.PushEvents(token);

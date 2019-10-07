@@ -162,8 +162,8 @@ namespace Test
             var timeseries = factory.timeseries.Values.FirstOrDefault(ts => ts.name == name);
             if (asset == null && timeseries == null) return false;
             return rawSource
-                ? asset != null && asset.externalId == ev.source || timeseries != null && timeseries.externalId == ev.source
-                : asset != null &&  ev.assetIds.Contains(asset.id);
+                ? asset != null && asset.externalId == ev.metadata["SourceNode"] || timeseries != null && timeseries.externalId == ev.metadata["SourceNode"]
+                : asset != null && ev.assetIds.Contains(asset.id);
         }
 
     }

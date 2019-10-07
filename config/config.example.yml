@@ -172,10 +172,8 @@ Extraction:
     #          NamespaceUri:
     #          NodeId:
     #      IsStep: false
-<<<<<<< HEAD
     # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
     NonFiniteReplacement:
-=======
 
 Events:
     # Event ids to map, with full namespace-uri, and node identifier on the form "i=123"
@@ -202,8 +200,6 @@ Events:
     # If no StartTime or EndTime are specified, both are set to the "Time" property of BaseEventType.
     # "Type" may be overriden case-by-case using "NameOverrides" in Extraction configuration, or in a dynamic way here. If no "Type" is specified,
     # it is generated from Event NodeId in the same way ExternalIds are generated for normal nodes.
-    # "Source" is by default the externalId of the node that actually caused the event, as CDF does not support events on timeseries.
-    # It may also be overridden here by mapping something to "CDFSource"
     DestinationNameMap:
         #Property1: SubType
     # Emitters that should be read for historical events. Leave empty to disable history read of events.
