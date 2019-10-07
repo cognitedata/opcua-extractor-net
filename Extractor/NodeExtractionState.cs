@@ -38,7 +38,7 @@ namespace Cognite.OpcUa
         {
             lock (lastMutex)
             {
-                if (last > DestLatestTimestamp)
+                if (last < DestLatestTimestamp || DestLatestTimestamp == Utils.Epoch)
                 {
                     DestLatestTimestamp = last;
                 }
@@ -116,9 +116,9 @@ namespace Cognite.OpcUa
             DestLatestTimestamp = Utils.Epoch;
             Id = emitterId;
         }
-        public void InitTimestamp(DateTime first, DateTime last)
+        public void InitTimestamp(DateTime last)
         {
-            lock (lastMutex)
+            if (last < DestLatestTimestamp || DestLatestTimestamp == Utils.Epoch)
             {
                 DestLatestTimestamp = last;
             }

@@ -315,9 +315,11 @@ namespace Cognite.OpcUa
                 {
                     pushEvents = true;
                     var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(UAClient, ObjectIds.Server)).ToList();
+                    var latest = Utils.ReadDateFromFile();
                     foreach (var id in emitters)
                     {
                         EventEmitterStates[id] = new EventExtractionState(id);
+                        EventEmitterStates[id].InitTimestamp(latest);
                     }
 
                     managedNodes = nodeList.Concat(varList).Select(node => node.Id).ToHashSet();
