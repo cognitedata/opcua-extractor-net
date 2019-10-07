@@ -2,6 +2,10 @@
 *     OPC UA Extractor
 *        Change Log
 ***********************************
+0.8.1  2019-10-07
+------------------
+* Config option for earliest history-read timestamp
+
 0.8.0  2019-10-07
 ------------------
 * Add support for reading events from OPC-UA and pushing to events in CDF.

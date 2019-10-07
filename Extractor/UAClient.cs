@@ -47,6 +47,7 @@ namespace Cognite.OpcUa
         public bool Started { get; private set; }
         public bool Failed { get; private set; }
         private readonly TimeSpan historyGranularity;
+        private readonly DateTime historyStartTime;
         private CancellationToken liveToken;
         private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> eventFields;
 
@@ -85,6 +86,7 @@ namespace Cognite.OpcUa
             eventConfig = config.Events;
             historyGranularity = config.Source.HistoryGranularity <= 0 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.Source.HistoryGranularity);
+            historyStartTime = DateTimeOffset.FromUnixTimeMilliseconds(config.Extraction.HistoryStartTime).DateTime;
         }
         #region Session management
         /// <summary>
@@ -791,6 +793,8 @@ namespace Cognite.OpcUa
         {
             DateTime lowest = DateTime.MinValue;
             lowest = toRead.Select((bvar) => { return bvar.DestLatestTimestamp; }).Min();
+            lowest = lowest < historyStartTime ? historyStartTime : lowest;
+			
             var details = new ReadRawModifiedDetails
             {
                 StartTime = lowest,
@@ -881,11 +885,19 @@ namespace Cognite.OpcUa
                 var collector = new EventFieldCollector(this, eventIds);
                 eventFields = collector.GetEventIdFields(token);
             }
-            var latestTime = Utils.ReadDateFromFile();
-            var filter = BuildEventFilter(nodeIds, latestTime);
+
+            // Read the latest local event write time from file, then set the startTime to the largest of that minus 10 minutes, and
+            // the HistoryStartTime config option. We have generally have no way of finding the latest event in the destinations,
+            // so we approximate the time we want to read from using a local buffer.
+            // We both filter on "ReceivedTime" on the server, and read from a specific time in HistoryRead. Servers have varying support
+            // for this feature, as history read on events is a bit of an edge case.
+            var latestTime = Utils.ReadLastEventTimestamp();
+            var startTime = latestTime.Subtract(TimeSpan.FromMinutes(10));
+            startTime = startTime < historyStartTime ? historyStartTime : startTime;
+            var filter = BuildEventFilter(nodeIds, startTime);
             var details = new ReadEventDetails
             {
-                StartTime = latestTime == DateTime.Now ? DateTime.Now : latestTime.Subtract(TimeSpan.FromMinutes(10)),
+                StartTime = startTime,
                 EndTime = DateTime.Now.AddDays(1),
                 NumValuesPerNode = (uint)eventConfig.HistoryReadChunk,
                 Filter = filter

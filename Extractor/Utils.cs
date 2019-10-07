@@ -100,21 +100,21 @@ namespace Cognite.OpcUa
             File.Create(config.BufferFile).Close();
             BufferFileEmpty = true;
         }
-        public static void WriteDateToFile(DateTime date)
+        public static void WriteLastEventTimestamp(DateTime date)
         {
             lock (dateFileLock)
             {
-                using (FileStream fs = new FileStream("latest.bin", FileMode.OpenOrCreate, FileAccess.Write))
+                using (FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Write))
                 {
                     fs.Write(BitConverter.GetBytes(date.ToBinary()));
                 }
             }
         }
-        public static DateTime ReadDateFromFile()
+        public static DateTime ReadLastEventTimestamp()
         {
             lock (dateFileLock)
             {
-                using (FileStream fs = new FileStream("latest.bin", FileMode.OpenOrCreate, FileAccess.Read))
+                using (FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Read))
                 {
                     byte[] rawRead = new byte[sizeof(long)];
                     int read = fs.Read(rawRead, 0, sizeof(long));

@@ -137,7 +137,7 @@ namespace Cognite.OpcUa
                             {
                                 await pusher.PushEvents(token);
                             }
-                            Utils.WriteDateToFile(DateTime.Now);
+                            Utils.WriteLastEventTimestamp(DateTime.Now);
                             await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
                         }
                         catch (TaskCanceledException)
@@ -315,7 +315,7 @@ namespace Cognite.OpcUa
                 {
                     pushEvents = true;
                     var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(UAClient, ObjectIds.Server)).ToList();
-                    var latest = Utils.ReadDateFromFile();
+                    var latest = Utils.ReadLastEventTimestamp();
                     foreach (var id in emitters)
                     {
                         EventEmitterStates[id] = new EventExtractionState(id);
