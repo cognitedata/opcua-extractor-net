@@ -336,6 +336,11 @@ namespace Cognite.OpcUa
             refd.IsForward = true;
             return refd;
         }
+        /// <summary>
+        /// Add externalId override for a single node
+        /// </summary>
+        /// <param name="nodeId">Id of node to be overridden</param>
+        /// <param name="externalId">ExternalId to be used</param>
         public void AddNodeOverride(NodeId nodeId, string externalId)
         {
             nodeOverrides[nodeId] = externalId;
@@ -345,6 +350,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="parents">List of parents to browse</param>
         /// <param name="referenceTypes">Referencetype to browse, defaults to HierarchicalReferences</param>
+        /// <param name="nodeClassMask">Mask for node classes, as specified in the OPC-UA specification</param>
         /// <returns></returns>
         private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(
             IEnumerable<NodeId> parents,
@@ -453,6 +459,8 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="roots">Root nodes to browse</param>
         /// <param name="callback">Callback for each node</param>
+        /// <param name="referenceTypes">Permitted reference types, defaults to HierarchicalReferences</param>
+        /// <param name="nodeClassMask">Mask for node classes as described in the OPC-UA specification</param>
         private void BrowseDirectory(
             IEnumerable<NodeId> roots,
             Action<ReferenceDescription, NodeId> callback,
@@ -708,10 +716,12 @@ namespace Cognite.OpcUa
         /// <summary>
         /// General method to perform history-read operations for a list of nodes, with a given callback and HistoryReadDetails
         /// </summary>
-        /// <param name="details"></param>
-        /// <param name="toRead"></param>
-        /// <param name="callback"></param>
-        /// <param name="token"></param>
+        /// <param name="details">Fully configured HistoryReadDetails to be used</param>
+        /// <param name="toRead">Collection of nodeIds to read</param>
+        /// <param name="callback">
+        /// Callback on each history read iteration.
+        /// Takes result as IEncodable, bool indicating if this is the final iteration, source NodeId, HistoryReadDetails, and returns the number of nodes processed.
+        /// </param>
         private void DoHistoryRead(HistoryReadDetails details,
             IEnumerable<NodeId> toRead,
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
@@ -785,8 +795,8 @@ namespace Cognite.OpcUa
         /// Read historydata for the requested nodes and call the callback after each call to HistoryRead
         /// </summary>
         /// <param name="toRead">Variables to read for</param>
-        /// <param name="callback">Callback, takes a <see cref="HistoryReadResultCollection"/>,
-        /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
+        /// <param name="callback">Callback, takes a IEncodable which should be an instance of a HistoryData object,
+        /// a bool indicating if this is the final iteration, the source NodeId, the ReadRawDetails used and returns the number of nodes processed</param>
         private void HistoryReadDataChunk(IEnumerable<NodeExtractionState> toRead,
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
@@ -810,6 +820,13 @@ namespace Cognite.OpcUa
                 throw;
             }
         }
+        /// <summary>
+        /// Read historydata for the requested nodes and call the callback after each call to HistoryRead, performs chunking according to config,
+        /// limiting each chunk by size, as well as grouping by timestamp according to historyGranularity.
+        /// </summary>
+        /// <param name="toRead">NodeExtractionStates for historical nodes to be read.</param>
+        /// <param name="callback">Callback, takes a IEncodable which should be an instance of a HistoryData object,
+        /// a bool indicating if this is the final iteration, the source NodeId, the ReadRawDetails used and returns the number of nodes processed</param>
         public async Task HistoryReadData(IEnumerable<NodeExtractionState> toRead,
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
@@ -874,6 +891,16 @@ namespace Cognite.OpcUa
                 throw;
             }
         }
+        /// <summary>
+        /// Read history data for a list of events, calls callback after each history read iteration.
+        /// </summary>
+        /// <param name="emitters">Nodes to be extracted from, these must all be emitters.</param>
+        /// <param name="eventIds">Events to extract.</param>
+        /// <param name="nodeIds">NodeIds permitted as SourceNode.</param>
+        /// <param name="callback">Callback to be called for each iteration. Takes a HistoryEvent as an IEncodable,
+        /// a bool indicating if this is the final iteration, NodeId of the node in question, ReadEventDetails containing the filter.
+        /// Returns the number of events processed.</param>
+        /// <param name="token"></param>
         public void HistoryReadEvents(IEnumerable<NodeId> emitters,
             IEnumerable<NodeId> eventIds,
             IEnumerable<NodeId> nodeIds,
@@ -912,11 +939,9 @@ namespace Cognite.OpcUa
             }
         }
         /// <summary>
-        /// Create subscriptions for given list of nodes
+        /// Create datapoint subscriptions for given list of nodes
         /// </summary>
         /// <param name="nodeList">List of buffered variables to synchronize</param>
-        /// <param name="callback">Callback used for DoHistoryRead. Takes a <see cref="HistoryReadResultCollection"/>,
-        /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
         public void SubscribeToNodes(IEnumerable<BufferedVariable> nodeList,
@@ -990,6 +1015,15 @@ namespace Cognite.OpcUa
             }
             Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
         }
+        /// <summary>
+        /// Subscribe to events from the given list of emitters.
+        /// </summary>
+        /// <param name="emitters">List of ids of nodes to serve as emitters. These are the actual targets of the subscription.</param>
+        /// <param name="eventIds">List of ids of events to subscribe to. Used to construct a filter.</param>
+        /// <param name="nodeIds">List of ids of nodes permitted as SourceNodes. Used to construct a filter.</param>
+        /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
+        /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
+        /// <returns>Map of fields, EventTypeId->(SourceTypeId, BrowseName)</returns>
         public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> SubscribeToEvents(IEnumerable<NodeId> emitters,
             IEnumerable<NodeId> eventIds,
             IEnumerable<NodeId> nodeIds,
@@ -1066,6 +1100,12 @@ namespace Cognite.OpcUa
         #endregion
 
         #region events
+        /// <summary>
+        /// Constructs a filter from the given list of permitted SourceNodes, the already constructed field map and an optional receivedAfter property.
+        /// </summary>
+        /// <param name="nodeIds">Permitted SourceNode ids</param>
+        /// <param name="receivedAfter">Optional, if defined, attempt to filter out events with [ReceiveTimeProperty] > receivedAfter</param>
+        /// <returns>The final event filter</returns>
         private EventFilter BuildEventFilter(IEnumerable<NodeId> nodeIds,
             DateTime? receivedAfter = null)
         {
@@ -1150,17 +1190,31 @@ namespace Cognite.OpcUa
                 SelectClauses = selectClauses
             };
         }
+        /// <summary>
+        /// Collects the fields of a given list of eventIds. It does this by mapping out the entire event type hierarchy,
+        /// and collecting the fields of each node on the way.
+        /// </summary>
         private class EventFieldCollector
         {
             readonly UAClient UAClient;
             readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> properties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
             readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> localProperties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
             readonly IEnumerable<NodeId> targetEventIds;
+            /// <summary>
+            /// Construct the collector.
+            /// </summary>
+            /// <param name="parent">UAClient to be used for browse calls.</param>
+            /// <param name="targetEventIds">Target event ids</param>
             public EventFieldCollector(UAClient parent, IEnumerable<NodeId> targetEventIds)
             {
                 UAClient = parent;
                 this.targetEventIds = targetEventIds;
             }
+            /// <summary>
+            /// Main collection function. Calls BrowseDirectory on BaseEventType, waits for it to complete, which should populate properties and localProperties,
+            /// then collects the resulting fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).
+            /// </summary>
+            /// <returns>The collected fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).</returns>
             public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventIdFields(CancellationToken token)
             {
                 properties[ObjectTypeIds.BaseEventType] = new List<ReferenceDescription>();
@@ -1185,6 +1239,11 @@ namespace Cognite.OpcUa
                         .Where(desc => propVariables.ContainsKey(desc.NodeId))
                         .Select(desc => propVariables[desc.NodeId]));
             }
+            /// <summary>
+            /// HandleNode callback for the event type mapping.
+            /// </summary>
+            /// <param name="child">Type or property to be handled</param>
+            /// <param name="parent">Parent type id</param>
             private void EventTypeCallback(ReferenceDescription child, NodeId parent)
             {
                 var id = UAClient.ToNodeId(child.NodeId);

@@ -15,8 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Opc.Ua;
-using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
@@ -35,27 +33,46 @@ namespace Cognite.OpcUa
         /// The UAClient to use as source
         /// </summary>
         UAClient UAClient { set; }
+
+        /// <summary>
+        /// Push nodes, emptying the queue
+        /// </summary>
+        Task<bool> PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> variables, CancellationToken token)
+        {
+            return Task.FromResult(true);
+        }
+        /// <summary>
+        /// Get latest timestamp in destination system, if possible
+        /// </summary>
+        Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
+        {
+            return Task.FromResult(true);
+        }
+        /// <summary>
+        /// Push events, emptying the event queue
+        /// </summary>
+        Task PushEvents(CancellationToken token)
+        {
+            BufferedEventQueue.Clear();
+            return Task.CompletedTask;
+        }
         /// <summary>
         /// Push data points, emptying the queue
         /// </summary>
         /// <param name="dataPointQueue">Data points to be pushed</param>
-        Task PushDataPoints(CancellationToken token);
-        /// <summary>
-        /// Push nodes, emptying the queue
-        /// </summary>
-        Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token);
-        /// <summary>
-        /// Get latest timestamp in destination system, if possible
-        /// </summary>
-        Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token);
-        /// <summary>
-        /// Push events, emptying the event queue
-        /// </summary>
-        Task PushEvents(CancellationToken token);
+        Task PushDataPoints(CancellationToken token)
+        {
+            BufferedDPQueue.Clear();
+            return Task.CompletedTask;
+        }
         /// <summary>
         /// Reset relevant persistent information in the pusher, preparing it to be restarted
         /// </summary>
-        void Reset();
+        void Reset()
+        {
+            BufferedDPQueue.Clear();
+            BufferedEventQueue.Clear();
+        }
         ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; }
         ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; }
     }

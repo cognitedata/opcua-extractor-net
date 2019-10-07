@@ -148,7 +148,10 @@ namespace Cognite.OpcUa
             if (string.IsNullOrWhiteSpace(config.Source.EndpointURL)) throw new Exception("Invalid EndpointURL");
             if (config.Source.PollingInterval < 0) throw new Exception("PollingInterval must be a positive number");
         }
-
+        /// <summary>
+        /// Configure two different configurations for the CDF client. One terminates on 410 or after 4 attempts. The other tries forever. Both terminate on 400.
+        /// </summary>
+        /// <param name="services"></param>
         private static void Configure(IServiceCollection services)
         {
             services.AddHttpClient<ContextCDFClient>()
@@ -207,6 +210,12 @@ namespace Cognite.OpcUa
             worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));
             worker.Start();
         }
+        /// <summary>
+        /// Start the extractor.
+        /// </summary>
+        /// <param name="config">Full config object</param>
+        /// <param name="provider">ServiceProvider with any required service for the pushers.</param>
+        /// <param name="source">CancellationTokenSource used to create tokens and terminate the run-task on failure</param>
         private static void Run(FullConfig config, ServiceProvider provider, CancellationTokenSource source)
         {
             UAClient client = new UAClient(config);

@@ -92,8 +92,7 @@ namespace Test
                 for (int i = 0; i < 20; i++)
                 {
                     var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=2[3]\"");
-                    var read2 = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=3[1]\"");
-                    if (read.Count > 0 && read.First().HasEntries && read2.Count > 0 && read2.First().HasEntries)
+                    if (read.Count > 0 && read.First().HasEntries)
                     {
                         gotData = true;
                         break;
