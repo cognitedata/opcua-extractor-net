@@ -35,29 +35,23 @@ namespace Cognite.OpcUa
     public class Extractor
     {
         private readonly UAClient UAClient;
-        private bool buffersEmpty;
-        private bool eventsBuffersEmpty;
         private readonly FullConfig config;
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
-        public ConcurrentDictionary<NodeId, BufferedVariable> ActiveVariables { get; } = new ConcurrentDictionary<NodeId, BufferedVariable>();
 
         // Concurrent reading of properties
         private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
 
-        public ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> ActiveEvents { get; } = new ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>>();
-        /// <summary>
-        /// The set of uniqueIds discovered, but not yet synced with the pusher
-        /// </summary>
-        private ISet<NodeId> NotInSync { get; } = new HashSet<NodeId>();
-        public ISet<NodeId> EventsNotInSync { get; } = new HashSet<NodeId>();
-        private object NotInSyncLock { get; } = new object();
-        private object EventsNotInSyncLock { get; } = new object();
+        public ConcurrentDictionary<NodeId, NodeExtractionState> NodeStates { get; } = new ConcurrentDictionary<NodeId, NodeExtractionState>();
+        public ConcurrentDictionary<NodeId, EventExtractionState> EventEmitterStates { get; } = new ConcurrentDictionary<NodeId, EventExtractionState>();
 
         private HashSet<NodeId> managedNodes;
+
+        public ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> ActiveEvents { get; } = new ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>>();
+
         private bool pushEvents = false;
         private bool pushData = false;
 
@@ -191,7 +185,6 @@ namespace Cognite.OpcUa
         public void RestartExtractor(CancellationToken token)
         {
             UAClient.WaitForOperations().Wait();
-            buffersEmpty = false;
             MapUAToCDF(token).Wait();
         }
         /// <summary>
@@ -275,7 +268,7 @@ namespace Cognite.OpcUa
                 if (AllowTSMap(node))
                 {
                     tsList.Add(node);
-                    ActiveVariables[node.Id] = node;
+                    NodeStates[node.Id] = new NodeExtractionState(node);
                     if (node.ArrayDimensions != null && node.ArrayDimensions.Length > 0 && node.ArrayDimensions[0] > 0)
                     {
                         for (int i = 0; i < node.ArrayDimensions[0]; i++)
@@ -288,28 +281,32 @@ namespace Cognite.OpcUa
                     {
                         fullTsList.Add(node);
                     }
-                    if (node.Historizing)
-                    {
-                        lock (NotInSyncLock)
-                        {
-                            NotInSync.Add(node.Id);
-                        }
-                    }
                 }
             }
 
             pushData = fullTsList.Any();
+
             var pushes = pushers.Select(pusher => pusher.PushNodes(nodeList, fullTsList, token)).ToList();
-            var result = await Task.WhenAll(pushes);
-            if (!result.All(res => res))
+            var pushResult = await Task.WhenAll(pushes);
+            if (!pushResult.All(res => res))
             {
                 throw new Exception("Pushing nodes failed");
             }
+
+
+            var statesToSync = NodeStates.Values.Where(state => state.Historizing);
+            var getLatestTasks = pushers.Select(pusher => pusher.InitLatestTimestamps(statesToSync, token));
+            var getLatestResult = await Task.WhenAll(getLatestTasks);
+            if (!getLatestResult.All(res => res))
+            {
+                throw new Exception("Getting latest timestamp failed");
+            }
+
             foreach (var node in nodeList.Concat(varList))
             {
                 Log.Debug(node.ToDebugDescription());
             }
-            if (pushers.Any() && pushers.First().GetType().Name == "TestPusher") return;
+
             Log.Information("Synchronize {NumNodesToSynch} nodes", tsList.Count);
             try
             {
@@ -318,6 +315,13 @@ namespace Cognite.OpcUa
                 {
                     pushEvents = true;
                     var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(UAClient, ObjectIds.Server)).ToList();
+                    var latest = Utils.ReadDateFromFile();
+                    foreach (var id in emitters)
+                    {
+                        EventEmitterStates[id] = new EventExtractionState(id);
+                        EventEmitterStates[id].InitTimestamp(latest);
+                    }
+
                     managedNodes = nodeList.Concat(varList).Select(node => node.Id).ToHashSet();
                     var eventFields = UAClient.SubscribeToEvents(
                         emitters,
@@ -332,12 +336,10 @@ namespace Cognite.OpcUa
                     if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
                     {
                         var histEmitters = config.Events.HistorizingEmitterIds.Select(proto => proto.ToNodeId(UAClient, ObjectIds.Server)).ToList();
-                        lock (EventsNotInSync)
+                        foreach (var id in histEmitters)
                         {
-                            foreach (var emitter in histEmitters)
-                            {
-                                EventsNotInSync.Add(emitter);
-                            }
+                            if (!EventEmitterStates.ContainsKey(id)) throw new Exception("Historical emitter not in emitter list");
+                            EventEmitterStates[id].Historizing = true;
                         }
                         UAClient.HistoryReadEvents(histEmitters,
                             config.Events.EventIds.Select(proto => proto.ToNodeId(UAClient, ObjectTypeIds.BaseEventType)).ToList(),
@@ -347,7 +349,7 @@ namespace Cognite.OpcUa
                     }
                 }
 
-                await UAClient.HistoryReadData(tsList, HistoryDataHandler, token);
+                await UAClient.HistoryReadData(NodeStates.Values.Where(state => state.Historizing), HistoryDataHandler, token);
             }
             catch (Exception e)
             {
@@ -429,7 +431,7 @@ namespace Cognite.OpcUa
                 commonQueue.Enqueue(bufferedNode);
             }
         }
-        private IEnumerable<BufferedDataPoint> ToDataPoint(DataValue value, BufferedVariable variable, string uniqueId)
+        private IEnumerable<BufferedDataPoint> ToDataPoint(DataValue value, NodeExtractionState variable, string uniqueId)
         {
             if (variable.ArrayDimensions != null && variable.ArrayDimensions.Length > 0 && variable.ArrayDimensions[0] > 0)
             {
@@ -496,8 +498,7 @@ namespace Cognite.OpcUa
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
             string uniqueId = UAClient.GetUniqueId(item.ResolvedNodeId);
-            if (!buffersEmpty && NotInSync.Contains(item.ResolvedNodeId)) return;
-            var variable = ActiveVariables[item.ResolvedNodeId];
+            var node = NodeStates[item.ResolvedNodeId];
 
             foreach (var datapoint in item.DequeueValues())
             {
@@ -506,7 +507,9 @@ namespace Cognite.OpcUa
                     Log.Warning("Bad datapoint: {BadDatapointExternalId}", uniqueId);
                     continue;
                 }
-                var buffDps = ToDataPoint(datapoint, variable, uniqueId);
+                var buffDps = ToDataPoint(datapoint, node, uniqueId);
+                node.UpdateFromStream(buffDps);
+                if (!node.IsStreaming) return;
                 foreach (var buffDp in buffDps)
                 {
                     Log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
@@ -588,9 +591,11 @@ namespace Cognite.OpcUa
                 Log.Warning("Triggered event without filter");
                 return;
             }
-            if (!eventsBuffersEmpty && EventsNotInSync.Contains(item.ResolvedNodeId)) return;
             var buffEvent = ConstructEvent(filter, eventFields);
             if (buffEvent == null) return;
+            var eventState = EventEmitterStates[item.ResolvedNodeId];
+            eventState.UpdateFromStream(buffEvent);
+            if (!eventState.IsStreaming) return;
             Log.Debug(buffEvent.ToDebugDescription());
             foreach (var pusher in pushers)
             {
@@ -605,26 +610,19 @@ namespace Cognite.OpcUa
         /// <param name="nodeid">Id of the node in question</param>
         private int HistoryDataHandler(IEncodeable rawData, bool final, NodeId nodeid, HistoryReadDetails details)
         {
-            if (final)
-            {
-                lock (NotInSyncLock)
-                {
-                    NotInSync.Remove(nodeid);
-                    buffersEmpty = !NotInSync.Any();
-                }
-            }
             if (rawData == null) return 0;
             if (!(rawData is HistoryData data))
             {
                 Log.Warning("Incorrect result type of history read data");
                 return 0;
             }
+            if (data == null || data.DataValues == null) return 0;
+            var nodeState = NodeStates[nodeid];
+
             string uniqueId = UAClient.GetUniqueId(nodeid);
 
-            if (data == null || data.DataValues == null) return 0;
-            var variable = ActiveVariables[nodeid];
-
-            if (data.DataValues == null) return 0;
+            DateTime last = data.DataValues.Max(dp => dp.SourceTimestamp);
+            nodeState.UpdateFromFrontfill(last, final);
             int cnt = 0;
             foreach (var datapoint in data.DataValues)
             {
@@ -633,7 +631,7 @@ namespace Cognite.OpcUa
                     Log.Warning("Bad datapoint: {BadDatapointExternalId}", uniqueId);
                     continue;
                 }
-                var buffDps = ToDataPoint(datapoint, variable, uniqueId);
+                var buffDps = ToDataPoint(datapoint, nodeState, uniqueId);
                 foreach (var buffDp in buffDps)
                 {
                     Log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
@@ -647,18 +645,24 @@ namespace Cognite.OpcUa
                     }
                 }
             }
+            if (final)
+            {
+                var buffered = nodeState.FlushBuffer();
+                foreach (var pusher in pushers)
+                {
+                    foreach (var dplist in buffered)
+                    {
+                        foreach (var dp in dplist)
+                        {
+                            pusher.BufferedDPQueue.Enqueue(dp);
+                        }
+                    }
+                }
+            }
             return cnt;
         }
         private int HistoryEventHandler(IEncodeable rawEvts, bool final, NodeId nodeid, HistoryReadDetails details)
         {
-            if (final)
-            {
-                lock (EventsNotInSyncLock)
-                {
-                    EventsNotInSync.Remove(nodeid);
-                    eventsBuffersEmpty = !EventsNotInSync.Any();
-                }
-            }
             if (rawEvts == null) return 0;
             if (!(rawEvts is HistoryEvent evts))
             {
@@ -677,16 +681,34 @@ namespace Cognite.OpcUa
                 return 0;
             }
             if (evts == null || evts.Events == null) return 0;
+            var emitterState = EventEmitterStates[nodeid];
+            DateTime last = DateTime.MinValue;
             int cnt = 0;
             foreach (var evt in evts.Events)
             {
                 var buffEvt = ConstructEvent(filter, evt.EventFields);
                 if (buffEvt == null) continue;
+                if (buffEvt.Time > last)
+                {
+                    last = buffEvt.Time;
+                }
                 foreach (var pusher in pushers)
                 {
                     pusher.BufferedEventQueue.Enqueue(buffEvt);
                 }
                 cnt++;
+            }
+            emitterState.UpdateFromFrontfill(last, final);
+            if (final)
+            {
+                var buffered = emitterState.FlushBuffer();
+                foreach (var pusher in pushers)
+                {
+                    foreach (var evt in buffered)
+                    {
+                        pusher.BufferedEventQueue.Enqueue(evt);
+                    }
+                }
             }
             return cnt;
         }

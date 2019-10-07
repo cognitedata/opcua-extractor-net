@@ -134,28 +134,6 @@ namespace Cognite.OpcUa
         public QualifiedName BrowseName { get; set; }
         private DateTime _latestTimestamp = new DateTime(1970, 1, 1);
         /// <summary>
-        /// Latest timestamp historizing value was read from CDF
-        /// </summary>
-        public DateTime LatestTimestamp
-        {
-            get { return _latestTimestamp; }
-            set
-            {
-                var tsRef = Index != -1 ? ArrayParent.LatestTimestamp : _latestTimestamp;
-                if (tsRef == new DateTime(1970, 1, 1) || value < tsRef)
-                {
-                    if (Index != -1)
-                    {
-                        ArrayParent.LatestTimestamp = value;
-                    }
-                    else
-                    {
-                        _latestTimestamp = value;
-                    }
-                }
-            }
-        }
-        /// <summary>
         /// Value of variable as string or double
         /// </summary>
         public BufferedDataPoint Value { get; private set; }
@@ -220,7 +198,6 @@ namespace Cognite.OpcUa
         {
             ArrayParent = other;
             Index = index;
-            LatestTimestamp = other.LatestTimestamp;
             Historizing = other.Historizing;
             DataType = other.DataType;
             ValueRank = other.ValueRank;

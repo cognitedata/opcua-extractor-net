@@ -28,6 +28,7 @@ namespace Cognite.OpcUa
 {
     public static class Utils
     {
+        public static readonly DateTime Epoch = DateTimeOffset.FromUnixTimeMilliseconds(0).DateTime;
         public static bool BufferFileEmpty { get; set; }
         private static readonly object fileLock = new object();
         private static readonly object dateFileLock = new object();

@@ -61,21 +61,21 @@ namespace Cognite.OpcUa
             return Task.CompletedTask;
         }
 
-        public async Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
+        public Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
             var historizingVariables = variables.Where(variable => variable.Historizing);
-            if (!historizingVariables.Any()) return true;
-            var getLastTasks = variables.Select(async variable =>
+            return Task.FromResult(true);
+        }
+        public async Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
+        {
+            var getLastTasks = states.Select(async state =>
             {
-                var values = await client.QueryMultiSeriesAsync(config.Database, $"SELECT last(value) FROM \"{UAClient.GetUniqueId(variable.Id, variable.Index)}\"");
+                var values = await client.QueryMultiSeriesAsync(config.Database,
+                    $"SELECT last(value) FROM \"{UAClient.GetUniqueId(state.Id, state.ArrayDimensions != null && state.ArrayDimensions[0] > 0 ? 0 : -1)}\"");
                 if (values.Any() && values.First().HasEntries)
                 {
                     DateTime timestamp = values.First().Entries[0].Time;
-                    variable.LatestTimestamp = timestamp;
-                }
-                else
-                {
-                    variable.LatestTimestamp = new DateTime(1970, 1, 1);
+                    state.InitTimestamp(timestamp);
                 }
             });
             try
