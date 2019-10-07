@@ -2,6 +2,10 @@
 *     OPC UA Extractor
 *        Change Log
 ***********************************
+0.8.0  2019-10-07
+------------------
+* Add support for reading events from OPC-UA and pushing to events in CDF.
+* Update to .NET Core 3.0, trim and optimize binaries, and deploy as a single platform specific executable
 
 0.7.0  2019-10-03
 ------------------
