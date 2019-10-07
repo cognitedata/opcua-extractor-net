@@ -1,0 +1,75 @@
+﻿Source:
+    # The URL of the OPC-UA server to connect to
+    EndpointURL: "opc.tcp://localhost:4840"
+
+Pushers:
+    - !cdf
+        # The project to connect to in the API
+        Project: test
+        # Cognite api key
+        ApiKey: test
+        # Buffer non-historizing datapoints when the connection to CDF fails.
+        BufferOnFailure: true
+        # Buffer file path
+        BufferFile: buffer.bin
+
+Logging:
+    # Writes log events at this level to the Console. 
+    # If not present, or if the level is invalid, Console is not used. 
+    ConsoleLevel: "debug"
+
+Extraction:
+    # Global prefix for externalId. Should be unique to prevent name conflicts.
+    IdPrefix: "gp."
+
+    # Specify specific DisplayNames to ignore.
+    IgnoreNamePrefix:
+        - EXCLUDE
+  
+    NamespaceMap:
+        # Map OPC-UA namespaces to prefixes in CDF. 
+        # Ex: "urn:cognite:net:server": cns
+        # Saves space compared to using the full URL. Using the ns index is not safe
+        # If not specified, the full URI is used instead.
+        "urn:freeopcua:python:server": "fps:"
+        "http://examples.freeopcua.github.io": "efg:"
+
+Events:
+    # Event ids to map, with full namespace-uri, and node identifier on the form "i=123"
+    # Custom events must be subtypes of the BaseEventType.
+    EventIds:
+        -   NamespaceUri: "http://examples.freeopcua.github.io"
+            NodeId: "i=12"
+        -   NamespaceUri: "http://examples.freeopcua.github.io"
+            NodeId: "i=16"
+        -   NamespaceUri: "http://examples.freeopcua.github.io"
+            NodeId: "i=18"
+    # Id of nodes to be observed as event emitters. Empty Namespace/NodeId defaults to the server node.
+    EmitterIds:
+        -   NamespaceUri: "http://examples.freeopcua.github.io"
+            NodeId: "i=1"
+        -   NamespaceUri:
+            NodeId:
+    # List of BrowseName for properties to be excluded from automatic mapping to destination metadata.
+    # All event properties are read, by default only "Time" and "Severity" are used from the base event.
+    # Be aware that a maximum of 16 metadata entries are allowed in CDF.
+    ExcludeProperties:
+        - PropertyNum
+    # Map source browse names to other values in the destination. For CDF, internal properties may be overwritten, by default
+    # "Message" is mapped to description, "SourceNode" is used for context and "EventType" is used for type. These may also be excluded or replaced by 
+    # overrides in DestinationNameMap. If multiple properties are mapped to the same value, the first non-null is used.
+
+    # If "StartTime", "EndTime" or "SubType" are specified, either directly or through the map, these are used as event properties instead of metadata.
+    # "Type" may be overriden case-by-case using "NameOverrides" in Extraction configuration, or in a dynamic way here. If no "Type" is specified,
+    # it is generated from Event NodeId in the same way ExternalIds are generated for normal nodes.
+    DestinationNameMap:
+        TypeProp: Type
+
+    # Emitters that should be read for historical events. Leave empty to disable history read of events.
+    HistorizingEmitterIds:
+        -   NamespaceUri:
+            NodeId:
+    # Attribute to use for filtering history read. The last time read is stored locally, in latest.bin, and only events received by the server after this time are history read.
+    # This should be the browsename of the attribute that stores the local server time when an event is received. One of "ReceiveTime", "Time", "LocalTime".
+    # Leave empty to always read the full history on startup. (This might be slow if there is a lot of history).
+    ReceiveTimeProperty: "Time"

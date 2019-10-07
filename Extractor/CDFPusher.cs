@@ -26,6 +26,7 @@ using CogniteSdk;
 using CogniteSdk.Assets;
 using CogniteSdk.TimeSeries;
 using CogniteSdk.DataPoints;
+using CogniteSdk.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus.Client;
@@ -47,6 +48,7 @@ namespace Cognite.OpcUa
         public PusherConfig BaseConfig { get; private set; }
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
+        public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
 
         public CDFPusher(IServiceProvider clientProvider, CogniteClientConfig config)
         {
@@ -55,9 +57,12 @@ namespace Cognite.OpcUa
             this.clientProvider = clientProvider;
         }
 
-        private Client GetClient()
+        private Client GetClient(string name = "Context")
         {
-            return clientProvider.GetRequiredService<Client>()
+            Client client = name == "Context"
+                ? (Client)clientProvider.GetRequiredService<ContextCDFClient>()
+                : clientProvider.GetRequiredService<DataCDFClient>();
+            return client
                 .AddHeader("api-key", config.ApiKey)
                 .SetAppId("OPC-UA Extractor")
                 .SetProject(config.Project)
@@ -70,6 +75,12 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_datapoint_pushes", "Number of times datapoints have been pushed to CDF");
         private static readonly Counter dataPointPushFailures = Metrics
             .CreateCounter("opcua_datapoint_push_failures", "Number of completely failed pushes of datapoints to CDF");
+        private static readonly Counter eventCounter = Metrics
+            .CreateCounter("opcua_events_pushed", "Number of events pushed to CDF");
+        private static readonly Counter eventPushCounter = Metrics
+            .CreateCounter("opcua_event_pushes", "Number of times events have been pushed to CDF");
+        private static readonly Counter eventPushFailures = Metrics
+            .CreateCounter("opcua_event_push_failures", "Number of times events have been pushed to CDF");
         private static readonly Gauge trackedAssets = Metrics
             .CreateGauge("opcua_tracked_assets", "Number of objects on the opcua server mapped to assets in CDF");
         private static readonly Gauge trackedTimeseres = Metrics
@@ -135,14 +146,14 @@ namespace Cognite.OpcUa
             });
             var req = new DataPointInsertionRequest();
             req.Items.AddRange(finalDataPoints);
-            var client = GetClient();
+            var client = GetClient("Data");
             try
             {
                 await client.DataPoints.InsertAsync(req, token);
             }
             catch (Exception e)
             {
-                Log.Error(e, "Failed to insert {NumFailedDatapoints} into CDF", count);
+                Log.Error(e, "Failed to insert {NumFailedDatapoints} datapoints into CDF", count);
 				dataPointPushFailures.Inc();
                 if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile))
                 {
@@ -163,6 +174,69 @@ namespace Cognite.OpcUa
             }
             dataPointsCounter.Inc(count);
             dataPointPushes.Inc();
+        }
+        public async Task PushEvents(CancellationToken token)
+        {
+            var eventList = new List<BufferedEvent>();
+            int count = 0;
+            while (BufferedEventQueue.TryDequeue(out BufferedEvent buffEvent) && count++ < 1000)
+            {
+                if (nodeToAssetIds.ContainsKey(buffEvent.SourceNode) || config.Debug)
+                {
+                    eventList.Add(buffEvent);
+                }
+                else
+                {
+                    Log.Warning("Event with unknown sourceNode: {nodeId}", buffEvent.SourceNode);
+                }
+            }
+            if (count == 0)
+            {
+                Log.Debug("Push 0 events to CDF");
+                return;
+            }
+            Log.Information("Push {NumEventsToPush} events to CDF", count);
+            if (config.Debug) return;
+            IEnumerable<EventEntity> events = eventList.Select(evt => EventToCDFEvent(evt)).ToList();
+            var client = GetClient("Data");
+            try
+            {
+                await client.Events.CreateAsync(events, token);
+            }
+            catch (ResponseException ex)
+            {
+                if (ex.Duplicated.Any())
+                {
+                    var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString());
+                    Log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count());
+
+                    events = events.Where(evt => !duplicates.Contains(evt.ExternalId));
+                    try
+                    {
+                        await client.Events.CreateAsync(events, token);
+                    }
+                    catch (Exception exc)
+                    {
+                        Log.Error(exc, "Failed to push {NumFailedEvents} events to CDF", count);
+                        eventPushFailures.Inc();
+                        return;
+                    }
+                }
+                else
+                {
+                    Log.Error(ex, "Failed to push {NumFailedEvents} events to CDF", count);
+                    eventPushFailures.Inc();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to push {NumFailedEvents} events to CDF", count);
+                eventPushFailures.Inc();
+                return;
+            }
+            eventCounter.Inc(count);
+            eventPushCounter.Inc();
         }
         /// <summary>
         /// Empty queue, fetch info for each relevant node, test results against CDF, then synchronize any variables
@@ -290,7 +364,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var missing in ex.Missing)
                     {
-                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        if (missing.TryGetValue("externalId", out CogniteSdk.ErrorValue value))
                         {
                             missingAssetIds.Add(value.ToString());
                         }
@@ -379,6 +453,17 @@ namespace Cognite.OpcUa
                 string externalId = UAClient.GetUniqueId(node.Id, node.Index);
                 tsIds.Add(externalId, node);
                 nodeIsHistorizing[externalId] = false;
+                if (node.Index == -1)
+                {
+                    if (nodeToAssetIds.ContainsKey(node.ParentId))
+                    {
+                        nodeToAssetIds[node.Id] = nodeToAssetIds[node.ParentId];
+                    }
+                    else
+                    {
+                        Log.Warning("Parentless timeseries: {id}", node.Id);
+                    }
+                }
             }
 
             Log.Information("Test {NumTimeseriesToTest} timeseries", tsIds.Count);
@@ -395,7 +480,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var missing in ex.Missing)
                     {
-                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        if (missing.TryGetValue("externalId", out CogniteSdk.ErrorValue value))
                         {
                             missingTSIds.Add(value.ToString());
                         }
@@ -449,6 +534,17 @@ namespace Cognite.OpcUa
                 string externalId = UAClient.GetUniqueId(node.Id, node.Index);
                 tsIds.Add(externalId, node);
                 nodeIsHistorizing[externalId] = true;
+                if (node.Index == -1)
+                {
+                    if (nodeToAssetIds.ContainsKey(node.ParentId))
+                    {
+                        nodeToAssetIds[node.Id] = nodeToAssetIds[node.ParentId];
+                    }
+                    else
+                    {
+                        Log.Warning("Parentless timeseries: {id}", node.Id);
+                    }
+                }
             }
 
             Log.Information("Test {NumHistorizingTimeseriesToTest} historizing timeseries", tsIds.Count);
@@ -462,6 +558,7 @@ namespace Cognite.OpcUa
                 Log.Information("Found {NumRetrievedHistorizingTimeseries} historizing timeseries", readResults.Count());
                 foreach (var resultItem in readResults)
                 {
+                    var variable = tsIds[resultItem.ExternalId];
                     if (resultItem.NumericDataPoints.Any())
                     {
                         tsIds[resultItem.ExternalId].LatestTimestamp =
@@ -475,7 +572,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var missing in ex.Missing)
                     {
-                        if (missing.TryGetValue("externalId", out ErrorValue value) && value != null)
+                        if (missing.TryGetValue("externalId", out CogniteSdk.ErrorValue value) && value != null)
                         {
                             missingTSIds.Add(value.ToString());
                         }
@@ -522,13 +619,13 @@ namespace Cognite.OpcUa
                     Log.Information("Get remaining {NumFinalHistorizingTimeseriesData} historizing timeseries ids", idsToMap.Count());
                     try
                     {
-                        var readResults = await client.DataPoints.GetLatestAsync(idsToMap, token);
-                        foreach (var resultItem in readResults)
+                        var latestReadResults = await client.DataPoints.GetLatestAsync(idsToMap, token);
+                        foreach (var resultItem in latestReadResults)
                         {
+                            var variable = tsIds[resultItem.ExternalId];
                             if (resultItem.NumericDataPoints.Any())
                             {
-                                tsIds[resultItem.ExternalId].LatestTimestamp =
-                                    DateTimeOffset.FromUnixTimeMilliseconds(resultItem.NumericDataPoints.First().TimeStamp).DateTime;
+                                variable.LatestTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(resultItem.NumericDataPoints.First().TimeStamp).DateTime;
                             }
                         }
                     }
@@ -552,10 +649,10 @@ namespace Cognite.OpcUa
             string externalId = UAClient.GetUniqueId(variable.Id, variable.Index);
             var writePoco = new TimeSeriesEntity
             {
-                Description = variable.Description,
+                Description = Utils.Truncate(variable.Description, 1000),
                 ExternalId = externalId,
                 AssetId = nodeToAssetIds[variable.ParentId],
-                Name = variable.DisplayName,
+                Name = Utils.Truncate(variable.DisplayName, 255),
                 LegacyName = externalId,
                 IsString = variable.DataType.isString,
                 IsStep = variable.DataType.isStep
@@ -564,7 +661,8 @@ namespace Cognite.OpcUa
             {
                 writePoco.MetaData = variable.properties
                     .Where(prop => prop.Value != null)
-                    .ToDictionary(prop => prop.DisplayName, prop => prop.Value.stringValue);
+                    .Take(16)
+                    .ToDictionary(prop => Utils.Truncate(prop.DisplayName, 32), prop => Utils.Truncate(prop.Value.stringValue, 256));
             }
             return writePoco;
         }
@@ -577,9 +675,9 @@ namespace Cognite.OpcUa
         {
             var writePoco = new AssetEntity
             {
-                Description = node.Description,
+                Description = Utils.Truncate(node.Description, 500),
                 ExternalId = UAClient.GetUniqueId(node.Id),
-                Name = node.DisplayName
+                Name = string.IsNullOrEmpty(node.DisplayName) ? Utils.Truncate(UAClient.GetUniqueId(node.Id), 140) : Utils.Truncate(node.DisplayName, 140)
             };
             if (node.ParentId != null && !node.ParentId.IsNullNodeId)
             {
@@ -589,9 +687,54 @@ namespace Cognite.OpcUa
             {
                 writePoco.MetaData = node.properties
                     .Where(prop => prop.Value != null)
-                    .ToDictionary(prop => prop.DisplayName, prop => prop.Value.stringValue);
+                    .Take(16)
+                    .ToDictionary(prop => Utils.Truncate(prop.DisplayName, 32), prop => Utils.Truncate(prop.Value.stringValue, 256));
             }
             return writePoco;
+        }
+        private long GetTimestampValue(object value)
+        {
+            if (value is DateTime dt)
+            {
+                return new DateTimeOffset(dt).ToUnixTimeMilliseconds();
+            }
+            else
+            {
+                return Convert.ToInt64(value);
+            }
+        }
+        private static HashSet<string> ExcludeMetaData = new HashSet<string> {
+            "StartTime", "EndTime", "Type", "SubType"
+        };
+
+        private EventEntity EventToCDFEvent(BufferedEvent evt)
+        {
+            var entity = new EventEntity
+            {
+                Description = Utils.Truncate(evt.Message, 500),
+                StartTime = evt.MetaData.ContainsKey("StartTime") ? GetTimestampValue(evt.MetaData["StartTime"]) : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
+                EndTime = evt.MetaData.ContainsKey("EndTime") ? GetTimestampValue(evt.MetaData["EndTime"]) : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
+                AssetIds = new List<long> { nodeToAssetIds[evt.SourceNode] },
+                ExternalId = Utils.Truncate(evt.EventId, 255),
+                Type = Utils.Truncate(evt.MetaData.ContainsKey("Type") ? UAClient.ConvertToString(evt.MetaData["Type"]) : UAClient.GetUniqueId(evt.EventType), 64)
+            };
+            if (!evt.MetaData.ContainsKey("SourceNode"))
+            {
+                evt.MetaData["SourceNode"] = UAClient.GetUniqueId(evt.SourceNode);
+            }
+            if (evt.MetaData.ContainsKey("SubType"))
+            {
+                entity.SubType = Utils.Truncate(UAClient.ConvertToString(evt.MetaData["SubType"]), 64);
+            }
+            var metaData = evt.MetaData
+                .Where(kvp => !ExcludeMetaData.Contains(kvp.Key))
+                .Take(16)
+                .ToDictionary(kvp => Utils.Truncate(kvp.Key, 32), kvp => Utils.Truncate(UAClient.ConvertToString(kvp.Value), 256));
+            if (metaData.Any())
+            {
+                entity.MetaData = metaData;
+            }
+            return entity;
         }
         #endregion
     }

@@ -21,6 +21,7 @@ buffer.bin
 coverage.json
 paket-files/
 Extractor/Properties
+*.bin
 
 # Config
 config.yml

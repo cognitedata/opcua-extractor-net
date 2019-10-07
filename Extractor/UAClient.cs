@@ -35,6 +35,7 @@ namespace Cognite.OpcUa
     {
         private readonly UAClientConfig config;
         private readonly ExtractionConfig extractionConfig;
+        private readonly EventConfig eventConfig;
         private Session session;
         private SessionReconnectHandler reconnectHandler;
         public Extractor Extractor { get; set; }
@@ -47,6 +48,7 @@ namespace Cognite.OpcUa
         public bool Failed { get; private set; }
         private readonly TimeSpan historyGranularity;
         private CancellationToken liveToken;
+        private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> eventFields;
 
         private int pendingOperations;
         private readonly object pendingOpLock = new object();
@@ -80,6 +82,7 @@ namespace Cognite.OpcUa
         {
             this.config = config.Source;
             extractionConfig = config.Extraction;
+            eventConfig = config.Events;
             historyGranularity = config.Source.HistoryGranularity <= 0 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.Source.HistoryGranularity);
         }
@@ -341,7 +344,11 @@ namespace Cognite.OpcUa
         /// <param name="parents">List of parents to browse</param>
         /// <param name="referenceTypes">Referencetype to browse, defaults to HierarchicalReferences</param>
         /// <returns></returns>
-        private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(IEnumerable<NodeId> parents, CancellationToken token, NodeId referenceTypes = null)
+        private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(
+            IEnumerable<NodeId> parents,
+            CancellationToken token,
+            NodeId referenceTypes,
+            uint nodeClassMask)
         {
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             foreach (var lparents in Utils.ChunkBy(parents, config.BrowseChunk))
@@ -353,7 +360,7 @@ namespace Cognite.OpcUa
                         NodeId = id,
                         ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
                         IncludeSubtypes = true,
-                        NodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
+                        NodeClassMask = nodeClassMask,
                         BrowseDirection = BrowseDirection.Forward,
                         ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
                             | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition
@@ -444,7 +451,12 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="roots">Root nodes to browse</param>
         /// <param name="callback">Callback for each node</param>
-        private void BrowseDirectory(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
+        private void BrowseDirectory(
+            IEnumerable<NodeId> roots,
+            Action<ReferenceDescription, NodeId> callback,
+            CancellationToken token,
+            NodeId referenceTypes = null,
+            uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object)
         {
             var nextIds = roots.ToList();
             int levelCnt = 0;
@@ -452,7 +464,7 @@ namespace Cognite.OpcUa
             do
             {
                 var references = Utils.ChunkBy(nextIds, config.BrowseNodesChunk)
-                    .Select(ids => GetNodeChildren(ids, token))
+                    .Select(ids => GetNodeChildren(ids, token, referenceTypes, nodeClassMask))
                     .SelectMany(dict => dict)
                     .ToDictionary(val => val.Key, val => val.Value);
 
@@ -494,233 +506,7 @@ namespace Cognite.OpcUa
         }
         #endregion
 
-        #region Get data
-        /// <summary>
-        /// Read historydata for the requested nodes and call the callback after each call to HistoryRead
-        /// </summary>
-        /// <param name="toRead">Variables to read for</param>
-        /// <param name="callback">Callback, takes a <see cref="HistoryReadResultCollection"/>,
-        /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
-        private void DoHistoryRead(IEnumerable<BufferedVariable> toRead,
-            Action<HistoryData, bool, NodeId> callback,
-            CancellationToken token)
-        {
-            DateTime lowest = DateTime.MinValue;
-            lowest = toRead.Select((bvar) => { return bvar.LatestTimestamp; }).Min();
-            var details = new ReadRawModifiedDetails
-            {
-                StartTime = lowest,
-                EndTime = DateTime.Now.AddDays(1),
-                NumValuesPerNode = (uint)config.HistoryReadChunk
-            };
-            int opCnt = 0;
-            int ptCnt = 0;
-            IncOperations();
-            var ids = new HistoryReadValueIdCollection();
-            var indexMap = new NodeId[toRead.Count()];
-            int index = 0;
-            foreach (var node in toRead)
-            {
-                ids.Add(new HistoryReadValueId
-                {
-                    NodeId = node.Id,
-                });
-                indexMap[index] = node.Id;
-                index++;
-            }
-            try
-            {
-                do
-                {
-                    session.HistoryRead(
-                        null,
-                        new ExtensionObject(details),
-                        TimestampsToReturn.Source,
-                        false,
-                        ids,
-                        out HistoryReadResultCollection results,
-                        out _
-                    );
-                    numHistoryReads.Inc();
-                    ids.Clear();
-                    int prevIndex = 0;
-                    int nextIndex = 0;
-                    opCnt++;
-                    foreach (var data in results)
-                    {
-                        var hdata = ExtensionObject.ToEncodeable(data.HistoryData) as HistoryData;
-                        ptCnt += hdata?.DataValues?.Count ?? 0;
-                        callback(hdata, data == null || hdata == null || data.ContinuationPoint == null, indexMap[prevIndex]);
-                        if (data.ContinuationPoint != null)
-                        {
-                            ids.Add(new HistoryReadValueId
-                            {
-                                NodeId = indexMap[prevIndex],
-                                ContinuationPoint = data.ContinuationPoint
-                            });
-                            indexMap[nextIndex] = indexMap[prevIndex];
-                            nextIndex++;
-                        }
-                        prevIndex++;
-                    }
-                } while (ids.Any() && !token.IsCancellationRequested);
-            }
-            catch (Exception)
-            {
-                historyReadFailures.Inc();
-                Log.Error("Failed during HistoryRead");
-                throw;
-            }
-            finally
-            {
-                DecOperations();
-                Log.Information("Fetched {NumHistoricalPoints} historical datapoints with {NumHistoryReadOperations} operations for {NumHistoryReadNodes} nodes",
-                    ptCnt, opCnt, index);
-            }
-        }
-        public async Task DoHistoryRead(IEnumerable<BufferedVariable> toRead,
-            Action<HistoryData, bool, NodeId> callback,
-            TimeSpan granularity,
-            CancellationToken token)
-        {
-            var tasks = new List<Task>();
-            if (granularity == TimeSpan.Zero)
-            {
-                foreach (var variable in toRead)
-                {
-                    if (variable.Historizing)
-                    {
-                        tasks.Add(Task.Run(() => DoHistoryRead(new List<BufferedVariable> { variable }, callback, token), token));
-                    }
-                    else
-                    {
-                        callback(null, true, variable.Id);
-                    }
-                }
-                try
-                {
-                    await Task.WhenAll(tasks);
-                }
-                catch (Exception)
-                {
-                    throw;
-                }
-                return;
-            }
-            int cnt = 0;
-            var groupedVariables = new Dictionary<long, IList<BufferedVariable>>();
-            foreach (var variable in toRead)
-            {
-                if (variable.Historizing)
-                {
-                    cnt++;
-                    long group = variable.LatestTimestamp.Ticks / granularity.Ticks;
-                    if (!groupedVariables.ContainsKey(group))
-                    {
-                        groupedVariables[group] = new List<BufferedVariable>();
-                    }
-                    groupedVariables[group].Add(variable);
-                }
-                else
-                {
-                    callback(null, true, variable.Id);
-                }
-            }
-            if (!groupedVariables.Any()) return;
-            foreach (var nodes in groupedVariables.Values)
-            {
-                foreach (var nextNodes in Utils.ChunkBy(nodes, config.HistoryReadNodesChunk))
-                {
-                    tasks.Add(Task.Run(() => DoHistoryRead(nextNodes, callback, token)));
-                }
-            }
-            try
-            {
-                await Task.WhenAll(tasks);
-            }
-            catch (Exception)
-            {
-                throw;
-            }
-        }
-        /// <summary>
-        /// Synchronizes a list of nodes with the server, creating subscriptions and reading historical data where necessary.
-        /// </summary>
-        /// <param name="nodeList">List of buffered variables to synchronize</param>
-        /// <param name="callback">Callback used for DoHistoryRead. Takes a <see cref="HistoryReadResultCollection"/>,
-        /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
-        /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
-        /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
-        public async Task SynchronizeNodes(IEnumerable<BufferedVariable> nodeList,
-            Action<HistoryData, bool, NodeId> callback,
-            MonitoredItemNotificationEventHandler subscriptionHandler,
-            CancellationToken token)
-        {
-            if (!nodeList.Any()) return;
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName != "NodeChangeListener");
-            if (subscription == null)
-            {
-                subscription = new Subscription(session.DefaultSubscription) { PublishingInterval = config.PollingInterval };
-            }
-            int count = 0;
-            var hasSubscription = subscription.MonitoredItems
-                .Select(sub => sub.ResolvedNodeId)
-                .ToHashSet();
-
-            foreach (var chunk in Utils.ChunkBy(nodeList, config.SubscriptionChunk))
-            {
-                if (token.IsCancellationRequested) break;
-                subscription.AddItems(chunk
-                    .Where(node => !hasSubscription.Contains(node.Id))
-                    .Select(node =>
-                    {
-                        var monitor = new MonitoredItem(subscription.DefaultItem)
-                        {
-                            StartNodeId = node.Id,
-                            DisplayName = "Value: " + node.DisplayName,
-                            SamplingInterval = config.PollingInterval
-                        };
-                        monitor.Notification += subscriptionHandler;
-                        count++;
-                        return monitor;
-                    })
-                );
-
-                Log.Information("Add {NumAddedSubscriptions} subscriptions", chunk.Count());
-                lock (subscriptionLock)
-                {
-                    IncOperations();
-                    try
-                    {
-                        if (count > 0)
-                        {
-                            if (subscription.Created)
-                            {
-                                subscription.CreateItems();
-                            }
-                            else
-                            {
-                                session.AddSubscription(subscription);
-                                subscription.Create();
-                            }
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        Log.Error("Failed to create subscriptions");
-                        throw;
-                    }
-                    finally
-                    {
-                        DecOperations();
-                    }
-                    numSubscriptions.Set(subscription.MonitoredItemCount);
-                }
-            }
-            Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
-
-            await DoHistoryRead(nodeList, callback, historyGranularity, token);
-        }
+        #region Get node data
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
         /// </summary>
@@ -826,7 +612,6 @@ namespace Cognite.OpcUa
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
                     vnode.SetDataType(dataType, numericDataTypes);
                     enumerator.MoveNext();
-                    // config to disable history for all nodes
                     vnode.Historizing = config.History && enumerator.Current.GetValue(false);
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
@@ -897,7 +682,7 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            var result = GetNodeChildren(idsToCheck, token, ReferenceTypeIds.HasProperty);
+            var result = GetNodeChildren(idsToCheck, token, ReferenceTypeIds.HasProperty, (uint)NodeClass.Variable);
             foreach (var parent in nodes)
             {
                 if (!result.ContainsKey(parent.Id)) continue;
@@ -914,6 +699,503 @@ namespace Cognite.OpcUa
             }
             ReadNodeData(properties, token);
             ReadNodeValues(properties, token);
+        }
+        #endregion
+
+        #region synchronization
+        /// <summary>
+        /// General method to perform history-read operations for a list of nodes, with a given callback and HistoryReadDetails
+        /// </summary>
+        /// <param name="details"></param>
+        /// <param name="toRead"></param>
+        /// <param name="callback"></param>
+        /// <param name="token"></param>
+        private void DoHistoryRead(HistoryReadDetails details,
+            IEnumerable<NodeId> toRead,
+            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
+            CancellationToken token)
+        {
+            int opCnt = 0;
+            int ptCnt = 0;
+            IncOperations();
+            var ids = new HistoryReadValueIdCollection();
+            var indexMap = new NodeId[toRead.Count()];
+            int index = 0;
+            foreach (var id in toRead)
+            {
+                ids.Add(new HistoryReadValueId
+                {
+                    NodeId = id,
+                });
+                indexMap[index] = id;
+                index++;
+            }
+            try
+            {
+                do
+                {
+                    session.HistoryRead(
+                        null,
+                        new ExtensionObject(details),
+                        TimestampsToReturn.Source,
+                        false,
+                        ids,
+                        out HistoryReadResultCollection results,
+                        out _
+                    );
+                    numHistoryReads.Inc();
+                    ids.Clear();
+                    int prevIndex = 0;
+                    int nextIndex = 0;
+                    opCnt++;
+                    foreach (var data in results)
+                    {
+                        var hdata = ExtensionObject.ToEncodeable(data.HistoryData);
+                        ptCnt += callback(hdata, data == null || hdata == null || data.ContinuationPoint == null, indexMap[prevIndex], details);
+                        if (data.ContinuationPoint != null)
+                        {
+                            ids.Add(new HistoryReadValueId
+                            {
+                                NodeId = indexMap[prevIndex],
+                                ContinuationPoint = data.ContinuationPoint
+                            });
+                            indexMap[nextIndex] = indexMap[prevIndex];
+                            nextIndex++;
+                        }
+                        prevIndex++;
+                    }
+                } while (ids.Any() && !token.IsCancellationRequested);
+            }
+            catch (Exception)
+            {
+                historyReadFailures.Inc();
+                Log.Error("Failed during HistoryRead");
+                throw;
+            }
+            finally
+            {
+                DecOperations();
+                Log.Information("Fetched {NumHistoricalPoints} historical datapoints with {NumHistoryReadOperations} operations for {NumHistoryReadNodes} nodes",
+                    ptCnt, opCnt, index);
+            }
+        }
+        /// <summary>
+        /// Read historydata for the requested nodes and call the callback after each call to HistoryRead
+        /// </summary>
+        /// <param name="toRead">Variables to read for</param>
+        /// <param name="callback">Callback, takes a <see cref="HistoryReadResultCollection"/>,
+        /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
+        private void HistoryReadDataChunk(IEnumerable<BufferedVariable> toRead,
+            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
+            CancellationToken token)
+        {
+            DateTime lowest = DateTime.MinValue;
+            lowest = toRead.Select((bvar) => { return bvar.LatestTimestamp; }).Min();
+            var details = new ReadRawModifiedDetails
+            {
+                StartTime = lowest,
+                EndTime = DateTime.Now.AddDays(1),
+                NumValuesPerNode = (uint)config.HistoryReadChunk
+            };
+            try
+            {
+                DoHistoryRead(details, toRead.Select(bv => bv.Id), callback, token);
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+        public async Task HistoryReadData(IEnumerable<BufferedVariable> toRead,
+            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
+            CancellationToken token)
+        {
+            var tasks = new List<Task>();
+            if (historyGranularity == TimeSpan.Zero)
+            {
+                foreach (var variable in toRead)
+                {
+                    if (variable.Historizing)
+                    {
+                        tasks.Add(Task.Run(() => HistoryReadDataChunk(new List<BufferedVariable> { variable }, callback, token), token));
+                    }
+                    else
+                    {
+                        callback(null, true, variable.Id, null);
+                    }
+                }
+                try
+                {
+                    await Task.WhenAll(tasks);
+                }
+                catch (Exception)
+                {
+                    throw;
+                }
+                return;
+            }
+            int cnt = 0;
+            var groupedVariables = new Dictionary<long, IList<BufferedVariable>>();
+            foreach (var variable in toRead)
+            {
+                if (variable.Historizing)
+                {
+                    cnt++;
+                    long group = variable.LatestTimestamp.Ticks / historyGranularity.Ticks;
+                    if (!groupedVariables.ContainsKey(group))
+                    {
+                        groupedVariables[group] = new List<BufferedVariable>();
+                    }
+                    groupedVariables[group].Add(variable);
+                }
+                else
+                {
+                    callback(null, true, variable.Id, null);
+                }
+            }
+            if (!groupedVariables.Any()) return;
+            foreach (var nodes in groupedVariables.Values)
+            {
+                foreach (var nextNodes in Utils.ChunkBy(nodes, config.HistoryReadNodesChunk))
+                {
+                    tasks.Add(Task.Run(() => HistoryReadDataChunk(nextNodes, callback, token)));
+                }
+            }
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+        public void HistoryReadEvents(IEnumerable<NodeId> emitters,
+            IEnumerable<NodeId> eventIds,
+            IEnumerable<NodeId> nodeIds,
+            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
+            CancellationToken token)
+        {
+            if (eventFields == null)
+            {
+                var collector = new EventFieldCollector(this, eventIds);
+                eventFields = collector.GetEventIdFields(token);
+            }
+            var latestTime = Utils.ReadDateFromFile();
+            var filter = BuildEventFilter(nodeIds, latestTime);
+            var details = new ReadEventDetails
+            {
+                StartTime = latestTime == DateTime.Now ? DateTime.Now : latestTime.Subtract(TimeSpan.FromMinutes(10)),
+                EndTime = DateTime.Now.AddDays(1),
+                NumValuesPerNode = (uint)eventConfig.HistoryReadChunk,
+                Filter = filter
+            };
+            try
+            {
+                DoHistoryRead(details, emitters, callback, token);
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+        /// <summary>
+        /// Create subscriptions for given list of nodes
+        /// </summary>
+        /// <param name="nodeList">List of buffered variables to synchronize</param>
+        /// <param name="callback">Callback used for DoHistoryRead. Takes a <see cref="HistoryReadResultCollection"/>,
+        /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
+        /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
+        /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
+        public void SubscribeToNodes(IEnumerable<BufferedVariable> nodeList,
+            MonitoredItemNotificationEventHandler subscriptionHandler,
+            CancellationToken token)
+        {
+            if (!nodeList.Any()) return;
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "DataChangeListener");
+            if (subscription == null)
+            {
+                subscription = new Subscription(session.DefaultSubscription)
+                {
+                    PublishingInterval = config.PollingInterval,
+                    DisplayName = "DataChangeListener"
+                };
+            }
+            int count = 0;
+            var hasSubscription = subscription.MonitoredItems
+                .Select(sub => sub.ResolvedNodeId)
+                .ToHashSet();
+
+            foreach (var chunk in Utils.ChunkBy(nodeList, config.SubscriptionChunk))
+            {
+                if (token.IsCancellationRequested) break;
+                subscription.AddItems(chunk
+                    .Where(node => !hasSubscription.Contains(node.Id))
+                    .Select(node =>
+                    {
+                        var monitor = new MonitoredItem(subscription.DefaultItem)
+                        {
+                            StartNodeId = node.Id,
+                            DisplayName = "Value: " + node.DisplayName,
+                            SamplingInterval = config.PollingInterval
+                        };
+                        monitor.Notification += subscriptionHandler;
+                        count++;
+                        return monitor;
+                    })
+                );
+
+                Log.Information("Add {NumAddedSubscriptions} subscriptions", chunk.Count());
+                lock (subscriptionLock)
+                {
+                    IncOperations();
+                    try
+                    {
+                        if (count > 0)
+                        {
+                            if (subscription.Created)
+                            {
+                                subscription.CreateItems();
+                            }
+                            else
+                            {
+                                session.AddSubscription(subscription);
+                                subscription.Create();
+                            }
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        Log.Error("Failed to create subscriptions");
+                        throw;
+                    }
+                    finally
+                    {
+                        DecOperations();
+                    }
+                    numSubscriptions.Set(subscription.MonitoredItemCount);
+                }
+            }
+            Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
+        }
+        public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> SubscribeToEvents(IEnumerable<NodeId> emitters,
+            IEnumerable<NodeId> eventIds,
+            IEnumerable<NodeId> nodeIds,
+            MonitoredItemNotificationEventHandler subscriptionHandler,
+            CancellationToken token)
+        {
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "EventListener");
+            if (subscription == null)
+            {
+                subscription = new Subscription(session.DefaultSubscription)
+                {
+                    PublishingInterval = config.PollingInterval,
+                    DisplayName = "EventListener"
+                };
+            }
+            int count = 0;
+            var hasSubscription = subscription.MonitoredItems
+                .Select(sub => sub.ResolvedNodeId)
+                .ToHashSet();
+
+            if (eventFields == null)
+            {
+                var collector = new EventFieldCollector(this, eventIds);
+                eventFields = collector.GetEventIdFields(token);
+            }
+
+            var filter = BuildEventFilter(nodeIds);
+            foreach (var emitter in emitters)
+            {
+                if (!hasSubscription.Contains(emitter))
+                {
+                    var item = new MonitoredItem
+                    {
+                        StartNodeId = emitter,
+                        Filter = filter,
+                        AttributeId = Attributes.EventNotifier
+                    };
+                    count++;
+                    item.Notification += subscriptionHandler;
+                    subscription.AddItem(item);
+                }
+            }
+            lock (subscriptionLock)
+            {
+                IncOperations();
+                try
+                {
+                    if (count > 0)
+                    {
+                        if (subscription.Created)
+                        {
+                            subscription.CreateItems();
+                        }
+                        else
+                        {
+                            session.AddSubscription(subscription);
+                            subscription.Create();
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    Log.Error("Failed to create event subscriptions");
+                    throw;
+                }
+                finally
+                {
+                    DecOperations();
+                }
+            }
+            Log.Information("Created {EventSubCount} event subscriptions", count);
+            return eventFields;
+        }
+        #endregion
+
+        #region events
+        private EventFilter BuildEventFilter(IEnumerable<NodeId> nodeIds,
+            DateTime? receivedAfter = null)
+        {
+            /*
+             * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds AND SourceNode IN nodeIds;
+             * using the internal query language in OPC-UA
+             * If receivedAfter is specified, then also "AND [ReceiveTimeProperty] > receivedAfter"
+             */
+            var whereClause = new ContentFilter();
+            var eventListOperand = new SimpleAttributeOperand
+            {
+                TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                AttributeId = Attributes.Value
+            };
+            eventListOperand.BrowsePath.Add(BrowseNames.EventType);
+            IEnumerable<FilterOperand> eventOperands = eventFields.Keys.Select(id =>
+                new LiteralOperand
+                {
+                    Value = id
+                });
+            // This does not do what it looks like, rather it replaces whatever operation exists in the where clause and returns 
+            // this operation as a ContentFilterElement.
+            var elem1 = whereClause.Push(FilterOperator.InList, eventOperands.Prepend(eventListOperand).ToArray());
+
+            var nodeListOperand = new SimpleAttributeOperand
+            {
+                TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                AttributeId = Attributes.Value
+            };
+            nodeListOperand.BrowsePath.Add(BrowseNames.SourceNode);
+            IEnumerable<FilterOperand> nodeOperands = nodeIds.Select(id =>
+                new LiteralOperand
+                {
+                    Value = id
+                });
+
+            var elem2 = whereClause.Push(FilterOperator.InList, nodeOperands.Prepend(nodeListOperand).ToArray());
+            var elem3 = whereClause.Push(FilterOperator.And, elem1, elem2);
+
+            if (receivedAfter != null && receivedAfter > DateTime.MinValue)
+            {
+                var eventTimeOperand = new SimpleAttributeOperand
+                {
+                    TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                    AttributeId = Attributes.Value
+                };
+                eventTimeOperand.BrowsePath.Add(eventConfig.ReceiveTimeProperty);
+                var timeOperand = new LiteralOperand
+                {
+                    Value = receivedAfter.Value
+                };
+                var elem4 = whereClause.Push(FilterOperator.GreaterThan, eventTimeOperand, timeOperand);
+                whereClause.Push(FilterOperator.And, elem3, elem4);
+            }
+
+            var fieldList = eventFields
+                .Aggregate((IEnumerable<(NodeId, QualifiedName)>)new List<(NodeId, QualifiedName)>(), (agg, kvp) => agg.Concat(kvp.Value))
+                .GroupBy(variable => variable.Item2)
+                .Select(items => items.FirstOrDefault());
+
+            if (!fieldList.Any())
+            {
+                Log.Warning("Missing valid event fields, no results will be returned");
+            }
+            var selectClauses = new SimpleAttributeOperandCollection();
+            foreach (var field in fieldList)
+            {
+                if (eventConfig.ExcludeProperties.Contains(field.Item2.Name)
+                    || eventConfig.BaseExcludeProperties.Contains(field.Item2.Name) && field.Item1 == ObjectTypeIds.BaseEventType) continue;
+                var operand = new SimpleAttributeOperand
+                {
+                    AttributeId = Attributes.Value,
+                    TypeDefinitionId = field.Item1
+                };
+                operand.BrowsePath.Add(field.Item2);
+                selectClauses.Add(operand);
+                Log.Information("Select event attribute {id}: {name}", field.Item1, field.Item2);
+            }
+            return new EventFilter
+            {
+                WhereClause = whereClause,
+                SelectClauses = selectClauses
+            };
+        }
+        private class EventFieldCollector
+        {
+            readonly UAClient UAClient;
+            readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> properties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
+            readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> localProperties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
+            readonly IEnumerable<NodeId> targetEventIds;
+            public EventFieldCollector(UAClient parent, IEnumerable<NodeId> targetEventIds)
+            {
+                UAClient = parent;
+                this.targetEventIds = targetEventIds;
+            }
+            public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventIdFields(CancellationToken token)
+            {
+                properties[ObjectTypeIds.BaseEventType] = new List<ReferenceDescription>();
+                localProperties[ObjectTypeIds.BaseEventType] = new List<ReferenceDescription>();
+
+                UAClient.BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType },
+                    EventTypeCallback, token, ReferenceTypeIds.HierarchicalReferences, (uint)NodeClass.ObjectType | (uint)NodeClass.Variable);
+                var propVariables = new Dictionary<ExpandedNodeId, (NodeId, QualifiedName)>();
+                foreach (var kvp in localProperties)
+                {
+                    foreach (var description in kvp.Value)
+                    {
+                        if (!propVariables.ContainsKey(description.NodeId))
+                        {
+                            propVariables[description.NodeId] = (kvp.Key, description.BrowseName);
+                        }
+                    }
+                }
+                return targetEventIds
+                    .Where(id => properties.ContainsKey(id))
+                    .ToDictionary(id => id, id => properties[id]
+                        .Where(desc => propVariables.ContainsKey(desc.NodeId))
+                        .Select(desc => propVariables[desc.NodeId]));
+            }
+            private void EventTypeCallback(ReferenceDescription child, NodeId parent)
+            {
+                var id = UAClient.ToNodeId(child.NodeId);
+                if (child.NodeClass == NodeClass.ObjectType && !properties.ContainsKey(id))
+                {
+                    var parentProperties = new List<ReferenceDescription>();
+                    if (properties.ContainsKey(parent))
+                    {
+                        foreach (var prop in properties[parent])
+                        {
+                            parentProperties.Add(prop);
+                        }
+                    }
+                    properties[id] = parentProperties;
+                    localProperties[id] = new List<ReferenceDescription>();
+                }
+                if (child.ReferenceTypeId == ReferenceTypeIds.HasProperty)
+                {
+                    properties[parent] = properties[parent].Append(child);
+                    localProperties[parent] = localProperties[parent].Append(child);
+                }
+            }
+
         }
         #endregion
 
@@ -962,7 +1244,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="value">Object to convert</param>
         /// <returns>Metadata suitable string</returns>
-        public static string ConvertToString(object value)
+        public string ConvertToString(object value)
         {
             if (value == null) return "";
             if (value.GetType().IsArray)
@@ -977,6 +1259,14 @@ namespace Cognite.OpcUa
                     }
                 }
                 return result + "]";
+            }
+            if (value.GetType() == typeof(NodeId))
+            {
+                return GetUniqueId((NodeId)value);
+            }
+            if (value.GetType() == typeof(ExpandedNodeId))
+            {
+                return GetUniqueId((NodeId)value);
             }
             if (value.GetType() == typeof(LocalizedText))
             {
@@ -1005,7 +1295,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="datavalue">Datavalue to convert</param>
         /// <returns>Metadata suitable string</returns>
-        public static string ConvertToString(DataValue datavalue)
+        public string ConvertToString(DataValue datavalue)
         {
             if (datavalue == null) return "";
             return ConvertToString(datavalue.Value);

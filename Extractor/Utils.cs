@@ -30,6 +30,7 @@ namespace Cognite.OpcUa
     {
         public static bool BufferFileEmpty { get; set; }
         private static readonly object fileLock = new object();
+        private static readonly object dateFileLock = new object();
         /// <summary>
         /// Write a list of datapoints to buffer file. Only writes non-historizing datapoints.
         /// </summary>
@@ -98,6 +99,29 @@ namespace Cognite.OpcUa
             File.Create(config.BufferFile).Close();
             BufferFileEmpty = true;
         }
+        public static void WriteDateToFile(DateTime date)
+        {
+            lock (dateFileLock)
+            {
+                using (FileStream fs = new FileStream("latest.bin", FileMode.OpenOrCreate, FileAccess.Write))
+                {
+                    fs.Write(BitConverter.GetBytes(date.ToBinary()));
+                }
+            }
+        }
+        public static DateTime ReadDateFromFile()
+        {
+            lock (dateFileLock)
+            {
+                using (FileStream fs = new FileStream("latest.bin", FileMode.OpenOrCreate, FileAccess.Read))
+                {
+                    byte[] rawRead = new byte[sizeof(long)];
+                    int read = fs.Read(rawRead, 0, sizeof(long));
+                    if (read < sizeof(long)) return DateTime.MinValue;
+                    return DateTime.FromBinary(BitConverter.ToInt64(rawRead));
+                }
+            }
+        }
         /// <summary>
         /// Map yaml config to the FullConfig object
         /// </summary>
@@ -134,6 +158,11 @@ namespace Cognite.OpcUa
                 .Select((x, i) => new { Index = i, Value = x })
                 .GroupBy(x => x.Index / maxSize)
                 .Select(x => x.Select(v => v.Value));
+        }
+        public static string Truncate(string str, int maxLength)
+        {
+            if (string.IsNullOrEmpty(str) || str.Length <= maxLength) return str;
+            return str.Substring(0, maxLength);
         }
     }
 }

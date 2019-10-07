@@ -1,6 +1,9 @@
 ﻿import math
 import sys
 import time
+import os
+
+sys.path.insert(1, os.path.join(os.path.dirname(__file__), '../../../python-opcua/build/lib/'))
 
 from opcua import Server, ua
 from opcua.server.history_sql import HistorySQLite

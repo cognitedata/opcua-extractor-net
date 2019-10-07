@@ -17,6 +17,7 @@ namespace Cognite.OpcUa
         public bool failing;
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
+        public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
         private readonly InfluxClientConfig config;
         private readonly InfluxDBClient client;
         public InfluxPusher(InfluxClientConfig config)
@@ -53,6 +54,11 @@ namespace Cognite.OpcUa
                 await client.PostPointsAsync(config.Database, influxPoints, 10000);
             });
             await Task.WhenAll(tasks);
+        }
+        public Task PushEvents(CancellationToken token)
+        {
+            BufferedEventQueue.Clear();
+            return Task.CompletedTask;
         }
 
         public async Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)

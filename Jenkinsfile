@@ -96,7 +96,13 @@ podTemplate(
                 sh('cp /nuget-credentials/nuget.config ./nuget.config')
                 sh('./credentials.sh')
                 sh('mono .paket/paket.exe install')
+                sh('git clone https://github.com/cognitedata/python-opcua.git ../python-opcua')
             }
+			dir('../python-opcua') {
+				stage('Build opcua') {
+					sh('python3 setup.py build')
+				}
+			}
             stage('Start servers') {
                 sh('./startservers.sh')
             }

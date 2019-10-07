@@ -29,6 +29,7 @@ using Polly.Timeout;
 using System.Runtime.ExceptionServices;
 using System.Linq;
 using Serilog;
+using Polly.Retry;
 
 namespace Cognite.OpcUa
 {
@@ -147,10 +148,14 @@ namespace Cognite.OpcUa
             if (string.IsNullOrWhiteSpace(config.Source.EndpointURL)) throw new Exception("Invalid EndpointURL");
             if (config.Source.PollingInterval < 0) throw new Exception("PollingInterval must be a positive number");
         }
+
         private static void Configure(IServiceCollection services)
         {
-            services.AddHttpClient<Client>()
+            services.AddHttpClient<ContextCDFClient>()
                 .AddPolicyHandler(GetRetryPolicy())
+                .AddPolicyHandler(GetTimeoutPolicy());
+            services.AddHttpClient<DataCDFClient>()
+                .AddPolicyHandler(GetDataRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
         }
         private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
@@ -161,6 +166,16 @@ namespace Cognite.OpcUa
                     !msg.IsSuccessStatusCode && msg.StatusCode != System.Net.HttpStatusCode.BadRequest)
                 .Or<TimeoutRejectedException>()
                 .WaitAndRetryForeverAsync(retryAttempt =>
+                    TimeSpan.FromMilliseconds(retryAttempt > maxRetryAttempt ? 60000 : Math.Pow(2, retryAttempt)));
+        }
+        private static IAsyncPolicy<HttpResponseMessage> GetDataRetryPolicy()
+        {
+            int maxRetryAttempt = (int)Math.Ceiling(Math.Log(60000 / 500, 2));
+            return Policy
+                .HandleResult<HttpResponseMessage>(msg =>
+                    !msg.IsSuccessStatusCode && msg.StatusCode != System.Net.HttpStatusCode.BadRequest && msg.StatusCode != System.Net.HttpStatusCode.Conflict)
+                .Or<TimeoutRejectedException>()
+                .WaitAndRetryAsync(4, retryAttempt =>
                     TimeSpan.FromMilliseconds(retryAttempt > maxRetryAttempt ? 60000 : Math.Pow(2, retryAttempt)));
         }
         private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
@@ -332,7 +347,9 @@ namespace Cognite.OpcUa
         public List<PusherConfig> Pushers { get { return _pushers; } set { _pushers = value ?? _pushers; } }
         private List<PusherConfig> _pushers = new List<PusherConfig>();
         public ExtractionConfig Extraction { get { return _extractionConfig; } set { _extractionConfig = value ?? _extractionConfig; } }
-        private ExtractionConfig _extractionConfig;
+        private ExtractionConfig _extractionConfig = new ExtractionConfig();
+        public EventConfig Events { get { return _eventConfig; } set { _eventConfig = value ?? _eventConfig; } }
+        private EventConfig _eventConfig = new EventConfig();
     }
     public class LoggerConfig
     {
@@ -352,16 +369,29 @@ namespace Cognite.OpcUa
         public int PushInterval { get; set; } = 1000;
         public string Instance { get; set; }
     }
+    public class EventConfig
+    {
+        public IEnumerable<ProtoNodeId> EventIds { get; set; }
+        public IEnumerable<ProtoNodeId> EmitterIds { get; set; }
+        public IEnumerable<string> ExcludeProperties { get { return _excludeProperties; } set { _excludeProperties = value ?? _excludeProperties; } }
+        private IEnumerable<string> _excludeProperties = new List<string>();
+        public IEnumerable<string> BaseExcludeProperties { get; } = new List<string> { "LocalTime", "ReceiveTime", "SourceName" };
+        public Dictionary<string, string> DestinationNameMap { get { return _destinationNameMap; } set { _destinationNameMap = value ?? _destinationNameMap; } }
+        private Dictionary<string, string> _destinationNameMap = new Dictionary<string, string>();
+        public IEnumerable<ProtoNodeId> HistorizingEmitterIds { get; set; }
+        public string ReceiveTimeProperty { get; set; } = "ReceiveTime";
+        public int HistoryReadChunk { get; set; } = 1000;
+    }
     public class ProtoNodeId
     {
         public string NamespaceUri { get; set; }
         public string NodeId { get; set; }
-        public NodeId ToNodeId(UAClient client)
+        public NodeId ToNodeId(UAClient client, NodeId defaultValue = null)
         {
             var node = client.ToNodeId(NodeId, NamespaceUri);
             if (node.IsNullNodeId)
             {
-                return ObjectIds.ObjectsFolder;
+                return defaultValue ?? ObjectIds.ObjectsFolder;
             }
             return node;
         }
@@ -371,4 +401,6 @@ namespace Cognite.OpcUa
         public ProtoNodeId NodeId { get; set; }
         public bool IsStep { get; set; } = false;
     }
+    public class DataCDFClient : Client { public DataCDFClient(HttpClient httpClient) : base(httpClient) { } }
+    public class ContextCDFClient : Client { public ContextCDFClient(HttpClient httpClient) : base(httpClient) { } }
 }

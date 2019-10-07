@@ -21,16 +21,16 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
-using CogniteSdk;
-using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Test
 {
     [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
-    public class CDFPusherTests
+    public class CDFPusherTests : MakeConsoleWork
     {
+        public CDFPusherTests(ITestOutputHelper output) : base(output) { }
         [Trait("Category", "both")]
         [Trait("Tests", "cdfpusher")]
         [Theory]
@@ -52,7 +52,7 @@ namespace Test
             UAClient client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             var factory = new DummyFactory(config.Project, mode);
-            var pusher = new CDFPusher(GetDummyProvider(factory), config);
+            var pusher = new CDFPusher(Common.GetDummyProvider(factory), config);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             try
@@ -83,7 +83,7 @@ namespace Test
             UAClient client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
-            var pusher = new CDFPusher(GetDummyProvider(factory), config);
+            var pusher = new CDFPusher(Common.GetDummyProvider(factory), config);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             using (var source = new CancellationTokenSource())
@@ -141,7 +141,7 @@ namespace Test
             Logger.Configure(fullConfig.Logging);
             UAClient client = new UAClient(fullConfig);
             var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
-            var pusher = new CDFPusher(GetDummyProvider(factory), config);
+            var pusher = new CDFPusher(Common.GetDummyProvider(factory), config);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             using (var source = new CancellationTokenSource())
@@ -161,13 +161,6 @@ namespace Test
                 extractor.Close();
             }
         }
-        public static IServiceProvider GetDummyProvider(DummyFactory factory)
-        {
-            var services = new ServiceCollection();
-            services.AddHttpClient<Client>()
-                .ConfigurePrimaryHttpMessageHandler(() => factory.GetHandler());
-            return services.BuildServiceProvider();
-        }
         [Trait("Category", "ArrayServer")]
         [Fact]
         public async Task TestArrayData()
@@ -180,7 +173,7 @@ namespace Test
 
             UAClient client = new UAClient(fullConfig);
             var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
-            var pusher = new CDFPusher(GetDummyProvider(factory), config);
+            var pusher = new CDFPusher(Common.GetDummyProvider(factory), config);
 
             Extractor extractor = new Extractor(fullConfig, pusher, client);
             using (var source = new CancellationTokenSource())

@@ -128,6 +128,10 @@ namespace Cognite.OpcUa
         /// True if variable is a property
         /// </summary>
         public bool IsProperty { get; set; }
+        /// <summary>
+        /// Local browse name of variable, sometimes useful for properties
+        /// </summary>
+        public QualifiedName BrowseName { get; set; }
         private DateTime _latestTimestamp = new DateTime(1970, 1, 1);
         /// <summary>
         /// Latest timestamp historizing value was read from CDF
@@ -202,7 +206,7 @@ namespace Cognite.OpcUa
                 Value = new BufferedDataPoint(
                     SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp,
                     client.GetUniqueId(Id),
-                    UAClient.ConvertToString(value));
+                    client.ConvertToString(value));
             }
             else
             {
@@ -293,6 +297,34 @@ namespace Cognite.OpcUa
         public string ToDebugDescription()
         {
             return $"Update timeseries {Id} to {(isString ? stringValue : doubleValue.ToString())} at {timestamp.ToString()}";
+        }
+    }
+    public class BufferedEvent
+    {
+        public string Message { get; set; }
+        public string EventId { get; set; } // Base64
+        public NodeId SourceNode { get; set; }
+        public DateTime Time { get; set; }
+        public NodeId EventType { get; set; }
+        public Dictionary<string, object> MetaData { get; set; }
+        public string ToDebugDescription()
+        {
+            var metadata = "{";
+            if (MetaData != null)
+            {
+                metadata += "\n";
+                foreach (var kvp in MetaData)
+                {
+                    metadata += $"        {kvp.Key} : {kvp.Value}\n";
+                }
+            }
+            metadata += "    }";
+            return $"EventId: {EventId}\n"
+                + $"    Message: {Message}\n"
+                + $"    SourceNodeId: {SourceNode}\n"
+                + $"    Time: {Time}\n"
+                + $"    EventTypeId: {EventType}\n"
+                + $"    MetaData: {metadata}\n";
         }
     }
 }
