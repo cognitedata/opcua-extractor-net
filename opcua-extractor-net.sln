@@ -8,7 +8,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Test", "Test\Test.csproj", 
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Misc", "Misc", "{F9D856F4-28DD-4A99-A325-E37860B8FDB4}"
 	ProjectSection(SolutionItems) = preProject
-		ChangeLog.txt = ChangeLog.txt
+		CHANGELOG.md = CHANGELOG.md
 		CONTRIBUTORS.md = CONTRIBUTORS.md
 		Dockerfile = Dockerfile
 		Dockerfile.build = Dockerfile.build
@@ -36,12 +36,6 @@ Global
 		{F853916C-CA29-48F9-99BF-3482B07CC85B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F853916C-CA29-48F9-99BF-3482B07CC85B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F853916C-CA29-48F9-99BF-3482B07CC85B}.Release|Any CPU.Build.0 = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {211CF2F7-C4F8-474B-BDEF-78610C8D9853}
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

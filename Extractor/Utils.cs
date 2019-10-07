@@ -100,6 +100,10 @@ namespace Cognite.OpcUa
             File.Create(config.BufferFile).Close();
             BufferFileEmpty = true;
         }
+        /// <summary>
+        /// Write given latest event timestamp to file
+        /// </summary>
+        /// <param name="date">Date to be written</param>
         public static void WriteLastEventTimestamp(DateTime date)
         {
             lock (dateFileLock)
@@ -110,6 +114,10 @@ namespace Cognite.OpcUa
                 }
             }
         }
+        /// <summary>
+        /// Read latest event timestamp from file.
+        /// </summary>
+        /// <returns>Retrieved date or DateTime.MinValue</returns>
         public static DateTime ReadLastEventTimestamp()
         {
             lock (dateFileLock)
@@ -160,6 +168,12 @@ namespace Cognite.OpcUa
                 .GroupBy(x => x.Index / maxSize)
                 .Select(x => x.Select(v => v.Value));
         }
+        /// <summary>
+        /// Reduce the length of given string to maxLength, if it is longer.
+        /// </summary>
+        /// <param name="str">String to be shortened</param>
+        /// <param name="maxLength">Maximum length of final string</param>
+        /// <returns>String which contains the first `maxLength` characters of the passed string.</returns>
         public static string Truncate(string str, int maxLength)
         {
             if (string.IsNullOrEmpty(str) || str.Length <= maxLength) return str;

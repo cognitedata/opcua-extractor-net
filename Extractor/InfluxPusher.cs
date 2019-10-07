@@ -9,6 +9,9 @@ using Serilog;
 
 namespace Cognite.OpcUa
 {
+    /// <summary>
+    /// Pusher for InfluxDb. Currently supports only double-valued datapoints
+    /// </summary>
     public class InfluxPusher : IPusher
     {
         public Extractor Extractor { set; private get; }
@@ -26,6 +29,9 @@ namespace Cognite.OpcUa
             BaseConfig = config;
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
         }
+        /// <summary>
+        /// Push each datapoint to influxdb. The datapoint Id, which corresponds to timeseries externalId in CDF, is used as MeasurementName
+        /// </summary>
         public async Task PushDataPoints(CancellationToken token)
         {
             var dataPointList = new List<BufferedDataPoint>();
@@ -33,7 +39,7 @@ namespace Cognite.OpcUa
             int count = 0;
             while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
             {
-                if (buffer.timestamp > DateTime.MinValue)
+                if (buffer.timestamp > DateTime.MinValue && !buffer.isString)
                 {
                     dataPointList.Add(buffer);
                 }
@@ -55,17 +61,11 @@ namespace Cognite.OpcUa
             });
             await Task.WhenAll(tasks);
         }
-        public Task PushEvents(CancellationToken token)
-        {
-            BufferedEventQueue.Clear();
-            return Task.CompletedTask;
-        }
-
-        public Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
-        {
-            var historizingVariables = variables.Where(variable => variable.Historizing);
-            return Task.FromResult(true);
-        }
+        /// <summary>
+        /// Reads the last datapoint from influx for each timeseries, sending the timestamp to each passed state
+        /// </summary>
+        /// <param name="states">List of historizing nodes</param>
+        /// <returns>True on success</returns>
         public async Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             var getLastTasks = states.Select(async state =>
@@ -76,6 +76,10 @@ namespace Cognite.OpcUa
                 {
                     DateTime timestamp = values.First().Entries[0].Time;
                     state.InitTimestamp(timestamp);
+                }
+                else
+                {
+                    state.InitTimestamp(Utils.Epoch);
                 }
             });
             try
@@ -88,10 +92,6 @@ namespace Cognite.OpcUa
                 return false;
             }
             return true;
-        }
-
-        public void Reset()
-        {
         }
     }
 }

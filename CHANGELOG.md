@@ -1,7 +1,4 @@
-***********************************
-*     OPC UA Extractor
-*        Change Log
-***********************************
+# OPC-UA Extractor Changelog
 0.8.1  2019-10-07
 ------------------
 * Config option for earliest history-read timestamp

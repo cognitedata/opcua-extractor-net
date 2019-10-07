@@ -91,9 +91,8 @@ namespace Cognite.OpcUa
 
         #region Interface
         /// <summary>
-        /// Dequeues up to 100000 points from the queue, then pushes them to CDF. On failure, writes to file if enabled.
+        /// Dequeues up to 100000 points from the BufferedDPQueue, then pushes them to CDF. On failure, writes to file if enabled.
         /// </summary>
-        /// <param name="dataPointQueue">Queue to be emptied</param>
         public async Task PushDataPoints(CancellationToken token)
         {
             var dataPointList = new List<BufferedDataPoint>();
@@ -175,6 +174,9 @@ namespace Cognite.OpcUa
             dataPointsCounter.Inc(count);
             dataPointPushes.Inc();
         }
+        /// <summary>
+        /// Dequeues up to 1000 events from the BufferedEventQueue, then pushes them to CDF.
+        /// </summary>
         public async Task PushEvents(CancellationToken token)
         {
             var eventList = new List<BufferedEvent>();
@@ -241,13 +243,14 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Empty queue, fetch info for each relevant node, test results against CDF, then synchronize any variables
         /// </summary>
-        /// <param name="nodeQueue">Queue to be emptied</param>
+        /// <param name="objects">List of objects to be synchronized</param>
+        /// <param name="variables">List of variables to be synchronized</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        public async Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
+        public async Task<bool> PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
             var tsList = new List<BufferedVariable>();
 
-            if (variables.Count() == 0 && nodes.Count() == 0)
+            if (variables.Count() == 0 && objects.Count() == 0)
             {
                 Log.Debug("Testing 0 nodes against CDF");
                 return true;
@@ -259,12 +262,12 @@ namespace Cognite.OpcUa
                     tsList.Add(node);
                 }
             }
-            Log.Information("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + nodes.Count());
+            Log.Information("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
             if (config.Debug)
             {
 
-                await Extractor.ReadProperties(nodes.Concat(variables), token);
-                foreach (var node in nodes)
+                await Extractor.ReadProperties(objects.Concat(variables), token);
+                foreach (var node in objects)
                 {
                     Log.Debug(node.ToDebugDescription());
                 }
@@ -277,11 +280,11 @@ namespace Cognite.OpcUa
             var client = GetClient();
             try
             {
-                foreach (var task in Utils.ChunkBy(nodes, config.AssetChunk).Select(items => EnsureAssets(items, token)))
+                foreach (var task in Utils.ChunkBy(objects, config.AssetChunk).Select(items => EnsureAssets(items, token)))
                 {
                     if (!await task) return false;
                 }
-                trackedAssets.Inc(nodes.Count());
+                trackedAssets.Inc(objects.Count());
                 // At this point the assets should all be synchronized and mapped
                 // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
                 // This also sets the LastTimestamp property of each BufferedVariable
@@ -317,6 +320,56 @@ namespace Cognite.OpcUa
             trackedAssets.Set(0);
             trackedTimeseres.Set(0);
         }
+        /// <summary>
+        /// Fetch the latest timestamp from the destination system for each NodeExtractionState provided
+        /// </summary>
+        /// <param name="states">Historizing NodeExtractionStates to get timestamps for</param>
+        /// <returns>True if no task failed unexpectedly</returns>
+        public async Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
+        {
+            if (config.Debug) return true;
+            var stateMap = states.ToDictionary(state => UAClient.GetUniqueId(state.Id,
+                state.ArrayDimensions != null && state.ArrayDimensions[0] > 0 ? 0 : -1), state => state);
+            var client = GetClient();
+            foreach (var idChunk in Utils.ChunkBy(stateMap.Keys, config.LatestChunk))
+            {
+                Log.Information("Get latest timestamp from CDF for {num} nodes", idChunk.Count());
+                var points = idChunk.Select<string, (Identity, string)>(id => (Identity.ExternalId(id), null));
+                try
+                {
+                    var dps = await client.DataPoints.GetLatestAsync(points, token);
+                    foreach (var dp in dps)
+                    {
+                        if (dp.NumericDataPoints.Any())
+                        {
+                            stateMap[dp.ExternalId].InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDataPoints.First().TimeStamp).DateTime);
+                        }
+                        else if (dp.StringDataPoints.Any())
+                        {
+                            stateMap[dp.ExternalId].InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.StringDataPoints.First().TimeStamp).DateTime);
+                        }
+                        else
+                        {
+                            stateMap[dp.ExternalId].InitTimestamp(Utils.Epoch);
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "Failed to get latest timestamp");
+                    if (e is ResponseException ex)
+                    {
+                        foreach (var id in ex.Missing)
+                        {
+                            Log.Information("Missing: {id}", id["externalId"].ToString());
+                        }
+                    }
+                    return false;
+                }
+            }
+            return true;
+        }
+
         #endregion
 
         #region Pushing
@@ -506,46 +559,6 @@ namespace Cognite.OpcUa
             }
             return true;
         }
-        public async Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
-        {
-            if (config.Debug) return true;
-            var stateMap = states.ToDictionary(state => UAClient.GetUniqueId(state.Id,
-                state.ArrayDimensions != null && state.ArrayDimensions[0] > 0 ? 0 : -1), state => state);
-            var client = GetClient();
-            foreach (var idChunk in Utils.ChunkBy(stateMap.Keys, config.LatestChunk))
-            {
-                Log.Information("Get latest timestamp from CDF for {num} nodes", idChunk.Count());
-                var points = idChunk.Select<string, (Identity, string)>(id => (Identity.ExternalId(id), null));
-                try
-                {
-                    var dps = await client.DataPoints.GetLatestAsync(points, token);
-                    foreach (var dp in dps)
-                    {
-                        if (dp.NumericDataPoints.Any())
-                        {
-                            stateMap[dp.ExternalId].InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDataPoints.First().TimeStamp).DateTime);
-                        }
-                        else if (dp.StringDataPoints.Any())
-                        {
-                            stateMap[dp.ExternalId].InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.StringDataPoints.First().TimeStamp).DateTime);
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e, "Failed to get latest timestamp");
-                    if (e is ResponseException ex)
-                    {
-                        foreach (var id in ex.Missing)
-                        {
-                            Log.Information("Missing: {id}", id["externalId"].ToString());
-                        }
-                    }
-                    return false;
-                }
-            }
-            return true;
-        }
         /// <summary>
         /// Create timeseries poco to create this node in CDF
         /// </summary>
@@ -599,6 +612,11 @@ namespace Cognite.OpcUa
             }
             return writePoco;
         }
+        /// <summary>
+        /// Get the value of given object assumed to be a timestamp as the number of milliseconds since 1/1/1970
+        /// </summary>
+        /// <param name="value">Value of the object. Assumed to be a timestamp or numeric value</param>
+        /// <returns>Milliseconds since epoch</returns>
         private long GetTimestampValue(object value)
         {
             if (value is DateTime dt)
@@ -613,7 +631,11 @@ namespace Cognite.OpcUa
         private static HashSet<string> ExcludeMetaData = new HashSet<string> {
             "StartTime", "EndTime", "Type", "SubType"
         };
-
+        /// <summary>
+        /// Transform BufferedEvent into EventEntity to be sent to CDF.
+        /// </summary>
+        /// <param name="evt">Event to be transformed.</param>
+        /// <returns>Final EventEntity object</returns>
         private EventEntity EventToCDFEvent(BufferedEvent evt)
         {
             var entity = new EventEntity

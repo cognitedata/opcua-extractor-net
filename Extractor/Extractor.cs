@@ -87,9 +87,9 @@ namespace Cognite.OpcUa
         #region Interface
 
         /// <summary>
-        /// Start the extractor, starting the data-push and the UAClient
+        /// Run the extractor, this starts the main MapUAToCDF task, then maintains the data/event push loop.
         /// </summary>
-        /// <returns>True on success</returns>
+        /// <param name="quitAfterMap">If true, terminate the extractor after first map iteration</param>
         public async Task RunExtractor(CancellationToken token, bool quitAfterMap = false)
         {
             if (!UAClient.Started)
@@ -205,7 +205,8 @@ namespace Cognite.OpcUa
             Log.Information("Extractor closed");
         }
         /// <summary>
-        /// Starts the extractor, calling BrowseDirectory on the root node, then pushes all nodes to CDF once finished.
+        /// Starts the extractor, calling BrowseDirectory on the root node, then pushes all nodes to CDF once finished,
+        /// finally subscribes to changes and executes HistoryRead.
         /// </summary>
         private async Task MapUAToCDF(CancellationToken token)
         {
@@ -358,6 +359,12 @@ namespace Cognite.OpcUa
                 throw;
             }
         }
+        /// <summary>
+        /// Read properties for the given list of BufferedNode. This in intelligent, and keeps track of which properties are in the process of being read,
+        /// to prevent multiple pushers from starting PropertyRead operations at the same time. If this is called on a given node twice in short time, the second call
+        /// waits on the first.
+        /// </summary>
+        /// <param name="nodes">Nodes to get properties for</param>
         public async Task ReadProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
         {
             Task newTask = null;
@@ -403,9 +410,6 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Callback for the browse operation, creates <see cref="BufferedNode"/>s and enqueues them.
         /// </summary>
-        /// <remarks>
-        /// A FIFO queue ensures that parents will always be created before their children
-        /// </remarks>
         /// <param name="node">Description of the node to be handled</param>
         /// <param name="parentId">Id of the parent node</param>
         private void HandleNode(ReferenceDescription node, NodeId parentId)
@@ -431,6 +435,13 @@ namespace Cognite.OpcUa
                 commonQueue.Enqueue(bufferedNode);
             }
         }
+        /// <summary>
+        /// Transform a given DataValue into a datapoint or a list of datapoints if the variable in question has array type.
+        /// </summary>
+        /// <param name="value">DataValue to be transformed</param>
+        /// <param name="variable">NodeExtractionState for variable the datavalue belongs to</param>
+        /// <param name="uniqueId"></param>
+        /// <returns>UniqueId to be used, for efficiency</returns>
         private IEnumerable<BufferedDataPoint> ToDataPoint(DataValue value, NodeExtractionState variable, string uniqueId)
         {
             if (variable.ArrayDimensions != null && variable.ArrayDimensions.Length > 0 && variable.ArrayDimensions[0] > 0)
@@ -523,6 +534,12 @@ namespace Cognite.OpcUa
                 }
             }
         }
+        /// <summary>
+        /// Construct event from filter and collection of event fields
+        /// </summary>
+        /// <param name="filter">Filter that resulted in this event</param>
+        /// <param name="eventFields">Fields for a single event</param>
+        /// <returns></returns>
         private BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields)
         {
             var eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType && atr.BrowsePath[0] == BrowseNames.EventType);
@@ -568,7 +585,8 @@ namespace Cognite.OpcUa
                     EventType = (NodeId)extractedProperties["EventType"],
                     MetaData = extractedProperties
                         .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode" && kvp.Key != "Time" && kvp.Key != "EventType")
-                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                    ReceivedTime = DateTime.UtcNow
                 };
                 return buffEvent;
             }
@@ -578,6 +596,9 @@ namespace Cognite.OpcUa
                 return null;
             }
         }
+        /// <summary>
+        /// Handle subscription callback for events
+        /// </summary>
         private void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
             if (!(eventArgs.NotificationValue is EventFieldList triggeredEvent))
@@ -603,11 +624,12 @@ namespace Cognite.OpcUa
             }
         }
         /// <summary>
-        /// Callback for HistoryRead operations. Simply pushes all datapoints to the queue.
+        /// Callback for HistoryRead operations for data. Simply pushes all datapoints to the queue.
         /// </summary>
-        /// <param name="data">Collection of data to be handled</param>
+        /// <param name="rawData">Collection of data to be handled as IEncodable</param>
         /// <param name="final">True if this is the final call for this node, and the lock may be removed</param>
         /// <param name="nodeid">Id of the node in question</param>
+        /// <param name="details">History read details used to generate this HistoryRead result</param>
         private int HistoryDataHandler(IEncodeable rawData, bool final, NodeId nodeid, HistoryReadDetails details)
         {
             if (rawData == null) return 0;
@@ -661,6 +683,13 @@ namespace Cognite.OpcUa
             }
             return cnt;
         }
+        /// <summary>
+        /// Callback for HistoryRead operations. Simply pushes all events to the queue.
+        /// </summary>
+        /// <param name="rawData">Collection of events to be handled as IEncodable</param>
+        /// <param name="final">True if this is the final call for this node, and the lock may be removed</param>
+        /// <param name="nodeid">Id of the emitter in question.</param>
+        /// <param name="details">History read details used to generate this HistoryRead result</param>
         private int HistoryEventHandler(IEncodeable rawEvts, bool final, NodeId nodeid, HistoryReadDetails details)
         {
             if (rawEvts == null) return 0;
@@ -682,23 +711,18 @@ namespace Cognite.OpcUa
             }
             if (evts == null || evts.Events == null) return 0;
             var emitterState = EventEmitterStates[nodeid];
-            DateTime last = DateTime.MinValue;
             int cnt = 0;
             foreach (var evt in evts.Events)
             {
                 var buffEvt = ConstructEvent(filter, evt.EventFields);
                 if (buffEvt == null) continue;
-                if (buffEvt.Time > last)
-                {
-                    last = buffEvt.Time;
-                }
                 foreach (var pusher in pushers)
                 {
                     pusher.BufferedEventQueue.Enqueue(buffEvt);
                 }
                 cnt++;
             }
-            emitterState.UpdateFromFrontfill(last, final);
+            emitterState.UpdateFromFrontfill(DateTime.UtcNow, final);
             if (final)
             {
                 var buffered = emitterState.FlushBuffer();

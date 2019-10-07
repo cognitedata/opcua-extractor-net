@@ -27,13 +27,28 @@ namespace Cognite.OpcUa
     /// </summary>
     public class BufferedNode
     {
+        /// <summary>
+        /// Raw NodeId in OPC-UA.
+        /// </summary>
         public readonly NodeId Id;
+        /// <summary>
+        /// DisplayName in OPC-UA
+        /// </summary>
         public readonly string DisplayName;
+        /// <summary>
+        /// True if this is also a BufferedVariable.
+        /// </summary>
         public readonly bool IsVariable;
+        /// <summary>
+        /// NodeId of the parent. May be NodeId.Null for rootNodes
+        /// </summary>
         public readonly NodeId ParentId;
+        /// <summary>
+        /// True if the properties of this object has been read.
+        /// </summary>
         public bool PropertiesRead { get; set; } = false;
         /// <summary>
-        /// Description in opcua
+        /// Description in OPC-UA
         /// </summary>
         public string Description { get; set; }
         public virtual string ToDebugDescription()
@@ -58,6 +73,10 @@ namespace Cognite.OpcUa
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
         public BufferedNode(NodeId Id, string DisplayName, NodeId ParentId) : this(Id, DisplayName, false, ParentId) { }
+        /// <param name="Id">NodeId of buffered node</param>
+        /// <param name="DisplayName">DisplayName of buffered node</param>
+        /// <param name="IsVariable">True if this is a variable</param>
+        /// <param name="ParentId">Id of parent of buffered node</param>
         protected BufferedNode(NodeId Id, string DisplayName, bool IsVariable, NodeId ParentId)
         {
             this.Id = Id;
@@ -66,11 +85,18 @@ namespace Cognite.OpcUa
             this.ParentId = ParentId;
         }
     }
+    /// <summary>
+    /// Represents a simplified OPC-UA datatype, containing information relevant to us (isString, isStep)
+    /// </summary>
     public class BufferedDataType
     {
         public readonly uint identifier;
         public readonly bool isStep;
         public readonly bool isString;
+        /// <summary>
+        /// Construct BufferedDataType from NodeId of datatype
+        /// </summary>
+        /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
         public BufferedDataType(NodeId rawDataType)
         {
             if (rawDataType.IdType == IdType.Numeric)
@@ -84,6 +110,11 @@ namespace Cognite.OpcUa
                 isString = true;
             }
         }
+        /// <summary>
+        /// Construct datatype from config object ProtoDateType and NodeId of datatype. Used when datatypes are being overriden.
+        /// </summary>
+        /// <param name="protoDataType">Overriding propoDataType</param>
+        /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
         public BufferedDataType(ProtoDataType protoDataType, NodeId rawDataType) : this(rawDataType)
         {
             isStep = protoDataType.IsStep;
@@ -132,7 +163,6 @@ namespace Cognite.OpcUa
         /// Local browse name of variable, sometimes useful for properties
         /// </summary>
         public QualifiedName BrowseName { get; set; }
-        private DateTime _latestTimestamp = new DateTime(1970, 1, 1);
         /// <summary>
         /// Value of variable as string or double
         /// </summary>
@@ -276,14 +306,39 @@ namespace Cognite.OpcUa
             return $"Update timeseries {Id} to {(isString ? stringValue : doubleValue.ToString())} at {timestamp.ToString()}";
         }
     }
+    /// <summary>
+    /// Represents a single OPC-UA event, with especially relevant information stored as properties and the rest in a dictionary.
+    /// </summary>
     public class BufferedEvent
     {
+        /// <summary>
+        /// Message sent with the original event.
+        /// </summary>
         public string Message { get; set; }
+        /// <summary>
+        /// Transformed ID of the event. The raw id is a byte-string. This is the byte-string transformed into Base64 and prepended the globalprefix.
+        /// </summary>
         public string EventId { get; set; } // Base64
+        /// <summary>
+        /// NodeId of the SourceNode
+        /// </summary>
         public NodeId SourceNode { get; set; }
+        /// <summary>
+        /// Time this event triggered.
+        /// </summary>
         public DateTime Time { get; set; }
+        /// <summary>
+        /// NodeId of the eventType of this event.
+        /// </summary>
         public NodeId EventType { get; set; }
+        /// <summary>
+        /// string->object dictionary of the remaining properties that haven't been filtered out.
+        /// </summary>
         public Dictionary<string, object> MetaData { get; set; }
+        /// <summary>
+        /// Timestamp this event was received locally
+        /// </summary>
+        public DateTime ReceivedTime { get; set; }
         public string ToDebugDescription()
         {
             var metadata = "{";
