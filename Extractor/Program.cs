@@ -299,6 +299,7 @@ namespace Cognite.OpcUa
             }
         }
         private double? _nonFiniteReplacement = null;
+        public long HistoryStartTime { get; set; } = 0;
     }
     public abstract class PusherConfig
     {
