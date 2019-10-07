@@ -50,7 +50,7 @@ namespace Test
                 await Task.Delay(1000);
                 for (int i = 0; i < 20; i++)
                 {
-                    if (factory.events.Values.Any() && !extractor.EventsNotInSync.Any())
+                    if (factory.events.Values.Any() && extractor.EventEmitterStates.All(state => state.Value.IsStreaming))
                     {
                         historyReadDone = true;
                         break;

@@ -93,7 +93,7 @@ namespace Test
                 File.Create(config.BufferFile).Close();
                 factory.AllowPush = false;
                 bool gotData = false;
-                for (int i = 0; i < 20; i++)
+                for (int i = 0; i < 40; i++)
                 {
                     if (new FileInfo(config.BufferFile).Length > 0)
                     {
@@ -105,7 +105,7 @@ namespace Test
                 Assert.True(gotData, "Some data must be written");
                 factory.AllowPush = true;
                 gotData = false;
-                for (int i = 0; i < 20; i++)
+                for (int i = 0; i < 40; i++)
                 {
                     if (new FileInfo(config.BufferFile).Length == 0)
                     {

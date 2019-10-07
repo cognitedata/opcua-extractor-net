@@ -15,6 +15,8 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Opc.Ua;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
@@ -42,6 +44,10 @@ namespace Cognite.OpcUa
         /// Push nodes, emptying the queue
         /// </summary>
         Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token);
+        /// <summary>
+        /// Get latest timestamp in destination system, if possible
+        /// </summary>
+        Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token);
         /// <summary>
         /// Push events, emptying the event queue
         /// </summary>

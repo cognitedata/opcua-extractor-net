@@ -245,7 +245,6 @@ namespace Cognite.OpcUa
         /// <returns>True if no operation failed unexpectedly</returns>
         public async Task<bool> PushNodes(IEnumerable<BufferedNode> nodes, IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
-            var histTsList = new List<BufferedVariable>();
             var tsList = new List<BufferedVariable>();
 
             if (variables.Count() == 0 && nodes.Count() == 0)
@@ -257,14 +256,7 @@ namespace Cognite.OpcUa
             {
                 if (Extractor.AllowTSMap(node))
                 {
-                    if (node.Historizing)
-                    {
-                        histTsList.Add(node);
-                    }
-                    else
-                    {
-                        tsList.Add(node);
-                    }
+                    tsList.Add(node);
                 }
             }
             Log.Information("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + nodes.Count());
@@ -304,12 +296,6 @@ namespace Cognite.OpcUa
                     if (!await task) return false;
                 }
                 trackedTimeseres.Inc(tsList.Count);
-
-                foreach (var task in Utils.ChunkBy(histTsList, config.LatestChunk).Select(items => EnsureHistorizingTimeseries(items, token)))
-                {
-                    if (!await task) return false;
-                }
-                trackedTimeseres.Inc(histTsList.Count);
             }
             catch (Exception e)
             {
@@ -364,7 +350,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var missing in ex.Missing)
                     {
-                        if (missing.TryGetValue("externalId", out CogniteSdk.ErrorValue value))
+                        if (missing.TryGetValue("externalId", out ErrorValue value))
                         {
                             missingAssetIds.Add(value.ToString());
                         }
@@ -520,121 +506,42 @@ namespace Cognite.OpcUa
             }
             return true;
         }
-        /// <summary>
-        /// Try to get latest timestamp from given list of timeseries, then create any not found and try again
-        /// </summary>
-        /// <param name="tsList">List of timeseries to be tested</param>
-        /// <returns>True if no operation failed unexpectedly</returns>
-        private async Task<bool> EnsureHistorizingTimeseries(IEnumerable<BufferedVariable> tsList, CancellationToken token)
+        public async Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
-            if (!tsList.Any()) return true;
-            var tsIds = new Dictionary<string, BufferedVariable>();
-            foreach (BufferedVariable node in tsList)
-            {
-                string externalId = UAClient.GetUniqueId(node.Id, node.Index);
-                tsIds.Add(externalId, node);
-                nodeIsHistorizing[externalId] = true;
-                if (node.Index == -1)
-                {
-                    if (nodeToAssetIds.ContainsKey(node.ParentId))
-                    {
-                        nodeToAssetIds[node.Id] = nodeToAssetIds[node.ParentId];
-                    }
-                    else
-                    {
-                        Log.Warning("Parentless timeseries: {id}", node.Id);
-                    }
-                }
-            }
-
-            Log.Information("Test {NumHistorizingTimeseriesToTest} historizing timeseries", tsIds.Count);
-            var missingTSIds = new HashSet<string>();
-
-            var pairedTsIds = tsIds.Keys.Select<string, (Identity, string)>(key => (Identity.ExternalId(key), null));
+            if (config.Debug) return true;
+            var stateMap = states.ToDictionary(state => UAClient.GetUniqueId(state.Id,
+                state.ArrayDimensions != null && state.ArrayDimensions[0] > 0 ? 0 : -1), state => state);
             var client = GetClient();
-            try
+            foreach (var idChunk in Utils.ChunkBy(stateMap.Keys, config.LatestChunk))
             {
-                var readResults = await client.DataPoints.GetLatestAsync(pairedTsIds, token);
-                Log.Information("Found {NumRetrievedHistorizingTimeseries} historizing timeseries", readResults.Count());
-                foreach (var resultItem in readResults)
-                {
-                    var variable = tsIds[resultItem.ExternalId];
-                    if (resultItem.NumericDataPoints.Any())
-                    {
-                        tsIds[resultItem.ExternalId].LatestTimestamp =
-                            DateTimeOffset.FromUnixTimeMilliseconds(resultItem.NumericDataPoints.First().TimeStamp).DateTime;
-                    }
-                }
-            }
-            catch (ResponseException ex)
-            {
-                if (ex.Code == 400 && ex.Missing.Any())
-                {
-                    foreach (var missing in ex.Missing)
-                    {
-                        if (missing.TryGetValue("externalId", out CogniteSdk.ErrorValue value) && value != null)
-                        {
-                            missingTSIds.Add(value.ToString());
-                        }
-                    }
-                    Log.Information("Found {NumMissingHistorizedTimeseries} missing historizing timeseries", ex.Missing.Count());
-                }
-                else
-                {
-                    nodeEnsuringFailures.Inc();
-                    Log.Error(ex, "Failed to get historizing timeseries");
-                    return false;
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to get historizing timeseries");
-                nodeEnsuringFailures.Inc();
-                return false;
-            }
-            if (missingTSIds.Any())
-            {
-                Log.Information("Create {NumHistorizingTimeseriesToCreate} new historizing timeseries", missingTSIds.Count);
-
-                var getMetaData = missingTSIds.Select(id => tsIds[id]);
-                await Extractor.ReadProperties(getMetaData, token);
-                var createTimeseries = getMetaData.Select(VariableToTimeseries);
+                Log.Information("Get latest timestamp from CDF for {num} nodes", idChunk.Count());
+                var points = idChunk.Select<string, (Identity, string)>(id => (Identity.ExternalId(id), null));
                 try
                 {
-                    await client.TimeSeries.CreateAsync(createTimeseries, token);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Failed to create historizing timeseries");
-                    nodeEnsuringFailures.Inc();
-                    return false;
-                }
-
-                var idsToMap = tsIds.Keys
-                    .Where(key => !missingTSIds.Contains(key) && tsIds[key].Index < 1)
-                    .Select<string, (Identity, string)>(key => (Identity.ExternalId(key), null));
-
-                if (idsToMap.Any())
-                {
-                    Log.Information("Get remaining {NumFinalHistorizingTimeseriesData} historizing timeseries ids", idsToMap.Count());
-                    try
+                    var dps = await client.DataPoints.GetLatestAsync(points, token);
+                    foreach (var dp in dps)
                     {
-                        var latestReadResults = await client.DataPoints.GetLatestAsync(idsToMap, token);
-                        foreach (var resultItem in latestReadResults)
+                        if (dp.NumericDataPoints.Any())
                         {
-                            var variable = tsIds[resultItem.ExternalId];
-                            if (resultItem.NumericDataPoints.Any())
-                            {
-                                variable.LatestTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(resultItem.NumericDataPoints.First().TimeStamp).DateTime;
-                            }
+                            stateMap[dp.ExternalId].InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDataPoints.First().TimeStamp).DateTime);
+                        }
+                        else if (dp.StringDataPoints.Any())
+                        {
+                            stateMap[dp.ExternalId].InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.StringDataPoints.First().TimeStamp).DateTime);
                         }
                     }
-                    catch (Exception ex)
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "Failed to get latest timestamp");
+                    if (e is ResponseException ex)
                     {
-                        Log.Error(ex, "Failed to get historizing timeseries ids");
-                        nodeEnsuringFailures.Inc();
-                        return false;
+                        foreach (var id in ex.Missing)
+                        {
+                            Log.Information("Missing: {id}", id["externalId"].ToString());
+                        }
                     }
+                    return false;
                 }
             }
             return true;

@@ -785,12 +785,12 @@ namespace Cognite.OpcUa
         /// <param name="toRead">Variables to read for</param>
         /// <param name="callback">Callback, takes a <see cref="HistoryReadResultCollection"/>,
         /// a bool indicating that this is the final callback for this node, and the id of the node in question</param>
-        private void HistoryReadDataChunk(IEnumerable<BufferedVariable> toRead,
+        private void HistoryReadDataChunk(IEnumerable<NodeExtractionState> toRead,
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
         {
             DateTime lowest = DateTime.MinValue;
-            lowest = toRead.Select((bvar) => { return bvar.LatestTimestamp; }).Min();
+            lowest = toRead.Select((bvar) => { return bvar.DestLatestTimestamp; }).Min();
             var details = new ReadRawModifiedDetails
             {
                 StartTime = lowest,
@@ -806,22 +806,22 @@ namespace Cognite.OpcUa
                 throw;
             }
         }
-        public async Task HistoryReadData(IEnumerable<BufferedVariable> toRead,
+        public async Task HistoryReadData(IEnumerable<NodeExtractionState> toRead,
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
         {
             var tasks = new List<Task>();
             if (historyGranularity == TimeSpan.Zero)
             {
-                foreach (var variable in toRead)
+                foreach (var state in toRead)
                 {
-                    if (variable.Historizing)
+                    if (state.Historizing)
                     {
-                        tasks.Add(Task.Run(() => HistoryReadDataChunk(new List<BufferedVariable> { variable }, callback, token), token));
+                        tasks.Add(Task.Run(() => HistoryReadDataChunk(new List<NodeExtractionState> { state }, callback, token), token));
                     }
                     else
                     {
-                        callback(null, true, variable.Id, null);
+                        callback(null, true, state.Id, null);
                     }
                 }
                 try
@@ -835,26 +835,26 @@ namespace Cognite.OpcUa
                 return;
             }
             int cnt = 0;
-            var groupedVariables = new Dictionary<long, IList<BufferedVariable>>();
-            foreach (var variable in toRead)
+            var groupedStates = new Dictionary<long, IList<NodeExtractionState>>();
+            foreach (var state in toRead)
             {
-                if (variable.Historizing)
+                if (state.Historizing)
                 {
                     cnt++;
-                    long group = variable.LatestTimestamp.Ticks / historyGranularity.Ticks;
-                    if (!groupedVariables.ContainsKey(group))
+                    long group = state.DestLatestTimestamp.Ticks / historyGranularity.Ticks;
+                    if (!groupedStates.ContainsKey(group))
                     {
-                        groupedVariables[group] = new List<BufferedVariable>();
+                        groupedStates[group] = new List<NodeExtractionState>();
                     }
-                    groupedVariables[group].Add(variable);
+                    groupedStates[group].Add(state);
                 }
                 else
                 {
-                    callback(null, true, variable.Id, null);
+                    callback(null, true, state.Id, null);
                 }
             }
-            if (!groupedVariables.Any()) return;
-            foreach (var nodes in groupedVariables.Values)
+            if (!groupedStates.Any()) return;
+            foreach (var nodes in groupedStates.Values)
             {
                 foreach (var nextNodes in Utils.ChunkBy(nodes, config.HistoryReadNodesChunk))
                 {
