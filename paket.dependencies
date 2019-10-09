@@ -1,5 +1,4 @@
 source https://www.nuget.org/api/v2
-source https://cognite.jfrog.io/cognite/api/nuget/nuget
 storage: none
 
 nuget coverlet.msbuild 2.6.3
@@ -10,7 +9,7 @@ nuget Microsoft.Extensions.Http.Polly 2.2.0
 nuget OPCFoundation.NetStandard.Opc.Ua 1.4.355.26
 nuget Prometheus.Client.MetricPusher 1.0.1
 nuget YamlDotNet 6.1.1
-nuget CogniteSdk 0.12.5
+nuget CogniteSdk 1.0.0-alpha-002
 nuget AdysTech.InfluxDB.Client.Net.Core 0.8.0
 nuget Serilog 2.8.0
 nuget Serilog.Sinks.GoogleCloudLogging 2.0.0

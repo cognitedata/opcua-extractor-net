@@ -3,9 +3,6 @@ FROM eu.gcr.io/cognitedata/dotnet-mono:3.0-sdk
 WORKDIR /build
 COPY . .
 
-RUN apt-get update && apt-get install -y libxml2-utils
-
-RUN ./credentials.sh
 RUN mono .paket/paket.exe install
 RUN dotnet build
 
