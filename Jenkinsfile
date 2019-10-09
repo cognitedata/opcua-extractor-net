@@ -90,11 +90,9 @@ podTemplate(
 		}
         container('dotnet-mono') {
             stage('Install dependencies') {
-                sh('apt-get update && apt-get install -y libxml2-utils python3-pip')
+                sh('apt-get update && apt-get install -y python3-pip')
                 sh('pip3 install pipenv')
                 sh('pipenv install -d --system')           
-                sh('cp /nuget-credentials/nuget.config ./nuget.config')
-                sh('./credentials.sh')
                 sh('mono .paket/paket.exe install')
                 sh('git clone https://github.com/cognitedata/python-opcua.git ../python-opcua')
             }
