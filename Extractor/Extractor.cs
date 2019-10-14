@@ -60,6 +60,7 @@ namespace Cognite.OpcUa
         private bool pushData = false;
 
         public bool Started { get; private set; }
+        public bool Pushing { get; private set; }
 
 
         private static readonly Gauge startTime = Metrics
@@ -127,6 +128,8 @@ namespace Cognite.OpcUa
             Log.Debug("End mapping directory");
 
             var synchTasks = await MapUAToDestinations(token);
+
+            Pushing = true;
 
             IEnumerable<Task> tasks = pushers.Select(pusher =>
             {
@@ -199,11 +202,14 @@ namespace Cognite.OpcUa
             pendingOperations.Clear();
             pendingOperations.Enqueue(new Task(async () =>
             {
+                Started = false;
                 await UAClient.WaitForOperations();
                 ConfigureExtractor(token);
                 await UAClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
                 var synchTasks = await MapUAToDestinations(token);
                 await Task.WhenAll(synchTasks);
+                Started = true;
+                Log.Information("Successfully restarted extractor");
             }));
             triggerUpdateOperations.Set();
         }
