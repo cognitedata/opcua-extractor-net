@@ -7,6 +7,10 @@
     <AssemblyName>OpcuaExtractor</AssemblyName>
     <PublishTrimmed>true</PublishTrimmed>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCpu'">
+    <PublishTrimmed>true</PublishTrimmed>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
   <ItemGroup>
     <None Remove="App.config" />
     <None Remove="Properties\GitCommitHash" />
@@ -33,9 +37,6 @@ mkdir "$(MSBuildProjectDirectory)/Properties"
 git describe --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
 git log -1  --format="%25%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
 </PreBuildEvent>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <Optimize>true</Optimize>
   </PropertyGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

@@ -36,6 +36,7 @@ namespace Cognite.OpcUa
         /// The extractor generally requires fixed dimensions in order to push arrays to destination systems.
         /// </summary>
         public int[] ArrayDimensions { get; }
+        public string DisplayName { get; }
         /// <summary>
         /// Earliest of the latest timestamp of the destination systems.
         /// </summary>
@@ -52,6 +53,7 @@ namespace Cognite.OpcUa
             Historizing = variable.Historizing;
             DataType = variable.DataType;
             ArrayDimensions = variable.ArrayDimensions;
+            DisplayName = variable.DisplayName;
             if (!variable.Historizing)
             {
                 IsStreaming = true;

@@ -95,14 +95,7 @@ namespace Cognite.OpcUa
         public async Task Run(CancellationToken token)
         {
             liveToken = token;
-            try
-            {
-                await StartSession();
-            }
-            catch (Exception e)
-            {
-                Log.Error(e, "Error starting client");
-            }
+            await StartSession();
         }
         /// <summary>
         /// Close the session, cleaning up any client data on the server
@@ -118,6 +111,12 @@ namespace Cognite.OpcUa
         private async Task StartSession()
         {
             visitedNodes.Clear();
+            // A restarted session might mean a restarted server, so all server-relevant data must be cleared.
+            // This includes any stored NodeId, which may refer to an outdated namespaceIndex
+            eventFields?.Clear();
+            nodeOverrides?.Clear();
+            numericDataTypes?.Clear();
+
             var application = new ApplicationInstance
             {
                 ApplicationName = ".NET OPC-UA Extractor",
@@ -187,6 +186,8 @@ namespace Cognite.OpcUa
             {
                 numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
             }
+            nodeOverrides?.Clear();
+            eventFields?.Clear();
             Task.Run(() => Extractor?.RestartExtractor(liveToken));
             lock (visitedNodesLock)
             {
@@ -343,6 +344,7 @@ namespace Cognite.OpcUa
         /// <param name="externalId">ExternalId to be used</param>
         public void AddNodeOverride(NodeId nodeId, string externalId)
         {
+            if (nodeId == null || nodeId == NodeId.Null) return;
             nodeOverrides[nodeId] = externalId;
         }
         /// <summary>
@@ -712,7 +714,7 @@ namespace Cognite.OpcUa
         }
         #endregion
 
-        #region synchronization
+        #region Synchronization
         /// <summary>
         /// General method to perform history-read operations for a list of nodes, with a given callback and HistoryReadDetails
         /// </summary>
@@ -901,18 +903,12 @@ namespace Cognite.OpcUa
         /// a bool indicating if this is the final iteration, NodeId of the node in question, ReadEventDetails containing the filter.
         /// Returns the number of events processed.</param>
         /// <param name="token"></param>
-        public void HistoryReadEvents(IEnumerable<NodeId> emitters,
-            IEnumerable<NodeId> eventIds,
+        public Task HistoryReadEvents(IEnumerable<NodeId> emitters,
             IEnumerable<NodeId> nodeIds,
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
         {
-            if (eventFields == null)
-            {
-                var collector = new EventFieldCollector(this, eventIds);
-                eventFields = collector.GetEventIdFields(token);
-            }
-
+            if (eventFields == null) throw new Exception("EventFields not defined");
             // Read the latest local event write time from file, then set the startTime to the largest of that minus 10 minutes, and
             // the HistoryStartTime config option. We have generally have no way of finding the latest event in the destinations,
             // so we approximate the time we want to read from using a local buffer.
@@ -929,14 +925,7 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = (uint)eventConfig.HistoryReadChunk,
                 Filter = filter
             };
-            try
-            {
-                DoHistoryRead(details, emitters, callback, token);
-            }
-            catch (Exception)
-            {
-                throw;
-            }
+            return Task.Run(() => DoHistoryRead(details, emitters, callback, token));
         }
         /// <summary>
         /// Create datapoint subscriptions for given list of nodes
@@ -944,7 +933,7 @@ namespace Cognite.OpcUa
         /// <param name="nodeList">List of buffered variables to synchronize</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
-        public void SubscribeToNodes(IEnumerable<BufferedVariable> nodeList,
+        public void SubscribeToNodes(IEnumerable<NodeExtractionState> nodeList,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
@@ -1024,8 +1013,7 @@ namespace Cognite.OpcUa
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
         /// <returns>Map of fields, EventTypeId->(SourceTypeId, BrowseName)</returns>
-        public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> SubscribeToEvents(IEnumerable<NodeId> emitters,
-            IEnumerable<NodeId> eventIds,
+        public void SubscribeToEvents(IEnumerable<NodeId> emitters,
             IEnumerable<NodeId> nodeIds,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
@@ -1044,15 +1032,12 @@ namespace Cognite.OpcUa
                 .Select(sub => sub.ResolvedNodeId)
                 .ToHashSet();
 
-            if (eventFields == null)
-            {
-                var collector = new EventFieldCollector(this, eventIds);
-                eventFields = collector.GetEventIdFields(token);
-            }
+            if (eventFields == null) throw new Exception("EventFields not defined");
 
             var filter = BuildEventFilter(nodeIds);
             foreach (var emitter in emitters)
             {
+                if (token.IsCancellationRequested) return;
                 if (!hasSubscription.Contains(emitter))
                 {
                     var item = new MonitoredItem
@@ -1095,11 +1080,17 @@ namespace Cognite.OpcUa
                 }
             }
             Log.Information("Created {EventSubCount} event subscriptions", count);
-            return eventFields;
         }
         #endregion
 
         #region events
+        public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventFields(IEnumerable<NodeId> eventIds, CancellationToken token)
+        {
+            if (eventFields != null) return eventFields;
+            var collector = new EventFieldCollector(this, eventIds);
+            eventFields = collector.GetEventIdFields(token);
+            return eventFields;
+        }
         /// <summary>
         /// Constructs a filter from the given list of permitted SourceNodes, the already constructed field map and an optional receivedAfter property.
         /// </summary>
