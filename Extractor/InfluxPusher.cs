@@ -16,8 +16,8 @@ namespace Cognite.OpcUa
     {
         public Extractor Extractor { set; private get; }
         public UAClient UAClient { set; private get; }
-        public PusherConfig BaseConfig { get; private set; }
-        public bool failing;
+        public PusherConfig BaseConfig { get; }
+        public bool Failing;
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
@@ -39,7 +39,7 @@ namespace Cognite.OpcUa
             int count = 0;
             while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
             {
-                if (buffer.timestamp > DateTime.MinValue && !buffer.isString)
+                if (buffer.Timestamp > DateTime.MinValue && !buffer.IsString)
                 {
                     dataPointList.Add(buffer);
                 }
@@ -50,10 +50,10 @@ namespace Cognite.OpcUa
                 {
                     var dp = new InfluxDatapoint<double>
                     {
-                        UtcTimestamp = point.timestamp,
+                        UtcTimestamp = point.Timestamp,
                         MeasurementName = point.Id,
                     };
-                    dp.Fields.Add("value", point.doubleValue);
+                    dp.Fields.Add("value", point.DoubleValue);
                     return dp;
                 });
                 Log.Information("Push {NumInfluxPointsToPush} points to InfluxDB", points.Count());

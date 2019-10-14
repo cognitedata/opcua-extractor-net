@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Serilog;
 using Serilog.Events;
-using Serilog.Formatting.Compact;
 using Serilog.Sinks.GoogleCloudLogging;
 
 namespace Cognite.OpcUa
@@ -27,9 +23,9 @@ namespace Cognite.OpcUa
 
         public static ILogger Configure(LoggerConfig config)
         {
-            var logToConsole = Enum.TryParse(config.ConsoleLevel, true, out LogEventLevel consoleLevel);
-            var logToFile = Enum.TryParse(config.FileLevel, true, out LogEventLevel fileLevel);
-            var logToStackdriver = config.StackdriverCredentials != null;
+            bool logToConsole = Enum.TryParse(config.ConsoleLevel, true, out LogEventLevel consoleLevel);
+            bool logToFile = Enum.TryParse(config.FileLevel, true, out LogEventLevel fileLevel);
+            bool logToStackdriver = config.StackdriverCredentials != null;
 
             var logConfig = new LoggerConfiguration();
             logConfig.MinimumLevel.Verbose();

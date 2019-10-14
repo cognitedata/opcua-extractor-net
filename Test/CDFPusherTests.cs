@@ -34,34 +34,34 @@ namespace Test
         [Trait("Category", "both")]
         [Trait("Tests", "cdfpusher")]
         [Theory]
-        [InlineData(DummyFactory.MockMode.All, "basic")]
-        [InlineData(DummyFactory.MockMode.Some, "basic")]
-        [InlineData(DummyFactory.MockMode.None, "basic")]
-        [InlineData(DummyFactory.MockMode.FailAsset, "basic")]
-        [InlineData(DummyFactory.MockMode.All, "full")]
-        [InlineData(DummyFactory.MockMode.Some, "full")]
-        [InlineData(DummyFactory.MockMode.None, "full")]
-        [InlineData(DummyFactory.MockMode.FailAsset, "full")]
-        public async Task TestBasicPushing(DummyFactory.MockMode mode, string serverType)
+        [InlineData(CDFMockHandler.MockMode.All, "basic")]
+        [InlineData(CDFMockHandler.MockMode.Some, "basic")]
+        [InlineData(CDFMockHandler.MockMode.None, "basic")]
+        [InlineData(CDFMockHandler.MockMode.FailAsset, "basic")]
+        [InlineData(CDFMockHandler.MockMode.All, "full")]
+        [InlineData(CDFMockHandler.MockMode.Some, "full")]
+        [InlineData(CDFMockHandler.MockMode.None, "full")]
+        [InlineData(CDFMockHandler.MockMode.FailAsset, "full")]
+        public async Task TestBasicPushing(CDFMockHandler.MockMode mode, string serverType)
         {
             var fullConfig = Common.BuildConfig(serverType, 3);
             Logger.Configure(fullConfig.Logging);
             Log.Information("Starting OPC UA Extractor version {version}", Cognite.OpcUa.Version.GetVersion());
             Log.Information("Revision information: {status}", Cognite.OpcUa.Version.Status());
             Log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
-            UAClient client = new UAClient(fullConfig);
+            var client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
-            var factory = new DummyFactory(config.Project, mode);
-            var pusher = new CDFPusher(Common.GetDummyProvider(factory), config);
+            var handler = new CDFMockHandler(config.Project, mode);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
 
-            Extractor extractor = new Extractor(fullConfig, pusher, client);
+            var extractor = new Extractor(fullConfig, pusher, client);
             try
             {
                 await extractor.RunExtractor(CancellationToken.None, true);
             }
             catch (Exception e)
             {
-                if (mode != DummyFactory.MockMode.FailAsset)
+                if (mode != CDFMockHandler.MockMode.FailAsset)
                 {
                     if (!Common.TestRunResult(e)) throw;
                 }
@@ -80,52 +80,50 @@ namespace Test
                 throw new Exception("No config");
             }
             Logger.Configure(fullConfig.Logging);
-            UAClient client = new UAClient(fullConfig);
+            var client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
-            var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
-            var pusher = new CDFPusher(Common.GetDummyProvider(factory), config);
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
 
-            Extractor extractor = new Extractor(fullConfig, pusher, client);
-            using (var source = new CancellationTokenSource())
+            var extractor = new Extractor(fullConfig, pusher, client);
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+
+            File.Create(config.BufferFile).Close();
+            handler.AllowPush = false;
+            bool gotData = false;
+            for (int i = 0; i < 40; i++)
             {
-                var runTask = extractor.RunExtractor(source.Token);
-
-                File.Create(config.BufferFile).Close();
-                factory.AllowPush = false;
-                bool gotData = false;
-                for (int i = 0; i < 40; i++)
+                if (new FileInfo(config.BufferFile).Length > 0)
                 {
-                    if (new FileInfo(config.BufferFile).Length > 0)
-                    {
-                        gotData = true;
-                        break;
-                    }
-                    Thread.Sleep(500);
+                    gotData = true;
+                    break;
                 }
-                Assert.True(gotData, "Some data must be written");
-                factory.AllowPush = true;
-                gotData = false;
-                for (int i = 0; i < 40; i++)
-                {
-                    if (new FileInfo(config.BufferFile).Length == 0)
-                    {
-                        gotData = true;
-                        break;
-                    }
-                    Thread.Sleep(500);
-                }
-                Assert.True(gotData, $"Expecting file to be emptied, but it contained {new FileInfo(config.BufferFile).Length} bytes of data");
-                source.Cancel();
-                try
-                {
-                    await runTask;
-                }
-                catch (Exception e)
-                {
-                    if (!Common.TestRunResult(e)) throw;
-                }
-                extractor.Close();
+                Thread.Sleep(500);
             }
+            Assert.True(gotData, "Some data must be written");
+            handler.AllowPush = true;
+            gotData = false;
+            for (int i = 0; i < 40; i++)
+            {
+                if (new FileInfo(config.BufferFile).Length == 0)
+                {
+                    gotData = true;
+                    break;
+                }
+                Thread.Sleep(500);
+            }
+            Assert.True(gotData, $"Expecting file to be emptied, but it contained {new FileInfo(config.BufferFile).Length} bytes of data");
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+            extractor.Close();
         }
         [Trait("Tests", "basicserver")]
         [Trait("Tests", "cdfpusher")]
@@ -139,37 +137,35 @@ namespace Test
             config.ApiKey = null;
 
             Logger.Configure(fullConfig.Logging);
-            UAClient client = new UAClient(fullConfig);
-            var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
-            var pusher = new CDFPusher(Common.GetDummyProvider(factory), config);
+            var client = new UAClient(fullConfig);
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
 
-            Extractor extractor = new Extractor(fullConfig, pusher, client);
-            using (var source = new CancellationTokenSource())
+            var extractor = new Extractor(fullConfig, pusher, client);
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+            bool started = false;
+            for (int i = 0; i < 20; i++)
             {
-                var runTask = extractor.RunExtractor(source.Token);
-                var started = false;
-                for (int i = 0; i < 20; i++)
+                if (extractor.Pushing)
                 {
-                    if (extractor.Pushing)
-                    {
-                        started = true;
-                        break;
-                    }
-                    Thread.Sleep(500);
+                    started = true;
+                    break;
                 }
-                Assert.True(started);
-                source.Cancel();
-                try
-                {
-                    await runTask;
-                }
-                catch (Exception e)
-                {
-                    if (!Common.TestRunResult(e)) throw;
-                }
-                Assert.Equal(0, factory.RequestCount);
-                extractor.Close();
+                Thread.Sleep(500);
             }
+            Assert.True(started);
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+            Assert.Equal(0, handler.RequestCount);
+            extractor.Close();
         }
         [Trait("Category", "arrayserver")]
         [Fact]
@@ -181,24 +177,24 @@ namespace Test
             fullConfig.Extraction.MaxArraySize = 4;
             Logger.Configure(fullConfig.Logging);
 
-            UAClient client = new UAClient(fullConfig);
-            var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
-            var pusher = new CDFPusher(Common.GetDummyProvider(factory), config);
+            var client = new UAClient(fullConfig);
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
 
-            Extractor extractor = new Extractor(fullConfig, pusher, client);
+            var extractor = new Extractor(fullConfig, pusher, client);
             using var source = new CancellationTokenSource();
-            var gotData = false;
+            bool gotData = false;
             var runTask = extractor.RunExtractor(source.Token);
             for (int i = 0; i < 20; i++)
             {
-                if (factory.assets.Count == 4 && factory.timeseries.Count == 7)
+                if (handler.assets.Count == 4 && handler.timeseries.Count == 7)
                 {
                     gotData = true;
                     break;
                 }
                 Thread.Sleep(500);
             }
-            Assert.True(gotData, $"Expected to get 4 assets and got {factory.assets.Count}, 7 timeseries and got {factory.timeseries.Count}");
+            Assert.True(gotData, $"Expected to get 4 assets and got {handler.assets.Count}, 7 timeseries and got {handler.timeseries.Count}");
             source.Cancel();
             try
             {
@@ -219,13 +215,13 @@ namespace Test
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             Logger.Configure(fullConfig.Logging);
 
-            UAClient client = new UAClient(fullConfig);
-            var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
-            var pusher = new CDFPusher(Common.GetDummyProvider(factory), config);
+            var client = new UAClient(fullConfig);
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
 
-            Extractor extractor = new Extractor(fullConfig, pusher, client);
+            var extractor = new Extractor(fullConfig, pusher, client);
             using var source = new CancellationTokenSource();
-            var started = false;
+            bool started = false;
             var runTask = extractor.RunExtractor(source.Token);
             for (int i = 0; i < 20; i++)
             {
@@ -239,17 +235,7 @@ namespace Test
             Assert.True(started);
             Assert.True(extractor.Started);
             extractor.RestartExtractor(source.Token);
-            var stopped = false;
-            for (int i = 0; i < 20; i++)
-            {
-                if (!extractor.Started)
-                {
-                    stopped = true;
-                    break;
-                }
-                Thread.Sleep(100);
-            }
-            Assert.True(stopped);
+            Thread.Sleep(500);
             started = false;
             for (int i = 0; i < 20; i++)
             {

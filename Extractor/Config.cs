@@ -1,7 +1,6 @@
 ﻿using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace Cognite.OpcUa
 {
@@ -17,18 +16,18 @@ namespace Cognite.OpcUa
         public bool History { get; set; } = true;
         public int HistoryGranularity { get; set; } = 600;
         public bool ForceRestart { get; set; } = false;
-        public int BrowseNodesChunk { get { return _browseNodesChunk; } set { _browseNodesChunk = Math.Max(1, value); } }
+        public int BrowseNodesChunk { get => _browseNodesChunk; set => _browseNodesChunk = Math.Max(1, value); }
         private int _browseNodesChunk = 1000;
-        public int BrowseChunk { get { return _browseChunk; } set { _browseChunk = Math.Max(1, value); } }
+        public int BrowseChunk { get => _browseChunk; set => _browseChunk = Math.Max(1, value); }
         private int _browseChunk = 1000;
-        public int HistoryReadChunk { get { return _uaHistoryReadPoints; } set { _uaHistoryReadPoints = Math.Max(1, value); } }
+        public int HistoryReadChunk { get => _uaHistoryReadPoints; set => _uaHistoryReadPoints = Math.Max(1, value); }
         private int _uaHistoryReadPoints = 1000;
-        public int HistoryReadNodesChunk { get { return _uaHistoryReadNodes; } set { _uaHistoryReadNodes = Math.Max(1, value); } }
+        public int HistoryReadNodesChunk { get => _uaHistoryReadNodes; set => _uaHistoryReadNodes = Math.Max(1, value); }
         private int _uaHistoryReadNodes = 100;
         // 0 means server defined:
-        public int AttributesChunk { get { return _attributesChunk; } set { _attributesChunk = Math.Max(0, value); } }
+        public int AttributesChunk { get => _attributesChunk; set => _attributesChunk = Math.Max(0, value); }
         private int _attributesChunk = 1000;
-        public int SubscriptionChunk { get { return _subscriptionChunk; } set { _subscriptionChunk = Math.Max(1, value); } }
+        public int SubscriptionChunk { get => _subscriptionChunk; set => _subscriptionChunk = Math.Max(1, value); }
         private int _subscriptionChunk = 1000;
     }
     public class ExtractionConfig
@@ -36,24 +35,21 @@ namespace Cognite.OpcUa
         public string IdPrefix { get; set; }
         public IEnumerable<string> IgnoreNamePrefix { get; set; }
         public IEnumerable<string> IgnoreName { get; set; }
-        public ProtoNodeId RootNode { get { return _rootNode; } set { _rootNode = value ?? _rootNode; } }
+        public ProtoNodeId RootNode { get => _rootNode; set => _rootNode = value ?? _rootNode; }
         private ProtoNodeId _rootNode = new ProtoNodeId();
         public Dictionary<string, ProtoNodeId> NodeMap { get; set; }
         public IEnumerable<ProtoNodeId> IgnoreDataTypes { get; set; }
         public int MaxArraySize { get; set; } = 0;
         public bool AllowStringVariables { get; set; } = false;
-        public Dictionary<string, string> NamespaceMap { get { return _namespaceMap; } set { _namespaceMap = value ?? _namespaceMap; } }
+        public Dictionary<string, string> NamespaceMap { get => _namespaceMap; set => _namespaceMap = value ?? _namespaceMap; }
         private Dictionary<string, string> _namespaceMap = new Dictionary<string, string>();
         public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
         public double? NonFiniteReplacement
         {
-            get { return _nonFiniteReplacement; }
-            set
-            {
-                _nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
-            }
+            get => _nonFiniteReplacement;
+            set =>_nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
         }
-        private double? _nonFiniteReplacement = null;
+        private double? _nonFiniteReplacement;
         public long HistoryStartTime { get; set; } = 0;
     }
     public abstract class PusherConfig
@@ -94,17 +90,17 @@ namespace Cognite.OpcUa
     }
     public class FullConfig
     {
-        public UAClientConfig Source { get { return _uaConfig; } set { _uaConfig = value ?? _uaConfig; } }
+        public UAClientConfig Source { get => _uaConfig; set => _uaConfig = value ?? _uaConfig; }
         private UAClientConfig _uaConfig = new UAClientConfig();
-        public LoggerConfig Logging { get { return _loggerConfig; } set { _loggerConfig = value ?? _loggerConfig; } }
+        public LoggerConfig Logging { get => _loggerConfig; set => _loggerConfig = value ?? _loggerConfig; }
         private LoggerConfig _loggerConfig = new LoggerConfig();
-        public MetricsConfig Metrics { get { return _metricsConfig; } set { _metricsConfig = value ?? _metricsConfig; } }
+        public MetricsConfig Metrics { get => _metricsConfig; set => _metricsConfig = value ?? _metricsConfig; }
         private MetricsConfig _metricsConfig = new MetricsConfig();
-        public List<PusherConfig> Pushers { get { return _pushers; } set { _pushers = value ?? _pushers; } }
+        public List<PusherConfig> Pushers { get => _pushers; set => _pushers = value ?? _pushers; }
         private List<PusherConfig> _pushers = new List<PusherConfig>();
-        public ExtractionConfig Extraction { get { return _extractionConfig; } set { _extractionConfig = value ?? _extractionConfig; } }
+        public ExtractionConfig Extraction { get => _extractionConfig; set => _extractionConfig = value ?? _extractionConfig; }
         private ExtractionConfig _extractionConfig = new ExtractionConfig();
-        public EventConfig Events { get { return _eventConfig; } set { _eventConfig = value ?? _eventConfig; } }
+        public EventConfig Events { get => _eventConfig; set => _eventConfig = value ?? _eventConfig; }
         private EventConfig _eventConfig = new EventConfig();
     }
     public class LoggerConfig
@@ -129,10 +125,10 @@ namespace Cognite.OpcUa
     {
         public IEnumerable<ProtoNodeId> EventIds { get; set; }
         public IEnumerable<ProtoNodeId> EmitterIds { get; set; }
-        public IEnumerable<string> ExcludeProperties { get { return _excludeProperties; } set { _excludeProperties = value ?? _excludeProperties; } }
+        public IEnumerable<string> ExcludeProperties { get => _excludeProperties; set => _excludeProperties = value ?? _excludeProperties; }
         private IEnumerable<string> _excludeProperties = new List<string>();
         public IEnumerable<string> BaseExcludeProperties { get; } = new List<string> { "LocalTime", "ReceiveTime", "SourceName" };
-        public Dictionary<string, string> DestinationNameMap { get { return _destinationNameMap; } set { _destinationNameMap = value ?? _destinationNameMap; } }
+        public Dictionary<string, string> DestinationNameMap { get => _destinationNameMap; set => _destinationNameMap = value ?? _destinationNameMap; }
         private Dictionary<string, string> _destinationNameMap = new Dictionary<string, string>();
         public IEnumerable<ProtoNodeId> HistorizingEmitterIds { get; set; }
         public string ReceiveTimeProperty { get; set; } = "ReceiveTime";

@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Opc.Ua;
 
@@ -53,12 +54,12 @@ namespace Cognite.OpcUa
         public string Description { get; set; }
         public virtual string ToDebugDescription()
         {
-            string propertyString = "properties: {" + (properties != null && properties.Any() ? "\n" : "");
-            if (properties != null)
+            string propertyString = "properties: {" + (Properties != null && Properties.Any() ? "\n" : "");
+            if (Properties != null)
             {
-                foreach (var prop in properties)
+                foreach (var prop in Properties)
                 {
-                    propertyString += $"    {prop.DisplayName} : {prop.Value?.stringValue ?? "??"},\n";
+                    propertyString += $"    {prop.DisplayName} : {prop.Value?.StringValue ?? "??"},\n";
                 }
             }
             propertyString += "}";
@@ -68,21 +69,21 @@ namespace Cognite.OpcUa
                 + propertyString + "\n";
             return ret;
         }
-        public IList<BufferedVariable> properties;
+        public IList<BufferedVariable> Properties;
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public BufferedNode(NodeId Id, string DisplayName, NodeId ParentId) : this(Id, DisplayName, false, ParentId) { }
-        /// <param name="Id">NodeId of buffered node</param>
-        /// <param name="DisplayName">DisplayName of buffered node</param>
-        /// <param name="IsVariable">True if this is a variable</param>
-        /// <param name="ParentId">Id of parent of buffered node</param>
-        protected BufferedNode(NodeId Id, string DisplayName, bool IsVariable, NodeId ParentId)
+        public BufferedNode(NodeId id, string displayName, NodeId parentId) : this(id, displayName, false, parentId) { }
+        /// <param name="id">NodeId of buffered node</param>
+        /// <param name="displayName">DisplayName of buffered node</param>
+        /// <param name="isVariable">True if this is a variable</param>
+        /// <param name="parentId">Id of parent of buffered node</param>
+        protected BufferedNode(NodeId id, string displayName, bool isVariable, NodeId parentId)
         {
-            this.Id = Id;
-            this.DisplayName = DisplayName;
-            this.IsVariable = IsVariable;
-            this.ParentId = ParentId;
+            Id = id;
+            DisplayName = displayName;
+            IsVariable = isVariable;
+            ParentId = parentId;
         }
     }
     /// <summary>
@@ -90,9 +91,9 @@ namespace Cognite.OpcUa
     /// </summary>
     public class BufferedDataType
     {
-        public readonly uint identifier;
-        public readonly bool isStep;
-        public readonly bool isString;
+        public readonly uint Identifier;
+        public readonly bool IsStep;
+        public readonly bool IsString;
         /// <summary>
         /// Construct BufferedDataType from NodeId of datatype
         /// </summary>
@@ -101,13 +102,13 @@ namespace Cognite.OpcUa
         {
             if (rawDataType.IdType == IdType.Numeric)
             {
-                identifier = (uint)rawDataType.Identifier;
-                isString = identifier < DataTypes.Boolean || identifier > DataTypes.Double;
-                isStep = identifier == DataTypes.Boolean;
+                Identifier = (uint)rawDataType.Identifier;
+                IsString = Identifier < DataTypes.Boolean || Identifier > DataTypes.Double;
+                IsStep = Identifier == DataTypes.Boolean;
             }
             else
             {
-                isString = true;
+                IsString = true;
             }
         }
         /// <summary>
@@ -117,15 +118,15 @@ namespace Cognite.OpcUa
         /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
         public BufferedDataType(ProtoDataType protoDataType, NodeId rawDataType) : this(rawDataType)
         {
-            isStep = protoDataType.IsStep;
-            isString = false;
+            IsStep = protoDataType.IsStep;
+            IsString = false;
         }
         public override string ToString()
         {
             return $"DataType: {{\n" +
-                $"    numIdentifier: {identifier}\n" +
-                $"    isStep: {isStep}\n" +
-                $"    isString: {isString}\n" +
+                $"    numIdentifier: {Identifier}\n" +
+                $"    isStep: {IsStep}\n" +
+                $"    isString: {IsString}\n" +
                 $"}}";
         }
     }
@@ -170,12 +171,12 @@ namespace Cognite.OpcUa
         public bool DataRead { get; set; } = false;
         public override string ToDebugDescription()
         {
-            string propertyString = "properties: {" + (properties != null && properties.Any() ? "\n" : "");
-            if (properties != null)
+            string propertyString = "properties: {" + (Properties != null && Properties.Any() ? "\n" : "");
+            if (Properties != null)
             {
-                foreach (var prop in properties)
+                foreach (var prop in Properties)
                 {
-                    propertyString += $"{prop.DisplayName} : {prop.Value.stringValue},\n";
+                    propertyString += $"{prop.DisplayName} : {prop.Value.StringValue},\n";
                 }
             }
             propertyString += "}";
@@ -184,42 +185,42 @@ namespace Cognite.OpcUa
                 + $"ParentId: {ParentId?.ToString()}\n"
                 + $"Historizing: {Historizing}\n"
                 + propertyString + "\n"
-                + DataType?.ToString() + "\n";
+                + DataType + "\n";
             return ret;
         }
-        public BufferedVariable ArrayParent { get; private set; } = null;
+        public BufferedVariable ArrayParent { get; }
         /// <summary>
         /// Fixed dimensions of the array-type variable, if any
         /// </summary>
-        public int[] ArrayDimensions { get; set; } = null;
+        public int[] ArrayDimensions { get; set; }
         /// <summary>
         /// Index of the variable in array, if relevant. -1 if the variable is scalar.
         /// </summary>
-        public int Index { get; private set; } = -1;
+        public int Index { get; } = -1;
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public BufferedVariable(NodeId Id, string DisplayName, NodeId ParentId) : base(Id, DisplayName, true, ParentId) { }
+        public BufferedVariable(NodeId id, string displayName, NodeId parentId) : base(id, displayName, true, parentId) { }
         /// <summary>
         /// Sets the datapoint to provided DataValue.
         /// </summary>
         /// <param name="value">Value to set</param>
         /// <param name="SourceTimestamp">Timestamp from source</param>
         /// <param name="client">Current client context</param>
-        public void SetDataPoint(object value, DateTime SourceTimestamp, UAClient client)
+        public void SetDataPoint(object value, DateTime sourceTimestamp, UAClient client)
         {
             if (value == null) return;
-            if (DataType.isString || IsProperty)
+            if (DataType.IsString || IsProperty)
             {
                 Value = new BufferedDataPoint(
-                    SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp,
+                    sourceTimestamp <= DateTime.MinValue ? DateTime.Now : sourceTimestamp,
                     client.GetUniqueId(Id),
                     client.ConvertToString(value));
             }
             else
             {
                 Value = new BufferedDataPoint(
-                    SourceTimestamp <= DateTime.MinValue ? DateTime.Now : SourceTimestamp,
+                    sourceTimestamp <= DateTime.MinValue ? DateTime.Now : sourceTimestamp,
                     client.GetUniqueId(Id),
                     UAClient.ConvertToDouble(value));
             }
@@ -239,30 +240,30 @@ namespace Cognite.OpcUa
     /// </summary>
     public class BufferedDataPoint
     {
-        public readonly DateTime timestamp;
+        public readonly DateTime Timestamp;
         public readonly string Id;
-        public double doubleValue;
-        public string stringValue;
-        public readonly bool isString;
+        public double DoubleValue;
+        public string StringValue;
+        public readonly bool IsString;
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public BufferedDataPoint(DateTime timestamp, string Id, double value)
+        public BufferedDataPoint(DateTime timestamp, string id, double value)
         {
-            this.timestamp = timestamp;
-            this.Id = Id;
-            doubleValue = value;
-            isString = false;
+            Timestamp = timestamp;
+            Id = id;
+            DoubleValue = value;
+            IsString = false;
         }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
-        public BufferedDataPoint(DateTime timestamp, string Id, string value)
+        public BufferedDataPoint(DateTime timestamp, string id, string value)
         {
-            this.timestamp = timestamp;
-            this.Id = Id;
-            stringValue = value;
-            isString = true;
+            Timestamp = timestamp;
+            Id = id;
+            StringValue = value;
+            IsString = true;
         }
         /// <summary>
         /// Converts datapoint into an array of bytes which may be written to file.
@@ -280,8 +281,8 @@ namespace Cognite.OpcUa
             ushort size = (ushort)(externalId.Length * sizeof(char) + sizeof(double) + sizeof(long));
             byte[] bytes = new byte[size + sizeof(ushort)];
             Buffer.BlockCopy(externalId.ToCharArray(), 0, bytes, sizeof(ushort), externalId.Length * sizeof(char));
-            Buffer.BlockCopy(BitConverter.GetBytes(doubleValue), 0, bytes, sizeof(ushort) + externalId.Length * sizeof(char), sizeof(double));
-            Buffer.BlockCopy(BitConverter.GetBytes(new DateTimeOffset(timestamp).ToUnixTimeMilliseconds()), 0, bytes, sizeof(ushort) + externalId.Length * sizeof(char)
+            Buffer.BlockCopy(BitConverter.GetBytes(DoubleValue), 0, bytes, sizeof(ushort) + externalId.Length * sizeof(char), sizeof(double));
+            Buffer.BlockCopy(BitConverter.GetBytes(new DateTimeOffset(Timestamp).ToUnixTimeMilliseconds()), 0, bytes, sizeof(ushort) + externalId.Length * sizeof(char)
                 + sizeof(double), sizeof(long));
             Buffer.BlockCopy(BitConverter.GetBytes(size), 0, bytes, 0, sizeof(ushort));
             return bytes;
@@ -294,16 +295,16 @@ namespace Cognite.OpcUa
         public BufferedDataPoint(byte[] bytes)
         {
             if (bytes.Length < sizeof(long) + sizeof(double)) return;
-            timestamp = DateTimeOffset.FromUnixTimeMilliseconds(BitConverter.ToInt64(bytes, bytes.Length - sizeof(long))).DateTime;
-            doubleValue = BitConverter.ToDouble(bytes, bytes.Length - sizeof(double) - sizeof(long));
+            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(BitConverter.ToInt64(bytes, bytes.Length - sizeof(long))).DateTime;
+            DoubleValue = BitConverter.ToDouble(bytes, bytes.Length - sizeof(double) - sizeof(long));
             char[] chars = new char[(bytes.Length - sizeof(long) - sizeof(double))/sizeof(char)];
             Buffer.BlockCopy(bytes, 0, chars, 0, bytes.Length - sizeof(long) - sizeof(double));
             Id = new string(chars);
-            isString = false;
+            IsString = false;
         }
         public string ToDebugDescription()
         {
-            return $"Update timeseries {Id} to {(isString ? stringValue : doubleValue.ToString())} at {timestamp.ToString()}";
+            return $"Update timeseries {Id} to {(IsString ? StringValue : DoubleValue.ToString(CultureInfo.InvariantCulture))} at {Timestamp.ToString(CultureInfo.InvariantCulture)}";
         }
     }
     /// <summary>
@@ -341,7 +342,7 @@ namespace Cognite.OpcUa
         public DateTime ReceivedTime { get; set; }
         public string ToDebugDescription()
         {
-            var metadata = "{";
+            string metadata = "{";
             if (MetaData != null)
             {
                 metadata += "\n";

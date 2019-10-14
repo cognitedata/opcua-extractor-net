@@ -40,17 +40,17 @@ namespace Cognite.OpcUa
         /// Load config, start the <see cref="Logger"/>, start the <see cref="Extractor"/> then wait for exit signal
         /// </summary>
         /// <returns></returns>
-        static int Main(String[] _)
+        static int Main()
         {
             // Temporary logger config for capturing logs during configuration.
             Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
 
-            var configDir = Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR");
+            string configDir = Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR");
             configDir = string.IsNullOrEmpty(configDir) ? "config/" : configDir;
-            FullConfig fullConfig = null;
+            FullConfig fullConfig;
             try
             {
-                var configFile = System.IO.Path.Combine(configDir, "config.yml");
+                string configFile = System.IO.Path.Combine(configDir, "config.yml");
                 Log.Information($"Loading config from {configFile}");
                 fullConfig = Utils.GetConfig(configFile);
             }
@@ -96,7 +96,7 @@ namespace Cognite.OpcUa
                 bool canceled = false;
                 Console.CancelKeyPress += (sender, eArgs) =>
                 {
-                    quitEvent.Set();
+                    quitEvent?.Set();
                     eArgs.Cancel = true;
                     source?.Cancel();
                     canceled = true;
@@ -241,16 +241,13 @@ namespace Cognite.OpcUa
             {
             }
 
-            if (runTask.IsFaulted)
+            if (!runTask.IsFaulted) return;
+            if (runTask.Exception.InnerException is TaskCanceledException)
             {
-                if (runTask.Exception.InnerException is TaskCanceledException)
-                {
-                    extractor.Close();
-                    throw new TaskCanceledException();
-                }
-                ExceptionDispatchInfo.Capture(runTask.Exception).Throw();
-                return;
+                extractor.Close();
+                throw new TaskCanceledException();
             }
+            ExceptionDispatchInfo.Capture(runTask.Exception).Throw();
         }
     }
     public class DataCDFClient : Client { public DataCDFClient(HttpClient httpClient) : base(httpClient) { } }

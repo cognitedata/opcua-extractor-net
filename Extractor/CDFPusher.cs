@@ -45,7 +45,7 @@ namespace Cognite.OpcUa
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
-        public PusherConfig BaseConfig { get; private set; }
+        public PusherConfig BaseConfig { get; }
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
@@ -100,7 +100,7 @@ namespace Cognite.OpcUa
             int count = 0;
             while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
             {
-                if (buffer.timestamp > DateTime.MinValue)
+                if (buffer.Timestamp > DateTime.MinValue)
                 {
                     dataPointList.Add(buffer);
                 }
@@ -119,14 +119,14 @@ namespace Cognite.OpcUa
                 {
                     ExternalId = id
                 };
-                if (points.First().isString)
+                if (points.First().IsString)
                 {
                     item.StringDatapoints = new StringDatapoints();
                     item.StringDatapoints.Datapoints.AddRange(points.Select(point =>
                         new StringDatapoint
                         {
-                            Timestamp = new DateTimeOffset(point.timestamp).ToUnixTimeMilliseconds(),
-                            Value = point.stringValue
+                            Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
+                            Value = point.StringValue
                         }
                     ));
                 }
@@ -136,8 +136,8 @@ namespace Cognite.OpcUa
                     item.NumericDatapoints.Datapoints.AddRange(points.Select(point =>
                         new NumericDatapoint
                         {
-                            Timestamp = new DateTimeOffset(point.timestamp).ToUnixTimeMilliseconds(),
-                            Value = point.doubleValue
+                            Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
+                            Value = point.DoubleValue
                         }
                     ));
                 }
@@ -199,7 +199,7 @@ namespace Cognite.OpcUa
             }
             Log.Information("Push {NumEventsToPush} events to CDF", count);
             if (config.Debug) return;
-            IEnumerable<EventEntity> events = eventList.Select(evt => EventToCDFEvent(evt)).ToList();
+            IEnumerable<EventEntity> events = eventList.Select(EventToCDFEvent).ToList();
             var client = GetClient("Data");
             try
             {
@@ -277,7 +277,6 @@ namespace Cognite.OpcUa
                 }
                 return true;
             }
-            var client = GetClient();
             try
             {
                 foreach (var task in Utils.ChunkBy(objects, config.AssetChunk).Select(items => EnsureAssets(items, token)))
@@ -519,7 +518,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var missing in ex.Missing)
                     {
-                        if (missing.TryGetValue("externalId", out CogniteSdk.ErrorValue value))
+                        if (missing.TryGetValue("externalId", out ErrorValue value))
                         {
                             missingTSIds.Add(value.ToString());
                         }
@@ -574,15 +573,15 @@ namespace Cognite.OpcUa
                 AssetId = nodeToAssetIds[variable.ParentId],
                 Name = Utils.Truncate(variable.DisplayName, 255),
                 LegacyName = externalId,
-                IsString = variable.DataType.isString,
-                IsStep = variable.DataType.isStep
+                IsString = variable.DataType.IsString,
+                IsStep = variable.DataType.IsStep
             };
-            if (variable.properties != null && variable.properties.Any())
+            if (variable.Properties != null && variable.Properties.Any())
             {
-                writePoco.MetaData = variable.properties
+                writePoco.MetaData = variable.Properties
                     .Where(prop => prop.Value != null)
                     .Take(16)
-                    .ToDictionary(prop => Utils.Truncate(prop.DisplayName, 32), prop => Utils.Truncate(prop.Value.stringValue, 256));
+                    .ToDictionary(prop => Utils.Truncate(prop.DisplayName, 32), prop => Utils.Truncate(prop.Value.StringValue, 256));
             }
             return writePoco;
         }
@@ -603,12 +602,12 @@ namespace Cognite.OpcUa
             {
                 writePoco.ParentExternalId = UAClient.GetUniqueId(node.ParentId);
             }
-            if (node.properties != null && node.properties.Any())
+            if (node.Properties != null && node.Properties.Any())
             {
-                writePoco.MetaData = node.properties
+                writePoco.MetaData = node.Properties
                     .Where(prop => prop.Value != null)
                     .Take(16)
-                    .ToDictionary(prop => Utils.Truncate(prop.DisplayName, 32), prop => Utils.Truncate(prop.Value.stringValue, 256));
+                    .ToDictionary(prop => Utils.Truncate(prop.DisplayName, 32), prop => Utils.Truncate(prop.Value.StringValue, 256));
             }
             return writePoco;
         }
@@ -628,7 +627,7 @@ namespace Cognite.OpcUa
                 return Convert.ToInt64(value);
             }
         }
-        private static HashSet<string> ExcludeMetaData = new HashSet<string> {
+        private static readonly HashSet<string> excludeMetaData = new HashSet<string> {
             "StartTime", "EndTime", "Type", "SubType"
         };
         /// <summary>
@@ -656,7 +655,7 @@ namespace Cognite.OpcUa
                 entity.SubType = Utils.Truncate(UAClient.ConvertToString(evt.MetaData["SubType"]), 64);
             }
             var metaData = evt.MetaData
-                .Where(kvp => !ExcludeMetaData.Contains(kvp.Key))
+                .Where(kvp => !excludeMetaData.Contains(kvp.Key))
                 .Take(16)
                 .ToDictionary(kvp => Utils.Truncate(kvp.Key, 32), kvp => Utils.Truncate(UAClient.ConvertToString(kvp.Value), 256));
             if (metaData.Any())
