@@ -95,14 +95,7 @@ namespace Cognite.OpcUa
         public async Task Run(CancellationToken token)
         {
             liveToken = token;
-            try
-            {
-                await StartSession();
-            }
-            catch (Exception e)
-            {
-                Log.Error(e, "Error starting client");
-            }
+            await StartSession();
         }
         /// <summary>
         /// Close the session, cleaning up any client data on the server
@@ -118,6 +111,12 @@ namespace Cognite.OpcUa
         private async Task StartSession()
         {
             visitedNodes.Clear();
+            // A restarted session might mean a restarted server, so all server-relevant data must be cleared.
+            // This includes any stored NodeId, which may refer to an outdated namespaceIndex
+            eventFields?.Clear();
+            nodeOverrides?.Clear();
+            numericDataTypes?.Clear();
+
             var application = new ApplicationInstance
             {
                 ApplicationName = ".NET OPC-UA Extractor",
@@ -125,7 +124,7 @@ namespace Cognite.OpcUa
                 ConfigSectionName = "opc.ua.net.extractor"
             };
             var appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
-            var certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
+            string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
             {
                 appconfig.SecurityConfiguration.ApplicationCertificate.StorePath = $"{certificateDir}/instance";
@@ -180,6 +179,7 @@ namespace Cognite.OpcUa
         private void ClientReconnectComplete(object sender, EventArgs eventArgs)
         {
             if (!ReferenceEquals(sender, reconnectHandler)) return;
+            if (reconnectHandler == null) return;
             session = reconnectHandler.Session;
             reconnectHandler.Dispose();
             Log.Warning("--- RECONNECTED ---");
@@ -187,6 +187,8 @@ namespace Cognite.OpcUa
             {
                 numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
             }
+            nodeOverrides?.Clear();
+            eventFields?.Clear();
             Task.Run(() => Extractor?.RestartExtractor(liveToken));
             lock (visitedNodesLock)
             {
@@ -334,6 +336,7 @@ namespace Cognite.OpcUa
             refd.NodeClass = (NodeClass)enumerator.Current.GetValue<int>(0);
             refd.ReferenceTypeId = null;
             refd.IsForward = true;
+            enumerator.Dispose();
             return refd;
         }
         /// <summary>
@@ -343,6 +346,7 @@ namespace Cognite.OpcUa
         /// <param name="externalId">ExternalId to be used</param>
         public void AddNodeOverride(NodeId nodeId, string externalId)
         {
+            if (nodeId == null || nodeId == NodeId.Null) return;
             nodeOverrides[nodeId] = externalId;
         }
         /// <summary>
@@ -534,7 +538,7 @@ namespace Cognite.OpcUa
             foreach (var node in nodes)
             {
                 if (node == null) continue;
-                foreach (var attribute in common)
+                foreach (uint attribute in common)
                 {
                     readValueIds.Add(new ReadValueId
                     {
@@ -544,7 +548,7 @@ namespace Cognite.OpcUa
                 }
                 if (node.IsVariable)
                 {
-                    foreach (var attribute in variables)
+                    foreach (uint attribute in variables)
                     {
                         readValueIds.Add(new ReadValueId
                         {
@@ -632,6 +636,7 @@ namespace Cognite.OpcUa
                     }
                 }
             }
+            enumerator.Dispose();
         }
         /// <summary>
         /// Gets the values of the given list of variables, then updates each variable with a BufferedDataPoint
@@ -662,6 +667,7 @@ namespace Cognite.OpcUa
                         this);
                 }
             }
+            enumerator.Dispose();
         }
         /// <summary>
         /// Gets properties for variables in nodes given, then updates all properties in given list of nodes with relevant data and values.
@@ -683,9 +689,9 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    if (node.properties != null)
+                    if (node.Properties != null)
                     {
-                        foreach (var property in node.properties)
+                        foreach (var property in node.Properties)
                         {
                             properties.Add(property);
                         }
@@ -700,11 +706,11 @@ namespace Cognite.OpcUa
                 {
                     var property = new BufferedVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
                     properties.Add(property);
-                    if (parent.properties == null)
+                    if (parent.Properties == null)
                     {
-                        parent.properties = new List<BufferedVariable>();
+                        parent.Properties = new List<BufferedVariable>();
                     }
-                    parent.properties.Add(property);
+                    parent.Properties.Add(property);
                 }
             }
             ReadNodeData(properties, token);
@@ -712,7 +718,7 @@ namespace Cognite.OpcUa
         }
         #endregion
 
-        #region synchronization
+        #region Synchronization
         /// <summary>
         /// General method to perform history-read operations for a list of nodes, with a given callback and HistoryReadDetails
         /// </summary>
@@ -763,7 +769,7 @@ namespace Cognite.OpcUa
                     foreach (var data in results)
                     {
                         var hdata = ExtensionObject.ToEncodeable(data.HistoryData);
-                        ptCnt += callback(hdata, data == null || hdata == null || data.ContinuationPoint == null, indexMap[prevIndex], details);
+                        ptCnt += callback(hdata, hdata == null || data.ContinuationPoint == null, indexMap[prevIndex], details);
                         if (data.ContinuationPoint != null)
                         {
                             ids.Add(new HistoryReadValueId
@@ -801,8 +807,7 @@ namespace Cognite.OpcUa
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
         {
-            DateTime lowest = DateTime.MinValue;
-            lowest = toRead.Select((bvar) => { return bvar.DestLatestTimestamp; }).Min();
+            var lowest = toRead.Select(bvar => bvar.DestLatestTimestamp).Min();
             lowest = lowest < historyStartTime ? historyStartTime : lowest;
 			
             var details = new ReadRawModifiedDetails
@@ -811,14 +816,7 @@ namespace Cognite.OpcUa
                 EndTime = DateTime.Now.AddDays(1),
                 NumValuesPerNode = (uint)config.HistoryReadChunk
             };
-            try
-            {
-                DoHistoryRead(details, toRead.Select(bv => bv.Id), callback, token);
-            }
-            catch (Exception)
-            {
-                throw;
-            }
+            DoHistoryRead(details, toRead.Select(bv => bv.Id), callback, token);
         }
         /// <summary>
         /// Read historydata for the requested nodes and call the callback after each call to HistoryRead, performs chunking according to config,
@@ -845,23 +843,14 @@ namespace Cognite.OpcUa
                         callback(null, true, state.Id, null);
                     }
                 }
-                try
-                {
-                    await Task.WhenAll(tasks);
-                }
-                catch (Exception)
-                {
-                    throw;
-                }
+                await Task.WhenAll(tasks); 
                 return;
             }
-            int cnt = 0;
             var groupedStates = new Dictionary<long, IList<NodeExtractionState>>();
             foreach (var state in toRead)
             {
                 if (state.Historizing)
                 {
-                    cnt++;
                     long group = state.DestLatestTimestamp.Ticks / historyGranularity.Ticks;
                     if (!groupedStates.ContainsKey(group))
                     {
@@ -882,14 +871,7 @@ namespace Cognite.OpcUa
                     tasks.Add(Task.Run(() => HistoryReadDataChunk(nextNodes, callback, token)));
                 }
             }
-            try
-            {
-                await Task.WhenAll(tasks);
-            }
-            catch (Exception)
-            {
-                throw;
-            }
+            await Task.WhenAll(tasks);
         }
         /// <summary>
         /// Read history data for a list of events, calls callback after each history read iteration.
@@ -901,18 +883,12 @@ namespace Cognite.OpcUa
         /// a bool indicating if this is the final iteration, NodeId of the node in question, ReadEventDetails containing the filter.
         /// Returns the number of events processed.</param>
         /// <param name="token"></param>
-        public void HistoryReadEvents(IEnumerable<NodeId> emitters,
-            IEnumerable<NodeId> eventIds,
+        public Task HistoryReadEvents(IEnumerable<NodeId> emitters,
             IEnumerable<NodeId> nodeIds,
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
         {
-            if (eventFields == null)
-            {
-                var collector = new EventFieldCollector(this, eventIds);
-                eventFields = collector.GetEventIdFields(token);
-            }
-
+            if (eventFields == null) throw new Exception("EventFields not defined");
             // Read the latest local event write time from file, then set the startTime to the largest of that minus 10 minutes, and
             // the HistoryStartTime config option. We have generally have no way of finding the latest event in the destinations,
             // so we approximate the time we want to read from using a local buffer.
@@ -929,14 +905,7 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = (uint)eventConfig.HistoryReadChunk,
                 Filter = filter
             };
-            try
-            {
-                DoHistoryRead(details, emitters, callback, token);
-            }
-            catch (Exception)
-            {
-                throw;
-            }
+            return Task.Run(() => DoHistoryRead(details, emitters, callback, token));
         }
         /// <summary>
         /// Create datapoint subscriptions for given list of nodes
@@ -944,20 +913,16 @@ namespace Cognite.OpcUa
         /// <param name="nodeList">List of buffered variables to synchronize</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
-        public void SubscribeToNodes(IEnumerable<BufferedVariable> nodeList,
+        public void SubscribeToNodes(IEnumerable<NodeExtractionState> nodeList,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
             if (!nodeList.Any()) return;
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "DataChangeListener");
-            if (subscription == null)
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "DataChangeListener") ?? new Subscription(session.DefaultSubscription)
             {
-                subscription = new Subscription(session.DefaultSubscription)
-                {
-                    PublishingInterval = config.PollingInterval,
-                    DisplayName = "DataChangeListener"
-                };
-            }
+                PublishingInterval = config.PollingInterval,
+                DisplayName = "DataChangeListener"
+            };
             int count = 0;
             var hasSubscription = subscription.MonitoredItems
                 .Select(sub => sub.ResolvedNodeId)
@@ -1024,35 +989,27 @@ namespace Cognite.OpcUa
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
         /// <returns>Map of fields, EventTypeId->(SourceTypeId, BrowseName)</returns>
-        public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> SubscribeToEvents(IEnumerable<NodeId> emitters,
-            IEnumerable<NodeId> eventIds,
+        public void SubscribeToEvents(IEnumerable<NodeId> emitters,
             IEnumerable<NodeId> nodeIds,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "EventListener");
-            if (subscription == null)
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "EventListener") ?? new Subscription(session.DefaultSubscription)
             {
-                subscription = new Subscription(session.DefaultSubscription)
-                {
-                    PublishingInterval = config.PollingInterval,
-                    DisplayName = "EventListener"
-                };
-            }
+                PublishingInterval = config.PollingInterval,
+                DisplayName = "EventListener"
+            };
             int count = 0;
             var hasSubscription = subscription.MonitoredItems
                 .Select(sub => sub.ResolvedNodeId)
                 .ToHashSet();
 
-            if (eventFields == null)
-            {
-                var collector = new EventFieldCollector(this, eventIds);
-                eventFields = collector.GetEventIdFields(token);
-            }
+            if (eventFields == null) throw new Exception("EventFields not defined");
 
             var filter = BuildEventFilter(nodeIds);
             foreach (var emitter in emitters)
             {
+                if (token.IsCancellationRequested) return;
                 if (!hasSubscription.Contains(emitter))
                 {
                     var item = new MonitoredItem
@@ -1095,11 +1052,17 @@ namespace Cognite.OpcUa
                 }
             }
             Log.Information("Created {EventSubCount} event subscriptions", count);
-            return eventFields;
         }
         #endregion
 
         #region events
+        public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventFields(IEnumerable<NodeId> eventIds, CancellationToken token)
+        {
+            if (eventFields != null) return eventFields;
+            var collector = new EventFieldCollector(this, eventIds);
+            eventFields = collector.GetEventIdFields(token);
+            return eventFields;
+        }
         /// <summary>
         /// Constructs a filter from the given list of permitted SourceNodes, the already constructed field map and an optional receivedAfter property.
         /// </summary>
@@ -1196,7 +1159,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private class EventFieldCollector
         {
-            readonly UAClient UAClient;
+            readonly UAClient uaClient;
             readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> properties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
             readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> localProperties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
             readonly IEnumerable<NodeId> targetEventIds;
@@ -1207,7 +1170,7 @@ namespace Cognite.OpcUa
             /// <param name="targetEventIds">Target event ids</param>
             public EventFieldCollector(UAClient parent, IEnumerable<NodeId> targetEventIds)
             {
-                UAClient = parent;
+                uaClient = parent;
                 this.targetEventIds = targetEventIds;
             }
             /// <summary>
@@ -1220,7 +1183,7 @@ namespace Cognite.OpcUa
                 properties[ObjectTypeIds.BaseEventType] = new List<ReferenceDescription>();
                 localProperties[ObjectTypeIds.BaseEventType] = new List<ReferenceDescription>();
 
-                UAClient.BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType },
+                uaClient.BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType },
                     EventTypeCallback, token, ReferenceTypeIds.HierarchicalReferences, (uint)NodeClass.ObjectType | (uint)NodeClass.Variable);
                 var propVariables = new Dictionary<ExpandedNodeId, (NodeId, QualifiedName)>();
                 foreach (var kvp in localProperties)
@@ -1246,7 +1209,7 @@ namespace Cognite.OpcUa
             /// <param name="parent">Parent type id</param>
             private void EventTypeCallback(ReferenceDescription child, NodeId parent)
             {
-                var id = UAClient.ToNodeId(child.NodeId);
+                var id = uaClient.ToNodeId(child.NodeId);
                 if (child.NodeClass == NodeClass.ObjectType && !properties.ContainsKey(id))
                 {
                     var parentProperties = new List<ReferenceDescription>();
@@ -1362,16 +1325,6 @@ namespace Cognite.OpcUa
             return value.ToString();
         }
         /// <summary>
-        /// Converts DataValue fetched from ua server to string, contains cases for special types we want to represent in CDF
-        /// </summary>
-        /// <param name="datavalue">Datavalue to convert</param>
-        /// <returns>Metadata suitable string</returns>
-        public string ConvertToString(DataValue datavalue)
-        {
-            if (datavalue == null) return "";
-            return ConvertToString(datavalue.Value);
-        }
-        /// <summary>
         /// Returns consistent unique string representation of a <see cref="NodeId"/> given its namespaceUri
         /// </summary>
         /// <remarks>
@@ -1385,20 +1338,8 @@ namespace Cognite.OpcUa
         {
             if (nodeOverrides.ContainsKey((NodeId)nodeid)) return nodeOverrides[(NodeId)nodeid];
 
-            string namespaceUri = nodeid.NamespaceUri;
-            if (namespaceUri == null)
-            {
-                namespaceUri = session.NamespaceUris.GetString(nodeid.NamespaceIndex);
-            }
-            string prefix;
-            if (extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode))
-            {
-                prefix = prefixNode;
-            }
-            else
-            {
-                prefix = namespaceUri;
-            }
+            string namespaceUri = nodeid.NamespaceUri ?? session.NamespaceUris.GetString(nodeid.NamespaceIndex);
+            string prefix = extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : namespaceUri;
             // Strip the ns=namespaceIndex; part, as it may be inconsistent between sessions
             // We still want the identifierType part of the id, so we just remove the first ocurrence of ns=..
             // If we can find out if the value of the key alone is unique, then we can remove the identifierType, though I suspect
@@ -1416,12 +1357,9 @@ namespace Cognite.OpcUa
             extId = extId.Trim();
             if (extId.Length > 255)
             {
-                if (index > -1)
-                {
-                    var indexSub = $"{index}";
-                    return extId.Substring(0, 255 - indexSub.Length) + indexSub;
-                }
-                return extId.Substring(0, 255);
+                if (index <= -1) return extId.Substring(0, 255);
+                string indexSub = $"{index}";
+                return extId.Substring(0, 255 - indexSub.Length) + indexSub;
             }
             if (index > -1)
             {

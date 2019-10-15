@@ -36,65 +36,63 @@ namespace Test
         {
             var fullConfig = Common.BuildConfig("events", 8, "config.events.yml");
             Logger.Configure(fullConfig.Logging);
-            UAClient client = new UAClient(fullConfig);
+            var client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
-            var factory = new DummyFactory(config.Project, DummyFactory.MockMode.None);
-            var pusher = new CDFPusher(Common.GetDummyProvider(factory), config);
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
 
-            Extractor extractor = new Extractor(fullConfig, pusher, client);
-            using (var source = new CancellationTokenSource())
+            var extractor = new Extractor(fullConfig, pusher, client);
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+
+            bool historyReadDone = false;
+            await Task.Delay(1000);
+            for (int i = 0; i < 20; i++)
             {
-                var runTask = extractor.RunExtractor(source.Token);
-
-                bool historyReadDone = false;
+                if (handler.events.Values.Any() && extractor.EventEmitterStates.All(state => state.Value.IsStreaming))
+                {
+                    historyReadDone = true;
+                    break;
+                }
                 await Task.Delay(1000);
-                for (int i = 0; i < 20; i++)
-                {
-                    if (factory.events.Values.Any() && extractor.EventEmitterStates.All(state => state.Value.IsStreaming))
-                    {
-                        historyReadDone = true;
-                        break;
-                    }
-                    await Task.Delay(1000);
-                }
-                Assert.True(historyReadDone);
-                await Task.Delay(1000);
-                Assert.True(factory.events.Values.Any());
-                Assert.Contains(factory.events.Values, ev => ev.description.StartsWith("prop "));
-                Assert.Contains(factory.events.Values, ev => ev.description == "prop 0");
-                Assert.Contains(factory.events.Values, ev => ev.description == "basicPass 0");
-                Assert.Contains(factory.events.Values, ev => ev.description == "basicPassSource 0");
-                Assert.Contains(factory.events.Values, ev => ev.description == "basicVarSource 0");
-                Assert.Contains(factory.events.Values, ev => ev.description == "mappedType 0");
-
-                Assert.Contains(factory.events.Values, ev => ev.description.StartsWith("propOther "));
-                Assert.Contains(factory.events.Values, ev => ev.description.StartsWith("basicPass "));
-                Assert.Contains(factory.events.Values, ev => ev.description.StartsWith("basicPassSource "));
-                Assert.Contains(factory.events.Values, ev => ev.description.StartsWith("basicPassSource2 "));
-                Assert.Contains(factory.events.Values, ev => ev.description.StartsWith("basicVarSource "));
-                Assert.Contains(factory.events.Values, ev => ev.description.StartsWith("mappedType "));
-
-                foreach (var ev in factory.events.Values)
-                {
-                    TestEvent(ev, factory);
-                }
-                source.Cancel();
-                try
-                {
-                    await runTask;
-                }
-                catch (Exception e)
-                {
-                    if (!Common.TestRunResult(e)) throw;
-                }
-                extractor.Close();
             }
+            Assert.True(historyReadDone);
+            await Task.Delay(1000);
+            Assert.True(handler.events.Values.Any());
+            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("prop "));
+            Assert.Contains(handler.events.Values, ev => ev.description == "prop 0");
+            Assert.Contains(handler.events.Values, ev => ev.description == "basicPass 0");
+            Assert.Contains(handler.events.Values, ev => ev.description == "basicPassSource 0");
+            Assert.Contains(handler.events.Values, ev => ev.description == "basicVarSource 0");
+            Assert.Contains(handler.events.Values, ev => ev.description == "mappedType 0");
+
+            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("propOther "));
+            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("basicPass "));
+            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("basicPassSource "));
+            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("basicPassSource2 "));
+            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("basicVarSource "));
+            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("mappedType "));
+
+            foreach (var ev in handler.events.Values)
+            {
+                TestEvent(ev, handler);
+            }
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+            extractor.Close();
         }
         /// <summary>
         /// Test that the event contains the appropriate data for the event server test
         /// </summary>
         /// <param name="ev"></param>
-        private static void TestEvent(EventDummy ev, DummyFactory factory)
+        private static void TestEvent(EventDummy ev, CDFMockHandler factory)
         {
             Assert.False(ev.description.StartsWith("propOther2 "));
             Assert.False(ev.description.StartsWith("basicBlock "));
@@ -156,10 +154,10 @@ namespace Test
                 throw new Exception("Unknown event found");
             }
         }
-        private static bool EventSourceIs(EventDummy ev, DummyFactory factory, string name, bool rawSource)
+        private static bool EventSourceIs(EventDummy ev, CDFMockHandler handler, string name, bool rawSource)
         {
-            var asset = factory.assets.Values.FirstOrDefault(ast => ast.name == name);
-            var timeseries = factory.timeseries.Values.FirstOrDefault(ts => ts.name == name);
+            var asset = handler.assets.Values.FirstOrDefault(ast => ast.name == name);
+            var timeseries = handler.timeseries.Values.FirstOrDefault(ts => ts.name == name);
             if (asset == null && timeseries == null) return false;
             return rawSource
                 ? asset != null && asset.externalId == ev.metadata["SourceNode"] || timeseries != null && timeseries.externalId == ev.metadata["SourceNode"]

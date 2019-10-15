@@ -81,13 +81,13 @@ namespace Test
             }
             return true;
         }
-        public static IServiceProvider GetDummyProvider(DummyFactory factory)
+        public static IServiceProvider GetDummyProvider(CDFMockHandler handler)
         {
             var services = new ServiceCollection();
             services.AddHttpClient<DataCDFClient>()
-                .ConfigurePrimaryHttpMessageHandler(() => factory.GetHandler());
+                .ConfigurePrimaryHttpMessageHandler(() => handler.GetHandler());
             services.AddHttpClient<ContextCDFClient>()
-                .ConfigurePrimaryHttpMessageHandler(() => factory.GetHandler());
+                .ConfigurePrimaryHttpMessageHandler(() => handler.GetHandler());
             return services.BuildServiceProvider();
         }
     }

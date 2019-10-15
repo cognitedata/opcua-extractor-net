@@ -8,20 +8,21 @@ namespace Cognite.OpcUa
         private static string Read(string property)
         {
             var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-            using (Stream stream = assembly.GetManifestResourceStream($"Cognite.OpcUa.Properties.{property}"))
-            using (StreamReader reader = new StreamReader(stream))
-                return reader.ReadToEnd().Trim();
+            using var stream = assembly.GetManifestResourceStream($"Cognite.OpcUa.Properties.{property}");
+            if (stream == null) return null;
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd().Trim();
         }
 
         public static string Status()
         {
-            var hash = Read("GitCommitHash");
-            var time = Read("GitCommitTime");
+            string hash = Read("GitCommitHash");
+            string time = Read("GitCommitTime");
             return $"{hash} {time}";
         }
         public static string GetVersion()
         {
-            var raw = Read("GitCommitHash");
+            string raw = Read("GitCommitHash");
             Regex rgx = new Regex(@"-(\d+)-*.*");
             return rgx.Replace(raw, "-pre.$1", 1);
         }

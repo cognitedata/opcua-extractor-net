@@ -28,7 +28,7 @@ using Serilog;
 
 namespace Test
 {
-    public class DummyFactory
+    public class CDFMockHandler
     {
         readonly object handlerLock = new object();
         readonly string project;
@@ -45,7 +45,7 @@ namespace Test
         {
             None, Some, All, FailAsset
         }
-        public DummyFactory(string project, MockMode mode)
+        public CDFMockHandler(string project, MockMode mode)
         {
             this.project = project;
             this.mode = mode;
@@ -59,7 +59,7 @@ namespace Test
         private async Task<HttpResponseMessage> MessageHandler(HttpRequestMessage req, CancellationToken cancellationToken)
         {
             string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "");
-            var content = await req.Content.ReadAsStringAsync();
+            string content = await req.Content.ReadAsStringAsync();
             lock (handlerLock)
             {
                 RequestCount++;
@@ -107,7 +107,7 @@ namespace Test
                 IList<string> finalMissing;
                 if (mode == MockMode.All)
                 {
-                    foreach (var id in missing)
+                    foreach (string id in missing)
                     {
                         MockAsset(id);
                     }
@@ -139,7 +139,7 @@ namespace Test
                 {
                     finalMissing = new List<string>();
                     int count = 1;
-                    foreach (var id in missing)
+                    foreach (string id in missing)
                     {
                         if (count++ % 2 == 0)
                         {
@@ -221,7 +221,7 @@ namespace Test
                 IList<string> finalMissing;
                 if (mode == MockMode.All)
                 {
-                    foreach (var id in missing)
+                    foreach (string id in missing)
                     {
                         MockTimeseries(id);
                     }
@@ -238,7 +238,7 @@ namespace Test
                 {
                     finalMissing = new List<string>();
                     int count = 1;
-                    foreach (var id in missing)
+                    foreach (string id in missing)
                     {
                         if (count++ % 2 == 0)
                         {

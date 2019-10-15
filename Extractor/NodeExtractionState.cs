@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace Cognite.OpcUa
 {
@@ -36,6 +35,7 @@ namespace Cognite.OpcUa
         /// The extractor generally requires fixed dimensions in order to push arrays to destination systems.
         /// </summary>
         public int[] ArrayDimensions { get; }
+        public string DisplayName { get; }
         /// <summary>
         /// Earliest of the latest timestamp of the destination systems.
         /// </summary>
@@ -52,6 +52,7 @@ namespace Cognite.OpcUa
             Historizing = variable.Historizing;
             DataType = variable.DataType;
             ArrayDimensions = variable.ArrayDimensions;
+            DisplayName = variable.DisplayName;
             if (!variable.Historizing)
             {
                 IsStreaming = true;
@@ -82,7 +83,7 @@ namespace Cognite.OpcUa
         public void UpdateFromStream(IEnumerable<BufferedDataPoint> points)
         {
             if (!points.Any()) return;
-            var last = points.Max(pt => pt.timestamp);
+            var last = points.Max(pt => pt.Timestamp);
             lock (lastMutex)
             {
                 if (last > DestLatestTimestamp && IsStreaming)
@@ -125,10 +126,10 @@ namespace Cognite.OpcUa
         public IEnumerable<IEnumerable<BufferedDataPoint>> FlushBuffer()
         {
             if (!IsStreaming) throw new Exception("Flush non-streaming buffer");
-            if (!buffer.Any()) new List<BufferedDataPoint[]>();
+            if (!buffer.Any()) return new List<BufferedDataPoint[]>();
             lock (lastMutex)
             {
-                var result = buffer.Where(arr => arr.Max(pt => pt.timestamp) > DestLatestTimestamp);
+                var result = buffer.Where(arr => arr.Max(pt => pt.Timestamp) > DestLatestTimestamp);
                 buffer.Clear();
                 return result;
             }
@@ -155,10 +156,9 @@ namespace Cognite.OpcUa
         /// True if there are historical events in OPC-UA, and this is configured as a Historizing emitter.
         /// </summary>
         public bool Historizing {
-            get {
-                return _historizing;
-            }
-            set {
+            get => _historizing;
+            set 
+            {
                 IsStreaming = !value;
                 _historizing = value;
                 if (_historizing && buffer == null)

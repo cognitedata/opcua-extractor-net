@@ -43,22 +43,20 @@ namespace Cognite.OpcUa
         {
             lock (fileLock)
             {
-                using (FileStream fs = new FileStream(config.BufferFile, FileMode.Append, FileAccess.Write))
+                using FileStream fs = new FileStream(config.BufferFile, FileMode.Append, FileAccess.Write);
+                int count = 0;
+                foreach (var dp in dataPoints)
                 {
-                    int count = 0;
-                    foreach (var dp in dataPoints)
-                    {
-                        if (token.IsCancellationRequested) return;
-                        if (nodeIsHistorizing?[dp.Id] ?? false) continue;
-                        count++;
-                        BufferFileEmpty = false;
-                        byte[] bytes = dp.ToStorableBytes();
-                        fs.Write(bytes, 0, bytes.Length);
-                    }
-                    if (count > 0)
-                    {
-                        Log.Information("Write {NumDatapointsToPersist} datapoints to file", count);
-                    }
+                    if (token.IsCancellationRequested) return;
+                    if (nodeIsHistorizing?[dp.Id] ?? false) continue;
+                    count++;
+                    BufferFileEmpty = false;
+                    byte[] bytes = dp.ToStorableBytes();
+                    fs.Write(bytes, 0, bytes.Length);
+                }
+                if (count > 0)
+                {
+                    Log.Information("Write {NumDatapointsToPersist} datapoints to file", count);
                 }
             }
         }
@@ -96,9 +94,9 @@ namespace Cognite.OpcUa
                     }
                 }
                 Log.Information("Read {NumDatapointsToRead} points from file", count);
+                File.Create(config.BufferFile).Close();
+                BufferFileEmpty |= new FileInfo(config.BufferFile).Length == 0;
             }
-            File.Create(config.BufferFile).Close();
-            BufferFileEmpty = true;
         }
         /// <summary>
         /// Write given latest event timestamp to file
@@ -108,10 +106,8 @@ namespace Cognite.OpcUa
         {
             lock (dateFileLock)
             {
-                using (FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Write))
-                {
-                    fs.Write(BitConverter.GetBytes(date.ToBinary()));
-                }
+                using FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Write);
+                fs.Write(BitConverter.GetBytes(date.ToBinary()));
             }
         }
         /// <summary>
@@ -122,13 +118,11 @@ namespace Cognite.OpcUa
         {
             lock (dateFileLock)
             {
-                using (FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Read))
-                {
-                    byte[] rawRead = new byte[sizeof(long)];
-                    int read = fs.Read(rawRead, 0, sizeof(long));
-                    if (read < sizeof(long)) return DateTime.MinValue;
-                    return DateTime.FromBinary(BitConverter.ToInt64(rawRead));
-                }
+                using FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Read);
+                byte[] rawRead = new byte[sizeof(long)];
+                int read = fs.Read(rawRead, 0, sizeof(long));
+                if (read < sizeof(long)) return DateTime.MinValue;
+                return DateTime.FromBinary(BitConverter.ToInt64(rawRead));
             }
         }
         /// <summary>
@@ -138,7 +132,7 @@ namespace Cognite.OpcUa
         /// <returns>A <see cref="FullConfig"/> object representing the entire config file</returns>
         public static FullConfig GetConfig(string configPath)
         {
-            FullConfig fullConfig = null;
+            FullConfig fullConfig;
             using (var rawConfig = new StringReader(File.ReadAllText(configPath)))
             {
                 var deserializer = new DeserializerBuilder()

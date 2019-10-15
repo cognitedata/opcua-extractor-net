@@ -37,39 +37,37 @@ namespace Test
             var fullConfig = Common.BuildConfig("basic", 6, "config.influxtest.yml");
             if (fullConfig == null) throw new Exception("Bad config");
             Logger.Configure(fullConfig.Logging);
-            UAClient client = new UAClient(fullConfig);
+            var client = new UAClient(fullConfig);
             var config = (InfluxClientConfig)fullConfig.Pushers.First();
             var pusher = new InfluxPusher(config);
 
-            Extractor extractor = new Extractor(fullConfig, pusher, client);
-            using (var source = new CancellationTokenSource())
+            var extractor = new Extractor(fullConfig, pusher, client);
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+            var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
+            bool gotData = false;
+            for (int i = 0; i < 20; i++)
             {
-                var runTask = extractor.RunExtractor(source.Token);
-                var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
-                bool gotData = false;
-                for (int i = 0; i < 20; i++)
+                var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=2\"");
+                if (read.Count > 0 && read.First().HasEntries)
                 {
-                    var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=2\"");
-                    if (read.Count > 0 && read.First().HasEntries)
-                    {
-                        gotData = true;
-                        break;
-                    }
-                    Thread.Sleep(1000);
+                    gotData = true;
+                    break;
                 }
-                Assert.True(gotData, "Expecting to find some data in influxdb");
-                source.Cancel();
-                try
-                {
-                    await runTask;
-                }
-                catch (Exception e)
-                {
-                    if (!Common.TestRunResult(e)) throw;
-                }
-                extractor.Close();
-                Assert.False(pusher.failing);
+                Thread.Sleep(1000);
             }
+            Assert.True(gotData, "Expecting to find some data in influxdb");
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+            extractor.Close();
+            Assert.False(pusher.Failing);
         }
         [Trait("Category", "ArrayServer")]
         [Fact]
@@ -79,39 +77,37 @@ namespace Test
             fullConfig.Extraction.MaxArraySize = 4;
             fullConfig.Extraction.AllowStringVariables = true;
             Logger.Configure(fullConfig.Logging);
-            UAClient client = new UAClient(fullConfig);
+            var client = new UAClient(fullConfig);
             var config = (InfluxClientConfig)fullConfig.Pushers.First();
             var pusher = new InfluxPusher(config);
 
-            Extractor extractor = new Extractor(fullConfig, pusher, client);
-            using (var source = new CancellationTokenSource())
+            var extractor = new Extractor(fullConfig, pusher, client);
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+            var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
+            bool gotData = false;
+            for (int i = 0; i < 20; i++)
             {
-                var runTask = extractor.RunExtractor(source.Token);
-                var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
-                bool gotData = false;
-                for (int i = 0; i < 20; i++)
+                var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=2[3]\"");
+                if (read.Count > 0 && read.First().HasEntries)
                 {
-                    var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=2[3]\"");
-                    if (read.Count > 0 && read.First().HasEntries)
-                    {
-                        gotData = true;
-                        break;
-                    }
-                    Thread.Sleep(1000);
+                    gotData = true;
+                    break;
                 }
-                Assert.True(gotData);
-                source.Cancel();
-                try
-                {
-                    await runTask;
-                }
-                catch (Exception e)
-                {
-                    if (!Common.TestRunResult(e)) throw;
-                }
-                extractor.Close();
-                Assert.False(pusher.failing);
+                Thread.Sleep(1000);
             }
+            Assert.True(gotData);
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+            extractor.Close();
+            Assert.False(pusher.Failing);
         }
     }
 }
