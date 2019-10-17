@@ -51,6 +51,8 @@ namespace Cognite.OpcUa
         }
         private double? _nonFiniteReplacement;
         public long HistoryStartTime { get; set; } = 0;
+        public int AutoRebrowsePeriod { get; set; } = 0;
+        public bool EnableAuditDiscovery { get; set; } = false;
     }
     public abstract class PusherConfig
     {

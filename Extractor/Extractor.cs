@@ -165,9 +165,13 @@ namespace Cognite.OpcUa
                     }
                 });
             }).Concat(synchTasks).Append(Task.Run(() => ExtraTaskLoop(token), token)).ToList();
+            if (config.Extraction.AutoRebrowsePeriod > 0)
+            {
+                tasks = tasks.Append(Task.Run(() => RebrowseLoop(token))).ToList();
+            }
 
             triggerUpdateOperations.Reset();
-            Task failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
+            var failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
             while (tasks.Any() && failedTask == null)
             {
                 try
@@ -208,6 +212,7 @@ namespace Cognite.OpcUa
                 Started = false;
                 await uaClient.WaitForOperations();
                 ConfigureExtractor(token);
+                uaClient.ResetVisitedNodes();
                 await uaClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
                 var synchTasks = await MapUAToDestinations(token);
                 await Task.WhenAll(synchTasks);
@@ -300,6 +305,26 @@ namespace Cognite.OpcUa
         }
         #endregion
         #region Mapping
+
+        private async Task RebrowseLoop(CancellationToken token)
+        {
+            var delay = TimeSpan.FromMinutes(config.Extraction.AutoRebrowsePeriod);
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(delay, token);
+                }
+                catch (TaskCanceledException)
+                {
+                    return;
+                }
+
+                await uaClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
+                var historyTasks = await MapUAToDestinations(token);
+                await Task.WhenAll(historyTasks);
+            }
+        }
         /// <summary>
         /// Waits for triggerUpdateOperations to fire, then sequentially executes all the tasks in the queue.
         /// The single-threaded nature is important as multiple mapping operations run in parallel could cause issues.
@@ -475,6 +500,11 @@ namespace Cognite.OpcUa
                         objects.Concat(variables).Select(node => node.Id).Distinct(),
                         HistoryEventHandler,
                         token)));
+            }
+
+            if (config.Extraction.EnableAuditDiscovery)
+            {
+                uaClient.SubscribeToAuditEvents(AuditEventSubscriptionHandler);
             }
             return tasks;
         }
@@ -728,6 +758,80 @@ namespace Cognite.OpcUa
                 pusher.BufferedEventQueue.Enqueue(buffEvent);
             }
         }
+        private void AuditEventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
+        {
+            if (!(eventArgs.NotificationValue is EventFieldList triggeredEvent))
+            {
+                Log.Warning("No event in event subscription notification: {}", item.StartNodeId);
+                return;
+            }
+
+            var eventFields = triggeredEvent.EventFields;
+            if (!(item.Filter is EventFilter filter))
+            {
+                Log.Warning("Triggered event without filter");
+                return;
+            }
+            int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
+                                                                       && atr.BrowsePath[0] == BrowseNames.EventType);
+            if (eventTypeIndex < 0)
+            {
+                Log.Warning("Triggered event has no type, ignoring");
+                return;
+            }
+            var eventType = eventFields[eventTypeIndex].Value as NodeId;
+            if (eventType == null || eventType != ObjectTypeIds.AuditAddNodesEventType && eventType != ObjectTypeIds.AuditAddReferencesEventType)
+            {
+                Log.Warning("Non-audit event triggered on audit event listener");
+                return;
+            }
+
+            if (eventType == ObjectTypeIds.AuditAddNodesEventType)
+            {
+                // This is a neat way to get the contents of the event, which may be fairly complicated (variant of arrays of extensionobjects)
+                var e = new AuditAddNodesEventState(null);
+                e.Update(uaClient.session.SystemContext, filter.SelectClauses, triggeredEvent);
+                if (e.NodesToAdd?.Value == null)
+                {
+                    Log.Warning("Missing NodesToAdd object on AddNodes event");
+                    return;
+                }
+
+                var addedNodes = e.NodesToAdd.Value;
+
+                var relevantIds = addedNodes.Where(added => added != null &&
+                    (added.NodeClass == NodeClass.Variable || added.NodeClass == NodeClass.Object)
+                    && (added.TypeDefinition != VariableTypeIds.PropertyType)
+                    && (managedNodes.Contains(uaClient.ToNodeId(added.ParentNodeId))))
+                    .Select(added => uaClient.ToNodeId(added.ParentNodeId))
+                    .Distinct();
+                pendingOperations.Enqueue(new Task(async () =>
+                {
+                    await uaClient.BrowseNodeChildren(relevantIds, HandleNode, CancellationToken.None);
+                    await MapUAToDestinations(CancellationToken.None);
+                }));
+                triggerUpdateOperations.Set();
+                return;
+            }
+
+            if (!extractedProperties.ContainsKey("ReferencesToAdd") || !(extractedProperties["ReferencesToAdd"] is AddReferencesItem[] addedReferences))
+            {
+                Log.Warning("Missing ReferencesToAdd object on AddReferences event");
+                return;
+            }
+
+            var relevantRefIds = addedReferences.Where(added =>
+                (added.IsForward && managedNodes.Contains(uaClient.ToNodeId(added.SourceNodeId))))
+                .Select(added => uaClient.ToNodeId(added.SourceNodeId))
+                .Distinct();
+
+            pendingOperations.Enqueue(new Task(async () =>
+            {
+                await uaClient.BrowseNodeChildren(relevantRefIds, HandleNode, CancellationToken.None);
+                await MapUAToDestinations(CancellationToken.None);
+            }));
+            triggerUpdateOperations.Set();
+        }
         /// <summary>
         /// Callback for HistoryRead operations for data. Simply pushes all datapoints to the queue.
         /// </summary>
@@ -773,17 +877,16 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            if (final)
+
+            if (!final) return cnt;
+            var buffered = nodeState.FlushBuffer(); 
+            foreach (var pusher in pushers)
             {
-                var buffered = nodeState.FlushBuffer();
-                foreach (var pusher in pushers)
-                {
-                    foreach (var dplist in buffered)
-                    {
-                        foreach (var dp in dplist)
-                        {
-                            pusher.BufferedDPQueue.Enqueue(dp);
-                        }
+                foreach (var dplist in buffered)
+                { 
+                    foreach (var dp in dplist) 
+                    { 
+                        pusher.BufferedDPQueue.Enqueue(dp);
                     }
                 }
             }
