@@ -90,62 +90,122 @@ namespace Cognite.OpcUa
             "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
 
         #region Interface
+
         /// <summary>
         /// Dequeues up to 100000 points from the BufferedDPQueue, then pushes them to CDF. On failure, writes to file if enabled.
         /// </summary>
-        public async Task PushDataPoints(CancellationToken token)
+        private IEnumerable<IDictionary<string, IEnumerable<BufferedDataPoint>>> ChunkDatapointDict(
+            IDictionary<string, List<BufferedDataPoint>> points)
         {
-            var dataPointList = new List<BufferedDataPoint>();
-
+            var ret = new List<Dictionary<string, IEnumerable<BufferedDataPoint>>>();
+            var current = new Dictionary<string, IEnumerable<BufferedDataPoint>>();
+            ret.Add(current);
             int count = 0;
-            while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
+            int tscount = 0;
+            foreach ((string key, var value) in points)
             {
-                if (buffer.Timestamp > DateTime.MinValue)
+                int pcount = value.Count();
+                if (count + pcount <= 100000 || tscount++ < 10000)
                 {
-                    dataPointList.Add(buffer);
+                    current[key] = value;
+                    count += pcount;
+                }
+                else
+                {
+                    var point = (IEnumerable<BufferedDataPoint>) value;
+                    var toAdd = point.Take(Math.Min(100000 - count, pcount));
+                    current[key] = toAdd;
+                    count = 0;
+                    tscount = 0;
+                    current = new Dictionary<string, IEnumerable<BufferedDataPoint>>();
+                    ret.Add(current);
+                    if (pcount > 100000 - count)
+                    {
+                        point = point.Skip(100000 - count);
+                        var dictionaries = Utils.ChunkBy(point, 100000)
+                            .Select(chunk => new Dictionary<string, IEnumerable<BufferedDataPoint>> { { key, chunk } }).ToList();
+                        current = dictionaries.Last();
+                        count = current.First().Value.Count();
+                        ret.AddRange(dictionaries.Take(dictionaries.Count() - 1));
+                    }
                 }
             }
-            if (count == 0)
+            return ret;
+        }
+        public async Task PushDataPoints(CancellationToken token)
+        {
+            int count = 0;
+            var dataPointList = new Dictionary<string, List<BufferedDataPoint>>();
+            while (BufferedDPQueue.Any())
             {
-                Log.Debug("Push 0 datapoints to CDF");
-                return;
-            }
-            Log.Information("Push {NumDatapointsToPush} datapoints to CDF", count);
+                while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer))
+                {
+                    if (buffer.Timestamp <= DateTime.MinValue) continue;
+                    count++;
+                    if (!dataPointList.ContainsKey(buffer.Id))
+                    {
+                        dataPointList[buffer.Id] = new List<BufferedDataPoint>();
+                    }
+                    dataPointList[buffer.Id].Add(buffer);
+                }
 
+                if (count == 0)
+                {
+                    Log.Debug("Push 0 datapoints to CDF");
+                    return;
+                }
+                Log.Information("Push {NumDatapointsToPush} datapoints to CDF", count);
+            }
+
+            var pushTasks = ChunkDatapointDict(dataPointList).Select(chunk => PushDataPointsChunk(chunk, token))
+                .ToList();
+            await Task.WhenAll(pushTasks);
+        }
+        private async Task PushDataPointsChunk(IDictionary<string, IEnumerable<BufferedDataPoint>> dataPointList, CancellationToken token) {
             if (config.Debug) return;
-            var finalDataPoints = dataPointList.GroupBy(dp => dp.Id, (id, points) =>
+            int count = 0;
+            var finalDataPoints = dataPointList.Select(kvp =>
             {
                 var item = new DataPointInsertionItem
                 {
-                    ExternalId = id
+                    ExternalId = kvp.Key
                 };
-                if (points.First().IsString)
+                if (kvp.Value.First().IsString)
                 {
                     item.StringDatapoints = new StringDatapoints();
-                    item.StringDatapoints.Datapoints.AddRange(points.Select(point =>
-                        new StringDatapoint
+                    item.StringDatapoints.Datapoints.AddRange(kvp.Value.Select(point =>
                         {
-                            Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = point.StringValue
+                            count++;
+                            return new StringDatapoint
+                            {
+                                Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
+                                Value = point.StringValue
+                            };
                         }
                     ));
                 }
                 else
                 {
                     item.NumericDatapoints = new NumericDatapoints();
-                    item.NumericDatapoints.Datapoints.AddRange(points.Select(point =>
-                        new NumericDatapoint
+                    item.NumericDatapoints.Datapoints.AddRange(kvp.Value.Select(point =>
                         {
-                            Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = point.DoubleValue
+                            count++;
+                            return new NumericDatapoint
+                            {
+                                Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
+                                Value = point.DoubleValue
+                            };
                         }
                     ));
                 }
+
                 return item;
             });
             var req = new DataPointInsertionRequest();
             req.Items.AddRange(finalDataPoints);
             var client = GetClient("Data");
+            bool buffer = false;
+            bool failed = false;
             try
             {
                 await client.DataPoints.InsertAsync(req, token);
@@ -154,25 +214,30 @@ namespace Cognite.OpcUa
             {
                 Log.Error(e, "Failed to insert {NumFailedDatapoints} datapoints into CDF", count);
 				dataPointPushFailures.Inc();
-                if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile))
+                if (!(e is ResponseException ex) || ex.Code != 400 && ex.Code != 409)
                 {
-                    try
-                    {
-                        Utils.WriteBufferToFile(dataPointList, config, token, nodeIsHistorizing);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "Failed to write buffer to file");
-                    }
-                }
-                return;
+                    buffer = true;
+                } 
+                failed = true;
             }
+            if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile) && buffer)
+            {
+                try
+                {
+                    Utils.WriteBufferToFile(dataPointList.Values.SelectMany(val => val).ToList(), config, token, nodeIsHistorizing);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to write buffer to file");
+                }
+            }
+            if (failed) return;
             if (config.BufferOnFailure && !Utils.BufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
             {
                 Utils.ReadBufferFromFile(BufferedDPQueue, config, token, nodeIsHistorizing);
             }
-            dataPointsCounter.Inc(count);
             dataPointPushes.Inc();
+            dataPointsCounter.Inc(count);
         }
         /// <summary>
         /// Dequeues up to 1000 events from the BufferedEventQueue, then pushes them to CDF.

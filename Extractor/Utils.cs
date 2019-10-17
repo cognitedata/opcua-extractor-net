@@ -48,14 +48,14 @@ namespace Cognite.OpcUa
                 foreach (var dp in dataPoints)
                 {
                     if (token.IsCancellationRequested) return;
-                    if (nodeIsHistorizing?[dp.Id] ?? false) continue;
+                    if (nodeIsHistorizing?[dp.Id] ?? dp.IsString) continue;
                     count++;
-                    BufferFileEmpty = false;
                     byte[] bytes = dp.ToStorableBytes();
                     fs.Write(bytes, 0, bytes.Length);
                 }
                 if (count > 0)
                 {
+                    BufferFileEmpty = false;
                     Log.Information("Write {NumDatapointsToPersist} datapoints to file", count);
                 }
             }
@@ -95,7 +95,7 @@ namespace Cognite.OpcUa
                 }
                 Log.Information("Read {NumDatapointsToRead} points from file", count);
                 File.Create(config.BufferFile).Close();
-                BufferFileEmpty |= new FileInfo(config.BufferFile).Length == 0;
+                BufferFileEmpty |= count > 0 && new FileInfo(config.BufferFile).Length == 0;
             }
         }
         /// <summary>

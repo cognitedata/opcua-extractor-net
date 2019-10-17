@@ -37,10 +37,11 @@ namespace Cognite.OpcUa
             var dataPointList = new List<BufferedDataPoint>();
 
             int count = 0;
-            while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
+            while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer))
             {
                 if (buffer.Timestamp > DateTime.MinValue && !buffer.IsString)
                 {
+                    count++;
                     dataPointList.Add(buffer);
                 }
             }
