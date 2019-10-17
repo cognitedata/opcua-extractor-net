@@ -812,6 +812,7 @@ namespace Cognite.OpcUa
 			
             var details = new ReadRawModifiedDetails
             {
+                IsReadModified = false,
                 StartTime = lowest,
                 EndTime = DateTime.Now.AddDays(1),
                 NumValuesPerNode = (uint)config.HistoryReadChunk
