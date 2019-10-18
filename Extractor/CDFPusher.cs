@@ -41,9 +41,8 @@ namespace Cognite.OpcUa
     {
         private readonly IServiceProvider clientProvider;
         private readonly CogniteClientConfig config;
-        private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
-        private readonly IDictionary<string /* externalId */ , TimeSeriesEntity> timeseries = new Dictionary<string, TimeSeriesEntity>();
+        private readonly IDictionary<string, NodeId> externalIdToNodeId = new Dictionary<string, NodeId>(); 
         
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
@@ -99,8 +98,8 @@ namespace Cognite.OpcUa
         private IEnumerable<IDictionary<string, IEnumerable<BufferedDataPoint>>> ChunkDatapointDict(
             IDictionary<string, List<BufferedDataPoint>> points)
         {
-            const int max_datapoints = 100000;
-            const int max_timeseries = 10000;
+            const int maxDatapoints = 100000;
+            const int maxTimeseries = 10000;
             var ret = new List<Dictionary<string, IEnumerable<BufferedDataPoint>>>();
             var current = new Dictionary<string, IEnumerable<BufferedDataPoint>>();
             int count = 0;
@@ -111,7 +110,7 @@ namespace Cognite.OpcUa
                 if (!value.Any())
                     continue;
 
-                if (tscount >= max_timeseries)
+                if (tscount >= maxTimeseries)
                 {
                     ret.Add(current);
                     current = new Dictionary<string, IEnumerable<BufferedDataPoint>>();
@@ -120,7 +119,7 @@ namespace Cognite.OpcUa
                 }
 
                 int pcount = value.Count;
-                if (count + pcount <= max_datapoints)
+                if (count + pcount <= maxDatapoints)
                 {
                     current[key] = value;
                     count += pcount;
@@ -129,7 +128,7 @@ namespace Cognite.OpcUa
                 }
 
                 // fill up the current batch to max_datapoints data points and keep the remaining data points in current.
-                var inCurrent = value.Take(Math.Min(max_datapoints - count, pcount));
+                var inCurrent = value.Take(Math.Min(maxDatapoints - count, pcount));
                 current[key] = inCurrent;
                 ret.Add(current);
 
@@ -137,7 +136,7 @@ namespace Cognite.OpcUa
                 var inNext = value.Skip(inCurrent.Count());
                 if (inNext.Any())
                 {
-                    var chunks = Utils.ChunkBy(inNext, max_datapoints).Select(chunk => new Dictionary<string, IEnumerable<BufferedDataPoint>> { { key, chunk } });
+                    var chunks = Utils.ChunkBy(inNext, maxDatapoints).Select(chunk => new Dictionary<string, IEnumerable<BufferedDataPoint>> { { key, chunk } });
                     if (chunks.Count() > 1)
                     {
                         ret.AddRange(chunks.Take(chunks.Count() - 1));
@@ -169,7 +168,10 @@ namespace Cognite.OpcUa
             {
                 while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer))
                 {
-                    if (buffer.Timestamp <= DateTime.MinValue) continue;
+                    // TODO: metrics on skipped points
+                    // Skip points which have an invalid timestamp, or which have incorrect data type
+                    if (buffer.Timestamp <= DateTime.MinValue
+                        || Extractor.NodeStates[externalIdToNodeId[buffer.Id]].DataType.IsString != buffer.IsString) continue;
                     count++;
                     if (!dataPointList.ContainsKey(buffer.Id))
                     {
@@ -193,52 +195,42 @@ namespace Cognite.OpcUa
         private async Task PushDataPointsChunk(IDictionary<string, IEnumerable<BufferedDataPoint>> dataPointList, CancellationToken token) {
             if (config.Debug) return;
             int count = 0;
-            var points = dataPointList.Join(timeseries, x => x.Key, ts => ts.Value.ExternalId, (a, b) => (b.Value, a.Value));
-            var inserts = points.Select(point =>
+            var inserts = dataPointList.Select(kvp =>
             {
-                var ts = point.Item1;
-                var values = point.Item2;
-
-                // TODO: metrics on skipped points
-                // Filter on consistent type
-                var datapoints = values.Where(point => point.IsString == ts.IsString);
-
-                if (!datapoints.Any())
-                    return null;
-
+                var externalId = kvp.Key;
+                var values = kvp.Value;
                 var item = new DataPointInsertionItem
                 {
-                    ExternalId = ts.ExternalId
+                    ExternalId = externalId
                 };
-
-                if (ts.IsString)
+                if (values.First().IsString)
                 {
                     item.StringDatapoints = new StringDatapoints();
-                    item.StringDatapoints.Datapoints.AddRange(datapoints.Select(point =>
+                    item.StringDatapoints.Datapoints.AddRange(values.Select(ipoint =>
                         new StringDatapoint
                         {
-                            Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = point.StringValue
+                            Timestamp = new DateTimeOffset(ipoint.Timestamp).ToUnixTimeMilliseconds(),
+                            Value = ipoint.StringValue
                         }));
                 }
                 else
                 {
                     item.NumericDatapoints = new NumericDatapoints();
-                    item.NumericDatapoints.Datapoints.AddRange(datapoints.Select(point =>
+                    item.NumericDatapoints.Datapoints.AddRange(values.Select(ipoint =>
                         new NumericDatapoint
                         {
-                            Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = point.DoubleValue
+                            Timestamp = new DateTimeOffset(ipoint.Timestamp).ToUnixTimeMilliseconds(),
+                            Value = ipoint.DoubleValue
                         }));
                 }
 
-                count += datapoints.Count();
+                count += values.Count();
                 return item;
             });
 
             var req = new DataPointInsertionRequest();
             // Filter out type check failures
-            req.Items.AddRange(inserts.Where(t => t != null));
+            req.Items.AddRange(inserts);
             if (!req.Items.Any())
                 return;
 
@@ -263,7 +255,8 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    Utils.WriteBufferToFile(dataPointList.Values.SelectMany(val => val).ToList(), config, token, nodeIsHistorizing);
+                    Utils.WriteBufferToFile(dataPointList.Values.SelectMany(val => val).ToList(), config, token, 
+                        dataPointList.ToDictionary(dp => dp.Key, dp => Extractor.NodeStates[externalIdToNodeId[dp.Key]].Historizing));
                 }
                 catch (Exception ex)
                 {
@@ -273,7 +266,8 @@ namespace Cognite.OpcUa
             if (failed) return;
             if (config.BufferOnFailure && !Utils.BufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
             {
-                Utils.ReadBufferFromFile(BufferedDPQueue, config, token, nodeIsHistorizing);
+                Utils.ReadBufferFromFile(BufferedDPQueue, config, token, 
+                    dataPointList.ToDictionary(dp => dp.Key, dp => Extractor.NodeStates[externalIdToNodeId[dp.Key]].Historizing));
             }
             dataPointPushes.Inc();
             dataPointsCounter.Inc(count);
@@ -594,7 +588,7 @@ namespace Cognite.OpcUa
             {
                 string externalId = UAClient.GetUniqueId(node.Id, node.Index);
                 tsIds.Add(externalId, node);
-                nodeIsHistorizing[externalId] = false;
+                externalIdToNodeId[externalId] = node.Id;
                 if (node.Index == -1)
                 {
                     if (nodeToAssetIds.ContainsKey(node.ParentId))
@@ -615,10 +609,6 @@ namespace Cognite.OpcUa
             {
                 var readResults = await client.TimeSeries.GetByIdsAsync(tsIds.Keys.Select(Identity.ExternalId), token);
                 Log.Information("Found {NumRetrievedTimeseries} timeseries", readResults.Count());
-                foreach (var ts in readResults)
-                {
-                    timeseries.Add(ts.ExternalId, ts);
-                }
             }
             catch (ResponseException ex)
             {
@@ -655,11 +645,7 @@ namespace Cognite.OpcUa
                 var createTimeseries = getMetaData.Select(VariableToTimeseries);
                 try
                 {
-                    var newTimeseries = await client.TimeSeries.CreateAsync(createTimeseries, token);
-                    foreach (var ts in newTimeseries)
-                    {
-                        timeseries.Add(ts.ExternalId, ts);
-                    }
+                    await client.TimeSeries.CreateAsync(createTimeseries, token);
                 }
                 catch (Exception e)
                 {
