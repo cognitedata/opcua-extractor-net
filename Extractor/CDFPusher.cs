@@ -97,40 +97,66 @@ namespace Cognite.OpcUa
         private IEnumerable<IDictionary<string, IEnumerable<BufferedDataPoint>>> ChunkDatapointDict(
             IDictionary<string, List<BufferedDataPoint>> points)
         {
+            const int max_datapoints = 100000;
+            const int max_timeseries = 10000;
             var ret = new List<Dictionary<string, IEnumerable<BufferedDataPoint>>>();
             var current = new Dictionary<string, IEnumerable<BufferedDataPoint>>();
-            ret.Add(current);
             int count = 0;
             int tscount = 0;
+
             foreach ((string key, var value) in points)
             {
+                if (!value.Any())
+                    continue;
+
+                if (tscount >= max_timeseries)
+                {
+                    ret.Add(current);
+                    current = new Dictionary<string, IEnumerable<BufferedDataPoint>>();
+                    count = 0;
+                    tscount = 0;
+                }
+
                 int pcount = value.Count;
-                if (count + pcount <= 100000 && tscount < 10000)
+                if (count + pcount <= max_datapoints)
                 {
                     current[key] = value;
                     count += pcount;
                     tscount++;
+                    continue;
+                }
+
+                // fill up the current batch to max_datapoints data points and keep the remaining data points in current.
+                var inCurrent = value.Take(Math.Min(max_datapoints - count, pcount));
+                current[key] = inCurrent;
+                ret.Add(current);
+
+                // inNext can have too many datapoints
+                var inNext = value.Skip(inCurrent.Count());
+                if (inNext.Any())
+                {
+                    var chunks = Utils.ChunkBy(inNext, max_datapoints).Select(chunk => new Dictionary<string, IEnumerable<BufferedDataPoint>> { { key, chunk } });
+                    if (chunks.Count() > 1)
+                    {
+                        ret.AddRange(chunks.Take(chunks.Count() - 1));
+                    }
+                    current = chunks.Last();
+                    tscount = 1;
+                    count = current[key].Count();
                 }
                 else
                 {
-                    var point = (IEnumerable<BufferedDataPoint>) value;
-                    var toAdd = point.Take(Math.Min(100000 - count, pcount));
-                    current[key] = toAdd;
+                    current = new Dictionary<string, IEnumerable<BufferedDataPoint>>();
                     count = 0;
                     tscount = 0;
-                    current = new Dictionary<string, IEnumerable<BufferedDataPoint>>();
-                    ret.Add(current);
-                    if (pcount > 100000 - count)
-                    {
-                        point = point.Skip(100000 - count);
-                        var dictionaries = Utils.ChunkBy(point, 100000)
-                            .Select(chunk => new Dictionary<string, IEnumerable<BufferedDataPoint>> { { key, chunk } }).ToList();
-                        current = dictionaries.Last();
-                        count = current.First().Value.Count();
-                        ret.AddRange(dictionaries.Take(dictionaries.Count - 1));
-                    }
                 }
             }
+
+            if (current.Any())
+            {
+                ret.Add(current);
+            }
+
             return ret;
         }
         public async Task PushDataPoints(CancellationToken token)
