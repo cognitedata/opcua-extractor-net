@@ -533,8 +533,9 @@ namespace Cognite.OpcUa
                 var ret = new List<BufferedDataPoint>();
                 if (!(value.Value is Array))
                 {
-                    Log.Warning("Bad datapoint on variable {BadPointName}, {BadPointValue}", uniqueId, value.Value.ToString());
-                    return new BufferedDataPoint[0];
+                    // TODO: metrics
+                    Log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
+                    return Enumerable.Empty<BufferedDataPoint>();
                 }
                 var values = (Array)value.Value;
                 for (int i = 0; i < Math.Min(variable.ArrayDimensions[0], values.Length); i++)
@@ -599,7 +600,11 @@ namespace Cognite.OpcUa
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Log.Warning("Bad datapoint: {BadDatapointExternalId}", uniqueId);
+                    // TODO: metrics
+                    // Could still use this timestamp for UpdateFromStream below!? It is a valid sensor timestamp, it is just the value that is bad.
+                    // A data point is bad if e.g. the sensor is faulty. We want a way to store this
+                    // information in CDF. For now, we must ignore it.
+                    Log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                     continue;
                 }
                 var buffDps = ToDataPoint(datapoint, node, uniqueId);
@@ -736,7 +741,8 @@ namespace Cognite.OpcUa
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Log.Warning("Bad datapoint: {BadDatapointExternalId}", uniqueId);
+                    // TODO: metrics
+                    Log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                     continue;
                 }
                 var buffDps = ToDataPoint(datapoint, nodeState, uniqueId);

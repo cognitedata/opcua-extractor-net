@@ -85,7 +85,7 @@ namespace Cognite.OpcUa
                         var buffDp = new BufferedDataPoint(dataBytes);
                         if (buffDp.Id == null || (!nodeIsHistorizing?.ContainsKey(buffDp.Id) ?? false))
                         {
-                            Log.Warning("Bad datapoint in file");
+                            Log.Warning($"Invalid datapoint in buffer file {config.BufferFile}: {buffDp.Id}");
                             continue;
                         }
                         count++;
