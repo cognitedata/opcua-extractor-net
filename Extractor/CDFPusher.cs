@@ -43,6 +43,8 @@ namespace Cognite.OpcUa
         private readonly CogniteClientConfig config;
         private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
+        private readonly IDictionary<string /* externalId */ , TimeSeriesEntity> timeseries = new Dictionary<string, TimeSeriesEntity>();
+        
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
         public PusherConfig BaseConfig { get; }
@@ -191,45 +193,55 @@ namespace Cognite.OpcUa
         private async Task PushDataPointsChunk(IDictionary<string, IEnumerable<BufferedDataPoint>> dataPointList, CancellationToken token) {
             if (config.Debug) return;
             int count = 0;
-            var finalDataPoints = dataPointList.Select(kvp =>
+            var points = dataPointList.Join(timeseries, x => x.Key, ts => ts.Value.ExternalId, (a, b) => (b.Value, a.Value));
+            var inserts = points.Select(point =>
             {
+                var ts = point.Item1;
+                var values = point.Item2;
+
+                // TODO: metrics on skipped points
+                // Filter on consistent type
+                var datapoints = values.Where(point => point.IsString == ts.IsString);
+
+                if (!datapoints.Any())
+                    return null;
+
                 var item = new DataPointInsertionItem
                 {
-                    ExternalId = kvp.Key
+                    ExternalId = ts.ExternalId
                 };
-                if (kvp.Value.First().IsString)
+
+                if (ts.IsString)
                 {
                     item.StringDatapoints = new StringDatapoints();
-                    item.StringDatapoints.Datapoints.AddRange(kvp.Value.Select(point =>
+                    item.StringDatapoints.Datapoints.AddRange(datapoints.Select(point =>
+                        new StringDatapoint
                         {
-                            count++;
-                            return new StringDatapoint
-                            {
-                                Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
-                                Value = point.StringValue
-                            };
-                        }
-                    ));
+                            Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
+                            Value = point.StringValue
+                        }));
                 }
                 else
                 {
                     item.NumericDatapoints = new NumericDatapoints();
-                    item.NumericDatapoints.Datapoints.AddRange(kvp.Value.Select(point =>
+                    item.NumericDatapoints.Datapoints.AddRange(datapoints.Select(point =>
+                        new NumericDatapoint
                         {
-                            count++;
-                            return new NumericDatapoint
-                            {
-                                Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
-                                Value = point.DoubleValue
-                            };
-                        }
-                    ));
+                            Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
+                            Value = point.DoubleValue
+                        }));
                 }
 
+                count += datapoints.Count();
                 return item;
             });
+
             var req = new DataPointInsertionRequest();
-            req.Items.AddRange(finalDataPoints);
+            // Filter out type check failures
+            req.Items.AddRange(inserts.Where(t => t != null));
+            if (!req.Items.Any())
+                return;
+
             var client = GetClient("Data");
             bool buffer = false;
             bool failed = false;
@@ -603,6 +615,10 @@ namespace Cognite.OpcUa
             {
                 var readResults = await client.TimeSeries.GetByIdsAsync(tsIds.Keys.Select(Identity.ExternalId), token);
                 Log.Information("Found {NumRetrievedTimeseries} timeseries", readResults.Count());
+                foreach (var ts in readResults)
+                {
+                    timeseries.Add(ts.ExternalId, ts);
+                }
             }
             catch (ResponseException ex)
             {
@@ -639,7 +655,11 @@ namespace Cognite.OpcUa
                 var createTimeseries = getMetaData.Select(VariableToTimeseries);
                 try
                 {
-                    await client.TimeSeries.CreateAsync(createTimeseries, token);
+                    var newTimeseries = await client.TimeSeries.CreateAsync(createTimeseries, token);
+                    foreach (var ts in newTimeseries)
+                    {
+                        timeseries.Add(ts.ExternalId, ts);
+                    }
                 }
                 catch (Exception e)
                 {
