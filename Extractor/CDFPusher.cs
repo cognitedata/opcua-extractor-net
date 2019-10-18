@@ -105,10 +105,11 @@ namespace Cognite.OpcUa
             foreach ((string key, var value) in points)
             {
                 int pcount = value.Count;
-                if (count + pcount <= 100000 || tscount++ < 10000)
+                if (count + pcount <= 100000 && tscount < 10000)
                 {
                     current[key] = value;
                     count += pcount;
+                    tscount++;
                 }
                 else
                 {
