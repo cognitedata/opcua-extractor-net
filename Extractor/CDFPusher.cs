@@ -104,7 +104,7 @@ namespace Cognite.OpcUa
             int tscount = 0;
             foreach ((string key, var value) in points)
             {
-                int pcount = value.Count();
+                int pcount = value.Count;
                 if (count + pcount <= 100000 || tscount++ < 10000)
                 {
                     current[key] = value;
@@ -126,7 +126,7 @@ namespace Cognite.OpcUa
                             .Select(chunk => new Dictionary<string, IEnumerable<BufferedDataPoint>> { { key, chunk } }).ToList();
                         current = dictionaries.Last();
                         count = current.First().Value.Count();
-                        ret.AddRange(dictionaries.Take(dictionaries.Count() - 1));
+                        ret.AddRange(dictionaries.Take(dictionaries.Count - 1));
                     }
                 }
             }
@@ -315,7 +315,7 @@ namespace Cognite.OpcUa
         {
             var tsList = new List<BufferedVariable>();
 
-            if (variables.Count() == 0 && objects.Count() == 0)
+            if (!variables.Any() && !objects.Any())
             {
                 Log.Debug("Testing 0 nodes against CDF");
                 return true;

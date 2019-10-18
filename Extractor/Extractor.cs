@@ -474,7 +474,7 @@ namespace Cognite.OpcUa
             if (!objects.Any() && !timeseries.Any() && !variables.Any())
             {
                 Log.Information("Mapping resulted in no new nodes");
-                return new Task[0];
+                return Array.Empty<Task>();
             }
 
             pushData = NodeStates.Any();
@@ -582,7 +582,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    return new BufferedDataPoint[0];
+                    return Array.Empty<BufferedDataPoint>();
                 }
             }
             return new[] { sdp };
@@ -826,6 +826,7 @@ namespace Cognite.OpcUa
             }
             return cnt;
         }
+
         #endregion
     }
 }
