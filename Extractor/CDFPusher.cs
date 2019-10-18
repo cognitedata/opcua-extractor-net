@@ -95,71 +95,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Dequeues up to 100000 points from the BufferedDPQueue, then pushes them to CDF. On failure, writes to file if enabled.
         /// </summary>
-        private IEnumerable<IDictionary<string, IEnumerable<BufferedDataPoint>>> ChunkDatapointDict(
-            IDictionary<string, List<BufferedDataPoint>> points)
-        {
-            const int maxDatapoints = 100000;
-            const int maxTimeseries = 10000;
-            var ret = new List<Dictionary<string, IEnumerable<BufferedDataPoint>>>();
-            var current = new Dictionary<string, IEnumerable<BufferedDataPoint>>();
-            int count = 0;
-            int tscount = 0;
 
-            foreach ((string key, var value) in points)
-            {
-                if (!value.Any())
-                    continue;
-
-                if (tscount >= maxTimeseries)
-                {
-                    ret.Add(current);
-                    current = new Dictionary<string, IEnumerable<BufferedDataPoint>>();
-                    count = 0;
-                    tscount = 0;
-                }
-
-                int pcount = value.Count;
-                if (count + pcount <= maxDatapoints)
-                {
-                    current[key] = value;
-                    count += pcount;
-                    tscount++;
-                    continue;
-                }
-
-                // fill up the current batch to max_datapoints data points and keep the remaining data points in current.
-                var inCurrent = value.Take(Math.Min(maxDatapoints - count, pcount));
-                current[key] = inCurrent;
-                ret.Add(current);
-
-                // inNext can have too many datapoints
-                var inNext = value.Skip(inCurrent.Count());
-                if (inNext.Any())
-                {
-                    var chunks = Utils.ChunkBy(inNext, maxDatapoints).Select(chunk => new Dictionary<string, IEnumerable<BufferedDataPoint>> { { key, chunk } });
-                    if (chunks.Count() > 1)
-                    {
-                        ret.AddRange(chunks.Take(chunks.Count() - 1));
-                    }
-                    current = chunks.Last();
-                    tscount = 1;
-                    count = current[key].Count();
-                }
-                else
-                {
-                    current = new Dictionary<string, IEnumerable<BufferedDataPoint>>();
-                    count = 0;
-                    tscount = 0;
-                }
-            }
-
-            if (current.Any())
-            {
-                ret.Add(current);
-            }
-
-            return ret;
-        }
         public async Task PushDataPoints(CancellationToken token)
         {
             int count = 0;
@@ -188,7 +124,7 @@ namespace Cognite.OpcUa
                 Log.Information("Push {NumDatapointsToPush} datapoints to CDF", count);
             }
 
-            var pushTasks = ChunkDatapointDict(dataPointList).Select(chunk => PushDataPointsChunk(chunk, token))
+            var pushTasks = Utils.ChunkDictOfLists(dataPointList, 100000, 10000).Select(chunk => PushDataPointsChunk(chunk, token))
                 .ToList();
             await Task.WhenAll(pushTasks);
         }
