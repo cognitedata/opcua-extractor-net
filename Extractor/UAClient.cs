@@ -445,10 +445,10 @@ namespace Cognite.OpcUa
                         numBrowse.Inc();
                     }
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
                     browseFailures.Inc();
-                    Log.Error("Failed during browse session");
+                    Log.Error(e, "Failed during browse session");
                     throw;
                 }
                 finally
@@ -581,9 +581,9 @@ namespace Cognite.OpcUa
                 }
                 Log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations", readValueIds.Count, count);
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                Log.Error("Failed to fetch attributes from opcua");
+                Log.Error(e, "Failed to fetch attributes from opcua");
                 attributeRequestFailures.Inc();
                 throw;
             }
@@ -784,10 +784,10 @@ namespace Cognite.OpcUa
                     }
                 } while (ids.Any() && !token.IsCancellationRequested);
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                historyReadFailures.Inc();
-                Log.Error("Failed during HistoryRead");
+                historyReadFailures.Inc();               
+                Log.Error(e, "Failed during HistoryRead");
                 throw;
             }
             finally
@@ -967,9 +967,9 @@ namespace Cognite.OpcUa
                             }
                         }
                     }
-                    catch (Exception)
+                    catch (Exception e)
                     {
-                        Log.Error("Failed to create subscriptions");
+                        Log.Error(e, "Failed to create subscriptions");
                         throw;
                     }
                     finally
@@ -1042,9 +1042,9 @@ namespace Cognite.OpcUa
                         }
                     }
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
-                    Log.Error("Failed to create event subscriptions");
+                    Log.Error(e, "Failed to create event subscriptions");
                     throw;
                 }
                 finally
@@ -1368,6 +1368,7 @@ namespace Cognite.OpcUa
             }
             return extId;
         }
+
         #endregion
     }
 }
