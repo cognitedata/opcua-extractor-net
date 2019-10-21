@@ -50,6 +50,8 @@ namespace Cognite.OpcUa
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
 
+        private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
+
         public CDFPusher(IServiceProvider clientProvider, CogniteClientConfig config)
         {
             this.config = config;
@@ -105,7 +107,9 @@ namespace Cognite.OpcUa
                 {
                     // TODO: metrics on skipped points
                     // Skip points which have an invalid timestamp, or which have incorrect data type
-                    if (buffer.Timestamp <= DateTime.MinValue || (Extractor.GetNodeState(buffer.Id)?.DataType.IsString ?? false)) continue;
+                    if (buffer.Timestamp <= DateTime.MinValue || (Extractor.GetNodeState(buffer.Id)?.DataType.IsString ?? false)
+                        || mismatchedTimeseries.Contains(buffer.Id)) continue;
+
                     count++;
                     if (!dataPointList.ContainsKey(buffer.Id))
                     {
@@ -131,7 +135,7 @@ namespace Cognite.OpcUa
             int count = 0;
             var inserts = dataPointList.Select(kvp =>
             {
-                var externalId = kvp.Key;
+                string externalId = kvp.Key;
                 var values = kvp.Value;
                 var item = new DataPointInsertionItem
                 {
@@ -297,7 +301,6 @@ namespace Cognite.OpcUa
             Log.Information("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
             if (config.Debug)
             {
-
                 await Extractor.ReadProperties(objects.Concat(variables), token);
                 foreach (var node in objects)
                 {
@@ -309,36 +312,43 @@ namespace Cognite.OpcUa
                 }
                 return true;
             }
-            try
+            foreach (var task in Utils.ChunkBy(objects, config.AssetChunk).Select(items => EnsureAssets(items, token)))
             {
-                foreach (var task in Utils.ChunkBy(objects, config.AssetChunk).Select(items => EnsureAssets(items, token)))
+                try
                 {
-                    if (!await task) return false;
+                    await task;
                 }
-                trackedAssets.Inc(objects.Count());
-                // At this point the assets should all be synchronized and mapped
-                // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
-                // This also sets the LastTimestamp property of each BufferedVariable
-                // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
-                // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
-                // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
-                // node to assets map.
-                // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
-                // fetching the timeseries itself
-                foreach (var task in Utils.ChunkBy(tsList, config.TimeSeriesChunk).Select(items => EnsureTimeseries(items, token)))
+                catch (Exception e)
                 {
-                    if (!await task) return false;
+                    Log.Error(e, "Failed to ensure assets");
+                    nodeEnsuringFailures.Inc();
+                    return false;
                 }
-                trackedTimeseres.Inc(tsList.Count);
             }
-            catch (Exception e)
+            trackedAssets.Inc(objects.Count());
+            // At this point the assets should all be synchronized and mapped
+            // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
+            // This also sets the LastTimestamp property of each BufferedVariable
+            // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
+            // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
+            // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
+            // node to assets map.
+            // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
+            // fetching the timeseries itself
+            foreach (var task in Utils.ChunkBy(tsList, config.TimeSeriesChunk).Select(items => EnsureTimeseries(items, token)))
             {
-                if (e is TaskCanceledException) throw;
-                Log.Error(e, "Failed to push to CDF");
-                return false;
+                try
+                {
+                    await task;
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "Failed to ensure timeseries");
+                    nodeEnsuringFailures.Inc();
+                    return false;
+                }
             }
-            // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
-            // createSubscription service called here
+            trackedTimeseres.Inc(tsList.Count);
             Log.Information("Finish pushing nodes to CDF");
             return true;
         }
@@ -409,7 +419,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="assetList">List of assets to be tested</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        private async Task<bool> EnsureAssets(IEnumerable<BufferedNode> assetList, CancellationToken token)
+        private async Task EnsureAssets(IEnumerable<BufferedNode> assetList, CancellationToken token)
         {
             var assetIds = assetList.ToDictionary(node => UAClient.GetUniqueId(node.Id));
             // TODO: When v1 gets support for ExternalId on assets when associating timeseries, we can drop a lot of this.
@@ -439,84 +449,46 @@ namespace Cognite.OpcUa
                             missingAssetIds.Add(value.ToString());
                         }
                     }
+
                     Log.Information("Found {NumMissingAssets} missing assets", ex.Missing.Count());
                 }
-                else
-                {
-                    nodeEnsuringFailures.Inc();
-                    Log.Error(ex, "Failed to get assets");
-                    return false;
-                }
+                else throw;
             }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to get assets");
-                nodeEnsuringFailures.Inc();
-                return false;
-            }
-            if (missingAssetIds.Any())
-            {
-                Log.Information("Create {NumAssetsToCreate} new assets", missingAssetIds.Count);
 
-                var getMetaData = missingAssetIds.Select(id => assetIds[id]);
-                try
-                {
-                    await Extractor.ReadProperties(getMetaData, token);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e, "Failed to get node properties");
-                    nodeEnsuringFailures.Inc();
-                    return false;
-                }
-                var createAssets = missingAssetIds.Select(id => NodeToAsset(assetIds[id]));
-                try
-                {
-                    var writeResults = await client.Assets.CreateAsync(createAssets, token);
-                    foreach (var resultItem in writeResults)
-                    {
-                        nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Failed to create assets");
-                    nodeEnsuringFailures.Inc();
-                    return false;
-                }
-                var idsToMap = assetIds.Keys
-                    .Where(id => !missingAssetIds.Contains(id))
-                    .Select(Identity.ExternalId);
+            if (!missingAssetIds.Any()) return;
+            Log.Information("Create {NumAssetsToCreate} new assets", missingAssetIds.Count);
 
-                if (idsToMap.Any())
-                {
-                    Log.Information("Get remaining {NumFinalIdsToRetrieve} assetids", idsToMap.Count());
-                    try
-                    {
-                        var readResults = await client.Assets.GetByIdsAsync(idsToMap, token);
-                        foreach (var resultItem in readResults)
-                        {
-                            nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Log.Error(e, "Failed to get asset ids");
-                        nodeEnsuringFailures.Inc();
-                        return false;
-                    }
-                }
+            var getMetaData = missingAssetIds.Select(id => assetIds[id]);
+            await Extractor.ReadProperties(getMetaData, token);
+            
+            var createAssets = missingAssetIds.Select(id => NodeToAsset(assetIds[id]));
+
+            var writeResults = await client.Assets.CreateAsync(createAssets, token);
+            foreach (var resultItem in writeResults)
+            {
+                nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
             }
-            return true;
+            var idsToMap = assetIds.Keys
+                .Where(id => !missingAssetIds.Contains(id))
+                .Select(Identity.ExternalId);
+
+            if (!idsToMap.Any()) return;
+
+            Log.Information("Get remaining {NumFinalIdsToRetrieve} assetids", idsToMap.Count());
+            var remainingResults = await client.Assets.GetByIdsAsync(idsToMap, token);
+            foreach (var resultItem in remainingResults)
+            { 
+                nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
+            }
         }
         /// <summary>
         /// Test if given list of timeseries exists, then create any that do not, checking for properties.
         /// </summary>
         /// <param name="tsList">List of timeseries to be tested</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        private async Task<bool> EnsureTimeseries(IEnumerable<BufferedVariable> tsList, CancellationToken token)
+        private async Task EnsureTimeseries(IEnumerable<BufferedVariable> tsList, CancellationToken token)
         {
-            if (!tsList.Any()) return true;
+            if (!tsList.Any()) return;
             var tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
@@ -542,6 +514,14 @@ namespace Cognite.OpcUa
             {
                 var readResults = await client.TimeSeries.GetByIdsAsync(tsIds.Keys.Select(Identity.ExternalId), token);
                 Log.Information("Found {NumRetrievedTimeseries} timeseries", readResults.Count());
+                foreach (var res in readResults)
+                {
+                    var state = Extractor.GetNodeState(res.ExternalId);
+                    if (state.DataType.IsString != res.IsString)
+                    {
+                        mismatchedTimeseries.Add(res.ExternalId);
+                    }
+                }
             }
             catch (ResponseException ex)
             {
@@ -556,38 +536,31 @@ namespace Cognite.OpcUa
                     }
                     Log.Information("Found {NumMissingTimeseries} missing timeseries", ex.Missing.Count());
                 }
-                else
-                {
-                    nodeEnsuringFailures.Inc();
-                    Log.Error(ex, "Failed to get timeseries");
-                    return false;
-                }
+                else throw;
             }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to get timeseries");
-                nodeEnsuringFailures.Inc();
-                return false;
-            }
-            if (missingTSIds.Any())
-            {
-                Log.Information("Create {NumTimeseriesToCreate} new timeseries", missingTSIds.Count);
 
-                var getMetaData = missingTSIds.Select(id => tsIds[id]);
-                await Extractor.ReadProperties(getMetaData, token);
-                var createTimeseries = getMetaData.Select(VariableToTimeseries);
-                try
+            if (!missingTSIds.Any()) return;
+
+            Log.Information("Create {NumTimeseriesToCreate} new timeseries", missingTSIds.Count);
+
+            var getMetaData = missingTSIds.Select(id => tsIds[id]);
+
+            await Extractor.ReadProperties(getMetaData, token);
+
+            var createTimeseries = getMetaData.Select(VariableToTimeseries);
+            await client.TimeSeries.CreateAsync(createTimeseries, token);
+
+            var remaining = tsIds.Keys.Except(missingTSIds);
+            var remainingResults = await client.TimeSeries.GetByIdsAsync(remaining.Select(Identity.ExternalId), token);
+
+            foreach (var res in remainingResults)
+            {
+                var state = Extractor.GetNodeState(res.ExternalId);
+                if (state.DataType.IsString != res.IsString)
                 {
-                    await client.TimeSeries.CreateAsync(createTimeseries, token);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e, "Failed to create TS");
-                    nodeEnsuringFailures.Inc();
-                    return false;
+                    mismatchedTimeseries.Add(res.ExternalId);
                 }
             }
-            return true;
         }
         /// <summary>
         /// Create timeseries poco to create this node in CDF
