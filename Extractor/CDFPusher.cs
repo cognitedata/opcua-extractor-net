@@ -31,6 +31,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus.Client;
 using Serilog;
+using Thoth.Json.Net;
 
 namespace Cognite.OpcUa
 {
@@ -312,19 +313,18 @@ namespace Cognite.OpcUa
                 }
                 return true;
             }
-            foreach (var task in Utils.ChunkBy(objects, config.AssetChunk).Select(items => EnsureAssets(items, token)))
+
+            try
             {
-                try
-                {
-                    await task;
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e, "Failed to ensure assets");
-                    nodeEnsuringFailures.Inc();
-                    return false;
-                }
+                await Task.WhenAll(Utils.ChunkBy(objects, config.AssetChunk).Select(items => EnsureAssets(items, token)).ToList());
             }
+            catch (Exception e)
+            {
+                Log.Error(e, "Failed to ensure assets");
+                nodeEnsuringFailures.Inc(); 
+                return false;
+            }
+
             trackedAssets.Inc(objects.Count());
             // At this point the assets should all be synchronized and mapped
             // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
@@ -335,18 +335,15 @@ namespace Cognite.OpcUa
             // node to assets map.
             // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
             // fetching the timeseries itself
-            foreach (var task in Utils.ChunkBy(tsList, config.TimeSeriesChunk).Select(items => EnsureTimeseries(items, token)))
+            try
             {
-                try
-                {
-                    await task;
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e, "Failed to ensure timeseries");
-                    nodeEnsuringFailures.Inc();
-                    return false;
-                }
+                await Task.WhenAll(Utils.ChunkBy(tsList, config.TimeSeriesChunk).Select(items => EnsureTimeseries(items, token)).ToList());
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Failed to ensure timeseries");
+                nodeEnsuringFailures.Inc();
+                return false;
             }
             trackedTimeseres.Inc(tsList.Count);
             Log.Information("Finish pushing nodes to CDF");
@@ -362,51 +359,68 @@ namespace Cognite.OpcUa
             trackedTimeseres.Set(0);
         }
         /// <summary>
+        /// Initialize latest timestamp for a given list of externalIds
+        /// </summary>
+        /// <param name="ids">ExternalIds to map</param>
+        private async Task InitLatestTimestampsChunk(IEnumerable<string> ids, CancellationToken token)
+        {
+            var client = GetClient();
+            var points = ids.Select<string, (Identity, string)>(id => (Identity.ExternalId(id), null));
+            Log.Information("Get latest timestamp for {num} nodes from CDF", ids.Count());
+            var dps = await client.DataPoints.GetLatestAsync(points, token);
+            foreach (var dp in dps)
+            {
+                if (dp.NumericDataPoints.Any())
+                {
+                    
+                    Extractor.GetNodeState(dp.ExternalId)?
+                        .InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDataPoints.First().TimeStamp).DateTime);
+                }
+                else if (dp.StringDataPoints.Any())
+                {
+                    Extractor.GetNodeState(dp.ExternalId)?
+                        .InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.StringDataPoints.First().TimeStamp).DateTime);
+                }
+                else
+                {
+                    Extractor.GetNodeState(dp.ExternalId)?.InitTimestamp(Utils.Epoch);
+                }
+            }
+        }
+        /// <summary>
         /// Fetch the latest timestamp from the destination system for each NodeExtractionState provided
+        /// Chunks by config.LatestChunk and executes in parallel
         /// </summary>
         /// <param name="states">Historizing NodeExtractionStates to get timestamps for</param>
         /// <returns>True if no task failed unexpectedly</returns>
         public async Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             if (config.Debug) return true;
-            var stateMap = states.ToDictionary(state => UAClient.GetUniqueId(state.Id,
-                state.ArrayDimensions != null && state.ArrayDimensions[0] > 0 ? 0 : -1), state => state);
-            var client = GetClient();
-            foreach (var idChunk in Utils.ChunkBy(stateMap.Keys, config.LatestChunk))
+            var ids = new List<string>();
+            foreach (var state in states)
             {
-                Log.Information("Get latest timestamp from CDF for {num} nodes", idChunk.Count());
-                var points = idChunk.Select<string, (Identity, string)>(id => (Identity.ExternalId(id), null));
-                try
+                if (state.ArrayDimensions != null && state.ArrayDimensions[0] > 0)
                 {
-                    var dps = await client.DataPoints.GetLatestAsync(points, token);
-                    foreach (var dp in dps)
+                    for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        if (dp.NumericDataPoints.Any())
-                        {
-                            stateMap[dp.ExternalId].InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDataPoints.First().TimeStamp).DateTime);
-                        }
-                        else if (dp.StringDataPoints.Any())
-                        {
-                            stateMap[dp.ExternalId].InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.StringDataPoints.First().TimeStamp).DateTime);
-                        }
-                        else
-                        {
-                            stateMap[dp.ExternalId].InitTimestamp(Utils.Epoch);
-                        }
+                        ids.Add(UAClient.GetUniqueId(state.Id, i));
                     }
                 }
-                catch (Exception e)
+                else
                 {
-                    Log.Error(e, "Failed to get latest timestamp");
-                    if (e is ResponseException ex)
-                    {
-                        foreach (var id in ex.Missing)
-                        {
-                            Log.Information("Missing: {id}", id["externalId"].ToString());
-                        }
-                    }
-                    return false;
+                    ids.Add(UAClient.GetUniqueId(state.Id));
                 }
+            }
+
+            try
+            {
+                await Task.WhenAll(Utils.ChunkBy(ids, config.LatestChunk)
+                    .Select(chunk => InitLatestTimestampsChunk(chunk, token)).ToList());
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Failed to get latest timestamp");
+                return false;
             }
             return true;
         }
@@ -422,8 +436,6 @@ namespace Cognite.OpcUa
         private async Task EnsureAssets(IEnumerable<BufferedNode> assetList, CancellationToken token)
         {
             var assetIds = assetList.ToDictionary(node => UAClient.GetUniqueId(node.Id));
-            // TODO: When v1 gets support for ExternalId on assets when associating timeseries, we can drop a lot of this.
-            // Specifically anything related to NodeToAssetIds
             ISet<string> missingAssetIds = new HashSet<string>();
 
             Log.Information("Test {NumAssetsToTest} assets", assetList.Count());
@@ -600,7 +612,8 @@ namespace Cognite.OpcUa
             {
                 Description = Utils.Truncate(node.Description, 500),
                 ExternalId = UAClient.GetUniqueId(node.Id),
-                Name = string.IsNullOrEmpty(node.DisplayName) ? Utils.Truncate(UAClient.GetUniqueId(node.Id), 140) : Utils.Truncate(node.DisplayName, 140)
+                Name = string.IsNullOrEmpty(node.DisplayName)
+                    ? Utils.Truncate(UAClient.GetUniqueId(node.Id), 140) : Utils.Truncate(node.DisplayName, 140)
             };
             if (node.ParentId != null && !node.ParentId.IsNullNodeId)
             {
@@ -620,7 +633,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="value">Value of the object. Assumed to be a timestamp or numeric value</param>
         /// <returns>Milliseconds since epoch</returns>
-        private long GetTimestampValue(object value)
+        private static long GetTimestampValue(object value)
         {
             if (value is DateTime dt)
             {
