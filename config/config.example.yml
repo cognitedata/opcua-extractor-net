@@ -176,6 +176,12 @@ Extraction:
     NonFiniteReplacement:
     # The earliest timestamp to be read from history on the OPC-UA server, in milliseconds since 1/1/1970.
     HistoryStartTime: 0
+    # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
+    # Note that this is a heavy operation, so this number should not be set too low.
+    AutoRebrowsePeriod: 0
+    # Enable using audit events to discover new nodes. If this is set to true, the client will expect AuditAddNodes/AuditAddReferences
+    # events on the server node. These will be used to add new nodes automatically, by recursively browsing from each given ParentId.
+    EnableAuditDiscovery:
 
 
 Events:

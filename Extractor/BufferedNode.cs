@@ -66,6 +66,7 @@ namespace Cognite.OpcUa
 
             string ret = $"DisplayName: {DisplayName}\n"
                 + $"ParentId: {ParentId?.ToString()}\n"
+                + $"Id: {Id.ToString()}\n"
                 + propertyString + "\n";
             return ret;
         }
@@ -183,6 +184,7 @@ namespace Cognite.OpcUa
 
             string ret = $"DisplayName: {DisplayName}\n"
                 + $"ParentId: {ParentId?.ToString()}\n"
+                + $"Id: {Id.ToString()}\n"
                 + $"Historizing: {Historizing}\n"
                 + propertyString + "\n"
                 + DataType + "\n";

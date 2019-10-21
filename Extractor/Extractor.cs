@@ -50,7 +50,8 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<string, NodeExtractionState> nodeStatesByExtId = new ConcurrentDictionary<string, NodeExtractionState>();
         public ConcurrentDictionary<NodeId, EventExtractionState> EventEmitterStates { get; } = new ConcurrentDictionary<NodeId, EventExtractionState>();
 
-        private readonly ConcurrentQueue<Task> pendingOperations = new ConcurrentQueue<Task>();
+        private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
+        private bool restart = false;
         private readonly AutoResetEvent triggerUpdateOperations = new AutoResetEvent(false);
 
         private readonly object managedNodesLock = new object();
@@ -165,9 +166,13 @@ namespace Cognite.OpcUa
                     }
                 });
             }).Concat(synchTasks).Append(Task.Run(() => ExtraTaskLoop(token), token)).ToList();
+            if (config.Extraction.AutoRebrowsePeriod > 0)
+            {
+                tasks = tasks.Append(Task.Run(() => RebrowseLoop(token))).ToList();
+            }
 
             triggerUpdateOperations.Reset();
-            Task failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
+            var failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
             while (tasks.Any() && failedTask == null)
             {
                 try
@@ -202,18 +207,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public void RestartExtractor(CancellationToken token)
         {
-            pendingOperations.Clear();
-            pendingOperations.Enqueue(new Task(async () =>
-            {
-                Started = false;
-                await uaClient.WaitForOperations();
-                ConfigureExtractor(token);
-                await uaClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
-                var synchTasks = await MapUAToDestinations(token);
-                await Task.WhenAll(synchTasks);
-                Started = true;
-                Log.Information("Successfully restarted extractor");
-            }));
+            restart = true;
             triggerUpdateOperations.Set();
         }
         /// <summary>
@@ -300,10 +294,27 @@ namespace Cognite.OpcUa
         }
         #endregion
         #region Mapping
+        private async Task RebrowseLoop(CancellationToken token)
+        {
+            var delay = TimeSpan.FromMinutes(config.Extraction.AutoRebrowsePeriod);
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(delay, token);
+                }
+                catch (TaskCanceledException)
+                {
+                    return;
+                }
+
+                await uaClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
+                var historyTasks = await MapUAToDestinations(token);
+                await Task.WhenAll(historyTasks);
+            }
+        }
         /// <summary>
-        /// Waits for triggerUpdateOperations to fire, then sequentially executes all the tasks in the queue.
-        /// The single-threaded nature is important as multiple mapping operations run in parallel could cause issues.
-        /// Tasks added to the pendingOperations queue should not be started beforehand, or this will fail.
+        /// Waits for triggerUpdateOperations to fire, then executes all the tasks in the queue.
         /// </summary>
         private async Task ExtraTaskLoop(CancellationToken token)
         {
@@ -311,11 +322,40 @@ namespace Cognite.OpcUa
             {
                 WaitHandle.WaitAny(new[] { triggerUpdateOperations, token.WaitHandle });
                 if (token.IsCancellationRequested) break;
-                while (pendingOperations.TryDequeue(out Task task))
+                var tasks = new List<Task>();
+                if (restart)
                 {
-                    task.Start();
-                    await task;
+                    extraNodesToBrowse.Clear();
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        Started = false;
+                        await uaClient.WaitForOperations();
+                        ConfigureExtractor(token);
+                        uaClient.ResetVisitedNodes();
+                        await uaClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
+                        var synchTasks = await MapUAToDestinations(token);
+                        await Task.WhenAll(synchTasks);
+                        Started = true;
+                        Log.Information("Successfully restarted extractor");
+                    }));
+                    restart = false;
+                } 
+                else if (extraNodesToBrowse.Any())
+                {
+                    var nodesToBrowse = new List<NodeId>();
+                    while (extraNodesToBrowse.TryDequeue(out NodeId id))
+                    {
+                        nodesToBrowse.Add(id);
+                    }
+
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        await uaClient.BrowseNodeChildren(nodesToBrowse.Distinct(), HandleNode, token);
+                        var historyTasks = await MapUAToDestinations(token);
+                        await Task.WhenAll(historyTasks);
+                    }));
                 }
+                await Task.WhenAll(tasks);
             }
         }
         /// <summary>
@@ -475,6 +515,11 @@ namespace Cognite.OpcUa
                         objects.Concat(variables).Select(node => node.Id).Distinct(),
                         HistoryEventHandler,
                         token)));
+            }
+
+            if (config.Extraction.EnableAuditDiscovery)
+            {
+                uaClient.SubscribeToAuditEvents(AuditEventSubscriptionHandler);
             }
             return tasks;
         }
@@ -729,6 +774,93 @@ namespace Cognite.OpcUa
             }
         }
         /// <summary>
+        /// Handle subscription callback for audit events (AddReferences/AddNodes). Triggers partial re-browse when necessary
+        /// </summary>
+        private void AuditEventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
+        {
+            if (!(eventArgs.NotificationValue is EventFieldList triggeredEvent))
+            {
+                Log.Warning("No event in event subscription notification: {}", item.StartNodeId);
+                return;
+            }
+
+            var eventFields = triggeredEvent.EventFields;
+            if (!(item.Filter is EventFilter filter))
+            {
+                Log.Warning("Triggered event without filter");
+                return;
+            }
+            int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
+                                                                       && atr.BrowsePath[0] == BrowseNames.EventType);
+            if (eventTypeIndex < 0)
+            {
+                Log.Warning("Triggered event has no type, ignoring");
+                return;
+            }
+            var eventType = eventFields[eventTypeIndex].Value as NodeId;
+            if (eventType == null || eventType != ObjectTypeIds.AuditAddNodesEventType && eventType != ObjectTypeIds.AuditAddReferencesEventType)
+            {
+                Log.Warning("Non-audit event triggered on audit event listener");
+                return;
+            }
+
+            if (eventType == ObjectTypeIds.AuditAddNodesEventType)
+            {
+                // This is a neat way to get the contents of the event, which may be fairly complicated (variant of arrays of extensionobjects)
+                var e = new AuditAddNodesEventState(null);
+                e.Update(uaClient.session.SystemContext, filter.SelectClauses, triggeredEvent);
+                if (e.NodesToAdd?.Value == null)
+                {
+                    Log.Warning("Missing NodesToAdd object on AddNodes event");
+                    return;
+                }
+
+                var addedNodes = e.NodesToAdd.Value;
+
+                var relevantIds = addedNodes.Where(added => added != null &&
+                    (added.NodeClass == NodeClass.Variable || added.NodeClass == NodeClass.Object)
+                    && (added.TypeDefinition != VariableTypeIds.PropertyType)
+                    && (managedNodes.Contains(uaClient.ToNodeId(added.ParentNodeId))))
+                    .Select(added => uaClient.ToNodeId(added.ParentNodeId))
+                    .Distinct();
+                if (!relevantIds.Any()) return;
+                Log.Information("Trigger rebrowse on {numnodes} node ids due to addNodes event", relevantIds.Count());
+
+                foreach (var id in relevantIds)
+                {
+                    extraNodesToBrowse.Enqueue(id);
+                }
+                triggerUpdateOperations.Set();
+                return;
+            }
+
+            var ev = new AuditAddReferencesEventState(null);
+            ev.Update(uaClient.session.SystemContext, filter.SelectClauses, triggeredEvent);
+
+            if (ev.ReferencesToAdd?.Value == null)
+            {
+                Log.Warning("Missing ReferencesToAdd object on AddReferences event");
+                return;
+            }
+
+            var addedReferences = ev.ReferencesToAdd.Value;
+
+            var relevantRefIds = addedReferences.Where(added =>
+                (added.IsForward && managedNodes.Contains(uaClient.ToNodeId(added.SourceNodeId))))
+                .Select(added => uaClient.ToNodeId(added.SourceNodeId))
+                .Distinct();
+
+            if (!relevantRefIds.Any()) return;
+
+            Log.Information("Trigger rebrowse on {numnodes} node ids due to addReference event", relevantRefIds.Count());
+
+            foreach (var id in relevantRefIds)
+            {
+                extraNodesToBrowse.Enqueue(id);
+            }
+            triggerUpdateOperations.Set();
+        }
+        /// <summary>
         /// Callback for HistoryRead operations for data. Simply pushes all datapoints to the queue.
         /// </summary>
         /// <param name="rawData">Collection of data to be handled as IEncodable</param>
@@ -773,17 +905,16 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            if (final)
+
+            if (!final) return cnt;
+            var buffered = nodeState.FlushBuffer(); 
+            foreach (var pusher in pushers)
             {
-                var buffered = nodeState.FlushBuffer();
-                foreach (var pusher in pushers)
-                {
-                    foreach (var dplist in buffered)
-                    {
-                        foreach (var dp in dplist)
-                        {
-                            pusher.BufferedDPQueue.Enqueue(dp);
-                        }
+                foreach (var dplist in buffered)
+                { 
+                    foreach (var dp in dplist) 
+                    { 
+                        pusher.BufferedDPQueue.Enqueue(dp);
                     }
                 }
             }
@@ -840,7 +971,6 @@ namespace Cognite.OpcUa
             }
             return cnt;
         }
-
         #endregion
     }
 }

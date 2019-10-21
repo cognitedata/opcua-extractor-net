@@ -164,6 +164,73 @@ namespace Test
                 ? asset != null && asset.externalId == ev.metadata["SourceNode"] || timeseries != null && timeseries.externalId == ev.metadata["SourceNode"]
                 : asset != null && ev.assetIds.Contains(asset.id);
         }
+        [Fact]
+        [Trait("Category", "audit")]
+        public async Task TestAuditEvents()
+        {
+            var fullConfig = Common.BuildConfig("audit", 10);
+            fullConfig.Extraction.EnableAuditDiscovery = true;
+            Logger.Configure(fullConfig.Logging);
+            var client = new UAClient(fullConfig);
+            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
 
+            var extractor = new Extractor(fullConfig, pusher, client);
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+
+            var tsCnt = 0;
+            var assetCnt = 0;
+            for (int i = 0; i < 20; i++)
+            {
+                assetCnt = handler.assets.Count;
+                tsCnt = handler.timeseries.Count;
+                if (assetCnt > 0 && tsCnt > 0) break;
+                await Task.Delay(500);
+            }
+
+            var lastAssetBefore = handler.assets.Values
+                .Where(asset => asset.name.StartsWith("Add"))
+                .Select(asset => int.Parse(asset.name.Split(' ')[1])).Max();
+
+            var lastTimeseriesBefore = handler.timeseries.Values
+                .Where(timeseries => timeseries.name.StartsWith("Add"))
+                .Select(timeseries => int.Parse(timeseries.name.Split(' ')[1])).Max();
+
+            Assert.True(tsCnt > 0, "Expected some timeseries");
+            Assert.True(assetCnt > 0, "Expected some assets");
+
+            var newTsCnt = 0;
+            var newAssetCnt = 0;
+            for (int i = 0; i < 20; i++)
+            {
+                newAssetCnt = handler.assets.Count;
+                newTsCnt = handler.timeseries.Count;
+                if (newAssetCnt > assetCnt && newTsCnt > tsCnt) break;
+                await Task.Delay(500);
+            }
+            Assert.True(newTsCnt > tsCnt, "Expected some new timeseries");
+            Assert.True(newAssetCnt > assetCnt, "Expected some new assets");
+            await Task.Delay(500);
+
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+
+            Assert.Contains(handler.assets.Values, asset => asset.name == "AddObject 0");
+            Assert.Contains(handler.timeseries.Values, timeseries => timeseries.name == "AddVariable 0");
+            Assert.Contains(handler.timeseries.Values, timeseries => timeseries.name == "AddExtraVariable 0");
+
+            Assert.Contains(handler.assets.Values, asset => asset.name == "AddObject " + (lastAssetBefore + 1));
+            Assert.Contains(handler.timeseries.Values, timeseries => timeseries.name == "AddVariable " + (lastTimeseriesBefore + 1));
+            Assert.Contains(handler.timeseries.Values, timeseries => timeseries.name == "AddExtraVariable " + (lastTimeseriesBefore + 1));
+        }
     }
 }

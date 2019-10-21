@@ -24,6 +24,7 @@ using Opc.Ua.Configuration;
 using System.Linq;
 using Prometheus.Client;
 using System.Threading;
+using Microsoft.VisualBasic.CompilerServices;
 using Serilog;
 
 namespace Cognite.OpcUa
@@ -36,7 +37,7 @@ namespace Cognite.OpcUa
         private readonly UAClientConfig config;
         private readonly ExtractionConfig extractionConfig;
         private readonly EventConfig eventConfig;
-        private Session session;
+        public Session session;
         private SessionReconnectHandler reconnectHandler;
         public Extractor Extractor { get; set; }
         private readonly object visitedNodesLock = new object();
@@ -204,30 +205,26 @@ namespace Cognite.OpcUa
         /// </summary>
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
         {
-            if (eventArgs.Status != null && ServiceResult.IsNotGood(eventArgs.Status))
+            if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
+            Log.Warning(eventArgs.Status.ToString());
+            if (reconnectHandler != null) return;
+            connected.Set(0);
+            Log.Warning("--- RECONNECTING ---");
+            if (!config.ForceRestart && !liveToken.IsCancellationRequested)
             {
-                Log.Warning(eventArgs.Status.ToString());
-                if (reconnectHandler == null)
+                reconnectHandler = new SessionReconnectHandler();
+                reconnectHandler.BeginReconnect(sender, 5000, ClientReconnectComplete);
+            }
+            else
+            {
+                Failed = true;
+                try
                 {
-                    connected.Set(0);
-                    Log.Warning("--- RECONNECTING ---");
-                    if (!config.ForceRestart && !liveToken.IsCancellationRequested)
-                    {
-                        reconnectHandler = new SessionReconnectHandler();
-                        reconnectHandler.BeginReconnect(sender, 5000, ClientReconnectComplete);
-                    }
-                    else
-                    {
-                        Failed = true;
-                        try
-                        {
-                            session.Close();
-                        }
-                        catch
-                        {
-                            Log.Warning("Client failed to close");
-                        }
-                    }
+                    session.Close();
+                }
+                catch
+                {
+                    Log.Warning("Client failed to close");
                 }
             }
         }
@@ -237,18 +234,16 @@ namespace Cognite.OpcUa
         private void CertificateValidationHandler(CertificateValidator validator,
             CertificateValidationEventArgs eventArgs)
         {
-            if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
+            if (eventArgs.Error.StatusCode != StatusCodes.BadCertificateUntrusted) return;
+            eventArgs.Accept = config.AutoAccept;
+            // TODO Verify client acceptance here somehow?
+            if (eventArgs.Accept)
             {
-                eventArgs.Accept = config.AutoAccept;
-                // TODO Verify client acceptance here somehow?
-                if (eventArgs.Accept)
-                {
-                    Log.Warning("Accepted Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
-                }
-                else
-                {
-                    Log.Error("Rejected Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
-                }
+                Log.Warning("Accepted Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
+            }
+            else
+            {
+                Log.Error("Rejected Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
             }
         }
         /// <summary>
@@ -290,22 +285,43 @@ namespace Cognite.OpcUa
         public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
         {
             Log.Debug("BrowseDirectoryAsync {root}", root);
+            var rootNode = GetRootNode(root);
+            if (rootNode == null) throw new Exception("Root node does not exist");
+            bool docb = true;
             lock (visitedNodesLock)
             {
-                visitedNodes.Clear();
-                visitedNodes.Add(root);
+                if (!visitedNodes.Add(root)) 
+                { 
+                    docb = false;
+                }
             }
-            try
+            if (docb)
             {
-                var rootNode = GetRootNode(root);
-                if (rootNode == null) throw new Exception("Root node does not exist");
                 callback(rootNode, null);
-                await Task.Run(() => BrowseDirectory(new List<NodeId> { root }, callback, token), token);
             }
-            catch (Exception e)
+
+            await Task.Run(() => BrowseDirectory(new List<NodeId> { root }, callback, token), token);
+        }
+
+        public async Task BrowseNodeChildren(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
+        {
+            foreach (var root in roots)
             {
-                Log.Error(e, "Failed to browse directory");
+                bool docb = true;
+                lock (visitedNodesLock)
+                {
+                    if (!visitedNodes.Add(root))
+                    {
+                        docb = false;
+                    }
+                }
+                if (docb)
+                {
+                    var rootNode = GetRootNode(root);
+                    callback(rootNode, null);
+                }
             }
+            await Task.Run(() => BrowseDirectory(roots, callback, token));
         }
         /// <summary>
         /// Get the root node and return it as a reference description.
@@ -402,8 +418,8 @@ namespace Cognite.OpcUa
                     Log.Debug("GetNodeChildren results {count}", results.Count);
                     foreach (var result in results)
                     {
-                        NodeId nodeId = lparents.ElementAt(bindex++);
-                        Log.Debug("GetNodeChildren Browse result {nodeId}", nodeId);
+                        var nodeId = lparents.ElementAt(bindex++);
+                        Log.Verbose("GetNodeChildren Browse result {nodeId}", nodeId);
                         finalResults[nodeId] = result.References;
                         if (result.ContinuationPoint != null)
                         {
@@ -433,7 +449,7 @@ namespace Cognite.OpcUa
                         foreach (var result in nextResults)
                         {
                             NodeId nodeId = indexMap[pindex++];
-                            Log.Debug("GetNodeChildren BrowseNext result {nodeId}", nodeId);
+                            Log.Verbose("GetNodeChildren BrowseNext result {nodeId}", nodeId);
                             finalResults[nodeId].AddRange(result.References);
                             if (result.ContinuationPoint != null)
                             {
@@ -458,6 +474,14 @@ namespace Cognite.OpcUa
             }
             return finalResults;
         }
+
+        public void ResetVisitedNodes()
+        {
+            lock (visitedNodesLock)
+            {
+                visitedNodes.Clear();
+            }
+        }
         /// <summary>
         /// Get all children of root nodes recursively and invoke the callback for each.
         /// </summary>
@@ -475,6 +499,7 @@ namespace Cognite.OpcUa
             var nextIds = roots.ToList();
             int levelCnt = 0;
             int nodeCnt = 0;
+            var localVisitedNodes = new HashSet<NodeId>();
             do
             {
                 var references = Utils.ChunkBy(nextIds, config.BrowseNodesChunk)
@@ -484,34 +509,40 @@ namespace Cognite.OpcUa
 
                 nextIds.Clear();
                 levelCnt++;
-                foreach (var rdlist in references)
+                foreach (var (parentId, children) in references)
                 {
-                    NodeId parentId = rdlist.Key;
-                    nodeCnt += rdlist.Value.Count;
-                    foreach (var rd in rdlist.Value)
+                    nodeCnt += children.Count;
+                    foreach (var rd in children)
                     {
-                        if (rd.NodeId == ObjectIds.Server)
-                            continue;
+                        var nodeId = ToNodeId(rd.NodeId);
+                        if (rd.NodeId == ObjectIds.Server) continue;
                         if (extractionConfig.IgnoreNamePrefix != null && extractionConfig.IgnoreNamePrefix.Any(prefix =>
                             rd.DisplayName.Text.StartsWith(prefix, StringComparison.CurrentCulture))
                             || extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(rd.DisplayName.Text))
                         {
-                            Log.Debug("Ignoring filtered {expandedNodeId} {nodeId}", rd.NodeId, ToNodeId(rd.NodeId));
+                            Log.Verbose("Ignoring filtered {nodeId}", nodeId);
                             continue;
                         }
+
+                        bool docb = true;
                         lock (visitedNodesLock)
                         {
-                            if (!visitedNodes.Add(ToNodeId(rd.NodeId)))
+                            if (!visitedNodes.Add(nodeId))
                             {
-                                // if (Log.IsEnabled(Debug))
-                                Log.Debug("Ignoring visited {expandedNodeId} {nodeId}", rd.NodeId, ToNodeId(rd.NodeId));
-                                continue;
+                                docb = false;
+                                Log.Verbose("Ignoring visited {nodeId}", nodeId);
                             }
                         }
-                        callback(rd, parentId);
-                        if (rd.NodeClass == NodeClass.Variable)
-                            continue;
-                        nextIds.Add(ToNodeId(rd.NodeId));
+                        if (docb)
+                        {
+                            Log.Debug("Discovered new node {nodeid}", nodeId);
+                            callback(rd, parentId);
+                        }
+                        if (rd.NodeClass == NodeClass.Variable) continue;
+                        if (localVisitedNodes.Add(nodeId))
+                        {
+                            nextIds.Add(nodeId);
+                        }
                     }
                 }
             } while (nextIds.Any());
@@ -1056,7 +1087,7 @@ namespace Cognite.OpcUa
         }
         #endregion
 
-        #region events
+        #region Events
         public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventFields(IEnumerable<NodeId> eventIds, CancellationToken token)
         {
             if (eventFields != null) return eventFields;
@@ -1153,6 +1184,95 @@ namespace Cognite.OpcUa
                 WhereClause = whereClause,
                 SelectClauses = selectClauses
             };
+        }
+
+        private EventFilter BuildAuditFilter()
+        {
+            var whereClause = new ContentFilter();
+            var eventTypeOperand = new SimpleAttributeOperand
+            {
+                TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                AttributeId = Attributes.Value
+            };
+            eventTypeOperand.BrowsePath.Add(BrowseNames.EventType);
+            var op1 = new LiteralOperand
+            {
+                Value = ObjectTypeIds.AuditAddNodesEventType
+            };
+            var op2 = new LiteralOperand
+            {
+                Value = ObjectTypeIds.AuditAddReferencesEventType
+            };
+            var elem1 = whereClause.Push(FilterOperator.Equals, eventTypeOperand, op1);
+            var elem2 = whereClause.Push(FilterOperator.Equals, eventTypeOperand, op2);
+            whereClause.Push(FilterOperator.Or, elem1, elem2);
+            var selectClauses = new SimpleAttributeOperandCollection();
+            foreach ((var source, string path) in new[]
+            {
+                (ObjectTypeIds.BaseEventType, BrowseNames.EventType),
+                (ObjectTypeIds.AuditAddNodesEventType, BrowseNames.NodesToAdd),
+                (ObjectTypeIds.AuditAddReferencesEventType, BrowseNames.ReferencesToAdd)
+            })
+            {
+                var op = new SimpleAttributeOperand
+                {
+                    AttributeId = Attributes.Value,
+                    TypeDefinitionId = source
+                };
+                op.BrowsePath.Add(path);
+                selectClauses.Add(op);
+            }
+
+            return new EventFilter
+            {
+               WhereClause = whereClause,
+                SelectClauses = selectClauses
+            };
+        }
+        public void SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback)
+        {
+            var filter = BuildAuditFilter();
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "AuditListener") ?? new Subscription(session.DefaultSubscription)
+            {
+                PublishingInterval = config.PollingInterval,
+                DisplayName = "AuditListener"
+            };
+            if (subscription.MonitoredItemCount != 0) return;
+            var item = new MonitoredItem
+            {
+                StartNodeId = ObjectIds.Server,
+                Filter = filter,
+                AttributeId = Attributes.EventNotifier
+            };
+            item.Notification += callback;
+            subscription.AddItem(item);
+            Log.Information("Subscribe to auditing events on the server node");
+            lock (subscriptionLock)
+            {
+                IncOperations();
+                try
+                {
+                    if (subscription.Created)
+                    { 
+                        subscription.CreateItems();
+                    }
+                    else
+                    {
+                        Log.Information("Add subscription to the session");
+                        session.AddSubscription(subscription); 
+                        subscription.Create();
+                    }
+                }
+                catch (Exception)
+                {
+                    Log.Error("Failed to create audit subscription");
+                    throw;
+                }
+                finally
+                {
+                    DecOperations();
+                }
+            }
         }
         /// <summary>
         /// Collects the fields of a given list of eventIds. It does this by mapping out the entire event type hierarchy,
