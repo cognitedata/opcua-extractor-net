@@ -1,4 +1,15 @@
 # OPC-UA Extractor Changelog
+0.10.0 2019-10-21
+------------------
+* Node discovery using either periodic restarts or audit events
+* Improved performance on fetching latest timestamp from CDF
+
+0.9.0  2019-10-21
+------------------
+* Update CogniteSdk to public version
+* Improvements to restarting and re-browsing
+* Fix limit of pushes to CDF, and make larger data batches work
+
 0.8.1  2019-10-07
 ------------------
 * Config option for earliest history-read timestamp
