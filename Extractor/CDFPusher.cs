@@ -41,14 +41,16 @@ namespace Cognite.OpcUa
     {
         private readonly IServiceProvider clientProvider;
         private readonly CogniteClientConfig config;
-        private readonly IDictionary<string, bool> nodeIsHistorizing = new Dictionary<string, bool>();
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
+        
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
         public PusherConfig BaseConfig { get; }
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
+
+        private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
 
         public CDFPusher(IServiceProvider clientProvider, CogniteClientConfig config)
         {
@@ -90,62 +92,89 @@ namespace Cognite.OpcUa
             "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
 
         #region Interface
+
         /// <summary>
         /// Dequeues up to 100000 points from the BufferedDPQueue, then pushes them to CDF. On failure, writes to file if enabled.
         /// </summary>
+
         public async Task PushDataPoints(CancellationToken token)
         {
-            var dataPointList = new List<BufferedDataPoint>();
-
             int count = 0;
-            while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer) && count++ < 100000)
+            var dataPointList = new Dictionary<string, List<BufferedDataPoint>>();
+            while (BufferedDPQueue.Any())
             {
-                if (buffer.Timestamp > DateTime.MinValue)
+                while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer))
                 {
-                    dataPointList.Add(buffer);
-                }
-            }
-            if (count == 0)
-            {
-                Log.Debug("Push 0 datapoints to CDF");
-                return;
-            }
-            Log.Information("Push {NumDatapointsToPush} datapoints to CDF", count);
+                    // TODO: metrics on skipped points
+                    // Skip points which have an invalid timestamp, or which have incorrect data type
+                    if (buffer.Timestamp <= DateTime.MinValue || (Extractor.GetNodeState(buffer.Id)?.DataType.IsString ?? false)
+                        || mismatchedTimeseries.Contains(buffer.Id)) continue;
 
+                    count++;
+                    if (!dataPointList.ContainsKey(buffer.Id))
+                    {
+                        dataPointList[buffer.Id] = new List<BufferedDataPoint>();
+                    }
+                    dataPointList[buffer.Id].Add(buffer);
+                }
+
+                if (count == 0)
+                {
+                    Log.Debug("Push 0 datapoints to CDF");
+                    return;
+                }
+                Log.Information("Push {NumDatapointsToPush} datapoints to CDF", count);
+            }
+
+            var pushTasks = Utils.ChunkDictOfLists(dataPointList, 100000, 10000).Select(chunk => PushDataPointsChunk(chunk, token))
+                .ToList();
+            await Task.WhenAll(pushTasks);
+        }
+        private async Task PushDataPointsChunk(IDictionary<string, IEnumerable<BufferedDataPoint>> dataPointList, CancellationToken token) {
             if (config.Debug) return;
-            var finalDataPoints = dataPointList.GroupBy(dp => dp.Id, (id, points) =>
+            int count = 0;
+            var inserts = dataPointList.Select(kvp =>
             {
+                string externalId = kvp.Key;
+                var values = kvp.Value;
                 var item = new DataPointInsertionItem
                 {
-                    ExternalId = id
+                    ExternalId = externalId
                 };
-                if (points.First().IsString)
+                if (values.First().IsString)
                 {
                     item.StringDatapoints = new StringDatapoints();
-                    item.StringDatapoints.Datapoints.AddRange(points.Select(point =>
+                    item.StringDatapoints.Datapoints.AddRange(values.Select(ipoint =>
                         new StringDatapoint
                         {
-                            Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = point.StringValue
-                        }
-                    ));
+                            Timestamp = new DateTimeOffset(ipoint.Timestamp).ToUnixTimeMilliseconds(),
+                            Value = ipoint.StringValue
+                        }));
                 }
                 else
                 {
                     item.NumericDatapoints = new NumericDatapoints();
-                    item.NumericDatapoints.Datapoints.AddRange(points.Select(point =>
+                    item.NumericDatapoints.Datapoints.AddRange(values.Select(ipoint =>
                         new NumericDatapoint
                         {
-                            Timestamp = new DateTimeOffset(point.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = point.DoubleValue
-                        }
-                    ));
+                            Timestamp = new DateTimeOffset(ipoint.Timestamp).ToUnixTimeMilliseconds(),
+                            Value = ipoint.DoubleValue
+                        }));
                 }
+
+                count += values.Count();
                 return item;
             });
+
             var req = new DataPointInsertionRequest();
-            req.Items.AddRange(finalDataPoints);
+            // Filter out type check failures
+            req.Items.AddRange(inserts);
+            if (!req.Items.Any())
+                return;
+
             var client = GetClient("Data");
+            bool buffer = false;
+            bool failed = false;
             try
             {
                 await client.DataPoints.InsertAsync(req, token);
@@ -154,25 +183,32 @@ namespace Cognite.OpcUa
             {
                 Log.Error(e, "Failed to insert {NumFailedDatapoints} datapoints into CDF", count);
 				dataPointPushFailures.Inc();
-                if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile))
+                if (!(e is ResponseException ex) || ex.Code != 400 && ex.Code != 409)
                 {
-                    try
-                    {
-                        Utils.WriteBufferToFile(dataPointList, config, token, nodeIsHistorizing);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex, "Failed to write buffer to file");
-                    }
-                }
-                return;
+                    buffer = true;
+                } 
+                failed = true;
             }
+            if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile) && buffer)
+            {
+                try
+                {
+                    Utils.WriteBufferToFile(dataPointList.Values.SelectMany(val => val).ToList(), config, token, 
+                        dataPointList.ToDictionary(dp => dp.Key, dp => Extractor.GetNodeState(dp.Key).Historizing));
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to write buffer to file");
+                }
+            }
+            if (failed) return;
             if (config.BufferOnFailure && !Utils.BufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
             {
-                Utils.ReadBufferFromFile(BufferedDPQueue, config, token, nodeIsHistorizing);
+                Utils.ReadBufferFromFile(BufferedDPQueue, config, token, 
+                    dataPointList.ToDictionary(dp => dp.Key, dp => Extractor.GetNodeState(dp.Key).Historizing));
             }
-            dataPointsCounter.Inc(count);
             dataPointPushes.Inc();
+            dataPointsCounter.Inc(count);
         }
         /// <summary>
         /// Dequeues up to 1000 events from the BufferedEventQueue, then pushes them to CDF.
@@ -250,7 +286,7 @@ namespace Cognite.OpcUa
         {
             var tsList = new List<BufferedVariable>();
 
-            if (variables.Count() == 0 && objects.Count() == 0)
+            if (!variables.Any() && !objects.Any())
             {
                 Log.Debug("Testing 0 nodes against CDF");
                 return true;
@@ -265,7 +301,6 @@ namespace Cognite.OpcUa
             Log.Information("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
             if (config.Debug)
             {
-
                 await Extractor.ReadProperties(objects.Concat(variables), token);
                 foreach (var node in objects)
                 {
@@ -277,36 +312,43 @@ namespace Cognite.OpcUa
                 }
                 return true;
             }
-            try
+            foreach (var task in Utils.ChunkBy(objects, config.AssetChunk).Select(items => EnsureAssets(items, token)))
             {
-                foreach (var task in Utils.ChunkBy(objects, config.AssetChunk).Select(items => EnsureAssets(items, token)))
+                try
                 {
-                    if (!await task) return false;
+                    await task;
                 }
-                trackedAssets.Inc(objects.Count());
-                // At this point the assets should all be synchronized and mapped
-                // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
-                // This also sets the LastTimestamp property of each BufferedVariable
-                // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
-                // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
-                // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
-                // node to assets map.
-                // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
-                // fetching the timeseries itself
-                foreach (var task in Utils.ChunkBy(tsList, config.TimeSeriesChunk).Select(items => EnsureTimeseries(items, token)))
+                catch (Exception e)
                 {
-                    if (!await task) return false;
+                    Log.Error(e, "Failed to ensure assets");
+                    nodeEnsuringFailures.Inc();
+                    return false;
                 }
-                trackedTimeseres.Inc(tsList.Count);
             }
-            catch (Exception e)
+            trackedAssets.Inc(objects.Count());
+            // At this point the assets should all be synchronized and mapped
+            // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
+            // This also sets the LastTimestamp property of each BufferedVariable
+            // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
+            // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
+            // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
+            // node to assets map.
+            // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
+            // fetching the timeseries itself
+            foreach (var task in Utils.ChunkBy(tsList, config.TimeSeriesChunk).Select(items => EnsureTimeseries(items, token)))
             {
-                if (e is TaskCanceledException) throw;
-                Log.Error(e, "Failed to push to CDF");
-                return false;
+                try
+                {
+                    await task;
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "Failed to ensure timeseries");
+                    nodeEnsuringFailures.Inc();
+                    return false;
+                }
             }
-            // This can be done in this thread, as the history read stuff is done in separate threads, so there should only be a single
-            // createSubscription service called here
+            trackedTimeseres.Inc(tsList.Count);
             Log.Information("Finish pushing nodes to CDF");
             return true;
         }
@@ -377,7 +419,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="assetList">List of assets to be tested</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        private async Task<bool> EnsureAssets(IEnumerable<BufferedNode> assetList, CancellationToken token)
+        private async Task EnsureAssets(IEnumerable<BufferedNode> assetList, CancellationToken token)
         {
             var assetIds = assetList.ToDictionary(node => UAClient.GetUniqueId(node.Id));
             // TODO: When v1 gets support for ExternalId on assets when associating timeseries, we can drop a lot of this.
@@ -407,90 +449,51 @@ namespace Cognite.OpcUa
                             missingAssetIds.Add(value.ToString());
                         }
                     }
+
                     Log.Information("Found {NumMissingAssets} missing assets", ex.Missing.Count());
                 }
-                else
-                {
-                    nodeEnsuringFailures.Inc();
-                    Log.Error(ex, "Failed to get assets");
-                    return false;
-                }
+                else throw;
             }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to get assets");
-                nodeEnsuringFailures.Inc();
-                return false;
-            }
-            if (missingAssetIds.Any())
-            {
-                Log.Information("Create {NumAssetsToCreate} new assets", missingAssetIds.Count);
 
-                var getMetaData = missingAssetIds.Select(id => assetIds[id]);
-                try
-                {
-                    await Extractor.ReadProperties(getMetaData, token);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e, "Failed to get node properties");
-                    nodeEnsuringFailures.Inc();
-                    return false;
-                }
-                var createAssets = missingAssetIds.Select(id => NodeToAsset(assetIds[id]));
-                try
-                {
-                    var writeResults = await client.Assets.CreateAsync(createAssets, token);
-                    foreach (var resultItem in writeResults)
-                    {
-                        nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Failed to create assets");
-                    nodeEnsuringFailures.Inc();
-                    return false;
-                }
-                var idsToMap = assetIds.Keys
-                    .Where(id => !missingAssetIds.Contains(id))
-                    .Select(Identity.ExternalId);
+            if (!missingAssetIds.Any()) return;
+            Log.Information("Create {NumAssetsToCreate} new assets", missingAssetIds.Count);
 
-                if (idsToMap.Any())
-                {
-                    Log.Information("Get remaining {NumFinalIdsToRetrieve} assetids", idsToMap.Count());
-                    try
-                    {
-                        var readResults = await client.Assets.GetByIdsAsync(idsToMap, token);
-                        foreach (var resultItem in readResults)
-                        {
-                            nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Log.Error(e, "Failed to get asset ids");
-                        nodeEnsuringFailures.Inc();
-                        return false;
-                    }
-                }
+            var getMetaData = missingAssetIds.Select(id => assetIds[id]);
+            await Extractor.ReadProperties(getMetaData, token);
+            
+            var createAssets = missingAssetIds.Select(id => NodeToAsset(assetIds[id]));
+
+            var writeResults = await client.Assets.CreateAsync(createAssets, token);
+            foreach (var resultItem in writeResults)
+            {
+                nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
             }
-            return true;
+            var idsToMap = assetIds.Keys
+                .Where(id => !missingAssetIds.Contains(id))
+                .Select(Identity.ExternalId);
+
+            if (!idsToMap.Any()) return;
+
+            Log.Information("Get remaining {NumFinalIdsToRetrieve} assetids", idsToMap.Count());
+            var remainingResults = await client.Assets.GetByIdsAsync(idsToMap, token);
+            foreach (var resultItem in remainingResults)
+            { 
+                nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
+            }
         }
         /// <summary>
         /// Test if given list of timeseries exists, then create any that do not, checking for properties.
         /// </summary>
         /// <param name="tsList">List of timeseries to be tested</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        private async Task<bool> EnsureTimeseries(IEnumerable<BufferedVariable> tsList, CancellationToken token)
+        private async Task EnsureTimeseries(IEnumerable<BufferedVariable> tsList, CancellationToken token)
         {
-            if (!tsList.Any()) return true;
+            if (!tsList.Any()) return;
             var tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
                 string externalId = UAClient.GetUniqueId(node.Id, node.Index);
                 tsIds.Add(externalId, node);
-                nodeIsHistorizing[externalId] = false;
                 if (node.Index == -1)
                 {
                     if (nodeToAssetIds.ContainsKey(node.ParentId))
@@ -511,6 +514,14 @@ namespace Cognite.OpcUa
             {
                 var readResults = await client.TimeSeries.GetByIdsAsync(tsIds.Keys.Select(Identity.ExternalId), token);
                 Log.Information("Found {NumRetrievedTimeseries} timeseries", readResults.Count());
+                foreach (var res in readResults)
+                {
+                    var state = Extractor.GetNodeState(res.ExternalId);
+                    if (state.DataType.IsString != res.IsString)
+                    {
+                        mismatchedTimeseries.Add(res.ExternalId);
+                    }
+                }
             }
             catch (ResponseException ex)
             {
@@ -525,38 +536,31 @@ namespace Cognite.OpcUa
                     }
                     Log.Information("Found {NumMissingTimeseries} missing timeseries", ex.Missing.Count());
                 }
-                else
-                {
-                    nodeEnsuringFailures.Inc();
-                    Log.Error(ex, "Failed to get timeseries");
-                    return false;
-                }
+                else throw;
             }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to get timeseries");
-                nodeEnsuringFailures.Inc();
-                return false;
-            }
-            if (missingTSIds.Any())
-            {
-                Log.Information("Create {NumTimeseriesToCreate} new timeseries", missingTSIds.Count);
 
-                var getMetaData = missingTSIds.Select(id => tsIds[id]);
-                await Extractor.ReadProperties(getMetaData, token);
-                var createTimeseries = getMetaData.Select(VariableToTimeseries);
-                try
+            if (!missingTSIds.Any()) return;
+
+            Log.Information("Create {NumTimeseriesToCreate} new timeseries", missingTSIds.Count);
+
+            var getMetaData = missingTSIds.Select(id => tsIds[id]);
+
+            await Extractor.ReadProperties(getMetaData, token);
+
+            var createTimeseries = getMetaData.Select(VariableToTimeseries);
+            await client.TimeSeries.CreateAsync(createTimeseries, token);
+
+            var remaining = tsIds.Keys.Except(missingTSIds);
+            var remainingResults = await client.TimeSeries.GetByIdsAsync(remaining.Select(Identity.ExternalId), token);
+
+            foreach (var res in remainingResults)
+            {
+                var state = Extractor.GetNodeState(res.ExternalId);
+                if (state.DataType.IsString != res.IsString)
                 {
-                    await client.TimeSeries.CreateAsync(createTimeseries, token);
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e, "Failed to create TS");
-                    nodeEnsuringFailures.Inc();
-                    return false;
+                    mismatchedTimeseries.Add(res.ExternalId);
                 }
             }
-            return true;
         }
         /// <summary>
         /// Create timeseries poco to create this node in CDF

@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -257,6 +258,51 @@ namespace Test
                 if (!Common.TestRunResult(e)) throw;
             }
             extractor.Close();
+        }
+        [InlineData(20000, 100, 20, 1000, 100000)]
+        [InlineData(200, 10000, 20, 10, 100000)]
+        [InlineData(20000, 5, 2, 10000, 50000)]
+        [Trait("Category", "DictChunk")]
+        [Theory]
+        public void TestDictionaryChunking(int timeseries, int datapoints, int expChunks, int expTimeseriesMax, int expDatapointsMax)
+        {
+            var dict = new Dictionary<string, List<BufferedDataPoint>>();
+            for (int i = 0; i < timeseries; i++)
+            {
+                var points = new List<BufferedDataPoint>();
+                for (int j = 0; j < datapoints; j++)
+                {
+                    points.Add(new BufferedDataPoint(DateTime.MinValue, "id" + i, i*datapoints + j));
+                }
+
+                dict["id" + i] = points;
+            }
+            var results = Utils.ChunkDictOfLists(dict, 100000, 10000);
+            var min = results.Min(dct => dct.Values.Min(val => val.Count()));
+            Assert.True(min > 0);
+            var max = results.Max(dct => dct.Values.Sum(val => val.Count()));
+            var maxTs = results.Max(dct => dct.Values.Count);
+            Assert.Equal(expDatapointsMax, max);
+            Assert.Equal(expTimeseriesMax, maxTs);
+            Assert.Equal(expChunks, results.Count());
+            var total = results.Sum(dct => dct.Values.Sum(val => val.Count()));
+            var totalTs = results.Sum(dct => dct.Values.Count);
+            Assert.Equal(timeseries, totalTs);
+            Assert.Equal(datapoints * timeseries, total);
+
+            var exists = new bool[timeseries * datapoints];
+            foreach (var dct in results)
+            {
+                foreach (var kvp in dct)
+                {
+                    foreach (var dp in kvp.Value)
+                    {
+                        exists[(int) dp.DoubleValue] = true;
+                    }
+                }
+            }
+            Assert.True(exists.All(val => val));
+
         }
     }
 }

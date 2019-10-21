@@ -47,26 +47,24 @@ namespace Cognite.OpcUa
 
             if (logToStackdriver)
             {
-                using (StreamReader r = new StreamReader(config.StackdriverCredentials))
-                {
-                    string json = r.ReadToEnd();
-                    var jsonObj = JsonConvert.DeserializeObject<GpcCredentials>(json);
+                using StreamReader r = new StreamReader(config.StackdriverCredentials);
+                string json = r.ReadToEnd();
+                var jsonObj = JsonConvert.DeserializeObject<GpcCredentials>(json);
 
-                    var resourceLabels = new Dictionary<string, string>
+                var resourceLabels = new Dictionary<string, string>
                     {
                         { "email_id", jsonObj.ClientEmail },
                         { "unique_id", jsonObj.ClientId }
                     };
 
-                    var gcConfig = new GoogleCloudLoggingSinkOptions(
-                        jsonObj.ProjectId,
-                        jsonObj.ResourceType,
-                        config.StackdriverLogName,
-                        resourceLabels: resourceLabels,
-                        useJsonOutput: true,
-                        googleCredentialJson: json);
-                    logConfig.WriteTo.GoogleCloudLogging(gcConfig);
-                }
+                var gcConfig = new GoogleCloudLoggingSinkOptions(
+                    jsonObj.ProjectId,
+                    jsonObj.ResourceType,
+                    config.StackdriverLogName,
+                    resourceLabels: resourceLabels,
+                    useJsonOutput: true,
+                    googleCredentialJson: json);
+                logConfig.WriteTo.GoogleCloudLogging(gcConfig);
             }
 
             logger = logConfig.CreateLogger();

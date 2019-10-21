@@ -48,14 +48,14 @@ namespace Cognite.OpcUa
                 foreach (var dp in dataPoints)
                 {
                     if (token.IsCancellationRequested) return;
-                    if (nodeIsHistorizing?[dp.Id] ?? false) continue;
+                    if (nodeIsHistorizing?[dp.Id] ?? dp.IsString) continue;
                     count++;
-                    BufferFileEmpty = false;
                     byte[] bytes = dp.ToStorableBytes();
                     fs.Write(bytes, 0, bytes.Length);
                 }
                 if (count > 0)
                 {
+                    BufferFileEmpty = false;
                     Log.Information("Write {NumDatapointsToPersist} datapoints to file", count);
                 }
             }
@@ -85,7 +85,7 @@ namespace Cognite.OpcUa
                         var buffDp = new BufferedDataPoint(dataBytes);
                         if (buffDp.Id == null || (!nodeIsHistorizing?.ContainsKey(buffDp.Id) ?? false))
                         {
-                            Log.Warning("Bad datapoint in file");
+                            Log.Warning($"Invalid datapoint in buffer file {config.BufferFile}: {buffDp.Id}");
                             continue;
                         }
                         count++;
@@ -95,7 +95,7 @@ namespace Cognite.OpcUa
                 }
                 Log.Information("Read {NumDatapointsToRead} points from file", count);
                 File.Create(config.BufferFile).Close();
-                BufferFileEmpty |= new FileInfo(config.BufferFile).Length == 0;
+                BufferFileEmpty |= count > 0 && new FileInfo(config.BufferFile).Length == 0;
             }
         }
         /// <summary>
@@ -109,6 +109,72 @@ namespace Cognite.OpcUa
                 using FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Write);
                 fs.Write(BitConverter.GetBytes(date.ToBinary()));
             }
+        }
+        public static IEnumerable<IDictionary<TKey, IEnumerable<TVal>>> ChunkDictOfLists<TKey, TVal>(
+            IDictionary<TKey, List<TVal>> points, int maxPerList, int maxKeys)
+        {
+            var ret = new List<Dictionary<TKey, IEnumerable<TVal>>>();
+            var current = new Dictionary<TKey, IEnumerable<TVal>>();
+            int count = 0;
+            int keyCount = 0;
+
+            foreach (var (key, value) in points)
+            {
+                if (!value.Any())
+                    continue;
+
+                if (keyCount >= maxKeys)
+                {
+                    ret.Add(current);
+                    current = new Dictionary<TKey, IEnumerable<TVal>>();
+                    count = 0;
+                    keyCount = 0;
+                }
+
+                int pcount = value.Count;
+                if (count + pcount <= maxPerList)
+                {
+                    current[key] = value;
+                    count += pcount;
+                    keyCount++;
+                    continue;
+                }
+
+                // fill up the current batch to max_datapoints data points and keep the remaining data points in current.
+                var inCurrent = value.Take(Math.Min(maxPerList - count, pcount)).ToList();
+                if (inCurrent.Count > 0)
+                {
+                    current[key] = inCurrent;
+                }
+                ret.Add(current);
+
+                // inNext can have too many datapoints
+                var inNext = value.Skip(inCurrent.Count);
+                if (inNext.Any())
+                {
+                    var chunks = ChunkBy(inNext, maxPerList).Select(chunk => new Dictionary<TKey, IEnumerable<TVal>> { { key, chunk } });
+                    if (chunks.Count() > 1)
+                    {
+                        ret.AddRange(chunks.Take(chunks.Count() - 1));
+                    }
+                    current = chunks.Last();
+                    keyCount = 1;
+                    count = current[key].Count();
+                }
+                else
+                {
+                    current = new Dictionary<TKey, IEnumerable<TVal>>();
+                    count = 0;
+                    keyCount = 0;
+                }
+            }
+
+            if (current.Any())
+            {
+                ret.Add(current);
+            }
+
+            return ret;
         }
         /// <summary>
         /// Read latest event timestamp from file.

@@ -45,7 +45,9 @@ namespace Cognite.OpcUa
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
 
-        public ConcurrentDictionary<NodeId, NodeExtractionState> NodeStates { get; } = new ConcurrentDictionary<NodeId, NodeExtractionState>();
+        private readonly ConcurrentDictionary<NodeId, NodeExtractionState> nodeStates = new ConcurrentDictionary<NodeId, NodeExtractionState>();
+
+        private readonly ConcurrentDictionary<string, NodeExtractionState> nodeStatesByExtId = new ConcurrentDictionary<string, NodeExtractionState>();
         public ConcurrentDictionary<NodeId, EventExtractionState> EventEmitterStates { get; } = new ConcurrentDictionary<NodeId, EventExtractionState>();
 
         private readonly ConcurrentQueue<Task> pendingOperations = new ConcurrentQueue<Task>();
@@ -286,6 +288,16 @@ namespace Cognite.OpcUa
                     || config.Extraction.MaxArraySize > 0 && node.ArrayDimensions != null && node.ArrayDimensions.Length == 1
                     && node.ArrayDimensions[0] > 0 && node.ArrayDimensions[0] <= config.Extraction.MaxArraySize);
         }
+
+        public NodeExtractionState GetNodeState(string externalId)
+        {
+            return nodeStatesByExtId.GetValueOrDefault(externalId);
+        }
+
+        public NodeExtractionState GetNodeState(NodeId id)
+        {
+            return nodeStates.GetValueOrDefault(id);
+        }
         #endregion
         #region Mapping
         /// <summary>
@@ -398,17 +410,19 @@ namespace Cognite.OpcUa
                 if (AllowTSMap(node))
                 {
                     variables.Add(node);
-                    NodeStates[node.Id] = new NodeExtractionState(node);
+                    nodeStates[node.Id] = new NodeExtractionState(node);
                     if (node.ArrayDimensions != null && node.ArrayDimensions.Length > 0 && node.ArrayDimensions[0] > 0)
                     {
                         for (int i = 0; i < node.ArrayDimensions[0]; i++)
                         {
                             timeseries.Add(new BufferedVariable(node, i));
+                            nodeStatesByExtId[uaClient.GetUniqueId(node.Id, i)] = nodeStates[node.Id];
                         }
                         objects.Add(node);
                     }
                     else
                     {
+                        nodeStatesByExtId[uaClient.GetUniqueId(node.Id)] = nodeStates[node.Id];
                         timeseries.Add(node);
                     }
                 }
@@ -428,7 +442,7 @@ namespace Cognite.OpcUa
             var statesToSync = timeseries
                 .Select(ts => ts.Id)
                 .Distinct()
-                .Select(id => NodeStates[id])
+                .Select(id => nodeStates[id])
                 .Where(state => state.Historizing);
 
             var getLatestPushes = pushers.Select(pusher => pusher.InitLatestTimestamps(statesToSync, token));
@@ -443,7 +457,7 @@ namespace Cognite.OpcUa
         /// <returns>Two tasks, one for data and one for events</returns>
         private IEnumerable<Task> SynchronizeNodes(IEnumerable<BufferedVariable> variables, IEnumerable<BufferedNode> objects, CancellationToken token)
         {
-            var states = variables.Select(ts => ts.Id).Distinct().Select(id => NodeStates[id]);
+            var states = variables.Select(ts => ts.Id).Distinct().Select(id => nodeStates[id]);
 
             Log.Information("Synchronize {NumNodesToSynch} nodes", variables.Count());
             var tasks = new List<Task>();
@@ -451,7 +465,7 @@ namespace Cognite.OpcUa
             if (states.Any())
             {
                 tasks.Add(Task.Run(() => uaClient.SubscribeToNodes(states, SubscriptionHandler, token)).ContinueWith(_ =>
-                    uaClient.HistoryReadData(NodeStates.Values.Where(state => state.Historizing), HistoryDataHandler, token)));
+                    uaClient.HistoryReadData(nodeStates.Values.Where(state => state.Historizing), HistoryDataHandler, token)));
             }
             if (EventEmitterStates.Any())
             {
@@ -474,10 +488,10 @@ namespace Cognite.OpcUa
             if (!objects.Any() && !timeseries.Any() && !variables.Any())
             {
                 Log.Information("Mapping resulted in no new nodes");
-                return new Task[0];
+                return Array.Empty<Task>();
             }
 
-            pushData = NodeStates.Any();
+            pushData = nodeStates.Any();
 
             await PushNodes(objects, timeseries, token);
 
@@ -533,8 +547,9 @@ namespace Cognite.OpcUa
                 var ret = new List<BufferedDataPoint>();
                 if (!(value.Value is Array))
                 {
-                    Log.Warning("Bad datapoint on variable {BadPointName}, {BadPointValue}", uniqueId, value.Value.ToString());
-                    return new BufferedDataPoint[0];
+                    // TODO: metrics
+                    Log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
+                    return Enumerable.Empty<BufferedDataPoint>();
                 }
                 var values = (Array)value.Value;
                 for (int i = 0; i < Math.Min(variable.ArrayDimensions[0], values.Length); i++)
@@ -581,7 +596,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    return new BufferedDataPoint[0];
+                    return Array.Empty<BufferedDataPoint>();
                 }
             }
             return new[] { sdp };
@@ -593,13 +608,17 @@ namespace Cognite.OpcUa
         private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
             string uniqueId = uaClient.GetUniqueId(item.ResolvedNodeId);
-            var node = NodeStates[item.ResolvedNodeId];
+            var node = nodeStates[item.ResolvedNodeId];
 
             foreach (var datapoint in item.DequeueValues())
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Log.Warning("Bad datapoint: {BadDatapointExternalId}", uniqueId);
+                    // TODO: metrics
+                    // Could still use this timestamp for UpdateFromStream below!? It is a valid sensor timestamp, it is just the value that is bad.
+                    // A data point is bad if e.g. the sensor is faulty. We want a way to store this
+                    // information in CDF. For now, we must ignore it.
+                    Log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                     continue;
                 }
                 var buffDps = ToDataPoint(datapoint, node, uniqueId);
@@ -725,7 +744,7 @@ namespace Cognite.OpcUa
                 return 0;
             }
             if (data.DataValues == null) return 0;
-            var nodeState = NodeStates[nodeid];
+            var nodeState = nodeStates[nodeid];
 
             string uniqueId = uaClient.GetUniqueId(nodeid);
 
@@ -736,7 +755,8 @@ namespace Cognite.OpcUa
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Log.Warning("Bad datapoint: {BadDatapointExternalId}", uniqueId);
+                    // TODO: metrics
+                    Log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                     continue;
                 }
                 var buffDps = ToDataPoint(datapoint, nodeState, uniqueId);
@@ -820,6 +840,7 @@ namespace Cognite.OpcUa
             }
             return cnt;
         }
+
         #endregion
     }
 }

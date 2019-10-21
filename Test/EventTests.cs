@@ -58,22 +58,23 @@ namespace Test
             }
             Assert.True(historyReadDone);
             await Task.Delay(1000);
-            Assert.True(handler.events.Values.Any());
-            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("prop "));
-            Assert.Contains(handler.events.Values, ev => ev.description == "prop 0");
-            Assert.Contains(handler.events.Values, ev => ev.description == "basicPass 0");
-            Assert.Contains(handler.events.Values, ev => ev.description == "basicPassSource 0");
-            Assert.Contains(handler.events.Values, ev => ev.description == "basicVarSource 0");
-            Assert.Contains(handler.events.Values, ev => ev.description == "mappedType 0");
+            var events = handler.events.Values.ToList();
+            Assert.True(events.Any());
+            Assert.Contains(events, ev => ev.description.StartsWith("prop "));
+            Assert.Contains(events, ev => ev.description == "prop 0");
+            Assert.Contains(events, ev => ev.description == "basicPass 0");
+            Assert.Contains(events, ev => ev.description == "basicPassSource 0");
+            Assert.Contains(events, ev => ev.description == "basicVarSource 0");
+            Assert.Contains(events, ev => ev.description == "mappedType 0");
 
-            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("propOther "));
-            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("basicPass "));
-            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("basicPassSource "));
-            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("basicPassSource2 "));
-            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("basicVarSource "));
-            Assert.Contains(handler.events.Values, ev => ev.description.StartsWith("mappedType "));
+            Assert.Contains(events, ev => ev.description.StartsWith("propOther "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicPass "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource2 "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicVarSource "));
+            Assert.Contains(events, ev => ev.description.StartsWith("mappedType "));
 
-            foreach (var ev in handler.events.Values)
+            foreach (var ev in events)
             {
                 TestEvent(ev, handler);
             }
