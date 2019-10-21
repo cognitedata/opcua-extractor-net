@@ -71,6 +71,10 @@ namespace Test
             {
                 fullConfig.Source.EndpointURL = "opc.tcp://localhost:4843";
             }
+            else if (serverType == "audit")
+            {
+                fullConfig.Source.EndpointURL = "opc.tcp://localhost:4844";
+            }
             return fullConfig;
         }
         public static bool TestRunResult(Exception e)

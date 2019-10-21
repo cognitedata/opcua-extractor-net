@@ -22,6 +22,10 @@ Extraction:
     # Global prefix for externalId. Should be unique to prevent name conflicts.
     IdPrefix: "gp."
   
+    # Specify specific DisplayNames to ignore.
+    IgnoreNamePrefix:
+        - EXCLUDE
+
     NamespaceMap:
         # Map OPC-UA namespaces to prefixes in CDF. 
         # Ex: "urn:cognite:net:server": cns
