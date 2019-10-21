@@ -42,7 +42,6 @@ namespace Cognite.OpcUa
         private readonly IServiceProvider clientProvider;
         private readonly CogniteClientConfig config;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
-        private readonly IDictionary<string, NodeId> externalIdToNodeId = new Dictionary<string, NodeId>(); 
         
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
@@ -106,8 +105,7 @@ namespace Cognite.OpcUa
                 {
                     // TODO: metrics on skipped points
                     // Skip points which have an invalid timestamp, or which have incorrect data type
-                    if (buffer.Timestamp <= DateTime.MinValue
-                        || Extractor.NodeStates[externalIdToNodeId[buffer.Id]].DataType.IsString != buffer.IsString) continue;
+                    if (buffer.Timestamp <= DateTime.MinValue || (Extractor.GetNodeState(buffer.Id)?.DataType.IsString ?? false)) continue;
                     count++;
                     if (!dataPointList.ContainsKey(buffer.Id))
                     {
@@ -192,7 +190,7 @@ namespace Cognite.OpcUa
                 try
                 {
                     Utils.WriteBufferToFile(dataPointList.Values.SelectMany(val => val).ToList(), config, token, 
-                        dataPointList.ToDictionary(dp => dp.Key, dp => Extractor.NodeStates[externalIdToNodeId[dp.Key]].Historizing));
+                        dataPointList.ToDictionary(dp => dp.Key, dp => Extractor.GetNodeState(dp.Key).Historizing));
                 }
                 catch (Exception ex)
                 {
@@ -203,7 +201,7 @@ namespace Cognite.OpcUa
             if (config.BufferOnFailure && !Utils.BufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
             {
                 Utils.ReadBufferFromFile(BufferedDPQueue, config, token, 
-                    dataPointList.ToDictionary(dp => dp.Key, dp => Extractor.NodeStates[externalIdToNodeId[dp.Key]].Historizing));
+                    dataPointList.ToDictionary(dp => dp.Key, dp => Extractor.GetNodeState(dp.Key).Historizing));
             }
             dataPointPushes.Inc();
             dataPointsCounter.Inc(count);
@@ -524,7 +522,6 @@ namespace Cognite.OpcUa
             {
                 string externalId = UAClient.GetUniqueId(node.Id, node.Index);
                 tsIds.Add(externalId, node);
-                externalIdToNodeId[externalId] = node.Id;
                 if (node.Index == -1)
                 {
                     if (nodeToAssetIds.ContainsKey(node.ParentId))
