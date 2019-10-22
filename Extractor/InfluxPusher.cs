@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel.Design.Serialization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
+using Opc.Ua;
 using Serilog;
+using Thoth.Json.Net;
 
 namespace Cognite.OpcUa
 {
@@ -45,22 +48,64 @@ namespace Cognite.OpcUa
                     dataPointList.Add(buffer);
                 }
             }
-            var tasks = Utils.ChunkBy(dataPointList, config.PointChunkSize).Select(async points =>
+
+            var groups = dataPointList.GroupBy(point => point.Id);
+
+            var points = new List<IInfluxDatapoint>();
+
+            foreach (var group in groups)
             {
-                var influxPoints = dataPointList.Select(point =>
+                var ts = Extractor.GetNodeState(group.Key);
+                if (ts == null) continue;
+                foreach (var dp in group)
                 {
-                    var dp = new InfluxDatapoint<double>
+                    if (ts.DataType.IsString)
                     {
-                        UtcTimestamp = point.Timestamp,
-                        MeasurementName = point.Id,
-                    };
-                    dp.Fields.Add("value", point.DoubleValue);
-                    return dp;
-                });
-                Log.Information("Push {NumInfluxPointsToPush} points to InfluxDB", points.Count());
-                await client.PostPointsAsync(config.Database, influxPoints, 10000);
-            });
-            await Task.WhenAll(tasks);
+                        var idp = new InfluxDatapoint<string>
+                        {
+                            UtcTimestamp = dp.Timestamp,
+                            MeasurementName = dp.Id
+                        };
+                        idp.Fields.Add("value", dp.StringValue);
+                        points.Add(idp);
+                    }
+                    else if (ts.DataType.Identifier == DataTypes.Boolean)
+                    {
+                        var idp = new InfluxDatapoint<bool>
+                        {
+                            UtcTimestamp = dp.Timestamp,
+                            MeasurementName = dp.Id
+                        };
+                        idp.Fields.Add("value", Math.Abs(dp.DoubleValue) < 0);
+                        points.Add(idp);
+
+                    }
+                    else if (ts.DataType.Identifier < DataTypes.Float
+                             || ts.DataType.Identifier == DataTypes.Integer
+                             || ts.DataType.Identifier == DataTypes.UInteger)
+                    {
+                        var idp = new InfluxDatapoint<long>
+                        {
+                            UtcTimestamp = dp.Timestamp,
+                            MeasurementName = dp.Id
+                        };
+                        idp.Fields.Add("value", (long)dp.DoubleValue);
+                        points.Add(idp);
+                    }
+                    else
+                    {
+                        var idp = new InfluxDatapoint<double>
+                        {
+                            UtcTimestamp = dp.Timestamp,
+                            MeasurementName = dp.Id
+                        };
+                        idp.Fields.Add("value", dp.DoubleValue);
+                        points.Add(idp);
+                    }
+                }
+            }
+
+            await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
         }
         /// <summary>
         /// Reads the last datapoint from influx for each timeseries, sending the timestamp to each passed state

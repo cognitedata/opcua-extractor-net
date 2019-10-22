@@ -104,7 +104,8 @@ namespace Cognite.OpcUa
             if (rawDataType.IdType == IdType.Numeric)
             {
                 Identifier = (uint)rawDataType.Identifier;
-                IsString = Identifier < DataTypes.Boolean || Identifier > DataTypes.Double;
+                IsString = (Identifier < DataTypes.Boolean || Identifier > DataTypes.Double)
+                           && Identifier != DataTypes.Integer && Identifier != DataTypes.UInteger;
                 IsStep = Identifier == DataTypes.Boolean;
             }
             else

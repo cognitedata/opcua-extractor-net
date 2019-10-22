@@ -45,6 +45,9 @@ if __name__ == "__main__":
     myobj.add_property(idx, "Asset prop 2", ua.Variant(123.21, ua.VariantType.Double))
 
     mybool = myobj.add_variable(idx, "MyVariable bool", ua.Variant(False, ua.VariantType.Boolean))
+    mybool.set_writable()
+    myint = myobj.add_variable(idx, "MyVariable int", ua.Variant(0, ua.VariantType.Int64))
+    myint.set_writable()
     # Configure server to use sqlite as history database (default is a simple memory dict)
     server.iserver.history_manager.set_storage(HistorySQLite("my_datavalue_history.sql"))
 
@@ -65,7 +68,8 @@ if __name__ == "__main__":
             bcount += 1
             myvar.set_value(math.sin(count))
             myvar2.set_value(math.cos(count))
-            if (bcount % 10 == 0):
+            myint.set_value(bcount);
+            if (bcount % 5 == 0):
                 mybool.set_value(not mybool.get_value())
                 
 
