@@ -42,11 +42,9 @@ namespace Cognite.OpcUa
             int count = 0;
             while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer))
             {
-                if (buffer.Timestamp > DateTime.MinValue && !buffer.IsString)
-                {
-                    count++;
-                    dataPointList.Add(buffer);
-                }
+                if (buffer.Timestamp <= DateTime.MinValue) continue;
+                count++;
+                dataPointList.Add(buffer);
             }
 
             var groups = dataPointList.GroupBy(point => point.Id);
@@ -76,7 +74,7 @@ namespace Cognite.OpcUa
                             UtcTimestamp = dp.Timestamp,
                             MeasurementName = dp.Id
                         };
-                        idp.Fields.Add("value", Math.Abs(dp.DoubleValue) < 0);
+                        idp.Fields.Add("value", Math.Abs(dp.DoubleValue) < 0.1);
                         points.Add(idp);
 
                     }
@@ -104,7 +102,7 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-
+            Log.Information("Push {cnt} datapoints to influxdb", points.Count);
             await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
         }
         /// <summary>
@@ -117,7 +115,7 @@ namespace Cognite.OpcUa
             var getLastTasks = states.Select(async state =>
             {
                 var values = await client.QueryMultiSeriesAsync(config.Database,
-                    $"SELECT last(value) FROM \"{UAClient.GetUniqueId(state.Id, state.ArrayDimensions != null && state.ArrayDimensions[0] > 0 ? 0 : -1)}\"");
+                    $"SELECT last(value) FROM \"{UAClient.GetUniqueId(state.Id, state.ArrayDimensions != null && state.ArrayDimensions.Length > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1)}\"");
                 if (values.Any() && values.First().HasEntries)
                 {
                     DateTime timestamp = values.First().Entries[0].Time;

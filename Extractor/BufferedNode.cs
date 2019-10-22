@@ -307,7 +307,8 @@ namespace Cognite.OpcUa
         }
         public string ToDebugDescription()
         {
-            return $"Update timeseries {Id} to {(IsString ? StringValue : DoubleValue.ToString(CultureInfo.InvariantCulture))} at {Timestamp.ToString(CultureInfo.InvariantCulture)}";
+            return $"Update timeseries {Id} to {(IsString ? "\"" + StringValue + "\"" : DoubleValue.ToString(CultureInfo.InvariantCulture))}" +
+                   $" at {Timestamp.ToString(CultureInfo.InvariantCulture)}";
         }
     }
     /// <summary>

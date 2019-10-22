@@ -108,8 +108,10 @@ namespace Cognite.OpcUa
                 {
                     // TODO: metrics on skipped points
                     // Skip points which have an invalid timestamp, or which have incorrect data type
-                    if (buffer.Timestamp <= DateTime.MinValue || (Extractor.GetNodeState(buffer.Id)?.DataType.IsString ?? false)
-                        || mismatchedTimeseries.Contains(buffer.Id)) continue;
+                    if (buffer.Timestamp <= DateTime.MinValue || mismatchedTimeseries.Contains(buffer.Id))
+                    {
+                        continue;
+                    }
 
                     count++;
                     if (!dataPointList.ContainsKey(buffer.Id))
@@ -367,12 +369,12 @@ namespace Cognite.OpcUa
             var client = GetClient();
             var points = ids.Select<string, (Identity, string)>(id => (Identity.ExternalId(id), null));
             Log.Information("Get latest timestamp for {num} nodes from CDF", ids.Count());
+            if (!ids.Any()) return;
             var dps = await client.DataPoints.GetLatestAsync(points, token);
             foreach (var dp in dps)
             {
                 if (dp.NumericDataPoints.Any())
                 {
-                    
                     Extractor.GetNodeState(dp.ExternalId)?
                         .InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDataPoints.First().TimeStamp).DateTime);
                 }
@@ -399,7 +401,7 @@ namespace Cognite.OpcUa
             var ids = new List<string>();
             foreach (var state in states)
             {
-                if (state.ArrayDimensions != null && state.ArrayDimensions[0] > 0)
+                if (state.ArrayDimensions != null && state.ArrayDimensions.Length > 0 && state.ArrayDimensions[0] > 0)
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
@@ -435,6 +437,7 @@ namespace Cognite.OpcUa
         /// <returns>True if no operation failed unexpectedly</returns>
         private async Task EnsureAssets(IEnumerable<BufferedNode> assetList, CancellationToken token)
         {
+            if (!assetList.Any()) return;
             var assetIds = assetList.ToDictionary(node => UAClient.GetUniqueId(node.Id));
             ISet<string> missingAssetIds = new HashSet<string>();
 
@@ -518,7 +521,6 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-
             Log.Information("Test {NumTimeseriesToTest} timeseries", tsIds.Count);
             var missingTSIds = new HashSet<string>();
             var client = GetClient();
@@ -563,6 +565,7 @@ namespace Cognite.OpcUa
             await client.TimeSeries.CreateAsync(createTimeseries, token);
 
             var remaining = tsIds.Keys.Except(missingTSIds);
+            if (!remaining.Any()) return;
             var remainingResults = await client.TimeSeries.GetByIdsAsync(remaining.Select(Identity.ExternalId), token);
 
             foreach (var res in remainingResults)
