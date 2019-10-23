@@ -54,7 +54,6 @@ namespace Test
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             var handler = new CDFMockHandler(config.Project, mode);
             var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
-
             var extractor = new Extractor(fullConfig, pusher, client);
             try
             {

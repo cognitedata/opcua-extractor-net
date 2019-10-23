@@ -104,7 +104,8 @@ namespace Cognite.OpcUa
             if (rawDataType.IdType == IdType.Numeric)
             {
                 Identifier = (uint)rawDataType.Identifier;
-                IsString = Identifier < DataTypes.Boolean || Identifier > DataTypes.Double;
+                IsString = (Identifier < DataTypes.Boolean || Identifier > DataTypes.Double)
+                           && Identifier != DataTypes.Integer && Identifier != DataTypes.UInteger;
                 IsStep = Identifier == DataTypes.Boolean;
             }
             else
@@ -306,7 +307,8 @@ namespace Cognite.OpcUa
         }
         public string ToDebugDescription()
         {
-            return $"Update timeseries {Id} to {(IsString ? StringValue : DoubleValue.ToString(CultureInfo.InvariantCulture))} at {Timestamp.ToString(CultureInfo.InvariantCulture)}";
+            return $"Update timeseries {Id} to {(IsString ? "\"" + StringValue + "\"" : DoubleValue.ToString(CultureInfo.InvariantCulture))}" +
+                   $" at {Timestamp.ToString(CultureInfo.InvariantCulture)}";
         }
     }
     /// <summary>
