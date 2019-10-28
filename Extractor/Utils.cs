@@ -248,7 +248,7 @@ namespace Cognite.OpcUa
             HistoryReadEvents, ReadRootNode, DefaultOperation
         }
 
-        private static SilentServiceException GetRootSilentException(AggregateException aex)
+        public static SilentServiceException GetRootSilentException(AggregateException aex)
         {
             if (aex.InnerException is SilentServiceException silent)
             {

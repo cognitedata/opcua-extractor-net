@@ -75,10 +75,6 @@ namespace Test
         public async Task TestAutoBuffering()
         {
             var fullConfig = Common.BuildConfig("basic", 4);
-            if (fullConfig == null)
-            {
-                throw new Exception("No config");
-            }
             Logger.Configure(fullConfig.Logging);
             var client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
