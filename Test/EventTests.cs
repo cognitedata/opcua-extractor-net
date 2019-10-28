@@ -59,7 +59,6 @@ namespace Test
                 await Task.Delay(1000);
             }
             Assert.True(historyReadDone);
-            await Task.Delay(1000);
             var events = handler.events.Values.ToList();
             Assert.True(events.Any());
             Assert.Contains(events, ev => ev.description.StartsWith("prop "));
@@ -68,6 +67,18 @@ namespace Test
             Assert.Contains(events, ev => ev.description == "basicPassSource 0");
             Assert.Contains(events, ev => ev.description == "basicVarSource 0");
             Assert.Contains(events, ev => ev.description == "mappedType 0");
+
+            for (int i = 0; i < 10; i++)
+            {
+                events = handler.events.Values.ToList();
+                if (events.Any(ev => ev.description.StartsWith("propOther "))
+                    && events.Any(ev => ev.description.StartsWith("basicPass "))
+                    && events.Any(ev => ev.description.StartsWith("basicPassSource "))
+                    && events.Any(ev => ev.description.StartsWith("basicPassSource2 ")) 
+                    && events.Any(ev => ev.description.StartsWith("basicVarSource "))
+                    && events.Any(ev => ev.description.StartsWith("mappedType "))) break;
+                await Task.Delay(1000);
+            }
 
             Assert.Contains(events, ev => ev.description.StartsWith("propOther "));
             Assert.Contains(events, ev => ev.description.StartsWith("basicPass "));

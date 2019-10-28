@@ -1015,7 +1015,9 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             if (!nodeList.Any()) return;
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "DataChangeListener") ?? new Subscription(session.DefaultSubscription)
+
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("DataChangeListener"))
+                               ?? new Subscription(session.DefaultSubscription)
             {
                 PublishingInterval = config.PollingInterval,
                 DisplayName = "DataChangeListener"
@@ -1044,7 +1046,7 @@ namespace Cognite.OpcUa
                     })
                 );
 
-                Log.Information("Add {NumAddedSubscriptions} subscriptions", chunk.Count());
+                Log.Information("Add subscriptions for {numnodes} nodes", chunk.Count());
                 lock (subscriptionLock)
                 {
                     IncOperations();
@@ -1100,7 +1102,8 @@ namespace Cognite.OpcUa
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "EventListener") ?? new Subscription(session.DefaultSubscription)
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("EventListener"))
+                               ?? new Subscription(session.DefaultSubscription)
             {
                 PublishingInterval = config.PollingInterval,
                 DisplayName = "EventListener"
@@ -1321,7 +1324,8 @@ namespace Cognite.OpcUa
         public void SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback)
         {
             var filter = BuildAuditFilter();
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "AuditListener") ?? new Subscription(session.DefaultSubscription)
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener"))
+                               ?? new Subscription(session.DefaultSubscription)
             {
                 PublishingInterval = config.PollingInterval,
                 DisplayName = "AuditListener"
@@ -1341,7 +1345,7 @@ namespace Cognite.OpcUa
                 IncOperations();
                 try
                 {
-                    if (subscription.Created)
+                    if (subscription.Created && subscription.MonitoredItemCount == 0)
                     { 
                         subscription.CreateItems();
                     }

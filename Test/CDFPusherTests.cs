@@ -81,6 +81,7 @@ namespace Test
             var client = new UAClient(fullConfig);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            handler.StoreDatapoints = true;
             var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
 
             var extractor = new Extractor(fullConfig, pusher, client);
@@ -97,8 +98,10 @@ namespace Test
                     gotData = true;
                     break;
                 }
-                Thread.Sleep(500);
+                await Task.Delay(500);
             }
+
+            await Task.Delay(1000);
             Assert.True(gotData, "Some data must be written");
             handler.AllowPush = true;
             gotData = false;
@@ -109,7 +112,7 @@ namespace Test
                     gotData = true;
                     break;
                 }
-                Thread.Sleep(500);
+                await Task.Delay(500);
             }
             Assert.True(gotData, $"Expecting file to be emptied, but it contained {new FileInfo(config.BufferFile).Length} bytes of data");
             source.Cancel();
