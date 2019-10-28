@@ -43,6 +43,9 @@ namespace Test
 
             var extractor = new Extractor(fullConfig, pusher, client);
             using var source = new CancellationTokenSource();
+
+            Assert.True(await pusher.TestConnection(source.Token));
+
             var runTask = extractor.RunExtractor(source.Token);
             var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
             bool gotData = false;

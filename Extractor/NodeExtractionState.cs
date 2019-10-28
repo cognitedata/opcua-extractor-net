@@ -236,7 +236,7 @@ namespace Cognite.OpcUa
         public IEnumerable<BufferedEvent> FlushBuffer()
         {
             if (!IsStreaming) throw new Exception("Flush non-streaming buffer");
-            if (!buffer.Any()) new List<BufferedDataPoint[]>();
+            if (!buffer.Any()) return new List<BufferedEvent>();
             lock (lastMutex)
             {
                 var result = buffer.Where(evt => evt.ReceivedTime > DestLatestTimestamp);

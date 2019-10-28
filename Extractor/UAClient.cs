@@ -24,7 +24,6 @@ using Opc.Ua.Configuration;
 using System.Linq;
 using Prometheus.Client;
 using System.Threading;
-using Microsoft.VisualBasic.CompilerServices;
 using Serilog;
 
 namespace Cognite.OpcUa
@@ -37,7 +36,7 @@ namespace Cognite.OpcUa
         private readonly UAClientConfig config;
         private readonly ExtractionConfig extractionConfig;
         private readonly EventConfig eventConfig;
-        public Session session;
+        private Session session;
         private SessionReconnectHandler reconnectHandler;
         public Extractor Extractor { get; set; }
         private readonly object visitedNodesLock = new object();
@@ -111,7 +110,10 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task StartSession()
         {
-            visitedNodes.Clear();
+            lock (visitedNodesLock)
+            {
+                visitedNodes.Clear();
+            }
             // A restarted session might mean a restarted server, so all server-relevant data must be cleared.
             // This includes any stored NodeId, which may refer to an outdated namespaceIndex
             eventFields?.Clear();
@@ -147,21 +149,37 @@ namespace Cognite.OpcUa
                 appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
             Log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointURL);
-            var selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && config.Secure);
+            EndpointDescription selectedEndpoint;
+            try
+            {
+                selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && config.Secure);
+            }
+            catch (ServiceResultException ex)
+            {
+                throw Utils.HandleServiceResult(ex, Utils.SourceOp.SelectEndpoint);
+            }
             var endpointConfiguration = EndpointConfiguration.Create(appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
             Log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri}", endpoint.Description.SecurityPolicyUri);
-            session = await Session.Create(
-                appconfig,
-                endpoint,
-                false,
-                ".NET OPC-UA Extractor Client",
-                0,
-                (config.Username == null || !config.Username.Trim().Any())
-                    ? new UserIdentity(new AnonymousIdentityToken())
-                    : new UserIdentity(config.Username, config.Password),
-                null
-            );
+            try
+            {
+                session = await Session.Create(
+                    appconfig,
+                    endpoint,
+                    false,
+                    ".NET OPC-UA Extractor Client",
+                    0,
+                    (config.Username == null || !config.Username.Trim().Any())
+                        ? new UserIdentity(new AnonymousIdentityToken())
+                        : new UserIdentity(config.Username, config.Password),
+                    null
+                );
+            }
+            catch (ServiceResultException ex)
+            {
+                throw Utils.HandleServiceResult(ex, Utils.SourceOp.CreateSession);
+            }
+
 
             session.KeepAlive += ClientKeepAlive;
             Started = true;
@@ -338,7 +356,15 @@ namespace Cognite.OpcUa
                 Attributes.NodeClass
             };
             var readValueIds = attributes.Select(attr => new ReadValueId { NodeId = nodeId, AttributeId = attr }).ToList();
-            session.Read(null, 0, TimestampsToReturn.Neither, new ReadValueIdCollection(readValueIds), out DataValueCollection results, out _);
+            DataValueCollection results;
+            try
+            {
+                session.Read(null, 0, TimestampsToReturn.Neither, new ReadValueIdCollection(readValueIds), out results, out _);
+            }
+            catch (ServiceResultException ex)
+            {
+                throw Utils.HandleServiceResult(ex, Utils.SourceOp.ReadRootNode);
+            }
             var refd = new ReferenceDescription();
             var enumerator = results.GetEnumerator();
             enumerator.MoveNext();
@@ -349,7 +375,7 @@ namespace Cognite.OpcUa
             enumerator.MoveNext();
             refd.DisplayName = enumerator.Current.GetValue(LocalizedText.Null);
             enumerator.MoveNext();
-            refd.NodeClass = (NodeClass)enumerator.Current.GetValue<int>(0);
+            refd.NodeClass = (NodeClass)enumerator.Current.GetValue(0);
             refd.ReferenceTypeId = null;
             refd.IsForward = true;
             enumerator.Dispose();
@@ -396,14 +422,24 @@ namespace Cognite.OpcUa
                 ));
                 try
                 {
-                    session.Browse(
-                        null,
-                        null,
-                        0,
-                        tobrowse,
-                        out BrowseResultCollection results,
-                        out DiagnosticInfoCollection diagnostics
-                    );
+                    BrowseResultCollection results;
+                    DiagnosticInfoCollection diagnostics;
+                    try
+                    {
+                        session.Browse(
+                            null,
+                            null,
+                            0,
+                            tobrowse,
+                            out results,
+                            out diagnostics
+                        );
+                    }
+                    catch (ServiceResultException ex)
+                    {
+                        throw Utils.HandleServiceResult(ex, Utils.SourceOp.Browse);
+                    }
+
 
                     foreach (var d in diagnostics)
                     {
@@ -430,15 +466,23 @@ namespace Cognite.OpcUa
                     numBrowse.Inc();
                     while (continuationPoints.Any() && !token.IsCancellationRequested)
                     {
-                        session.BrowseNext(
-                            null,
-                            false,
-                            continuationPoints,
-                            out BrowseResultCollection nextResults,
-                            out DiagnosticInfoCollection diagnosticsNext
-                        );
+                        try
+                        {
+                            session.BrowseNext(
+                                null,
+                                false,
+                                continuationPoints,
+                                out results,
+                                out diagnostics
+                            );
+                        }
+                        catch (ServiceResultException ex)
+                        {
+                            throw Utils.HandleServiceResult(ex, Utils.SourceOp.BrowseNext);
+                        }
 
-                        foreach (var d in diagnosticsNext)
+
+                        foreach (var d in diagnostics)
                         {
                             Log.Warning("GetNodeChildren BrowseNext diagnostics {msg}", d);
                         }
@@ -446,25 +490,22 @@ namespace Cognite.OpcUa
                         int nindex = 0;
                         int pindex = 0;
                         continuationPoints.Clear();
-                        foreach (var result in nextResults)
+                        foreach (var result in results)
                         {
-                            NodeId nodeId = indexMap[pindex++];
+                            var nodeId = indexMap[pindex++];
                             Log.Verbose("GetNodeChildren BrowseNext result {nodeId}", nodeId);
                             finalResults[nodeId].AddRange(result.References);
-                            if (result.ContinuationPoint != null)
-                            {
-                                indexMap[nindex++] = nodeId;
-                                continuationPoints.Add(result.ContinuationPoint);
-                            }
+                            if (result.ContinuationPoint == null) continue;
+                            indexMap[nindex++] = nodeId;
+                            continuationPoints.Add(result.ContinuationPoint);
                         }
 
                         numBrowse.Inc();
                     }
                 }
-                catch (Exception e)
+                catch
                 {
                     browseFailures.Inc();
-                    Log.Error(e, "Failed during browse session");
                     throw;
                 }
                 finally
@@ -569,24 +610,10 @@ namespace Cognite.OpcUa
             foreach (var node in nodes)
             {
                 if (node == null) continue;
-                foreach (uint attribute in common)
-                {
-                    readValueIds.Add(new ReadValueId
-                    {
-                        AttributeId = attribute,
-                        NodeId = node.Id
-                    });
-                }
+                readValueIds.AddRange(common.Select(attribute => new ReadValueId {AttributeId = attribute, NodeId = node.Id}));
                 if (node.IsVariable)
                 {
-                    foreach (uint attribute in variables)
-                    {
-                        readValueIds.Add(new ReadValueId
-                        {
-                            AttributeId = attribute,
-                            NodeId = node.Id
-                        });
-                    }
+                    readValueIds.AddRange(variables.Select(attribute => new ReadValueId {AttributeId = attribute, NodeId = node.Id}));
                 }
             }
             IEnumerable<DataValue> values = new DataValueCollection();
@@ -610,11 +637,11 @@ namespace Cognite.OpcUa
                     values = values.Concat(lvalues);
                     Log.Information("Read {NumAttributesRead} attributes", lvalues.Count);
                 }
-                Log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations", readValueIds.Count, count);
+                Log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
+                    readValueIds.Count, count, nodes.Count());
             }
-            catch (Exception e)
+            catch
             {
-                Log.Error(e, "Failed to fetch attributes from opcua");
                 attributeRequestFailures.Inc();
                 throw;
             }
@@ -641,12 +668,27 @@ namespace Cognite.OpcUa
             {
                 variableAttributes.Add(Attributes.ArrayDimensions);
             }
-            var values = GetNodeAttributes(nodes, new List<uint>
+
+            IEnumerable<DataValue> values;
+            try
             {
-                Attributes.Description
-            }, variableAttributes, token);
+                values = GetNodeAttributes(nodes, new List<uint>
+                {
+                    Attributes.Description
+                }, variableAttributes, token);
+            }
+            catch (ServiceResultException ex)
+            {
+                throw Utils.HandleServiceResult(ex, Utils.SourceOp.ReadAttributes);
+            }
+
+            if (values.Count() < nodes.Count(node => node.IsVariable) * 3 + nodes.Count())
+            {
+                throw new Exception("Too few results in ReadNodeData");
+            }
+
             var enumerator = values.GetEnumerator();
-            foreach (BufferedNode node in nodes)
+            foreach (var node in nodes)
             {
                 if (token.IsCancellationRequested) return;
                 enumerator.MoveNext();
@@ -681,11 +723,20 @@ namespace Cognite.OpcUa
         public void ReadNodeValues(IEnumerable<BufferedVariable> nodes, CancellationToken token)
         {
             nodes = nodes.Where(node => !node.DataRead && node.Index == -1).ToList();
-            var values = GetNodeAttributes(nodes.Where((BufferedVariable buff) => buff.ValueRank == ValueRanks.Scalar),
-                new List<uint>(),
-                new List<uint> { Attributes.Value },
-                token
-            );
+            IEnumerable<DataValue> values;
+            try
+            {
+                values = GetNodeAttributes(nodes.Where(buff => buff.ValueRank == ValueRanks.Scalar),
+                    new List<uint>(),
+                    new List<uint> {Attributes.Value},
+                    token
+                );
+            }
+            catch (ServiceResultException ex)
+            {
+                throw Utils.HandleServiceResult(ex, Utils.SourceOp.ReadAttributes);
+            }
+
             var enumerator = values.GetEnumerator();
             foreach (var node in nodes)
             {
@@ -783,6 +834,7 @@ namespace Cognite.OpcUa
             {
                 do
                 {
+
                     session.HistoryRead(
                         null,
                         new ExtensionObject(details),
@@ -815,10 +867,9 @@ namespace Cognite.OpcUa
                     }
                 } while (ids.Any() && !token.IsCancellationRequested);
             }
-            catch (Exception e)
+            catch
             {
                 historyReadFailures.Inc();               
-                Log.Error(e, "Failed during HistoryRead");
                 throw;
             }
             finally
@@ -848,7 +899,14 @@ namespace Cognite.OpcUa
                 EndTime = DateTime.Now.AddDays(1),
                 NumValuesPerNode = (uint)config.HistoryReadChunk
             };
-            DoHistoryRead(details, toRead.Select(bv => bv.Id), callback, token);
+            try
+            {
+                DoHistoryRead(details, toRead.Select(bv => bv.Id), callback, token);
+            }
+            catch (ServiceResultException ex)
+            {
+                throw Utils.HandleServiceResult(ex, Utils.SourceOp.HistoryRead);
+            }
         }
         /// <summary>
         /// Read historydata for the requested nodes and call the callback after each call to HistoryRead, performs chunking according to config,
@@ -915,7 +973,7 @@ namespace Cognite.OpcUa
         /// a bool indicating if this is the final iteration, NodeId of the node in question, ReadEventDetails containing the filter.
         /// Returns the number of events processed.</param>
         /// <param name="token"></param>
-        public Task HistoryReadEvents(IEnumerable<NodeId> emitters,
+        public async Task HistoryReadEvents(IEnumerable<NodeId> emitters,
             IEnumerable<NodeId> nodeIds,
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
@@ -937,7 +995,14 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = (uint)eventConfig.HistoryReadChunk,
                 Filter = filter
             };
-            return Task.Run(() => DoHistoryRead(details, emitters, callback, token));
+            try
+            {
+                await Task.Run(() => DoHistoryRead(details, emitters, callback, token));
+            }
+            catch (ServiceResultException ex)
+            {
+                throw Utils.HandleServiceResult(ex, Utils.SourceOp.HistoryReadEvents);
+            }
         }
         /// <summary>
         /// Create datapoint subscriptions for given list of nodes
@@ -989,19 +1054,28 @@ namespace Cognite.OpcUa
                         {
                             if (subscription.Created)
                             {
-                                subscription.CreateItems();
+                                try
+                                {
+                                    subscription.CreateItems();
+                                }
+                                catch (ServiceResultException ex)
+                                {
+                                    throw Utils.HandleServiceResult(ex, Utils.SourceOp.CreateMonitoredItems);
+                                }
                             }
                             else
                             {
-                                session.AddSubscription(subscription);
-                                subscription.Create();
+                                try
+                                {
+                                    session.AddSubscription(subscription);
+                                    subscription.Create();
+                                }
+                                catch (ServiceResultException ex)
+                                {
+                                    throw Utils.HandleServiceResult(ex, Utils.SourceOp.CreateSubscription);
+                                }
                             }
                         }
-                    }
-                    catch (Exception e)
-                    {
-                        Log.Error(e, "Failed to create subscriptions");
-                        throw;
                     }
                     finally
                     {
@@ -1064,19 +1138,29 @@ namespace Cognite.OpcUa
                     {
                         if (subscription.Created)
                         {
-                            subscription.CreateItems();
+                            try
+                            {
+                                subscription.CreateItems();
+                            }
+                            catch (ServiceResultException ex)
+                            {
+                                throw Utils.HandleServiceResult(ex, Utils.SourceOp.CreateMonitoredItems);
+                            }
                         }
                         else
                         {
-                            session.AddSubscription(subscription);
-                            subscription.Create();
+                            try
+                            {
+                                session.AddSubscription(subscription);
+                                subscription.Create();
+                            }
+                            catch (ServiceResultException ex)
+                            {
+                                throw Utils.HandleServiceResult(ex, Utils.SourceOp.CreateSubscription);
+                            }
+
                         }
                     }
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e, "Failed to create event subscriptions");
-                    throw;
                 }
                 finally
                 {
@@ -1088,6 +1172,11 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Events
+
+        public ISystemContext GetSystemContext()
+        {
+            return session?.SystemContext;
+        }
         public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventFields(IEnumerable<NodeId> eventIds, CancellationToken token)
         {
             if (eventFields != null) return eventFields;
@@ -1123,7 +1212,7 @@ namespace Cognite.OpcUa
                 });
             // This does not do what it looks like, rather it replaces whatever operation exists in the where clause and returns 
             // this operation as a ContentFilterElement.
-            var elem1 = whereClause.Push(FilterOperator.InList, eventOperands.Prepend(eventListOperand).ToArray());
+            var elem1 = whereClause.Push(FilterOperator.InList, eventOperands.Prepend(eventListOperand).ToArray<object>());
 
             var nodeListOperand = new SimpleAttributeOperand
             {
@@ -1137,7 +1226,7 @@ namespace Cognite.OpcUa
                     Value = id
                 });
 
-            var elem2 = whereClause.Push(FilterOperator.InList, nodeOperands.Prepend(nodeListOperand).ToArray());
+            var elem2 = whereClause.Push(FilterOperator.InList, nodeOperands.Prepend(nodeListOperand).ToArray<object>());
             var elem3 = whereClause.Push(FilterOperator.And, elem1, elem2);
 
             if (receivedAfter != null && receivedAfter > DateTime.MinValue)
