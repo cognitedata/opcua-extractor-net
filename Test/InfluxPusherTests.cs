@@ -30,7 +30,9 @@ namespace Test
     public class InfluxPusherTests : MakeConsoleWork
     {
         public InfluxPusherTests(ITestOutputHelper output) : base(output) { }
-        [Trait("Category", "basicserver")]
+        [Trait("Server", "basic")]
+        [Trait("Target", "InfluxPusher")]
+        [Trait("Test", "pusher")]
         [Fact]
         public async Task TestInfluxPusher()
         {
@@ -72,7 +74,9 @@ namespace Test
             extractor.Close();
             Assert.False(pusher.Failing);
         }
-        [Trait("Category", "ArrayServer")]
+        [Trait("Server", "array")]
+        [Trait("Target", "InfluxPusher")]
+        [Trait("Test", "arraydata")]
         [Fact]
         public async Task TestArrayData()
         {

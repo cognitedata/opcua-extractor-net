@@ -30,7 +30,9 @@ namespace Test
     public class EventTests : MakeConsoleWork
     {
         public EventTests(ITestOutputHelper output) : base(output) { }
-        [Trait("Category", "eventserver")]
+        [Trait("Server", "events")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "events")]
         [Fact]
         public async Task TestEventServer()
         {
@@ -165,7 +167,9 @@ namespace Test
                 : asset != null && ev.assetIds.Contains(asset.id);
         }
         [Fact]
-        [Trait("Category", "audit")]
+        [Trait("Server", "audit")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "audit")]
         public async Task TestAuditEvents()
         {
             var fullConfig = Common.BuildConfig("audit", 10);

@@ -22,7 +22,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http;
+using Com.Cognite.V1.Timeseries.Proto;
 using Newtonsoft.Json;
 using Serilog;
 using HttpMethod = System.Net.Http.HttpMethod;
@@ -38,11 +38,14 @@ namespace Test
         public readonly Dictionary<string, AssetDummy> assets = new Dictionary<string, AssetDummy>();
         public readonly Dictionary<string, TimeseriesDummy> timeseries = new Dictionary<string, TimeseriesDummy>();
         public readonly Dictionary<string, EventDummy> events = new Dictionary<string, EventDummy>();
+        public readonly Dictionary<string, (List<NumericDatapoint>, List<StringDatapoint>)> datapoints =
+            new Dictionary<string, (List<NumericDatapoint>, List<StringDatapoint>)>();
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
         long eventIdCounter = 1;
         public long RequestCount { get; private set; }
         public bool AllowPush { get; set; } = true;
+        public bool StoreDatapoints { get; set; } = false;
         public MockMode mode;
         public enum MockMode
         {
@@ -67,11 +70,19 @@ namespace Test
                 return HandleLoginStatus();
             }
             string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "");
+
+            if (reqPath == "/timeseries/data" && req.Method == HttpMethod.Post && StoreDatapoints)
+            {
+                var proto = await req.Content.ReadAsByteArrayAsync();
+                var data = DataPointInsertionRequest.Parser.ParseFrom(proto);
+                return HandleTimeseriesData(data);
+            }
+
             string content = "";
             try
             {
                 content = await req.Content.ReadAsStringAsync();
-            } 
+            }
             catch { }
             lock (handlerLock)
             {
@@ -86,7 +97,7 @@ namespace Test
                     case "/timeseries":
                         return req.Method == HttpMethod.Get ? HandleListTimeseries() : HandleCreateTimeseries(content);
                     case "/timeseries/data":
-                        return HandleTimeseriesData();
+                        return HandleTimeseriesData(null);
                     case "/timeseries/data/latest":
                         return HandleGetTimeseries(content);
                     case "/events":
@@ -322,7 +333,7 @@ namespace Test
             };
         }
 
-        private HttpResponseMessage HandleTimeseriesData()
+        private HttpResponseMessage HandleTimeseriesData(DataPointInsertionRequest req)
         {
             if (!AllowPush)
             {
@@ -338,6 +349,32 @@ namespace Test
                     }))
                 };
             }
+
+            if (req == null)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{}")
+                };
+            }
+
+            foreach (var item in req.Items)
+            {
+                if (!datapoints.ContainsKey(item.ExternalId))
+                {
+                    datapoints[item.ExternalId] = (new List<NumericDatapoint>(), new List<StringDatapoint>());
+                }
+                if (item.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.NumericDatapoints)
+                {
+                    datapoints[item.ExternalId].Item1.AddRange(item.NumericDatapoints.Datapoints);
+                }
+                else
+                {
+                    datapoints[item.ExternalId].Item2.AddRange(item.StringDatapoints.Datapoints);
+                }
+
+            }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{}")

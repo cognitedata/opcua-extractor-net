@@ -13,7 +13,9 @@ namespace Test
     {
         public UAClientTests(ITestOutputHelper output) : base(output) { }
 
-        [Trait("Category", "failure")]
+        [Trait("Server", "basic")]
+        [Trait("Target", "UAClient")]
+        [Trait("Test", "connectingfailure")]
         [Fact]
         public async Task TestConnectionFailure()
         {

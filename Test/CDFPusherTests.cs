@@ -17,7 +17,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -33,8 +32,10 @@ namespace Test
     public class CDFPusherTests : MakeConsoleWork
     {
         public CDFPusherTests(ITestOutputHelper output) : base(output) { }
-        [Trait("Category", "both")]
-        [Trait("Tests", "cdfpusher")]
+        [Trait("Server", "basic")]
+        [Trait("Server", "full")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "pusher")]
         [Theory]
         [InlineData(CDFMockHandler.MockMode.All, "basic")]
         [InlineData(CDFMockHandler.MockMode.Some, "basic")]
@@ -69,9 +70,9 @@ namespace Test
             }
             extractor.Close();
         }
-        [Trait("Category", "basicserver")]
-        [Trait("Tests", "cdfpusher")]
-        [Trait("Tests", "autobuffer")]
+        [Trait("Server", "basic")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "autobuffer")]
         [Fact]
         public async Task TestAutoBuffering()
         {
@@ -121,9 +122,26 @@ namespace Test
                 if (!Common.TestRunResult(e)) throw;
             }
             extractor.Close();
+
+            var dps = handler.datapoints["gp.efg:i=10"].Item1;
+            var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)Math.Round(dp.First().Value)).ToList();
+            var min = intdps.Min();
+            var check = new int[intdps.Count];
+
+            int last = 0;
+            foreach (var dp in intdps)
+            {
+                if (last != dp - 1)
+                {
+                    Log.Information("Out of order points at {dp}, {last}", dp, last);
+                }
+                last = dp;
+                check[dp - min]++;
+            }
         }
-        [Trait("Tests", "basicserver")]
-        [Trait("Tests", "cdfpusher")]
+        [Trait("Server", "basic")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "debugmode")]
         [Fact]
         public async Task TestDebugMode()
         {
@@ -164,7 +182,9 @@ namespace Test
             Assert.Equal(0, handler.RequestCount);
             extractor.Close();
         }
-        [Trait("Category", "arrayserver")]
+        [Trait("Server", "array")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "arraydata")]
         [Fact]
         public async Task TestArrayData()
         {
@@ -175,7 +195,7 @@ namespace Test
             Logger.Configure(fullConfig.Logging);
 
             var client = new UAClient(fullConfig);
-            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None) {StoreDatapoints = true};
             var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
 
             var extractor = new Extractor(fullConfig, pusher, client);
@@ -184,14 +204,26 @@ namespace Test
             var runTask = extractor.RunExtractor(source.Token);
             for (int i = 0; i < 20; i++)
             {
-                if (handler.assets.Count == 4 && handler.timeseries.Count == 7)
+                if (handler.assets.Count == 4 && handler.timeseries.Count == 7
+                    && handler.datapoints.ContainsKey("gp.efg:i=2[2]"))
                 {
                     gotData = true;
                     break;
                 }
-                Thread.Sleep(500);
+                await Task.Delay(500);
             }
+
             Assert.True(gotData, $"Expected to get 4 assets and got {handler.assets.Count}, 7 timeseries and got {handler.timeseries.Count}");
+
+            // Expect data to be increasing through subscriptions
+            int lastData = handler.datapoints["gp.efg:i=2[2]"].Item1.Count;
+            for (int i = 0; i < 20; i++)
+            {
+                if (handler.datapoints["gp.efg:i=2[2]"].Item1.Count > lastData) break;
+                await Task.Delay(500);
+            }
+            Assert.True(handler.datapoints["gp.efg:i=2[2]"].Item1.Count > lastData);
+
             source.Cancel();
             try
             {
@@ -202,9 +234,26 @@ namespace Test
                 if (!Common.TestRunResult(e)) throw;
             }
             extractor.Close();
+
+            var dps = handler.datapoints["gp.efg:i=2[2]"].Item1;
+            var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)dp.First().Value).ToList();
+            var min = intdps.Min();
+            var check = new int[intdps.Count];
+
+            int last = 0;
+            foreach (var dp in intdps)
+            {
+                if (last != dp - 1)
+                {
+                    Log.Information("Out of order points at {dp}, {last}", dp, last);
+                }
+                last = dp;
+                check[dp - min]++;
+            }
         }
-        [Trait("Category", "basicserver")]
-        [Trait("Category", "restart")]
+        [Trait("Server", "basic")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "restart")]
         [Fact]
         public async Task TestExtractorRestart()
         {
@@ -258,7 +307,9 @@ namespace Test
         [InlineData(20000, 100, 20, 1000, 100000)]
         [InlineData(200, 10000, 20, 10, 100000)]
         [InlineData(20000, 5, 2, 10000, 50000)]
-        [Trait("Category", "DictChunk")]
+        [Trait("Server", "none")]
+        [Trait("Target", "Utils")]
+        [Trait("Test", "dictChunk")]
         [Theory]
         public void TestDictionaryChunking(int timeseries, int datapoints, int expChunks, int expTimeseriesMax, int expDatapointsMax)
         {
@@ -301,7 +352,9 @@ namespace Test
 
         }
         [Fact]
-        [Trait("Category", "connectiontest")]
+        [Trait("Server", "basic")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "connectiontest")]
         public async Task TestConnectionTest()
         {
             var fullConfig = Common.BuildConfig("basic", 9);
@@ -313,6 +366,67 @@ namespace Test
             var res = await pusher.TestConnection(CancellationToken.None);
             Log.CloseAndFlush();
             Assert.True(res);
+        }
+        [Fact]
+        [Trait("Server", "basic")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "continuity")]
+        public async Task TestDataContinuity()
+        {
+            var fullConfig = Common.BuildConfig("basic", 15);
+            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            Logger.Configure(fullConfig.Logging);
+
+            var client = new UAClient(fullConfig);
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
+            handler.StoreDatapoints = true;
+
+            var extractor = new Extractor(fullConfig, pusher, client);
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+
+            for (int i = 0; i < 10; i++)
+            {
+                // Wait until we get some data on the integer datapoint
+                if (handler.datapoints.ContainsKey("gp.efg:i=10") &&
+                    handler.datapoints["gp.efg:i=10"].Item1.Count > 100) break;
+                await Task.Delay(1000);
+            }
+            // We want some extra subscriptions as well
+            await Task.Delay(1000);
+
+            Log.Information("End loop: {count}", handler.datapoints["gp.efg:i=10"].Item1.Count);
+            Assert.True(handler.datapoints["gp.efg:i=10"].Item1.Count > 100);
+
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+            extractor.Close();
+
+            var dps = handler.datapoints["gp.efg:i=10"].Item1;
+            var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)dp.First().Value).ToList();
+            var min = intdps.Min();
+            var check = new int[intdps.Count];
+
+            int last = 0;
+            foreach (var dp in intdps)
+            {
+                if (last != dp - 1)
+                {
+                    Log.Information("Out of order points at {dp}, {last}", dp, last);
+                }
+                last = dp;
+                check[dp-min]++;
+            }
+
+            Assert.True(check.All(count => count == 1));
         }
     }
 }

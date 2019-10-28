@@ -30,7 +30,7 @@ if __name__ == "__main__":
     # populating our address space
     myobj = objects.add_object(idx, "MyObject")
     
-    myvar = myobj.add_variable(idx, "MyArray", ua.Variant([1.0, 2.0, 3.0, 4.0], ua.VariantType.Double))
+    myvar = myobj.add_variable(idx, "MyArray", ua.Variant([1.0, 2.0, 0, 0], ua.VariantType.Double))
     myvar.set_array_dimensions([4])
     myvar.set_writable()  # Set MyVariable to be writable by clients
 
@@ -61,10 +61,10 @@ if __name__ == "__main__":
         count = 0
         bcount = 0
         while True:
-            time.sleep(1)
+            time.sleep(0.2)
             count += 0.1
             bcount += 1
-            myvar.set_value([math.sin(count), math.cos(count), count, -1 * count])
+            myvar.set_value([math.sin(count), math.cos(count), bcount, -1 * bcount])
             myvar2.set_value(["word: " + str(bcount), "word2: " + str(bcount)])
 
     finally:
