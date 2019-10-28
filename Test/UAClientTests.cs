@@ -29,6 +29,13 @@ namespace Test
             using var source = new CancellationTokenSource();
             var runTask = extractor.RunExtractor(source.Token);
 
+            for (int i = 0; i < 10; i++)
+            {
+                if (runTask.IsFaulted) break;
+                await Task.Delay(1000);
+            }
+            Assert.True(runTask.IsFaulted);
+
             try
             {
                 await runTask;

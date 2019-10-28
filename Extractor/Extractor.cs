@@ -19,6 +19,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
@@ -214,7 +215,7 @@ namespace Cognite.OpcUa
             if (token.IsCancellationRequested) throw new TaskCanceledException();
             if (failedTask != null)
             {
-                throw new Exception("Process failed unexpectedly", failedTask.Exception);
+                ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
             }
             throw new Exception("Processes quit without failing");
         }
@@ -456,7 +457,8 @@ namespace Cognite.OpcUa
                 }
                 nodeMap.Add(uaClient.GetUniqueId(buffer.Id), buffer);
             }
-            Log.Information("Getting data for {NumVariables} variables and {NumObjects} objects", variables.Count, objects.Count);
+            Log.Information("Getting data for {NumVariables} variables and {NumObjects} objects", 
+                rawVariables.Count, objects.Count);
             uaClient.ReadNodeData(objects.Concat(rawVariables), token);
             foreach (var node in objects.Concat(rawVariables))
             {
