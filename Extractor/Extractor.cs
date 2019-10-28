@@ -19,7 +19,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
@@ -51,7 +50,7 @@ namespace Cognite.OpcUa
         public ConcurrentDictionary<NodeId, EventExtractionState> EventEmitterStates { get; } = new ConcurrentDictionary<NodeId, EventExtractionState>();
 
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
-        private bool restart = false;
+        private bool restart;
         private readonly AutoResetEvent triggerUpdateOperations = new AutoResetEvent(false);
 
         private readonly object managedNodesLock = new object();
@@ -110,7 +109,17 @@ namespace Cognite.OpcUa
             if (!uaClient.Started)
             {
                 Log.Information("Start UAClient");
-                await uaClient.Run(token);
+                try
+                {
+                    await uaClient.Run(token);
+                }
+                catch (Exception ex)
+                {
+                    Utils.LogException(ex, "Unexpected error starting UAClient",
+                        "Handled service result exception on starting UAClient");
+                    throw;
+                }
+
                 if (!uaClient.Started)
                 {
                     throw new Exception("UAClient failed to start");
@@ -131,7 +140,17 @@ namespace Cognite.OpcUa
             await uaClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
             Log.Debug("End mapping directory");
 
-            var synchTasks = await MapUAToDestinations(token);
+            IEnumerable<Task> synchTasks;
+            try
+            {
+                synchTasks = await MapUAToDestinations(token);
+            }
+            catch (Exception ex)
+            {
+                Utils.LogException(ex, "Unexpected error in MapUAToDestinations", 
+                    "Handled service result exception in MapUAToDestinations");
+                throw;
+            }
 
             Pushing = true;
 
@@ -179,8 +198,9 @@ namespace Cognite.OpcUa
                 {
                     await Task.WhenAny(tasks);
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    Utils.LogException(ex, "Unexpected error in main task list", "Handled error in main task list");
                 }
                 failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
 
@@ -190,15 +210,13 @@ namespace Cognite.OpcUa
                     .Where(task => !task.IsCompleted && !task.IsFaulted && !task.IsCanceled)
                     .ToList();
             }
-            if (!token.IsCancellationRequested)
+
+            if (token.IsCancellationRequested) throw new TaskCanceledException();
+            if (failedTask != null)
             {
-                if (failedTask != null)
-                {
-                    ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
-                }
-                throw new Exception("Processes quit without failing");
+                throw new Exception("Process failed unexpectedly", failedTask.Exception);
             }
-            throw new TaskCanceledException();
+            throw new Exception("Processes quit without failing");
         }
         /// <summary>
         /// Restarts the extractor, to some extent, clears known asset ids,
@@ -808,7 +826,7 @@ namespace Cognite.OpcUa
             {
                 // This is a neat way to get the contents of the event, which may be fairly complicated (variant of arrays of extensionobjects)
                 var e = new AuditAddNodesEventState(null);
-                e.Update(uaClient.session.SystemContext, filter.SelectClauses, triggeredEvent);
+                e.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
                 if (e.NodesToAdd?.Value == null)
                 {
                     Log.Warning("Missing NodesToAdd object on AddNodes event");
@@ -835,7 +853,7 @@ namespace Cognite.OpcUa
             }
 
             var ev = new AuditAddReferencesEventState(null);
-            ev.Update(uaClient.session.SystemContext, filter.SelectClauses, triggeredEvent);
+            ev.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
 
             if (ev.ReferencesToAdd?.Value == null)
             {

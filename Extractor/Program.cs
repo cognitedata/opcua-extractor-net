@@ -22,20 +22,17 @@ using System.Net.Http;
 using System.Collections.Generic;
 using Polly;
 using Prometheus.Client.MetricPusher;
-using Opc.Ua;
 using CogniteSdk;
 using System.Threading.Tasks;
 using Polly.Timeout;
-using System.Runtime.ExceptionServices;
 using System.Linq;
 using Serilog;
-using Polly.Retry;
 
 namespace Cognite.OpcUa
 {
     class Program
     {
-        static MetricPushServer worker;
+        static MetricPushServer _worker;
         /// <summary>
         /// Load config, start the <see cref="Logger"/>, start the <see cref="Extractor"/> then wait for exit signal
         /// </summary>
@@ -119,9 +116,9 @@ namespace Cognite.OpcUa
                             Log.Warning("Extractor stopped manually");
                             break;
                         }
-                        catch (Exception e)
+                        catch
                         {
-                            Log.Error(e, "Exception in Run");
+                            Log.Error("Extractor crashed, restarting");
                         }
                         try
                         {
@@ -163,7 +160,7 @@ namespace Cognite.OpcUa
         }
         private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
         {
-            int maxRetryAttempt = (int)Math.Ceiling(Math.Log(60000 / 500, 2));
+            int maxRetryAttempt = (int)Math.Ceiling(Math.Log(120, 2));
             return Policy
                 .HandleResult<HttpResponseMessage>(msg =>
                     !msg.IsSuccessStatusCode && msg.StatusCode != System.Net.HttpStatusCode.BadRequest)
@@ -173,7 +170,7 @@ namespace Cognite.OpcUa
         }
         private static IAsyncPolicy<HttpResponseMessage> GetDataRetryPolicy()
         {
-            int maxRetryAttempt = (int)Math.Ceiling(Math.Log(60000 / 500, 2));
+            int maxRetryAttempt = (int)Math.Ceiling(Math.Log(120, 2));
             return Policy
                 .HandleResult<HttpResponseMessage>(msg =>
                     !msg.IsSuccessStatusCode && msg.StatusCode != System.Net.HttpStatusCode.BadRequest && msg.StatusCode != System.Net.HttpStatusCode.Conflict)
@@ -207,8 +204,8 @@ namespace Cognite.OpcUa
                 additionalHeaders.Add("Authorization", $"Basic {encoded}");
             }
             var pusher = new MetricPusher(config.URL, config.Job, config.Instance, additionalHeaders);
-            worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));
-            worker.Start();
+            _worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));
+            _worker.Start();
         }
         /// <summary>
         /// Start the extractor.
@@ -216,14 +213,13 @@ namespace Cognite.OpcUa
         /// <param name="config">Full config object</param>
         /// <param name="provider">ServiceProvider with any required service for the pushers.</param>
         /// <param name="source">CancellationTokenSource used to create tokens and terminate the run-task on failure</param>
-        private static void Run(FullConfig config, ServiceProvider provider, CancellationTokenSource source)
+        private static void Run(FullConfig config, IServiceProvider provider, CancellationTokenSource source)
         {
-            UAClient client = new UAClient(config);
-            // As it turns out, linq does some insane stuff when you use the result of a "select" query that does transformation.
+            var client = new UAClient(config);
             var pushers = config.Pushers.Select(pusher => pusher.ToPusher(provider)).ToList();
-            Extractor extractor = new Extractor(config, pushers, client);
+            var extractor = new Extractor(config, pushers, client);
 
-            Task runTask = extractor.RunExtractor(source.Token)
+            var runTask = extractor.RunExtractor(source.Token)
                 .ContinueWith(task =>
                 {
                     source.Cancel();
@@ -237,17 +233,11 @@ namespace Cognite.OpcUa
             {
                 runTask.Wait();
             }
-            catch (Exception)
-            {
-            }
-
-            if (!runTask.IsFaulted) return;
-            if (runTask.Exception.InnerException is TaskCanceledException)
+            catch
             {
                 extractor.Close();
-                throw new TaskCanceledException();
+                throw;
             }
-            ExceptionDispatchInfo.Capture(runTask.Exception).Throw();
         }
     }
     public class DataCDFClient : Client { public DataCDFClient(HttpClient httpClient) : base(httpClient) { } }
