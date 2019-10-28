@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -298,6 +299,20 @@ namespace Test
             }
             Assert.True(exists.All(val => val));
 
+        }
+        [Fact]
+        [Trait("Category", "connectiontest")]
+        public async Task TestConnectionTest()
+        {
+            var fullConfig = Common.BuildConfig("basic", 9);
+            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            Logger.Configure(fullConfig.Logging);
+
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
+            var res = await pusher.TestConnection(CancellationToken.None);
+            Log.CloseAndFlush();
+            Assert.True(res);
         }
     }
 }

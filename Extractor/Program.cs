@@ -107,6 +107,7 @@ namespace Cognite.OpcUa
                             Log.Warning("Extractor stopped manually");
                             break;
                         }
+
                         try
                         {
                             Run(fullConfig, provider, source);
@@ -163,7 +164,10 @@ namespace Cognite.OpcUa
             int maxRetryAttempt = (int)Math.Ceiling(Math.Log(120, 2));
             return Policy
                 .HandleResult<HttpResponseMessage>(msg =>
-                    !msg.IsSuccessStatusCode && msg.StatusCode != System.Net.HttpStatusCode.BadRequest)
+                    !msg.IsSuccessStatusCode 
+                    && msg.StatusCode != System.Net.HttpStatusCode.BadRequest
+                    && msg.StatusCode != System.Net.HttpStatusCode.Unauthorized
+                    && msg.StatusCode != System.Net.HttpStatusCode.Forbidden)
                 .Or<TimeoutRejectedException>()
                 .WaitAndRetryForeverAsync(retryAttempt =>
                     TimeSpan.FromMilliseconds(retryAttempt > maxRetryAttempt ? 60000 : Math.Pow(2, retryAttempt)));
@@ -173,7 +177,11 @@ namespace Cognite.OpcUa
             int maxRetryAttempt = (int)Math.Ceiling(Math.Log(120, 2));
             return Policy
                 .HandleResult<HttpResponseMessage>(msg =>
-                    !msg.IsSuccessStatusCode && msg.StatusCode != System.Net.HttpStatusCode.BadRequest && msg.StatusCode != System.Net.HttpStatusCode.Conflict)
+                    !msg.IsSuccessStatusCode
+                    && msg.StatusCode != System.Net.HttpStatusCode.BadRequest
+                    && msg.StatusCode != System.Net.HttpStatusCode.Conflict
+                    && msg.StatusCode != System.Net.HttpStatusCode.Unauthorized
+                    && msg.StatusCode != System.Net.HttpStatusCode.Forbidden)
                 .Or<TimeoutRejectedException>()
                 .WaitAndRetryAsync(4, retryAttempt =>
                     TimeSpan.FromMilliseconds(retryAttempt > maxRetryAttempt ? 60000 : Math.Pow(2, retryAttempt)));
@@ -216,7 +224,28 @@ namespace Cognite.OpcUa
         private static void Run(FullConfig config, IServiceProvider provider, CancellationTokenSource source)
         {
             var client = new UAClient(config);
-            var pushers = config.Pushers.Select(pusher => pusher.ToPusher(provider)).ToList();
+            IEnumerable<IPusher> pushers = config.Pushers.Select(pusher => pusher.ToPusher(provider)).ToList();
+            var removePushers = new List<IPusher>();
+            try
+            {
+                Task.WhenAll(pushers.Select(pusher => pusher.TestConnection(source.Token).ContinueWith(result =>
+                    {
+                        if (pusher.BaseConfig.Critical && !result.Result)
+                        {
+                            throw new Exception("Critical pusher failed to connect");
+                        }
+                        if (!result.Result)
+                        {
+                            removePushers.Add(pusher);
+                        }
+                    })).ToArray()).Wait();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Failed to connect to a critical destination", ex);
+            }
+
+            pushers = pushers.Except(removePushers).ToList();
             var extractor = new Extractor(config, pushers, client);
 
             var runTask = extractor.RunExtractor(source.Token)

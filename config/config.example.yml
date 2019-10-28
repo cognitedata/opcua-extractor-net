@@ -56,6 +56,9 @@ Pushers:
         DataPushDelay: 1000
         # Debug mode, if true, Extractor will not push to target
         Debug: false
+        # False if this destination can be ignored on failed connection
+        # default is true, meaning the extractor will terminate if connection test fails
+        Critical: true
         # Buffer non-historizing datapoints when the connection to CDF fails.
         BufferOnFailure: false
         # Buffer file path
@@ -78,6 +81,9 @@ Pushers:
         DataPushDelay: 1000
         # Debug mode, if true, Extractor will not push to target
         Debug:
+        # False if this destination can be ignored on failed connection
+        # default is true, meaning the extractor will terminate if connection test fails
+        Critical: true
         # Max number of points to send in each request to influx
         PointChunkSize: 100000
 

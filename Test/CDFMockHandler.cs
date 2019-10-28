@@ -22,8 +22,11 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http;
 using Newtonsoft.Json;
 using Serilog;
+using HttpMethod = System.Net.Http.HttpMethod;
+
 #pragma warning disable IDE1006 // Naming Styles
 
 namespace Test
@@ -58,11 +61,20 @@ namespace Test
 
         private async Task<HttpResponseMessage> MessageHandler(HttpRequestMessage req, CancellationToken cancellationToken)
         {
+            RequestCount++;
+            if (req.RequestUri.AbsolutePath == "/login/status")
+            {
+                return HandleLoginStatus();
+            }
             string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "");
-            string content = await req.Content.ReadAsStringAsync();
+            string content = "";
+            try
+            {
+                content = await req.Content.ReadAsStringAsync();
+            } 
+            catch { }
             lock (handlerLock)
             {
-                RequestCount++;
                 switch (reqPath)
                 {
                     case "/assets/byids":
@@ -72,7 +84,7 @@ namespace Test
                     case "/timeseries/byids":
                         return HandleGetTimeseries(content);
                     case "/timeseries":
-                        return HandleCreateTimeseries(content);
+                        return req.Method == HttpMethod.Get ? HandleListTimeseries() : HandleCreateTimeseries(content);
                     case "/timeseries/data":
                         return HandleTimeseriesData();
                     case "/timeseries/data/latest":
@@ -197,6 +209,18 @@ namespace Test
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(result)
+            };
+        }
+
+        private HttpResponseMessage HandleListTimeseries()
+        {
+            string res = JsonConvert.SerializeObject(new TimeseriesReadWrapper
+            {
+                items = new List<TimeseriesDummy>()
+            });
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(res)
             };
         }
 
@@ -337,6 +361,27 @@ namespace Test
             };
         }
 
+        private HttpResponseMessage HandleLoginStatus()
+        {
+            var status = new LoginInfo
+            {
+                apiKeyId = 1,
+                loggedIn = true,
+                project = project,
+                projectId = 1,
+                user = "user"
+            };
+            var result = new LoginInfoWrapper
+            {
+                data = status
+            };
+            var data = JsonConvert.SerializeObject(result);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(data)
+            };
+        }
+
         private AssetDummy MockAsset(string externalId)
         {
             var asset = new AssetDummy
@@ -426,6 +471,20 @@ namespace Test
         public string externalId { get; set; }
         public IEnumerable<DataPoint> datapoints { get; set; }
         public string name { get; set; }
+    }
+
+    public class LoginInfo
+    {
+        public string user { get; set; }
+        public bool loggedIn { get; set; }
+        public string project { get; set; }
+        public long projectId { get; set; }
+        public long apiKeyId { get; set; }
+    }
+
+    public class LoginInfoWrapper
+    {
+        public LoginInfo data { get; set; }
     }
     public class DataPoint
     {

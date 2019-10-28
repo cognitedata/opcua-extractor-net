@@ -137,5 +137,25 @@ namespace Cognite.OpcUa
             }
             return true;
         }
+
+        public async Task<bool> TestConnection(CancellationToken token)
+        {
+            IEnumerable<string> dbs;
+            try
+            {
+                dbs = await client.GetInfluxDBNamesAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to get db names from influx server: {host}", config.Host);
+                return false;
+            }
+            if (dbs == null || !dbs.Contains(config.Database))
+            {
+                Log.Error("Database {db} does not exist in influxDb: {host}", config.Database, config.Host);
+                return false;
+            }
+            return true;
+        }
     }
 }

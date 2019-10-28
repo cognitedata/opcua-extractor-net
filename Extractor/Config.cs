@@ -58,6 +58,7 @@ namespace Cognite.OpcUa
     {
         public bool Debug { get; set; } = false;
         public int DataPushDelay { get; set; } = 1000;
+        public bool Critical { get; set; } = true;
         public abstract IPusher ToPusher(IServiceProvider provider);
     }
     public class CogniteClientConfig : PusherConfig

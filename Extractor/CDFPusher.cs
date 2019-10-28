@@ -27,11 +27,11 @@ using CogniteSdk.Assets;
 using CogniteSdk.TimeSeries;
 using CogniteSdk.DataPoints;
 using CogniteSdk.Events;
+using CogniteSdk.Login;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus.Client;
 using Serilog;
-using Thoth.Json.Net;
 
 namespace Cognite.OpcUa
 {
@@ -424,6 +424,44 @@ namespace Cognite.OpcUa
                 Log.Error(e, "Failed to get latest timestamp");
                 return false;
             }
+            return true;
+        }
+
+        public async Task<bool> TestConnection(CancellationToken token)
+        {
+            // Use data client because it gives up after a little while
+            var client = GetClient("Data");
+            LoginStatusEntity loginStatus;
+            try
+            {
+                loginStatus = await client.Login.StatusAsync(new CancellationToken());
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to get login status from CDF. {project} at {url}", config.Project, config.Host);
+                return false;
+            }
+            if (!loginStatus.LoggedIn)
+            {
+                Log.Error("API key is invalid. {project} at {url}", config.Project, config.Host);
+                return false;
+            }
+            if (!loginStatus.Project.Equals(config.Project))
+            {
+                Log.Error("API key is not associated with project {project} at {url}", config.Project, config.Host);
+                return false;
+            }
+            try
+            {
+                await client.TimeSeries.ListAsync(new List<TimeSeriesQuery> { TimeSeriesQuery.Limit(1) });
+            }
+            catch (ResponseException ex)
+            {
+                Log.Error(ex, "Could not access CDF Time Series - most likely due to insufficient access rights on API key. {project} at {host}",
+                    config.Project, config.Host);
+                return false;
+            }
+
             return true;
         }
 

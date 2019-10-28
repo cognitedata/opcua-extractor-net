@@ -42,6 +42,10 @@ namespace Cognite.OpcUa
             return Task.FromResult(true);
         }
         /// <summary>
+        /// Test the connection to the destination, should return false on failure
+        /// </summary>
+        Task<bool> TestConnection(CancellationToken token);
+        /// <summary>
         /// Get latest timestamp in destination system, if possible
         /// </summary>
         Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
