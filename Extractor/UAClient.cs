@@ -1549,7 +1549,7 @@ namespace Cognite.OpcUa
             if (nodeOverrides.ContainsKey((NodeId)nodeid)) return nodeOverrides[(NodeId)nodeid];
 
             string namespaceUri = nodeid.NamespaceUri ?? session.NamespaceUris.GetString(nodeid.NamespaceIndex);
-            string prefix = extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : namespaceUri;
+            string prefix = extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
             // Strip the ns=namespaceIndex; part, as it may be inconsistent between sessions
             // We still want the identifierType part of the id, so we just remove the first ocurrence of ns=..
             // If we can find out if the value of the key alone is unique, then we can remove the identifierType, though I suspect
@@ -1563,7 +1563,7 @@ namespace Cognite.OpcUa
             }
             string extId = $"{extractionConfig.IdPrefix}{prefix}{nodeidstr}".Replace("\n", "");
 
-            // ExternalId is limited to 128 characters
+            // ExternalId is limited to 255 characters
             extId = extId.Trim();
             if (extId.Length > 255)
             {
