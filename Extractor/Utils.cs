@@ -61,7 +61,11 @@ namespace Cognite.OpcUa
                 if (count > 0)
                 {
                     BufferFileEmpty = false;
-                    Log.Information("Write {NumDatapointsToPersist} datapoints to file", count);
+                    Log.Debug("Write {NumDatapointsToPersist} datapoints to file", count);
+                }
+                else
+                {
+                    Log.Verbose("Write 0 datapoints to file");
                 }
             }
         }
@@ -98,7 +102,12 @@ namespace Cognite.OpcUa
                         bufferedDPQueue.Enqueue(buffDp);
                     }
                 }
-                Log.Information("Read {NumDatapointsToRead} points from file", count);
+
+                if (count == 0)
+                {
+                    Log.Verbose("Read 0 point from file");
+                }
+                Log.Debug("Read {NumDatapointsToRead} points from file", count);
                 File.Create(config.BufferFile).Close();
                 BufferFileEmpty |= count > 0 && new FileInfo(config.BufferFile).Length == 0;
             }
