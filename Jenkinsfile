@@ -36,11 +36,11 @@ podTemplate(
         resourceLimitCpu: '1500m',
         resourceLimitMemory: '3000Mi',
         ttyEnabled: true),
-	containerTemplate(name: 'influxdb',
-		image: 'influxdb:1.7.7',
-		resourceRequestCpu: '1000m',
-		resourceRequestMemory: '500Mi',
-		resourceLimitCpu: '1000m',
+    containerTemplate(name: 'influxdb',
+        image: 'influxdb:1.7.7',
+        resourceRequestCpu: '1000m',
+        resourceRequestMemory: '500Mi',
+        resourceLimitCpu: '1000m',
         resourceLimitMemory: '500Mi',
         ttyEnabled: true),
     ],
@@ -74,6 +74,7 @@ podTemplate(
                   userRemoteConfigs: scm.userRemoteConfigs
                 ])
                 dockerImageName = "eu.gcr.io/cognitedata/opcua-extractor-net"
+                dockerImageName2 = "eu.gcr.io/cognite-registry/opcua-extractor-net"
                 version = sh(returnStdout: true, script: "git describe --tags HEAD || true").trim()
                 version = version.replaceFirst(/-(\d+)-.*/, '-pre.$1')
                 lastTag = sh(returnStdout: true, script: "git describe --tags --abbrev=0").trim()
@@ -82,12 +83,12 @@ podTemplate(
                 echo "${env.BRANCH_NAME}"
             }
         }
-		container('influxdb') {
-			stage('Build DB') {
-				sh("influx --execute 'DROP DATABASE testdb'")
-				sh("influx --execute 'CREATE DATABASE testdb'")
-			}
-		}
+        container('influxdb') {
+            stage('Build DB') {
+                sh("influx --execute 'DROP DATABASE testdb'")
+                sh("influx --execute 'CREATE DATABASE testdb'")
+            }
+        }
         container('dotnet-mono') {
             stage('Install dependencies') {
                 sh('apt-get update && apt-get install -y python3-pip')
@@ -96,11 +97,11 @@ podTemplate(
                 sh('mono .paket/paket.exe install')
                 sh('git clone https://github.com/cognitedata/python-opcua.git ../python-opcua')
             }
-			dir('../python-opcua') {
-				stage('Build opcua') {
-					sh('python3 setup.py build')
-				}
-			}
+            dir('../python-opcua') {
+                stage('Build opcua') {
+                    sh('python3 setup.py build')
+                }
+            }
             stage('Start servers') {
                 sh('./startservers.sh')
             }
@@ -143,12 +144,13 @@ podTemplate(
                        + "&& id=\$(docker create \$image)"
                        + "&& docker cp \$id:/build/deploy ."
                        + "&& docker rm -v \$id"
-                       + "&& docker build -t ${dockerImageName}:${version} .")
+                       + "&& docker build -t ${dockerImageName}:${version} -t ${dockerImageName2}:${version} .")
                 sh('docker images | head')
             }
             if (env.BRANCH_NAME == 'master') {
                 stage('Push Docker images') {
                     sh("docker push ${dockerImageName}:${version}")
+                    sh("docker push ${dockerImageName2}:${version}")
                 }
             }
         }
