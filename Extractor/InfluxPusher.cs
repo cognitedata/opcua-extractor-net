@@ -47,6 +47,11 @@ namespace Cognite.OpcUa
                 dataPointList.Add(buffer);
             }
 
+            if (count == 0)
+            {
+                Log.Verbose("Push 0 datapoints to influxdb");
+                return;
+            }
             var groups = dataPointList.GroupBy(point => point.Id);
 
             var points = new List<IInfluxDatapoint>();
@@ -102,7 +107,7 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            Log.Information("Push {cnt} datapoints to influxdb", points.Count);
+            Log.Debug("Push {cnt} datapoints to influxdb", points.Count);
             await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
         }
         /// <summary>

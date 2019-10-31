@@ -123,10 +123,10 @@ namespace Cognite.OpcUa
 
                 if (count == 0)
                 {
-                    Log.Debug("Push 0 datapoints to CDF");
+                    Log.Verbose("Push 0 datapoints to CDF");
                     return;
                 }
-                Log.Information("Push {NumDatapointsToPush} datapoints to CDF", count);
+                Log.Debug("Push {NumDatapointsToPush} datapoints to CDF", count);
             }
 
             var pushTasks = Utils.ChunkDictOfLists(dataPointList, 100000, 10000).Select(chunk => PushDataPointsChunk(chunk, token))
@@ -184,13 +184,22 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Log.Error(e, "Failed to insert {NumFailedDatapoints} datapoints into CDF", count);
+
 				dataPointPushFailures.Inc();
                 if (!(e is ResponseException ex) || ex.Code != 400 && ex.Code != 409)
                 {
                     buffer = true;
-                } 
+                }
                 failed = true;
+                if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile) && buffer)
+                {
+                    Log.Warning("Failed to insert {NumFailedDatapoints} datapoints into CDF, writing to file", count);
+                }
+                else
+                {
+                    Log.Error("Failed to insert {NumFailedDatapoints} datapoints into CDF", count);
+                }
+                Log.Debug(e, "Failed to insert {NumFailedDatapoints} datapoints into CDF", count);
             }
             if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile) && buffer)
             {
@@ -233,10 +242,10 @@ namespace Cognite.OpcUa
             }
             if (count == 0)
             {
-                Log.Debug("Push 0 events to CDF");
+                Log.Verbose("Push 0 events to CDF");
                 return;
             }
-            Log.Information("Push {NumEventsToPush} events to CDF", count);
+            Log.Debug("Push {NumEventsToPush} events to CDF", count);
             if (config.Debug) return;
             IEnumerable<EventEntity> events = eventList.Select(EventToCDFEvent).ToList();
             var client = GetClient("Data");
