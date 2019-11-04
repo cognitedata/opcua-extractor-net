@@ -16,11 +16,13 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
 using Microsoft.Extensions.DependencyInjection;
+using Prometheus.Client;
 using Xunit.Abstractions;
 
 namespace Test
@@ -93,6 +95,62 @@ namespace Test
             services.AddHttpClient<ContextCDFClient>()
                 .ConfigurePrimaryHttpMessageHandler(() => handler.GetHandler());
             return services.BuildServiceProvider();
+        }
+
+        public static double GetMetricValue(string name)
+        {
+            Metrics.DefaultCollectorRegistry.TryGet(name, out var collector);
+            return collector switch
+            {
+                Gauge gauge => gauge.Value,
+                Counter counter => counter.Value,
+                _ => 0
+            };
+        }
+        public static bool TestMetricValue(string name, double value)
+        {
+            Metrics.DefaultCollectorRegistry.TryGet(name, out var collector);
+            return collector switch
+            {
+                Gauge gauge => (Math.Abs(gauge.Value - value) < 0.01),
+                Counter counter => (Math.Abs(counter.Value - value) < 0.01),
+                _ => false
+            };
+        }
+
+        public static bool VerifySuccessMetrics()
+        {
+            return TestMetricValue("opcua_attribute_request_failures", 0)
+                && TestMetricValue("opcua_history_read_failures", 0)
+                && TestMetricValue("opcua_browse_failures", 0);
+        }
+
+        private static void ResetMetricValue(string name)
+        {
+            Metrics.DefaultCollectorRegistry.TryGet(name, out var collector);
+            switch (collector)
+            {
+                case Gauge gauge:
+                    gauge.Set(0);
+                    break;
+                case Counter counter:
+                    counter.Reset();
+                    break;
+            }
+        }
+        public static void ResetTestMetrics()
+        {
+            var metrics = new List<string>
+            {
+                "opcua_attribute_request_failures", "opcua_history_read_failures", "opcua_browse_failures",
+                "opcua_browse_operations", "opcua_history_reads", "opcua_tracked_timeseries",
+                "opcua_tracked_assets", "opcua_node_ensure_failures", "opcua_datapoint_pushes",
+                "opcua_datapoint_push_failures"
+            };
+            foreach (var metric in metrics)
+            {
+                ResetMetricValue(metric);
+            }
         }
     }
 }

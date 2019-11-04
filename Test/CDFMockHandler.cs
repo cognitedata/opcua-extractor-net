@@ -505,6 +505,7 @@ namespace Test
         public bool isStep { get; set; }
         public long createdTime { get; set; }
         public long lastUpdatedTime { get; set; }
+        public Dictionary<string, string> metadata { get; set; }
         public string externalId { get; set; }
         public IEnumerable<DataPoint> datapoints { get; set; }
         public string name { get; set; }

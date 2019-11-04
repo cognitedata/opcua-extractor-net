@@ -22,6 +22,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Prometheus.Client;
 using Serilog;
 using Xunit;
 using Xunit.Abstractions;
@@ -47,7 +48,9 @@ namespace Test
         [InlineData(CDFMockHandler.MockMode.FailAsset, "full")]
         public async Task TestBasicPushing(CDFMockHandler.MockMode mode, string serverType)
         {
+            Common.ResetTestMetrics();
             var fullConfig = Common.BuildConfig(serverType, 3);
+            fullConfig.Extraction.AllowStringVariables = false;
             Logger.Configure(fullConfig.Logging);
             Log.Information("Starting OPC UA Extractor version {version}", Cognite.OpcUa.Version.GetVersion());
             Log.Information("Revision information: {status}", Cognite.OpcUa.Version.Status());
@@ -69,6 +72,21 @@ namespace Test
                 }
             }
             extractor.Close();
+            Assert.True(Common.VerifySuccessMetrics());
+            Assert.Equal(mode == CDFMockHandler.MockMode.FailAsset ? 1 : 0, (int)Common.GetMetricValue("opcua_node_ensure_failures"));
+
+            if (mode == CDFMockHandler.MockMode.None)
+            {
+                Assert.DoesNotContain(handler.timeseries.Values, ts => ts.name == "MyString");
+                Assert.Contains(handler.assets.Values, asset =>
+                    asset.name == "MyObject" && asset.metadata != null
+                    && asset.metadata["Asset prop 1"] == "test"
+                    && asset.metadata["Asset prop 2"] == "123.21");
+                Assert.Contains(handler.timeseries.Values, ts =>
+                    ts.name == "MyVariable" && ts.metadata != null
+                    && ts.metadata["TS property 1"] == "test"
+                    && ts.metadata["TS property 2"] == "123.2");
+            }
         }
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
@@ -76,6 +94,7 @@ namespace Test
         [Fact]
         public async Task TestAutoBuffering()
         {
+            Common.ResetTestMetrics();
             var fullConfig = Common.BuildConfig("basic", 4);
             Logger.Configure(fullConfig.Logging);
             var client = new UAClient(fullConfig);
@@ -141,6 +160,10 @@ namespace Test
                 last = dp;
                 check[dp - min]++;
             }
+            Assert.True(Common.VerifySuccessMetrics());
+            Assert.Equal(2, (int)Common.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(4, (int)Common.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.NotEqual(0, (int)Common.GetMetricValue("opcua_datapoint_push_failures"));
         }
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
@@ -148,6 +171,7 @@ namespace Test
         [Fact]
         public async Task TestDebugMode()
         {
+            Common.ResetTestMetrics();
             var fullConfig = Common.BuildConfig("basic", 5);
             if (fullConfig == null) throw new Exception("No config");
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
@@ -184,6 +208,7 @@ namespace Test
             }
             Assert.Equal(0, handler.RequestCount);
             extractor.Close();
+            Assert.True(Common.VerifySuccessMetrics());
         }
         [Trait("Server", "array")]
         [Trait("Target", "CDFPusher")]
@@ -191,6 +216,7 @@ namespace Test
         [Fact]
         public async Task TestArrayData()
         {
+            Common.ResetTestMetrics();
             var fullConfig = Common.BuildConfig("array", 6);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             fullConfig.Extraction.AllowStringVariables = true;
@@ -253,6 +279,9 @@ namespace Test
                 last = dp;
                 check[dp - min]++;
             }
+            Assert.True(Common.VerifySuccessMetrics());
+            Assert.Equal(4, (int)Common.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(7, (int)Common.GetMetricValue("opcua_tracked_timeseries"));
         }
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
@@ -260,6 +289,7 @@ namespace Test
         [Fact]
         public async Task TestExtractorRestart()
         {
+            Common.ResetTestMetrics();
             var fullConfig = Common.BuildConfig("basic", 9);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             Logger.Configure(fullConfig.Logging);
@@ -376,6 +406,7 @@ namespace Test
         [Trait("Test", "continuity")]
         public async Task TestDataContinuity()
         {
+            Common.ResetTestMetrics();
             var fullConfig = Common.BuildConfig("basic", 15);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             Logger.Configure(fullConfig.Logging);
@@ -430,6 +461,67 @@ namespace Test
             }
 
             Assert.True(check.All(count => count == 1));
+            Assert.True(Common.VerifySuccessMetrics());
+            Assert.Equal(2, (int)Common.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(4, (int)Common.GetMetricValue("opcua_tracked_timeseries"));
+        }
+
+        [Fact]
+        [Trait("Server", "basic")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "multiplecdf")]
+        // Multiple pushers that fetch properties does some magic to avoid fetching data twice
+        public async Task TestMultipleCDFPushers()
+        {
+            Common.ResetTestMetrics();
+            var fullConfig = Common.BuildConfig("basic", 16);
+            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            Logger.Configure(fullConfig.Logging);
+
+            var client = new UAClient(fullConfig);
+            var handler1 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var handler2 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher1 = new CDFPusher(Common.GetDummyProvider(handler1), config);
+            var pusher2 = new CDFPusher(Common.GetDummyProvider(handler2), config);
+
+            var extractor = new Extractor(fullConfig, new List<IPusher> { pusher1, pusher2 }, client);
+            try
+            {
+                await extractor.RunExtractor(CancellationToken.None, true);
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+            extractor.Close();
+            Assert.DoesNotContain(handler1.timeseries.Values, ts => ts.name == "MyString");
+            Assert.Contains(handler1.assets.Values, asset =>
+                asset.name == "MyObject"
+                && asset.metadata != null 
+                && asset.metadata["Asset prop 1"] == "test" 
+                && asset.metadata["Asset prop 2"] == "123.21");
+            Assert.Contains(handler1.timeseries.Values, ts =>
+                ts.name == "MyVariable" 
+                && ts.metadata != null 
+                && ts.metadata["TS property 1"] == "test" 
+                && ts.metadata["TS property 2"] == "123.2");
+            Assert.DoesNotContain(handler2.timeseries.Values, ts => ts.name == "MyString");
+            Assert.Contains(handler2.assets.Values, asset =>
+                asset.name == "MyObject"
+                && asset.metadata != null
+                && asset.metadata["Asset prop 1"] == "test"
+                && asset.metadata["Asset prop 2"] == "123.21");
+            Assert.Contains(handler2.timeseries.Values, ts =>
+                ts.name == "MyVariable"
+                && ts.metadata != null
+                && ts.metadata["TS property 1"] == "test"
+                && ts.metadata["TS property 2"] == "123.2");
+            // Note that each pusher counts on the same metrics, so we would expect double values here.
+            Assert.True(Common.VerifySuccessMetrics());
+            Assert.Equal(4, (int)Common.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(8, (int)Common.GetMetricValue("opcua_tracked_timeseries"));
+            // 1 for root, 1 for MyObject, 1 for asset/timeseries properties
+            Assert.Equal(3, (int)Common.GetMetricValue("opcua_browse_operations"));
         }
     }
 }

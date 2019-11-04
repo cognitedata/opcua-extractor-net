@@ -71,7 +71,7 @@ namespace Cognite.OpcUa
         private static readonly Counter attributeRequestFailures = Metrics
             .CreateCounter("opcua_attribute_request_failures", "Number of failed requests for attributes to OPC-UA");
         private static readonly Counter historyReadFailures = Metrics
-            .CreateCounter("opcua_history_read_fauilures", "Number of failed history read operations");
+            .CreateCounter("opcua_history_read_failures", "Number of failed history read operations");
         private static readonly Counter browseFailures = Metrics
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
@@ -455,7 +455,7 @@ namespace Cognite.OpcUa
                     foreach (var result in results)
                     {
                         var nodeId = lparents.ElementAt(bindex++);
-                        Log.Verbose("GetNodeChildren Browse result {nodeId}", nodeId);
+                        Log.Debug("GetNodeChildren Browse result {nodeId}", nodeId);
                         finalResults[nodeId] = result.References;
                         if (result.ContinuationPoint != null)
                         {
@@ -493,7 +493,7 @@ namespace Cognite.OpcUa
                         foreach (var result in results)
                         {
                             var nodeId = indexMap[pindex++];
-                            Log.Verbose("GetNodeChildren BrowseNext result {nodeId}", nodeId);
+                            Log.Debug("GetNodeChildren BrowseNext result {nodeId}", nodeId);
                             finalResults[nodeId].AddRange(result.References);
                             if (result.ContinuationPoint == null) continue;
                             indexMap[nindex++] = nodeId;
@@ -759,6 +759,7 @@ namespace Cognite.OpcUa
         {
             var properties = new HashSet<BufferedVariable>();
             Log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
+            if (!nodes.Any()) return;
             var idsToCheck = new List<NodeId>();
             foreach (var node in nodes)
             {

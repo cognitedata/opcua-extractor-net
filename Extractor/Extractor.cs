@@ -259,7 +259,7 @@ namespace Cognite.OpcUa
             List<Task> tasksToWaitFor;
             lock (propertySetLock)
             {
-                nodes = nodes.Where(node => !pendingProperties.Contains(node.Id) && !node.PropertiesRead);
+                nodes = nodes.Where(node => !pendingProperties.Contains(node.Id) && !node.PropertiesRead).ToList();
                 if (nodes.Any())
                 {
                     newTask = Task.Run(() => uaClient.GetNodeProperties(nodes, token));

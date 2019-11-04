@@ -22,10 +22,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
-using CogniteSdk;
-using CogniteSdk.Login;
-using CogniteSdk.TimeSeries;
 using Opc.Ua;
 using YamlDotNet.Serialization;
 
