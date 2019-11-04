@@ -87,6 +87,12 @@ namespace Test
                     && ts.metadata["TS property 1"] == "test"
                     && ts.metadata["TS property 2"] == "123.2");
             }
+
+            if (mode != CDFMockHandler.MockMode.FailAsset)
+            {
+                Assert.Equal(serverType == "basic" ? 2 : 154, handler.assets.Count);
+                Assert.Equal(serverType == "basic" ? 4 : 2002, handler.timeseries.Count);
+            }
         }
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]

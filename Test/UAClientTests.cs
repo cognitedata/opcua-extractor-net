@@ -74,5 +74,38 @@ namespace Test
             source.Cancel();
             extractor.Close();
         }
+        [Trait("Server", "basic")]
+        [Trait("Target", "UAClient")]
+        [Trait("Test", "granularity")]
+        [Theory]
+        [InlineData(1, 900)]
+        [InlineData(3, 0)]
+        public async Task TestHistoryReadGranularity(int expectedReads, int granularity)
+        {
+            Common.ResetTestMetrics();
+            var fullConfig = Common.BuildConfig("basic", 18);
+            fullConfig.Source.HistoryGranularity = granularity;
+            fullConfig.Source.HistoryReadChunk = 10000;
+            Logger.Configure(fullConfig.Logging);
+            var client = new UAClient(fullConfig);
+            var extractor = new Extractor(fullConfig, new List<IPusher>(), client);
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+            for (int i = 0; i < 20; i++)
+            {
+                if ((int) Common.GetMetricValue("opcua_history_reads") == expectedReads) break;
+                await Task.Delay(500);
+            }
+            Assert.Equal(expectedReads, (int)Common.GetMetricValue("opcua_history_reads"));
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+        }
     }
 }

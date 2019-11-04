@@ -1573,7 +1573,7 @@ namespace Cognite.OpcUa
             if (extId.Length > 255)
             {
                 if (index <= -1) return extId.Substring(0, 255);
-                string indexSub = $"{index}";
+                string indexSub = $"[{index}]";
                 return extId.Substring(0, 255 - indexSub.Length) + indexSub;
             }
             if (index > -1)
