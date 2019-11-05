@@ -44,12 +44,6 @@ namespace Cognite.OpcUa
         public Dictionary<string, string> NamespaceMap { get => _namespaceMap; set => _namespaceMap = value ?? _namespaceMap; }
         private Dictionary<string, string> _namespaceMap = new Dictionary<string, string>();
         public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
-        public double? NonFiniteReplacement
-        {
-            get => _nonFiniteReplacement;
-            set =>_nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
-        }
-        private double? _nonFiniteReplacement;
         public long HistoryStartTime { get; set; } = 0;
         public int AutoRebrowsePeriod { get; set; } = 0;
         public bool EnableAuditDiscovery { get; set; } = false;
@@ -78,6 +72,12 @@ namespace Cognite.OpcUa
         public int LatestChunk { get; set; } = 100;
         public int TimeSeriesChunk { get; set; } = 1000;
         public int AssetChunk { get; set; } = 1000;
+        public double? NonFiniteReplacement
+        {
+            get => _nonFiniteReplacement;
+            set => _nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
+        }
+        private double? _nonFiniteReplacement;
     }
     public class InfluxClientConfig : PusherConfig
     {

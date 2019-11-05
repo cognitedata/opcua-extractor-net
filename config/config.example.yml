@@ -63,6 +63,8 @@ Pushers:
         BufferOnFailure: false
         # Buffer file path
         BufferFile: buffer.bin
+        # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
+        NonFiniteReplacement:
         # Chunk sizes in CDF requests
         LatestChunk: 100
         TimeSeriesChunk: 1000
@@ -178,8 +180,6 @@ Extraction:
     #          NamespaceUri:
     #          NodeId:
     #      IsStep: false
-    # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
-    NonFiniteReplacement:
     # The earliest timestamp to be read from history on the OPC-UA server, in milliseconds since 1/1/1970.
     HistoryStartTime: 0
     # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.

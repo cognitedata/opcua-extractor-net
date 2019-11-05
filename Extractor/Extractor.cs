@@ -628,17 +628,6 @@ namespace Cognite.OpcUa
                             value.SourceTimestamp,
                             $"{uniqueId}[{i}]",
                             UAClient.ConvertToDouble(values.GetValue(i)));
-                    if (!dp.IsString && !double.IsFinite(dp.DoubleValue))
-                    {
-                        if (config.Extraction.NonFiniteReplacement != null)
-                        {
-                            dp.DoubleValue = config.Extraction.NonFiniteReplacement.Value;
-                        }
-                        else
-                        {
-                            continue;
-                        }
-                    }
                     ret.Add(dp);
                 }
                 return ret;
@@ -652,18 +641,6 @@ namespace Cognite.OpcUa
                     value.SourceTimestamp,
                     uniqueId,
                     UAClient.ConvertToDouble(value.Value));
-
-            if (!sdp.IsString && !double.IsFinite(sdp.DoubleValue))
-            {
-                if (config.Extraction.NonFiniteReplacement != null)
-                {
-                    sdp.DoubleValue = config.Extraction.NonFiniteReplacement.Value;
-                }
-                else
-                {
-                    return Array.Empty<BufferedDataPoint>();
-                }
-            }
             return new[] { sdp };
         }
         /// <summary>

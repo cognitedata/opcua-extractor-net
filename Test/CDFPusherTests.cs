@@ -346,6 +346,7 @@ namespace Test
         [InlineData(20000, 100, 20, 1000, 100000)]
         [InlineData(200, 10000, 20, 10, 100000)]
         [InlineData(20000, 5, 2, 10000, 50000)]
+        [InlineData(20, 150000, 30, 2, 100000)]
         [Trait("Server", "none")]
         [Trait("Target", "Utils")]
         [Trait("Test", "dictChunk")]
@@ -372,8 +373,6 @@ namespace Test
             Assert.Equal(expTimeseriesMax, maxTs);
             Assert.Equal(expChunks, results.Count());
             var total = results.Sum(dct => dct.Values.Sum(val => val.Count()));
-            var totalTs = results.Sum(dct => dct.Values.Count);
-            Assert.Equal(timeseries, totalTs);
             Assert.Equal(datapoints * timeseries, total);
 
             var exists = new bool[timeseries * datapoints];
@@ -528,6 +527,193 @@ namespace Test
             Assert.Equal(8, (int)Common.GetMetricValue("opcua_tracked_timeseries"));
             // 1 for root, 1 for MyObject, 1 for asset/timeseries properties
             Assert.Equal(3, (int)Common.GetMetricValue("opcua_browse_operations"));
+        }
+        [Fact]
+        [Trait("Server", "basic")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "nodemap")]
+        public async Task TestNodeMap()
+        {
+            Common.ResetTestMetrics();
+            var fullConfig = Common.BuildConfig("basic", 19);
+            fullConfig.Extraction.NodeMap = new Dictionary<string, ProtoNodeId>
+            {
+                { "Map1", new ProtoNodeId { NamespaceUri = "http://examples.freeopcua.github.io", NodeId = "i=10" } }
+            };
+            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            Logger.Configure(fullConfig.Logging);
+
+            var client = new UAClient(fullConfig);
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
+            handler.StoreDatapoints = true;
+
+            var extractor = new Extractor(fullConfig, pusher, client);
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+
+            for (int i = 0; i < 20; i++)
+            {
+                // Wait until we get some data on the overridden datapoint
+                if (handler.datapoints.ContainsKey("Map1")) break;
+                await Task.Delay(500);
+            }
+            
+            source.Cancel();
+
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+
+            Assert.True(handler.datapoints.ContainsKey("Map1"));
+            Assert.True(handler.timeseries.ContainsKey("Map1"));
+            Assert.Equal("MyVariable int", handler.timeseries["Map1"].name);
+            extractor.Close();
+        }
+        [Fact]
+        [Trait("Server", "basic")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "nonfinite")]
+        public async Task TestNonFiniteDatapoints()
+        {
+            Common.ResetTestMetrics();
+            var fullConfig = Common.BuildConfig("basic", 20);
+            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            fullConfig.Logging.ConsoleLevel = "verbose";
+            fullConfig.Source.History = false;
+            Logger.Configure(fullConfig.Logging);
+            // It is awfully difficult to test anything without a UAClient to use for creating unique-ids etc, unfortunately
+            // Perhaps in the future a final rewrite to make the pusher not use NodeId would be in order, it is not that easy, however.
+            var client = new UAClient(fullConfig);
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
+
+            var extractor = new Extractor(fullConfig, pusher, client);
+            try
+            {
+                await extractor.RunExtractor(CancellationToken.None, true);
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+            await pusher.PushDataPoints(CancellationToken.None);
+            Assert.False(handler.datapoints.ContainsKey("gp.efg:i=2"));
+            // The extractor does not actually close completely if quitAfterMap is specified, but leaves connections open, including subscriptions
+            extractor.Close();
+            handler.StoreDatapoints = true;
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.PositiveInfinity));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NegativeInfinity));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NaN));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E100));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E100));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E105));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E105));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MaxValue));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MinValue));
+            await pusher.PushDataPoints(CancellationToken.None);
+            Assert.False(handler.datapoints.ContainsKey("gp.efg:i=2"));
+            config.NonFiniteReplacement = -1;
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.PositiveInfinity));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NegativeInfinity));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NaN));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E100));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E100));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E105));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E105));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MaxValue));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MinValue));
+            await pusher.PushDataPoints(CancellationToken.None);
+            Assert.True(handler.datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.Equal(9, handler.datapoints["gp.efg:i=2"].Item1.Count);
+            Assert.True(handler.datapoints["gp.efg:i=2"].Item1.TrueForAll(item => Math.Abs(item.Value + 1) < 0.01));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E99));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E99));
+            await pusher.PushDataPoints(CancellationToken.None);
+            Assert.Equal(11, handler.datapoints["gp.efg:i=2"].Item1.Count);
+        }
+
+        [Fact]
+        [Trait("Server", "basic")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "badpoints")]
+        public async Task TestBadPoints()
+        {
+            Common.ResetTestMetrics();
+            var fullConfig = Common.BuildConfig("basic", 21);
+            var config = (CogniteClientConfig) fullConfig.Pushers.First();
+            fullConfig.Logging.ConsoleLevel = "verbose";
+            fullConfig.Source.History = false;
+            fullConfig.Extraction.AllowStringVariables = true;
+            Logger.Configure(fullConfig.Logging);
+            // It is awfully difficult to test anything without a UAClient to use for creating unique-ids etc, unfortunately
+            // Perhaps in the future a final rewrite to make the pusher not use NodeId would be in order, it is not that easy, however.
+            var client = new UAClient(fullConfig);
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            handler.timeseries.Add("gp.efg:i=2", new TimeseriesDummy
+            {
+                id = -1,
+                datapoints = new List<DataPoint>(),
+                externalId = "gp.efg:i=2",
+                isString = true,
+                name = "MyVariable"
+            });
+            handler.timeseries.Add("gp.efg:i=4", new TimeseriesDummy
+            {
+                id = -2,
+                datapoints = new List<DataPoint>(),
+                externalId = "gp.efg:i=4",
+                isString = false,
+                name = "MyString"
+            });
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
+
+            var extractor = new Extractor(fullConfig, pusher, client);
+            try
+            {
+                await extractor.RunExtractor(CancellationToken.None, true);
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+
+            await pusher.PushDataPoints(CancellationToken.None);
+            Assert.False(handler.datapoints.ContainsKey("gp.efg:i=2"));
+            // The extractor does not actually close completely if quitAfterMap is specified, but leaves connections open, including subscriptions
+            extractor.Close();
+            handler.StoreDatapoints = true;
+            // Too low datetime
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(new DateTime(1970, 1, 1), "gp.efg:i=3", 0));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(new DateTime(1900, 1, 1), "gp.efg:i=3", 0));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.MinValue, "gp.efg:i=3", 0));
+            // Incorrect type
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 123));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", "123"));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", null));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=4", 123));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=4", "123"));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=4", null));
+
+            await pusher.PushDataPoints(CancellationToken.None);
+            Assert.False(handler.datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.False(handler.datapoints.ContainsKey("gp.efg:i=4"));
+            Assert.False(handler.datapoints.ContainsKey("gp.efg:i=3"));
+            // Remember that this does not test against CDF
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(new DateTime(1971, 1, 1), "gp.efg:i=3", 0));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(new DateTime(2040, 1, 1), "gp.efg:i=3", 0));
+            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(new DateTime(1980, 1, 1), "gp.efg:i=3", 0));
+            await pusher.PushDataPoints(CancellationToken.None);
+
+            Assert.False(handler.datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.False(handler.datapoints.ContainsKey("gp.efg:i=4"));
+            Assert.True(handler.datapoints.ContainsKey("gp.efg:i=3"));
+            Assert.Equal(3, handler.datapoints["gp.efg:i=3"].Item1.Count);
         }
     }
 }
