@@ -86,6 +86,8 @@ Pushers:
         # False if this destination can be ignored on failed connection
         # default is true, meaning the extractor will terminate if connection test fails
         Critical: true
+        # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
+        NonFiniteReplacement:
         # Max number of points to send in each request to influx
         PointChunkSize: 100000
 

@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,6 +37,7 @@ namespace Test
         [Fact]
         public async Task TestEventServer()
         {
+            File.Create("latestEvent.bin").Close();
             var fullConfig = Common.BuildConfig("events", 8, "config.events.yml");
             Logger.Configure(fullConfig.Logging);
             var client = new UAClient(fullConfig);
@@ -108,6 +110,7 @@ namespace Test
         [Fact]
         public async Task TestEventServerRestart()
         {
+            File.Create("latestEvent.bin").Close();
             var fullConfig = Common.BuildConfig("events", 8, "config.events.yml");
             Logger.Configure(fullConfig.Logging);
             var client = new UAClient(fullConfig);
@@ -121,7 +124,7 @@ namespace Test
 
             bool historyReadDone = false;
             await Task.Delay(1000);
-            for (int i = 0; i < 40; i++)
+            for (int i = 0; i < 80; i++)
             {
                 if (handler.events.Values.Any() && extractor.EventEmitterStates.All(state => state.Value.IsStreaming))
                 {
@@ -137,7 +140,7 @@ namespace Test
             extractor.RestartExtractor(source.Token);
             historyReadDone = false;
             await Task.Delay(1000);
-            for (int i = 0; i < 40; i++)
+            for (int i = 0; i < 80; i++)
             {
                 if (handler.events.Values.Any() && extractor.EventEmitterStates.All(state => state.Value.IsStreaming) && handler.events.Count > lastCount)
                 {

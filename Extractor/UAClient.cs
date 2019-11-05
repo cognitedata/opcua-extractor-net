@@ -981,13 +981,15 @@ namespace Cognite.OpcUa
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
         {
+            Log.Information("History read events");
             if (eventFields == null) throw new Exception("EventFields not defined");
             // Get the latest event receive time (will be fetched from file), then set the startTime to the largest of that minus 10 minutes, and
             // the HistoryStartTime config option. We have generally have no way of finding the latest event in the destinations,
             // so we approximate the time we want to read from using a local buffer.
             var latestTime = emitters.Min(emitter => emitter.DestLatestTimestamp);
-            var startTime = latestTime.Subtract(TimeSpan.FromMinutes(10));
+            var startTime = latestTime == DateTime.MinValue ? latestTime : latestTime.Subtract(TimeSpan.FromMinutes(10));
             startTime = startTime < historyStartTime ? historyStartTime : startTime;
+            Log.Information("Read history for {num} nodes starting from {starttime}", emitters.Count(), startTime);
             var filter = BuildEventFilter(nodeIds);
             var details = new ReadEventDetails
             {

@@ -86,26 +86,37 @@ namespace Test
             catch { }
             lock (handlerLock)
             {
-                switch (reqPath)
+                try
                 {
-                    case "/assets/byids":
-                        return HandleAssetsByIds(content);
-                    case "/assets":
-                        return HandleCreateAssets(content);
-                    case "/timeseries/byids":
-                        return HandleGetTimeseries(content);
-                    case "/timeseries":
-                        return req.Method == HttpMethod.Get ? HandleListTimeseries() : HandleCreateTimeseries(content);
-                    case "/timeseries/data":
-                        return HandleTimeseriesData(null);
-                    case "/timeseries/data/latest":
-                        return HandleGetTimeseries(content);
-                    case "/events":
-                        return HandleCreateEvents(content);
-                    default:
-                        Log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
-                        return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                    switch (reqPath)
+                    {
+                        case "/assets/byids":
+                            return HandleAssetsByIds(content);
+                        case "/assets":
+                            return HandleCreateAssets(content);
+                        case "/timeseries/byids":
+                            return HandleGetTimeseries(content);
+                        case "/timeseries":
+                            return req.Method == HttpMethod.Get
+                                ? HandleListTimeseries()
+                                : HandleCreateTimeseries(content);
+                        case "/timeseries/data":
+                            return HandleTimeseriesData(null);
+                        case "/timeseries/data/latest":
+                            return HandleGetTimeseries(content);
+                        case "/events":
+                            return HandleCreateEvents(content);
+                        default:
+                            Log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
+                            return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                    }
                 }
+                catch (Exception e)
+                {
+                    Log.Error(e, "Error in mock handler");
+                    return new HttpResponseMessage(HttpStatusCode.BadRequest);
+                }
+
             }
         }
 

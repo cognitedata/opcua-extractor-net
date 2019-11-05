@@ -75,7 +75,7 @@ namespace Cognite.OpcUa
         public double? NonFiniteReplacement
         {
             get => _nonFiniteReplacement;
-            set => _nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
+            set => _nonFiniteReplacement = value == null || double.IsFinite(value.Value) && Math.Abs(value.Value) < 1E100 ? value : null;
         }
         private double? _nonFiniteReplacement;
     }
@@ -86,6 +86,12 @@ namespace Cognite.OpcUa
         public string Password { get; set; }
         public string Database { get; set; }
         public int PointChunkSize { get; set; } = 100000;
+        public double? NonFiniteReplacement
+        {
+            get => _nonFiniteReplacement;
+            set => _nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
+        }
+        private double? _nonFiniteReplacement;
         public override IPusher ToPusher(IServiceProvider _)
         {
             return new InfluxPusher(this);
