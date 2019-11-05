@@ -69,7 +69,3 @@ Events:
     HistorizingEmitterIds:
         -   NamespaceUri:
             NodeId:
-    # Attribute to use for filtering history read. The last time read is stored locally, in latest.bin, and only events received by the server after this time are history read.
-    # This should be the browsename of the attribute that stores the local server time when an event is received. One of "ReceiveTime", "Time", "LocalTime".
-    # Leave empty to always read the full history on startup. (This might be slow if there is a lot of history).
-    ReceiveTimeProperty: "Time"

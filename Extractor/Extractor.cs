@@ -531,7 +531,7 @@ namespace Cognite.OpcUa
             {
                 tasks.Add(Task.Run(() => uaClient.SubscribeToEvents(EventEmitterStates.Keys, managedNodes, EventSubscriptionHandler, token)).ContinueWith(_ =>
                     uaClient.HistoryReadEvents(
-                        EventEmitterStates.Values.Where(state => state.Historizing).Select(state => state.Id),
+                        EventEmitterStates.Values.Where(state => state.Historizing),
                         objects.Concat(variables).Select(node => node.Id).Distinct(),
                         HistoryEventHandler,
                         token)));
@@ -957,7 +957,7 @@ namespace Cognite.OpcUa
                 cnt++;
             }
             emitterState.UpdateFromFrontfill(DateTime.UtcNow, final);
-            if (!final) return cnt; 
+            if (!final) return cnt;
             var buffered = emitterState.FlushBuffer();
             foreach (var pusher in pushers)
             {

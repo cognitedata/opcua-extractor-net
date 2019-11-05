@@ -976,21 +976,19 @@ namespace Cognite.OpcUa
         /// a bool indicating if this is the final iteration, NodeId of the node in question, ReadEventDetails containing the filter.
         /// Returns the number of events processed.</param>
         /// <param name="token"></param>
-        public async Task HistoryReadEvents(IEnumerable<NodeId> emitters,
+        public async Task HistoryReadEvents(IEnumerable<EventExtractionState> emitters,
             IEnumerable<NodeId> nodeIds,
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
         {
             if (eventFields == null) throw new Exception("EventFields not defined");
-            // Read the latest local event write time from file, then set the startTime to the largest of that minus 10 minutes, and
+            // Get the latest event receive time (will be fetched from file), then set the startTime to the largest of that minus 10 minutes, and
             // the HistoryStartTime config option. We have generally have no way of finding the latest event in the destinations,
             // so we approximate the time we want to read from using a local buffer.
-            // We both filter on "ReceivedTime" on the server, and read from a specific time in HistoryRead. Servers have varying support
-            // for this feature, as history read on events is a bit of an edge case.
-            var latestTime = Utils.ReadLastEventTimestamp();
+            var latestTime = emitters.Min(emitter => emitter.DestLatestTimestamp);
             var startTime = latestTime.Subtract(TimeSpan.FromMinutes(10));
             startTime = startTime < historyStartTime ? historyStartTime : startTime;
-            var filter = BuildEventFilter(nodeIds, startTime);
+            var filter = BuildEventFilter(nodeIds);
             var details = new ReadEventDetails
             {
                 StartTime = startTime,
@@ -1000,7 +998,7 @@ namespace Cognite.OpcUa
             };
             try
             {
-                await Task.Run(() => DoHistoryRead(details, emitters, callback, token));
+                await Task.Run(() => DoHistoryRead(details, emitters.Select(emitter => emitter.Id).ToList(), callback, token));
             }
             catch (ServiceResultException ex)
             {
@@ -1196,8 +1194,7 @@ namespace Cognite.OpcUa
         /// <param name="nodeIds">Permitted SourceNode ids</param>
         /// <param name="receivedAfter">Optional, if defined, attempt to filter out events with [ReceiveTimeProperty] > receivedAfter</param>
         /// <returns>The final event filter</returns>
-        private EventFilter BuildEventFilter(IEnumerable<NodeId> nodeIds,
-            DateTime? receivedAfter = null)
+        private EventFilter BuildEventFilter(IEnumerable<NodeId> nodeIds)
         {
             /*
              * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds AND SourceNode IN nodeIds;
@@ -1235,21 +1232,6 @@ namespace Cognite.OpcUa
             var elem2 = whereClause.Push(FilterOperator.InList, nodeOperands.Prepend(nodeListOperand).ToArray<object>());
             var elem3 = whereClause.Push(FilterOperator.And, elem1, elem2);
 
-            if (receivedAfter != null && receivedAfter > DateTime.MinValue)
-            {
-                var eventTimeOperand = new SimpleAttributeOperand
-                {
-                    TypeDefinitionId = ObjectTypeIds.BaseEventType,
-                    AttributeId = Attributes.Value
-                };
-                eventTimeOperand.BrowsePath.Add(eventConfig.ReceiveTimeProperty);
-                var timeOperand = new LiteralOperand
-                {
-                    Value = receivedAfter.Value
-                };
-                var elem4 = whereClause.Push(FilterOperator.GreaterThan, eventTimeOperand, timeOperand);
-                whereClause.Push(FilterOperator.And, elem3, elem4);
-            }
 
             var fieldList = eventFields
                 .Aggregate((IEnumerable<(NodeId, QualifiedName)>)new List<(NodeId, QualifiedName)>(), (agg, kvp) => agg.Concat(kvp.Value))

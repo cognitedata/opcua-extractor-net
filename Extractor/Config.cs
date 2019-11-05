@@ -134,7 +134,6 @@ namespace Cognite.OpcUa
         public Dictionary<string, string> DestinationNameMap { get => _destinationNameMap; set => _destinationNameMap = value ?? _destinationNameMap; }
         private Dictionary<string, string> _destinationNameMap = new Dictionary<string, string>();
         public IEnumerable<ProtoNodeId> HistorizingEmitterIds { get; set; }
-        public string ReceiveTimeProperty { get; set; } = "ReceiveTime";
         public int HistoryReadChunk { get; set; } = 1000;
     }
     public class ProtoNodeId
