@@ -876,7 +876,9 @@ namespace Cognite.OpcUa
             finally
             {
                 DecOperations();
-                Log.Information("Fetched {NumHistoricalPoints} historical datapoints with {NumHistoryReadOperations} operations for {NumHistoryReadNodes} nodes",
+                Log.Information("Fetched {NumHistoricalPoints} historical "
+                                + (details is ReadEventDetails ? "events" : "datapoints") 
+                                + " with {NumHistoryReadOperations} operations for {NumHistoryReadNodes} nodes",
                     ptCnt, opCnt, index);
             }
         }
@@ -992,7 +994,7 @@ namespace Cognite.OpcUa
             var details = new ReadEventDetails
             {
                 StartTime = startTime,
-                EndTime = DateTime.Now.AddDays(1),
+                EndTime = DateTime.UtcNow.AddDays(1),
                 NumValuesPerNode = (uint)eventConfig.HistoryReadChunk,
                 Filter = filter
             };

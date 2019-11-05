@@ -384,15 +384,39 @@ namespace Test
         private HttpResponseMessage HandleCreateEvents(string content)
         {
             var newEvents = JsonConvert.DeserializeObject<EventWrapper>(content);
+            var duplicated = new List<Identity>();
             foreach (var ev in newEvents.items)
             {
+                if (events.ContainsKey(ev.externalId))
+                {
+                    duplicated.Add(new Identity { externalId = ev.externalId });
+                    continue;
+                }
+                if (duplicated.Any()) continue;
                 ev.id = eventIdCounter++;
                 ev.createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
                 ev.lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
                 events.Add(ev.externalId, ev);
             }
+
+            if (duplicated.Any())
+            {
+                string errResult = JsonConvert.SerializeObject(new ErrorWrapper
+                {
+                    error = new ErrorContent
+                    {
+                        duplicated = duplicated,
+                        code = 400,
+                        message = "duplicated"
+                    }
+                });
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                {
+                    Content = new StringContent(errResult)
+                };
+            }
             string result = JsonConvert.SerializeObject(newEvents);
-            return new HttpResponseMessage(HttpStatusCode.OK)
+            return new HttpResponseMessage(HttpStatusCode.Created)
             {
                 Content = new StringContent(result)
             };
@@ -478,6 +502,7 @@ namespace Test
         public int code { get; set; }
         public string message { get; set; }
         public IEnumerable<Identity> missing { get; set; }
+        public IEnumerable<Identity> duplicated { get; set; }
     }
     public class ErrorWrapper
     {

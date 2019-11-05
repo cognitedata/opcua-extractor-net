@@ -102,6 +102,95 @@ namespace Test
             }
             extractor.Close();
         }
+        [Trait("Server", "events")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "eventsrestart")]
+        [Fact]
+        public async Task TestEventServerRestart()
+        {
+            var fullConfig = Common.BuildConfig("events", 8, "config.events.yml");
+            Logger.Configure(fullConfig.Logging);
+            var client = new UAClient(fullConfig);
+            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
+            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
+
+            var extractor = new Extractor(fullConfig, pusher, client);
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+
+            bool historyReadDone = false;
+            await Task.Delay(1000);
+            for (int i = 0; i < 40; i++)
+            {
+                if (handler.events.Values.Any() && extractor.EventEmitterStates.All(state => state.Value.IsStreaming))
+                {
+                    historyReadDone = true;
+                    break;
+                }
+                await Task.Delay(500);
+            }
+
+            Assert.True(historyReadDone);
+            int lastCount = handler.events.Count;
+            Assert.Equal(0, (int)Common.GetMetricValue("opcua_event_push_failures"));
+            extractor.RestartExtractor(source.Token);
+            historyReadDone = false;
+            await Task.Delay(1000);
+            for (int i = 0; i < 40; i++)
+            {
+                if (handler.events.Values.Any() && extractor.EventEmitterStates.All(state => state.Value.IsStreaming) && handler.events.Count > lastCount)
+                {
+                    historyReadDone = true;
+                    break;
+                }
+                await Task.Delay(500);
+            }
+            Assert.True(historyReadDone);
+            Assert.True((int)Common.GetMetricValue("opcua_duplicated_events") > 0);
+            var events = handler.events.Values.ToList();
+            Assert.True(events.Any());
+            Assert.Contains(events, ev => ev.description.StartsWith("prop "));
+            Assert.Contains(events, ev => ev.description == "prop 0");
+            Assert.Contains(events, ev => ev.description == "basicPass 0");
+            Assert.Contains(events, ev => ev.description == "basicPassSource 0");
+            Assert.Contains(events, ev => ev.description == "basicVarSource 0");
+            Assert.Contains(events, ev => ev.description == "mappedType 0");
+
+            for (int i = 0; i < 10; i++)
+            {
+                events = handler.events.Values.ToList();
+                if (events.Any(ev => ev.description.StartsWith("propOther "))
+                    && events.Any(ev => ev.description.StartsWith("basicPass "))
+                    && events.Any(ev => ev.description.StartsWith("basicPassSource "))
+                    && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
+                    && events.Any(ev => ev.description.StartsWith("basicVarSource "))
+                    && events.Any(ev => ev.description.StartsWith("mappedType "))) break;
+                await Task.Delay(1000);
+            }
+
+            Assert.Contains(events, ev => ev.description.StartsWith("propOther "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicPass "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource2 "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicVarSource "));
+            Assert.Contains(events, ev => ev.description.StartsWith("mappedType "));
+
+            foreach (var ev in events)
+            {
+                TestEvent(ev, handler);
+            }
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+            extractor.Close();
+        }
         /// <summary>
         /// Test that the event contains the appropriate data for the event server test
         /// </summary>

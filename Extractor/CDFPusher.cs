@@ -93,6 +93,8 @@ namespace Cognite.OpcUa
         private static readonly Counter nodeEnsuringFailures = Metrics
             .CreateCounter("opcua_node_ensure_failures",
             "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
+        private static readonly Counter duplicatedEvents = Metrics
+            .CreateCounter("opcua_duplicated_events", "Number of events that failed to push to CDF due to already existing in CDF");
 
         #region Interface
 
@@ -277,7 +279,7 @@ namespace Cognite.OpcUa
                 {
                     var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString());
                     Log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count());
-
+                    duplicatedEvents.Inc(duplicates.Count());
                     events = events.Where(evt => !duplicates.Contains(evt.ExternalId));
                     try
                     {
