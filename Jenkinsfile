@@ -132,22 +132,22 @@ podTemplate(
                 }
             }
         }
-        container('docker') {
-            stage("Build Docker images") {
-                sh('docker images | head')
-                sh('#!/bin/sh -e\n'
-                        + 'docker login -u _json_key -p "$(cat /jenkins-docker-builder/credentials.json)" https://eu.gcr.io')
+        if (env.BRANCH_NAME == 'master') {
+            container('docker') {
+                stage("Build Docker images") {
+                    sh('docker images | head')
+                    sh('#!/bin/sh -e\n'
+                            + 'docker login -u _json_key -p "$(cat /jenkins-docker-builder/credentials.json)" https://eu.gcr.io')
 
-                sh('cp /nuget-credentials/nuget.config ./nuget.config')
-                // Building twice to get sensible output. The second build will be quick.
-                sh("image=\$(docker build -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
-                       + "&& id=\$(docker create \$image)"
-                       + "&& docker cp \$id:/build/deploy ."
-                       + "&& docker rm -v \$id"
-                       + "&& docker build -t ${dockerImageName}:${version} -t ${dockerImageName2}:${version} .")
-                sh('docker images | head')
-            }
-            if (env.BRANCH_NAME == 'master') {
+                    sh('cp /nuget-credentials/nuget.config ./nuget.config')
+                    // Building twice to get sensible output. The second build will be quick.
+                    sh("image=\$(docker build -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
+                           + "&& id=\$(docker create \$image)"
+                           + "&& docker cp \$id:/build/deploy ."
+                           + "&& docker rm -v \$id"
+                           + "&& docker build -t ${dockerImageName}:${version} -t ${dockerImageName2}:${version} .")
+                    sh('docker images | head')
+                }
                 stage('Push Docker images') {
                     sh("docker push ${dockerImageName}:${version}")
                     sh("docker push ${dockerImageName2}:${version}")

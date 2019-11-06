@@ -63,6 +63,8 @@ Pushers:
         BufferOnFailure: false
         # Buffer file path
         BufferFile: buffer.bin
+        # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
+        NonFiniteReplacement:
         # Chunk sizes in CDF requests
         LatestChunk: 100
         TimeSeriesChunk: 1000
@@ -84,6 +86,8 @@ Pushers:
         # False if this destination can be ignored on failed connection
         # default is true, meaning the extractor will terminate if connection test fails
         Critical: true
+        # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
+        NonFiniteReplacement:
         # Max number of points to send in each request to influx
         PointChunkSize: 100000
 
@@ -178,8 +182,6 @@ Extraction:
     #          NamespaceUri:
     #          NodeId:
     #      IsStep: false
-    # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
-    NonFiniteReplacement:
     # The earliest timestamp to be read from history on the OPC-UA server, in milliseconds since 1/1/1970.
     HistoryStartTime: 0
     # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
@@ -221,9 +223,5 @@ Events:
     HistorizingEmitterIds:
         #-   NamespaceUri:
         #    NodeId:
-    # Attribute to use for filtering history read. The last time read is stored locally, in latest.bin, and only events received by the server after this time are history read.
-    # This should be the browsename of the attribute that stores the local server time when an event is received. One of "ReceiveTime", "Time", "LocalTime".
-    # Leave empty to always read the full history on startup. (This might be slow if there is a lot of history).
-    ReceiveTimeProperty: "ReceiveTime"
     # Max number of events per history read operation.
     HistoryReadChunk: 1000

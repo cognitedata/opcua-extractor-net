@@ -1,4 +1,21 @@
-﻿using System;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2019 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,7 +30,9 @@ namespace Test
     {
         public UAClientTests(ITestOutputHelper output) : base(output) { }
 
-        [Trait("Category", "failure")]
+        [Trait("Server", "basic")]
+        [Trait("Target", "UAClient")]
+        [Trait("Test", "connectingfailure")]
         [Fact]
         public async Task TestConnectionFailure()
         {
@@ -54,6 +73,39 @@ namespace Test
             }
             source.Cancel();
             extractor.Close();
+        }
+        [Trait("Server", "basic")]
+        [Trait("Target", "UAClient")]
+        [Trait("Test", "granularity")]
+        [Theory]
+        [InlineData(1, 900)]
+        [InlineData(3, 0)]
+        public async Task TestHistoryReadGranularity(int expectedReads, int granularity)
+        {
+            Common.ResetTestMetrics();
+            var fullConfig = Common.BuildConfig("basic", 18);
+            fullConfig.Source.HistoryGranularity = granularity;
+            fullConfig.Source.HistoryReadChunk = 10000;
+            Logger.Configure(fullConfig.Logging);
+            var client = new UAClient(fullConfig);
+            var extractor = new Extractor(fullConfig, new List<IPusher>(), client);
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+            for (int i = 0; i < 20; i++)
+            {
+                if ((int) Common.GetMetricValue("opcua_history_reads") == expectedReads) break;
+                await Task.Delay(500);
+            }
+            Assert.Equal(expectedReads, (int)Common.GetMetricValue("opcua_history_reads"));
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
         }
     }
 }

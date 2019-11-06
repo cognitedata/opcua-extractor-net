@@ -26,6 +26,7 @@ using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus.Client;
 using Serilog;
+using Exception = System.Exception;
 
 namespace Cognite.OpcUa
 {
@@ -193,6 +194,10 @@ namespace Cognite.OpcUa
 
             triggerUpdateOperations.Reset();
             var failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
+            if (failedTask != null)
+            {
+                Utils.LogException(failedTask.Exception, "Unexpected error in main task list", "Handled error in main task list");
+            }
             while (tasks.Any() && failedTask == null)
             {
                 try
@@ -259,7 +264,7 @@ namespace Cognite.OpcUa
             List<Task> tasksToWaitFor;
             lock (propertySetLock)
             {
-                nodes = nodes.Where(node => !pendingProperties.Contains(node.Id) && !node.PropertiesRead);
+                nodes = nodes.Where(node => !pendingProperties.Contains(node.Id) && !node.PropertiesRead).ToList();
                 if (nodes.Any())
                 {
                     newTask = Task.Run(() => uaClient.GetNodeProperties(nodes, token));
@@ -509,6 +514,16 @@ namespace Cognite.OpcUa
             var getLatestResult = await Task.WhenAll(getLatestPushes);
             if (!getLatestResult.All(res => res)) throw new Exception("Getting latest timestamp failed");
         }
+
+        private async Task SynchronizeEvents(IEnumerable<NodeId> nodes, CancellationToken token)
+        {
+            uaClient.SubscribeToEvents(EventEmitterStates.Keys, nodes, EventSubscriptionHandler, token);
+            await uaClient.HistoryReadEvents(
+                EventEmitterStates.Values.Where(state => state.Historizing),
+                nodes,
+                HistoryEventHandler,
+                token);
+            }
         /// <summary>
         /// Start synchronization of given list of variables with the server.
         /// </summary>
@@ -529,12 +544,7 @@ namespace Cognite.OpcUa
             }
             if (EventEmitterStates.Any())
             {
-                tasks.Add(Task.Run(() => uaClient.SubscribeToEvents(EventEmitterStates.Keys, managedNodes, EventSubscriptionHandler, token)).ContinueWith(_ =>
-                    uaClient.HistoryReadEvents(
-                        EventEmitterStates.Values.Where(state => state.Historizing).Select(state => state.Id),
-                        objects.Concat(variables).Select(node => node.Id).Distinct(),
-                        HistoryEventHandler,
-                        token)));
+                tasks.Add(SynchronizeEvents(objects.Concat(variables).Select(node => node.Id).Distinct().ToList(), token));
             }
 
             if (config.Extraction.EnableAuditDiscovery)
@@ -628,17 +638,6 @@ namespace Cognite.OpcUa
                             value.SourceTimestamp,
                             $"{uniqueId}[{i}]",
                             UAClient.ConvertToDouble(values.GetValue(i)));
-                    if (!dp.IsString && !double.IsFinite(dp.DoubleValue))
-                    {
-                        if (config.Extraction.NonFiniteReplacement != null)
-                        {
-                            dp.DoubleValue = config.Extraction.NonFiniteReplacement.Value;
-                        }
-                        else
-                        {
-                            continue;
-                        }
-                    }
                     ret.Add(dp);
                 }
                 return ret;
@@ -652,18 +651,6 @@ namespace Cognite.OpcUa
                     value.SourceTimestamp,
                     uniqueId,
                     UAClient.ConvertToDouble(value.Value));
-
-            if (!sdp.IsString && !double.IsFinite(sdp.DoubleValue))
-            {
-                if (config.Extraction.NonFiniteReplacement != null)
-                {
-                    sdp.DoubleValue = config.Extraction.NonFiniteReplacement.Value;
-                }
-                else
-                {
-                    return Array.Empty<BufferedDataPoint>();
-                }
-            }
             return new[] { sdp };
         }
         /// <summary>
@@ -980,7 +967,7 @@ namespace Cognite.OpcUa
                 cnt++;
             }
             emitterState.UpdateFromFrontfill(DateTime.UtcNow, final);
-            if (!final) return cnt; 
+            if (!final) return cnt;
             var buffered = emitterState.FlushBuffer();
             foreach (var pusher in pushers)
             {

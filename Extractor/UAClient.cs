@@ -71,7 +71,7 @@ namespace Cognite.OpcUa
         private static readonly Counter attributeRequestFailures = Metrics
             .CreateCounter("opcua_attribute_request_failures", "Number of failed requests for attributes to OPC-UA");
         private static readonly Counter historyReadFailures = Metrics
-            .CreateCounter("opcua_history_read_fauilures", "Number of failed history read operations");
+            .CreateCounter("opcua_history_read_failures", "Number of failed history read operations");
         private static readonly Counter browseFailures = Metrics
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
@@ -455,7 +455,7 @@ namespace Cognite.OpcUa
                     foreach (var result in results)
                     {
                         var nodeId = lparents.ElementAt(bindex++);
-                        Log.Verbose("GetNodeChildren Browse result {nodeId}", nodeId);
+                        Log.Debug("GetNodeChildren Browse result {nodeId}", nodeId);
                         finalResults[nodeId] = result.References;
                         if (result.ContinuationPoint != null)
                         {
@@ -493,7 +493,7 @@ namespace Cognite.OpcUa
                         foreach (var result in results)
                         {
                             var nodeId = indexMap[pindex++];
-                            Log.Verbose("GetNodeChildren BrowseNext result {nodeId}", nodeId);
+                            Log.Debug("GetNodeChildren BrowseNext result {nodeId}", nodeId);
                             finalResults[nodeId].AddRange(result.References);
                             if (result.ContinuationPoint == null) continue;
                             indexMap[nindex++] = nodeId;
@@ -759,6 +759,7 @@ namespace Cognite.OpcUa
         {
             var properties = new HashSet<BufferedVariable>();
             Log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
+            if (!nodes.Any()) return;
             var idsToCheck = new List<NodeId>();
             foreach (var node in nodes)
             {
@@ -875,7 +876,9 @@ namespace Cognite.OpcUa
             finally
             {
                 DecOperations();
-                Log.Information("Fetched {NumHistoricalPoints} historical datapoints with {NumHistoryReadOperations} operations for {NumHistoryReadNodes} nodes",
+                Log.Information("Fetched {NumHistoricalPoints} historical "
+                                + (details is ReadEventDetails ? "events" : "datapoints") 
+                                + " with {NumHistoryReadOperations} operations for {NumHistoryReadNodes} nodes",
                     ptCnt, opCnt, index);
             }
         }
@@ -973,31 +976,31 @@ namespace Cognite.OpcUa
         /// a bool indicating if this is the final iteration, NodeId of the node in question, ReadEventDetails containing the filter.
         /// Returns the number of events processed.</param>
         /// <param name="token"></param>
-        public async Task HistoryReadEvents(IEnumerable<NodeId> emitters,
+        public async Task HistoryReadEvents(IEnumerable<EventExtractionState> emitters,
             IEnumerable<NodeId> nodeIds,
             Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
             CancellationToken token)
         {
+            Log.Information("History read events");
             if (eventFields == null) throw new Exception("EventFields not defined");
-            // Read the latest local event write time from file, then set the startTime to the largest of that minus 10 minutes, and
+            // Get the latest event receive time (will be fetched from file), then set the startTime to the largest of that minus 10 minutes, and
             // the HistoryStartTime config option. We have generally have no way of finding the latest event in the destinations,
             // so we approximate the time we want to read from using a local buffer.
-            // We both filter on "ReceivedTime" on the server, and read from a specific time in HistoryRead. Servers have varying support
-            // for this feature, as history read on events is a bit of an edge case.
-            var latestTime = Utils.ReadLastEventTimestamp();
-            var startTime = latestTime.Subtract(TimeSpan.FromMinutes(10));
+            var latestTime = emitters.Min(emitter => emitter.DestLatestTimestamp);
+            var startTime = latestTime == DateTime.MinValue ? latestTime : latestTime.Subtract(TimeSpan.FromMinutes(10));
             startTime = startTime < historyStartTime ? historyStartTime : startTime;
-            var filter = BuildEventFilter(nodeIds, startTime);
+            Log.Information("Read history for {num} nodes starting from {starttime}", emitters.Count(), startTime);
+            var filter = BuildEventFilter(nodeIds);
             var details = new ReadEventDetails
             {
                 StartTime = startTime,
-                EndTime = DateTime.Now.AddDays(1),
+                EndTime = DateTime.UtcNow.AddDays(1),
                 NumValuesPerNode = (uint)eventConfig.HistoryReadChunk,
                 Filter = filter
             };
             try
             {
-                await Task.Run(() => DoHistoryRead(details, emitters, callback, token));
+                await Task.Run(() => DoHistoryRead(details, emitters.Select(emitter => emitter.Id).ToList(), callback, token));
             }
             catch (ServiceResultException ex)
             {
@@ -1015,7 +1018,9 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             if (!nodeList.Any()) return;
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "DataChangeListener") ?? new Subscription(session.DefaultSubscription)
+
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("DataChangeListener"))
+                               ?? new Subscription(session.DefaultSubscription)
             {
                 PublishingInterval = config.PollingInterval,
                 DisplayName = "DataChangeListener"
@@ -1044,7 +1049,7 @@ namespace Cognite.OpcUa
                     })
                 );
 
-                Log.Information("Add {NumAddedSubscriptions} subscriptions", chunk.Count());
+                Log.Information("Add subscriptions for {numnodes} nodes", chunk.Count());
                 lock (subscriptionLock)
                 {
                     IncOperations();
@@ -1100,7 +1105,8 @@ namespace Cognite.OpcUa
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "EventListener") ?? new Subscription(session.DefaultSubscription)
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("EventListener"))
+                               ?? new Subscription(session.DefaultSubscription)
             {
                 PublishingInterval = config.PollingInterval,
                 DisplayName = "EventListener"
@@ -1190,8 +1196,7 @@ namespace Cognite.OpcUa
         /// <param name="nodeIds">Permitted SourceNode ids</param>
         /// <param name="receivedAfter">Optional, if defined, attempt to filter out events with [ReceiveTimeProperty] > receivedAfter</param>
         /// <returns>The final event filter</returns>
-        private EventFilter BuildEventFilter(IEnumerable<NodeId> nodeIds,
-            DateTime? receivedAfter = null)
+        private EventFilter BuildEventFilter(IEnumerable<NodeId> nodeIds)
         {
             /*
              * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds AND SourceNode IN nodeIds;
@@ -1229,21 +1234,6 @@ namespace Cognite.OpcUa
             var elem2 = whereClause.Push(FilterOperator.InList, nodeOperands.Prepend(nodeListOperand).ToArray<object>());
             var elem3 = whereClause.Push(FilterOperator.And, elem1, elem2);
 
-            if (receivedAfter != null && receivedAfter > DateTime.MinValue)
-            {
-                var eventTimeOperand = new SimpleAttributeOperand
-                {
-                    TypeDefinitionId = ObjectTypeIds.BaseEventType,
-                    AttributeId = Attributes.Value
-                };
-                eventTimeOperand.BrowsePath.Add(eventConfig.ReceiveTimeProperty);
-                var timeOperand = new LiteralOperand
-                {
-                    Value = receivedAfter.Value
-                };
-                var elem4 = whereClause.Push(FilterOperator.GreaterThan, eventTimeOperand, timeOperand);
-                whereClause.Push(FilterOperator.And, elem3, elem4);
-            }
 
             var fieldList = eventFields
                 .Aggregate((IEnumerable<(NodeId, QualifiedName)>)new List<(NodeId, QualifiedName)>(), (agg, kvp) => agg.Concat(kvp.Value))
@@ -1321,7 +1311,8 @@ namespace Cognite.OpcUa
         public void SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback)
         {
             var filter = BuildAuditFilter();
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName == "AuditListener") ?? new Subscription(session.DefaultSubscription)
+            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener"))
+                               ?? new Subscription(session.DefaultSubscription)
             {
                 PublishingInterval = config.PollingInterval,
                 DisplayName = "AuditListener"
@@ -1341,7 +1332,7 @@ namespace Cognite.OpcUa
                 IncOperations();
                 try
                 {
-                    if (subscription.Created)
+                    if (subscription.Created && subscription.MonitoredItemCount == 0)
                     { 
                         subscription.CreateItems();
                     }
@@ -1568,7 +1559,7 @@ namespace Cognite.OpcUa
             if (extId.Length > 255)
             {
                 if (index <= -1) return extId.Substring(0, 255);
-                string indexSub = $"{index}";
+                string indexSub = $"[{index}]";
                 return extId.Substring(0, 255 - indexSub.Length) + indexSub;
             }
             if (index > -1)

@@ -44,12 +44,6 @@ namespace Cognite.OpcUa
         public Dictionary<string, string> NamespaceMap { get => _namespaceMap; set => _namespaceMap = value ?? _namespaceMap; }
         private Dictionary<string, string> _namespaceMap = new Dictionary<string, string>();
         public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
-        public double? NonFiniteReplacement
-        {
-            get => _nonFiniteReplacement;
-            set =>_nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
-        }
-        private double? _nonFiniteReplacement;
         public long HistoryStartTime { get; set; } = 0;
         public int AutoRebrowsePeriod { get; set; } = 0;
         public bool EnableAuditDiscovery { get; set; } = false;
@@ -78,6 +72,12 @@ namespace Cognite.OpcUa
         public int LatestChunk { get; set; } = 100;
         public int TimeSeriesChunk { get; set; } = 1000;
         public int AssetChunk { get; set; } = 1000;
+        public double? NonFiniteReplacement
+        {
+            get => _nonFiniteReplacement;
+            set => _nonFiniteReplacement = value == null || double.IsFinite(value.Value) && Math.Abs(value.Value) < 1E100 ? value : null;
+        }
+        private double? _nonFiniteReplacement;
     }
     public class InfluxClientConfig : PusherConfig
     {
@@ -86,6 +86,12 @@ namespace Cognite.OpcUa
         public string Password { get; set; }
         public string Database { get; set; }
         public int PointChunkSize { get; set; } = 100000;
+        public double? NonFiniteReplacement
+        {
+            get => _nonFiniteReplacement;
+            set => _nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
+        }
+        private double? _nonFiniteReplacement;
         public override IPusher ToPusher(IServiceProvider _)
         {
             return new InfluxPusher(this);
@@ -134,7 +140,6 @@ namespace Cognite.OpcUa
         public Dictionary<string, string> DestinationNameMap { get => _destinationNameMap; set => _destinationNameMap = value ?? _destinationNameMap; }
         private Dictionary<string, string> _destinationNameMap = new Dictionary<string, string>();
         public IEnumerable<ProtoNodeId> HistorizingEmitterIds { get; set; }
-        public string ReceiveTimeProperty { get; set; } = "ReceiveTime";
         public int HistoryReadChunk { get; set; } = 1000;
     }
     public class ProtoNodeId

@@ -57,6 +57,7 @@ if __name__ == "__main__":
     # enable data change history for this particular node, must be called after start since it uses subscription
     server.historize_node_data_change(myvar, count=10000)
     server.historize_node_data_change(myvar2, count=10000)
+    server.historize_node_data_change(myint, count=10000)
     # server.historize_node_data_change(mybool, count=1000)
 
     try:
@@ -70,6 +71,7 @@ if __name__ == "__main__":
             myvar2.set_value(math.cos(count))
             myint.set_value(bcount);
             if (bcount % 5 == 0):
+                mystring.set_value("val: " + str(count))
                 mybool.set_value(not mybool.get_value())
                 
 

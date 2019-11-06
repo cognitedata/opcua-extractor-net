@@ -1,14 +1,12 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel.Design.Serialization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Opc.Ua;
 using Serilog;
-using Thoth.Json.Net;
 
 namespace Cognite.OpcUa
 {
@@ -43,6 +41,17 @@ namespace Cognite.OpcUa
             while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer))
             {
                 if (buffer.Timestamp <= DateTime.MinValue) continue;
+                if (!buffer.IsString && !double.IsFinite(buffer.DoubleValue))
+                {
+                    if (config.NonFiniteReplacement != null)
+                    {
+                        buffer.DoubleValue = config.NonFiniteReplacement.Value;
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
                 count++;
                 dataPointList.Add(buffer);
             }

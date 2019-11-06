@@ -32,6 +32,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus.Client;
 using Serilog;
+using Thoth.Json.Net;
 
 namespace Cognite.OpcUa
 {
@@ -43,6 +44,7 @@ namespace Cognite.OpcUa
         private readonly IServiceProvider clientProvider;
         private readonly CogniteClientConfig config;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
+        private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
         
         public Extractor Extractor { private get; set; }
         public UAClient UAClient { private get; set; }
@@ -91,6 +93,8 @@ namespace Cognite.OpcUa
         private static readonly Counter nodeEnsuringFailures = Metrics
             .CreateCounter("opcua_node_ensure_failures",
             "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
+        private static readonly Counter duplicatedEvents = Metrics
+            .CreateCounter("opcua_duplicated_events", "Number of events that failed to push to CDF due to already existing in CDF");
 
         #region Interface
 
@@ -108,9 +112,25 @@ namespace Cognite.OpcUa
                 {
                     // TODO: metrics on skipped points
                     // Skip points which have an invalid timestamp, or which have incorrect data type
-                    if (buffer.Timestamp <= DateTime.MinValue || mismatchedTimeseries.Contains(buffer.Id))
+                    if (buffer.Timestamp < minDateTime || mismatchedTimeseries.Contains(buffer.Id))
                     {
                         continue;
+                    }
+                    if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
+                    {
+                        if (config.NonFiniteReplacement != null)
+                        {
+                            buffer.DoubleValue = config.NonFiniteReplacement.Value;
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }
+
+                    if (buffer.IsString && buffer.StringValue == null)
+                    {
+                        buffer.StringValue = "";
                     }
 
                     count++;
@@ -259,7 +279,7 @@ namespace Cognite.OpcUa
                 {
                     var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString());
                     Log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count());
-
+                    duplicatedEvents.Inc(duplicates.Count());
                     events = events.Where(evt => !duplicates.Contains(evt.ExternalId));
                     try
                     {
@@ -620,6 +640,9 @@ namespace Cognite.OpcUa
                 var state = Extractor.GetNodeState(res.ExternalId);
                 if (state.DataType.IsString != res.IsString)
                 {
+                    Log.Warning("Mismatched timeseries: {id}. "
+                                + (state.DataType.IsString ? "Expected double but got string" : "Expected string but got double"), 
+                        res.ExternalId);
                     mismatchedTimeseries.Add(res.ExternalId);
                 }
             }
