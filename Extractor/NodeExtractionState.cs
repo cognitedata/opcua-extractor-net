@@ -151,19 +151,22 @@ namespace Cognite.OpcUa
         /// Id of the emitting node in OPC-UA
         /// </summary>
         public NodeId Id { get; }
-        private bool _historizing;
+        private bool historizing;
         /// <summary>
         /// True if there are historical events in OPC-UA, and this is configured as a Historizing emitter.
         /// </summary>
         public bool Historizing {
-            get => _historizing;
+            get => historizing;
             set 
             {
                 IsStreaming = !value;
-                _historizing = value;
-                if (_historizing && buffer == null)
+                historizing = value;
+                if (historizing && buffer == null)
                 {
-                    buffer = new List<BufferedEvent>();
+                    lock (lastMutex)
+                    {
+                        buffer = new List<BufferedEvent>();
+                    }
                 }
             }
         }

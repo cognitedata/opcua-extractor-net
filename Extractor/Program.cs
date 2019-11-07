@@ -26,6 +26,7 @@ using CogniteSdk;
 using System.Threading.Tasks;
 using Polly.Timeout;
 using System.Linq;
+using System.Net;
 using Serilog;
 
 namespace Cognite.OpcUa
@@ -164,10 +165,10 @@ namespace Cognite.OpcUa
             int maxRetryAttempt = (int)Math.Ceiling(Math.Log(120, 2));
             return Policy
                 .HandleResult<HttpResponseMessage>(msg =>
-                    !msg.IsSuccessStatusCode 
-                    && msg.StatusCode != System.Net.HttpStatusCode.BadRequest
-                    && msg.StatusCode != System.Net.HttpStatusCode.Unauthorized
-                    && msg.StatusCode != System.Net.HttpStatusCode.Forbidden)
+                    !msg.IsSuccessStatusCode
+                    && ((int)msg.StatusCode >= 500
+                        || msg.StatusCode == HttpStatusCode.Unauthorized
+                        || msg.StatusCode == HttpStatusCode.TooManyRequests))
                 .Or<TimeoutRejectedException>()
                 .WaitAndRetryForeverAsync(retryAttempt =>
                     TimeSpan.FromMilliseconds(retryAttempt > maxRetryAttempt ? 60000 : Math.Pow(2, retryAttempt)));
@@ -178,10 +179,9 @@ namespace Cognite.OpcUa
             return Policy
                 .HandleResult<HttpResponseMessage>(msg =>
                     !msg.IsSuccessStatusCode
-                    && msg.StatusCode != System.Net.HttpStatusCode.BadRequest
-                    && msg.StatusCode != System.Net.HttpStatusCode.Conflict
-                    && msg.StatusCode != System.Net.HttpStatusCode.Unauthorized
-                    && msg.StatusCode != System.Net.HttpStatusCode.Forbidden)
+                    && ((int)msg.StatusCode >= 500
+                        || msg.StatusCode == HttpStatusCode.Unauthorized
+                        || msg.StatusCode == HttpStatusCode.TooManyRequests))
                 .Or<TimeoutRejectedException>()
                 .WaitAndRetryAsync(4, retryAttempt =>
                     TimeSpan.FromMilliseconds(retryAttempt > maxRetryAttempt ? 60000 : Math.Pow(2, retryAttempt)));

@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Opc.Ua;
+using Prometheus.Client;
 using Serilog;
 
 namespace Cognite.OpcUa
@@ -24,11 +25,23 @@ namespace Cognite.OpcUa
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
         private readonly InfluxClientConfig config;
         private readonly InfluxDBClient client;
+
+        private static readonly Counter numInfluxPusher = Metrics
+            .CreateCounter("opcua_influx_pusher_count", "Number of active influxdb pushers");
+        private static readonly Counter dataPointsCounter = Metrics
+            .CreateCounter("opcua_datapoints_pushed_influx", "Number of datapoints pushed to influxdb");
+        private static readonly Counter dataPointPushes = Metrics
+            .CreateCounter("opcua_datapoint_pushes_influx", "Number of times datapoints have been pushed to influxdb");
+        private static readonly Counter dataPointPushFailures = Metrics
+            .CreateCounter("opcua_datapoint_push_failures_influx", "Number of completely failed pushes of datapoints to influxdb");
+        private static readonly Counter skippedDatapoints = Metrics
+            .CreateCounter("opcua_skipped_datapoints_influx", "Number of datapoints skipped by influxdb pusher");
         public InfluxPusher(InfluxClientConfig config)
         {
             this.config = config;
             BaseConfig = config;
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
+            numInfluxPusher.Inc();
         }
         /// <summary>
         /// Push each datapoint to influxdb. The datapoint Id, which corresponds to timeseries externalId in CDF, is used as MeasurementName
@@ -40,7 +53,11 @@ namespace Cognite.OpcUa
             int count = 0;
             while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer))
             {
-                if (buffer.Timestamp <= DateTime.MinValue) continue;
+                if (buffer.Timestamp <= DateTime.MinValue)
+                {
+                    skippedDatapoints.Inc();
+                    continue;
+                }
                 if (!buffer.IsString && !double.IsFinite(buffer.DoubleValue))
                 {
                     if (config.NonFiniteReplacement != null)
@@ -49,6 +66,7 @@ namespace Cognite.OpcUa
                     }
                     else
                     {
+                        skippedDatapoints.Inc();
                         continue;
                     }
                 }
@@ -71,6 +89,7 @@ namespace Cognite.OpcUa
                 if (ts == null) continue;
                 foreach (var dp in group)
                 {
+                    dataPointsCounter.Inc();
                     if (ts.DataType.IsString)
                     {
                         var idp = new InfluxDatapoint<string>
@@ -117,7 +136,16 @@ namespace Cognite.OpcUa
                 }
             }
             Log.Debug("Push {cnt} datapoints to influxdb", points.Count);
-            await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
+            try
+            {
+                await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
+            }
+            catch (Exception)
+            {
+                dataPointPushFailures.Inc();
+                throw;
+            }
+            dataPointPushes.Inc();
         }
         /// <summary>
         /// Reads the last datapoint from influx for each timeseries, sending the timestamp to each passed state

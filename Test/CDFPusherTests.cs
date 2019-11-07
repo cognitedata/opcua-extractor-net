@@ -22,7 +22,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
-using Prometheus.Client;
 using Serilog;
 using Xunit;
 using Xunit.Abstractions;
@@ -169,7 +168,7 @@ namespace Test
             Assert.True(Common.VerifySuccessMetrics());
             Assert.Equal(2, (int)Common.GetMetricValue("opcua_tracked_assets"));
             Assert.Equal(4, (int)Common.GetMetricValue("opcua_tracked_timeseries"));
-            Assert.NotEqual(0, (int)Common.GetMetricValue("opcua_datapoint_push_failures"));
+            Assert.NotEqual(0, (int)Common.GetMetricValue("opcua_datapoint_push_failures_cdf"));
         }
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]

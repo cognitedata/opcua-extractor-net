@@ -125,11 +125,11 @@ namespace Cognite.OpcUa
         }
         public override string ToString()
         {
-            return $"DataType: {{\n" +
+            return "DataType: {\n" +
                 $"    numIdentifier: {Identifier}\n" +
                 $"    isStep: {IsStep}\n" +
                 $"    isString: {IsString}\n" +
-                $"}}";
+                "}";
         }
     }
     /// <summary>
