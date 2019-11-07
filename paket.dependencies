@@ -1,21 +1,19 @@
 source https://www.nuget.org/api/v2
 storage: none
 
-nuget coverlet.msbuild 2.6.3
-nuget Microsoft.NET.Test.Sdk 16.2.0
-nuget xunit 2.4.1
-nuget xunit.runner.visualstudio 2.4.1
-nuget Microsoft.Extensions.Http.Polly 2.2.0
-nuget OPCFoundation.NetStandard.Opc.Ua 1.4.355.26
-nuget Prometheus.Client.MetricPusher 1.0.1
-nuget YamlDotNet 6.1.1
-nuget CogniteSdk 1.0.0-alpha-002
-nuget Oryx 0.12.4
-nuget Thoth.Json.Net 3.5.1
-nuget AdysTech.InfluxDB.Client.Net.Core 0.9.0
-nuget Serilog 2.8.0
-nuget Serilog.Sinks.GoogleCloudLogging 2.0.0
-nuget Serilog.Formatting.Compact 1.0.0
-nuget Serilog.Sinks.Console 3.1.1
-nuget Serilog.Sinks.Async 1.4.0
-nuget Serilog.Sinks.File 4.0.0
+nuget coverlet.msbuild
+nuget Microsoft.NET.Test.Sdk
+nuget xunit
+nuget xunit.runner.visualstudio
+nuget Microsoft.Extensions.Http.Polly
+nuget OPCFoundation.NetStandard.Opc.Ua
+nuget Prometheus.Client.MetricPusher
+nuget YamlDotNet
+nuget CogniteSdk
+nuget AdysTech.InfluxDB.Client.Net.Core
+nuget Serilog
+nuget Serilog.Sinks.GoogleCloudLogging
+nuget Serilog.Formatting.Compact
+nuget Serilog.Sinks.Console
+nuget Serilog.Sinks.Async
+nuget Serilog.Sinks.File

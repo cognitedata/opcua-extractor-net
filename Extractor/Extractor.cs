@@ -71,6 +71,9 @@ namespace Cognite.OpcUa
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
 
+        private static readonly Counter badDataPoints = Metrics
+            .CreateCounter("opcua_bad_datapoints", "Datapoints skipped due to bad status");
+
         /// <summary>
         /// Constructor
         /// </summary>
@@ -622,7 +625,7 @@ namespace Cognite.OpcUa
                 var ret = new List<BufferedDataPoint>();
                 if (!(value.Value is Array))
                 {
-                    // TODO: metrics
+                    badDataPoints.Inc();
                     Log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
                     return Enumerable.Empty<BufferedDataPoint>();
                 }
@@ -666,10 +669,7 @@ namespace Cognite.OpcUa
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    // TODO: metrics
-                    // Could still use this timestamp for UpdateFromStream below!? It is a valid sensor timestamp, it is just the value that is bad.
-                    // A data point is bad if e.g. the sensor is faulty. We want a way to store this
-                    // information in CDF. For now, we must ignore it.
+                    badDataPoints.Inc();
                     Log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                     continue;
                 }
@@ -894,7 +894,7 @@ namespace Cognite.OpcUa
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    // TODO: metrics
+                    badDataPoints.Inc();
                     Log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                     continue;
                 }

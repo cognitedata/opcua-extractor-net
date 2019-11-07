@@ -32,7 +32,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus.Client;
 using Serilog;
-using Thoth.Json.Net;
 
 namespace Cognite.OpcUa
 {
@@ -60,6 +59,7 @@ namespace Cognite.OpcUa
             this.config = config;
             BaseConfig = config;
             this.clientProvider = clientProvider;
+            numCdfPusher.Inc();
         }
 
         private Client GetClient(string name = "Context")
@@ -74,12 +74,14 @@ namespace Cognite.OpcUa
                 .SetServiceUrl(config.Host);
         }
 
+        private static readonly Counter numCdfPusher = Metrics
+            .CreateCounter("opcua_cdf_pusher_count", "Number of active CDF pushers");
         private static readonly Counter dataPointsCounter = Metrics
-            .CreateCounter("opcua_datapoints_pushed", "Number of datapoints pushed to CDF");
+            .CreateCounter("opcua_datapoints_pushed_cdf", "Number of datapoints pushed to CDF");
         private static readonly Counter dataPointPushes = Metrics
-            .CreateCounter("opcua_datapoint_pushes", "Number of times datapoints have been pushed to CDF");
+            .CreateCounter("opcua_datapoint_pushes_cdf", "Number of times datapoints have been pushed to CDF");
         private static readonly Counter dataPointPushFailures = Metrics
-            .CreateCounter("opcua_datapoint_push_failures", "Number of completely failed pushes of datapoints to CDF");
+            .CreateCounter("opcua_datapoint_push_failures_cdf", "Number of completely failed pushes of datapoints to CDF");
         private static readonly Counter eventCounter = Metrics
             .CreateCounter("opcua_events_pushed", "Number of events pushed to CDF");
         private static readonly Counter eventPushCounter = Metrics
@@ -95,7 +97,8 @@ namespace Cognite.OpcUa
             "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
         private static readonly Counter duplicatedEvents = Metrics
             .CreateCounter("opcua_duplicated_events", "Number of events that failed to push to CDF due to already existing in CDF");
-
+        private static readonly Counter skippedDatapoints = Metrics
+            .CreateCounter("opcua_skipped_datapoints_cdf", "Number of datapoints skipped by CDF pusher");
         #region Interface
 
         /// <summary>
@@ -110,10 +113,9 @@ namespace Cognite.OpcUa
             {
                 while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer))
                 {
-                    // TODO: metrics on skipped points
-                    // Skip points which have an invalid timestamp, or which have incorrect data type
                     if (buffer.Timestamp < minDateTime || mismatchedTimeseries.Contains(buffer.Id))
                     {
+                        skippedDatapoints.Inc();
                         continue;
                     }
                     if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
@@ -124,6 +126,7 @@ namespace Cognite.OpcUa
                         }
                         else
                         {
+                            skippedDatapoints.Inc();
                             continue;
                         }
                     }

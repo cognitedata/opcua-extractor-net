@@ -745,7 +745,7 @@ namespace Cognite.OpcUa
                 {
                     enumerator.MoveNext();
                     node.SetDataPoint(enumerator.Current?.Value,
-                        enumerator.Current == null ? enumerator.Current.SourceTimestamp : DateTime.MinValue,
+                        enumerator.Current?.SourceTimestamp ?? DateTime.MinValue,
                         this);
                 }
             }
@@ -1232,8 +1232,7 @@ namespace Cognite.OpcUa
                 });
 
             var elem2 = whereClause.Push(FilterOperator.InList, nodeOperands.Prepend(nodeListOperand).ToArray<object>());
-            var elem3 = whereClause.Push(FilterOperator.And, elem1, elem2);
-
+            whereClause.Push(FilterOperator.And, elem1, elem2);
 
             var fieldList = eventFields
                 .Aggregate((IEnumerable<(NodeId, QualifiedName)>)new List<(NodeId, QualifiedName)>(), (agg, kvp) => agg.Concat(kvp.Value))
