@@ -1,4 +1,14 @@
 # OPC-UA Extractor Changelog
+
+1.0.0 2019-11-07
+------------------
+* Moved responsibility for handling non-finite datapoints to the pushers, resulting in a small change to the config scheme.
+* Improved user feedback on common OPC-UA errors
+* Add support for integer/bool/string datatypes to influx pusher
+* Some added metrics
+* Updated dependencies
+* Numerous bugfixes
+
 0.10.0 2019-10-21
 ------------------
 * Node discovery using either periodic restarts or audit events
