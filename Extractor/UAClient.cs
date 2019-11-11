@@ -295,34 +295,19 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Browse
+
+        public Task BrowseNodeHierarchy(NodeId root, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
+        {
+            return BrowseNodeHierarchy(new[] {root}, callback, token);
+        }
         /// <summary>
         /// Browse an opcua directory, calling callback for all relevant nodes found.
         /// </summary>
-        /// <param name="root">Initial node to start mapping. Will not be sent to callback</param>
+        /// <param name="roots">Initial nodes to start mapping.</param>
         /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
-        public async Task BrowseDirectoryAsync(NodeId root, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
+        public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
         {
-            Log.Debug("BrowseDirectoryAsync {root}", root);
-            var rootNode = GetRootNode(root);
-            if (rootNode == null) throw new Exception("Root node does not exist");
-            bool docb = true;
-            lock (visitedNodesLock)
-            {
-                if (!visitedNodes.Add(root)) 
-                { 
-                    docb = false;
-                }
-            }
-            if (docb)
-            {
-                callback(rootNode, null);
-            }
-
-            await Task.Run(() => BrowseDirectory(new List<NodeId> { root }, callback, token), token);
-        }
-
-        public async Task BrowseNodeChildren(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
-        {
+            Log.Debug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
             foreach (var root in roots)
             {
                 bool docb = true;
@@ -336,10 +321,11 @@ namespace Cognite.OpcUa
                 if (docb)
                 {
                     var rootNode = GetRootNode(root);
+                    if (rootNode == null) throw new Exception($"Root node does not exist: {root}");
                     callback(rootNode, null);
                 }
             }
-            await Task.Run(() => BrowseDirectory(roots, callback, token));
+            await Task.Run(() => BrowseDirectory(roots, callback, token), token);
         }
         /// <summary>
         /// Get the root node and return it as a reference description.

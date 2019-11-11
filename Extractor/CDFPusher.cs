@@ -46,7 +46,6 @@ namespace Cognite.OpcUa
         private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
         
         public Extractor Extractor { private get; set; }
-        public UAClient UAClient { private get; set; }
         public PusherConfig BaseConfig { get; }
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
@@ -437,12 +436,12 @@ namespace Cognite.OpcUa
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        ids.Add(UAClient.GetUniqueId(state.Id, i));
+                        ids.Add(Extractor.GetUniqueId(state.Id, i));
                     }
                 }
                 else
                 {
-                    ids.Add(UAClient.GetUniqueId(state.Id));
+                    ids.Add(Extractor.GetUniqueId(state.Id));
                 }
             }
 
@@ -508,7 +507,7 @@ namespace Cognite.OpcUa
         private async Task EnsureAssets(IEnumerable<BufferedNode> assetList, CancellationToken token)
         {
             if (!assetList.Any()) return;
-            var assetIds = assetList.ToDictionary(node => UAClient.GetUniqueId(node.Id));
+            var assetIds = assetList.ToDictionary(node => Extractor.GetUniqueId(node.Id));
             ISet<string> missingAssetIds = new HashSet<string>();
 
             Log.Information("Test {NumAssetsToTest} assets", assetList.Count());
@@ -577,7 +576,7 @@ namespace Cognite.OpcUa
             var tsIds = new Dictionary<string, BufferedVariable>();
             foreach (BufferedVariable node in tsList)
             {
-                string externalId = UAClient.GetUniqueId(node.Id, node.Index);
+                string externalId = Extractor.GetUniqueId(node.Id, node.Index);
                 tsIds.Add(externalId, node);
                 if (node.Index == -1)
                 {
@@ -657,7 +656,7 @@ namespace Cognite.OpcUa
         /// <returns>Complete timeseries write poco</returns>
         private TimeSeriesEntity VariableToTimeseries(BufferedVariable variable)
         {
-            string externalId = UAClient.GetUniqueId(variable.Id, variable.Index);
+            string externalId = Extractor.GetUniqueId(variable.Id, variable.Index);
             var writePoco = new TimeSeriesEntity
             {
                 Description = Utils.Truncate(variable.Description, 1000),
@@ -687,13 +686,13 @@ namespace Cognite.OpcUa
             var writePoco = new AssetEntity
             {
                 Description = Utils.Truncate(node.Description, 500),
-                ExternalId = UAClient.GetUniqueId(node.Id),
+                ExternalId = Extractor.GetUniqueId(node.Id),
                 Name = string.IsNullOrEmpty(node.DisplayName)
-                    ? Utils.Truncate(UAClient.GetUniqueId(node.Id), 140) : Utils.Truncate(node.DisplayName, 140)
+                    ? Utils.Truncate(Extractor.GetUniqueId(node.Id), 140) : Utils.Truncate(node.DisplayName, 140)
             };
             if (node.ParentId != null && !node.ParentId.IsNullNodeId)
             {
-                writePoco.ParentExternalId = UAClient.GetUniqueId(node.ParentId);
+                writePoco.ParentExternalId = Extractor.GetUniqueId(node.ParentId);
             }
             if (node.Properties != null && node.Properties.Any())
             {
@@ -733,24 +732,31 @@ namespace Cognite.OpcUa
             var entity = new EventEntity
             {
                 Description = Utils.Truncate(evt.Message, 500),
-                StartTime = evt.MetaData.ContainsKey("StartTime") ? GetTimestampValue(evt.MetaData["StartTime"]) : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                EndTime = evt.MetaData.ContainsKey("EndTime") ? GetTimestampValue(evt.MetaData["EndTime"]) : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
+                StartTime = evt.MetaData.ContainsKey("StartTime")
+                    ? GetTimestampValue(evt.MetaData["StartTime"])
+                    : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
+                EndTime = evt.MetaData.ContainsKey("EndTime")
+                    ? GetTimestampValue(evt.MetaData["EndTime"])
+                    : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
                 AssetIds = new List<long> { nodeToAssetIds[evt.SourceNode] },
                 ExternalId = Utils.Truncate(evt.EventId, 255),
-                Type = Utils.Truncate(evt.MetaData.ContainsKey("Type") ? UAClient.ConvertToString(evt.MetaData["Type"]) : UAClient.GetUniqueId(evt.EventType), 64)
+                Type = Utils.Truncate(evt.MetaData.ContainsKey("Type")
+                    ? Extractor.ConvertToString(evt.MetaData["Type"])
+                    : Extractor.GetUniqueId(evt.EventType), 64)
             };
             if (!evt.MetaData.ContainsKey("SourceNode"))
             {
-                evt.MetaData["SourceNode"] = UAClient.GetUniqueId(evt.SourceNode);
+                evt.MetaData["SourceNode"] = Extractor.GetUniqueId(evt.SourceNode);
             }
             if (evt.MetaData.ContainsKey("SubType"))
             {
-                entity.SubType = Utils.Truncate(UAClient.ConvertToString(evt.MetaData["SubType"]), 64);
+                entity.SubType = Utils.Truncate(Extractor.ConvertToString(evt.MetaData["SubType"]), 64);
             }
             var metaData = evt.MetaData
                 .Where(kvp => !excludeMetaData.Contains(kvp.Key))
                 .Take(16)
-                .ToDictionary(kvp => Utils.Truncate(kvp.Key, 32), kvp => Utils.Truncate(UAClient.ConvertToString(kvp.Value), 256));
+                .ToDictionary(kvp => Utils.Truncate(kvp.Key, 32), kvp =>
+                    Utils.Truncate(Extractor.ConvertToString(kvp.Value), 256));
             if (metaData.Any())
             {
                 entity.MetaData = metaData;

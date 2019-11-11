@@ -29,10 +29,6 @@ namespace Cognite.OpcUa
         /// Parent extractor
         /// </summary>
         Extractor Extractor { set; }
-        /// <summary>
-        /// The UAClient to use as source
-        /// </summary>
-        UAClient UAClient { set; }
 
         /// <summary>
         /// Push nodes, emptying the queue
