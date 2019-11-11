@@ -170,8 +170,7 @@ namespace Cognite.OpcUa
                         || msg.StatusCode == HttpStatusCode.Unauthorized
                         || msg.StatusCode == HttpStatusCode.TooManyRequests))
                 .Or<TimeoutRejectedException>()
-                .WaitAndRetryForeverAsync(retryAttempt =>
-                    TimeSpan.FromMilliseconds(retryAttempt > maxRetryAttempt ? 60000 : Math.Pow(2, retryAttempt)));
+                .WaitAndRetryForeverAsync(retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
         }
         private static IAsyncPolicy<HttpResponseMessage> GetDataRetryPolicy()
         {
@@ -183,8 +182,7 @@ namespace Cognite.OpcUa
                         || msg.StatusCode == HttpStatusCode.Unauthorized
                         || msg.StatusCode == HttpStatusCode.TooManyRequests))
                 .Or<TimeoutRejectedException>()
-                .WaitAndRetryAsync(4, retryAttempt =>
-                    TimeSpan.FromMilliseconds(retryAttempt > maxRetryAttempt ? 60000 : Math.Pow(2, retryAttempt)));
+                .WaitAndRetryAsync(4, retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
         }
         private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
         {

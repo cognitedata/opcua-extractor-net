@@ -17,7 +17,6 @@ namespace Cognite.OpcUa
     public class InfluxPusher : IPusher
     {
         public Extractor Extractor { set; private get; }
-        public UAClient UAClient { set; private get; }
         public PusherConfig BaseConfig { get; }
         public bool Failing;
 
@@ -157,7 +156,7 @@ namespace Cognite.OpcUa
             var getLastTasks = states.Select(async state =>
             {
                 var values = await client.QueryMultiSeriesAsync(config.Database,
-                    $"SELECT last(value) FROM \"{UAClient.GetUniqueId(state.Id, state.ArrayDimensions != null && state.ArrayDimensions.Length > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1)}\"");
+                    $"SELECT last(value) FROM \"{Extractor.GetUniqueId(state.Id, state.ArrayDimensions != null && state.ArrayDimensions.Length > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1)}\"");
                 if (values.Any() && values.First().HasEntries)
                 {
                     DateTime timestamp = values.First().Entries[0].Time;

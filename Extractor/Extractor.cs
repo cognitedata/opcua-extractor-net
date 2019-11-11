@@ -90,7 +90,6 @@ namespace Cognite.OpcUa
             foreach (var pusher in pushers)
             {
                 pusher.Extractor = this;
-                pusher.UAClient = this.uaClient;
             }
         }
 
@@ -142,7 +141,7 @@ namespace Cognite.OpcUa
             }
 
             Log.Debug("Begin mapping directory");
-            await uaClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
+            await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
             Log.Debug("End mapping directory");
 
             IEnumerable<Task> synchTasks;
@@ -255,6 +254,15 @@ namespace Cognite.OpcUa
             Log.Information("Extractor closed");
         }
 
+        public string GetUniqueId(NodeId id, int index = -1)
+        {
+            return uaClient.GetUniqueId(id, index);
+        }
+
+        public string ConvertToString(object value)
+        {
+            return uaClient.ConvertToString(value);
+        }
         /// <summary>
         /// Read properties for the given list of BufferedNode. This in intelligent, and keeps track of which properties are in the process of being read,
         /// to prevent multiple pushers from starting PropertyRead operations at the same time. If this is called on a given node twice in short time, the second call
@@ -335,7 +343,7 @@ namespace Cognite.OpcUa
                     return;
                 }
 
-                await uaClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
+                await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
                 var historyTasks = await MapUAToDestinations(token);
                 await Task.WhenAll(historyTasks);
             }
@@ -359,7 +367,7 @@ namespace Cognite.OpcUa
                         await uaClient.WaitForOperations();
                         ConfigureExtractor(token);
                         uaClient.ResetVisitedNodes();
-                        await uaClient.BrowseDirectoryAsync(RootNode, HandleNode, token);
+                        await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
                         var synchTasks = await MapUAToDestinations(token);
                         await Task.WhenAll(synchTasks);
                         Started = true;
@@ -377,7 +385,7 @@ namespace Cognite.OpcUa
 
                     tasks.Add(Task.Run(async () =>
                     {
-                        await uaClient.BrowseNodeChildren(nodesToBrowse.Distinct(), HandleNode, token);
+                        await uaClient.BrowseNodeHierarchy(nodesToBrowse.Distinct(), HandleNode, token);
                         var historyTasks = await MapUAToDestinations(token);
                         await Task.WhenAll(historyTasks);
                     }));
@@ -398,6 +406,11 @@ namespace Cognite.OpcUa
                 {
                     uaClient.AddNodeOverride(kvp.Value.ToNodeId(uaClient), kvp.Key);
                 }
+            }
+
+            foreach (var state in nodeStates.Values)
+            {
+                state.ClearIsStreaming();
             }
 
             if (config.Events.EmitterIds != null && config.Events.EventIds != null && config.Events.EmitterIds.Any() && config.Events.EventIds.Any())
@@ -542,7 +555,7 @@ namespace Cognite.OpcUa
             // Create tasks to subscribe to nodes, then start history read. We might lose data if history read finished before subscriptions were created.
             if (states.Any())
             {
-                tasks.Add(Task.Run(() => uaClient.SubscribeToNodes(states, SubscriptionHandler, token)).ContinueWith(_ =>
+                tasks.Add(Task.Run(() => uaClient.SubscribeToNodes(states, DataSubscriptionHandler, token)).ContinueWith(_ =>
                     uaClient.HistoryReadData(nodeStates.Values.Where(state => state.Historizing), HistoryDataHandler, token)));
             }
             if (EventEmitterStates.Any())
@@ -660,7 +673,7 @@ namespace Cognite.OpcUa
         /// Handles notifications on subscribed items, pushes all new datapoints to the queue.
         /// </summary>
         /// <param name="item">Modified item</param>
-        private void SubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
+        private void DataSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
             string uniqueId = uaClient.GetUniqueId(item.ResolvedNodeId);
             var node = nodeStates[item.ResolvedNodeId];

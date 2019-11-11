@@ -134,6 +134,11 @@ namespace Cognite.OpcUa
                 return result;
             }
         }
+
+        public void ClearIsStreaming()
+        {
+            IsStreaming = false;
+        }
     }
     /// <summary>
     /// State of a node currently being extracted for events. Contains information about the data,
