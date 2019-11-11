@@ -90,7 +90,6 @@ namespace Cognite.OpcUa
             foreach (var pusher in pushers)
             {
                 pusher.Extractor = this;
-                pusher.UAClient = this.uaClient;
             }
         }
 

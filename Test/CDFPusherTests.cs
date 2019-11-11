@@ -681,11 +681,10 @@ namespace Test
             {
                 if (!Common.TestRunResult(e)) throw;
             }
-
+            extractor.Close();
             await pusher.PushDataPoints(CancellationToken.None);
             Assert.False(handler.datapoints.ContainsKey("gp.efg:i=2"));
             // The extractor does not actually close completely if quitAfterMap is specified, but leaves connections open, including subscriptions
-            extractor.Close();
             handler.StoreDatapoints = true;
             // Too low datetime
             pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(new DateTime(1970, 1, 1), "gp.efg:i=3", 0));
