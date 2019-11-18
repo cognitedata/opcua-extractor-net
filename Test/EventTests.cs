@@ -60,6 +60,16 @@ namespace Test
                 }
                 await Task.Delay(1000);
             }
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+            extractor.Close();
             Assert.True(historyReadDone);
             var events = handler.events.Values.ToList();
             Assert.True(events.Any());
@@ -93,16 +103,6 @@ namespace Test
             {
                 TestEvent(ev, handler);
             }
-            source.Cancel();
-            try
-            {
-                await runTask;
-            }
-            catch (Exception e)
-            {
-                if (!Common.TestRunResult(e)) throw;
-            }
-            extractor.Close();
         }
         [Trait("Server", "events")]
         [Trait("Target", "CDFPusher")]

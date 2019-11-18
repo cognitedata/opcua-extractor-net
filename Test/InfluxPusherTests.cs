@@ -44,7 +44,8 @@ namespace Test
             var client = new UAClient(fullConfig);
             var config = (InfluxClientConfig)fullConfig.Pushers.First();
             var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
-            await ifDBclient.DropMeasurementAsync(new InfluxDatabase(config.Database), new InfluxMeasurement("gp.efg:i=2"));
+            await ifDBclient.DropDatabaseAsync(new InfluxDatabase(config.Database));
+            await ifDBclient.CreateDatabaseAsync(config.Database);
             var pusher = new InfluxPusher(config);
 
             var extractor = new Extractor(fullConfig, pusher, client);
@@ -91,8 +92,8 @@ namespace Test
             var config = (InfluxClientConfig)fullConfig.Pushers.First();
             var pusher = new InfluxPusher(config);
             var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
-            await ifDBclient.DropMeasurementAsync(new InfluxDatabase(config.Database), new InfluxMeasurement("gp.efg:i=2[3]"));
-
+            await ifDBclient.DropDatabaseAsync(new InfluxDatabase(config.Database));
+            await ifDBclient.CreateDatabaseAsync(config.Database);
 
             var extractor = new Extractor(fullConfig, pusher, client);
             using var source = new CancellationTokenSource();
@@ -135,7 +136,8 @@ namespace Test
             var config = (InfluxClientConfig)fullConfig.Pushers.First();
             var pusher = new InfluxPusher(config);
             var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
-            await ifDBclient.DropMeasurementAsync(new InfluxDatabase(config.Database), new InfluxMeasurement("gp.efg:i=2"));
+            await ifDBclient.DropDatabaseAsync(new InfluxDatabase(config.Database));
+            await ifDBclient.CreateDatabaseAsync(config.Database);
 
             var extractor = new Extractor(fullConfig, pusher, client);
             try
@@ -177,6 +179,51 @@ namespace Test
                 Assert.Contains(readValues.Entries, entry => Math.Abs(Convert.ToDouble(entry.Value) - value) < 1);
             }
             Assert.False(pusher.Failing);
+        }
+        [Trait("Server", "events")]
+        [Trait("Target", "InfluxPusher")]
+        [Trait("Test", "influxdbevents")]
+        [Fact]
+        public async Task TestInfluxdbEvents()
+        {
+            var fullConfig2 = Common.BuildConfig("basic", 25, "config.influxtest.yml");
+            var fullConfig = Common.BuildConfig("events", 25, "config.events.yml");
+            fullConfig.Logging.ConsoleLevel = "debug";
+            Logger.Configure(fullConfig.Logging);
+            fullConfig.Source.History = false;
+            var client = new UAClient(fullConfig);
+            var config = (InfluxClientConfig)fullConfig2.Pushers.First();
+            var pusher = new InfluxPusher(config);
+            var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
+            await ifDBclient.DropDatabaseAsync(new InfluxDatabase(config.Database));
+            await ifDBclient.CreateDatabaseAsync(config.Database);
+
+            var extractor = new Extractor(fullConfig, pusher, client);
+
+            using var source = new CancellationTokenSource();
+            var runTask = extractor.RunExtractor(source.Token);
+            bool gotData = false;
+            for (int i = 0; i < 20; i++)
+            {
+                var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"events.gp.efg:i=1\"");
+                if (read.Count > 0 && read.First().HasEntries && extractor.EventEmitterStates.All(state => state.Value.IsStreaming))
+                {
+                    gotData = true;
+                    break;
+                }
+                Thread.Sleep(1000);
+            }
+            Assert.True(gotData);
+            source.Cancel();
+            try
+            {
+                await runTask;
+            }
+            catch (Exception e)
+            {
+                if (!Common.TestRunResult(e)) throw;
+            }
+            extractor.Close();
         }
     }
 }

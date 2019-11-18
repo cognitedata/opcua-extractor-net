@@ -115,6 +115,7 @@ namespace Cognite.OpcUa
         public async Task PushEvents(CancellationToken token)
         {
             var evts = new List<BufferedEvent>();
+            int count = 0;
             while (BufferedEventQueue.TryDequeue(out BufferedEvent evt))
             {
                 if (evt.Time < DateTime.UnixEpoch)
@@ -122,16 +123,23 @@ namespace Cognite.OpcUa
                     skippedEvents.Inc();
                     continue;
                 }
+
+                count++;
                 evts.Add(evt);
             }
 
-            var points = evts.Select(BufferedEventToInflux).ToList();
+            if (count == 0)
+            {
+                Log.Verbose("Push 0 events to influxdb");
+                return;
+            }
 
-            eventsCounter.Inc(points.Count);
-
+            Log.Debug("Push {cnt} events to influxdb", count);
+            var points = evts.Select(BufferedEventToInflux);
             try
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
+                eventsCounter.Inc(count);
             }
             catch (Exception)
             {
@@ -247,7 +255,7 @@ namespace Cognite.OpcUa
             var idp = new InfluxDatapoint<string>
             {
                 UtcTimestamp = evt.Time,
-                MeasurementName = "event." + Extractor.GetUniqueId(evt.SourceNode)
+                MeasurementName = "events." + Extractor.GetUniqueId(evt.SourceNode)
             };
             idp.Fields.Add("Value", evt.Message);
             idp.Fields.Add("Id", evt.EventId);
