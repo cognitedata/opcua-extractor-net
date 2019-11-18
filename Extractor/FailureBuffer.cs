@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Opc.Ua;
 using Serilog;
 
 namespace Cognite.OpcUa
@@ -14,8 +15,11 @@ namespace Cognite.OpcUa
         private readonly FailureBufferConfig config;
         private readonly Dictionary<string, bool> managedPoints;
         private readonly Dictionary<int, DateTime> startTimes;
+        private readonly Dictionary<int, DateTime> eventStartTimes;
         private readonly Extractor extractor;
+        private readonly HashSet<NodeId> managedEvents = new HashSet<NodeId>();
         public bool Any { get; private set; }
+        public bool AnyEvents { get; private set; }
 
         private bool bufferFileEmpty;
         private readonly object fileLock = new object();
@@ -25,6 +29,7 @@ namespace Cognite.OpcUa
             this.extractor = extractor;
             managedPoints = new Dictionary<string, bool>();
             startTimes = new Dictionary<int, DateTime>();
+            eventStartTimes = new Dictionary<int, DateTime>();
             if (config.Influx?.Database == null) return;
 
             influxPusher = new InfluxPusher(new InfluxClientConfig
@@ -50,7 +55,6 @@ namespace Cognite.OpcUa
             points = points.Where(point => !extractor.GetNodeState(point.Id).Historizing).ToList();
             if (!points.Any()) return;
             bool success = false;
-            bool useBackup = true;
             if (config.Influx != null && config.Influx.Write && influxPusher != null)
             {
                 influxPusher.BaseConfig.NonFiniteReplacement = nonFiniteReplacement;
@@ -59,7 +63,6 @@ namespace Cognite.OpcUa
                     influxPusher.BufferedDPQueue.Enqueue(dp);
                 }
 
-                useBackup = false;
                 try
                 {
                     await influxPusher.PushDataPoints(token);
@@ -68,12 +71,11 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception e)
                 {
-                    useBackup = true;
                     Log.Error(e, "Failed to insert into influxdb buffer");
                 }
             }
 
-            if (useBackup && config.FilePath != null)
+            if (!success && config.FilePath != null)
             {
                 WriteBufferToFile(points, Path.Join(config.FilePath, "buffer.bin"), token);
                 success = true;
@@ -98,10 +100,8 @@ namespace Cognite.OpcUa
             if (!startTimes.ContainsKey(index)) return Array.Empty<BufferedDataPoint>();
             bool success = false;
             IEnumerable<BufferedDataPoint> ret = new List<BufferedDataPoint>();
-            bool useBackup = true;
             if (config.Influx != null && config.Influx.Write && influxPusher != null)
             {
-                useBackup = false;
                 try
                 {
                     ret = ret.Concat(await influxPusher.ReadDataPoints(startTimes[index], managedPoints, token));
@@ -110,12 +110,11 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception e)
                 {
-                    useBackup = true;
                     Log.Error(e, "Failed to read from influxdb buffer");
                 }
             }
 
-            if (config.FilePath != null && (useBackup || !bufferFileEmpty))
+            if (config.FilePath != null && (!success || !bufferFileEmpty))
             {
                 ret = ret.Concat(ReadBufferFromFile(Path.Join(config.FilePath, "buffer.bin"), token));
                 success = true;
@@ -138,8 +137,80 @@ namespace Cognite.OpcUa
             }
             return ret;
         }
+
+        public async Task WriteEvents(IEnumerable<BufferedEvent> events, int index, CancellationToken token)
+        {
+            if (!events.Any()) return;
+            bool success = false;
+            if (config.Influx != null && config.Influx.Write && influxPusher != null)
+            {
+                foreach (var evt in events)
+                {
+                    influxPusher.BufferedEventQueue.Enqueue(evt);
+                }
+
+                try
+                {
+                    await influxPusher.PushEvents(token);
+                    Log.Information("Inserted {cnt} points into influxdb failure buffer", events.Count());
+                    success = true;
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "Failed to insert into influxdb buffer");
+                }
+            }
+
+            if (success)
+            {
+                var mints = events.Select(evt => evt.Time).Min();
+                if (!eventStartTimes.ContainsKey(index) || mints < eventStartTimes[index])
+                {
+                    eventStartTimes[index] = mints;
+                }
+                foreach (var evt in events)
+                {
+                    managedEvents.Add(evt.SourceNode);
+                }
+
+                AnyEvents = true;
+            }
+        }
+
+        public async Task<IEnumerable<BufferedEvent>> ReadEvents(int index, CancellationToken token)
+        {
+            if (!eventStartTimes.ContainsKey(index)) return Array.Empty<BufferedEvent>();
+            bool success = false;
+            IEnumerable<BufferedEvent> ret = new List<BufferedEvent>();
+            if (config.Influx != null && config.Influx.Write && influxPusher != null)
+            {
+                try
+                {
+                    ret = ret.Concat(await influxPusher.ReadEvents(eventStartTimes[index], managedEvents, token));
+                    Log.Information("Read {cnt} events from influxdb failure buffer", ret.Count());
+                    success = true;
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "Failed to read events from influxdb buffer");
+                }
+            }
+
+            ret = ret.DistinctBy(evt => new { evt.EventId, evt.Time }).ToList();
+            if (success)
+            {
+                eventStartTimes.Remove(index);
+                if (!eventStartTimes.Any())
+                {
+                    managedEvents.Clear();
+                    AnyEvents = false;
+                }
+            }
+
+            return ret;
+        }
         /// <summary>
-        /// Write a list of datapoints to buffer file. Only writes non-historizing datapoints.
+        /// Write a list of datapoints to buffer file.
         /// </summary>
         /// <param name="dataPoints">List of points to be buffered</param>
         private void WriteBufferToFile(IEnumerable<BufferedDataPoint> dataPoints,
@@ -170,7 +241,7 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Reads buffer from file into the datapoint queue
+        /// Reads buffer from file
         /// </summary>
         private IEnumerable<BufferedDataPoint> ReadBufferFromFile(string path, CancellationToken token)
         {

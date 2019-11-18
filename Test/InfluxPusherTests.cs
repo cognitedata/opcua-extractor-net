@@ -241,6 +241,7 @@ namespace Test
 
             var dps = await ((InfluxPusher)tester.Pusher)
                 .ReadDataPoints(DateTime.UnixEpoch, new Dictionary<string, bool> {{"gp.efg:i=10", false}}, tester.Source.Token);
+
             var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)Math.Round(dp.First().DoubleValue)).ToList();
 
             tester.TestContinuity(intdps);

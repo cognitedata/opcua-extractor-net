@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Metadata.Ecma335;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
@@ -317,6 +318,52 @@ namespace Cognite.OpcUa
             }
 
             return finalPoints;
+        }
+
+        public async Task<IEnumerable<BufferedEvent>> ReadEvents(DateTime startTime,
+            IEnumerable<NodeId> measurements,
+            CancellationToken token)
+        {
+            var timestamp = startTime - DateTime.UnixEpoch;
+            var nameToNodeId = measurements.ToDictionary(
+                id => "events." + Extractor.GetUniqueId(id),
+                id => id);
+            var fetchTasks = measurements.Select(measurement =>
+                client.QueryMultiSeriesAsync(config.Database,
+                    $"SELECT * FROM \"{"events." + Extractor.GetUniqueId(measurement)} WHERE time >= {timestamp.Ticks}")).ToList();
+            var results = await Task.WhenAll(fetchTasks);
+            var finalEvents = new List<BufferedEvent>();
+
+            foreach (var series in results)
+            {
+                if (!series.Any()) continue;
+                var current = series.First();
+                if (!nameToNodeId.ContainsKey(current.SeriesName)) continue;
+                var sourceNode = nameToNodeId[current.SeriesName];
+                finalEvents.AddRange(current.Entries.Select(res =>
+                {
+                    // The client uses ExpandoObject as dynamic, which implements IDictionary
+                    if (!(res is IDictionary<string, object> values)) return null;
+                    var evt = new BufferedEvent
+                    {
+                        Time = new DateTime((long) values["Timestamp"]).Add(
+                            TimeSpan.FromTicks(DateTime.UnixEpoch.Ticks)),
+                        EventId = (string)values["EventId"],
+                        Message = (string)values["Value"],
+                        SourceNode = sourceNode,
+                        MetaData = new Dictionary<string, object>()
+                    };
+                    foreach (var kvp in values)
+                    {
+                        if (kvp.Key == "Timestamp" || kvp.Key == "EventId" || kvp.Key == "Value") continue;
+                        evt.MetaData.Add(kvp.Key, kvp.Value);
+                    }
+
+                    return evt;
+                }).Where(evt => evt != null));
+            }
+
+            return finalEvents;
         }
 
         public void Reconfigure()
