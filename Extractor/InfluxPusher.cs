@@ -8,6 +8,7 @@ using AdysTech.InfluxDB.Client.Net;
 using Opc.Ua;
 using Prometheus.Client;
 using Serilog;
+using Exception = System.Exception;
 
 namespace Cognite.OpcUa
 {
@@ -35,6 +36,15 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_datapoint_push_failures_influx", "Number of completely failed pushes of datapoints to influxdb");
         private static readonly Counter skippedDatapoints = Metrics
             .CreateCounter("opcua_skipped_datapoints_influx", "Number of datapoints skipped by influxdb pusher");
+        private static readonly Counter eventsCounter = Metrics
+            .CreateCounter("opcua_events_pushed_influx", "Number of events pushed to influxdb");
+        private static readonly Counter eventsPushes = Metrics
+            .CreateCounter("opcua_event_pushes_influx", "Number of times events have been pushed to influxdb");
+        private static readonly Counter eventPushFailures = Metrics
+            .CreateCounter("opcua_event_push_failures_influx", "Number of completely failed pushes of events to influxdb");
+        private static readonly Counter skippedEvents = Metrics
+            .CreateCounter("opcua_skipped_events_influx", "Number of events skipped by influxdb pusher");
+
         public InfluxPusher(InfluxClientConfig config)
         {
             this.config = config;
@@ -52,7 +62,7 @@ namespace Cognite.OpcUa
             int count = 0;
             while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer))
             {
-                if (buffer.Timestamp <= DateTime.MinValue)
+                if (buffer.Timestamp <= DateTime.UnixEpoch)
                 {
                     skippedDatapoints.Inc();
                     continue;
@@ -86,53 +96,8 @@ namespace Cognite.OpcUa
             {
                 var ts = Extractor.GetNodeState(group.Key);
                 if (ts == null) continue;
-                foreach (var dp in group)
-                {
-                    dataPointsCounter.Inc();
-                    if (ts.DataType.IsString)
-                    {
-                        var idp = new InfluxDatapoint<string>
-                        {
-                            UtcTimestamp = dp.Timestamp,
-                            MeasurementName = dp.Id
-                        };
-                        idp.Fields.Add("value", dp.StringValue);
-                        points.Add(idp);
-                    }
-                    else if (ts.DataType.Identifier == DataTypes.Boolean)
-                    {
-                        var idp = new InfluxDatapoint<bool>
-                        {
-                            UtcTimestamp = dp.Timestamp,
-                            MeasurementName = dp.Id
-                        };
-                        idp.Fields.Add("value", Math.Abs(dp.DoubleValue) < 0.1);
-                        points.Add(idp);
-
-                    }
-                    else if (ts.DataType.Identifier < DataTypes.Float
-                             || ts.DataType.Identifier == DataTypes.Integer
-                             || ts.DataType.Identifier == DataTypes.UInteger)
-                    {
-                        var idp = new InfluxDatapoint<long>
-                        {
-                            UtcTimestamp = dp.Timestamp,
-                            MeasurementName = dp.Id
-                        };
-                        idp.Fields.Add("value", (long)dp.DoubleValue);
-                        points.Add(idp);
-                    }
-                    else
-                    {
-                        var idp = new InfluxDatapoint<double>
-                        {
-                            UtcTimestamp = dp.Timestamp,
-                            MeasurementName = dp.Id
-                        };
-                        idp.Fields.Add("value", dp.DoubleValue);
-                        points.Add(idp);
-                    }
-                }
+                dataPointsCounter.Inc(group.Count());
+                points.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
             }
             Log.Debug("Push {cnt} datapoints to influxdb", points.Count);
             try
@@ -146,6 +111,36 @@ namespace Cognite.OpcUa
             }
             dataPointPushes.Inc();
         }
+
+        public async Task PushEvents(CancellationToken token)
+        {
+            var evts = new List<BufferedEvent>();
+            while (BufferedEventQueue.TryDequeue(out BufferedEvent evt))
+            {
+                if (evt.Time < DateTime.UnixEpoch)
+                {
+                    skippedEvents.Inc();
+                    continue;
+                }
+                evts.Add(evt);
+            }
+
+            var points = evts.Select(BufferedEventToInflux).ToList();
+
+            eventsCounter.Inc(points.Count);
+
+            try
+            {
+                await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
+            }
+            catch (Exception)
+            {
+                eventPushFailures.Inc();
+                throw;
+            }
+            eventsPushes.Inc();
+
+        }
         /// <summary>
         /// Reads the last datapoint from influx for each timeseries, sending the timestamp to each passed state
         /// </summary>
@@ -155,8 +150,10 @@ namespace Cognite.OpcUa
         {
             var getLastTasks = states.Select(async state =>
             {
+                var id = Extractor.GetUniqueId(state.Id,
+                    state.ArrayDimensions != null && state.ArrayDimensions.Length > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1);
                 var values = await client.QueryMultiSeriesAsync(config.Database,
-                    $"SELECT last(value) FROM \"{Extractor.GetUniqueId(state.Id, state.ArrayDimensions != null && state.ArrayDimensions.Length > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1)}\"");
+                    $"SELECT last(value) FROM \"{id}\"");
                 if (values.Any() && values.First().HasEntries)
                 {
                     DateTime timestamp = values.First().Entries[0].Time;
@@ -197,6 +194,69 @@ namespace Cognite.OpcUa
                 return false;
             }
             return true;
+        }
+
+        private IInfluxDatapoint BufferedDPToInflux(NodeExtractionState state, BufferedDataPoint dp)
+        {
+            if (state.DataType.IsString)
+            {
+                var idp = new InfluxDatapoint<string>
+                {
+                    UtcTimestamp = dp.Timestamp,
+                    MeasurementName = dp.Id
+                };
+                idp.Fields.Add("value", dp.StringValue);
+                return idp;
+            }
+            if (state.DataType.Identifier == DataTypes.Boolean)
+            {
+                var idp = new InfluxDatapoint<bool>
+                {
+                    UtcTimestamp = dp.Timestamp,
+                    MeasurementName = dp.Id
+                };
+                idp.Fields.Add("value", Math.Abs(dp.DoubleValue) < 0.1);
+                return idp;
+            }
+            if (state.DataType.Identifier < DataTypes.Float
+                     || state.DataType.Identifier == DataTypes.Integer
+                     || state.DataType.Identifier == DataTypes.UInteger)
+            {
+                var idp = new InfluxDatapoint<long>
+                {
+                    UtcTimestamp = dp.Timestamp,
+                    MeasurementName = dp.Id
+                };
+                idp.Fields.Add("value", (long)dp.DoubleValue);
+                return idp;
+            }
+            else
+            {
+                var idp = new InfluxDatapoint<double>
+                {
+                    UtcTimestamp = dp.Timestamp,
+                    MeasurementName = dp.Id
+                };
+                idp.Fields.Add("value", dp.DoubleValue);
+                return idp;
+            }
+        }
+
+        private IInfluxDatapoint BufferedEventToInflux(BufferedEvent evt)
+        {
+            var idp = new InfluxDatapoint<string>
+            {
+                UtcTimestamp = evt.Time,
+                MeasurementName = "event." + Extractor.GetUniqueId(evt.SourceNode)
+            };
+            idp.Fields.Add("Value", evt.Message);
+            idp.Fields.Add("Id", evt.EventId);
+            idp.Tags["Type"] = Extractor.GetUniqueId(evt.EventType);
+            foreach (var kvp in evt.MetaData)
+            {
+                idp.Tags[kvp.Key] = Extractor.ConvertToString(kvp.Value);
+            }
+            return idp;
         }
     }
 }

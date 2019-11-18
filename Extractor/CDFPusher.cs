@@ -98,6 +98,8 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_duplicated_events", "Number of events that failed to push to CDF due to already existing in CDF");
         private static readonly Counter skippedDatapoints = Metrics
             .CreateCounter("opcua_skipped_datapoints_cdf", "Number of datapoints skipped by CDF pusher");
+        private static readonly Counter skippedEvents = Metrics
+            .CreateCounter("opcua_skipped_events_cdf", "Number of events skipped by CDF pusher");
         #region Interface
 
         /// <summary>
@@ -253,14 +255,12 @@ namespace Cognite.OpcUa
             int count = 0;
             while (BufferedEventQueue.TryDequeue(out BufferedEvent buffEvent) && count++ < 1000)
             {
-                if (nodeToAssetIds.ContainsKey(buffEvent.SourceNode) || config.Debug)
+                if (buffEvent.Time < minDateTime || !nodeToAssetIds.ContainsKey(buffEvent.SourceNode) && !config.Debug)
                 {
-                    eventList.Add(buffEvent);
+                    skippedEvents.Inc();
+                    continue;
                 }
-                else
-                {
-                    Log.Warning("Event with unknown sourceNode: {nodeId}", buffEvent.SourceNode);
-                }
+                eventList.Add(buffEvent);
             }
             if (count == 0)
             {
