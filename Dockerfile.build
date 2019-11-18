@@ -3,7 +3,7 @@ FROM eu.gcr.io/cognitedata/dotnet-mono:3.0-sdk
 WORKDIR /build
 COPY . .
 
-RUN mono .paket/paket.exe install
+RUN mono .paket/paket.exe restore
 RUN dotnet build
 
 RUN dotnet publish -c Release -o /build/deploy /p:PublishTrimmed="false" Extractor
