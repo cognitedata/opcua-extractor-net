@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
-using DateTime = System.DateTime;
 
 namespace Cognite.OpcUa
 {
@@ -17,6 +16,9 @@ namespace Cognite.OpcUa
         private readonly Dictionary<int, DateTime> startTimes;
         private readonly Extractor extractor;
         public bool Any { get; private set; }
+
+        private bool bufferFileEmpty;
+        private readonly object fileLock = new object();
         public FailureBuffer(FailureBufferConfig config, Extractor extractor)
         {
             this.config = config;
@@ -31,8 +33,10 @@ namespace Cognite.OpcUa
                 Host = config.Influx.Host,
                 Password = config.Influx.Password,
                 PointChunkSize = config.Influx.PointChunkSize
-            });
-            influxPusher.Extractor = extractor;
+            })
+            {
+                Extractor = extractor
+            };
             var connTest = influxPusher.TestConnection(CancellationToken.None);
             connTest.Wait();
             if (!connTest.Result)
@@ -71,7 +75,7 @@ namespace Cognite.OpcUa
 
             if (useBackup && config.FilePath != null)
             {
-                Utils.WriteBufferToFile(points, Path.Join(config.FilePath, "buffer.bin"), token);
+                WriteBufferToFile(points, Path.Join(config.FilePath, "buffer.bin"), token);
                 success = true;
             }
 
@@ -111,9 +115,9 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (config.FilePath != null && (useBackup || !Utils.BufferFileEmpty))
+            if (config.FilePath != null && (useBackup || !bufferFileEmpty))
             {
-                ret = ret.Concat(Utils.ReadBufferFromFile(Path.Join(config.FilePath, "buffer.bin"), token));
+                ret = ret.Concat(ReadBufferFromFile(Path.Join(config.FilePath, "buffer.bin"), token));
                 success = true;
             }
 
@@ -125,14 +129,86 @@ namespace Cognite.OpcUa
                 {
                     managedPoints.Clear();
                     Any = false;
-                    lock (Utils.FileLock)
+                    lock (fileLock)
                     {
                         File.Create(Path.Join(config.FilePath, "buffer.bin")).Close();
                     }
-                    Utils.BufferFileEmpty = false;
+                    bufferFileEmpty = false;
                 }
             }
             return ret;
+        }
+        /// <summary>
+        /// Write a list of datapoints to buffer file. Only writes non-historizing datapoints.
+        /// </summary>
+        /// <param name="dataPoints">List of points to be buffered</param>
+        private void WriteBufferToFile(IEnumerable<BufferedDataPoint> dataPoints,
+            string path,
+            CancellationToken token)
+        {
+            lock (fileLock)
+            {
+                using FileStream fs = new FileStream(path, FileMode.Append, FileAccess.Write);
+                int count = 0;
+                foreach (var dp in dataPoints)
+                {
+                    if (token.IsCancellationRequested) return;
+                    count++;
+                    byte[] bytes = dp.ToStorableBytes();
+                    fs.Write(bytes, 0, bytes.Length);
+                }
+                if (count > 0)
+                {
+                    bufferFileEmpty = false;
+                    Log.Debug("Write {NumDatapointsToPersist} datapoints to file", count);
+                }
+                else
+                {
+                    Log.Verbose("Write 0 datapoints to file");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reads buffer from file into the datapoint queue
+        /// </summary>
+        private IEnumerable<BufferedDataPoint> ReadBufferFromFile(string path, CancellationToken token)
+        {
+            var result = new List<BufferedDataPoint>();
+            lock (fileLock)
+            {
+                int count = 0;
+                using (FileStream fs = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Read))
+                {
+                    byte[] sizeBytes = new byte[sizeof(ushort)];
+                    while (!token.IsCancellationRequested)
+                    {
+                        int read = fs.Read(sizeBytes, 0, sizeBytes.Length);
+                        if (read < sizeBytes.Length) break;
+                        ushort size = BitConverter.ToUInt16(sizeBytes, 0);
+                        byte[] dataBytes = new byte[size];
+                        int dRead = fs.Read(dataBytes, 0, size);
+                        if (dRead < size) break;
+                        var buffDp = new BufferedDataPoint(dataBytes);
+                        if (buffDp.Id == null)
+                        {
+                            Log.Warning($"Invalid datapoint in buffer file {path}: {buffDp.Id}");
+                            continue;
+                        }
+                        count++;
+                        Log.Debug(buffDp.ToDebugDescription());
+                        result.Add(buffDp);
+                    }
+                }
+
+                if (count == 0)
+                {
+                    Log.Verbose("Read 0 point from file");
+                }
+                Log.Debug("Read {NumDatapointsToRead} points from file", count);
+            }
+
+            return result;
         }
     }
 }
