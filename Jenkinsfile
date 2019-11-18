@@ -94,7 +94,7 @@ podTemplate(
                 sh('apt-get update && apt-get install -y python3-pip')
                 sh('pip3 install pipenv')
                 sh('pipenv install -d --system')           
-                sh('mono .paket/paket.exe install')
+                sh('mono .paket/paket.exe restore')
                 sh('git clone https://github.com/cognitedata/python-opcua.git ../python-opcua')
             }
             dir('../python-opcua') {
