@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
@@ -24,6 +25,7 @@ namespace Cognite.OpcUa
 {
     public interface IPusher
     {
+        int Index { get; set; }
         PusherConfig BaseConfig { get; }
         /// <summary>
         /// Parent extractor
@@ -60,10 +62,11 @@ namespace Cognite.OpcUa
         /// Push data points, emptying the queue
         /// </summary>
         /// <param name="dataPointQueue">Data points to be pushed</param>
-        Task PushDataPoints(CancellationToken token)
+        /// <returns>A list of datapoints that failed to be inserted</returns>
+        Task<IEnumerable<BufferedDataPoint>> PushDataPoints(CancellationToken token)
         {
             BufferedDPQueue.Clear();
-            return Task.CompletedTask;
+            return Task.FromResult((IEnumerable<BufferedDataPoint>)Array.Empty<BufferedDataPoint>());
         }
         /// <summary>
         /// Reset relevant persistent information in the pusher, preparing it to be restarted

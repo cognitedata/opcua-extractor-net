@@ -8,10 +8,6 @@ Pushers:
         Project: test
         # Cognite api key
         ApiKey: test
-        # Buffer non-historizing datapoints when the connection to CDF fails.
-        BufferOnFailure: true
-        # Buffer file path
-        BufferFile: buffer.bin
 
 Logging:
     # Writes log events at this level to the Console. 

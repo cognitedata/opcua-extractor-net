@@ -57,29 +57,24 @@ namespace Test
         {
             var fullConfig = Utils.GetConfig(configname);
             if (fullConfig == null) throw new Exception("Failed to load config file");
-            if (fullConfig.Pushers.First() is CogniteClientConfig cogniteConfig)
+            fullConfig.FailureBuffer.FilePath = $"buffers{index}";
+            switch (serverType)
             {
-                cogniteConfig.BufferFile = $"buffer{index}.bin";
-            }
-            if (serverType == "basic")
-            {
-                fullConfig.Source.EndpointURL = "opc.tcp://localhost:4840";
-            }
-            else if (serverType == "full")
-            {
-                fullConfig.Source.EndpointURL = "opc.tcp://localhost:4841";
-            }
-            else if (serverType == "array")
-            {
-                fullConfig.Source.EndpointURL = "opc.tcp://localhost:4842";
-            }
-            else if (serverType == "events")
-            {
-                fullConfig.Source.EndpointURL = "opc.tcp://localhost:4843";
-            }
-            else if (serverType == "audit")
-            {
-                fullConfig.Source.EndpointURL = "opc.tcp://localhost:4844";
+                case "basic":
+                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4840";
+                    break;
+                case "full":
+                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4841";
+                    break;
+                case "array":
+                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4842";
+                    break;
+                case "events":
+                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4843";
+                    break;
+                case "audit":
+                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4844";
+                    break;
             }
             return fullConfig;
         }
@@ -215,17 +210,39 @@ namespace Test
                 pusherConfig = Utils.GetConfig(_configNames[testParams.PusherConfig.Value]);
             }
 
+            if (testParams.BufferDir != null || testParams.FailureInflux != null)
+            {
+                Config.FailureBuffer.Enabled = true;
+                Config.FailureBuffer.FilePath = testParams.BufferDir;
+                if (testParams.FailureInflux != null)
+                {
+                    var failureInflux = Utils.GetConfig(_configNames[testParams.FailureInflux.Value]);
+                    if (failureInflux.Pushers.First() is InfluxClientConfig influxConfig)
+                    {
+                        failureInflux.FailureBuffer.Influx = new InfluxBufferConfig
+                        {
+                            Database = influxConfig.Database,
+                            Host = influxConfig.Host,
+                            Password = influxConfig.Password,
+                            PointChunkSize = influxConfig.PointChunkSize,
+                            Username = influxConfig.Username,
+                            Write = testParams.FailureInfluxWrite
+                        };
+                    }
+                }
+            }
+
             switch ((pusherConfig ?? Config).Pushers.First())
             {
                 case CogniteClientConfig cogniteClientConfig:
                     CogniteConfig = cogniteClientConfig;
                     Handler = new CDFMockHandler(CogniteConfig.Project, testParams.MockMode);
                     Handler.StoreDatapoints = testParams.StoreDatapoints;
-                    Pusher = CogniteConfig.ToPusher(Common.GetDummyProvider(Handler));
+                    Pusher = CogniteConfig.ToPusher(0, Common.GetDummyProvider(Handler));
                     break;
                 case InfluxClientConfig influxClientConfig:
                     InfluxConfig = influxClientConfig;
-                    Pusher = InfluxConfig.ToPusher(null);
+                    Pusher = InfluxConfig.ToPusher(0, null);
                     influx = true;
                     IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
                     break;
@@ -248,9 +265,9 @@ namespace Test
                 await IfDbClient.CreateDatabaseAsync(InfluxConfig.Database);
             }
 
-            if (CogniteConfig != null)
+            if (Config.FailureBuffer.Enabled && !string.IsNullOrEmpty(Config.FailureBuffer.FilePath))
             {
-                File.Create(CogniteConfig.BufferFile).Close();
+                File.Create(Path.Join(Config.FailureBuffer.FilePath, "buffer.bin")).Close();
             }
         }
 
@@ -314,11 +331,16 @@ namespace Test
         {
             var dps = Handler.datapoints[id].Item1;
             var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)Math.Round(dp.First().Value)).ToList();
-            var min = intdps.Min();
+            TestContinuity(intdps);
+        }
+
+        public void TestContinuity(List<int> intdps)
+        {
+            int min = intdps.Min();
             var check = new int[intdps.Count];
 
             int last = min - 1;
-            foreach (var dp in intdps)
+            foreach (int dp in intdps)
             {
                 if (last != dp - 1)
                 {
@@ -345,5 +367,8 @@ namespace Test
         public bool QuitAfterMap { get; set; } = false;
         public bool StoreDatapoints { get; set; } = false;
         public int? HistoryGranularity { get; set; } = null;
+        public ConfigName? FailureInflux { get; set; } = null;
+        public string BufferDir { get; set; } = null;
+        public bool FailureInfluxWrite { get; set; } = true;
     }
 }

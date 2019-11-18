@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
@@ -26,7 +27,6 @@ using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus.Client;
 using Serilog;
-using Exception = System.Exception;
 
 namespace Cognite.OpcUa
 {
@@ -37,6 +37,7 @@ namespace Cognite.OpcUa
     {
         private readonly UAClient uaClient;
         private readonly FullConfig config;
+        public readonly FailureBuffer FailureBuffer;
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
@@ -57,6 +58,8 @@ namespace Cognite.OpcUa
 
         private readonly object managedNodesLock = new object();
         private HashSet<NodeId> managedNodes = new HashSet<NodeId>();
+
+        private HashSet<NodeId> ignoreDataTypes;
 
         public ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> ActiveEvents { get; }
             = new ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>>();
@@ -84,6 +87,7 @@ namespace Cognite.OpcUa
         {
             this.pushers = pushers;
             this.uaClient = uaClient;
+            FailureBuffer = new FailureBuffer(config.FailureBuffer, this);
             this.config = config;
             this.uaClient.Extractor = this;
             Log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
@@ -129,6 +133,10 @@ namespace Cognite.OpcUa
                     throw new Exception("UAClient failed to start");
                 }
             }
+            if (config.FailureBuffer.Enabled && config.FailureBuffer.FilePath != null)
+            {
+                Directory.CreateDirectory(config.FailureBuffer.FilePath);
+            }
 
             ConfigureExtractor(token);
 
@@ -158,37 +166,10 @@ namespace Cognite.OpcUa
 
             Pushing = true;
 
-            IEnumerable<Task> tasks = pushers.Select(pusher =>
-            {
-                return Task.Run(async () =>
-                {
-                    Log.Information("Start push loop");
-                    while (!token.IsCancellationRequested)
-                    {
-                        try
-                        {
-                            if (pushData)
-                            {
-                                await pusher.PushDataPoints(token);
-                            }
-                            if (pushEvents)
-                            {
-                                await pusher.PushEvents(token);
-                            }
-                            Utils.WriteLastEventTimestamp(DateTime.Now);
-                            await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
-                        }
-                        catch (TaskCanceledException)
-                        {
-                            break;
-                        }
-                        catch (Exception e)
-                        {
-                            Log.Error(e, "Failed to push datapoints on pusher of type {FailedPusherName}", pusher.GetType().Name);
-                        }
-                    }
-                });
-            }).Concat(synchTasks).Append(Task.Run(() => ExtraTaskLoop(token), token)).ToList();
+            IEnumerable<Task> tasks = pushers
+                .Select(pusher => PusherLoop(pusher, token))
+                .Concat(synchTasks).Append(Task.Run(() => ExtraTaskLoop(token), token)).ToList();
+
             if (config.Extraction.AutoRebrowsePeriod > 0)
             {
                 tasks = tasks.Append(Task.Run(() => RebrowseLoop(token))).ToList();
@@ -315,7 +296,8 @@ namespace Cognite.OpcUa
             return (!node.DataType.IsString || config.Extraction.AllowStringVariables)
                 && (node.ValueRank == ValueRanks.Scalar
                     || config.Extraction.MaxArraySize > 0 && node.ArrayDimensions != null && node.ArrayDimensions.Length == 1
-                    && node.ArrayDimensions[0] > 0 && node.ArrayDimensions[0] <= config.Extraction.MaxArraySize);
+                    && node.ArrayDimensions[0] > 0 && node.ArrayDimensions[0] <= config.Extraction.MaxArraySize)
+                && !ignoreDataTypes.Contains(node.DataType.raw);
         }
 
         public NodeExtractionState GetNodeState(string externalId)
@@ -329,6 +311,51 @@ namespace Cognite.OpcUa
         }
         #endregion
         #region Mapping
+
+        private async Task PusherLoop(IPusher pusher, CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    if (pushData)
+                    {
+                        var failed = await pusher.PushDataPoints(token);
+                        // If failed is null, there were no points, so we can't conclude success or failure
+                        if (failed != null && config.FailureBuffer.Enabled)
+                        {
+                            if (failed.Any())
+                            {
+                                await FailureBuffer.WriteDatapoints(failed, pusher.Index,
+                                    pusher.BaseConfig.NonFiniteReplacement, token);
+                            }
+                            else if (FailureBuffer.Any)
+                            {
+                                var recovered = await FailureBuffer.ReadDatapoints(pusher.Index, token);
+                                foreach (var dp in recovered)
+                                {
+                                    pusher.BufferedDPQueue.Enqueue(dp);
+                                }
+                            }
+                        }
+                    }
+                    if (pushEvents)
+                    {
+                        await pusher.PushEvents(token);
+                    }
+                    Utils.WriteLastEventTimestamp(DateTime.Now);
+                    await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "Failed to push datapoints on pusher of type {FailedPusherName}", pusher.GetType().Name);
+                }
+            }
+        }
         private async Task RebrowseLoop(CancellationToken token)
         {
             var delay = TimeSpan.FromMinutes(config.Extraction.AutoRebrowsePeriod);
@@ -399,6 +426,10 @@ namespace Cognite.OpcUa
         private void ConfigureExtractor(CancellationToken token)
         {
             RootNode = config.Extraction.RootNode.ToNodeId(uaClient, ObjectIds.ObjectsFolder);
+
+            ignoreDataTypes = config.Extraction.IgnoreDataTypes != null
+                ? config.Extraction.IgnoreDataTypes.Select(proto => proto.ToNodeId(uaClient)).ToHashSet()
+                : new HashSet<NodeId>();
 
             if (config.Extraction.NodeMap != null)
             {
@@ -677,7 +708,7 @@ namespace Cognite.OpcUa
         {
             string uniqueId = uaClient.GetUniqueId(item.ResolvedNodeId);
             var node = nodeStates[item.ResolvedNodeId];
-
+            
             foreach (var datapoint in item.DequeueValues())
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))

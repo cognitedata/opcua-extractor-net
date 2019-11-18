@@ -222,7 +222,8 @@ namespace Cognite.OpcUa
         private static void Run(FullConfig config, IServiceProvider provider, CancellationTokenSource source)
         {
             var client = new UAClient(config);
-            IEnumerable<IPusher> pushers = config.Pushers.Select(pusher => pusher.ToPusher(provider)).ToList();
+            int index = 0;
+            IEnumerable<IPusher> pushers = config.Pushers.Select(pusher => pusher.ToPusher(index++, provider)).ToList();
             var removePushers = new List<IPusher>();
             try
             {

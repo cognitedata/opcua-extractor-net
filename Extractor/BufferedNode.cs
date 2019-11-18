@@ -95,12 +95,14 @@ namespace Cognite.OpcUa
         public readonly uint Identifier;
         public readonly bool IsStep;
         public readonly bool IsString;
+        public readonly NodeId raw;
         /// <summary>
         /// Construct BufferedDataType from NodeId of datatype
         /// </summary>
         /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
         public BufferedDataType(NodeId rawDataType)
         {
+            raw = rawDataType;
             if (rawDataType.IdType == IdType.Numeric)
             {
                 Identifier = (uint)rawDataType.Identifier;
@@ -245,8 +247,8 @@ namespace Cognite.OpcUa
     {
         public readonly DateTime Timestamp;
         public readonly string Id;
-        public double DoubleValue;
-        public string StringValue;
+        public readonly double DoubleValue;
+        public readonly string StringValue;
         public readonly bool IsString;
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
@@ -267,6 +269,21 @@ namespace Cognite.OpcUa
             Id = id;
             StringValue = value;
             IsString = true;
+        }
+
+        public BufferedDataPoint(BufferedDataPoint other, string replacement)
+        {
+            Timestamp = other.Timestamp;
+            Id = other.Id;
+            StringValue = replacement;
+            IsString = other.IsString;
+        }
+        public BufferedDataPoint(BufferedDataPoint other, double replacement)
+        {
+            Timestamp = other.Timestamp;
+            Id = other.Id;
+            DoubleValue = replacement;
+            IsString = other.IsString;
         }
         /// <summary>
         /// Converts datapoint into an array of bytes which may be written to file.

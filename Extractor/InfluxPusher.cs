@@ -18,14 +18,15 @@ namespace Cognite.OpcUa
     public class InfluxPusher : IPusher
     {
         public Extractor Extractor { set; private get; }
+        public int Index { get; set; }
         public PusherConfig BaseConfig { get; }
         public bool Failing;
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
         private readonly InfluxClientConfig config;
-        private readonly InfluxDBClient client;
         private readonly Dictionary<string, DateTime> latestTimestamp = new Dictionary<string, DateTime>();
+        private InfluxDBClient client;
 
         private static readonly Counter numInfluxPusher = Metrics
             .CreateCounter("opcua_influx_pusher_count", "Number of active influxdb pushers");
@@ -56,7 +57,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push each datapoint to influxdb. The datapoint Id, which corresponds to timeseries externalId in CDF, is used as MeasurementName
         /// </summary>
-        public async Task PushDataPoints(CancellationToken token)
+        public async Task<IEnumerable<BufferedDataPoint>> PushDataPoints(CancellationToken token)
         {
             var dataPointList = new List<BufferedDataPoint>();
 
@@ -75,7 +76,7 @@ namespace Cognite.OpcUa
                 {
                     if (config.NonFiniteReplacement != null)
                     {
-                        buffer.DoubleValue = config.NonFiniteReplacement.Value;
+                        buffer = new BufferedDataPoint(buffer, config.NonFiniteReplacement.Value);
                     }
                     else
                     {
@@ -90,7 +91,7 @@ namespace Cognite.OpcUa
             if (count == 0)
             {
                 Log.Verbose("Push 0 datapoints to influxdb");
-                return;
+                return null;
             }
             var groups = dataPointList.GroupBy(point => point.Id);
 
@@ -103,17 +104,19 @@ namespace Cognite.OpcUa
                 dataPointsCounter.Inc(group.Count());
                 points.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
             }
-            Log.Debug("Push {cnt} datapoints to influxdb", points.Count);
+            Log.Debug("Push {cnt} datapoints to influxdb {db}", points.Count, config.Database);
             try
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
             }
-            catch (Exception)
+            catch (Exception e)
             {
                 dataPointPushFailures.Inc();
-                throw;
+                Log.Error(e, "Failed to insert datapoints into influxdb");
+                return dataPointList;
             }
             dataPointPushes.Inc();
+            return Array.Empty<BufferedDataPoint>();
         }
 
         public async Task PushEvents(CancellationToken token)
@@ -270,7 +273,55 @@ namespace Cognite.OpcUa
             {
                 idp.Tags[kvp.Key] = Extractor.ConvertToString(kvp.Value);
             }
+
             return idp;
+        }
+
+        public async Task<IEnumerable<BufferedDataPoint>> ReadDataPoints(DateTime startTime,
+            IDictionary<string, bool> measurements,
+            CancellationToken token)
+        {
+            var timestamp = startTime - DateTime.UnixEpoch;
+            var fetchTasks = measurements.Keys.Select(measurement =>
+                client.QueryMultiSeriesAsync(config.Database, 
+                    $"SELECT * FROM \"{measurement}\" WHERE time >= {timestamp.Ticks}")).ToList();
+
+            var results = await Task.WhenAll(fetchTasks);
+            var finalPoints = new List<BufferedDataPoint>();
+            foreach (var series in results)
+            {
+                if (!series.Any()) continue;
+                var current = series.First();
+                string id = current.SeriesName;
+                if (!measurements.ContainsKey(id)) continue;
+                bool isString = measurements[id];
+                finalPoints.AddRange(current.Entries.Select(dp =>
+                {
+                    if (isString)
+                    {
+                        return new BufferedDataPoint(dp.Time, id, (string) dp.Value);
+                    }
+
+                    double convVal;
+                    if (dp.Value == "true" || dp.Value == "false")
+                    {
+                        convVal = dp.Value == "true" ? 1 : 0;
+                    }
+                    else
+                    {
+                        convVal = Convert.ToDouble(dp.Value);
+                    }
+
+                    return new BufferedDataPoint(dp.Time, id, convVal);
+                }));
+            }
+
+            return finalPoints;
+        }
+
+        public void Reconfigure()
+        {
+            client = new InfluxDBClient(config.Host, config.Username, config.Password);
         }
     }
 }
