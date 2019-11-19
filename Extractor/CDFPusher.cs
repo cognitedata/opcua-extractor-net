@@ -186,6 +186,8 @@ namespace Cognite.OpcUa
                         failedPoints.AddRange(points);
                     }
                 }
+
+                index++;
             }
             return failedPoints;
         }
@@ -249,7 +251,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Dequeues up to 1000 events from the BufferedEventQueue, then pushes them to CDF.
         /// </summary>
-        public async Task PushEvents(CancellationToken token)
+        public async Task<IEnumerable<BufferedEvent>> PushEvents(CancellationToken token)
         {
             var eventList = new List<BufferedEvent>();
             int count = 0;
@@ -265,15 +267,36 @@ namespace Cognite.OpcUa
             if (count == 0)
             {
                 Log.Verbose("Push 0 events to CDF");
-                return;
+                return null;
             }
             Log.Debug("Push {NumEventsToPush} events to CDF", count);
-            if (config.Debug) return;
-            IEnumerable<EventEntity> events = eventList.Select(EventToCDFEvent).ToList();
+            var chunks = Utils.ChunkBy(eventList, 1000).ToArray();
+            if (config.Debug) return null;
+            bool[] results = await Task.WhenAll(chunks.Select(chunk => PushEventsChunk(chunk, token)));
+            if (results.All(result => result)) return Array.Empty<BufferedEvent>();
+            int index = 0;
+            var failedEvents = new List<BufferedEvent>();
+            foreach (var result in results)
+            {
+                if (!result)
+                {
+                    failedEvents.AddRange(chunks[index]);
+                }
+
+                index++;
+            }
+
+            return failedEvents;
+        }
+
+        private async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> events, CancellationToken token)
+        {
             var client = GetClient("Data");
+            IEnumerable<EventEntity> eventEntities = events.Select(EventToCDFEvent).ToList();
+            var count = events.Count();
             try
             {
-                await client.Events.CreateAsync(events, token);
+                await client.Events.CreateAsync(eventEntities, token);
             }
             catch (ResponseException ex)
             {
@@ -282,33 +305,34 @@ namespace Cognite.OpcUa
                     var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString());
                     Log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count());
                     duplicatedEvents.Inc(duplicates.Count());
-                    events = events.Where(evt => !duplicates.Contains(evt.ExternalId));
+                    eventEntities = eventEntities.Where(evt => !duplicates.Contains(evt.ExternalId));
                     try
                     {
-                        await client.Events.CreateAsync(events, token);
+                        await client.Events.CreateAsync(eventEntities, token);
                     }
                     catch (Exception exc)
                     {
                         Log.Error(exc, "Failed to push {NumFailedEvents} events to CDF", count);
                         eventPushFailures.Inc();
-                        return;
+                        return !(exc is ResponseException rex) || rex.Code == 400 || rex.Code == 409;
                     }
                 }
                 else
                 {
                     Log.Error(ex, "Failed to push {NumFailedEvents} events to CDF", count);
                     eventPushFailures.Inc();
-                    return;
+                    return ex.Code == 400 || ex.Code == 409;
                 }
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to push {NumFailedEvents} events to CDF", count);
                 eventPushFailures.Inc();
-                return;
+                return false;
             }
             eventCounter.Inc(count);
             eventPushCounter.Inc();
+            return true;
         }
         /// <summary>
         /// Empty queue, fetch info for each relevant node, test results against CDF, then synchronize any variables

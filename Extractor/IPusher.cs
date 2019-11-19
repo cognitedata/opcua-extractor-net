@@ -53,10 +53,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push events, emptying the event queue
         /// </summary>
-        Task PushEvents(CancellationToken token)
+        Task<IEnumerable<BufferedEvent>> PushEvents(CancellationToken token)
         {
             BufferedEventQueue.Clear();
-            return Task.CompletedTask;
+            return Task.FromResult((IEnumerable<BufferedEvent>)Array.Empty<BufferedEvent>());
         }
         /// <summary>
         /// Push data points, emptying the queue

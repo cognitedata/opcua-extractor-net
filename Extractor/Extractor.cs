@@ -310,7 +310,7 @@ namespace Cognite.OpcUa
             return nodeStates.GetValueOrDefault(id);
         }
         #endregion
-        #region Mapping
+        #region Loops
 
         private async Task PusherLoop(IPusher pusher, CancellationToken token)
         {
@@ -341,7 +341,22 @@ namespace Cognite.OpcUa
                     }
                     if (pushEvents)
                     {
-                        await pusher.PushEvents(token);
+                        var failed = await pusher.PushEvents(token);
+                        if (failed != null && config.FailureBuffer.Enabled)
+                        {
+                            if (failed.Any())
+                            {
+                                await FailureBuffer.WriteEvents(failed, pusher.Index, token);
+                            }
+                            else if (FailureBuffer.AnyEvents)
+                            {
+                                var recovered = await FailureBuffer.ReadEvents(pusher.Index, token);
+                                foreach (var evt in recovered)
+                                {
+                                    pusher.BufferedEventQueue.Enqueue(evt);
+                                }
+                            }
+                        }
                     }
                     Utils.WriteLastEventTimestamp(DateTime.Now);
                     await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
@@ -352,7 +367,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "Failed to push datapoints on pusher of type {FailedPusherName}", pusher.GetType().Name);
+                    Log.Error(e, "Failed to push on pusher of type {FailedPusherName}", pusher.GetType().Name);
                 }
             }
         }
@@ -420,6 +435,8 @@ namespace Cognite.OpcUa
                 await Task.WhenAll(tasks);
             }
         }
+        #endregion
+        #region Mapping
         /// <summary>
         /// Set up extractor once UAClient is started
         /// </summary>
@@ -739,9 +756,10 @@ namespace Cognite.OpcUa
         /// <param name="filter">Filter that resulted in this event</param>
         /// <param name="eventFields">Fields for a single event</param>
         /// <returns></returns>
-        private BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields)
+        private BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
         {
-            int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType && atr.BrowsePath[0] == BrowseNames.EventType);
+            int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
+                                                                       && atr.BrowsePath[0] == BrowseNames.EventType);
             if (eventTypeIndex < 0)
             {
                 Log.Warning("Triggered event has no type, ignoring.");
@@ -788,7 +806,8 @@ namespace Cognite.OpcUa
                         .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
                                       && kvp.Key != "Time" && kvp.Key != "EventType")
                         .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-                    ReceivedTime = DateTime.UtcNow
+                    ReceivedTime = DateTime.UtcNow,
+                    EmitterNode = emitter
                 };
                 return buffEvent;
             }
@@ -814,7 +833,7 @@ namespace Cognite.OpcUa
                 Log.Warning("Triggered event without filter");
                 return;
             }
-            var buffEvent = ConstructEvent(filter, eventFields);
+            var buffEvent = ConstructEvent(filter, eventFields, item.ResolvedNodeId);
             if (buffEvent == null) return;
             var eventState = EventEmitterStates[item.ResolvedNodeId];
             eventState.UpdateFromStream(buffEvent);
@@ -1003,7 +1022,7 @@ namespace Cognite.OpcUa
             int cnt = 0;
             foreach (var evt in evts.Events)
             {
-                var buffEvt = ConstructEvent(filter, evt.EventFields);
+                var buffEvt = ConstructEvent(filter, evt.EventFields, nodeid);
                 if (buffEvt == null) continue;
                 foreach (var pusher in pushers)
                 {

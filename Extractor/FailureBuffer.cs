@@ -141,6 +141,11 @@ namespace Cognite.OpcUa
         public async Task WriteEvents(IEnumerable<BufferedEvent> events, int index, CancellationToken token)
         {
             if (!events.Any()) return;
+            // A null or bad emitterId should mean that it has already passed through the buffer once, and so is not historizing.
+            events = events.Where(evt => evt.EmitterNode == null
+                                         || !extractor.EventEmitterStates.ContainsKey(evt.EmitterNode)
+                                         || !extractor.EventEmitterStates[evt.EmitterNode].Historizing);
+
             bool success = false;
             if (config.Influx != null && config.Influx.Write && influxPusher != null)
             {
