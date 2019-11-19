@@ -21,6 +21,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
 using Serilog;
 using Xunit;
@@ -92,7 +93,7 @@ namespace Test
             using var tester = new ExtractorTester(new TestParameters
             {
                 StoreDatapoints = true,
-                BufferDir = "./buffer/"
+                BufferDir = "./"
             });
             await tester.ClearPersistentData();
             tester.StartExtractor();

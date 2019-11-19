@@ -2,14 +2,12 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection.Metadata.Ecma335;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Opc.Ua;
 using Prometheus.Client;
 using Serilog;
-using Exception = System.Exception;
 
 namespace Cognite.OpcUa
 {
@@ -120,7 +118,7 @@ namespace Cognite.OpcUa
             return Array.Empty<BufferedDataPoint>();
         }
 
-        public async Task PushEvents(CancellationToken token)
+        public async Task<IEnumerable<BufferedEvent>> PushEvents(CancellationToken token)
         {
             var evts = new List<BufferedEvent>();
             int count = 0;
@@ -139,7 +137,7 @@ namespace Cognite.OpcUa
             if (count == 0)
             {
                 Log.Verbose("Push 0 events to influxdb");
-                return;
+                return null;
             }
 
             Log.Debug("Push {cnt} events to influxdb", count);
@@ -152,10 +150,10 @@ namespace Cognite.OpcUa
             catch (Exception)
             {
                 eventPushFailures.Inc();
-                throw;
+                return evts;
             }
             eventsPushes.Inc();
-
+            return Array.Empty<BufferedEvent>();
         }
         /// <summary>
         /// Reads the last datapoint from influx for each timeseries, sending the timestamp to each passed state
@@ -272,6 +270,7 @@ namespace Cognite.OpcUa
             idp.Tags["Type"] = Extractor.GetUniqueId(evt.EventType);
             foreach (var kvp in evt.MetaData)
             {
+                if (kvp.Key == "SourceNode") continue;
                 idp.Tags[kvp.Key] = Extractor.ConvertToString(kvp.Value);
             }
 
@@ -330,7 +329,7 @@ namespace Cognite.OpcUa
                 id => id);
             var fetchTasks = measurements.Select(measurement =>
                 client.QueryMultiSeriesAsync(config.Database,
-                    $"SELECT * FROM \"{"events." + Extractor.GetUniqueId(measurement)} WHERE time >= {timestamp.Ticks}")).ToList();
+                    $"SELECT * FROM \"{"events." + Extractor.GetUniqueId(measurement)}\" WHERE time >= {timestamp.Ticks}")).ToList();
             var results = await Task.WhenAll(fetchTasks);
             var finalEvents = new List<BufferedEvent>();
 
@@ -346,18 +345,18 @@ namespace Cognite.OpcUa
                     if (!(res is IDictionary<string, object> values)) return null;
                     var evt = new BufferedEvent
                     {
-                        Time = new DateTime((long) values["Timestamp"]).Add(
-                            TimeSpan.FromTicks(DateTime.UnixEpoch.Ticks)),
-                        EventId = (string)values["EventId"],
+                        Time = (DateTime)values["Time"],
+                        EventId = (string)values["Id"],
                         Message = (string)values["Value"],
                         SourceNode = sourceNode,
                         MetaData = new Dictionary<string, object>()
                     };
                     foreach (var kvp in values)
                     {
-                        if (kvp.Key == "Timestamp" || kvp.Key == "EventId" || kvp.Key == "Value") continue;
+                        if (kvp.Key == "Time" || kvp.Key == "Id" || kvp.Key == "Value" || string.IsNullOrEmpty(kvp.Value as string)) continue;
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
+                    Log.Information(evt.ToDebugDescription());
 
                     return evt;
                 }).Where(evt => evt != null));

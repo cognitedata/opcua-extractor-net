@@ -45,6 +45,7 @@ namespace Test
         long eventIdCounter = 1;
         public long RequestCount { get; private set; }
         public bool AllowPush { get; set; } = true;
+        public bool AllowEvents { get; set; } = true;
         public bool StoreDatapoints { get; set; } = false;
         public MockMode mode;
         public enum MockMode
@@ -346,6 +347,7 @@ namespace Test
 
         private HttpResponseMessage HandleTimeseriesData(DataPointInsertionRequest req)
         {
+            Log.Information("Timeseries data: {allow}", AllowPush);
             if (!AllowPush)
             {
                 return new HttpResponseMessage(HttpStatusCode.InternalServerError)
@@ -394,6 +396,20 @@ namespace Test
 
         private HttpResponseMessage HandleCreateEvents(string content)
         {
+            if (!AllowEvents)
+            {
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
+                    {
+                        error = new ErrorContent
+                        {
+                            code = 501,
+                            message = "bad something or other"
+                        }
+                    }))
+                };
+            }
             var newEvents = JsonConvert.DeserializeObject<EventWrapper>(content);
             var duplicated = new List<Identity>();
             foreach (var ev in newEvents.items)

@@ -20,6 +20,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
 using Serilog;
 using Xunit;
@@ -47,7 +48,7 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.events.Values.Any() &&
+                    tester.Handler.events.Values.Count > 20 &&
                     tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming),
                 40, "Expected history read to finish");
 
@@ -252,6 +253,8 @@ namespace Test
                     tester.Handler.assets.Count > assetCount && tester.Handler.timeseries.Count > tsCount,
                 20, "Expected timeseries and asset count to be increasing");
 
+            await Task.Delay(1000);
+
             await tester.TerminateRunTask();
 
             Assert.Contains(tester.Handler.assets.Values, asset => asset.name == "AddObject 0");
@@ -261,6 +264,70 @@ namespace Test
             Assert.Contains(tester.Handler.assets.Values, asset => asset.name == "AddObject " + (lastAssetBefore + 1));
             Assert.Contains(tester.Handler.timeseries.Values, timeseries => timeseries.name == "AddVariable " + (lastTimeseriesBefore + 1));
             Assert.Contains(tester.Handler.timeseries.Values, timeseries => timeseries.name == "AddExtraVariable " + (lastTimeseriesBefore + 1));
+        }
+        [Fact]
+        [Trait("Server", "events")]
+        [Trait("Target", "FailureBuffer")]
+        [Trait("Test", "influxeventsbuffering")]
+        public async Task TestEventsInfluxBuffering()
+        {
+            var tester = new ExtractorTester(new TestParameters
+            {
+                ConfigName = ConfigName.Events,
+                ServerName = ServerName.Events,
+                FailureInflux = ConfigName.Influx,
+                FailureInfluxWrite = true,
+                LogLevel = "debug"
+            });
+            await tester.ClearPersistentData();
+            tester.StartExtractor();
+
+            tester.Handler.AllowEvents = false;
+            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
+                20, "Expected failurebuffer to contain some events");
+
+            tester.Handler.AllowEvents = true;
+            await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.AnyEvents,
+                20, "Expected FailureBuffer to be emptied");
+            Assert.False(tester.Extractor.FailureBuffer.Any);
+
+            await tester.WaitForCondition(() => tester.Handler.events.Count > 20, 20,
+                "Expected to receive some events");
+
+            await tester.WaitForCondition(() =>
+            {
+                var events = tester.Handler.events.Values.ToList();
+                return events.Any(ev => ev.description.StartsWith("propOther "))
+                       && events.Any(ev => ev.description.StartsWith("basicPass "))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource "))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
+                       && events.Any(ev => ev.description.StartsWith("basicVarSource "))
+                       && events.Any(ev => ev.description.StartsWith("mappedType "));
+            }, 20, "Expected to receive the remaining events");
+
+            await tester.TerminateRunTask();
+
+            var events = tester.Handler.events.Values.ToList();
+            Assert.True(events.Any());
+            Assert.Contains(events, ev => ev.description.StartsWith("prop "));
+            Assert.Contains(events, ev => ev.description == "prop 0");
+            Assert.Contains(events, ev => ev.description == "basicPass 0");
+            Assert.Contains(events, ev => ev.description == "basicPassSource 0");
+            Assert.Contains(events, ev => ev.description == "basicVarSource 0");
+            Assert.Contains(events, ev => ev.description == "mappedType 0");
+
+            Assert.Contains(events, ev => ev.description.StartsWith("propOther "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicPass "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource2 "));
+            Assert.Contains(events, ev => ev.description.StartsWith("basicVarSource "));
+            Assert.Contains(events, ev => ev.description.StartsWith("mappedType "));
+
+            foreach (var ev in events)
+            {
+                TestEvent(ev, tester.Handler);
+            }
+
         }
     }
 }

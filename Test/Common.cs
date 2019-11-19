@@ -219,7 +219,7 @@ namespace Test
                     var failureInflux = Utils.GetConfig(_configNames[testParams.FailureInflux.Value]);
                     if (failureInflux.Pushers.First() is InfluxClientConfig influxConfig)
                     {
-                        failureInflux.FailureBuffer.Influx = new InfluxBufferConfig
+                        Config.FailureBuffer.Influx = new InfluxBufferConfig
                         {
                             Database = influxConfig.Database,
                             Host = influxConfig.Host,

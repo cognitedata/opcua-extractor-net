@@ -179,6 +179,7 @@ namespace Test
                 FailureInflux = ConfigName.Influx,
                 StoreDatapoints = true,
                 FailureInfluxWrite = true,
+                LogLevel = "debug"
             });
             await tester.ClearPersistentData();
             tester.StartExtractor();
@@ -213,7 +214,7 @@ namespace Test
             var tester = new ExtractorTester(new TestParameters
             {
                 ConfigName = ConfigName.Influx,
-                BufferDir = "./buffer/"
+                BufferDir = "./"
             });
             tester.Config.Source.History = false;
             await tester.ClearPersistentData();

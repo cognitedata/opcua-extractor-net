@@ -239,6 +239,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
+                Log.Warning(e, "Failed to push {count} points to CDF", count);
                 dataPointPushFailures.Inc();
                 // Return false indicating unexpected failure if we want to buffer.
                 return !(e is ResponseException ex) || ex.Code == 400 || ex.Code == 409;

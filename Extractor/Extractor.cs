@@ -756,7 +756,7 @@ namespace Cognite.OpcUa
         /// <param name="filter">Filter that resulted in this event</param>
         /// <param name="eventFields">Fields for a single event</param>
         /// <returns></returns>
-        private BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
+        private BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields)
         {
             int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
                                                                        && atr.BrowsePath[0] == BrowseNames.EventType);
@@ -807,7 +807,6 @@ namespace Cognite.OpcUa
                                       && kvp.Key != "Time" && kvp.Key != "EventType")
                         .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
                     ReceivedTime = DateTime.UtcNow,
-                    EmitterNode = emitter
                 };
                 return buffEvent;
             }
@@ -833,7 +832,7 @@ namespace Cognite.OpcUa
                 Log.Warning("Triggered event without filter");
                 return;
             }
-            var buffEvent = ConstructEvent(filter, eventFields, item.ResolvedNodeId);
+            var buffEvent = ConstructEvent(filter, eventFields);
             if (buffEvent == null) return;
             var eventState = EventEmitterStates[item.ResolvedNodeId];
             eventState.UpdateFromStream(buffEvent);
@@ -1022,7 +1021,7 @@ namespace Cognite.OpcUa
             int cnt = 0;
             foreach (var evt in evts.Events)
             {
-                var buffEvt = ConstructEvent(filter, evt.EventFields, nodeid);
+                var buffEvt = ConstructEvent(filter, evt.EventFields);
                 if (buffEvt == null) continue;
                 foreach (var pusher in pushers)
                 {
