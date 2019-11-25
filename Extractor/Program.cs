@@ -153,10 +153,10 @@ namespace Cognite.OpcUa
         /// <param name="services"></param>
         private static void Configure(IServiceCollection services)
         {
-            services.AddHttpClient<ContextCDFClient>()
+            services.AddHttpClient<ContextCDFClient>(client => { client.Timeout = TimeSpan.MaxValue; })
                 .AddPolicyHandler(GetRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
-            services.AddHttpClient<DataCDFClient>()
+            services.AddHttpClient<DataCDFClient>(client => { client.Timeout = TimeSpan.FromSeconds(300); })
                 .AddPolicyHandler(GetDataRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
         }
@@ -186,7 +186,7 @@ namespace Cognite.OpcUa
         }
         private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
         {
-            return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(120));
+            return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(60));
         }
         /// <summary>
         /// Starts prometheus pushgateway client
