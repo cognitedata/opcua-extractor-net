@@ -163,7 +163,7 @@ namespace Cognite.OpcUa
                 return Task.Run(async () =>
                 {
                     Log.Information("Start push loop");
-                    while (!token.IsCancellationRequested && !uaClient.Failed)
+                    while (!token.IsCancellationRequested)
                     {
                         try
                         {

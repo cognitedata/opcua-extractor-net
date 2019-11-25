@@ -120,6 +120,8 @@ namespace Cognite.OpcUa
                         skippedDatapoints.Inc();
                         continue;
                     }
+                    // We do not subscribe to changes in history, so an update to a point earlier than the last known point
+                    // is due to the pushers not being synchronized. No reason to push points that have already been pushed.
                     if (buffer.Timestamp < latestTimestamp.GetValueOrDefault(buffer.Id)) continue;
 
                     if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))

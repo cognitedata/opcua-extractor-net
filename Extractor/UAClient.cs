@@ -45,7 +45,6 @@ namespace Cognite.OpcUa
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         private Dictionary<NodeId, ProtoDataType> numericDataTypes = new Dictionary<NodeId, ProtoDataType>();
         public bool Started { get; private set; }
-        public bool Failed { get; private set; }
         private readonly TimeSpan historyGranularity;
         private readonly DateTime historyStartTime;
         private CancellationToken liveToken;
@@ -235,7 +234,6 @@ namespace Cognite.OpcUa
             }
             else
             {
-                Failed = true;
                 try
                 {
                     session.Close();
