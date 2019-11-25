@@ -38,6 +38,8 @@ namespace Cognite.OpcUa
         public string DisplayName { get; }
         /// <summary>
         /// Earliest of the latest timestamp of the destination systems.
+        /// Represents the last common value for the pushers, not safe, as it updates before
+        /// the pushers are done pushing. Each pusher should keep track of its own latest timestamp as well.
         /// </summary>
         public DateTime DestLatestTimestamp { get; private set; }
         private readonly IList<IEnumerable<BufferedDataPoint>> buffer;
