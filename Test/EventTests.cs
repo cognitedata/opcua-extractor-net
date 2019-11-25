@@ -37,41 +37,22 @@ namespace Test
         [Fact]
         public async Task TestEventServer()
         {
-            File.Create("latestEvent.bin").Close();
-            var fullConfig = Common.BuildConfig("events", 8, "config.events.yml");
-            Logger.Configure(fullConfig.Logging);
-            var client = new UAClient(fullConfig);
-            var config = (CogniteClientConfig)fullConfig.Pushers.First();
-            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
+            using var tester = new ExtractorTester(new TestParameters
+            {
+                ServerName = ServerName.Events,
+                ConfigName = ConfigName.Events
+            });
+            await tester.ClearPersistentData();
 
-            var extractor = new Extractor(fullConfig, pusher, client);
-            using var source = new CancellationTokenSource();
-            var runTask = extractor.RunExtractor(source.Token);
+            tester.StartExtractor();
 
-            bool historyReadDone = false;
-            await Task.Delay(1000);
-            for (int i = 0; i < 20; i++)
-            {
-                if (handler.events.Values.Any() && extractor.EventEmitterStates.All(state => state.Value.IsStreaming))
-                {
-                    historyReadDone = true;
-                    break;
-                }
-                await Task.Delay(1000);
-            }
-            source.Cancel();
-            try
-            {
-                await runTask;
-            }
-            catch (Exception e)
-            {
-                if (!Common.TestRunResult(e)) throw;
-            }
-            extractor.Close();
-            Assert.True(historyReadDone);
-            var events = handler.events.Values.ToList();
+            await tester.WaitForCondition(() =>
+                    tester.Handler.events.Values.Any() &&
+                    tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming),
+                40, "Expected history read to finish");
+
+
+            var events = tester.Handler.events.Values.ToList();
             Assert.True(events.Any());
             Assert.Contains(events, ev => ev.description.StartsWith("prop "));
             Assert.Contains(events, ev => ev.description == "prop 0");
@@ -80,28 +61,24 @@ namespace Test
             Assert.Contains(events, ev => ev.description == "basicVarSource 0");
             Assert.Contains(events, ev => ev.description == "mappedType 0");
 
-            for (int i = 0; i < 10; i++)
+            await tester.WaitForCondition(() =>
             {
-                events = handler.events.Values.ToList();
-                if (events.Any(ev => ev.description.StartsWith("propOther "))
-                    && events.Any(ev => ev.description.StartsWith("basicPass "))
-                    && events.Any(ev => ev.description.StartsWith("basicPassSource "))
-                    && events.Any(ev => ev.description.StartsWith("basicPassSource2 ")) 
-                    && events.Any(ev => ev.description.StartsWith("basicVarSource "))
-                    && events.Any(ev => ev.description.StartsWith("mappedType "))) break;
-                await Task.Delay(1000);
-            }
+                events = tester.Handler.events.Values.ToList();
+                return events.Any(ev => ev.description.StartsWith("propOther "))
+                       && events.Any(ev => ev.description.StartsWith("basicPass "))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource "))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
+                       && events.Any(ev => ev.description.StartsWith("basicVarSource "))
+                       && events.Any(ev => ev.description.StartsWith("mappedType "));
+            }, 40, "Expected remaining event subscriptions to trigger");
 
-            Assert.Contains(events, ev => ev.description.StartsWith("propOther "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPass "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource2 "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicVarSource "));
-            Assert.Contains(events, ev => ev.description.StartsWith("mappedType "));
+            await tester.TerminateRunTask();
+
+            events = tester.Handler.events.Values.ToList();
 
             foreach (var ev in events)
             {
-                TestEvent(ev, handler);
+                TestEvent(ev, tester.Handler);
             }
         }
         [Trait("Server", "events")]
@@ -110,48 +87,33 @@ namespace Test
         [Fact]
         public async Task TestEventServerRestart()
         {
-            File.Create("latestEvent.bin").Close();
-            var fullConfig = Common.BuildConfig("events", 8, "config.events.yml");
-            Logger.Configure(fullConfig.Logging);
-            var client = new UAClient(fullConfig);
-            var config = (CogniteClientConfig)fullConfig.Pushers.First();
-            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
-
-            var extractor = new Extractor(fullConfig, pusher, client);
-            using var source = new CancellationTokenSource();
-            var runTask = extractor.RunExtractor(source.Token);
-
-            bool historyReadDone = false;
-            await Task.Delay(1000);
-            for (int i = 0; i < 80; i++)
+            using var tester = new ExtractorTester(new TestParameters
             {
-                if (handler.events.Values.Any() && extractor.EventEmitterStates.All(state => state.Value.IsStreaming))
-                {
-                    historyReadDone = true;
-                    break;
-                }
-                await Task.Delay(500);
-            }
+                ServerName = ServerName.Events,
+                ConfigName = ConfigName.Events
+            });
+            await tester.ClearPersistentData();
 
-            Assert.True(historyReadDone);
-            int lastCount = handler.events.Count;
+            tester.StartExtractor();
+
+            await tester.WaitForCondition(() =>
+                    tester.Handler.events.Values.Any()
+                    && tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming),
+                40, "Expected history read to finish");
+
+            int lastCount = tester.Handler.events.Count;
             Assert.Equal(0, (int)Common.GetMetricValue("opcua_event_push_failures"));
-            extractor.RestartExtractor(source.Token);
-            historyReadDone = false;
-            await Task.Delay(1000);
-            for (int i = 0; i < 80; i++)
-            {
-                if (handler.events.Values.Any() && extractor.EventEmitterStates.All(state => state.Value.IsStreaming) && handler.events.Count > lastCount)
-                {
-                    historyReadDone = true;
-                    break;
-                }
-                await Task.Delay(500);
-            }
-            Assert.True(historyReadDone);
+            tester.Extractor.RestartExtractor(tester.Source.Token);
+            await Task.Delay(500);
+
+            await tester.WaitForCondition(() =>
+                    tester.Handler.events.Values.Any()
+                    && tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming)
+                    && tester.Handler.events.Count > lastCount,
+                40, "Expected number of events to be increasing");
+
             Assert.True((int)Common.GetMetricValue("opcua_duplicated_events") > 0);
-            var events = handler.events.Values.ToList();
+            var events = tester.Handler.events.Values.ToList();
             Assert.True(events.Any());
             Assert.Contains(events, ev => ev.description.StartsWith("prop "));
             Assert.Contains(events, ev => ev.description == "prop 0");
@@ -160,39 +122,25 @@ namespace Test
             Assert.Contains(events, ev => ev.description == "basicVarSource 0");
             Assert.Contains(events, ev => ev.description == "mappedType 0");
 
-            for (int i = 0; i < 10; i++)
+            await tester.WaitForCondition(() =>
             {
-                events = handler.events.Values.ToList();
-                if (events.Any(ev => ev.description.StartsWith("propOther "))
-                    && events.Any(ev => ev.description.StartsWith("basicPass "))
-                    && events.Any(ev => ev.description.StartsWith("basicPassSource "))
-                    && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
-                    && events.Any(ev => ev.description.StartsWith("basicVarSource "))
-                    && events.Any(ev => ev.description.StartsWith("mappedType "))) break;
-                await Task.Delay(1000);
-            }
+                events = tester.Handler.events.Values.ToList();
+                return events.Any(ev => ev.description.StartsWith("propOther "))
+                       && events.Any(ev => ev.description.StartsWith("basicPass "))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource "))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
+                       && events.Any(ev => ev.description.StartsWith("basicVarSource "))
+                       && events.Any(ev => ev.description.StartsWith("mappedType "));
+            }, 40, "Expected remaining event subscriptions to trigger");
 
-            Assert.Contains(events, ev => ev.description.StartsWith("propOther "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPass "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource2 "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicVarSource "));
-            Assert.Contains(events, ev => ev.description.StartsWith("mappedType "));
+            await tester.TerminateRunTask();
+
+            events = tester.Handler.events.Values.ToList();
 
             foreach (var ev in events)
             {
-                TestEvent(ev, handler);
+                TestEvent(ev, tester.Handler);
             }
-            source.Cancel();
-            try
-            {
-                await runTask;
-            }
-            catch (Exception e)
-            {
-                if (!Common.TestRunResult(e)) throw;
-            }
-            extractor.Close();
         }
         /// <summary>
         /// Test that the event contains the appropriate data for the event server test
@@ -275,69 +223,44 @@ namespace Test
         [Trait("Test", "audit")]
         public async Task TestAuditEvents()
         {
-            var fullConfig = Common.BuildConfig("audit", 10);
-            fullConfig.Extraction.EnableAuditDiscovery = true;
-            Logger.Configure(fullConfig.Logging);
-            var client = new UAClient(fullConfig);
-            var config = (CogniteClientConfig)fullConfig.Pushers.First();
-            var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
-
-            var extractor = new Extractor(fullConfig, pusher, client);
-            using var source = new CancellationTokenSource();
-            var runTask = extractor.RunExtractor(source.Token);
-
-            var tsCnt = 0;
-            var assetCnt = 0;
-            for (int i = 0; i < 20; i++)
+            using var tester = new ExtractorTester(new TestParameters
             {
-                assetCnt = handler.assets.Count;
-                tsCnt = handler.timeseries.Count;
-                if (assetCnt > 0 && tsCnt > 0) break;
-                await Task.Delay(500);
-            }
+                ServerName = ServerName.Audit
+            });
+            await tester.ClearPersistentData();
 
-            var lastAssetBefore = handler.assets.Values
+            tester.Config.Extraction.EnableAuditDiscovery = true;
+
+            tester.StartExtractor();
+
+            await tester.WaitForCondition(() =>
+                    tester.Handler.assets.Count > 0 && tester.Handler.timeseries.Count > 0,
+                20, "Expected some assets and timeseries to be discovered");
+
+            int lastAssetBefore = tester.Handler.assets.Values
                 .Where(asset => asset.name.StartsWith("Add"))
                 .Select(asset => int.Parse(asset.name.Split(' ')[1])).Max();
 
-            var lastTimeseriesBefore = handler.timeseries.Values
+            int lastTimeseriesBefore = tester.Handler.timeseries.Values
                 .Where(timeseries => timeseries.name.StartsWith("Add"))
                 .Select(timeseries => int.Parse(timeseries.name.Split(' ')[1])).Max();
 
-            Assert.True(tsCnt > 0, "Expected some timeseries");
-            Assert.True(assetCnt > 0, "Expected some assets");
+            int assetCount = tester.Handler.assets.Count;
+            int tsCount = tester.Handler.timeseries.Count;
 
-            var newTsCnt = 0;
-            var newAssetCnt = 0;
-            for (int i = 0; i < 20; i++)
-            {
-                newAssetCnt = handler.assets.Count;
-                newTsCnt = handler.timeseries.Count;
-                if (newAssetCnt > assetCnt && newTsCnt > tsCnt) break;
-                await Task.Delay(500);
-            }
-            Assert.True(newTsCnt > tsCnt, "Expected some new timeseries");
-            Assert.True(newAssetCnt > assetCnt, "Expected some new assets");
-            await Task.Delay(500);
+            await tester.WaitForCondition(() =>
+                    tester.Handler.assets.Count > assetCount && tester.Handler.timeseries.Count > tsCount,
+                20, "Expected timeseries and asset count to be increasing");
 
-            source.Cancel();
-            try
-            {
-                await runTask;
-            }
-            catch (Exception e)
-            {
-                if (!Common.TestRunResult(e)) throw;
-            }
+            await tester.TerminateRunTask();
 
-            Assert.Contains(handler.assets.Values, asset => asset.name == "AddObject 0");
-            Assert.Contains(handler.timeseries.Values, timeseries => timeseries.name == "AddVariable 0");
-            Assert.Contains(handler.timeseries.Values, timeseries => timeseries.name == "AddExtraVariable 0");
+            Assert.Contains(tester.Handler.assets.Values, asset => asset.name == "AddObject 0");
+            Assert.Contains(tester.Handler.timeseries.Values, timeseries => timeseries.name == "AddVariable 0");
+            Assert.Contains(tester.Handler.timeseries.Values, timeseries => timeseries.name == "AddExtraVariable 0");
 
-            Assert.Contains(handler.assets.Values, asset => asset.name == "AddObject " + (lastAssetBefore + 1));
-            Assert.Contains(handler.timeseries.Values, timeseries => timeseries.name == "AddVariable " + (lastTimeseriesBefore + 1));
-            Assert.Contains(handler.timeseries.Values, timeseries => timeseries.name == "AddExtraVariable " + (lastTimeseriesBefore + 1));
+            Assert.Contains(tester.Handler.assets.Values, asset => asset.name == "AddObject " + (lastAssetBefore + 1));
+            Assert.Contains(tester.Handler.timeseries.Values, timeseries => timeseries.name == "AddVariable " + (lastTimeseriesBefore + 1));
+            Assert.Contains(tester.Handler.timeseries.Values, timeseries => timeseries.name == "AddExtraVariable " + (lastTimeseriesBefore + 1));
         }
     }
 }
