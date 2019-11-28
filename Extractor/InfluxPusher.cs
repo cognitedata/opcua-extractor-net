@@ -169,7 +169,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    state.InitTimestamp(Utils.Epoch);
+                    state.InitTimestamp(DateTime.UnixEpoch);
                 }
             });
             try

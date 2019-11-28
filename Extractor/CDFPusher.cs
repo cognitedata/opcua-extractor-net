@@ -416,7 +416,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    Extractor.GetNodeState(dp.ExternalId)?.InitTimestamp(Utils.Epoch);
+                    Extractor.GetNodeState(dp.ExternalId)?.InitTimestamp(DateTime.UnixEpoch);
                 }
             }
         }
