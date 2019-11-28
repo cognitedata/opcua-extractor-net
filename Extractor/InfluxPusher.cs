@@ -8,7 +8,6 @@ using AdysTech.InfluxDB.Client.Net;
 using Opc.Ua;
 using Prometheus.Client;
 using Serilog;
-using Exception = System.Exception;
 
 namespace Cognite.OpcUa
 {
@@ -18,14 +17,15 @@ namespace Cognite.OpcUa
     public class InfluxPusher : IPusher
     {
         public Extractor Extractor { set; private get; }
+        public int Index { get; set; }
         public PusherConfig BaseConfig { get; }
         public bool Failing;
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
         private readonly InfluxClientConfig config;
-        private readonly InfluxDBClient client;
         private readonly Dictionary<string, DateTime> latestTimestamp = new Dictionary<string, DateTime>();
+        private InfluxDBClient client;
 
         private static readonly Counter numInfluxPusher = Metrics
             .CreateCounter("opcua_influx_pusher_count", "Number of active influxdb pushers");
@@ -56,7 +56,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push each datapoint to influxdb. The datapoint Id, which corresponds to timeseries externalId in CDF, is used as MeasurementName
         /// </summary>
-        public async Task PushDataPoints(CancellationToken token)
+        public async Task<IEnumerable<BufferedDataPoint>> PushDataPoints(CancellationToken token)
         {
             var dataPointList = new List<BufferedDataPoint>();
 
@@ -75,7 +75,7 @@ namespace Cognite.OpcUa
                 {
                     if (config.NonFiniteReplacement != null)
                     {
-                        buffer.DoubleValue = config.NonFiniteReplacement.Value;
+                        buffer = new BufferedDataPoint(buffer, config.NonFiniteReplacement.Value);
                     }
                     else
                     {
@@ -90,7 +90,7 @@ namespace Cognite.OpcUa
             if (count == 0)
             {
                 Log.Verbose("Push 0 datapoints to influxdb");
-                return;
+                return null;
             }
             var groups = dataPointList.GroupBy(point => point.Id);
 
@@ -103,20 +103,22 @@ namespace Cognite.OpcUa
                 dataPointsCounter.Inc(group.Count());
                 points.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
             }
-            Log.Debug("Push {cnt} datapoints to influxdb", points.Count);
+            Log.Debug("Push {cnt} datapoints to influxdb {db}", points.Count, config.Database);
             try
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
             }
-            catch (Exception)
+            catch (Exception e)
             {
                 dataPointPushFailures.Inc();
-                throw;
+                Log.Error(e, "Failed to insert datapoints into influxdb");
+                return dataPointList;
             }
             dataPointPushes.Inc();
+            return Array.Empty<BufferedDataPoint>();
         }
 
-        public async Task PushEvents(CancellationToken token)
+        public async Task<IEnumerable<BufferedEvent>> PushEvents(CancellationToken token)
         {
             var evts = new List<BufferedEvent>();
             int count = 0;
@@ -135,7 +137,7 @@ namespace Cognite.OpcUa
             if (count == 0)
             {
                 Log.Verbose("Push 0 events to influxdb");
-                return;
+                return null;
             }
 
             Log.Debug("Push {cnt} events to influxdb", count);
@@ -148,10 +150,10 @@ namespace Cognite.OpcUa
             catch (Exception)
             {
                 eventPushFailures.Inc();
-                throw;
+                return evts;
             }
             eventsPushes.Inc();
-
+            return Array.Empty<BufferedEvent>();
         }
         /// <summary>
         /// Reads the last datapoint from influx for each timeseries, sending the timestamp to each passed state
@@ -268,9 +270,104 @@ namespace Cognite.OpcUa
             idp.Tags["Type"] = Extractor.GetUniqueId(evt.EventType);
             foreach (var kvp in evt.MetaData)
             {
+                if (kvp.Key == "SourceNode") continue;
                 idp.Tags[kvp.Key] = Extractor.ConvertToString(kvp.Value);
             }
+
             return idp;
+        }
+
+        public async Task<IEnumerable<BufferedDataPoint>> ReadDataPoints(DateTime startTime,
+            IDictionary<string, bool> measurements,
+            CancellationToken token)
+        {
+            var timestamp = startTime - DateTime.UnixEpoch;
+            var fetchTasks = measurements.Keys.Select(measurement =>
+                client.QueryMultiSeriesAsync(config.Database, 
+                    $"SELECT * FROM \"{measurement}\" WHERE time >= {timestamp.Ticks}")).ToList();
+
+            var results = await Task.WhenAll(fetchTasks);
+            var finalPoints = new List<BufferedDataPoint>();
+            foreach (var series in results)
+            {
+                if (!series.Any()) continue;
+                var current = series.First();
+                string id = current.SeriesName;
+                if (!measurements.ContainsKey(id)) continue;
+                bool isString = measurements[id];
+                finalPoints.AddRange(current.Entries.Select(dp =>
+                {
+                    if (isString)
+                    {
+                        return new BufferedDataPoint(dp.Time, id, (string) dp.Value);
+                    }
+
+                    double convVal;
+                    if (dp.Value == "true" || dp.Value == "false")
+                    {
+                        convVal = dp.Value == "true" ? 1 : 0;
+                    }
+                    else
+                    {
+                        convVal = Convert.ToDouble(dp.Value);
+                    }
+
+                    return new BufferedDataPoint(dp.Time, id, convVal);
+                }));
+            }
+
+            return finalPoints;
+        }
+
+        public async Task<IEnumerable<BufferedEvent>> ReadEvents(DateTime startTime,
+            IEnumerable<NodeId> measurements,
+            CancellationToken token)
+        {
+            var timestamp = startTime - DateTime.UnixEpoch;
+            var nameToNodeId = measurements.ToDictionary(
+                id => "events." + Extractor.GetUniqueId(id),
+                id => id);
+            var fetchTasks = measurements.Select(measurement =>
+                client.QueryMultiSeriesAsync(config.Database,
+                    $"SELECT * FROM \"{"events." + Extractor.GetUniqueId(measurement)}\" WHERE time >= {timestamp.Ticks}")).ToList();
+            var results = await Task.WhenAll(fetchTasks);
+            var finalEvents = new List<BufferedEvent>();
+
+            foreach (var series in results)
+            {
+                if (!series.Any()) continue;
+                var current = series.First();
+                if (!nameToNodeId.ContainsKey(current.SeriesName)) continue;
+                var sourceNode = nameToNodeId[current.SeriesName];
+                finalEvents.AddRange(current.Entries.Select(res =>
+                {
+                    // The client uses ExpandoObject as dynamic, which implements IDictionary
+                    if (!(res is IDictionary<string, object> values)) return null;
+                    var evt = new BufferedEvent
+                    {
+                        Time = (DateTime)values["Time"],
+                        EventId = (string)values["Id"],
+                        Message = (string)values["Value"],
+                        SourceNode = sourceNode,
+                        MetaData = new Dictionary<string, object>()
+                    };
+                    foreach (var kvp in values)
+                    {
+                        if (kvp.Key == "Time" || kvp.Key == "Id" || kvp.Key == "Value" || string.IsNullOrEmpty(kvp.Value as string)) continue;
+                        evt.MetaData.Add(kvp.Key, kvp.Value);
+                    }
+                    Log.Information(evt.ToDebugDescription());
+
+                    return evt;
+                }).Where(evt => evt != null));
+            }
+
+            return finalEvents;
+        }
+
+        public void Reconfigure()
+        {
+            client = new InfluxDBClient(config.Host, config.Username, config.Password);
         }
     }
 }

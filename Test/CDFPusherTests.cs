@@ -21,6 +21,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
 using Serilog;
 using Xunit;
@@ -91,19 +92,21 @@ namespace Test
         {
             using var tester = new ExtractorTester(new TestParameters
             {
-                StoreDatapoints = true
+                StoreDatapoints = true,
+                BufferDir = "./"
             });
             await tester.ClearPersistentData();
             tester.StartExtractor();
-
             tester.Handler.AllowPush = false;
 
-            await tester.WaitForCondition(() => new FileInfo(tester.CogniteConfig.BufferFile).Length > 0, 20, 
+            var bufferPath = Path.Join(tester.Config.FailureBuffer.FilePath, "buffer.bin");
+
+            await tester.WaitForCondition(() => new FileInfo(bufferPath).Length > 0, 20, 
                 "Some data must be written");
             tester.Handler.AllowPush = true;
 
-            await tester.WaitForCondition(() => new FileInfo(tester.CogniteConfig.BufferFile).Length == 0, 20,
-                () => $"Expecting file to be emptied but it contained {new FileInfo(tester.CogniteConfig.BufferFile).Length} bytes");
+            await tester.WaitForCondition(() => new FileInfo(bufferPath).Length == 0, 20,
+                () => $"Expecting file to be emptied but it contained {new FileInfo(bufferPath).Length} bytes");
 
             await Task.Delay(500);
 

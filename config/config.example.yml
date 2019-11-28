@@ -59,10 +59,6 @@ Pushers:
         # False if this destination can be ignored on failed connection
         # default is true, meaning the extractor will terminate if connection test fails
         Critical: true
-        # Buffer non-historizing datapoints when the connection to CDF fails.
-        BufferOnFailure: false
-        # Buffer file path
-        BufferFile: buffer.bin
         # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
         NonFiniteReplacement:
         # Chunk sizes in CDF requests
@@ -90,6 +86,31 @@ Pushers:
         NonFiniteReplacement:
         # Max number of points to send in each request to influx
         PointChunkSize: 100000
+
+# If a pusher fails to push data for some reason, the failure buffer will automatically store the data,
+# then add it back into the queue once a push succeeds.
+FailureBuffer:
+    # If false, buffering is disabled
+    Enabled: false
+    # Create a binary dump of the data and store points there, and a json dump for events.
+    # Should be a relative path to a folder. datapoints.bin and events.json will be created there if enabled.
+    # Leave empty to disable pushing to file
+    FilePath: ./
+    # Use influxdb as buffer
+    # Points will be written to influxdb on failure unless Write is false, and read once pushing succeeds again.
+    # They will not be deleted.
+    Influx:
+        Host:
+        Username:
+        Password:
+        Database:
+        # If true, write failed datapoints to influx, otherwise, only read.
+        # This should be false if there is a pusher targeting the influxdb database.
+        Write: true
+        # Max number of points to send in each request to influx
+        PointChunkSize: 100000
+    
+
 
 Logging:
     # Log levels: 'verbose', 'debug', 'information', 'warning', 'error', 'fatal'.

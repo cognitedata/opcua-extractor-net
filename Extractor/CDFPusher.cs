@@ -46,6 +46,7 @@ namespace Cognite.OpcUa
         private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
         private readonly Dictionary<string, DateTime> latestTimestamp = new Dictionary<string, DateTime>();
         
+        public int Index { get; set; }
         public Extractor Extractor { private get; set; }
         public PusherConfig BaseConfig { get; }
 
@@ -107,7 +108,7 @@ namespace Cognite.OpcUa
         /// Dequeues up to 100000 points from the BufferedDPQueue, then pushes them to CDF. On failure, writes to file if enabled.
         /// </summary>
 
-        public async Task PushDataPoints(CancellationToken token)
+        public async Task<IEnumerable<BufferedDataPoint>> PushDataPoints(CancellationToken token)
         {
             int count = 0;
             var dataPointList = new Dictionary<string, List<BufferedDataPoint>>();
@@ -128,7 +129,7 @@ namespace Cognite.OpcUa
                     {
                         if (config.NonFiniteReplacement != null)
                         {
-                            buffer.DoubleValue = config.NonFiniteReplacement.Value;
+                            buffer = new BufferedDataPoint(buffer, config.NonFiniteReplacement.Value);
                         }
                         else
                         {
@@ -139,7 +140,7 @@ namespace Cognite.OpcUa
 
                     if (buffer.IsString && buffer.StringValue == null)
                     {
-                        buffer.StringValue = "";
+                        buffer = new BufferedDataPoint(buffer, "");
                     }
 
                     count++;
@@ -153,25 +154,45 @@ namespace Cognite.OpcUa
                 if (count == 0)
                 {
                     Log.Verbose("Push 0 datapoints to CDF");
-                    return;
+                    return null;
                 }
                 Log.Debug("Push {NumDatapointsToPush} datapoints to CDF", count);
             }
+            var dpChunks = Utils.ChunkDictOfLists(dataPointList, 100000, 10000).ToArray();
+            var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk, token)).ToList();
+            var results = await Task.WhenAll(pushTasks);
 
-            var pushTasks = Utils.ChunkDictOfLists(dataPointList, 100000, 10000).Select(chunk => PushDataPointsChunk(chunk, token))
-                .ToList();
-            await Task.WhenAll(pushTasks);
-            foreach (var group in dataPointList)
+
+            if (results.All(res => res))
             {
-                var ts = group.Value.Max(dp => dp.Timestamp);
-                if (!latestTimestamp.ContainsKey(group.Key) || latestTimestamp[group.Key] < ts)
+                foreach (var group in dataPointList)
                 {
-                    latestTimestamp[group.Key] = ts;
+                    var ts = group.Value.Max(dp => dp.Timestamp);
+                    if (!latestTimestamp.ContainsKey(group.Key) || latestTimestamp[group.Key] < ts)
+                    {
+                        latestTimestamp[group.Key] = ts;
+                    }
                 }
+                return Array.Empty<BufferedDataPoint>();
             }
+            int index = 0;
+            var failedPoints = new List<BufferedDataPoint>();
+            foreach (var result in results)
+            {
+                if (!result)
+                {
+                    foreach (var points in dpChunks[index].Values)
+                    {
+                        failedPoints.AddRange(points);
+                    }
+                }
+
+                index++;
+            }
+            return failedPoints;
         }
-        private async Task PushDataPointsChunk(IDictionary<string, IEnumerable<BufferedDataPoint>> dataPointList, CancellationToken token) {
-            if (config.Debug) return;
+        private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<BufferedDataPoint>> dataPointList, CancellationToken token) {
+            if (config.Debug) return true;
             int count = 0;
             var inserts = dataPointList.Select(kvp =>
             {
@@ -209,60 +230,29 @@ namespace Cognite.OpcUa
             var req = new DataPointInsertionRequest();
             // Filter out type check failures
             req.Items.AddRange(inserts);
-            if (!req.Items.Any())
-                return;
+            if (!req.Items.Any()) return true;
 
             var client = GetClient("Data");
-            bool buffer = false;
-            bool failed = false;
             try
             {
                 await client.DataPoints.InsertAsync(req, token);
             }
             catch (Exception e)
             {
+                Log.Warning(e, "Failed to push {count} points to CDF", count);
+                dataPointPushFailures.Inc();
+                // Return false indicating unexpected failure if we want to buffer.
+                return !(e is ResponseException ex) || ex.Code == 400 || ex.Code == 409;
+            }
 
-				dataPointPushFailures.Inc();
-                if (!(e is ResponseException ex) || ex.Code != 400 && ex.Code != 409)
-                {
-                    buffer = true;
-                }
-                failed = true;
-                if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile) && buffer)
-                {
-                    Log.Warning("Failed to insert {NumFailedDatapoints} datapoints into CDF, writing to file", count);
-                }
-                else
-                {
-                    Log.Error("Failed to insert {NumFailedDatapoints} datapoints into CDF", count);
-                }
-                Log.Debug(e, "Failed to insert {NumFailedDatapoints} datapoints into CDF", count);
-            }
-            if (config.BufferOnFailure && !string.IsNullOrEmpty(config.BufferFile) && buffer)
-            {
-                try
-                {
-                    Utils.WriteBufferToFile(dataPointList.Values.SelectMany(val => val).ToList(), config, token, 
-                        dataPointList.ToDictionary(dp => dp.Key, dp => Extractor.GetNodeState(dp.Key).Historizing));
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Failed to write buffer to file");
-                }
-            }
-            if (failed) return;
-            if (config.BufferOnFailure && !Utils.BufferFileEmpty && !string.IsNullOrEmpty(config.BufferFile))
-            {
-                Utils.ReadBufferFromFile(BufferedDPQueue, config, token, 
-                    dataPointList.ToDictionary(dp => dp.Key, dp => Extractor.GetNodeState(dp.Key).Historizing));
-            }
             dataPointPushes.Inc();
             dataPointsCounter.Inc(count);
+            return true;
         }
         /// <summary>
         /// Dequeues up to 1000 events from the BufferedEventQueue, then pushes them to CDF.
         /// </summary>
-        public async Task PushEvents(CancellationToken token)
+        public async Task<IEnumerable<BufferedEvent>> PushEvents(CancellationToken token)
         {
             var eventList = new List<BufferedEvent>();
             int count = 0;
@@ -278,15 +268,36 @@ namespace Cognite.OpcUa
             if (count == 0)
             {
                 Log.Verbose("Push 0 events to CDF");
-                return;
+                return null;
             }
             Log.Debug("Push {NumEventsToPush} events to CDF", count);
-            if (config.Debug) return;
-            IEnumerable<EventEntity> events = eventList.Select(EventToCDFEvent).ToList();
+            var chunks = Utils.ChunkBy(eventList, 1000).ToArray();
+            if (config.Debug) return null;
+            bool[] results = await Task.WhenAll(chunks.Select(chunk => PushEventsChunk(chunk, token)));
+            if (results.All(result => result)) return Array.Empty<BufferedEvent>();
+            int index = 0;
+            var failedEvents = new List<BufferedEvent>();
+            foreach (var result in results)
+            {
+                if (!result)
+                {
+                    failedEvents.AddRange(chunks[index]);
+                }
+
+                index++;
+            }
+
+            return failedEvents;
+        }
+
+        private async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> events, CancellationToken token)
+        {
             var client = GetClient("Data");
+            IEnumerable<EventEntity> eventEntities = events.Select(EventToCDFEvent).ToList();
+            var count = events.Count();
             try
             {
-                await client.Events.CreateAsync(events, token);
+                await client.Events.CreateAsync(eventEntities, token);
             }
             catch (ResponseException ex)
             {
@@ -295,33 +306,34 @@ namespace Cognite.OpcUa
                     var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString());
                     Log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count());
                     duplicatedEvents.Inc(duplicates.Count());
-                    events = events.Where(evt => !duplicates.Contains(evt.ExternalId));
+                    eventEntities = eventEntities.Where(evt => !duplicates.Contains(evt.ExternalId));
                     try
                     {
-                        await client.Events.CreateAsync(events, token);
+                        await client.Events.CreateAsync(eventEntities, token);
                     }
                     catch (Exception exc)
                     {
                         Log.Error(exc, "Failed to push {NumFailedEvents} events to CDF", count);
                         eventPushFailures.Inc();
-                        return;
+                        return !(exc is ResponseException rex) || rex.Code == 400 || rex.Code == 409;
                     }
                 }
                 else
                 {
                     Log.Error(ex, "Failed to push {NumFailedEvents} events to CDF", count);
                     eventPushFailures.Inc();
-                    return;
+                    return ex.Code == 400 || ex.Code == 409;
                 }
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to push {NumFailedEvents} events to CDF", count);
                 eventPushFailures.Inc();
-                return;
+                return false;
             }
             eventCounter.Inc(count);
             eventPushCounter.Inc();
+            return true;
         }
         /// <summary>
         /// Empty queue, fetch info for each relevant node, test results against CDF, then synchronize any variables

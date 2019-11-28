@@ -17,11 +17,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Serilog;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using Opc.Ua;
 using YamlDotNet.Serialization;
 
@@ -29,82 +27,17 @@ namespace Cognite.OpcUa
 {
     public static class Utils
     {
-        public static bool BufferFileEmpty { get; set; }
-        private static readonly object fileLock = new object();
         private static readonly object dateFileLock = new object();
-        /// <summary>
-        /// Write a list of datapoints to buffer file. Only writes non-historizing datapoints.
-        /// </summary>
-        /// <param name="dataPoints">List of points to be buffered</param>
-        public static void WriteBufferToFile(IEnumerable<BufferedDataPoint> dataPoints,
-            CogniteClientConfig config,
-            CancellationToken token,
-            IDictionary<string, bool> nodeIsHistorizing = null)
+        public static IEnumerable<TSource> DistinctBy<TSource, TKey>(this IEnumerable<TSource> source,
+            Func<TSource, TKey> selector)
         {
-            lock (fileLock)
+            HashSet<TKey> seenKeys = new HashSet<TKey>();
+            foreach (var elem in source)
             {
-                using FileStream fs = new FileStream(config.BufferFile, FileMode.Append, FileAccess.Write);
-                int count = 0;
-                foreach (var dp in dataPoints)
+                if (seenKeys.Add(selector(elem)))
                 {
-                    if (token.IsCancellationRequested) return;
-                    if (nodeIsHistorizing?[dp.Id] ?? dp.IsString) continue;
-                    count++;
-                    byte[] bytes = dp.ToStorableBytes();
-                    fs.Write(bytes, 0, bytes.Length);
+                    yield return elem;
                 }
-                if (count > 0)
-                {
-                    BufferFileEmpty = false;
-                    Log.Debug("Write {NumDatapointsToPersist} datapoints to file", count);
-                }
-                else
-                {
-                    Log.Verbose("Write 0 datapoints to file");
-                }
-            }
-        }
-        /// <summary>
-        /// Reads buffer from file into the datapoint queue
-        /// </summary>
-        public static void ReadBufferFromFile(ConcurrentQueue<BufferedDataPoint> bufferedDPQueue,
-            CogniteClientConfig config,
-            CancellationToken token,
-            IDictionary<string, bool> nodeIsHistorizing = null)
-        {
-            lock (fileLock)
-            {
-                int count = 0;
-                using (FileStream fs = new FileStream(config.BufferFile, FileMode.OpenOrCreate, FileAccess.Read))
-                {
-                    byte[] sizeBytes = new byte[sizeof(ushort)];
-                    while (!token.IsCancellationRequested)
-                    {
-                        int read = fs.Read(sizeBytes, 0, sizeBytes.Length);
-                        if (read < sizeBytes.Length) break;
-                        ushort size = BitConverter.ToUInt16(sizeBytes, 0);
-                        byte[] dataBytes = new byte[size];
-                        int dRead = fs.Read(dataBytes, 0, size);
-                        if (dRead < size) break;
-                        var buffDp = new BufferedDataPoint(dataBytes);
-                        if (buffDp.Id == null || (!nodeIsHistorizing?.ContainsKey(buffDp.Id) ?? false))
-                        {
-                            Log.Warning($"Invalid datapoint in buffer file {config.BufferFile}: {buffDp.Id}");
-                            continue;
-                        }
-                        count++;
-                        Log.Debug(buffDp.ToDebugDescription());
-                        bufferedDPQueue.Enqueue(buffDp);
-                    }
-                }
-
-                if (count == 0)
-                {
-                    Log.Verbose("Read 0 point from file");
-                }
-                Log.Debug("Read {NumDatapointsToRead} points from file", count);
-                File.Create(config.BufferFile).Close();
-                BufferFileEmpty |= count > 0 && new FileInfo(config.BufferFile).Length == 0;
             }
         }
         /// <summary>
