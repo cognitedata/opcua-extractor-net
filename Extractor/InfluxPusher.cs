@@ -25,6 +25,7 @@ namespace Cognite.OpcUa
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
         private readonly InfluxClientConfig config;
         private readonly InfluxDBClient client;
+        private readonly Dictionary<string, DateTime> latestTimestamp = new Dictionary<string, DateTime>();
 
         private static readonly Counter numInfluxPusher = Metrics
             .CreateCounter("opcua_influx_pusher_count", "Number of active influxdb pushers");
@@ -67,6 +68,9 @@ namespace Cognite.OpcUa
                     skippedDatapoints.Inc();
                     continue;
                 }
+
+                if (buffer.Timestamp < latestTimestamp.GetValueOrDefault(buffer.Id)) continue;
+
                 if (!buffer.IsString && !double.IsFinite(buffer.DoubleValue))
                 {
                     if (config.NonFiniteReplacement != null)
@@ -166,10 +170,12 @@ namespace Cognite.OpcUa
                 {
                     DateTime timestamp = values.First().Entries[0].Time;
                     state.InitTimestamp(timestamp);
+                    latestTimestamp[id] = timestamp;
                 }
                 else
                 {
                     state.InitTimestamp(DateTime.UnixEpoch);
+                    latestTimestamp[id] = DateTime.UnixEpoch;
                 }
             });
             try

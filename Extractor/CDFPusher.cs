@@ -44,6 +44,7 @@ namespace Cognite.OpcUa
         private readonly CogniteClientConfig config;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
+        private readonly Dictionary<string, DateTime> latestTimestamp = new Dictionary<string, DateTime>();
         
         public Extractor Extractor { private get; set; }
         public PusherConfig BaseConfig { get; }
@@ -119,6 +120,10 @@ namespace Cognite.OpcUa
                         skippedDatapoints.Inc();
                         continue;
                     }
+                    // We do not subscribe to changes in history, so an update to a point earlier than the last known point
+                    // is due to the pushers not being synchronized. No reason to push points that have already been pushed.
+                    if (buffer.Timestamp < latestTimestamp.GetValueOrDefault(buffer.Id)) continue;
+
                     if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
                     {
                         if (config.NonFiniteReplacement != null)
@@ -156,6 +161,14 @@ namespace Cognite.OpcUa
             var pushTasks = Utils.ChunkDictOfLists(dataPointList, 100000, 10000).Select(chunk => PushDataPointsChunk(chunk, token))
                 .ToList();
             await Task.WhenAll(pushTasks);
+            foreach (var group in dataPointList)
+            {
+                var ts = group.Value.Max(dp => dp.Timestamp);
+                if (!latestTimestamp.ContainsKey(group.Key) || latestTimestamp[group.Key] < ts)
+                {
+                    latestTimestamp[group.Key] = ts;
+                }
+            }
         }
         private async Task PushDataPointsChunk(IDictionary<string, IEnumerable<BufferedDataPoint>> dataPointList, CancellationToken token) {
             if (config.Debug) return;
@@ -406,17 +419,20 @@ namespace Cognite.OpcUa
             {
                 if (dp.NumericDataPoints.Any())
                 {
-                    Extractor.GetNodeState(dp.ExternalId)?
-                        .InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDataPoints.First().TimeStamp).DateTime);
+                    var ts = DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDataPoints.First().TimeStamp).DateTime;
+                    Extractor.GetNodeState(dp.ExternalId)?.InitTimestamp(ts);
+                    latestTimestamp[dp.ExternalId] = ts;
                 }
                 else if (dp.StringDataPoints.Any())
                 {
-                    Extractor.GetNodeState(dp.ExternalId)?
-                        .InitTimestamp(DateTimeOffset.FromUnixTimeMilliseconds(dp.StringDataPoints.First().TimeStamp).DateTime);
+                    var ts = DateTimeOffset.FromUnixTimeMilliseconds(dp.StringDataPoints.First().TimeStamp).DateTime;
+                    Extractor.GetNodeState(dp.ExternalId)?.InitTimestamp(ts);
+                    latestTimestamp[dp.ExternalId] = ts;
                 }
                 else
                 {
                     Extractor.GetNodeState(dp.ExternalId)?.InitTimestamp(DateTime.UnixEpoch);
+                    latestTimestamp[dp.ExternalId] = DateTime.UnixEpoch;
                 }
             }
         }

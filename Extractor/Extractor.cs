@@ -163,7 +163,7 @@ namespace Cognite.OpcUa
                 return Task.Run(async () =>
                 {
                     Log.Information("Start push loop");
-                    while (!token.IsCancellationRequested && !uaClient.Failed)
+                    while (!token.IsCancellationRequested)
                     {
                         try
                         {
@@ -754,7 +754,8 @@ namespace Cognite.OpcUa
                     Time = (DateTime)extractedProperties.GetValueOrDefault("Time"),
                     EventType = (NodeId)extractedProperties["EventType"],
                     MetaData = extractedProperties
-                        .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode" && kvp.Key != "Time" && kvp.Key != "EventType")
+                        .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
+                                      && kvp.Key != "Time" && kvp.Key != "EventType")
                         .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
                     ReceivedTime = DateTime.UtcNow
                 };
