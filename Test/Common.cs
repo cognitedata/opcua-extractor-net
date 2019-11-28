@@ -19,11 +19,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
 using Microsoft.Extensions.DependencyInjection;
 using Prometheus.Client;
+using Serilog;
 using Xunit.Abstractions;
+using Xunit;
 
 namespace Test
 {
@@ -152,5 +156,194 @@ namespace Test
                 ResetMetricValue(metric);
             }
         }
+    }
+    public enum ServerName { Basic, Full, Array, Events, Audit }
+    public enum ConfigName { Events, Influx, Test }
+
+    public class ExtractorTester : IDisposable
+    {
+        private static readonly Dictionary<ServerName, string> _hostNames = new Dictionary<ServerName, string>
+        {
+            {ServerName.Basic, "opc.tcp://localhost:4840"},
+            {ServerName.Full, "opc.tcp://localhost:4841"},
+            {ServerName.Array, "opc.tcp://localhost:4842"},
+            {ServerName.Events, "opc.tcp://localhost:4843"},
+            {ServerName.Audit, "opc.tcp://localhost:4844"},
+        };
+
+        private static readonly Dictionary<ConfigName, string> _configNames = new Dictionary<ConfigName, string>
+        {
+            {ConfigName.Test, "config.test.yml"},
+            {ConfigName.Events, "config.events.yml"},
+            {ConfigName.Influx, "config.influxtest.yml"}
+        };
+
+
+        public readonly FullConfig Config;
+        public readonly CDFMockHandler Handler;
+        public readonly Extractor Extractor;
+        public readonly UAClient UAClient;
+        public readonly IPusher Pusher;
+        public readonly InfluxClientConfig InfluxConfig;
+        public readonly CogniteClientConfig CogniteConfig;
+        public readonly CancellationTokenSource Source;
+        public readonly InfluxDBClient IfDbClient;
+        private readonly bool influx;
+        private readonly bool events;
+        public Task RunTask;
+        private readonly TestParameters testParams;
+        public ExtractorTester(TestParameters testParams)
+        {
+            this.testParams = testParams;
+            Config = Utils.GetConfig(_configNames[testParams.ConfigName]);
+            if (testParams.ConfigName == ConfigName.Events)
+            {
+                events = true;
+            }
+
+            if (testParams.HistoryGranularity != null)
+            {
+                Config.Source.HistoryGranularity = testParams.HistoryGranularity.Value;
+            }
+            Config.Logging.ConsoleLevel = testParams.LogLevel;
+            Logger.Configure(Config.Logging);
+            Config.Source.EndpointURL = _hostNames[testParams.ServerName];
+
+            FullConfig pusherConfig = null;
+            if (testParams.PusherConfig != null)
+            {
+                pusherConfig = Utils.GetConfig(_configNames[testParams.PusherConfig.Value]);
+            }
+
+            switch ((pusherConfig ?? Config).Pushers.First())
+            {
+                case CogniteClientConfig cogniteClientConfig:
+                    CogniteConfig = cogniteClientConfig;
+                    Handler = new CDFMockHandler(CogniteConfig.Project, testParams.MockMode);
+                    Handler.StoreDatapoints = testParams.StoreDatapoints;
+                    Pusher = CogniteConfig.ToPusher(Common.GetDummyProvider(Handler));
+                    break;
+                case InfluxClientConfig influxClientConfig:
+                    InfluxConfig = influxClientConfig;
+                    Pusher = InfluxConfig.ToPusher(null);
+                    influx = true;
+                    IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
+                    break;
+            }
+            UAClient = new UAClient(Config);
+            Source = new CancellationTokenSource();
+            Extractor = new Extractor(Config, Pusher, UAClient);
+        }
+
+        public async Task ClearPersistentData()
+        {
+            if (events)
+            {
+                File.Create("latestEvent.bin").Close();
+            }
+            Common.ResetTestMetrics();
+            if (influx)
+            {
+                await IfDbClient.DropDatabaseAsync(new InfluxDatabase(InfluxConfig.Database));
+                await IfDbClient.CreateDatabaseAsync(InfluxConfig.Database);
+            }
+
+            if (CogniteConfig != null)
+            {
+                File.Create(CogniteConfig.BufferFile).Close();
+            }
+        }
+
+        public void StartExtractor()
+        {
+            Log.Information("Starting OPC UA Extractor version {version}", Cognite.OpcUa.Version.GetVersion());
+            Log.Information("Revision information: {status}", Cognite.OpcUa.Version.Status());
+            RunTask = Extractor.RunExtractor(Source.Token, testParams.QuitAfterMap);
+        }
+        public async Task WaitForCondition(Func<Task<bool>> condition, int seconds, Func<string> assertion)
+        {
+            bool triggered = false;
+            for (int i = 0; i < seconds * 5; i++)
+            {
+                if (await condition())
+                {
+                    triggered = true;
+                    break;
+                }
+
+                await Task.Delay(200);
+            }
+            Assert.True(triggered, assertion());
+        }
+        public async Task WaitForCondition(Func<bool> condition, int seconds,
+            string assertion = "Expected condition to trigger")
+        { 
+            await WaitForCondition(() => Task.FromResult(condition()), seconds, () => assertion);
+        }
+        public async Task WaitForCondition(Func<bool> condition, int seconds,
+            Func<string> assertion)
+        {
+            await WaitForCondition(() => Task.FromResult(condition()), seconds, assertion);
+        }
+        public async Task WaitForCondition(Func<Task<bool>> condition, int seconds,
+            string assertion = "Expected condition to trigger")
+        {
+            await WaitForCondition(condition, seconds, () => assertion);
+        }
+
+        public async Task TerminateRunTask(Func<Exception, bool> testResult = null)
+        {
+            if (RunTask == null) throw new Exception("Run task is not started");
+            if (!testParams.QuitAfterMap)
+            {
+                Source.Cancel();
+            }
+            try
+            {
+                await RunTask;
+            }
+            catch (Exception e)
+            {
+                if (testResult != null && !testResult(e)) throw;
+                if (testResult == null && !Common.TestRunResult(e)) throw;
+            }
+            Extractor.Close();
+        }
+
+        public void TestContinuity(string id)
+        {
+            var dps = Handler.datapoints[id].Item1;
+            var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)Math.Round(dp.First().Value)).ToList();
+            var min = intdps.Min();
+            var check = new int[intdps.Count];
+
+            int last = min - 1;
+            foreach (var dp in intdps)
+            {
+                if (last != dp - 1)
+                {
+                    Log.Information("Out of order points at {dp}, {last}", dp, last);
+                }
+                last = dp;
+                check[dp - min]++;
+            }
+            Assert.All(check, val => Assert.Equal(1, val));
+        }
+        public void Dispose()
+        {
+            Source?.Dispose();
+            IfDbClient?.Dispose();
+        }
+    }
+    public class TestParameters
+    {
+        public ServerName ServerName { get; set; } = ServerName.Basic;
+        public ConfigName ConfigName { get; set; } = ConfigName.Test;
+        public ConfigName? PusherConfig { get; set; } = null;
+        public CDFMockHandler.MockMode MockMode { get; set; } = CDFMockHandler.MockMode.None;
+        public string LogLevel { get; set; } = "information";
+        public bool QuitAfterMap { get; set; } = false;
+        public bool StoreDatapoints { get; set; } = false;
+        public int? HistoryGranularity { get; set; } = null;
     }
 }

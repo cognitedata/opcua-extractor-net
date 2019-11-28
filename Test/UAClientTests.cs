@@ -16,8 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
-using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
 using Xunit;
@@ -36,43 +34,31 @@ namespace Test
         [Fact]
         public async Task TestConnectionFailure()
         {
-            var fullConfig = Common.BuildConfig("basic", 12);
-            // Some incorrect endpoint
-            fullConfig.Source.EndpointURL = "opc.tcp://localhost:4000";
-            Logger.Configure(fullConfig.Logging);
-            var client = new UAClient(fullConfig);
-
-            var extractor = new Extractor(fullConfig, new List<IPusher>(), client);
-            using var source = new CancellationTokenSource();
-            var runTask = extractor.RunExtractor(source.Token);
-
-            for (int i = 0; i < 10; i++)
+            using var tester = new ExtractorTester(new TestParameters
             {
-                if (runTask.IsFaulted) break;
-                await Task.Delay(1000);
-            }
-            Assert.True(runTask.IsFaulted);
+                QuitAfterMap = true
+            });
+            await tester.ClearPersistentData();
+            tester.Config.Source.EndpointURL = "opc.tcp://localhost:4000";
 
-            try
-            {
-                await runTask;
-            }
-            catch (Exception e)
+            tester.StartExtractor();
+
+            await tester.WaitForCondition(() => tester.RunTask.IsFaulted, 20, "Expected run task to fail");
+
+            await tester.TerminateRunTask(e =>
             {
                 SilentServiceException silent = null;
                 if (e is SilentServiceException silentEx)
                 {
                     silent = silentEx;
-                } 
+                }
                 else if (e is AggregateException aex)
                 {
                     silent = Utils.GetRootSilentException(aex);
                 }
-                Assert.True(silent != null);
-                Assert.True(silent.Operation == Utils.SourceOp.SelectEndpoint);
-            }
-            source.Cancel();
-            extractor.Close();
+
+                return silent != null && silent.Operation == Utils.SourceOp.SelectEndpoint;
+            });
         }
         [Trait("Server", "basic")]
         [Trait("Target", "UAClient")]
@@ -82,30 +68,20 @@ namespace Test
         [InlineData(3, 0)]
         public async Task TestHistoryReadGranularity(int expectedReads, int granularity)
         {
-            Common.ResetTestMetrics();
-            var fullConfig = Common.BuildConfig("basic", 18);
-            fullConfig.Source.HistoryGranularity = granularity;
-            fullConfig.Source.HistoryReadChunk = 10000;
-            Logger.Configure(fullConfig.Logging);
-            var client = new UAClient(fullConfig);
-            var extractor = new Extractor(fullConfig, new List<IPusher>(), client);
-            using var source = new CancellationTokenSource();
-            var runTask = extractor.RunExtractor(source.Token);
-            for (int i = 0; i < 20; i++)
+            using var tester = new ExtractorTester(new TestParameters
             {
-                if ((int) Common.GetMetricValue("opcua_history_reads") == expectedReads) break;
-                await Task.Delay(500);
-            }
-            Assert.Equal(expectedReads, (int)Common.GetMetricValue("opcua_history_reads"));
-            source.Cancel();
-            try
-            {
-                await runTask;
-            }
-            catch (Exception e)
-            {
-                if (!Common.TestRunResult(e)) throw;
-            }
+                HistoryGranularity = granularity
+            });
+            await tester.ClearPersistentData();
+
+            tester.Config.Source.HistoryReadChunk = 10000;
+
+            tester.StartExtractor();
+
+            await tester.WaitForCondition(() => (int) Common.GetMetricValue("opcua_history_reads") == expectedReads, 20,
+                () => $"Expected history to be read {expectedReads} times, got {Common.GetMetricValue("opcua_history_reads")}");
+
+            await tester.TerminateRunTask();
         }
     }
 }

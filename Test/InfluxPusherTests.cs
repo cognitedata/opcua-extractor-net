@@ -15,7 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
 using System;
 using System.Collections.Generic;
@@ -37,46 +36,25 @@ namespace Test
         [Fact]
         public async Task TestInfluxPusher()
         {
-            
-            var fullConfig = Common.BuildConfig("basic", 6, "config.influxtest.yml");
-            if (fullConfig == null) throw new Exception("Bad config");
-            Logger.Configure(fullConfig.Logging);
-            var client = new UAClient(fullConfig);
-            var config = (InfluxClientConfig)fullConfig.Pushers.First();
-            var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
-            await ifDBclient.DropDatabaseAsync(new InfluxDatabase(config.Database));
-            await ifDBclient.CreateDatabaseAsync(config.Database);
-            var pusher = new InfluxPusher(config);
-
-            var extractor = new Extractor(fullConfig, pusher, client);
-            using var source = new CancellationTokenSource();
-
-            Assert.True(await pusher.TestConnection(source.Token));
-
-            var runTask = extractor.RunExtractor(source.Token);
-            bool gotData = false;
-            for (int i = 0; i < 20; i++)
+            using var tester = new ExtractorTester(new TestParameters
             {
-                var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=2\"");
-                if (read.Count > 0 && read.First().HasEntries)
-                {
-                    gotData = true;
-                    break;
-                }
-                Thread.Sleep(1000);
-            }
-            Assert.True(gotData, "Expecting to find some data in influxdb");
-            source.Cancel();
-            try
+                ConfigName = ConfigName.Influx
+            });
+            await tester.ClearPersistentData();
+
+            Assert.True(await tester.Pusher.TestConnection(tester.Source.Token));
+
+            tester.StartExtractor();
+
+            await tester.WaitForCondition(async () =>
             {
-                await runTask;
-            }
-            catch (Exception e)
-            {
-                if (!Common.TestRunResult(e)) throw;
-            }
-            extractor.Close();
-            Assert.False(pusher.Failing);
+                var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database,
+                    "SELECT * FROM \"gp.efg:i=2\"");
+                return read.Count > 0 && read.First().HasEntries;
+            }, 20, "Expected to find some data in influxdb");
+
+            await tester.TerminateRunTask();
+            Assert.False(((InfluxPusher) tester.Pusher).Failing);
         }
         [Trait("Server", "array")]
         [Trait("Target", "InfluxPusher")]
@@ -84,43 +62,27 @@ namespace Test
         [Fact]
         public async Task TestArrayData()
         {
-            var fullConfig = Common.BuildConfig("array", 7, "config.influxtest.yml");
-            fullConfig.Extraction.MaxArraySize = 4;
-            fullConfig.Extraction.AllowStringVariables = true;
-            Logger.Configure(fullConfig.Logging);
-            var client = new UAClient(fullConfig);
-            var config = (InfluxClientConfig)fullConfig.Pushers.First();
-            var pusher = new InfluxPusher(config);
-            var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
-            await ifDBclient.DropDatabaseAsync(new InfluxDatabase(config.Database));
-            await ifDBclient.CreateDatabaseAsync(config.Database);
+            using var tester = new ExtractorTester(new TestParameters
+            {
+                ConfigName = ConfigName.Influx,
+                ServerName = ServerName.Array
+            });
+            await tester.ClearPersistentData();
+            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.AllowStringVariables = true;
 
-            var extractor = new Extractor(fullConfig, pusher, client);
-            using var source = new CancellationTokenSource();
-            var runTask = extractor.RunExtractor(source.Token);
-            bool gotData = false;
-            for (int i = 0; i < 20; i++)
+            tester.StartExtractor();
+
+            await tester.WaitForCondition(async () =>
             {
-                var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=2[3]\"");
-                if (read.Count > 0 && read.First().HasEntries)
-                {
-                    gotData = true;
-                    break;
-                }
-                Thread.Sleep(1000);
-            }
-            Assert.True(gotData);
-            source.Cancel();
-            try
-            {
-                await runTask;
-            }
-            catch (Exception e)
-            {
-                if (!Common.TestRunResult(e)) throw;
-            }
-            extractor.Close();
-            Assert.False(pusher.Failing);
+                var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database,
+                    "SELECT * FROM \"gp.efg:i=2[3]\"");
+                return read.Count > 0 && read.First().HasEntries;
+            }, 20, "Expected to get some data");
+
+            await tester.TerminateRunTask();
+
+            Assert.False(((InfluxPusher)tester.Pusher).Failing);
         }
 
         [Trait("Server", "basic")]
@@ -129,26 +91,18 @@ namespace Test
         [Fact]
         public async Task TestNonFiniteInflux()
         {
-            var fullConfig = Common.BuildConfig("basic", 21, "config.influxtest.yml");
-            Logger.Configure(fullConfig.Logging);
-            fullConfig.Source.History = false;
-            var client = new UAClient(fullConfig);
-            var config = (InfluxClientConfig)fullConfig.Pushers.First();
-            var pusher = new InfluxPusher(config);
-            var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
-            await ifDBclient.DropDatabaseAsync(new InfluxDatabase(config.Database));
-            await ifDBclient.CreateDatabaseAsync(config.Database);
+            using var tester = new ExtractorTester(new TestParameters
+            {
+                ConfigName = ConfigName.Influx,
+                QuitAfterMap = true
+            });
+            await tester.ClearPersistentData();
+            tester.Config.Source.History = false;
 
-            var extractor = new Extractor(fullConfig, pusher, client);
-            try
-            {
-                await extractor.RunExtractor(CancellationToken.None, true);
-            }
-            catch (Exception e)
-            {
-                if (!Common.TestRunResult(e)) throw;
-            }
-            extractor.Close();
+            tester.StartExtractor();
+
+            await tester.TerminateRunTask();
+
             var values = new List<double>
             {
                 1E100,
@@ -159,6 +113,8 @@ namespace Test
                 double.MinValue
             };
 
+            var pusher = tester.Pusher;
+
             foreach (var value in values)
             {
                 pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", value));
@@ -167,18 +123,18 @@ namespace Test
             pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NegativeInfinity));
             pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NaN));
 
-
             await pusher.PushDataPoints(CancellationToken.None);
 
-
-            var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"gp.efg:i=2\"");
+            var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database, 
+                "SELECT * FROM \"gp.efg:i=2\"");
             Assert.True(read.Count > 0);
             var readValues = read.First();
+
             foreach (var value in values)
             {
                 Assert.Contains(readValues.Entries, entry => Math.Abs(Convert.ToDouble(entry.Value) - value) < 1);
             }
-            Assert.False(pusher.Failing);
+            Assert.False(((InfluxPusher)tester.Pusher).Failing);
         }
         [Trait("Server", "events")]
         [Trait("Target", "InfluxPusher")]
@@ -186,44 +142,27 @@ namespace Test
         [Fact]
         public async Task TestInfluxdbEvents()
         {
-            var fullConfig2 = Common.BuildConfig("basic", 25, "config.influxtest.yml");
-            var fullConfig = Common.BuildConfig("events", 25, "config.events.yml");
-            fullConfig.Logging.ConsoleLevel = "debug";
-            Logger.Configure(fullConfig.Logging);
-            fullConfig.Source.History = false;
-            var client = new UAClient(fullConfig);
-            var config = (InfluxClientConfig)fullConfig2.Pushers.First();
-            var pusher = new InfluxPusher(config);
-            var ifDBclient = new InfluxDBClient(config.Host, config.Username, config.Password);
-            await ifDBclient.DropDatabaseAsync(new InfluxDatabase(config.Database));
-            await ifDBclient.CreateDatabaseAsync(config.Database);
+            using var tester = new ExtractorTester(new TestParameters
+            {
+                ServerName = ServerName.Events,
+                LogLevel = "debug",
+                PusherConfig = ConfigName.Influx,
+                ConfigName = ConfigName.Events
+            });
+            await tester.ClearPersistentData();
+            tester.Config.Source.History = false;
 
-            var extractor = new Extractor(fullConfig, pusher, client);
+            tester.StartExtractor();
 
-            using var source = new CancellationTokenSource();
-            var runTask = extractor.RunExtractor(source.Token);
-            bool gotData = false;
-            for (int i = 0; i < 20; i++)
+            await tester.WaitForCondition(async () =>
             {
-                var read = await ifDBclient.QueryMultiSeriesAsync(config.Database, "SELECT * FROM \"events.gp.efg:i=1\"");
-                if (read.Count > 0 && read.First().HasEntries && extractor.EventEmitterStates.All(state => state.Value.IsStreaming))
-                {
-                    gotData = true;
-                    break;
-                }
-                Thread.Sleep(1000);
-            }
-            Assert.True(gotData);
-            source.Cancel();
-            try
-            {
-                await runTask;
-            }
-            catch (Exception e)
-            {
-                if (!Common.TestRunResult(e)) throw;
-            }
-            extractor.Close();
+                var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database, 
+                    "SELECT * FROM \"events.gp.efg:i=1\"");
+                return read.Count > 0 && read.First().HasEntries &&
+                       tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming);
+            }, 20, "Expected to get some events in influxdb");
+
+            await tester.TerminateRunTask();
         }
     }
 }
