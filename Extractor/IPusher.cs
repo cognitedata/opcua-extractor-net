@@ -20,6 +20,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Opc.Ua;
 
 namespace Cognite.OpcUa
 {
@@ -46,7 +47,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Get latest timestamp in destination system, if possible
         /// </summary>
-        Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
+        Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
         {
             return Task.FromResult(true);
         }

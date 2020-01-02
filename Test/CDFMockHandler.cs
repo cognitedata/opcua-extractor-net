@@ -347,7 +347,6 @@ namespace Test
 
         private HttpResponseMessage HandleTimeseriesData(DataPointInsertionRequest req)
         {
-            Log.Information("Timeseries data: {allow}", AllowPush);
             if (!AllowPush)
             {
                 return new HttpResponseMessage(HttpStatusCode.InternalServerError)

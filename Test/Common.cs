@@ -198,7 +198,7 @@ namespace Test
 
             if (testParams.HistoryGranularity != null)
             {
-                Config.Source.HistoryGranularity = testParams.HistoryGranularity.Value;
+                Config.History.Granularity = testParams.HistoryGranularity.Value;
             }
             Config.Logging.ConsoleLevel = testParams.LogLevel;
             Logger.Configure(Config.Logging);

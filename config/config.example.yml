@@ -19,10 +19,6 @@ Source:
     Password:
     # Use secured connection
     Secure: false
-    # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
-    # be read together. Should not be smaller than usual average update rate
-    # Leave at 0 to always read a single node each time.
-    HistoryGranularity: 900
     # If true, force restart the uaclient on disconnect. Required for some servers
     ForceRestart: false
     # Max sizes of various requests to OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
@@ -30,14 +26,29 @@ Source:
     BrowseChunk: 1000
     #Max number of nodes to browse at the same time. Higher is much faster, but may be restricted by the server.
     BrowseNodesChunk: 1000
-    # Enable/disable history synchronization from the OPC-UA server to CDF:
-    History: true
-    # Number of datapoints per request, 0 for server specified
-    HistoryReadChunk: 1000
-    # Max number of simultaneous nodes per historyRead request
-    HistoryReadNodesChunk: 100
     AttributesChunk: 1000
     SubscriptionChunk: 1000
+
+# Config for reading of history from the server
+History:
+    # Enable/disable history synchronization from the OPC-UA server to CDF:
+    Enabled: true
+    # Enable/disable backfill behavior. If this is false, data is read using frontfill only. (Pre 1.1 behavior)
+    Backfill: false
+    # Max number of datapoints per history read request, 0 for server specified
+    DataChunk: 1000
+    # Max number of simultaneous nodes per historyRead request for data
+    DataNodesChunk: 100
+    # Max number of events per history read request, 0 for server specified
+    EventChunk: 1000
+    # Max number of simultaneous nodes per historyRead request for events
+    EventNodesChunk: 100
+    # The earliest timestamp to be read from history on the OPC-UA server, in milliseconds since 1/1/1970.
+    StartTime: 0
+    # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
+    # be read together. Should not be smaller than usual average update rate
+    # Leave at 0 to always read a single node each time.
+    Granularity: 600
 
 # List of pushers, the type must be identified using a Yaml tag. Each element results in a pusher, so it is possible
 # to push multiple times to the same system, for example in order to push to multiple projects in CDF.
@@ -63,6 +74,7 @@ Pushers:
         NonFiniteReplacement:
         # Chunk sizes in CDF requests
         LatestChunk: 100
+        EarliestChunk: 1000
         TimeSeriesChunk: 1000
         AssetChunk: 1000
 
@@ -203,8 +215,6 @@ Extraction:
     #          NamespaceUri:
     #          NodeId:
     #      IsStep: false
-    # The earliest timestamp to be read from history on the OPC-UA server, in milliseconds since 1/1/1970.
-    HistoryStartTime: 0
     # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
     # Note that this is a heavy operation, so this number should not be set too low.
     AutoRebrowsePeriod: 0

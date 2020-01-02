@@ -36,6 +36,7 @@ namespace Cognite.OpcUa
         private readonly UAClientConfig config;
         private readonly ExtractionConfig extractionConfig;
         private readonly EventConfig eventConfig;
+        private readonly HistoryConfig historyConfig;
         private Session session;
         private SessionReconnectHandler reconnectHandler;
         public Extractor Extractor { get; set; }
@@ -45,8 +46,6 @@ namespace Cognite.OpcUa
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         private Dictionary<NodeId, ProtoDataType> numericDataTypes = new Dictionary<NodeId, ProtoDataType>();
         public bool Started { get; private set; }
-        private readonly TimeSpan historyGranularity;
-        private readonly DateTime historyStartTime;
         private CancellationToken liveToken;
         private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> eventFields;
 
@@ -83,9 +82,7 @@ namespace Cognite.OpcUa
             this.config = config.Source;
             extractionConfig = config.Extraction;
             eventConfig = config.Events;
-            historyGranularity = config.Source.HistoryGranularity <= 0 ? TimeSpan.Zero
-                : TimeSpan.FromSeconds(config.Source.HistoryGranularity);
-            historyStartTime = DateTimeOffset.FromUnixTimeMilliseconds(config.Extraction.HistoryStartTime).DateTime;
+            historyConfig = config.History;
         }
         #region Session management
         /// <summary>
@@ -683,7 +680,7 @@ namespace Cognite.OpcUa
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
                     vnode.SetDataType(dataType, numericDataTypes);
                     enumerator.MoveNext();
-                    vnode.Historizing = config.History && enumerator.Current.GetValue(false);
+                    vnode.Historizing = historyConfig.Enabled && enumerator.Current.GetValue(false);
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
                     if (extractionConfig.MaxArraySize > 0)
@@ -786,210 +783,90 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Synchronization
-        /// <summary>
-        /// General method to perform history-read operations for a list of nodes, with a given callback and HistoryReadDetails
-        /// </summary>
-        /// <param name="details">Fully configured HistoryReadDetails to be used</param>
-        /// <param name="toRead">Collection of nodeIds to read</param>
-        /// <param name="callback">
-        /// Callback on each history read iteration.
-        /// Takes result as IEncodable, bool indicating if this is the final iteration, source NodeId, HistoryReadDetails, and returns the number of nodes processed.
-        /// </param>
-        private void DoHistoryRead(HistoryReadDetails details,
-            IEnumerable<NodeId> toRead,
-            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
-            CancellationToken token)
+
+        public class HistoryReadParams
         {
-            int opCnt = 0;
-            int ptCnt = 0;
+            public HistoryReadDetails Details { get; }
+            public IEnumerable<NodeId> Nodes { get; set; }
+            public IDictionary<NodeId, byte[]> ContinuationPoints { get; }
+            public IDictionary<NodeId, bool> Completed { get; }
+
+            public HistoryReadParams(IEnumerable<NodeId> nodes, HistoryReadDetails details)
+            {
+                ContinuationPoints = new Dictionary<NodeId, byte[]>();
+                Completed = new Dictionary<NodeId, bool>();
+                this.Nodes = nodes;
+                this.Details = details;
+                foreach (var node in nodes)
+                {
+                    ContinuationPoints[node] = null;
+                    Completed[node] = false;
+                }
+            }
+        }
+        /// <summary>
+        /// Modifies passed HistoryReadParams while doing a single config-limited iteration of history read.
+        /// </summary>
+        /// <param name="readParams"></param>
+        /// <returns>Pairs of NodeId and history read results as IEncodable</returns>
+        public IEnumerable<(NodeId, IEncodeable)> DoHistoryRead(HistoryReadParams readParams)
+        {
             IncOperations();
             var ids = new HistoryReadValueIdCollection();
-            var indexMap = new NodeId[toRead.Count()];
-            int index = 0;
-            foreach (var id in toRead)
+            var nodesIndices = readParams.Nodes.ToArray();
+            foreach (var id in readParams.Nodes)
             {
                 ids.Add(new HistoryReadValueId
                 {
                     NodeId = id,
+                    ContinuationPoint = readParams.ContinuationPoints[id]
                 });
-                indexMap[index] = id;
-                index++;
             }
+
+            var result = new List<(NodeId, IEncodeable)>();
             try
             {
-                do
+                session.HistoryRead(
+                    null,
+                    new ExtensionObject(readParams.Details),
+                    TimestampsToReturn.Source,
+                    false,
+                    ids,
+                    out HistoryReadResultCollection results,
+                    out _
+                );
+                numHistoryReads.Inc();
+                int idx = 0;
+                foreach (var data in results)
                 {
-
-                    session.HistoryRead(
-                        null,
-                        new ExtensionObject(details),
-                        TimestampsToReturn.Source,
-                        false,
-                        ids,
-                        out HistoryReadResultCollection results,
-                        out _
-                    );
-                    numHistoryReads.Inc();
-                    ids.Clear();
-                    int prevIndex = 0;
-                    int nextIndex = 0;
-                    opCnt++;
-                    foreach (var data in results)
+                    var nodeId = nodesIndices[idx];
+                    result.Add((nodeId, ExtensionObject.ToEncodeable(data.HistoryData)));
+                    if (data.ContinuationPoint == null)
                     {
-                        var hdata = ExtensionObject.ToEncodeable(data.HistoryData);
-                        ptCnt += callback(hdata, hdata == null || data.ContinuationPoint == null, indexMap[prevIndex], details);
-                        if (data.ContinuationPoint != null)
-                        {
-                            ids.Add(new HistoryReadValueId
-                            {
-                                NodeId = indexMap[prevIndex],
-                                ContinuationPoint = data.ContinuationPoint
-                            });
-                            indexMap[nextIndex] = indexMap[prevIndex];
-                            nextIndex++;
-                        }
-                        prevIndex++;
+                        readParams.Completed[nodeId] = true;
                     }
-                } while (ids.Any() && !token.IsCancellationRequested);
+                    else
+                    {
+                        readParams.ContinuationPoints[nodeId] = data.ContinuationPoint;
+                    }
+
+                    idx++;
+                }
+                Log.Verbose("Fetched historical "
+                            + (readParams.Details is ReadEventDetails ? "events" : "datapoints")
+                            + " for {nodeCount} nodes", readParams.Nodes.Count());
             }
             catch
             {
-                historyReadFailures.Inc();               
+                historyReadFailures.Inc();
                 throw;
             }
             finally
             {
                 DecOperations();
-                Log.Information("Fetched {NumHistoricalPoints} historical "
-                                + (details is ReadEventDetails ? "events" : "datapoints") 
-                                + " with {NumHistoryReadOperations} operations for {NumHistoryReadNodes} nodes",
-                    ptCnt, opCnt, index);
             }
-        }
-        /// <summary>
-        /// Read historydata for the requested nodes and call the callback after each call to HistoryRead
-        /// </summary>
-        /// <param name="toRead">Variables to read for</param>
-        /// <param name="callback">Callback, takes a IEncodable which should be an instance of a HistoryData object,
-        /// a bool indicating if this is the final iteration, the source NodeId, the ReadRawDetails used and returns the number of nodes processed</param>
-        private void HistoryReadDataChunk(IEnumerable<NodeExtractionState> toRead,
-            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
-            CancellationToken token)
-        {
-            var lowest = toRead.Select(bvar => bvar.DestLatestTimestamp).Min();
-            lowest = lowest < historyStartTime ? historyStartTime : lowest;
-			
-            var details = new ReadRawModifiedDetails
-            {
-                IsReadModified = false,
-                StartTime = lowest,
-                EndTime = DateTime.Now.AddDays(1),
-                NumValuesPerNode = (uint)config.HistoryReadChunk
-            };
-            try
-            {
-                DoHistoryRead(details, toRead.Select(bv => bv.Id), callback, token);
-            }
-            catch (ServiceResultException ex)
-            {
-                throw Utils.HandleServiceResult(ex, Utils.SourceOp.HistoryRead);
-            }
-        }
-        /// <summary>
-        /// Read historydata for the requested nodes and call the callback after each call to HistoryRead, performs chunking according to config,
-        /// limiting each chunk by size, as well as grouping by timestamp according to historyGranularity.
-        /// </summary>
-        /// <param name="toRead">NodeExtractionStates for historical nodes to be read.</param>
-        /// <param name="callback">Callback, takes a IEncodable which should be an instance of a HistoryData object,
-        /// a bool indicating if this is the final iteration, the source NodeId, the ReadRawDetails used and returns the number of nodes processed</param>
-        public async Task HistoryReadData(IEnumerable<NodeExtractionState> toRead,
-            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
-            CancellationToken token)
-        {
-            var tasks = new List<Task>();
-            if (historyGranularity == TimeSpan.Zero)
-            {
-                foreach (var state in toRead)
-                {
-                    if (state.Historizing)
-                    {
-                        tasks.Add(Task.Run(() => HistoryReadDataChunk(new List<NodeExtractionState> { state }, callback, token), token));
-                    }
-                    else
-                    {
-                        callback(null, true, state.Id, null);
-                    }
-                }
-                await Task.WhenAll(tasks); 
-                return;
-            }
-            var groupedStates = new Dictionary<long, IList<NodeExtractionState>>();
-            foreach (var state in toRead)
-            {
-                if (state.Historizing)
-                {
-                    long group = state.DestLatestTimestamp.Ticks / historyGranularity.Ticks;
-                    if (!groupedStates.ContainsKey(group))
-                    {
-                        groupedStates[group] = new List<NodeExtractionState>();
-                    }
-                    groupedStates[group].Add(state);
-                }
-                else
-                {
-                    callback(null, true, state.Id, null);
-                }
-            }
-            if (!groupedStates.Any()) return;
-            foreach (var nodes in groupedStates.Values)
-            {
-                foreach (var nextNodes in Utils.ChunkBy(nodes, config.HistoryReadNodesChunk))
-                {
-                    tasks.Add(Task.Run(() => HistoryReadDataChunk(nextNodes, callback, token)));
-                }
-            }
-            await Task.WhenAll(tasks);
-        }
-        /// <summary>
-        /// Read history data for a list of events, calls callback after each history read iteration.
-        /// </summary>
-        /// <param name="emitters">Nodes to be extracted from, these must all be emitters.</param>
-        /// <param name="eventIds">Events to extract.</param>
-        /// <param name="nodeIds">NodeIds permitted as SourceNode.</param>
-        /// <param name="callback">Callback to be called for each iteration. Takes a HistoryEvent as an IEncodable,
-        /// a bool indicating if this is the final iteration, NodeId of the node in question, ReadEventDetails containing the filter.
-        /// Returns the number of events processed.</param>
-        /// <param name="token"></param>
-        public async Task HistoryReadEvents(IEnumerable<EventExtractionState> emitters,
-            IEnumerable<NodeId> nodeIds,
-            Func<IEncodeable, bool, NodeId, HistoryReadDetails, int> callback,
-            CancellationToken token)
-        {
-            Log.Information("History read events");
-            if (eventFields == null) throw new Exception("EventFields not defined");
-            // Get the latest event receive time (will be fetched from file), then set the startTime to the largest of that minus 10 minutes, and
-            // the HistoryStartTime config option. We have generally have no way of finding the latest event in the destinations,
-            // so we approximate the time we want to read from using a local buffer.
-            var latestTime = emitters.Min(emitter => emitter.DestLatestTimestamp);
-            var startTime = latestTime == DateTime.MinValue ? latestTime : latestTime.Subtract(TimeSpan.FromMinutes(10));
-            startTime = startTime < historyStartTime ? historyStartTime : startTime;
-            Log.Information("Read history for {num} nodes starting from {starttime}", emitters.Count(), startTime);
-            var filter = BuildEventFilter(nodeIds);
-            var details = new ReadEventDetails
-            {
-                StartTime = startTime,
-                EndTime = DateTime.UtcNow.AddDays(1),
-                NumValuesPerNode = (uint)eventConfig.HistoryReadChunk,
-                Filter = filter
-            };
-            try
-            {
-                await Task.Run(() => DoHistoryRead(details, emitters.Select(emitter => emitter.Id).ToList(), callback, token));
-            }
-            catch (ServiceResultException ex)
-            {
-                throw Utils.HandleServiceResult(ex, Utils.SourceOp.HistoryReadEvents);
-            }
+
+            return result;
         }
         /// <summary>
         /// Create datapoint subscriptions for given list of nodes
@@ -1180,12 +1057,11 @@ namespace Cognite.OpcUa
         /// <param name="nodeIds">Permitted SourceNode ids</param>
         /// <param name="receivedAfter">Optional, if defined, attempt to filter out events with [ReceiveTimeProperty] > receivedAfter</param>
         /// <returns>The final event filter</returns>
-        private EventFilter BuildEventFilter(IEnumerable<NodeId> nodeIds)
+        public EventFilter BuildEventFilter(IEnumerable<NodeId> nodeIds)
         {
             /*
              * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds AND SourceNode IN nodeIds;
              * using the internal query language in OPC-UA
-             * If receivedAfter is specified, then also "AND [ReceiveTimeProperty] > receivedAfter"
              */
             var whereClause = new ContentFilter();
             var eventListOperand = new SimpleAttributeOperand

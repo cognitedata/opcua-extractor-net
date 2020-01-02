@@ -13,17 +13,11 @@ namespace Cognite.OpcUa
         public string Username { get; set; }
         public string Password { get; set; }
         public bool Secure { get; set; } = false;
-        public bool History { get; set; } = true;
-        public int HistoryGranularity { get; set; } = 600;
         public bool ForceRestart { get; set; } = false;
         public int BrowseNodesChunk { get => _browseNodesChunk; set => _browseNodesChunk = Math.Max(1, value); }
         private int _browseNodesChunk = 1000;
         public int BrowseChunk { get => _browseChunk; set => _browseChunk = Math.Max(1, value); }
         private int _browseChunk = 1000;
-        public int HistoryReadChunk { get => _uaHistoryReadPoints; set => _uaHistoryReadPoints = Math.Max(1, value); }
-        private int _uaHistoryReadPoints = 1000;
-        public int HistoryReadNodesChunk { get => _uaHistoryReadNodes; set => _uaHistoryReadNodes = Math.Max(1, value); }
-        private int _uaHistoryReadNodes = 100;
         // 0 means server defined:
         public int AttributesChunk { get => _attributesChunk; set => _attributesChunk = Math.Max(0, value); }
         private int _attributesChunk = 1000;
@@ -44,7 +38,6 @@ namespace Cognite.OpcUa
         public Dictionary<string, string> NamespaceMap { get => _namespaceMap; set => _namespaceMap = value ?? _namespaceMap; }
         private Dictionary<string, string> _namespaceMap = new Dictionary<string, string>();
         public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
-        public long HistoryStartTime { get; set; } = 0;
         public int AutoRebrowsePeriod { get; set; } = 0;
         public bool EnableAuditDiscovery { get; set; } = false;
     }
@@ -71,6 +64,7 @@ namespace Cognite.OpcUa
             return new CDFPusher(provider, this) {Index = index};
         }
 
+        public int EarliestChunk { get; set; } = 1000;
         // Limits can change without notice in CDF API end-points.
         // The limit on number of time series on the "latest" end-point is currently 100.
         public int LatestChunk { get; set; } = 100;
@@ -122,6 +116,8 @@ namespace Cognite.OpcUa
         private EventConfig _eventConfig = new EventConfig();
         public FailureBufferConfig FailureBuffer { get => _failureBufferConfig; set => _failureBufferConfig = value ?? _failureBufferConfig; }
         private FailureBufferConfig _failureBufferConfig = new FailureBufferConfig();
+        public HistoryConfig History { get => _historyConfig; set => _historyConfig = value ?? _historyConfig; }
+        private HistoryConfig _historyConfig = new HistoryConfig();
     }
     public class LoggerConfig
     {
@@ -151,7 +147,21 @@ namespace Cognite.OpcUa
         public Dictionary<string, string> DestinationNameMap { get => _destinationNameMap; set => _destinationNameMap = value ?? _destinationNameMap; }
         private Dictionary<string, string> _destinationNameMap = new Dictionary<string, string>();
         public IEnumerable<ProtoNodeId> HistorizingEmitterIds { get; set; }
-        public int HistoryReadChunk { get; set; } = 1000;
+    }
+    public class HistoryConfig
+    {
+        public bool Enabled { get; set; } = true;
+        public bool Backfill { get; set; } = false;
+        public int DataChunk { get => _dataChunk; set => _dataChunk = Math.Max(0, value); }
+        private int _dataChunk = 1000;
+        public int DataNodesChunk { get => _dataNodesChunk; set => _dataNodesChunk = Math.Max(1, value); }
+        private int _dataNodesChunk = 100;
+        public int EventChunk { get => _eventPointsChunk; set => _eventPointsChunk = Math.Max(0, value); }
+        private int _eventPointsChunk = 1000;
+        public int EventNodesChunk { get => _eventNodesChunk; set => _eventNodesChunk = Math.Max(1, value); }
+        private int _eventNodesChunk = 100;
+        public long StartTime { get; set; } = 0;
+        public int Granularity { get; set; } = 600;
     }
     public class ProtoNodeId
     {

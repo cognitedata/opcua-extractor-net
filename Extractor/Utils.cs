@@ -44,12 +44,13 @@ namespace Cognite.OpcUa
         /// Write given latest event timestamp to file
         /// </summary>
         /// <param name="date">Date to be written</param>
-        public static void WriteLastEventTimestamp(DateTime date)
+        public static void WriteEventExtractedRange(DateTime first, DateTime last)
         {
             lock (dateFileLock)
             {
                 using FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Write);
-                fs.Write(BitConverter.GetBytes(date.ToBinary()));
+                fs.Write(BitConverter.GetBytes(last.ToBinary()));
+                fs.Write(BitConverter.GetBytes(first.ToBinary()));
             }
         }
         public static IEnumerable<IDictionary<TKey, IEnumerable<TVal>>> ChunkDictOfLists<TKey, TVal>(
@@ -122,15 +123,31 @@ namespace Cognite.OpcUa
         /// Read latest event timestamp from file.
         /// </summary>
         /// <returns>Retrieved date or DateTime.MinValue</returns>
-        public static DateTime ReadLastEventTimestamp()
+        public static TimeRange ReadEventExtractedRange(bool backfillEnabled)
         {
+            // Order is end-start in order to be somewhat backwards compatible
+            var range = new TimeRange(DateTime.MinValue, DateTime.MinValue);
             lock (dateFileLock)
             {
                 using FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Read);
                 byte[] rawRead = new byte[sizeof(long)];
                 int read = fs.Read(rawRead, 0, sizeof(long));
-                if (read < sizeof(long)) return DateTime.MinValue;
-                return DateTime.FromBinary(BitConverter.ToInt64(rawRead));
+                if (read < sizeof(long))
+                {
+                    if (backfillEnabled)
+                    {
+                        range.End = DateTime.UtcNow;
+                        range.Start = DateTime.UtcNow;
+                    }
+
+                    return range;
+                }
+                range.End = DateTime.FromBinary(BitConverter.ToInt64(rawRead));
+                read = fs.Read(rawRead, 0, sizeof(long));
+                // If there is a start, but no end, assume that frontfill was run from the start before.
+                range.Start = read < sizeof(long) ? DateTime.MinValue : DateTime.FromBinary(BitConverter.ToInt64(rawRead));
+
+                return range;
             }
         }
         /// <summary>
@@ -180,6 +197,14 @@ namespace Cognite.OpcUa
         {
             if (string.IsNullOrEmpty(str) || str.Length <= maxLength) return str;
             return str.Substring(0, maxLength);
+        }
+
+        public static IEnumerable<IEnumerable<T>> GroupByTimeGranularity<T>(IEnumerable<(T, DateTime)> input, TimeSpan granularity, int maxLength)
+        {
+            return granularity == TimeSpan.Zero
+                ? input.Select(item => new [] {item.Item1})
+                : input.GroupBy(pair => pair.Item2.Ticks / granularity.Ticks)
+                    .SelectMany(group => ChunkBy(group.ToList().Select(pair => pair.Item1), maxLength));
         }
 
         public enum SourceOp
@@ -459,6 +484,23 @@ namespace Cognite.OpcUa
         {
             Operation = op;
             StatusCode = ex.StatusCode;
+        }
+    }
+
+    public class TimeRange
+    {
+        public DateTime Start;
+        public DateTime End;
+
+        public TimeRange(DateTime start, DateTime end)
+        {
+            Start = start;
+            End = end;
+        }
+
+        public bool Contains(DateTime cmp)
+        {
+            return cmp >= Start && cmp <= End;
         }
     }
 }

@@ -24,7 +24,7 @@ namespace Cognite.OpcUa
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
         private readonly InfluxClientConfig config;
-        private readonly Dictionary<string, DateTime> latestTimestamp = new Dictionary<string, DateTime>();
+        private readonly Dictionary<string, TimeRange> ranges = new Dictionary<string, TimeRange>();
         private InfluxDBClient client;
 
         private static readonly Counter numInfluxPusher = Metrics
@@ -69,7 +69,8 @@ namespace Cognite.OpcUa
                     continue;
                 }
 
-                if (buffer.Timestamp < latestTimestamp.GetValueOrDefault(buffer.Id)) continue;
+                if (ranges.ContainsKey(buffer.Id) && buffer.Timestamp < ranges[buffer.Id].End
+                    && buffer.Timestamp > ranges[buffer.Id].Start) continue;
 
                 if (!buffer.IsString && !double.IsFinite(buffer.DoubleValue))
                 {
@@ -160,29 +161,48 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="states">List of historizing nodes</param>
         /// <returns>True on success</returns>
-        public async Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
+        public async Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
         {
-            var getLastTasks = states.Select(async state =>
+            var getRangeTasks = states.Select(async state =>
             {
                 var id = Extractor.GetUniqueId(state.Id,
                     state.ArrayDimensions != null && state.ArrayDimensions.Length > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1);
-                var values = await client.QueryMultiSeriesAsync(config.Database,
+                var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\"");
-                if (values.Any() && values.First().HasEntries)
+
+                if (last.Any() && last.First().HasEntries)
                 {
-                    DateTime timestamp = values.First().Entries[0].Time;
-                    state.InitTimestamp(timestamp);
-                    latestTimestamp[id] = timestamp;
+                    DateTime ts = last.First().Entries[0].Time;
+                    ranges[id] = new TimeRange(ts, ts);
                 }
                 else
                 {
-                    state.InitTimestamp(DateTime.UnixEpoch);
-                    latestTimestamp[id] = DateTime.UnixEpoch;
+                    if (backfillEnabled)
+                    {
+                        ranges[id] = new TimeRange(DateTime.UtcNow, DateTime.UtcNow);
+                    }
+                    else
+                    {
+                        ranges[id] = new TimeRange(DateTime.MinValue, DateTime.MinValue);
+                    }
                 }
+
+                if (backfillEnabled)
+                {
+                    var first = await client.QueryMultiSeriesAsync(config.Database,
+                        $"SELECT first(value) FROM \"{id}\"");
+                    if (first.Any() && first.First().HasEntries)
+                    {
+                        DateTime ts = first.First().Entries[0].Time;
+                        ranges[id].Start = ts;
+                    }
+                }
+                state.InitExtractedRange(ranges[id].Start, ranges[id].End);
+
             });
             try
             {
-                await Task.WhenAll(getLastTasks);
+                await Task.WhenAll(getRangeTasks);
             }
             catch (Exception e)
             {

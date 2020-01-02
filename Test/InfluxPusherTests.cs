@@ -98,7 +98,7 @@ namespace Test
                 QuitAfterMap = true
             });
             await tester.ClearPersistentData();
-            tester.Config.Source.History = false;
+            tester.Config.History.Enabled = false;
 
             tester.StartExtractor();
 
@@ -152,7 +152,7 @@ namespace Test
                 ConfigName = ConfigName.Events
             });
             await tester.ClearPersistentData();
-            tester.Config.Source.History = false;
+            tester.Config.History.Enabled = false;
 
             tester.StartExtractor();
 
@@ -216,7 +216,7 @@ namespace Test
                 ConfigName = ConfigName.Influx,
                 BufferDir = "./"
             });
-            tester.Config.Source.History = false;
+            tester.Config.History.Enabled = false;
             await tester.ClearPersistentData();
             var bufferPath = Path.Join(tester.Config.FailureBuffer.FilePath, "buffer.bin");
 

@@ -392,7 +392,7 @@ namespace Test
             });
             await tester.ClearPersistentData();
             tester.StartExtractor();
-            tester.Config.Source.History = false;
+            tester.Config.History.Enabled = false;
 
             await tester.TerminateRunTask();
 
@@ -445,7 +445,7 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
-            tester.Config.Source.History = false;
+            tester.Config.History.Enabled = false;
             tester.Config.Extraction.AllowStringVariables = true;
 
             tester.Handler.timeseries.Add("gp.efg:i=2", new TimeseriesDummy
