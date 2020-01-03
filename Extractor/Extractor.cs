@@ -365,9 +365,6 @@ namespace Cognite.OpcUa
                                 }
                             }
                         }
-                        Utils.WriteEventExtractedRange(
-                            EventEmitterStates.Values.Max(state => state.ExtractedRange.Start),
-                            EventEmitterStates.Values.Min(state => state.ExtractedRange.End));
                     }
 
                     await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
@@ -476,12 +473,9 @@ namespace Cognite.OpcUa
             {
                 pushEvents = true;
                 var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
-                var range = Utils.ReadEventExtractedRange(config.History.Backfill);
-                Log.Information("{start}, {end}", range.Start, range.End);
                 foreach (var id in emitters)
                 {
                     EventEmitterStates[id] = new EventExtractionState(id);
-                    EventEmitterStates[id].InitExtractedRange(range.Start, range.End);
                 }
                 if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
                 {

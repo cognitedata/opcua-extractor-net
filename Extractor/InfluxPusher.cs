@@ -225,9 +225,10 @@ namespace Cognite.OpcUa
             string emitterId = Extractor.GetUniqueId(state.Id);
             var tasks = nodes.Select(async node =>
             {
+                Log.Information(emitterId);
                 string id = "events." + Extractor.GetUniqueId(node);
                 var last = await client.QueryMultiSeriesAsync(config.Database,
-                    $"SELECT last(value) FROM \"{id}\" WHERE emitter='{emitterId}'");
+                    $"SELECT last(value) FROM \"{id}\" WHERE Emitter='{emitterId}'");
 
                 if (last.Any() && last.First().HasEntries)
                 {
@@ -245,14 +246,16 @@ namespace Cognite.OpcUa
                 {
                     if (!last.Any()) return;
                     var first = await client.QueryMultiSeriesAsync(config.Database,
-                        $"SELECT first(value) FROM \"{id}\" WHERE emitter='{emitterId}'");
+                        $"SELECT first(value) FROM \"{id}\" WHERE Emitter='{emitterId}'");
                     if (first.Any() && first.First().HasEntries)
                     {
                         DateTime ts = first.First().Entries[0].Time;
+                        Log.Information("{first}", ts);
                         lock (mutex)
                         {
                             if (ts < bestRange.Start)
                             {
+                                Log.Information("New best first: {ts}", ts);
                                 bestRange.Start = ts;
                             }
                         }
@@ -270,6 +273,7 @@ namespace Cognite.OpcUa
                 bestRange.Start = bestRange.End;
             }
             state.InitExtractedRange(bestRange.Start, bestRange.End);
+            Log.Information("{current}, {new}", state.ExtractedRange.Start, bestRange.Start);
         }
         public async Task<bool> InitExtractedEventRanges(IEnumerable<EventExtractionState> states,
             IEnumerable<NodeId> nodes,
@@ -363,8 +367,8 @@ namespace Cognite.OpcUa
                 UtcTimestamp = evt.Time,
                 MeasurementName = "events." + Extractor.GetUniqueId(evt.SourceNode)
             };
-            idp.Fields.Add("Value", evt.Message);
-            idp.Fields.Add("Id", evt.EventId);
+            idp.Fields.Add("value", evt.Message);
+            idp.Fields.Add("id", evt.EventId);
             idp.Tags["Type"] = Extractor.GetUniqueId(evt.EventType);
             idp.Tags["Emitter"] = Extractor.GetUniqueId(evt.EmittingNode);
             foreach (var kvp in evt.MetaData)

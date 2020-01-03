@@ -27,7 +27,6 @@ namespace Cognite.OpcUa
 {
     public static class Utils
     {
-        private static readonly object dateFileLock = new object();
         public static IEnumerable<TSource> DistinctBy<TSource, TKey>(this IEnumerable<TSource> source,
             Func<TSource, TKey> selector)
         {
@@ -40,19 +39,7 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        /// <summary>
-        /// Write given latest event timestamp to file
-        /// </summary>
-        /// <param name="date">Date to be written</param>
-        public static void WriteEventExtractedRange(DateTime first, DateTime last)
-        {
-            lock (dateFileLock)
-            {
-                using FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Write);
-                fs.Write(BitConverter.GetBytes(last.ToBinary()));
-                fs.Write(BitConverter.GetBytes(first.ToBinary()));
-            }
-        }
+
         public static IEnumerable<IDictionary<TKey, IEnumerable<TVal>>> ChunkDictOfLists<TKey, TVal>(
             IDictionary<TKey, List<TVal>> points, int maxPerList, int maxKeys)
         {
@@ -118,37 +105,6 @@ namespace Cognite.OpcUa
             }
 
             return ret;
-        }
-        /// <summary>
-        /// Read latest event timestamp from file.
-        /// </summary>
-        /// <returns>Retrieved date or DateTime.MinValue</returns>
-        public static TimeRange ReadEventExtractedRange(bool backfillEnabled)
-        {
-            // Order is end-start in order to be somewhat backwards compatible
-            var range = new TimeRange(DateTime.MinValue, DateTime.MinValue);
-            lock (dateFileLock)
-            {
-                using FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Read);
-                byte[] rawRead = new byte[sizeof(long)];
-                int read = fs.Read(rawRead, 0, sizeof(long));
-                if (read < sizeof(long))
-                {
-                    if (backfillEnabled)
-                    {
-                        range.End = DateTime.UtcNow;
-                        range.Start = DateTime.UtcNow;
-                    }
-
-                    return range;
-                }
-                range.End = DateTime.FromBinary(BitConverter.ToInt64(rawRead));
-                read = fs.Read(rawRead, 0, sizeof(long));
-                // If there is a start, but no end, assume that frontfill was run from the start before.
-                range.Start = read < sizeof(long) ? DateTime.MinValue : DateTime.FromBinary(BitConverter.ToInt64(rawRead));
-
-                return range;
-            }
         }
         /// <summary>
         /// Map yaml config to the FullConfig object

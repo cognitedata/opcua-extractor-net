@@ -144,7 +144,8 @@ namespace Test
                 "opcua_attribute_request_failures", "opcua_history_read_failures", "opcua_browse_failures",
                 "opcua_browse_operations", "opcua_history_reads", "opcua_tracked_timeseries",
                 "opcua_tracked_assets", "opcua_node_ensure_failures", "opcua_datapoint_pushes",
-                "opcua_datapoint_push_failures", "opcua_backfill_data_count", "opcua_frontfill_data_count"
+                "opcua_datapoint_push_failures", "opcua_backfill_data_count", "opcua_frontfill_data_count",
+                "opcua_backfill_events_count", "opcua_frontfill_events_count"
             };
             foreach (var metric in metrics)
             {
@@ -254,10 +255,6 @@ namespace Test
 
         public async Task ClearPersistentData()
         {
-            if (events)
-            {
-                File.Create("latestEvent.bin").Close();
-            }
             Common.ResetTestMetrics();
             if (influx)
             {
@@ -269,8 +266,6 @@ namespace Test
             {
                 File.Create(Path.Join(Config.FailureBuffer.FilePath, "buffer.bin")).Close();
             }
-
-            File.Create("latestEvent.bin").Close();
         }
 
         public void StartExtractor()
