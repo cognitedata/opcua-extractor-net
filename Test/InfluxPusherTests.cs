@@ -161,7 +161,7 @@ namespace Test
                 var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database, 
                     "SELECT * FROM \"events.gp.efg:i=1\"");
                 return read.Count > 0 && read.First().HasEntries &&
-                       tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming);
+                       tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming);
             }, 20, "Expected to get some events in influxdb");
 
             await tester.TerminateRunTask();
@@ -335,7 +335,7 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => tester.Extractor.EventEmitterStates.All(kvp =>
+            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(kvp =>
                     !kvp.Value.Historizing || kvp.Value.BackfillDone && kvp.Value.IsStreaming),
                 60, "Expected backfill of events to terminate");
 
@@ -363,7 +363,7 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => tester.Extractor.EventEmitterStates.All(kvp =>
+            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(kvp =>
                     !kvp.Value.Historizing || kvp.Value.BackfillDone && kvp.Value.IsStreaming),
                 60, "Expected backfill of events to terminate");
 
@@ -377,7 +377,7 @@ namespace Test
 
             await Task.Delay(500);
 
-            await tester.WaitForCondition(() => tester.Extractor.EventEmitterStates.All(kvp =>
+            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(kvp =>
                     !kvp.Value.Historizing || kvp.Value.BackfillDone && kvp.Value.IsStreaming),
                 60, "Expected backfill of events to terminate");
 

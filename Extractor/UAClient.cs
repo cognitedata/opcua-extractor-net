@@ -1396,6 +1396,10 @@ namespace Cognite.OpcUa
         /// <returns>Unique string representation</returns>
         public string GetUniqueId(ExpandedNodeId nodeid, int index = -1)
         {
+            if (nodeid == null || (NodeId)nodeid == null)
+            {
+                Log.Information("Null nodeid detected");
+            }
             if (nodeOverrides.ContainsKey((NodeId)nodeid)) return nodeOverrides[(NodeId)nodeid];
 
             string namespaceUri = nodeid.NamespaceUri ?? session.NamespaceUris.GetString(nodeid.NamespaceIndex);

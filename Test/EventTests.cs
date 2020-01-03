@@ -49,7 +49,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Count > 20 &&
-                    tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming),
+                    tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming),
                 40, "Expected history read to finish");
 
 
@@ -99,7 +99,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming),
+                    && tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming),
                 40, "Expected history read to finish");
 
             int lastCount = tester.Handler.events.Count;
@@ -109,7 +109,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming)
+                    && tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming)
                     && tester.Handler.events.Count > lastCount,
                 40, "Expected number of events to be increasing");
 
@@ -302,26 +302,17 @@ namespace Test
                        && events.Any(ev => ev.description.StartsWith("basicPassSource "))
                        && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
                        && events.Any(ev => ev.description.StartsWith("basicVarSource "))
-                       && events.Any(ev => ev.description.StartsWith("mappedType "));
+                       && events.Any(ev => ev.description.StartsWith("mappedType "))
+                       && events.Any(ev => ev.description == "prop 0")
+                       && events.Any(ev => ev.description == "basicPass 0")
+                       && events.Any(ev => ev.description == "basicPassSource 0")
+                       && events.Any(ev => ev.description == "basicVarSource 0")
+                       && events.Any(ev => ev.description == "mappedType 0");
             }, 20, "Expected to receive the remaining events");
 
             await tester.TerminateRunTask();
 
             var events = tester.Handler.events.Values.ToList();
-            Assert.True(events.Any());
-            Assert.Contains(events, ev => ev.description.StartsWith("prop "));
-            Assert.Contains(events, ev => ev.description == "prop 0");
-            Assert.Contains(events, ev => ev.description == "basicPass 0");
-            Assert.Contains(events, ev => ev.description == "basicPassSource 0");
-            Assert.Contains(events, ev => ev.description == "basicVarSource 0");
-            Assert.Contains(events, ev => ev.description == "mappedType 0");
-
-            Assert.Contains(events, ev => ev.description.StartsWith("propOther "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPass "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource2 "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicVarSource "));
-            Assert.Contains(events, ev => ev.description.StartsWith("mappedType "));
 
             foreach (var ev in events)
             {

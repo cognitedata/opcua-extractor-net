@@ -48,10 +48,16 @@ namespace Cognite.OpcUa
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
 
-        private readonly ConcurrentDictionary<NodeId, NodeExtractionState> nodeStates = new ConcurrentDictionary<NodeId, NodeExtractionState>();
+        public ConcurrentDictionary<NodeId, NodeExtractionState> NodeStates { get; } =
+            new ConcurrentDictionary<NodeId, NodeExtractionState>();
 
         private readonly ConcurrentDictionary<string, NodeExtractionState> nodeStatesByExtId = new ConcurrentDictionary<string, NodeExtractionState>();
-        public ConcurrentDictionary<NodeId, EventExtractionState> EventEmitterStates { get; } = new ConcurrentDictionary<NodeId, EventExtractionState>();
+
+        public ConcurrentDictionary<NodeId, EventExtractionState> EmitterStates { get; } =
+            new ConcurrentDictionary<NodeId, EventExtractionState>();
+
+        private readonly ConcurrentDictionary<string, EventExtractionState> emitterStatesByExtId =
+            new ConcurrentDictionary<string, EventExtractionState>();
 
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
         private bool restart;
@@ -315,7 +321,17 @@ namespace Cognite.OpcUa
 
         public NodeExtractionState GetNodeState(NodeId id)
         {
-            return nodeStates.GetValueOrDefault(id);
+            return NodeStates.GetValueOrDefault(id);
+        }
+
+        public EventExtractionState GetEmitterState(string externalId)
+        {
+            return emitterStatesByExtId.GetValueOrDefault(externalId);
+        }
+
+        public EventExtractionState GetEmitterState(NodeId id)
+        {
+            return EmitterStates.GetValueOrDefault(id);
         }
         #endregion
         #region Loops
@@ -464,7 +480,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            foreach (var state in nodeStates.Values)
+            foreach (var state in NodeStates.Values)
             {
                 state.ClearIsStreaming();
             }
@@ -475,15 +491,16 @@ namespace Cognite.OpcUa
                 var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
                 foreach (var id in emitters)
                 {
-                    EventEmitterStates[id] = new EventExtractionState(id);
+                    EmitterStates[id] = new EventExtractionState(id);
+                    emitterStatesByExtId[uaClient.GetUniqueId(id)] = EmitterStates[id];
                 }
                 if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
                 {
                     var histEmitters = config.Events.HistorizingEmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
                     foreach (var id in histEmitters)
                     {
-                        if (!EventEmitterStates.ContainsKey(id)) throw new Exception("Historical emitter not in emitter list");
-                        EventEmitterStates[id].Historizing = true;
+                        if (!EmitterStates.ContainsKey(id)) throw new Exception("Historical emitter not in emitter list");
+                        EmitterStates[id].Historizing = true;
                     }
                 }
                 var eventFields = uaClient.GetEventFields(config.Events.EventIds.Select(proto => proto.ToNodeId(uaClient, ObjectTypeIds.BaseEventType)).ToList(), token);
@@ -545,19 +562,19 @@ namespace Cognite.OpcUa
                 if (AllowTSMap(node))
                 {
                     variables.Add(node);
-                    nodeStates[node.Id] = new NodeExtractionState(node);
+                    NodeStates[node.Id] = new NodeExtractionState(node);
                     if (node.ArrayDimensions != null && node.ArrayDimensions.Length > 0 && node.ArrayDimensions[0] > 0)
                     {
                         for (int i = 0; i < node.ArrayDimensions[0]; i++)
                         {
                             timeseries.Add(new BufferedVariable(node, i));
-                            nodeStatesByExtId[uaClient.GetUniqueId(node.Id, i)] = nodeStates[node.Id];
+                            nodeStatesByExtId[uaClient.GetUniqueId(node.Id, i)] = NodeStates[node.Id];
                         }
                         objects.Add(node);
                     }
                     else
                     {
-                        nodeStatesByExtId[uaClient.GetUniqueId(node.Id)] = nodeStates[node.Id];
+                        nodeStatesByExtId[uaClient.GetUniqueId(node.Id)] = NodeStates[node.Id];
                         timeseries.Add(node);
                     }
                 }
@@ -577,15 +594,15 @@ namespace Cognite.OpcUa
             var statesToSync = timeseries
                 .Select(ts => ts.Id)
                 .Distinct()
-                .Select(id => nodeStates[id])
+                .Select(id => NodeStates[id])
                 .Where(state => state.Historizing);
 
             var getRangePushes = pushers.Select(pusher => pusher.InitExtractedRanges(statesToSync, config.History.Backfill, token));
 
-            if (EventEmitterStates.Any(kvp => kvp.Value.Historizing))
+            if (EmitterStates.Any(kvp => kvp.Value.Historizing))
             {
                 var getEventRanges = pushers.Select(pusher =>
-                    pusher.InitExtractedEventRanges(EventEmitterStates.Where(kvp => kvp.Value.Historizing).Select(kvp => kvp.Value),
+                    pusher.InitExtractedEventRanges(EmitterStates.Values.Where(state => state.Historizing),
                         timeseries.Concat(objects).Select(ts => ts.Id).Distinct(), config.History.Backfill, token));
                 getRangePushes = getRangePushes.Concat(getEventRanges);
             }
@@ -593,15 +610,48 @@ namespace Cognite.OpcUa
 
             var getRangeResult = await Task.WhenAll(getRangePushes);
             if (!getRangeResult.All(res => res)) throw new Exception("Getting latest timestamp failed");
+            // If any nodes are still at default values, meaning no pusher can initialize them, initialize to default values.
+            foreach (var state in statesToSync)
+            {
+                if (state.ExtractedRange.Start == DateTime.MinValue && state.ExtractedRange.End == DateTime.MaxValue)
+                {
+                    if (config.History.Backfill)
+                    {
+                        state.ExtractedRange.Start = DateTime.UtcNow;
+                        state.ExtractedRange.End = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        state.ExtractedRange.End = DateTime.MinValue;
+                    }
+                }
+            }
+
+            foreach (var state in EmitterStates.Values.Where(state => state.Historizing))
+            {
+                if (state.ExtractedRange.Start == DateTime.MinValue && state.ExtractedRange.End == DateTime.MaxValue)
+                {
+                    if (config.History.Backfill)
+                    {
+                        state.ExtractedRange.Start = DateTime.UtcNow;
+                        state.ExtractedRange.End = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        state.ExtractedRange.End = DateTime.MinValue;
+                    }
+                }
+            }
+
         }
 
         private async Task SynchronizeEvents(IEnumerable<NodeId> nodes, CancellationToken token)
         {
-            await Task.Run(() => uaClient.SubscribeToEvents(EventEmitterStates.Keys, nodes, EventSubscriptionHandler, token));
-            await historyReader.FrontfillEvents(EventEmitterStates.Values.Where(state => state.Historizing), nodes, token);
+            await Task.Run(() => uaClient.SubscribeToEvents(EmitterStates.Keys, nodes, EventSubscriptionHandler, token));
+            await historyReader.FrontfillEvents(EmitterStates.Values.Where(state => state.Historizing), nodes, token);
             if (config.History.Backfill)
             {
-                await historyReader.BackfillEvents(EventEmitterStates.Values.Where(state => state.Historizing), nodes, token);
+                await historyReader.BackfillEvents(EmitterStates.Values.Where(state => state.Historizing), nodes, token);
             }
         }
 
@@ -622,7 +672,7 @@ namespace Cognite.OpcUa
         /// <returns>Two tasks, one for data and one for events</returns>
         private IEnumerable<Task> Synchronize(IEnumerable<BufferedVariable> variables, IEnumerable<BufferedNode> objects, CancellationToken token)
         {
-            var states = variables.Select(ts => ts.Id).Distinct().Select(id => nodeStates[id]);
+            var states = variables.Select(ts => ts.Id).Distinct().Select(id => NodeStates[id]);
 
             Log.Information("Synchronize {NumNodesToSynch} nodes", variables.Count());
             var tasks = new List<Task>();
@@ -631,7 +681,7 @@ namespace Cognite.OpcUa
             {
                 tasks.Add(SynchronizeNodes(states, token));
             }
-            if (EventEmitterStates.Any())
+            if (EmitterStates.Any())
             {
                 tasks.Add(SynchronizeEvents(objects.Concat(variables).Select(node => node.Id).Distinct().ToList(), token));
             }
@@ -655,7 +705,7 @@ namespace Cognite.OpcUa
                 return Array.Empty<Task>();
             }
 
-            pushData = nodeStates.Any();
+            pushData = NodeStates.Any();
 
             await PushNodes(objects, timeseries, token);
 
@@ -749,7 +799,7 @@ namespace Cognite.OpcUa
         private void DataSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
             string uniqueId = uaClient.GetUniqueId(item.ResolvedNodeId);
-            var node = nodeStates[item.ResolvedNodeId];
+            var node = NodeStates[item.ResolvedNodeId];
             
             foreach (var datapoint in item.DequeueValues())
             {
@@ -860,7 +910,7 @@ namespace Cognite.OpcUa
             }
             var buffEvent = ConstructEvent(filter, eventFields, item.ResolvedNodeId);
             if (buffEvent == null) return;
-            var eventState = EventEmitterStates[item.ResolvedNodeId];
+            var eventState = EmitterStates[item.ResolvedNodeId];
             eventState.UpdateFromStream(buffEvent);
 
             // Either backfill/frontfill is done, or we are not outside of each respective bound

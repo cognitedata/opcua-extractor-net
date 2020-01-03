@@ -446,20 +446,24 @@ namespace Cognite.OpcUa
                 {
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
                     if (!(res is IDictionary<string, object> values)) return null;
+                    var emitter = Extractor.GetEmitterState((string)values["Emitter"]);
+                    if (emitter == null) return null;
                     var evt = new BufferedEvent
                     {
                         Time = (DateTime)values["Time"],
                         EventId = (string)values["Id"],
                         Message = (string)values["Value"],
+                        EmittingNode = emitter.Id,
                         SourceNode = sourceNode,
                         MetaData = new Dictionary<string, object>()
                     };
                     foreach (var kvp in values)
                     {
-                        if (kvp.Key == "Time" || kvp.Key == "Id" || kvp.Key == "Value" || string.IsNullOrEmpty(kvp.Value as string)) continue;
+                        if (kvp.Key == "Time" || kvp.Key == "Id" || kvp.Key == "Value"
+                            || kvp.Key == "Emitter" || string.IsNullOrEmpty(kvp.Value as string)) continue;
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
-                    Log.Information(evt.ToDebugDescription());
+                    Log.Verbose(evt.ToDebugDescription());
 
                     return evt;
                 }).Where(evt => evt != null));

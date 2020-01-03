@@ -143,7 +143,7 @@ namespace Cognite.OpcUa
                 return 0;
             }
             if (evts.Events == null) return 0;
-            var emitterState = extractor.EventEmitterStates[nodeid];
+            var emitterState = extractor.GetEmitterState(nodeid);
             int cnt = 0;
 
             var range = new TimeRange(DateTime.MaxValue, DateTime.MinValue);
