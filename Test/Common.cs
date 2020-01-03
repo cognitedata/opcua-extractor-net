@@ -269,6 +269,8 @@ namespace Test
             {
                 File.Create(Path.Join(Config.FailureBuffer.FilePath, "buffer.bin")).Close();
             }
+
+            File.Create("latestEvent.bin").Close();
         }
 
         public void StartExtractor()
@@ -285,6 +287,12 @@ namespace Test
                 if (await condition())
                 {
                     triggered = true;
+                    break;
+                }
+
+                if (RunTask.IsFaulted)
+                {
+                    Log.Error(RunTask.Exception, "RunTask failed during WaitForCondition");
                     break;
                 }
 

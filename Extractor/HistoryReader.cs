@@ -63,11 +63,13 @@ namespace Cognite.OpcUa
             {
                 var last = data.DataValues.Any() ? data.DataValues.Max(dp => dp.SourceTimestamp) : DateTime.MinValue;
                 nodeState.UpdateFromFrontfill(last, final);
+                Log.Debug("Frontfill of data for {id} at {ts}", uniqueId, last);
             }
             else
             {
                 var first = data.DataValues.Any() ? data.DataValues.Min(dp => dp.SourceTimestamp) : DateTime.MaxValue;
                 nodeState.UpdateFromBackfill(first, final);
+                Log.Debug("Backfill of data for {id} at {ts}", uniqueId, first);
             }
 
             int cnt = 0;
@@ -148,7 +150,7 @@ namespace Cognite.OpcUa
 
             foreach (var evt in evts.Events)
             {
-                var buffEvt = extractor.ConstructEvent(filter, evt.EventFields);
+                var buffEvt = extractor.ConstructEvent(filter, evt.EventFields, nodeid);
                 if (buffEvt == null) continue;
 
                 if (buffEvt.Time < range.Start)
@@ -171,10 +173,12 @@ namespace Cognite.OpcUa
             if (frontfill)
             {
                 emitterState.UpdateFromFrontfill(range.End, final);
+                Log.Debug("Frontfill of events for {id} at: {end}", nodeid, range.End);
             }
             else
             {
                 emitterState.UpdateFromBackfill(range.Start, final);
+                Log.Debug("Backfill of events for {id} at: {end}", nodeid, range.Start);
             }
 
             if (!final || !frontfill) return cnt;
@@ -251,6 +255,7 @@ namespace Cognite.OpcUa
             // Earliest latest timestamp in chunk.
             var finalTimeStamp = nodes.Select(node => node.ExtractedRange.End).Min();
             finalTimeStamp = finalTimeStamp < historyStartTime ? historyStartTime : finalTimeStamp;
+            finalTimeStamp = finalTimeStamp > DateTime.UtcNow ? DateTime.UtcNow : finalTimeStamp;
             var details = new ReadRawModifiedDetails
             {
                 IsReadModified = false,
@@ -299,11 +304,8 @@ namespace Cognite.OpcUa
         {
             // Earliest latest timestamp in chunk.
             var finalTimeStamp = states.Select(node => node.ExtractedRange.End).Min();
-            finalTimeStamp = finalTimeStamp == DateTime.MinValue
-                ? finalTimeStamp
-                : finalTimeStamp.Subtract(TimeSpan.FromMinutes(10));
             finalTimeStamp = finalTimeStamp < historyStartTime ? historyStartTime : finalTimeStamp;
-
+            finalTimeStamp = finalTimeStamp > DateTime.UtcNow ? DateTime.UtcNow : finalTimeStamp;
             var details = new ReadEventDetails
             {
                 EndTime = DateTime.UtcNow.AddDays(10),

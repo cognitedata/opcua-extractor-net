@@ -477,6 +477,7 @@ namespace Cognite.OpcUa
                 pushEvents = true;
                 var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
                 var range = Utils.ReadEventExtractedRange(config.History.Backfill);
+                Log.Information("{start}, {end}", range.Start, range.End);
                 foreach (var id in emitters)
                 {
                     EventEmitterStates[id] = new EventExtractionState(id);
@@ -586,6 +587,16 @@ namespace Cognite.OpcUa
                 .Where(state => state.Historizing);
 
             var getRangePushes = pushers.Select(pusher => pusher.InitExtractedRanges(statesToSync, config.History.Backfill, token));
+
+            if (EventEmitterStates.Any(kvp => kvp.Value.Historizing))
+            {
+                var getEventRanges = pushers.Select(pusher =>
+                    pusher.InitExtractedEventRanges(EventEmitterStates.Where(kvp => kvp.Value.Historizing).Select(kvp => kvp.Value),
+                        timeseries.Concat(objects).Select(ts => ts.Id).Distinct(), config.History.Backfill, token));
+                getRangePushes = getRangePushes.Concat(getEventRanges);
+            }
+
+
             var getRangeResult = await Task.WhenAll(getRangePushes);
             if (!getRangeResult.All(res => res)) throw new Exception("Getting latest timestamp failed");
         }
@@ -776,7 +787,7 @@ namespace Cognite.OpcUa
         /// <param name="filter">Filter that resulted in this event</param>
         /// <param name="eventFields">Fields for a single event</param>
         /// <returns></returns>
-        public BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields)
+        public BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
         {
             int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
                                                                        && atr.BrowsePath[0] == BrowseNames.EventType);
@@ -826,6 +837,7 @@ namespace Cognite.OpcUa
                         .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
                                       && kvp.Key != "Time" && kvp.Key != "EventType")
                         .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                    EmittingNode = emitter,
                     ReceivedTime = DateTime.UtcNow,
                 };
                 return buffEvent;
@@ -852,7 +864,7 @@ namespace Cognite.OpcUa
                 Log.Warning("Triggered event without filter");
                 return;
             }
-            var buffEvent = ConstructEvent(filter, eventFields);
+            var buffEvent = ConstructEvent(filter, eventFields, item.ResolvedNodeId);
             if (buffEvent == null) return;
             var eventState = EventEmitterStates[item.ResolvedNodeId];
             eventState.UpdateFromStream(buffEvent);
@@ -861,7 +873,7 @@ namespace Cognite.OpcUa
             if (!((eventState.IsStreaming || buffEvent.Time < eventState.ExtractedRange.End)
                   && (eventState.BackfillDone || buffEvent.Time > eventState.ExtractedRange.Start))) return;
 
-            Log.Debug(buffEvent.ToDebugDescription());
+            Log.Verbose(buffEvent.ToDebugDescription());
             foreach (var pusher in pushers)
             {
                 pusher.BufferedEventQueue.Enqueue(buffEvent);

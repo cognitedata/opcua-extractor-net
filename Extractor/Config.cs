@@ -46,6 +46,7 @@ namespace Cognite.OpcUa
         public bool Debug { get; set; } = false;
         public int DataPushDelay { get; set; } = 1000;
         public bool Critical { get; set; } = true;
+        public bool ReadExtractedRanges { get; set; } = true;
         public double? NonFiniteReplacement
         {
             get => _nonFiniteReplacement;

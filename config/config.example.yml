@@ -72,6 +72,11 @@ Pushers:
         Critical: true
         # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
         NonFiniteReplacement:
+        # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
+        # otherwise back/frontfill will run for the entire history every restart.
+        # The CDF pusher is not able to read start/end points for events, so if reading historical events is enabled, one other pusher
+        # able to do this should be enabled.
+        ReadExtractedRanges: true
         # Chunk sizes in CDF requests
         LatestChunk: 100
         EarliestChunk: 1000
@@ -96,6 +101,9 @@ Pushers:
         Critical: true
         # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
         NonFiniteReplacement:
+        # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
+        # otherwise back/frontfill will run for the entire history every restart.
+        ReadExtractedRanges: true
         # Max number of points to send in each request to influx
         PointChunkSize: 100000
 

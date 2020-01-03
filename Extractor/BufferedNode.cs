@@ -361,6 +361,11 @@ namespace Cognite.OpcUa
         /// Timestamp this event was received locally
         /// </summary>
         public DateTime ReceivedTime { get; set; }
+        /// <summary>
+        /// Id of the node that emitted the event in opc-ua
+        /// </summary>
+        public NodeId EmittingNode { get; set; }
+
         public string ToDebugDescription()
         {
             string metadata = "{";

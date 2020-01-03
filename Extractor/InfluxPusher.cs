@@ -2,12 +2,14 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Metadata.Ecma335;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Opc.Ua;
 using Prometheus.Client;
 using Serilog;
+using Thoth.Json.Net;
 
 namespace Cognite.OpcUa
 {
@@ -24,7 +26,7 @@ namespace Cognite.OpcUa
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
         private readonly InfluxClientConfig config;
-        private readonly Dictionary<string, TimeRange> ranges = new Dictionary<string, TimeRange>();
+        private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
         private InfluxDBClient client;
 
         private static readonly Counter numInfluxPusher = Metrics
@@ -163,6 +165,7 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
         {
+            if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
             var getRangeTasks = states.Select(async state =>
             {
                 var id = Extractor.GetUniqueId(state.Id,
@@ -187,7 +190,7 @@ namespace Cognite.OpcUa
                     }
                 }
 
-                if (backfillEnabled)
+                if (backfillEnabled && last.Any())
                 {
                     var first = await client.QueryMultiSeriesAsync(config.Database,
                         $"SELECT first(value) FROM \"{id}\"");
@@ -200,6 +203,81 @@ namespace Cognite.OpcUa
                 state.InitExtractedRange(ranges[id].Start, ranges[id].End);
 
             });
+            try
+            {
+                await Task.WhenAll(getRangeTasks);
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Failed to get timestamps from influxdb");
+                return false;
+            }
+            return true;
+        }
+
+        private async Task InitExtractedEventRange(EventExtractionState state,
+            IEnumerable<NodeId> nodes,
+            bool backfillEnabled,
+            CancellationToken token)
+        {
+            var mutex = new object();
+            var bestRange = new TimeRange(DateTime.MaxValue, DateTime.MinValue);
+            string emitterId = Extractor.GetUniqueId(state.Id);
+            var tasks = nodes.Select(async node =>
+            {
+                string id = "events." + Extractor.GetUniqueId(node);
+                var last = await client.QueryMultiSeriesAsync(config.Database,
+                    $"SELECT last(value) FROM \"{id}\" WHERE emitter='{emitterId}'");
+
+                if (last.Any() && last.First().HasEntries)
+                {
+                    DateTime ts = last.First().Entries[0].Time;
+                    lock (mutex)
+                    {
+                        if (ts > bestRange.End)
+                        {
+                            bestRange.End = ts;
+                        }
+                    }
+                }
+
+                if (backfillEnabled)
+                {
+                    if (!last.Any()) return;
+                    var first = await client.QueryMultiSeriesAsync(config.Database,
+                        $"SELECT first(value) FROM \"{id}\" WHERE emitter='{emitterId}'");
+                    if (first.Any() && first.First().HasEntries)
+                    {
+                        DateTime ts = first.First().Entries[0].Time;
+                        lock (mutex)
+                        {
+                            if (ts < bestRange.Start)
+                            {
+                                bestRange.Start = ts;
+                            }
+                        }
+                    }
+                }
+            });
+            await Task.WhenAll(tasks);
+            if (bestRange.End == DateTime.MinValue && backfillEnabled)
+            {
+                bestRange.End = DateTime.UtcNow;
+            }
+
+            if (bestRange.Start == DateTime.MaxValue)
+            {
+                bestRange.Start = bestRange.End;
+            }
+            state.InitExtractedRange(bestRange.Start, bestRange.End);
+        }
+        public async Task<bool> InitExtractedEventRanges(IEnumerable<EventExtractionState> states,
+            IEnumerable<NodeId> nodes,
+            bool backfillEnabled,
+            CancellationToken token)
+        {
+            if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, nodes, backfillEnabled, token));
             try
             {
                 await Task.WhenAll(getRangeTasks);
@@ -288,6 +366,7 @@ namespace Cognite.OpcUa
             idp.Fields.Add("Value", evt.Message);
             idp.Fields.Add("Id", evt.EventId);
             idp.Tags["Type"] = Extractor.GetUniqueId(evt.EventType);
+            idp.Tags["Emitter"] = Extractor.GetUniqueId(evt.EmittingNode);
             foreach (var kvp in evt.MetaData)
             {
                 if (kvp.Key == "SourceNode") continue;
@@ -388,6 +467,13 @@ namespace Cognite.OpcUa
         public void Reconfigure()
         {
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
+        }
+
+        public void Reset()
+        {
+            BufferedDPQueue.Clear();
+            BufferedEventQueue.Clear();
+            ranges.Clear();
         }
     }
 }

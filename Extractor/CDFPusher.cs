@@ -32,6 +32,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus.Client;
 using Serilog;
+using KeyValuePair = Opc.Ua.KeyValuePair;
 
 namespace Cognite.OpcUa
 {
@@ -44,7 +45,7 @@ namespace Cognite.OpcUa
         private readonly CogniteClientConfig config;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
-        private readonly Dictionary<string, TimeRange> ranges = new Dictionary<string, TimeRange>();
+        private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
         
         public int Index { get; set; }
         public Extractor Extractor { private get; set; }
@@ -429,6 +430,9 @@ namespace Cognite.OpcUa
             nodeToAssetIds.Clear();
             trackedAssets.Set(0);
             trackedTimeseres.Set(0);
+            BufferedDPQueue.Clear();
+            BufferedEventQueue.Clear();
+            ranges.Clear();
         }
         private async Task<IEnumerable<(string, DateTime)>> GetEarliestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
         {
@@ -512,7 +516,7 @@ namespace Cognite.OpcUa
         }
         public async Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
         {
-            if (!states.Any() || config.Debug) return true;
+            if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
             var ids = new List<string>();
             foreach (var state in states)
             {
@@ -864,22 +868,33 @@ namespace Cognite.OpcUa
                     ? Extractor.ConvertToString(evt.MetaData["Type"])
                     : Extractor.GetUniqueId(evt.EventType), 64)
             };
+            var finalMetaData = new Dictionary<string, string>();
+            int len = 1;
+            finalMetaData["Emitter"] = Extractor.GetUniqueId(evt.EmittingNode);
             if (!evt.MetaData.ContainsKey("SourceNode"))
             {
-                evt.MetaData["SourceNode"] = Extractor.GetUniqueId(evt.SourceNode);
+                finalMetaData["SourceNode"] = Extractor.GetUniqueId(evt.SourceNode);
+                len++;
             }
             if (evt.MetaData.ContainsKey("SubType"))
             {
                 entity.SubType = Utils.Truncate(Extractor.ConvertToString(evt.MetaData["SubType"]), 64);
             }
-            var metaData = evt.MetaData
-                .Where(kvp => !excludeMetaData.Contains(kvp.Key))
-                .Take(16)
-                .ToDictionary(kvp => Utils.Truncate(kvp.Key, 32), kvp =>
-                    Utils.Truncate(Extractor.ConvertToString(kvp.Value), 256));
-            if (metaData.Any())
+
+            foreach (var dt in evt.MetaData)
             {
-                entity.MetaData = metaData;
+                if (!excludeMetaData.Contains(dt.Key))
+                {
+                    finalMetaData[Utils.Truncate(dt.Key, 32)] =
+                        Utils.Truncate(Extractor.ConvertToString(dt.Value), 256);
+                }
+
+                if (len++ == 15) break;
+            }
+
+            if (finalMetaData.Any())
+            {
+                entity.MetaData = finalMetaData;
             }
             return entity;
         }

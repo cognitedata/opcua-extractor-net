@@ -578,6 +578,8 @@ namespace Test
                     && tester.Extractor.GetNodeState("gp.efg:i=10").IsStreaming, 20,
                 "Expected integer datapoint to finish backfill and frontfill");
 
+            await tester.TerminateRunTask();
+
             Assert.True(Common.TestMetricValue("opcua_frontfill_data_count", 1));
             Assert.True(Common.TestMetricValue("opcua_backfill_data_count", 1));
         }
