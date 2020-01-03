@@ -852,7 +852,7 @@ namespace Cognite.OpcUa
 
                     idx++;
                 }
-                Log.Verbose("Fetched historical "
+                Log.Debug("Fetched historical "
                             + (readParams.Details is ReadEventDetails ? "events" : "datapoints")
                             + " for {nodeCount} nodes", readParams.Nodes.Count());
             }

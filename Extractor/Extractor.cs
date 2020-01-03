@@ -171,7 +171,6 @@ namespace Cognite.OpcUa
             IEnumerable<Task> tasks = pushers
                 .Select(pusher => PusherLoop(pusher, token))
                 .Concat(synchTasks).Append(Task.Run(() => ExtraTaskLoop(token), token)).ToList();
-
             if (config.Extraction.AutoRebrowsePeriod > 0)
             {
                 tasks = tasks.Append(Task.Run(() => RebrowseLoop(token))).ToList();
@@ -185,9 +184,16 @@ namespace Cognite.OpcUa
             }
             while (tasks.Any() && failedTask == null)
             {
+
                 try
                 {
-                    await Task.WhenAny(tasks);
+                    var terminated = await Task.WhenAny(tasks);
+                    if (terminated.IsFaulted)
+                    {
+                        Utils.LogException(terminated.Exception, 
+                            "Unexpected error in main task list", 
+                            "Handled error in main task list");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -586,7 +592,7 @@ namespace Cognite.OpcUa
 
         private async Task SynchronizeEvents(IEnumerable<NodeId> nodes, CancellationToken token)
         {
-            uaClient.SubscribeToEvents(EventEmitterStates.Keys, nodes, EventSubscriptionHandler, token);
+            await Task.Run(() => uaClient.SubscribeToEvents(EventEmitterStates.Keys, nodes, EventSubscriptionHandler, token));
             await historyReader.FrontfillEvents(EventEmitterStates.Values.Where(state => state.Historizing), nodes, token);
             if (config.History.Backfill)
             {
@@ -596,7 +602,7 @@ namespace Cognite.OpcUa
 
         private async Task SynchronizeNodes(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
-            uaClient.SubscribeToNodes(states, DataSubscriptionHandler, token);
+            await Task.Run(() => uaClient.SubscribeToNodes(states, DataSubscriptionHandler, token));
             await historyReader.FrontfillData(states.Where(state => state.Historizing), token);
             if (config.History.Backfill)
             {
@@ -850,7 +856,11 @@ namespace Cognite.OpcUa
             if (buffEvent == null) return;
             var eventState = EventEmitterStates[item.ResolvedNodeId];
             eventState.UpdateFromStream(buffEvent);
-            if (!eventState.IsStreaming) return;
+
+            // Either backfill/frontfill is done, or we are not outside of each respective bound
+            if (!((eventState.IsStreaming || buffEvent.Time < eventState.ExtractedRange.End)
+                  && (eventState.BackfillDone || buffEvent.Time > eventState.ExtractedRange.Start))) return;
+
             Log.Debug(buffEvent.ToDebugDescription());
             foreach (var pusher in pushers)
             {

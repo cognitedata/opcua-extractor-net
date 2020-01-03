@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -52,7 +53,7 @@ namespace Cognite.OpcUa
         /// <param name="variable">Variable to be used as base</param>
         public NodeExtractionState(BufferedVariable variable)
         {
-            ExtractedRange = new TimeRange(DateTime.MaxValue, DateTime.MinValue);
+            ExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
             Id = variable.Id;
             Historizing = variable.Historizing;
             DataType = variable.DataType;
@@ -75,7 +76,7 @@ namespace Cognite.OpcUa
             {
                 if (last < ExtractedRange.End)
                 {
-                    ExtractedRange.Start = last;
+                    ExtractedRange.End = last;
                 }
 
                 if (first > ExtractedRange.Start)
@@ -207,7 +208,7 @@ namespace Cognite.OpcUa
         private IList<BufferedEvent> buffer;
         public EventExtractionState(NodeId emitterId)
         {
-            ExtractedRange = new TimeRange(DateTime.MaxValue, DateTime.MinValue);
+            ExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
             Id = emitterId;
         }
         /// <summary>
@@ -220,7 +221,7 @@ namespace Cognite.OpcUa
             {
                 if (last < ExtractedRange.End)
                 {
-                    ExtractedRange.Start = last;
+                    ExtractedRange.End = last;
                 }
                 if (first > ExtractedRange.Start)
                 {
@@ -236,7 +237,7 @@ namespace Cognite.OpcUa
         {
             lock (rangeMutex)
             {
-                if (evt.Time > ExtractedRange.End && IsStreaming)
+                if (evt.Time > ExtractedRange.End && evt.Time > ExtractedRange.Start && IsStreaming)
                 {
                     ExtractedRange.End = evt.ReceivedTime;
                 }
@@ -278,17 +279,15 @@ namespace Cognite.OpcUa
                 {
                     ExtractedRange.Start = first;
                 }
-
                 BackfillDone |= final;
             }
         }
         /// <summary>
-        /// Retrieve contents of the buffer after final historyRead iteration, filters out events triggered after latest known timestamp.
+        /// Retrieve contents of the buffer after final historyRead iteration
         /// </summary>
         /// <returns>The contents of the buffer</returns>
         public IEnumerable<BufferedEvent> FlushBuffer()
         {
-            if (!IsStreaming) throw new Exception("Flush non-streaming buffer");
             if (!buffer.Any()) return new List<BufferedEvent>();
             lock (rangeMutex)
             {

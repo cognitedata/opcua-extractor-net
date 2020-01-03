@@ -501,5 +501,85 @@ namespace Test
             Assert.True(tester.Handler.datapoints.ContainsKey("gp.efg:i=3"));
             Assert.Equal(3, tester.Handler.datapoints["gp.efg:i=3"].Item1.Count);
         }
+        [Fact]
+        [Trait("Server", "basic")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "backfill")]
+        public async Task TestBackfill()
+        {
+            long startTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+            using var tester = new ExtractorTester(new TestParameters
+            {
+                LogLevel = "debug",
+                QuitAfterMap = false,
+                StoreDatapoints = true
+            });
+            await tester.ClearPersistentData();
+
+            tester.Config.History.Backfill = true;
+
+            tester.StartExtractor();
+
+            await tester.WaitForCondition(() =>
+                    tester.Extractor.GetNodeState("gp.efg:i=10") != null
+                    && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone
+                    && tester.Extractor.GetNodeState("gp.efg:i=10").IsStreaming
+                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=10"), 20,
+                "Expected integer datapoint to finish backfill and frontfill");
+
+            await tester.TerminateRunTask();
+
+            tester.TestContinuity("gp.efg:i=10");
+            Assert.True(Common.TestMetricValue("opcua_frontfill_data_count", 1));
+            Assert.True(Common.GetMetricValue("opcua_backfill_data_count") >= 1);
+            Assert.True(Common.VerifySuccessMetrics());
+            Assert.Contains(tester.Handler.datapoints["gp.efg:i=10"].Item1,pt => pt.Timestamp < startTime);
+        }
+        [Fact]
+        [Trait("Server", "basic")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "backfillrestart")]
+        public async Task TestBackfillRestart()
+        {
+            long startTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+            using var tester = new ExtractorTester(new TestParameters
+            {
+                LogLevel = "debug",
+                QuitAfterMap = false,
+                StoreDatapoints = true
+            });
+            await tester.ClearPersistentData();
+
+            tester.Config.History.Backfill = true;
+
+            tester.StartExtractor();
+
+            await tester.WaitForCondition(() =>
+                    tester.Extractor.GetNodeState("gp.efg:i=10") != null
+                    && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone
+                    && tester.Extractor.GetNodeState("gp.efg:i=10").IsStreaming
+                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=10"), 20,
+                "Expected integer datapoint to finish backfill and frontfill");
+
+            tester.TestContinuity("gp.efg:i=10");
+            Assert.True(Common.TestMetricValue("opcua_frontfill_data_count", 1));
+            Assert.True(Common.GetMetricValue("opcua_backfill_data_count") >= 1);
+            Assert.True(Common.VerifySuccessMetrics());
+            Assert.Contains(tester.Handler.datapoints["gp.efg:i=10"].Item1, pt => pt.Timestamp < startTime);
+
+            Common.ResetTestMetrics();
+            tester.Extractor.RestartExtractor(tester.Source.Token);
+
+            await Task.Delay(500);
+
+            await tester.WaitForCondition(() =>
+                    tester.Extractor.GetNodeState("gp.efg:i=10") != null
+                    && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone
+                    && tester.Extractor.GetNodeState("gp.efg:i=10").IsStreaming, 20,
+                "Expected integer datapoint to finish backfill and frontfill");
+
+            Assert.True(Common.TestMetricValue("opcua_frontfill_data_count", 1));
+            Assert.True(Common.TestMetricValue("opcua_backfill_data_count", 1));
+        }
     }
 }

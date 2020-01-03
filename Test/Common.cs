@@ -144,7 +144,7 @@ namespace Test
                 "opcua_attribute_request_failures", "opcua_history_read_failures", "opcua_browse_failures",
                 "opcua_browse_operations", "opcua_history_reads", "opcua_tracked_timeseries",
                 "opcua_tracked_assets", "opcua_node_ensure_failures", "opcua_datapoint_pushes",
-                "opcua_datapoint_push_failures"
+                "opcua_datapoint_push_failures", "opcua_backfill_data_count", "opcua_frontfill_data_count"
             };
             foreach (var metric in metrics)
             {
@@ -344,7 +344,7 @@ namespace Test
             {
                 if (last != dp - 1)
                 {
-                    Log.Information("Out of order points at {dp}, {last}", dp, last);
+                    Log.Verbose("Out of order points at {dp}, {last}", dp, last);
                 }
                 last = dp;
                 check[dp - min]++;

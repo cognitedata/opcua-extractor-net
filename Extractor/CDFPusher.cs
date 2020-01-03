@@ -123,8 +123,9 @@ namespace Cognite.OpcUa
                     }
                     // We do not subscribe to changes in history, so an update to a point within the known range is due to
                     // something being out of synch.
-                    if (ranges.ContainsKey(buffer.Id) && buffer.Timestamp < ranges[buffer.Id].End 
-                                                      && buffer.Timestamp > ranges[buffer.Id].Start) continue;
+                    if (ranges.ContainsKey(buffer.Id)
+                        && buffer.Timestamp < ranges[buffer.Id].End 
+                        && buffer.Timestamp > ranges[buffer.Id].Start) continue;
 
                     if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
                     {
@@ -242,7 +243,6 @@ namespace Cognite.OpcUa
             });
 
             var req = new DataPointInsertionRequest();
-            // Filter out type check failures
             req.Items.AddRange(inserts);
             if (!req.Items.Any()) return true;
 
@@ -450,12 +450,12 @@ namespace Cognite.OpcUa
             var res = new List<(string, DateTime)>();
             foreach (var dp in dps.Items)
             {
-                if (dp.NumericDatapoints.Datapoints.Any())
+                if (dp.NumericDatapoints?.Datapoints?.Any() ?? false)
                 {
                     var ts = DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDatapoints.Datapoints.First().Timestamp).DateTime;
                     res.Add((dp.ExternalId, ts));
                 }
-                else if (dp.StringDatapoints.Datapoints.Any())
+                else if (dp.StringDatapoints?.Datapoints?.Any() ?? false)
                 {
                     var ts = DateTimeOffset.FromUnixTimeMilliseconds(dp.StringDatapoints.Datapoints.First().Timestamp).DateTime;
                     res.Add((dp.ExternalId, ts));
@@ -555,6 +555,7 @@ namespace Cognite.OpcUa
                     // No value found, so the timeseries is empty. If backfill is enabled this means that we start the range now, otherwise it means
                     // that we start at time zero.
                     ranges[dp.Item1] = new TimeRange(DateTime.UtcNow, DateTime.UtcNow);
+                    continue;
                 }
                 ranges[dp.Item1] = new TimeRange(dp.Item2, dp.Item2);
             }

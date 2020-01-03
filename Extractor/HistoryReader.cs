@@ -4,12 +4,30 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
+using Prometheus.Client;
 using Serilog;
 
 namespace Cognite.OpcUa
 {
     class HistoryReader
     {
+        private static readonly Counter numFrontfillPoints = Metrics
+            .CreateCounter("opcua_frontfill_data_points", "Number of datapoints retrieved through frontfill");
+        private static readonly Counter numFrontfillData = Metrics
+            .CreateCounter("opcua_frontfill_data_count", "Number of times frontfill has been run on datapoints");
+        private static readonly Counter numBackfillPoints = Metrics
+            .CreateCounter("opcua_backfill_data_points", "Number of datapoints retrieved through backfill");
+        private static readonly Counter numBackfillData = Metrics
+            .CreateCounter("opcua_backfill_data_count", "Number of times backfill has been run on datapoints");
+        private static readonly Counter numFrontfillEvents = Metrics
+            .CreateCounter("opcua_frontfill_events", "Number of events retrieved through frontfill");
+        private static readonly Counter numFrontfillEvent = Metrics
+            .CreateCounter("opcua_frontfill_events_count", "Number of times frontfill has been run on events");
+        private static readonly Counter numBackfillEvents = Metrics
+            .CreateCounter("opcua_backfill_events", "Number of events retrieved through backfill");
+        private static readonly Counter numBackfillEvent = Metrics
+            .CreateCounter("opcua_backfill_events_count", "Number of times backfill has been run on events");
+
         private readonly UAClient uaClient;
         private readonly Extractor extractor;
         private readonly HistoryConfig config;
@@ -36,19 +54,19 @@ namespace Cognite.OpcUa
                 return 0;
             }
 
-            if (data.DataValues == null || !data.DataValues.Any()) return 0;
+            if (data.DataValues == null) return 0;
             var nodeState = extractor.GetNodeState(nodeid);
 
             string uniqueId = uaClient.GetUniqueId(nodeid);
 
             if (frontfill)
             {
-                var last = data.DataValues.Max(dp => dp.SourceTimestamp);
+                var last = data.DataValues.Any() ? data.DataValues.Max(dp => dp.SourceTimestamp) : DateTime.MinValue;
                 nodeState.UpdateFromFrontfill(last, final);
             }
             else
             {
-                var first = data.DataValues.Min(dp => dp.SourceTimestamp);
+                var first = data.DataValues.Any() ? data.DataValues.Min(dp => dp.SourceTimestamp) : DateTime.MaxValue;
                 nodeState.UpdateFromBackfill(first, final);
             }
 
@@ -79,7 +97,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (!final || frontfill) return cnt;
+            if (!final || !frontfill) return cnt;
 
             var buffered = nodeState.FlushBuffer();
             foreach (var pusher in pushers)
@@ -159,7 +177,7 @@ namespace Cognite.OpcUa
                 emitterState.UpdateFromBackfill(range.Start, final);
             }
 
-            if (!final || frontfill) return cnt;
+            if (!final || !frontfill) return cnt;
             var buffered = emitterState.FlushBuffer();
             foreach (var pusher in pushers)
             {
@@ -174,26 +192,56 @@ namespace Cognite.OpcUa
         private void BaseHistoryReadOp(HistoryReadDetails details,
             IEnumerable<NodeId> nodes,
             bool frontfill,
-            string type,
+            bool data,
             Func<IEncodeable, bool, bool, NodeId, HistoryReadDetails, int> handler,
             CancellationToken token)
         {
             var readParams = new UAClient.HistoryReadParams(nodes, details);
-            int total = 0;
             while (readParams.Nodes.Any() && !token.IsCancellationRequested)
             {
+                int total = 0;
                 int count = readParams.Nodes.Count();
                 var results = uaClient.DoHistoryRead(readParams);
                 foreach (var res in results)
                 {
                     int cnt = handler(res.Item2, readParams.Completed[res.Item1], frontfill, res.Item1, details);
+
                     total += cnt;
                     Log.Debug("{mode} {cnt} {type} for node {nodeId}", 
-                        frontfill ? "Frontfill" : "Backfill", cnt, type, res.Item1);
+                        frontfill ? "Frontfill" : "Backfill", cnt, data ? "datapoints" : "events", res.Item1);
                 }
-                Log.Information("{mode} {cnt} {type} for {nodeCount} states",
-                    frontfill ? "Frontfill" : "Backfill", total, type, count);
-                readParams.Nodes = readParams.Nodes.Where(id => !readParams.Completed[id]);
+                Log.Information("{mode}ed {cnt} {type} for {nodeCount} states",
+                    frontfill ? "Frontfill" : "Backfill", total, data ? "datapoints" : "events", count);
+
+                if (data && frontfill)
+                {
+                    numFrontfillData.Inc();
+                    numFrontfillPoints.Inc(total);
+                }
+                else if (data)
+                {
+                    numBackfillData.Inc();
+                    numBackfillPoints.Inc(total);
+                }
+                else if (frontfill)
+                {
+                    numFrontfillEvent.Inc();
+                    numFrontfillEvents.Inc(total);
+                }
+                else
+                {
+                    numBackfillEvent.Inc();
+                    numBackfillEvents.Inc(total);
+                }
+
+                int termCount = readParams.Nodes.Count(id => readParams.Completed[id]);
+                if (termCount > 0)
+                {
+                    Log.Debug("Terminate {mode} of {type} for {count} states", frontfill ? "Frontfill" : "Backfill",
+                        data ? "datapoints" : "events", termCount);
+                }
+
+                readParams.Nodes = readParams.Nodes.Where(id => !readParams.Completed[id]).ToList();
             }
 
         }
@@ -213,7 +261,7 @@ namespace Cognite.OpcUa
             Log.Information("Frontfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
             try
             {
-                BaseHistoryReadOp(details, nodes.Select(node => node.Id), true, "datapoints", HistoryDataHandler,
+                BaseHistoryReadOp(details, nodes.Select(node => node.Id), true, true, HistoryDataHandler,
                     token);
             }
             catch (ServiceResultException ex)
@@ -239,7 +287,7 @@ namespace Cognite.OpcUa
 
             try
             {
-                BaseHistoryReadOp(details, nodes.Select(node => node.Id), false, "datapoints", HistoryDataHandler,
+                BaseHistoryReadOp(details, nodes.Select(node => node.Id), false, true, HistoryDataHandler,
                     token);
             }
             catch (ServiceResultException ex)
@@ -267,7 +315,7 @@ namespace Cognite.OpcUa
 
             try
             {
-                BaseHistoryReadOp(details, states.Select(node => node.Id), true, "events", HistoryEventHandler, token);
+                BaseHistoryReadOp(details, states.Select(node => node.Id), true, false, HistoryEventHandler, token);
             }
             catch (ServiceResultException ex)
             {
@@ -292,7 +340,7 @@ namespace Cognite.OpcUa
 
             try
             {
-                BaseHistoryReadOp(details, states.Select(node => node.Id), false, "events", HistoryEventHandler, token);
+                BaseHistoryReadOp(details, states.Select(node => node.Id), false, false, HistoryEventHandler, token);
             }
             catch (ServiceResultException ex)
             {
