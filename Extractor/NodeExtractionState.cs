@@ -187,6 +187,7 @@ namespace Cognite.OpcUa
             set 
             {
                 IsStreaming = !value;
+                BackfillDone = !value;
                 historizing = value;
                 if (!historizing || buffer != null) return;
                 lock (rangeMutex)
@@ -201,7 +202,8 @@ namespace Cognite.OpcUa
         /// the pushers are done pushing. Each pusher should keep track of its own range as needed.
         /// </summary>
         public TimeRange ExtractedRange { get; }
-        public bool BackfillDone { get; private set; }
+
+        public bool BackfillDone { get; private set; } = true;
         /// <summary>
         /// Last known timestamp of events from OPC-UA.
         /// </summary>
@@ -279,6 +281,7 @@ namespace Cognite.OpcUa
                 {
                     ExtractedRange.Start = first;
                 }
+
                 BackfillDone |= final;
             }
         }

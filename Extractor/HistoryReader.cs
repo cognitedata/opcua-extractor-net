@@ -264,15 +264,7 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = (uint) config.DataChunk
             };
             Log.Information("Frontfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
-            try
-            {
-                BaseHistoryReadOp(details, nodes.Select(node => node.Id), true, true, HistoryDataHandler,
-                    token);
-            }
-            catch (ServiceResultException ex)
-            {
-                Utils.HandleServiceResult(ex, Utils.SourceOp.HistoryRead);
-            }
+            BaseHistoryReadOp(details, nodes.Select(node => node.Id), true, true, HistoryDataHandler, token);
         }
 
         private void BackfillDataChunk(IEnumerable<NodeExtractionState> nodes, CancellationToken token)
@@ -290,15 +282,7 @@ namespace Cognite.OpcUa
             };
             Log.Information("Backfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
 
-            try
-            {
-                BaseHistoryReadOp(details, nodes.Select(node => node.Id), false, true, HistoryDataHandler,
-                    token);
-            }
-            catch (ServiceResultException ex)
-            {
-                Utils.HandleServiceResult(ex, Utils.SourceOp.HistoryRead);
-            }
+            BaseHistoryReadOp(details, nodes.Select(node => node.Id), false, true, HistoryDataHandler, token);
         }
         private void FrontfillEventsChunk(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
         {
@@ -310,19 +294,13 @@ namespace Cognite.OpcUa
             {
                 EndTime = DateTime.UtcNow.AddDays(10),
                 StartTime = finalTimeStamp,
-                NumValuesPerNode = (uint)config.DataChunk,
+                NumValuesPerNode = (uint)config.EventChunk,
                 Filter = uaClient.BuildEventFilter(nodes)
             };
             Log.Information("Frontfill events from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
 
-            try
-            {
-                BaseHistoryReadOp(details, states.Select(node => node.Id), true, false, HistoryEventHandler, token);
-            }
-            catch (ServiceResultException ex)
-            {
-                Utils.HandleServiceResult(ex, Utils.SourceOp.HistoryReadEvents);
-            }
+            BaseHistoryReadOp(details, states.Select(node => node.Id), true, false, HistoryEventHandler, token); 
+
         }
 
         private void BackfillEventsChunk(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
@@ -335,21 +313,13 @@ namespace Cognite.OpcUa
                 // Reverse start/end time should result in backwards read according to the OPC-UA specification
                 EndTime = historyStartTime,
                 StartTime = finalTimeStamp,
-                NumValuesPerNode = (uint)config.DataChunk,
+                NumValuesPerNode = (uint)config.EventChunk,
                 Filter = uaClient.BuildEventFilter(nodes)
             };
             Log.Information("Backfill events from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
 
-            try
-            {
-                BaseHistoryReadOp(details, states.Select(node => node.Id), false, false, HistoryEventHandler, token);
-            }
-            catch (ServiceResultException ex)
-            {
-                Utils.HandleServiceResult(ex, Utils.SourceOp.HistoryReadEvents);
-            }
+            BaseHistoryReadOp(details, states.Select(node => node.Id), false, false, HistoryEventHandler, token);
         }
-
         public async Task FrontfillData(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             var frontFillChunks = Utils.GroupByTimeGranularity(
@@ -357,7 +327,6 @@ namespace Cognite.OpcUa
                 historyGranularity, config.DataNodesChunk);
             await Task.WhenAll(frontFillChunks.Select(chunk => Task.Run(() => FrontfillDataChunk(chunk, token))));
         }
-
         public async Task BackfillData(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             var backFillChunks = Utils.GroupByTimeGranularity(
@@ -369,7 +338,7 @@ namespace Cognite.OpcUa
         {
             var frontFillChunks = Utils.GroupByTimeGranularity(
                 states.Select(state => (state, state.ExtractedRange.End)),
-                historyGranularity, config.DataNodesChunk);
+                historyGranularity, config.EventNodesChunk);
             await Task.WhenAll(frontFillChunks.Select(chunk => Task.Run(() => FrontfillEventsChunk(chunk, nodes, token))));
         }
 
@@ -377,7 +346,7 @@ namespace Cognite.OpcUa
         {
             var backFillChunks = Utils.GroupByTimeGranularity(
                 states.Select(state => (state, state.ExtractedRange.Start)),
-                historyGranularity, config.DataNodesChunk);
+                historyGranularity, config.EventNodesChunk);
 
             await Task.WhenAll(backFillChunks.Select(chunk => Task.Run(() => BackfillEventsChunk(chunk, nodes, token))));
         }

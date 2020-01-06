@@ -842,7 +842,11 @@ namespace Cognite.OpcUa
             }
             var eventType = eventFields[eventTypeIndex].Value as NodeId;
             // Many servers don't handle filtering on history data.
-            if (eventType == null || !ActiveEvents.ContainsKey(eventType)) return null;
+            if (eventType == null || !ActiveEvents.ContainsKey(eventType))
+            {
+                Log.Verbose("Invalid event type: {eventType}", eventType);
+                return null;
+            }
             var targetEventFields = ActiveEvents[eventType];
 
             var extractedProperties = new Dictionary<string, object>();
@@ -869,7 +873,11 @@ namespace Cognite.OpcUa
             try
             {
                 var sourceNode = extractedProperties["SourceNode"];
-                if (!managedNodes.Contains(sourceNode)) return null;
+                if (!managedNodes.Contains(sourceNode))
+                {
+                    Log.Verbose("Invalid source node for event of type: {type}", eventType);
+                    return null;
+                }
                 var buffEvent = new BufferedEvent
                 {
                     Message = uaClient.ConvertToString(extractedProperties.GetValueOrDefault("Message")),

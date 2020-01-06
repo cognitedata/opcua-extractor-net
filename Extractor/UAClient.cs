@@ -852,9 +852,17 @@ namespace Cognite.OpcUa
 
                     idx++;
                 }
+
                 Log.Debug("Fetched historical "
-                            + (readParams.Details is ReadEventDetails ? "events" : "datapoints")
-                            + " for {nodeCount} nodes", readParams.Nodes.Count());
+                          + (readParams.Details is ReadEventDetails ? "events" : "datapoints")
+                          + " for {nodeCount} nodes", readParams.Nodes.Count());
+            }
+            catch (ServiceResultException ex)
+            {
+                historyReadFailures.Inc();
+                throw Utils.HandleServiceResult(ex, readParams.Details is ReadEventDetails
+                    ? Utils.SourceOp.HistoryReadEvents
+                    : Utils.SourceOp.HistoryRead);
             }
             catch
             {

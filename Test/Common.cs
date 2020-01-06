@@ -251,9 +251,16 @@ namespace Test
                     IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
                     break;
             }
+
+            if (testParams.InfluxOverride != null && !influx)
+            {
+                influx = true;
+                InfluxConfig = testParams.InfluxOverride;
+                IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
+            }
             UAClient = new UAClient(Config);
             Source = new CancellationTokenSource();
-            Extractor = new Extractor(Config, Pusher, UAClient);
+            Extractor = testParams.Builder != null ? testParams.Builder(Config, Pusher, UAClient) : new Extractor(Config, Pusher, UAClient);
         }
 
         public async Task ClearPersistentData()
@@ -376,5 +383,7 @@ namespace Test
         public ConfigName? FailureInflux { get; set; } = null;
         public string BufferDir { get; set; } = null;
         public bool FailureInfluxWrite { get; set; } = true;
+        public Func<FullConfig, IPusher, UAClient, Extractor> Builder { get; set; } = null;
+        public InfluxClientConfig InfluxOverride { get; set; } = null;
     }
 }

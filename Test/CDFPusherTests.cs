@@ -524,7 +524,8 @@ namespace Test
                     tester.Extractor.GetNodeState("gp.efg:i=10") != null
                     && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone
                     && tester.Extractor.GetNodeState("gp.efg:i=10").IsStreaming
-                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=10"), 20,
+                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=10")
+                    && tester.Handler.datapoints["gp.efg:i=10"].Item1.Any(pt => pt.Timestamp < startTime), 20,
                 "Expected integer datapoint to finish backfill and frontfill");
 
             await tester.TerminateRunTask();
