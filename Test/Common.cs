@@ -144,7 +144,8 @@ namespace Test
                 "opcua_attribute_request_failures", "opcua_history_read_failures", "opcua_browse_failures",
                 "opcua_browse_operations", "opcua_history_reads", "opcua_tracked_timeseries",
                 "opcua_tracked_assets", "opcua_node_ensure_failures", "opcua_datapoint_pushes",
-                "opcua_datapoint_push_failures"
+                "opcua_datapoint_push_failures", "opcua_backfill_data_count", "opcua_frontfill_data_count",
+                "opcua_backfill_events_count", "opcua_frontfill_events_count"
             };
             foreach (var metric in metrics)
             {
@@ -198,7 +199,7 @@ namespace Test
 
             if (testParams.HistoryGranularity != null)
             {
-                Config.Source.HistoryGranularity = testParams.HistoryGranularity.Value;
+                Config.History.Granularity = testParams.HistoryGranularity.Value;
             }
             Config.Logging.ConsoleLevel = testParams.LogLevel;
             Logger.Configure(Config.Logging);
@@ -219,6 +220,9 @@ namespace Test
                     var failureInflux = Utils.GetConfig(_configNames[testParams.FailureInflux.Value]);
                     if (failureInflux.Pushers.First() is InfluxClientConfig influxConfig)
                     {
+                        influx = true;
+                        InfluxConfig = influxConfig;
+                        IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
                         Config.FailureBuffer.Influx = new InfluxBufferConfig
                         {
                             Database = influxConfig.Database,
@@ -247,17 +251,20 @@ namespace Test
                     IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
                     break;
             }
+
+            if (testParams.InfluxOverride != null && !influx)
+            {
+                influx = true;
+                InfluxConfig = testParams.InfluxOverride;
+                IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
+            }
             UAClient = new UAClient(Config);
             Source = new CancellationTokenSource();
-            Extractor = new Extractor(Config, Pusher, UAClient);
+            Extractor = testParams.Builder != null ? testParams.Builder(Config, Pusher, UAClient) : new Extractor(Config, Pusher, UAClient);
         }
 
         public async Task ClearPersistentData()
         {
-            if (events)
-            {
-                File.Create("latestEvent.bin").Close();
-            }
             Common.ResetTestMetrics();
             if (influx)
             {
@@ -288,6 +295,12 @@ namespace Test
                     break;
                 }
 
+                if (RunTask.IsFaulted)
+                {
+                    Log.Error(RunTask.Exception, "RunTask failed during WaitForCondition");
+                    break;
+                }
+
                 await Task.Delay(200);
             }
             Assert.True(triggered, assertion());
@@ -313,6 +326,7 @@ namespace Test
             if (RunTask == null) throw new Exception("Run task is not started");
             if (!testParams.QuitAfterMap)
             {
+                await Extractor.WaitForNextPush();
                 Source.Cancel();
             }
             try
@@ -344,7 +358,7 @@ namespace Test
             {
                 if (last != dp - 1)
                 {
-                    Log.Information("Out of order points at {dp}, {last}", dp, last);
+                    Log.Verbose("Out of order points at {dp}, {last}", dp, last);
                 }
                 last = dp;
                 check[dp - min]++;
@@ -370,5 +384,7 @@ namespace Test
         public ConfigName? FailureInflux { get; set; } = null;
         public string BufferDir { get; set; } = null;
         public bool FailureInfluxWrite { get; set; } = true;
+        public Func<FullConfig, IPusher, UAClient, Extractor> Builder { get; set; } = null;
+        public InfluxClientConfig InfluxOverride { get; set; } = null;
     }
 }

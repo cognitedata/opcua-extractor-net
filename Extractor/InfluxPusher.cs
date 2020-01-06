@@ -2,12 +2,14 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Metadata.Ecma335;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Opc.Ua;
 using Prometheus.Client;
 using Serilog;
+using Thoth.Json.Net;
 
 namespace Cognite.OpcUa
 {
@@ -24,7 +26,7 @@ namespace Cognite.OpcUa
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
         private readonly InfluxClientConfig config;
-        private readonly Dictionary<string, DateTime> latestTimestamp = new Dictionary<string, DateTime>();
+        private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
         private InfluxDBClient client;
 
         private static readonly Counter numInfluxPusher = Metrics
@@ -69,7 +71,8 @@ namespace Cognite.OpcUa
                     continue;
                 }
 
-                if (buffer.Timestamp < latestTimestamp.GetValueOrDefault(buffer.Id)) continue;
+                if (ranges.ContainsKey(buffer.Id) && buffer.Timestamp < ranges[buffer.Id].End
+                    && buffer.Timestamp > ranges[buffer.Id].Start) continue;
 
                 if (!buffer.IsString && !double.IsFinite(buffer.DoubleValue))
                 {
@@ -156,33 +159,135 @@ namespace Cognite.OpcUa
             return Array.Empty<BufferedEvent>();
         }
         /// <summary>
-        /// Reads the last datapoint from influx for each timeseries, sending the timestamp to each passed state
+        /// Reads the first and last datapoint from influx for each timeseries, sending the timestamps to each passed state
         /// </summary>
         /// <param name="states">List of historizing nodes</param>
+        /// <param name="backfillEnabled">True if backfill is enabled, in which case the first timestamp will be read</param>
         /// <returns>True on success</returns>
-        public async Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
+        public async Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
         {
-            var getLastTasks = states.Select(async state =>
+            if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            var getRangeTasks = states.Select(async state =>
             {
                 var id = Extractor.GetUniqueId(state.Id,
                     state.ArrayDimensions != null && state.ArrayDimensions.Length > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1);
-                var values = await client.QueryMultiSeriesAsync(config.Database,
+                var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\"");
-                if (values.Any() && values.First().HasEntries)
+
+                if (last.Any() && last.First().HasEntries)
                 {
-                    DateTime timestamp = values.First().Entries[0].Time;
-                    state.InitTimestamp(timestamp);
-                    latestTimestamp[id] = timestamp;
+                    DateTime ts = last.First().Entries[0].Time;
+                    ranges[id] = new TimeRange(ts, ts);
                 }
                 else
                 {
-                    state.InitTimestamp(DateTime.UnixEpoch);
-                    latestTimestamp[id] = DateTime.UnixEpoch;
+                    if (backfillEnabled)
+                    {
+                        ranges[id] = new TimeRange(DateTime.UtcNow, DateTime.UtcNow);
+                    }
+                    else
+                    {
+                        ranges[id] = new TimeRange(DateTime.MinValue, DateTime.MinValue);
+                    }
                 }
+
+                if (backfillEnabled && last.Any())
+                {
+                    var first = await client.QueryMultiSeriesAsync(config.Database,
+                        $"SELECT first(value) FROM \"{id}\"");
+                    if (first.Any() && first.First().HasEntries)
+                    {
+                        DateTime ts = first.First().Entries[0].Time;
+                        ranges[id].Start = ts;
+                    }
+                }
+                state.InitExtractedRange(ranges[id].Start, ranges[id].End);
+
             });
             try
             {
-                await Task.WhenAll(getLastTasks);
+                await Task.WhenAll(getRangeTasks);
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Failed to get timestamps from influxdb");
+                return false;
+            }
+            return true;
+        }
+        private async Task InitExtractedEventRange(EventExtractionState state,
+            IEnumerable<NodeId> nodes,
+            bool backfillEnabled,
+            CancellationToken token)
+        {
+            var mutex = new object();
+            var bestRange = new TimeRange(DateTime.MaxValue, DateTime.MinValue);
+            string emitterId = Extractor.GetUniqueId(state.Id);
+            var tasks = nodes.Select(async node =>
+            {
+                string id = "events." + Extractor.GetUniqueId(node);
+                var last = await client.QueryMultiSeriesAsync(config.Database,
+                    $"SELECT last(value) FROM \"{id}\" WHERE Emitter='{emitterId}'");
+
+                if (last.Any() && last.First().HasEntries)
+                {
+                    DateTime ts = last.First().Entries[0].Time;
+                    lock (mutex)
+                    {
+                        if (ts > bestRange.End)
+                        {
+                            bestRange.End = ts;
+                        }
+                    }
+                }
+
+                if (backfillEnabled)
+                {
+                    if (!last.Any()) return;
+                    var first = await client.QueryMultiSeriesAsync(config.Database,
+                        $"SELECT first(value) FROM \"{id}\" WHERE Emitter='{emitterId}'");
+                    if (first.Any() && first.First().HasEntries)
+                    {
+                        DateTime ts = first.First().Entries[0].Time;
+                        lock (mutex)
+                        {
+                            if (ts < bestRange.Start)
+                            {
+                                bestRange.Start = ts;
+                            }
+                        }
+                    }
+                }
+            });
+            await Task.WhenAll(tasks);
+            if (bestRange.End == DateTime.MinValue && backfillEnabled)
+            {
+                bestRange.End = DateTime.UtcNow;
+            }
+
+            if (bestRange.Start == DateTime.MaxValue)
+            {
+                bestRange.Start = bestRange.End;
+            }
+            state.InitExtractedRange(bestRange.Start, bestRange.End);
+        }
+        /// <summary>
+        /// Reads the first and last datapoint from influx for each emitter, sending the timestamps to each passed state
+        /// </summary>
+        /// <param name="states">List of historizing emitters</param>
+        /// <param name="nodes">Relevant nodes to consider events for (sourcenodes)</param>
+        /// <param name="backfillEnabled">True if backfill is enabled, in which case the first timestamp will be read</param>
+        /// <returns>True on success</returns>
+        public async Task<bool> InitExtractedEventRanges(IEnumerable<EventExtractionState> states,
+            IEnumerable<NodeId> nodes,
+            bool backfillEnabled,
+            CancellationToken token)
+        {
+            if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, nodes, backfillEnabled, token));
+            try
+            {
+                await Task.WhenAll(getRangeTasks);
             }
             catch (Exception e)
             {
@@ -265,9 +370,10 @@ namespace Cognite.OpcUa
                 UtcTimestamp = evt.Time,
                 MeasurementName = "events." + Extractor.GetUniqueId(evt.SourceNode)
             };
-            idp.Fields.Add("Value", evt.Message);
-            idp.Fields.Add("Id", evt.EventId);
+            idp.Fields.Add("value", evt.Message);
+            idp.Fields.Add("id", evt.EventId);
             idp.Tags["Type"] = Extractor.GetUniqueId(evt.EventType);
+            idp.Tags["Emitter"] = Extractor.GetUniqueId(evt.EmittingNode);
             foreach (var kvp in evt.MetaData)
             {
                 if (kvp.Key == "SourceNode") continue;
@@ -318,7 +424,12 @@ namespace Cognite.OpcUa
 
             return finalPoints;
         }
-
+        /// <summary>
+        /// Read events from influxdb back into BufferedEvents
+        /// </summary>
+        /// <param name="startTime">Time to read from, reading forwards</param>
+        /// <param name="measurements">Nodes to read events from</param>
+        /// <returns>A list of read events</returns>
         public async Task<IEnumerable<BufferedEvent>> ReadEvents(DateTime startTime,
             IEnumerable<NodeId> measurements,
             CancellationToken token)
@@ -343,20 +454,24 @@ namespace Cognite.OpcUa
                 {
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
                     if (!(res is IDictionary<string, object> values)) return null;
+                    var emitter = Extractor.GetEmitterState((string)values["Emitter"]);
+                    if (emitter == null) return null;
                     var evt = new BufferedEvent
                     {
                         Time = (DateTime)values["Time"],
                         EventId = (string)values["Id"],
                         Message = (string)values["Value"],
+                        EmittingNode = emitter.Id,
                         SourceNode = sourceNode,
                         MetaData = new Dictionary<string, object>()
                     };
                     foreach (var kvp in values)
                     {
-                        if (kvp.Key == "Time" || kvp.Key == "Id" || kvp.Key == "Value" || string.IsNullOrEmpty(kvp.Value as string)) continue;
+                        if (kvp.Key == "Time" || kvp.Key == "Id" || kvp.Key == "Value"
+                            || kvp.Key == "Emitter" || string.IsNullOrEmpty(kvp.Value as string)) continue;
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
-                    Log.Information(evt.ToDebugDescription());
+                    Log.Verbose(evt.ToDebugDescription());
 
                     return evt;
                 }).Where(evt => evt != null));
@@ -368,6 +483,13 @@ namespace Cognite.OpcUa
         public void Reconfigure()
         {
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
+        }
+
+        public void Reset()
+        {
+            BufferedDPQueue.Clear();
+            BufferedEventQueue.Clear();
+            ranges.Clear();
         }
     }
 }

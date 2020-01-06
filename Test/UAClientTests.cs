@@ -74,7 +74,7 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
-            tester.Config.Source.HistoryReadChunk = 10000;
+            tester.Config.History.DataChunk = 10000;
 
             tester.StartExtractor();
 

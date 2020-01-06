@@ -23,7 +23,10 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Com.Cognite.V1.Timeseries.Proto;
+using Google.Protobuf;
+using Google.Protobuf.Collections;
 using Newtonsoft.Json;
+using Opc.Ua;
 using Serilog;
 using HttpMethod = System.Net.Http.HttpMethod;
 
@@ -105,6 +108,8 @@ namespace Test
                             return HandleTimeseriesData(null);
                         case "/timeseries/data/latest":
                             return HandleGetTimeseries(content);
+                        case "/timeseries/data/list":
+                            return HandleGetDatapoints(content);
                         case "/events":
                             return HandleCreateEvents(content);
                         default:
@@ -347,7 +352,6 @@ namespace Test
 
         private HttpResponseMessage HandleTimeseriesData(DataPointInsertionRequest req)
         {
-            Log.Information("Timeseries data: {allow}", AllowPush);
             if (!AllowPush)
             {
                 return new HttpResponseMessage(HttpStatusCode.InternalServerError)
@@ -412,6 +416,7 @@ namespace Test
             }
             var newEvents = JsonConvert.DeserializeObject<EventWrapper>(content);
             var duplicated = new List<Identity>();
+            var created = new List<(string, EventDummy)>();
             foreach (var ev in newEvents.items)
             {
                 if (events.ContainsKey(ev.externalId))
@@ -423,7 +428,7 @@ namespace Test
                 ev.id = eventIdCounter++;
                 ev.createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
                 ev.lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
-                events.Add(ev.externalId, ev);
+                created.Add((ev.externalId, ev));
             }
 
             if (duplicated.Any())
@@ -441,6 +446,10 @@ namespace Test
                 {
                     Content = new StringContent(errResult)
                 };
+            }
+            foreach (var evt in created)
+            {
+                events.Add(evt.Item1, evt.Item2);
             }
             string result = JsonConvert.SerializeObject(newEvents);
             return new HttpResponseMessage(HttpStatusCode.Created)
@@ -470,6 +479,52 @@ namespace Test
             };
         }
 
+        private HttpResponseMessage HandleGetDatapoints(string content)
+        {
+            // Ignore query for now, this is only used to read the first point, so we just respond with that.
+            var ids = JsonConvert.DeserializeObject<IdentityListWrapper>(content);
+            var ret = new DataPointListResponse();
+            var missing = new List<Identity>();
+            foreach (var id in ids.items)
+            {
+                if (!timeseries.ContainsKey(id.externalId))
+                {
+                    missing.Add(id);
+                    continue;
+                }
+                var item = new DataPointListItem
+                {
+                    ExternalId = id.externalId,
+                    Id = timeseries[id.externalId].id
+                };
+                if (datapoints.ContainsKey(id.externalId))
+                {
+                    if (timeseries[id.externalId].isString)
+                    {
+                        item.StringDatapoints = new StringDatapoints();
+                        item.StringDatapoints.Datapoints.Add(datapoints[id.externalId].Item2.Aggregate((curMin, x) =>
+                            curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
+                    }
+                    else
+                    {
+                        item.NumericDatapoints = new NumericDatapoints();
+                        item.NumericDatapoints.Datapoints.Add(datapoints[id.externalId].Item1.Aggregate((curMin, x) =>
+                            curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
+                    }
+                }
+
+                ret.Items.Add(item);
+            }
+
+            var respContent = new ByteArrayContent(ret.ToByteArray());
+            respContent.Headers.Add("Content-Type", "application/protobuf");
+            var res = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = respContent
+            };
+            return res;
+        }
+
         private AssetDummy MockAsset(string externalId)
         {
             var asset = new AssetDummy
@@ -489,7 +544,7 @@ namespace Test
 
         private TimeseriesDummy MockTimeseries(string externalId)
         {
-            var ts = new TimeseriesDummy
+            var ts = new TimeseriesDummy(mode)
             {
                 id = timeseriesIdCounter++,
                 isString = false,
@@ -541,16 +596,24 @@ namespace Test
     }
     public class TimeseriesDummy
     {
-        public TimeseriesDummy()
+        public TimeseriesDummy() : this(CDFMockHandler.MockMode.None) { }
+        public TimeseriesDummy(CDFMockHandler.MockMode mode)
         {
-            datapoints = new List<DataPoint>
+            if (mode == CDFMockHandler.MockMode.None || mode == CDFMockHandler.MockMode.FailAsset)
             {
-                new DataPoint
+                datapoints = new List<DataPoint>();
+            }
+            else
+            {
+                datapoints = new List<DataPoint>
                 {
-                    timestamp = new DateTimeOffset(DateTime.Now.Subtract(TimeSpan.FromMinutes(15))).ToUnixTimeMilliseconds(),
-                    value = 0
-                }
-            };
+                    new DataPoint
+                    {
+                        timestamp = new DateTimeOffset(DateTime.Now.Subtract(TimeSpan.FromMinutes(15))).ToUnixTimeMilliseconds(),
+                        value = 0
+                    }
+                };
+            }
         }
         public long id { get; set; }
         public bool isString { get; set; }

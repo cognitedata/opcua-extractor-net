@@ -2,6 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Serialization;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -13,7 +15,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public class NodeExtractionState
     {
-        private readonly object lastMutex = new object();
+        private readonly object rangeMutex = new object();
         /// <summary>
         /// True if the node is currently passing live data from subscriptions into the pushers.
         /// </summary>
@@ -37,11 +39,13 @@ namespace Cognite.OpcUa
         public int[] ArrayDimensions { get; }
         public string DisplayName { get; }
         /// <summary>
-        /// Earliest of the latest timestamp of the destination systems.
+        /// Earliest of the latest timestamps and latest of the earliest timestamps from destination systems.
         /// Represents the last common value for the pushers, not safe, as it updates before
-        /// the pushers are done pushing. Each pusher should keep track of its own latest timestamp as well.
+        /// the pushers are done pushing. Each pusher should keep track of its own range as needed.
         /// </summary>
-        public DateTime DestLatestTimestamp { get; private set; }
+        public TimeRange ExtractedRange { get; }
+        public bool BackfillDone { get; private set; }
+
         private readonly IList<IEnumerable<BufferedDataPoint>> buffer;
         /// <summary>
         /// Constructor. Copies relevant data from BufferedVariable, initializes the buffer if Historizing is true.
@@ -49,12 +53,13 @@ namespace Cognite.OpcUa
         /// <param name="variable">Variable to be used as base</param>
         public NodeExtractionState(BufferedVariable variable)
         {
-            DestLatestTimestamp = DateTime.MinValue;
+            ExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
             Id = variable.Id;
             Historizing = variable.Historizing;
             DataType = variable.DataType;
             ArrayDimensions = variable.ArrayDimensions;
             DisplayName = variable.DisplayName;
+            BackfillDone = false;
             if (!variable.Historizing)
             {
                 IsStreaming = true;
@@ -64,33 +69,35 @@ namespace Cognite.OpcUa
                 buffer = new List<IEnumerable<BufferedDataPoint>>();
             }
         }
-        /// <summary>
-        /// Set the timestamp if it is more conservative than the previous last known timestamp.
-        /// </summary>
-        /// <param name="last">Timestamp to be set</param>
-        public void InitTimestamp(DateTime last)
+
+        public void InitExtractedRange(DateTime first, DateTime last)
         {
-            lock (lastMutex)
+            lock (rangeMutex)
             {
-                if (last < DestLatestTimestamp || DestLatestTimestamp == DateTime.MinValue)
+                if (last < ExtractedRange.End)
                 {
-                    DestLatestTimestamp = last;
+                    ExtractedRange.End = last;
+                }
+
+                if (first > ExtractedRange.Start)
+                {
+                    ExtractedRange.Start = first;
                 }
             }
         }
         /// <summary>
-        /// Update timestamp and buffer from stream.
+        /// Update time range and buffer from stream.
         /// </summary>
         /// <param name="points">Points received for current stream iteration</param>
         public void UpdateFromStream(IEnumerable<BufferedDataPoint> points)
         {
             if (!points.Any()) return;
             var last = points.Max(pt => pt.Timestamp);
-            lock (lastMutex)
+            lock (rangeMutex)
             {
-                if (last > DestLatestTimestamp && IsStreaming)
+                if (last > ExtractedRange.End && IsStreaming)
                 {
-                    DestLatestTimestamp = last;
+                    ExtractedRange.End = last;
                 }
                 else if (!IsStreaming)
                 {
@@ -105,11 +112,11 @@ namespace Cognite.OpcUa
         /// <param name="final">True if this is the final iteration of history read</param>
         public void UpdateFromFrontfill(DateTime last, bool final)
         {
-            lock (lastMutex)
+            lock (rangeMutex)
             {
-                if (last > DestLatestTimestamp)
+                if (last > ExtractedRange.End)
                 {
-                    DestLatestTimestamp = last;
+                    ExtractedRange.End = last;
                 }
                 if (!final)
                 {
@@ -121,6 +128,19 @@ namespace Cognite.OpcUa
                 }
             }
         }
+
+        public void UpdateFromBackfill(DateTime first, bool final)
+        {
+            lock (rangeMutex)
+            {
+                if (first < ExtractedRange.Start)
+                {
+                    ExtractedRange.Start = first;
+                }
+
+                BackfillDone |= final;
+            }
+        }
         /// <summary>
         /// Retrieve the buffer after the final iteration of HistoryRead. Filters out data received before the last known timestamp.
         /// </summary>
@@ -129,9 +149,9 @@ namespace Cognite.OpcUa
         {
             if (!IsStreaming) throw new Exception("Flush non-streaming buffer");
             if (!buffer.Any()) return new List<BufferedDataPoint[]>();
-            lock (lastMutex)
+            lock (rangeMutex)
             {
-                var result = buffer.Where(arr => arr.Max(pt => pt.Timestamp) > DestLatestTimestamp);
+                var result = buffer.Where(arr => arr.Max(pt => pt.Timestamp) > ExtractedRange.End);
                 buffer.Clear();
                 return result;
             }
@@ -149,7 +169,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public class EventExtractionState
     {
-        private readonly object lastMutex = new object();
+        private readonly object rangeMutex = new object();
         /// <summary>
         /// True if the emitter in currently streaming live events into destination systems.
         /// </summary>
@@ -167,35 +187,48 @@ namespace Cognite.OpcUa
             set 
             {
                 IsStreaming = !value;
+                BackfillDone = !value;
                 historizing = value;
-                if (historizing && buffer == null)
+                if (!historizing || buffer != null) return;
+                lock (rangeMutex)
                 {
-                    lock (lastMutex)
-                    {
-                        buffer = new List<BufferedEvent>();
-                    }
+                    buffer = new List<BufferedEvent>();
                 }
             }
         }
         /// <summary>
+        /// Earliest of the latest timestamps and latest of the earliest timestamps from destination systems.
+        /// Represents the last common value for the pushers, not safe, as it updates before
+        /// the pushers are done pushing. Each pusher should keep track of its own range as needed.
+        /// </summary>
+        public TimeRange ExtractedRange { get; }
+
+        public bool BackfillDone { get; private set; } = true;
+        /// <summary>
         /// Last known timestamp of events from OPC-UA.
         /// </summary>
-        public DateTime DestLatestTimestamp { get; private set; }
         private IList<BufferedEvent> buffer;
         public EventExtractionState(NodeId emitterId)
         {
-            DestLatestTimestamp = DateTime.MinValue;
+            ExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
             Id = emitterId;
         }
         /// <summary>
-        /// Set the timestamp if it is more conservative than the previous last known timestamp.
+        /// Set the time range if it is more conservative than the previous last known time range.
         /// </summary>
         /// <param name="last">Timestamp to be set</param>
-        public void InitTimestamp(DateTime last)
+        public void InitExtractedRange(DateTime first, DateTime last)
         {
-            if (last < DestLatestTimestamp || DestLatestTimestamp == DateTime.MinValue)
+            lock (rangeMutex)
             {
-                DestLatestTimestamp = last;
+                if (last < ExtractedRange.End)
+                {
+                    ExtractedRange.End = last;
+                }
+                if (first > ExtractedRange.Start)
+                {
+                    ExtractedRange.Start = first;
+                }
             }
         }
         /// <summary>
@@ -204,11 +237,11 @@ namespace Cognite.OpcUa
         /// <param name="points">Event received for current stream iteration</param>
         public void UpdateFromStream(BufferedEvent evt)
         {
-            lock (lastMutex)
+            lock (rangeMutex)
             {
-                if (evt.Time > DestLatestTimestamp && IsStreaming)
+                if (evt.Time > ExtractedRange.End && evt.Time > ExtractedRange.Start && IsStreaming)
                 {
-                    DestLatestTimestamp = evt.ReceivedTime;
+                    ExtractedRange.End = evt.ReceivedTime;
                 }
                 else if (!IsStreaming)
                 {
@@ -223,11 +256,11 @@ namespace Cognite.OpcUa
         /// <param name="final">True if this is the final iteration of history read</param>
         public void UpdateFromFrontfill(DateTime last, bool final)
         {
-            lock (lastMutex)
+            lock (rangeMutex)
             {
-                if (last > DestLatestTimestamp)
+                if (last > ExtractedRange.End)
                 {
-                    DestLatestTimestamp = last;
+                    ExtractedRange.End = last;
                 }
                 if (!final)
                 {
@@ -239,17 +272,29 @@ namespace Cognite.OpcUa
                 }
             }
         }
+
+        public void UpdateFromBackfill(DateTime first, bool final)
+        {
+            lock (rangeMutex)
+            {
+                if (first < ExtractedRange.Start)
+                {
+                    ExtractedRange.Start = first;
+                }
+
+                BackfillDone |= final;
+            }
+        }
         /// <summary>
-        /// Retrieve contents of the buffer after final historyRead iteration, filters out events triggered after latest known timestamp.
+        /// Retrieve contents of the buffer after final historyRead iteration
         /// </summary>
         /// <returns>The contents of the buffer</returns>
         public IEnumerable<BufferedEvent> FlushBuffer()
         {
-            if (!IsStreaming) throw new Exception("Flush non-streaming buffer");
             if (!buffer.Any()) return new List<BufferedEvent>();
-            lock (lastMutex)
+            lock (rangeMutex)
             {
-                var result = buffer.Where(evt => evt.ReceivedTime > DestLatestTimestamp);
+                var result = buffer.Where(evt => evt.ReceivedTime > ExtractedRange.End);
                 buffer.Clear();
                 return result;
             }

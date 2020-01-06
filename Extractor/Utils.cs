@@ -27,7 +27,6 @@ namespace Cognite.OpcUa
 {
     public static class Utils
     {
-        private static readonly object dateFileLock = new object();
         public static IEnumerable<TSource> DistinctBy<TSource, TKey>(this IEnumerable<TSource> source,
             Func<TSource, TKey> selector)
         {
@@ -40,18 +39,7 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        /// <summary>
-        /// Write given latest event timestamp to file
-        /// </summary>
-        /// <param name="date">Date to be written</param>
-        public static void WriteLastEventTimestamp(DateTime date)
-        {
-            lock (dateFileLock)
-            {
-                using FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Write);
-                fs.Write(BitConverter.GetBytes(date.ToBinary()));
-            }
-        }
+
         public static IEnumerable<IDictionary<TKey, IEnumerable<TVal>>> ChunkDictOfLists<TKey, TVal>(
             IDictionary<TKey, List<TVal>> points, int maxPerList, int maxKeys)
         {
@@ -119,21 +107,6 @@ namespace Cognite.OpcUa
             return ret;
         }
         /// <summary>
-        /// Read latest event timestamp from file.
-        /// </summary>
-        /// <returns>Retrieved date or DateTime.MinValue</returns>
-        public static DateTime ReadLastEventTimestamp()
-        {
-            lock (dateFileLock)
-            {
-                using FileStream fs = new FileStream("latestEvent.bin", FileMode.OpenOrCreate, FileAccess.Read);
-                byte[] rawRead = new byte[sizeof(long)];
-                int read = fs.Read(rawRead, 0, sizeof(long));
-                if (read < sizeof(long)) return DateTime.MinValue;
-                return DateTime.FromBinary(BitConverter.ToInt64(rawRead));
-            }
-        }
-        /// <summary>
         /// Map yaml config to the FullConfig object
         /// </summary>
         /// <param name="configPath">Path to config file</param>
@@ -180,6 +153,14 @@ namespace Cognite.OpcUa
         {
             if (string.IsNullOrEmpty(str) || str.Length <= maxLength) return str;
             return str.Substring(0, maxLength);
+        }
+
+        public static IEnumerable<IEnumerable<T>> GroupByTimeGranularity<T>(IEnumerable<(T, DateTime)> input, TimeSpan granularity, int maxLength)
+        {
+            return granularity == TimeSpan.Zero
+                ? input.Select(item => new [] {item.Item1})
+                : input.GroupBy(pair => pair.Item2.Ticks / granularity.Ticks)
+                    .SelectMany(group => ChunkBy(group.ToList().Select(pair => pair.Item1), maxLength));
         }
 
         public enum SourceOp
@@ -459,6 +440,23 @@ namespace Cognite.OpcUa
         {
             Operation = op;
             StatusCode = ex.StatusCode;
+        }
+    }
+
+    public class TimeRange
+    {
+        public DateTime Start;
+        public DateTime End;
+
+        public TimeRange(DateTime start, DateTime end)
+        {
+            Start = start;
+            End = end;
+        }
+
+        public bool Contains(DateTime cmp)
+        {
+            return cmp >= Start && cmp <= End;
         }
     }
 }

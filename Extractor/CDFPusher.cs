@@ -32,6 +32,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus.Client;
 using Serilog;
+using KeyValuePair = Opc.Ua.KeyValuePair;
 
 namespace Cognite.OpcUa
 {
@@ -44,7 +45,7 @@ namespace Cognite.OpcUa
         private readonly CogniteClientConfig config;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
-        private readonly Dictionary<string, DateTime> latestTimestamp = new Dictionary<string, DateTime>();
+        private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
         
         public int Index { get; set; }
         public Extractor Extractor { private get; set; }
@@ -121,9 +122,11 @@ namespace Cognite.OpcUa
                         skippedDatapoints.Inc();
                         continue;
                     }
-                    // We do not subscribe to changes in history, so an update to a point earlier than the last known point
-                    // is due to the pushers not being synchronized. No reason to push points that have already been pushed.
-                    if (buffer.Timestamp < latestTimestamp.GetValueOrDefault(buffer.Id)) continue;
+                    // We do not subscribe to changes in history, so an update to a point within the known range is due to
+                    // something being out of synch.
+                    if (ranges.ContainsKey(buffer.Id)
+                        && buffer.Timestamp < ranges[buffer.Id].End 
+                        && buffer.Timestamp > ranges[buffer.Id].Start) continue;
 
                     if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
                     {
@@ -167,10 +170,23 @@ namespace Cognite.OpcUa
             {
                 foreach (var group in dataPointList)
                 {
-                    var ts = group.Value.Max(dp => dp.Timestamp);
-                    if (!latestTimestamp.ContainsKey(group.Key) || latestTimestamp[group.Key] < ts)
+                    var last = group.Value.Max(dp => dp.Timestamp);
+                    var first = group.Value.Min(dp => dp.Timestamp);
+                    if (!ranges.ContainsKey(group.Key))
                     {
-                        latestTimestamp[group.Key] = ts;
+                        ranges[group.Key] = new TimeRange(first, last);
+                    }
+                    else
+                    {
+                        if (last < ranges[group.Key].End)
+                        {
+                            ranges[group.Key].End = last;
+                        }
+
+                        if (first > ranges[group.Key].Start)
+                        {
+                            ranges[group.Key].Start = first;
+                        }
                     }
                 }
                 return Array.Empty<BufferedDataPoint>();
@@ -228,7 +244,6 @@ namespace Cognite.OpcUa
             });
 
             var req = new DataPointInsertionRequest();
-            // Filter out type check failures
             req.Items.AddRange(inserts);
             if (!req.Items.Any()) return true;
 
@@ -303,9 +318,10 @@ namespace Cognite.OpcUa
             {
                 if (ex.Duplicated.Any())
                 {
-                    var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString());
-                    Log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count());
-                    duplicatedEvents.Inc(duplicates.Count());
+                    var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString())
+                        .ToList();
+                    Log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count);
+                    duplicatedEvents.Inc(duplicates.Count);
                     eventEntities = eventEntities.Where(evt => !duplicates.Contains(evt.ExternalId));
                     try
                     {
@@ -313,7 +329,7 @@ namespace Cognite.OpcUa
                     }
                     catch (Exception exc)
                     {
-                        Log.Error(exc, "Failed to push {NumFailedEvents} events to CDF", count);
+                        Log.Error(exc, "Failed to push {NumFailedEvents} events to CDF", eventEntities.Count());
                         eventPushFailures.Inc();
                         return !(exc is ResponseException rex) || rex.Code == 400 || rex.Code == 409;
                     }
@@ -415,48 +431,93 @@ namespace Cognite.OpcUa
             nodeToAssetIds.Clear();
             trackedAssets.Set(0);
             trackedTimeseres.Set(0);
+            BufferedDPQueue.Clear();
+            BufferedEventQueue.Clear();
+            ranges.Clear();
         }
-        /// <summary>
-        /// Initialize latest timestamp for a given list of externalIds
-        /// </summary>
-        /// <param name="ids">ExternalIds to map</param>
-        private async Task InitLatestTimestampsChunk(IEnumerable<string> ids, CancellationToken token)
+        private async Task<IEnumerable<(string, DateTime)>> GetEarliestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
         {
             var client = GetClient();
-            var points = ids.Select<string, (Identity, string)>(id => (Identity.ExternalId(id), null));
-            Log.Information("Get latest timestamp for {num} nodes from CDF", ids.Count());
-            if (!ids.Any()) return;
-            var dps = await client.DataPoints.GetLatestAsync(points, token);
+            var dps = await client.DataPoints.ListMultipleAsync(
+                ids.Select(id =>
+                    new DataPointMultipleQuery
+                    {
+                        Id = Identity.ExternalId(id),
+                        QueryOptions = Array.Empty<DataPointQuery>()
+                    }),
+                new List<DataPointQuery>
+                {
+                    DataPointQuery.Start("0"),
+                    DataPointQuery.Limit(1)
+                },
+                token);
+
+            var res = new List<(string, DateTime)>();
+            foreach (var dp in dps.Items)
+            {
+                if (dp.NumericDatapoints?.Datapoints?.Any() ?? false)
+                {
+                    var ts = DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDatapoints.Datapoints.First().Timestamp).DateTime;
+                    res.Add((dp.ExternalId, ts));
+                }
+                else if (dp.StringDatapoints?.Datapoints?.Any() ?? false)
+                {
+                    var ts = DateTimeOffset.FromUnixTimeMilliseconds(dp.StringDatapoints.Datapoints.First().Timestamp).DateTime;
+                    res.Add((dp.ExternalId, ts));
+                }
+                else
+                {
+                    res.Add((dp.ExternalId, DateTime.MinValue));
+                }
+            }
+
+            return res;
+        }
+        private async Task<IEnumerable<(string, DateTime)>> GetEarliestTimestamp(IEnumerable<string> ids, CancellationToken token)
+        {
+            var tasks = Utils.ChunkBy(ids, config.EarliestChunk).Select(chunk => GetEarliestTimestampChunk(chunk, token)).ToList();
+            await Task.WhenAll(tasks);
+            return tasks.SelectMany(task => task.Result);
+        }
+
+        private async Task<IEnumerable<(string, DateTime)>> GetLatestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
+        {
+            var client = GetClient();
+            var dps = await client.DataPoints.GetLatestAsync(
+                ids.Select<string, (Identity, string)>(id => (Identity.ExternalId(id), null)), token);
+
+            var res = new List<(string, DateTime)>();
             foreach (var dp in dps)
             {
                 if (dp.NumericDataPoints.Any())
                 {
                     var ts = DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDataPoints.First().TimeStamp).DateTime;
-                    Extractor.GetNodeState(dp.ExternalId)?.InitTimestamp(ts);
-                    latestTimestamp[dp.ExternalId] = ts;
+                    res.Add((dp.ExternalId, ts));
                 }
                 else if (dp.StringDataPoints.Any())
                 {
                     var ts = DateTimeOffset.FromUnixTimeMilliseconds(dp.StringDataPoints.First().TimeStamp).DateTime;
-                    Extractor.GetNodeState(dp.ExternalId)?.InitTimestamp(ts);
-                    latestTimestamp[dp.ExternalId] = ts;
+                    res.Add((dp.ExternalId, ts));
                 }
                 else
                 {
-                    Extractor.GetNodeState(dp.ExternalId)?.InitTimestamp(DateTime.UnixEpoch);
-                    latestTimestamp[dp.ExternalId] = DateTime.UnixEpoch;
+                    res.Add((dp.ExternalId, DateTime.MinValue));
                 }
             }
+
+            return res;
         }
-        /// <summary>
-        /// Fetch the latest timestamp from the destination system for each NodeExtractionState provided
-        /// Chunks by config.LatestChunk and executes in parallel
-        /// </summary>
-        /// <param name="states">Historizing NodeExtractionStates to get timestamps for</param>
-        /// <returns>True if no task failed unexpectedly</returns>
-        public async Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
+
+        private async Task<IEnumerable<(string, DateTime)>> GetLatestTimestamp(IEnumerable<string> ids,
+            CancellationToken token)
         {
-            if (config.Debug) return true;
+            var tasks = Utils.ChunkBy(ids, config.LatestChunk).Select(chunk => GetLatestTimestampChunk(chunk, token)).ToList();
+            await Task.WhenAll(tasks);
+            return tasks.SelectMany(task => task.Result);
+        }
+        public async Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
+        {
+            if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
             var ids = new List<string>();
             foreach (var state in states)
             {
@@ -472,17 +533,53 @@ namespace Cognite.OpcUa
                     ids.Add(Extractor.GetUniqueId(state.Id));
                 }
             }
+            var tasks = new List<Task>();
+            var latestTask = GetLatestTimestamp(ids, token);
+            tasks.Add(latestTask);
+            Task<IEnumerable<(string, DateTime)>> earliestTask = null;
+            if (backfillEnabled)
+            {
+                earliestTask = GetEarliestTimestamp(ids, token);
+                tasks.Add(earliestTask);
+            }
 
             try
             {
-                await Task.WhenAll(Utils.ChunkBy(ids, config.LatestChunk)
-                    .Select(chunk => InitLatestTimestampsChunk(chunk, token)).ToList());
+                await Task.WhenAll(tasks);
             }
             catch (Exception e)
             {
-                Log.Error(e, "Failed to get latest timestamp");
+                Log.Error(e, "Failed to get extracted ranges");
                 return false;
             }
+
+            foreach (var dp in latestTask.Result)
+            {
+                if (backfillEnabled && dp.Item2 == DateTime.MinValue)
+                {
+                    // No value found, so the timeseries is empty. If backfill is enabled this means that we start the range now, otherwise it means
+                    // that we start at time zero.
+                    ranges[dp.Item1] = new TimeRange(DateTime.UtcNow, DateTime.UtcNow);
+                    continue;
+                }
+                ranges[dp.Item1] = new TimeRange(dp.Item2, dp.Item2);
+            }
+
+            if (backfillEnabled)
+            {
+                foreach (var dp in earliestTask.Result)
+                {
+                    if (dp.Item2 == DateTime.MinValue) continue;
+                    ranges[dp.Item1].Start = dp.Item2;
+                }
+            }
+
+            foreach (var id in ids)
+            {
+                var state = Extractor.GetNodeState(id);
+                state.InitExtractedRange(ranges[id].Start, ranges[id].End);
+            }
+
             return true;
         }
 
@@ -772,22 +869,33 @@ namespace Cognite.OpcUa
                     ? Extractor.ConvertToString(evt.MetaData["Type"])
                     : Extractor.GetUniqueId(evt.EventType), 64)
             };
+            var finalMetaData = new Dictionary<string, string>();
+            int len = 1;
+            finalMetaData["Emitter"] = Extractor.GetUniqueId(evt.EmittingNode);
             if (!evt.MetaData.ContainsKey("SourceNode"))
             {
-                evt.MetaData["SourceNode"] = Extractor.GetUniqueId(evt.SourceNode);
+                finalMetaData["SourceNode"] = Extractor.GetUniqueId(evt.SourceNode);
+                len++;
             }
             if (evt.MetaData.ContainsKey("SubType"))
             {
                 entity.SubType = Utils.Truncate(Extractor.ConvertToString(evt.MetaData["SubType"]), 64);
             }
-            var metaData = evt.MetaData
-                .Where(kvp => !excludeMetaData.Contains(kvp.Key))
-                .Take(16)
-                .ToDictionary(kvp => Utils.Truncate(kvp.Key, 32), kvp =>
-                    Utils.Truncate(Extractor.ConvertToString(kvp.Value), 256));
-            if (metaData.Any())
+
+            foreach (var dt in evt.MetaData)
             {
-                entity.MetaData = metaData;
+                if (!excludeMetaData.Contains(dt.Key))
+                {
+                    finalMetaData[Utils.Truncate(dt.Key, 32)] =
+                        Utils.Truncate(Extractor.ConvertToString(dt.Value), 256);
+                }
+
+                if (len++ == 15) break;
+            }
+
+            if (finalMetaData.Any())
+            {
+                entity.MetaData = finalMetaData;
             }
             return entity;
         }

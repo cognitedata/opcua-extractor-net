@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -49,7 +50,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Count > 20 &&
-                    tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming),
+                    tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming),
                 40, "Expected history read to finish");
 
 
@@ -99,7 +100,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming),
+                    && tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming),
                 40, "Expected history read to finish");
 
             int lastCount = tester.Handler.events.Count;
@@ -109,7 +110,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EventEmitterStates.All(state => state.Value.IsStreaming)
+                    && tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming)
                     && tester.Handler.events.Count > lastCount,
                 40, "Expected number of events to be increasing");
 
@@ -302,13 +303,51 @@ namespace Test
                        && events.Any(ev => ev.description.StartsWith("basicPassSource "))
                        && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
                        && events.Any(ev => ev.description.StartsWith("basicVarSource "))
-                       && events.Any(ev => ev.description.StartsWith("mappedType "));
+                       && events.Any(ev => ev.description.StartsWith("mappedType "))
+                       && events.Any(ev => ev.description == "prop 0")
+                       && events.Any(ev => ev.description == "basicPass 0")
+                       && events.Any(ev => ev.description == "basicPassSource 0")
+                       && events.Any(ev => ev.description == "basicVarSource 0")
+                       && events.Any(ev => ev.description == "mappedType 0");
             }, 20, "Expected to receive the remaining events");
 
             await tester.TerminateRunTask();
 
             var events = tester.Handler.events.Values.ToList();
+
+            foreach (var ev in events)
+            {
+                TestEvent(ev, tester.Handler);
+            }
+        }
+
+        [Fact]
+        [Trait("Server", "events")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "cdfeventsbackfill")]
+        public async Task TestCDFEventsBackfill()
+        {
+            using var tester = new ExtractorTester(new TestParameters
+            {
+                ServerName = ServerName.Events,
+                ConfigName = ConfigName.Events,
+                LogLevel = "debug"
+            });
+            tester.Config.History.EventChunk = 100;
+            tester.Config.History.Backfill = true;
+            await tester.ClearPersistentData();
+
+            tester.StartExtractor();
+            await tester.WaitForCondition(() =>
+                    tester.Handler.events.Any()
+                    && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
+                40, "Expected backfill to finish");
+
+            await Task.Delay(1000); // Wait for final pushes to complete
+
+            var events = tester.Handler.events.Values.ToList();
             Assert.True(events.Any());
+
             Assert.Contains(events, ev => ev.description.StartsWith("prop "));
             Assert.Contains(events, ev => ev.description == "prop 0");
             Assert.Contains(events, ev => ev.description == "basicPass 0");
@@ -316,17 +355,92 @@ namespace Test
             Assert.Contains(events, ev => ev.description == "basicVarSource 0");
             Assert.Contains(events, ev => ev.description == "mappedType 0");
 
-            Assert.Contains(events, ev => ev.description.StartsWith("propOther "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPass "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicPassSource2 "));
-            Assert.Contains(events, ev => ev.description.StartsWith("basicVarSource "));
-            Assert.Contains(events, ev => ev.description.StartsWith("mappedType "));
+            await tester.WaitForCondition(() =>
+            {
+                events = tester.Handler.events.Values.ToList();
+                return events.Any(ev => ev.description.StartsWith("propOther "))
+                       && events.Any(ev => ev.description.StartsWith("basicPass "))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource "))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
+                       && events.Any(ev => ev.description.StartsWith("basicVarSource "))
+                       && events.Any(ev => ev.description.StartsWith("mappedType "));
+            }, 40, "Expected remaining event subscriptions to trigger");
+
+            await tester.TerminateRunTask();
+
+            events = tester.Handler.events.Values.ToList();
 
             foreach (var ev in events)
             {
                 TestEvent(ev, tester.Handler);
             }
+
+            Assert.True(Common.TestMetricValue("opcua_frontfill_events_count", 1));
+            Assert.True(Common.GetMetricValue("opcua_backfill_events_count") >= 1);
+            Assert.True(Common.VerifySuccessMetrics());
+        }
+        [Fact]
+        [Trait("Server", "events")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "multipushereventbackfill")]
+        public async Task TestMultiPusherBackfillRestart()
+        {
+            var influxCfg = Utils.GetConfig("config.influxtest.yml");
+            using var tester = new ExtractorTester(new TestParameters
+            {
+                ServerName = ServerName.Events,
+                ConfigName = ConfigName.Events,
+                LogLevel = "debug",
+                InfluxOverride = (InfluxClientConfig)influxCfg.Pushers.First(),
+                Builder = (cfg, pusher, client) =>
+                {
+                    var pushers = new List<IPusher>
+                    {
+                        pusher, new InfluxPusher((InfluxClientConfig) influxCfg.Pushers.First())
+                    };
+
+                    return new Extractor(cfg, pushers, client);
+                }
+            });
+
+            tester.Config.History.Backfill = true;
+
+            await tester.ClearPersistentData();
+
+            tester.StartExtractor();
+            await tester.WaitForCondition(() =>
+                    tester.Handler.events.Values.Any()
+                    && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
+                40, "Expected backfill to finish");
+
+            await tester.WaitForCondition(() =>
+            {
+                var events = tester.Handler.events.Values.ToList();
+                return events.Any(ev => ev.description.StartsWith("propOther "))
+                       && events.Any(ev => ev.description.StartsWith("basicPass "))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource "))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
+                       && events.Any(ev => ev.description.StartsWith("basicVarSource "))
+                       && events.Any(ev => ev.description.StartsWith("mappedType "));
+            }, 20, "Expected remaining event subscriptions to trigger");
+
+            Assert.True(Common.TestMetricValue("opcua_frontfill_events_count", 1));
+            Assert.True(Common.GetMetricValue("opcua_backfill_events_count") >= 1);
+            Assert.True(Common.VerifySuccessMetrics());
+
+            Common.ResetTestMetrics();
+            tester.Extractor.RestartExtractor(tester.Source.Token);
+
+            await Task.Delay(500);
+
+            await tester.WaitForCondition(() =>
+                    tester.Handler.events.Values.Any()
+                    && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
+                20, "Expected backfill to finish");
+
+            Assert.True(Common.TestMetricValue("opcua_frontfill_events_count", 1));
+            Assert.True(Common.TestMetricValue("opcua_backfill_events_count", 1));
+
 
         }
     }

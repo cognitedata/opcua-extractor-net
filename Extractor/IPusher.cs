@@ -20,6 +20,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Opc.Ua;
 
 namespace Cognite.OpcUa
 {
@@ -44,9 +45,20 @@ namespace Cognite.OpcUa
         /// </summary>
         Task<bool> TestConnection(CancellationToken token);
         /// <summary>
-        /// Get latest timestamp in destination system, if possible
+        /// Get earliest and latest timestamps in destination system, if possible
         /// </summary>
-        Task<bool> InitLatestTimestamps(IEnumerable<NodeExtractionState> states, CancellationToken token)
+        Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
+        {
+            return Task.FromResult(true);
+        }
+        /// <summary>
+        /// Get the earliest and latest timestamps for events in the destination system, if possible.
+        /// </summary>
+        /// <param name="states">States to initialize for</param>
+        /// <param name="backfillEnabled">True if backfill is enabled</param>
+        /// <returns>true on success</returns>
+        Task<bool> InitExtractedEventRanges(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, bool backfillEnabled,
+            CancellationToken token)
         {
             return Task.FromResult(true);
         }
