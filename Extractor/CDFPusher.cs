@@ -318,9 +318,10 @@ namespace Cognite.OpcUa
             {
                 if (ex.Duplicated.Any())
                 {
-                    var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString());
-                    Log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count());
-                    duplicatedEvents.Inc(duplicates.Count());
+                    var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString())
+                        .ToList();
+                    Log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count);
+                    duplicatedEvents.Inc(duplicates.Count);
                     eventEntities = eventEntities.Where(evt => !duplicates.Contains(evt.ExternalId));
                     try
                     {
@@ -328,7 +329,7 @@ namespace Cognite.OpcUa
                     }
                     catch (Exception exc)
                     {
-                        Log.Error(exc, "Failed to push {NumFailedEvents} events to CDF", count);
+                        Log.Error(exc, "Failed to push {NumFailedEvents} events to CDF", eventEntities.Count());
                         eventPushFailures.Inc();
                         return !(exc is ResponseException rex) || rex.Code == 400 || rex.Code == 409;
                     }

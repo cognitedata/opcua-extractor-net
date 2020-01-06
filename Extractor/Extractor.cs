@@ -77,6 +77,8 @@ namespace Cognite.OpcUa
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
 
+        private bool nextPushFlag = false;
+
 
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
@@ -333,6 +335,12 @@ namespace Cognite.OpcUa
         {
             return EmitterStates.GetValueOrDefault(id);
         }
+
+        public async Task WaitForNextPush(int timeout = 100)
+        {
+            int time = 0;
+            while (!nextPushFlag && time++ < timeout) await Task.Delay(100);
+        }
         #endregion
         #region Loops
 
@@ -383,6 +391,7 @@ namespace Cognite.OpcUa
                         }
                     }
 
+                    nextPushFlag = true;
                     await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
                 }
                 catch (TaskCanceledException)

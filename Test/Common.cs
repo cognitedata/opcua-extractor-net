@@ -326,6 +326,7 @@ namespace Test
             if (RunTask == null) throw new Exception("Run task is not started");
             if (!testParams.QuitAfterMap)
             {
+                await Extractor.WaitForNextPush();
                 Source.Cancel();
             }
             try

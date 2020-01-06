@@ -416,6 +416,7 @@ namespace Test
             }
             var newEvents = JsonConvert.DeserializeObject<EventWrapper>(content);
             var duplicated = new List<Identity>();
+            var created = new List<(string, EventDummy)>();
             foreach (var ev in newEvents.items)
             {
                 if (events.ContainsKey(ev.externalId))
@@ -427,7 +428,7 @@ namespace Test
                 ev.id = eventIdCounter++;
                 ev.createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
                 ev.lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
-                events.Add(ev.externalId, ev);
+                created.Add((ev.externalId, ev));
             }
 
             if (duplicated.Any())
@@ -445,6 +446,10 @@ namespace Test
                 {
                     Content = new StringContent(errResult)
                 };
+            }
+            foreach (var evt in created)
+            {
+                events.Add(evt.Item1, evt.Item2);
             }
             string result = JsonConvert.SerializeObject(newEvents);
             return new HttpResponseMessage(HttpStatusCode.Created)
