@@ -302,6 +302,7 @@ namespace Test
             Common.ResetTestMetrics();
             var fullConfig = Common.BuildConfig("basic", 16);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            fullConfig.Logging.ConsoleLevel = "debug";
             Logger.Configure(fullConfig.Logging);
 
             var client = new UAClient(fullConfig);

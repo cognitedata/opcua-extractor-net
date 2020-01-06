@@ -308,7 +308,7 @@ namespace Cognite.OpcUa
         private async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
             var client = GetClient("Data");
-            IEnumerable<EventEntity> eventEntities = events.Select(EventToCDFEvent).ToList();
+            IEnumerable<EventEntity> eventEntities = events.Select(EventToCDFEvent).DistinctBy(evt => evt.ExternalId).ToList();
             var count = events.Count();
             try
             {

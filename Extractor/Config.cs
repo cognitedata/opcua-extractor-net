@@ -16,7 +16,7 @@ namespace Cognite.OpcUa
         public bool ForceRestart { get; set; } = false;
         public int BrowseNodesChunk { get => _browseNodesChunk; set => _browseNodesChunk = Math.Max(1, value); }
         private int _browseNodesChunk = 1000;
-        public int BrowseChunk { get => _browseChunk; set => _browseChunk = Math.Max(1, value); }
+        public int BrowseChunk { get => _browseChunk; set => _browseChunk = Math.Max(0, value); }
         private int _browseChunk = 1000;
         // 0 means server defined:
         public int AttributesChunk { get => _attributesChunk; set => _attributesChunk = Math.Max(0, value); }

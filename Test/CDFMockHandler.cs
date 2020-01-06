@@ -419,7 +419,7 @@ namespace Test
             var created = new List<(string, EventDummy)>();
             foreach (var ev in newEvents.items)
             {
-                if (events.ContainsKey(ev.externalId))
+                if (events.ContainsKey(ev.externalId) || created.Any(ct => ct.Item1 == ev.externalId))
                 {
                     duplicated.Add(new Identity { externalId = ev.externalId });
                     continue;

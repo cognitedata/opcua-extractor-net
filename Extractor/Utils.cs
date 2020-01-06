@@ -138,6 +138,10 @@ namespace Cognite.OpcUa
         /// <returns>A number of enumerables smaller or equal to maxSize</returns>
         public static IEnumerable<IEnumerable<T>> ChunkBy<T>(IEnumerable<T> input, int maxSize)
         {
+            if (maxSize == 0)
+            {
+                return input.Select(x => new[] {x});
+            }
             return input
                 .Select((x, i) => new { Index = i, Value = x })
                 .GroupBy(x => x.Index / maxSize)
