@@ -77,7 +77,7 @@ namespace Cognite.OpcUa
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
 
-        private bool nextPushFlag = false;
+        private bool nextPushFlag;
 
 
         private static readonly Gauge startTime = Metrics
@@ -335,11 +335,18 @@ namespace Cognite.OpcUa
         {
             return EmitterStates.GetValueOrDefault(id);
         }
-
+        /// <summary>
+        /// Wait for the next push of data to CDF
+        /// </summary>
+        /// <param name="timeout">Timeout in 1/10th of a second</param>
         public async Task WaitForNextPush(int timeout = 100)
         {
             int time = 0;
             while (!nextPushFlag && time++ < timeout) await Task.Delay(100);
+            if (time >= timeout && !nextPushFlag)
+            {
+                throw new Exception("Waiting for push timed out");
+            }
         }
         #endregion
         #region Loops

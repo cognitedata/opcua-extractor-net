@@ -262,5 +262,3 @@ Events:
     HistorizingEmitterIds:
         #-   NamespaceUri:
         #    NodeId:
-    # Max number of events per history read operation.
-    HistoryReadChunk: 1000

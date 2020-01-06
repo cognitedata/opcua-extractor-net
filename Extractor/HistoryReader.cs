@@ -44,7 +44,15 @@ namespace Cognite.OpcUa
             historyGranularity = config.Granularity <= 0 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.Granularity);
         }
-
+        /// <summary>
+        /// Handle the result of a historyReadRaw. Takes information about the read, updates states and pushes datapoints.
+        /// </summary>
+        /// <param name="rawData">Data to be transformed into events</param>
+        /// <param name="final">True if this is the last read</param>
+        /// <param name="frontfill">True if this is frontfill, false for backfill</param>
+        /// <param name="nodeid">NodeId being read</param>
+        /// <param name="details">The HistoryReadDetails used</param>
+        /// <returns></returns>
         private int HistoryDataHandler(IEncodeable rawData, bool final, bool frontfill, NodeId nodeid, HistoryReadDetails details)
         {
             if (rawData == null) return 0;
@@ -117,10 +125,11 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Callback for HistoryRead operations. Simply pushes all events to the queue.
+        /// Handler for HistoryRead of events. Simply pushes all events to the queue.
         /// </summary>
-        /// <param name="rawData">Collection of events to be handled as IEncodable</param>
+        /// <param name="rawEvts">Collection of events to be handled as IEncodable</param>
         /// <param name="final">True if this is the final call for this node, and the lock may be removed</param>
+        /// <param name="frontfill">True if frontfill, false for backfill</param>
         /// <param name="nodeid">Id of the emitter in question.</param>
         /// <param name="details">History read details used to generate this HistoryRead result</param>
         private int HistoryEventHandler(IEncodeable rawEvts, bool final, bool frontfill, NodeId nodeid, HistoryReadDetails details)
@@ -192,7 +201,14 @@ namespace Cognite.OpcUa
             }
             return cnt;
         }
-
+        /// <summary>
+        /// Main history read loop. Reads for the given list of nodes until all are done, using the given HistoryReadDetails.
+        /// </summary>
+        /// <param name="details">HistoryReadDetails to be used</param>
+        /// <param name="nodes">Nodes to be read</param>
+        /// <param name="frontfill">True if frontfill, false for backfill, used for synching states</param>
+        /// <param name="data">True if data is being read, false for events</param>
+        /// <param name="handler">Callback to handle read results</param>
         private void BaseHistoryReadOp(HistoryReadDetails details,
             IEnumerable<NodeId> nodes,
             bool frontfill,
@@ -249,7 +265,10 @@ namespace Cognite.OpcUa
             }
 
         }
-
+        /// <summary>
+        /// Frontfill data for the given list of states
+        /// </summary>
+        /// <param name="nodes">Nodes to be read</param>
         private void FrontfillDataChunk(IEnumerable<NodeExtractionState> nodes, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
@@ -266,7 +285,10 @@ namespace Cognite.OpcUa
             Log.Information("Frontfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
             BaseHistoryReadOp(details, nodes.Select(node => node.Id), true, true, HistoryDataHandler, token);
         }
-
+        /// <summary>
+        /// Backfill data for the given list of states
+        /// </summary>
+        /// <param name="nodes">Nodes to be read</param>
         private void BackfillDataChunk(IEnumerable<NodeExtractionState> nodes, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
@@ -284,6 +306,11 @@ namespace Cognite.OpcUa
 
             BaseHistoryReadOp(details, nodes.Select(node => node.Id), false, true, HistoryDataHandler, token);
         }
+        /// <summary>
+        /// Frontfill events for the given list of states
+        /// </summary>
+        /// <param name="states">Emitters to be read from</param>
+        /// <param name="nodes">SourceNodes to read for</param>
         private void FrontfillEventsChunk(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
@@ -302,7 +329,11 @@ namespace Cognite.OpcUa
             BaseHistoryReadOp(details, states.Select(node => node.Id), true, false, HistoryEventHandler, token); 
 
         }
-
+        /// <summary>
+        /// Backfill events for the given list of states
+        /// </summary>
+        /// <param name="states">Emitters to be read from</param>
+        /// <param name="nodes">SourceNodes to read for</param>
         private void BackfillEventsChunk(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
@@ -320,6 +351,10 @@ namespace Cognite.OpcUa
 
             BaseHistoryReadOp(details, states.Select(node => node.Id), false, false, HistoryEventHandler, token);
         }
+        /// <summary>
+        /// Frontfill data for the given list of states. Chunks by time granularity and given chunksizes.
+        /// </summary>
+        /// <param name="states">Nodes to be read</param>
         public async Task FrontfillData(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             var frontFillChunks = Utils.GroupByTimeGranularity(
@@ -327,6 +362,10 @@ namespace Cognite.OpcUa
                 historyGranularity, config.DataNodesChunk);
             await Task.WhenAll(frontFillChunks.Select(chunk => Task.Run(() => FrontfillDataChunk(chunk, token))));
         }
+        /// <summary>
+        /// Backfill data for the given list of states. Chunks by time granularity and given chunksizes.
+        /// </summary>
+        /// <param name="states">Nodes to be read</param>
         public async Task BackfillData(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             var backFillChunks = Utils.GroupByTimeGranularity(
@@ -334,6 +373,11 @@ namespace Cognite.OpcUa
                 historyGranularity, config.DataNodesChunk);
             await Task.WhenAll(backFillChunks.Select(chunk => Task.Run(() => BackfillDataChunk(chunk, token))));
         }
+        /// <summary>
+        /// Frontfill events for the given list of states. Chunks by time granularity and given chunksizes.
+        /// </summary>
+        /// <param name="states">Emitters to be read from</param>
+        /// <param name="nodes">SourceNodes to read for</param>
         public async Task FrontfillEvents(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
         {
             var frontFillChunks = Utils.GroupByTimeGranularity(
@@ -341,7 +385,11 @@ namespace Cognite.OpcUa
                 historyGranularity, config.EventNodesChunk);
             await Task.WhenAll(frontFillChunks.Select(chunk => Task.Run(() => FrontfillEventsChunk(chunk, nodes, token))));
         }
-
+        /// <summary>
+        /// Backfill events for the given list of states. Chunks by time granularity and given chunksizes.
+        /// </summary>
+        /// <param name="states">Emitters to be read from</param>
+        /// <param name="nodes">SourceNodes to read for</param>
         public async Task BackfillEvents(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
         {
             var backFillChunks = Utils.GroupByTimeGranularity(

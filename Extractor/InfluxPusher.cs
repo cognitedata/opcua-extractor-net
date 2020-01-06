@@ -159,9 +159,10 @@ namespace Cognite.OpcUa
             return Array.Empty<BufferedEvent>();
         }
         /// <summary>
-        /// Reads the last datapoint from influx for each timeseries, sending the timestamp to each passed state
+        /// Reads the first and last datapoint from influx for each timeseries, sending the timestamps to each passed state
         /// </summary>
         /// <param name="states">List of historizing nodes</param>
+        /// <param name="backfillEnabled">True if backfill is enabled, in which case the first timestamp will be read</param>
         /// <returns>True on success</returns>
         public async Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
         {
@@ -214,7 +215,6 @@ namespace Cognite.OpcUa
             }
             return true;
         }
-
         private async Task InitExtractedEventRange(EventExtractionState state,
             IEnumerable<NodeId> nodes,
             bool backfillEnabled,
@@ -225,7 +225,6 @@ namespace Cognite.OpcUa
             string emitterId = Extractor.GetUniqueId(state.Id);
             var tasks = nodes.Select(async node =>
             {
-                Log.Information(emitterId);
                 string id = "events." + Extractor.GetUniqueId(node);
                 var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\" WHERE Emitter='{emitterId}'");
@@ -250,12 +249,10 @@ namespace Cognite.OpcUa
                     if (first.Any() && first.First().HasEntries)
                     {
                         DateTime ts = first.First().Entries[0].Time;
-                        Log.Information("{first}", ts);
                         lock (mutex)
                         {
                             if (ts < bestRange.Start)
                             {
-                                Log.Information("New best first: {ts}", ts);
                                 bestRange.Start = ts;
                             }
                         }
@@ -273,8 +270,14 @@ namespace Cognite.OpcUa
                 bestRange.Start = bestRange.End;
             }
             state.InitExtractedRange(bestRange.Start, bestRange.End);
-            Log.Information("{current}, {new}", state.ExtractedRange.Start, bestRange.Start);
         }
+        /// <summary>
+        /// Reads the first and last datapoint from influx for each emitter, sending the timestamps to each passed state
+        /// </summary>
+        /// <param name="states">List of historizing emitters</param>
+        /// <param name="nodes">Relevant nodes to consider events for (sourcenodes)</param>
+        /// <param name="backfillEnabled">True if backfill is enabled, in which case the first timestamp will be read</param>
+        /// <returns>True on success</returns>
         public async Task<bool> InitExtractedEventRanges(IEnumerable<EventExtractionState> states,
             IEnumerable<NodeId> nodes,
             bool backfillEnabled,
@@ -421,7 +424,12 @@ namespace Cognite.OpcUa
 
             return finalPoints;
         }
-
+        /// <summary>
+        /// Read events from influxdb back into BufferedEvents
+        /// </summary>
+        /// <param name="startTime">Time to read from, reading forwards</param>
+        /// <param name="measurements">Nodes to read events from</param>
+        /// <returns>A list of read events</returns>
         public async Task<IEnumerable<BufferedEvent>> ReadEvents(DateTime startTime,
             IEnumerable<NodeId> measurements,
             CancellationToken token)
