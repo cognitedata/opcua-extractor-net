@@ -442,6 +442,7 @@ namespace Cognite.OpcUa
                 var tasks = new List<Task>();
                 if (restart)
                 {
+                    Log.Information("Restarting extractor...");
                     extraNodesToBrowse.Clear();
                     tasks.Add(Task.Run(async () =>
                     {

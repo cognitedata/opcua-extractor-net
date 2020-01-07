@@ -37,11 +37,12 @@ namespace Cognite.OpcUa
         private readonly ExtractionConfig extractionConfig;
         private readonly EventConfig eventConfig;
         private readonly HistoryConfig historyConfig;
-        private Session session;
+        protected Session session;
+        protected ApplicationConfiguration appconfig;
         private SessionReconnectHandler reconnectHandler;
         public Extractor Extractor { get; set; }
         private readonly object visitedNodesLock = new object();
-        private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
+        protected readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         private Dictionary<NodeId, ProtoDataType> numericDataTypes = new Dictionary<NodeId, ProtoDataType>();
@@ -122,7 +123,7 @@ namespace Cognite.OpcUa
                 ApplicationType = ApplicationType.Client,
                 ConfigSectionName = "opc.ua.net.extractor"
             };
-            var appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
+            appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
             {
@@ -148,7 +149,7 @@ namespace Cognite.OpcUa
             EndpointDescription selectedEndpoint;
             try
             {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, validAppCert && config.Secure);
+                selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, config.Secure);
             }
             catch (ServiceResultException ex)
             {
@@ -386,113 +387,115 @@ namespace Cognite.OpcUa
             uint nodeClassMask)
         {
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            foreach (var lparents in Utils.ChunkBy(parents, config.BrowseChunk))
+            IncOperations();
+            var tobrowse = new BrowseDescriptionCollection(parents.Select(id =>
+                new BrowseDescription
+                {
+                    NodeId = id,
+                    ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
+                    IncludeSubtypes = true,
+                    NodeClassMask = nodeClassMask,
+                    BrowseDirection = BrowseDirection.Forward,
+                    ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
+                        | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition
+                }
+            ));
+            if (!parents.Any())
             {
-                IncOperations();
-                var tobrowse = new BrowseDescriptionCollection(lparents.Select(id =>
-                    new BrowseDescription
-                    {
-                        NodeId = id,
-                        ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
-                        IncludeSubtypes = true,
-                        NodeClassMask = nodeClassMask,
-                        BrowseDirection = BrowseDirection.Forward,
-                        ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
-                            | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition
-                    }
-                ));
+                DecOperations();
+                return finalResults;
+            }
+            try
+            {
+                BrowseResultCollection results;
+                DiagnosticInfoCollection diagnostics;
                 try
                 {
-                    BrowseResultCollection results;
-                    DiagnosticInfoCollection diagnostics;
+                    session.Browse(
+                        null,
+                        null,
+                        (uint)config.BrowseChunk,
+                        tobrowse,
+                        out results,
+                        out diagnostics
+                    );
+                }
+                catch (ServiceResultException ex)
+                {
+                    throw Utils.HandleServiceResult(ex, Utils.SourceOp.Browse);
+                }
+
+
+                foreach (var d in diagnostics)
+                {
+                    Log.Warning("GetNodeChildren Browse diagnostics {msg}", d);
+                }
+
+                var indexMap = new NodeId[parents.Count()];
+                var continuationPoints = new ByteStringCollection();
+                int index = 0;
+                int bindex = 0;
+                Log.Debug("GetNodeChildren parents {count}", parents.Count());
+                Log.Debug("GetNodeChildren results {count}", results.Count);
+                foreach (var result in results)
+                {
+                    var nodeId = parents.ElementAt(bindex++);
+                    Log.Debug("GetNodeChildren Browse result {nodeId}", nodeId);
+                    finalResults[nodeId] = result.References;
+                    if (result.ContinuationPoint != null)
+                    {
+                        indexMap[index++] = nodeId;
+                        continuationPoints.Add(result.ContinuationPoint);
+                    }
+                }
+                numBrowse.Inc();
+                while (continuationPoints.Any() && !token.IsCancellationRequested)
+                {
                     try
                     {
-                        session.Browse(
+                        session.BrowseNext(
                             null,
-                            null,
-                            0,
-                            tobrowse,
+                            false,
+                            continuationPoints,
                             out results,
                             out diagnostics
                         );
                     }
                     catch (ServiceResultException ex)
                     {
-                        throw Utils.HandleServiceResult(ex, Utils.SourceOp.Browse);
+                        throw Utils.HandleServiceResult(ex, Utils.SourceOp.BrowseNext);
                     }
 
 
                     foreach (var d in diagnostics)
                     {
-                        Log.Warning("GetNodeChildren Browse diagnostics {msg}", d);
+                        Log.Warning("GetNodeChildren BrowseNext diagnostics {msg}", d);
                     }
 
-                    var indexMap = new NodeId[lparents.Count()];
-                    var continuationPoints = new ByteStringCollection();
-                    int index = 0;
-                    int bindex = 0;
-                    Log.Debug("GetNodeChildren lparents {count}", lparents.Count());
-                    Log.Debug("GetNodeChildren results {count}", results.Count);
+                    int nindex = 0;
+                    int pindex = 0;
+                    continuationPoints.Clear();
                     foreach (var result in results)
                     {
-                        var nodeId = lparents.ElementAt(bindex++);
-                        Log.Debug("GetNodeChildren Browse result {nodeId}", nodeId);
-                        finalResults[nodeId] = result.References;
-                        if (result.ContinuationPoint != null)
-                        {
-                            indexMap[index++] = nodeId;
-                            continuationPoints.Add(result.ContinuationPoint);
-                        }
+                        var nodeId = indexMap[pindex++];
+                        Log.Debug("GetNodeChildren BrowseNext result {nodeId}", nodeId);
+                        finalResults[nodeId].AddRange(result.References);
+                        if (result.ContinuationPoint == null) continue;
+                        indexMap[nindex++] = nodeId;
+                        continuationPoints.Add(result.ContinuationPoint);
                     }
+
                     numBrowse.Inc();
-                    while (continuationPoints.Any() && !token.IsCancellationRequested)
-                    {
-                        try
-                        {
-                            session.BrowseNext(
-                                null,
-                                false,
-                                continuationPoints,
-                                out results,
-                                out diagnostics
-                            );
-                        }
-                        catch (ServiceResultException ex)
-                        {
-                            throw Utils.HandleServiceResult(ex, Utils.SourceOp.BrowseNext);
-                        }
-
-
-                        foreach (var d in diagnostics)
-                        {
-                            Log.Warning("GetNodeChildren BrowseNext diagnostics {msg}", d);
-                        }
-
-                        int nindex = 0;
-                        int pindex = 0;
-                        continuationPoints.Clear();
-                        foreach (var result in results)
-                        {
-                            var nodeId = indexMap[pindex++];
-                            Log.Debug("GetNodeChildren BrowseNext result {nodeId}", nodeId);
-                            finalResults[nodeId].AddRange(result.References);
-                            if (result.ContinuationPoint == null) continue;
-                            indexMap[nindex++] = nodeId;
-                            continuationPoints.Add(result.ContinuationPoint);
-                        }
-
-                        numBrowse.Inc();
-                    }
                 }
-                catch
-                {
-                    browseFailures.Inc();
-                    throw;
-                }
-                finally
-                {
-                    DecOperations();
-                }
+            }
+            catch
+            {
+                browseFailures.Inc();
+                throw;
+            }
+            finally
+            {
+                DecOperations();
             }
             return finalResults;
         }
@@ -525,7 +528,7 @@ namespace Cognite.OpcUa
             do
             {
                 var references = Utils.ChunkBy(nextIds, config.BrowseNodesChunk)
-                    .Select(ids => GetNodeChildren(ids, token, referenceTypes, nodeClassMask))
+                    .Select(ids => GetNodeChildren(ids.ToList(), token, referenceTypes, nodeClassMask))
                     .SelectMany(dict => dict)
                     .ToDictionary(val => val.Key, val => val.Value);
 
