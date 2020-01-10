@@ -26,3 +26,4 @@ Extractor/Properties
 # Config
 config.yml
 config.yml.*
+config.config-tool.yml

@@ -514,7 +514,7 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback for each node</param>
         /// <param name="referenceTypes">Permitted reference types, defaults to HierarchicalReferences</param>
         /// <param name="nodeClassMask">Mask for node classes as described in the OPC-UA specification</param>
-        private void BrowseDirectory(
+        protected void BrowseDirectory(
             IEnumerable<NodeId> roots,
             Action<ReferenceDescription, NodeId> callback,
             CancellationToken token,

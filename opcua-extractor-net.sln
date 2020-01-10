@@ -22,6 +22,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Misc", "Misc", "{F9D856F4-2
 		test.sh = test.sh
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigurationTool", "ConfigurationTool\ConfigurationTool.csproj", "{F9A30D7C-1F8D-41F2-9A84-26C2B86DCDBE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,6 +38,10 @@ Global
 		{F853916C-CA29-48F9-99BF-3482B07CC85B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F853916C-CA29-48F9-99BF-3482B07CC85B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F853916C-CA29-48F9-99BF-3482B07CC85B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F9A30D7C-1F8D-41F2-9A84-26C2B86DCDBE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F9A30D7C-1F8D-41F2-9A84-26C2B86DCDBE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F9A30D7C-1F8D-41F2-9A84-26C2B86DCDBE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F9A30D7C-1F8D-41F2-9A84-26C2B86DCDBE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

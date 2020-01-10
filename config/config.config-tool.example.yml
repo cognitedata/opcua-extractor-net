@@ -1,0 +1,51 @@
+﻿# Template for the config file,
+# Defaults to config.config-tool.yml in ./config.
+# Your config file can contain only a subset of these config options. Any extra options will
+# cause the extractor to fail.
+# The configuration here is used as a basis for the generated config, any config from config.example.yml can be used,
+# if any chunk sizes or similar are added here they will be used as an upper bound in the generated result.
+Source:
+    # The URL of the OPC-UA server to connect to
+    EndpointURL: opc.tcp://localhost:4840
+    # Auto accept connections from unknown servers.
+    # There is not yet a feature to accept new certificates, but you can manually move rejected certificates to accepted.
+    # Paths are defined in opc.ua.net.extractor.Config.xml
+    AutoAccept: false
+    # OPC-UA username, leave blank for anonymous user. (no authentication)
+    Username:
+    # OPC-UA password
+    Password:
+    # Use secured connection
+    Secure: false
+
+Logging:
+    # Log levels: 'verbose', 'debug', 'information', 'warning', 'error', 'fatal'.
+    # Writes log events at this level to the Console. 
+    # If not present, or if the level is invalid, Console is not used. 
+    ConsoleLevel: information
+
+Extraction:
+    # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.
+    # The externalId is: IdPrefix + NamespaceMap[nodeId.NamespaceUri] + nodeId.Identifier
+    IdPrefix: "gp:"
+    
+    # Specify prefixes on DisplayName to ignore.
+    IgnoreNamePrefix:
+        # -prefix1
+    
+    # Specify specific DisplayNames to ignore.
+    IgnoreName:
+        # -name1
+    
+    # List of NodeIds corresponding to DataTypes that should be ignored.
+    IgnoreDataTypes:
+        # - NamespaceUri:
+        #	NodeId:
+
+    # Source node in the OPC-UA server. Leave empty to use the top level Objects node.
+    RootNode:
+        # Full name of the namespace of the root node.
+        NamespaceUri:
+        # Id of the root node, on the form "i=123" or "s=stringid" etc.
+        NodeId:
+
