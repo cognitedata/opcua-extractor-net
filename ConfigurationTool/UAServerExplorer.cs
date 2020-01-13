@@ -4,7 +4,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
+using Opc.Ua.Client;
 using Serilog;
+using Exception = System.Exception;
 
 namespace Cognite.OpcUa.Config
 {
@@ -40,7 +42,25 @@ namespace Cognite.OpcUa.Config
             100
         };
 
-    public UAServerExplorer(FullConfig config, FullConfig baseConfig) : base(config)
+        private readonly List<int> testSubscriptionChunkSizes = new List<int>
+        {
+            1000,
+            100,
+            10,
+            1
+        };
+
+        private readonly List<int> testHistoryChunkSizes = new List<int>
+        {
+            1000,
+            100,
+            10,
+            1
+        };
+
+
+
+        public UAServerExplorer(FullConfig config, FullConfig baseConfig) : base(config)
         {
             this.baseConfig = baseConfig;
             this.config = config;
@@ -199,6 +219,12 @@ namespace Cognite.OpcUa.Config
                 {
                     Log.Warning("Failed to browse node hierarchy");
                     Log.Debug(ex, "Failed to browse nodes");
+                    if (ex is ServiceResultException exc && exc.StatusCode == StatusCodes.BadServiceUnsupported)
+                    {
+                        throw new Exception(
+                            "Browse unsupported by server, the extractor does not support servers without support for" +
+                            " the \"Browse\" service");
+                    }
                     result.failed = true;
                 }
 
@@ -394,6 +420,14 @@ namespace Cognite.OpcUa.Config
                 catch (Exception e)
                 {
                     Log.Information(e, "Failed to read node attributes");
+
+                    if (e is ServiceResultException exc && exc.StatusCode == StatusCodes.BadServiceUnsupported)
+                    {
+                        throw new Exception(
+                            "Attribute read is unsupported, the extractor does not support servers which do not " +
+                            "support the \"Read\" service");
+                    }
+
                     continue;
                 }
 
@@ -409,22 +443,6 @@ namespace Cognite.OpcUa.Config
             {
                 throw new Exception("Failed to read node attributes for any chunk size");
             }
-        }
-        private NodeId GetTopLevelDataType(IEnumerable<BufferedNode> nodes, BufferedNode child)
-        {
-            var next = child;
-
-            do
-            {
-                if (next.ParentId == DataTypes.BaseDataType)
-                {
-                    return next.Id;
-                }
-
-                next = nodes.FirstOrDefault(node => node.Id == next.ParentId);
-            } while (next != null);
-            
-            return null;
         }
 
         public async Task IdentifyDataTypeSettings(CancellationToken token)
@@ -542,6 +560,7 @@ namespace Cognite.OpcUa.Config
             baseConfig.Extraction.AllowStringVariables = baseConfig.Extraction.AllowStringVariables || stringVariables;
             baseConfig.Extraction.MaxArraySize = maxLimitedArrayLength > 1 ? maxLimitedArrayLength : arrayLimit;
         }
+
         private struct BrowseMapResult
         {
             public int MaxLevel;
@@ -549,6 +568,369 @@ namespace Cognite.OpcUa.Config
             public int BrowseChunk;
             public int NumNodes;
             public bool failed;
+        }
+
+        private IEnumerable<BufferedDataPoint> ToDataPoint(DataValue value, NodeExtractionState variable, string uniqueId)
+        {
+            if (variable.ArrayDimensions != null && variable.ArrayDimensions.Length > 0 && variable.ArrayDimensions[0] > 0)
+            {
+                var ret = new List<BufferedDataPoint>();
+                if (!(value.Value is Array))
+                {
+                    Log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
+                    return Enumerable.Empty<BufferedDataPoint>();
+                }
+                var values = (Array)value.Value;
+                for (int i = 0; i < Math.Min(variable.ArrayDimensions[0], values.Length); i++)
+                {
+                    var dp = variable.DataType.IsString
+                        ? new BufferedDataPoint(
+                            value.SourceTimestamp,
+                            $"{uniqueId}[{i}]",
+                            ConvertToString(values.GetValue(i)))
+                        : new BufferedDataPoint(
+                            value.SourceTimestamp,
+                            $"{uniqueId}[{i}]",
+                            ConvertToDouble(values.GetValue(i)));
+                    ret.Add(dp);
+                }
+                return ret;
+            }
+            var sdp = variable.DataType.IsString
+                ? new BufferedDataPoint(
+                    value.SourceTimestamp,
+                    uniqueId,
+                    ConvertToString(value.Value))
+                : new BufferedDataPoint(
+                    value.SourceTimestamp,
+                    uniqueId,
+                    ConvertToDouble(value.Value));
+            return new[] { sdp };
+        }
+
+        private MonitoredItemNotificationEventHandler GetSimpleListWriterHandler(
+            List<BufferedDataPoint> points,
+            IDictionary<NodeId, NodeExtractionState> states)
+        {
+            return (item, args) =>
+            {
+                string uniqueId = GetUniqueId(item.ResolvedNodeId);
+                var state = states[item.ResolvedNodeId];
+                foreach (var datapoint in item.DequeueValues())
+                {
+                    if (StatusCode.IsNotGood(datapoint.StatusCode))
+                    {
+                        Log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
+                        continue;
+                    }
+                    var buffDps = ToDataPoint(datapoint, state, uniqueId);
+                    state.UpdateFromStream(buffDps);
+                    if (!state.IsStreaming) return;
+                    foreach (var buffDp in buffDps)
+                    {
+                        Log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
+                    }
+                    points.AddRange(buffDps);
+                }
+            };
+        }
+
+        public async Task GetSubscriptionChunkSizes(CancellationToken token)
+        {
+            bool failed = true;
+            var states = nodeList.Where(node =>
+                    node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty)
+                .Select(node => new NodeExtractionState(node as BufferedVariable)).ToList();
+
+            Log.Information("Get chunkSizes for subscribing to variables");
+
+            if (states.Count < 1000)
+            {
+                Log.Warning("There are only {count} extractable variables, so expected chunksizes may not be accurate. " +
+                            "The default is 1000, which generally works.", states.Count);
+            }
+
+            var dps = new List<BufferedDataPoint>();
+
+            foreach (var chunkSize in testSubscriptionChunkSizes)
+            {
+                config.Source.SubscriptionChunk = chunkSize;
+                try
+                {
+                    SubscribeToNodes(states, GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.Id)),
+                        token);
+                    baseConfig.Source.SubscriptionChunk = chunkSize;
+                    failed = false;
+                    break;
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "Failed to subscribe to nodes, retrying with different chunkSize");
+                    bool critical = false;
+                    try
+                    {
+                        session.RemoveSubscriptions(session.Subscriptions.ToList());
+                    }
+                    catch (Exception ex)
+                    {
+                        critical = true;
+                        Log.Warning(ex, "Unable to remove subscriptions, further analysis is not possible");
+                    }
+
+                    if (e is ServiceResultException exc && exc.StatusCode == StatusCodes.BadServiceUnsupported)
+                    {
+                        critical = true;
+                        Log.Warning("CreateMonitoredItems or CreateSubscriptions services unsupported, the extractor " +
+                                    "will not be able to properly read datapoints live from this server");
+                    }
+
+                    if (critical) break;
+                }
+            }
+
+            if (failed)
+            {
+                Log.Warning("Unable to subscribe to nodes");
+                return;
+            }
+            Log.Information("Settled on chunkSize: {size}", baseConfig.Source.SubscriptionChunk);
+            Log.Information("Waiting for datapoints to arrive...");
+
+            for (int i = 0; i < 50; i++)
+            {
+                if (dps.Any()) break;
+                await Task.Delay(200);
+            }
+
+            if (dps.Any())
+            {
+                Log.Information("Datapoints arrived, subscriptions confirmed to be working properly");
+            }
+            else
+            {
+                Log.Warning("No datapoints arrived, subscriptions may not be working properly, " +
+                            "or there may be no updates on the server");
+            }
+
+            session.RemoveSubscriptions(session.Subscriptions.ToList());
+        }
+
+        private BufferedDataPoint[] ReadResultToDataPoints(IEncodeable rawData, NodeExtractionState state)
+        {
+            if (rawData == null) return Array.Empty<BufferedDataPoint>();
+            if (!(rawData is HistoryData data))
+            {
+                Log.Warning("Incorrect result type of history read data");
+                return Array.Empty<BufferedDataPoint>();
+            }
+
+            if (data.DataValues == null) return Array.Empty<BufferedDataPoint>();
+            string uniqueId = GetUniqueId(state.Id);
+
+            var result = new List<BufferedDataPoint>();
+
+            foreach (var datapoint in data.DataValues)
+            {
+                if (StatusCode.IsNotGood(datapoint.StatusCode))
+                {
+                    Log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
+                        datapoint.SourceTimestamp);
+                    continue;
+                }
+
+                var buffDps = ToDataPoint(datapoint, state, uniqueId);
+                foreach (var buffDp in buffDps)
+                {
+                    Log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
+                    result.Add(buffDp);
+                }
+            }
+
+            return result.ToArray();
+        }
+
+        public void GetHistoryReadConfig()
+        {
+            var historizingStates = nodeList.Where(node =>
+                    node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty && variable.Historizing)
+                .Select(node => new NodeExtractionState(node as BufferedVariable)).ToList();
+
+            var stateMap = historizingStates.ToDictionary(state => state.Id);
+
+            Log.Information("Read history to decide on decent history settings");
+
+            if (!historizingStates.Any())
+            {
+                Log.Warning("No historizing variables detected, unable analyze history");
+                return;
+            }
+
+            var earliestTime = DateTimeOffset.FromUnixTimeMilliseconds(config.History.StartTime).DateTime;
+
+            var details = new ReadRawModifiedDetails
+            {
+                IsReadModified = false,
+                EndTime = DateTime.UtcNow.AddDays(10),
+                StartTime = earliestTime,
+                NumValuesPerNode = (uint)config.History.DataChunk
+            };
+
+            long largestEstimate = 0;
+
+            long sumDistance = 0;
+            int count = 0;
+
+            NodeId nodeWithData = null;
+
+            bool failed = true;
+            bool done = false;
+
+            foreach (var chunkSize in testHistoryChunkSizes)
+            {
+                foreach (var chunk in Utils.ChunkBy(historizingStates, chunkSize))
+                {
+                    var historyParams = new HistoryReadParams(chunk.Select(state => state.Id), details);
+                    try
+                    {
+                        var result = DoHistoryRead(historyParams);
+
+                        foreach (var res in result)
+                        {
+                            var data = ReadResultToDataPoints(res.Item2, stateMap[res.Item1]);
+                            if (data.Length > 10 && nodeWithData == null)
+                            {
+                                nodeWithData = res.Item1;
+                            }
+
+
+                            if (data.Length < 2) continue;
+                            count++;
+                            long avgTicks = (data.Last().Timestamp.Ticks - data.First().Timestamp.Ticks) / (data.Length - 1);
+                            sumDistance += avgTicks;
+
+                            if (historyParams.Completed[res.Item1]) continue;
+                            if (avgTicks == 0) continue;
+                            long estimate = (DateTime.UtcNow.Ticks - data.First().Timestamp.Ticks) / avgTicks;
+                            if (estimate > largestEstimate)
+                            {
+                                nodeWithData = res.Item1;
+                                largestEstimate = estimate;
+                            }
+                        }
+
+
+                        failed = false;
+                        baseConfig.History.DataNodesChunk = chunkSize;
+                        config.History.DataNodesChunk = chunkSize;
+                        done = true;
+                    }
+                    catch (Exception e)
+                    {
+                        failed = true;
+                        done = false;
+                        Log.Warning(e, "Failed to read history");
+                        if (e is ServiceResultException exc && (
+                                exc.StatusCode == StatusCodes.BadHistoryOperationUnsupported
+                                || exc.StatusCode == StatusCodes.BadServiceUnsupported))
+                        {
+                            Log.Warning("History read unsupported, despite Historizing being set to true. " +
+                                        "The history config option must be set to false, or this will cause issues");
+                            done = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (done) break;
+            }
+
+
+            if (failed)
+            {
+                Log.Warning("Unable to read data history");
+                return;
+            }
+
+            Log.Information("Settled on chunkSize: {size}", baseConfig.History.DataNodesChunk);
+            Log.Information("Largest estimated number of datapoints in a single nodes history is {largestEstimate}, " +
+                            "this is found by looking at the first datapoints, then assuming the average frequency holds until now", largestEstimate);
+
+            if (nodeWithData == null)
+            {
+                Log.Warning("No nodes found with more than 10 datapoints in history, further history analysis is not possible");
+                return;
+            }
+
+            var totalAvgDistance = sumDistance / count;
+
+            Log.Information("Average distance between timestamps across all nodes with history: {dist}",
+                TimeSpan.FromTicks(totalAvgDistance));
+            var granularity = Math.Max(TimeSpan.FromTicks(totalAvgDistance).Seconds, 1) * 10;
+            Log.Information("Suggested granularity is: {gran} seconds", granularity);
+            config.History.Granularity = granularity;
+
+            bool backfillCapable = false;
+
+            var backfillDetails = new ReadRawModifiedDetails
+            {
+                IsReadModified = false,
+                StartTime = DateTime.UtcNow,
+                EndTime = earliestTime,
+                NumValuesPerNode = (uint) config.History.DataChunk
+            };
+
+            var backfillParams = new HistoryReadParams(new[] {nodeWithData}, backfillDetails);
+
+            try
+            {
+                var result = DoHistoryRead(backfillParams);
+
+                var data = ReadResultToDataPoints(result.First().Item2, stateMap[result.First().Item1]);
+
+                Log.Information("Last ts: {ts}, {now}", data.First().Timestamp, DateTime.UtcNow);
+
+                var last = data.First();
+                bool orderOk = true;
+                foreach (var dp in data)
+                {
+                    if (dp.Timestamp > last.Timestamp)
+                    {
+                        orderOk = false;
+                    }
+                }
+
+                if (!orderOk)
+                {
+                    Log.Warning("Backfill does not result in properly ordered results");
+                }
+                else
+                {
+                    Log.Information("Backfill config results in properly ordered results");
+                    backfillCapable = true;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Information(e, "Failed to perform backfill");
+            }
+
+            if ((largestEstimate > 100000 || config.History.Backfill) && backfillCapable)
+            {
+                Log.Information("Backfill is recommended or manually enabled, and the server is capable");
+                baseConfig.History.Backfill = true;
+            }
+            else
+            {
+                Log.Information("Backfill is not recommended, or the server is incapable");
+                baseConfig.History.Backfill = false;
+            }
+
+        }
+
+        public void GetEventConfig()
+        {
+            Log.Information("Test for event configuration");
+
         }
     }
 }

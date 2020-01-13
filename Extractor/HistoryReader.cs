@@ -280,7 +280,7 @@ namespace Cognite.OpcUa
                 IsReadModified = false,
                 EndTime = DateTime.UtcNow.AddDays(10),
                 StartTime = finalTimeStamp,
-                NumValuesPerNode = (uint) config.DataChunk
+                NumValuesPerNode = (uint)config.DataChunk
             };
             Log.Information("Frontfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
             BaseHistoryReadOp(details, nodes.Select(node => node.Id), true, true, HistoryDataHandler, token);

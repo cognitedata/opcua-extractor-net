@@ -42,10 +42,13 @@ namespace Cognite.OpcUa.Config
                 explorer.GetVariableChunkSizes(source.Token).Wait();
                 explorer.ReadCustomTypes(source.Token);
                 explorer.IdentifyDataTypeSettings(source.Token).Wait();
+                explorer.GetSubscriptionChunkSizes(source.Token).Wait();
+                explorer.GetHistoryReadConfig(source.Token);
             }
             catch (Exception e)
             {
                 Log.Error(e, "ConfigurationTool failed fatally");
+                return 1;
             }
 
 
