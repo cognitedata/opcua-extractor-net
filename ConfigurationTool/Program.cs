@@ -43,7 +43,10 @@ namespace Cognite.OpcUa.Config
                 explorer.ReadCustomTypes(source.Token);
                 explorer.IdentifyDataTypeSettings(source.Token).Wait();
                 explorer.GetSubscriptionChunkSizes(source.Token).Wait();
-                explorer.GetHistoryReadConfig(source.Token);
+                explorer.GetHistoryReadConfig();
+                explorer.GetEventConfig(source.Token).Wait();
+                explorer.GetNamespaceMap();
+
             }
             catch (Exception e)
             {

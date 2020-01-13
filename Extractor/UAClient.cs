@@ -519,7 +519,8 @@ namespace Cognite.OpcUa
             Action<ReferenceDescription, NodeId> callback,
             CancellationToken token,
             NodeId referenceTypes = null,
-            uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object)
+            uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
+            bool ignoreVisited = true)
         {
             var nextIds = roots.ToList();
             int levelCnt = 0;
@@ -552,7 +553,7 @@ namespace Cognite.OpcUa
                         bool docb = true;
                         lock (visitedNodesLock)
                         {
-                            if (!visitedNodes.Add(nodeId))
+                            if (!visitedNodes.Add(nodeId) && ignoreVisited)
                             {
                                 docb = false;
                                 Log.Verbose("Ignoring visited {nodeId}", nodeId);
@@ -564,7 +565,7 @@ namespace Cognite.OpcUa
                             callback(rd, parentId);
                         }
                         if (rd.NodeClass == NodeClass.Variable) continue;
-                        if (localVisitedNodes.Add(nodeId))
+                        if (localVisitedNodes.Add(nodeId) || !ignoreVisited)
                         {
                             nextIds.Add(nodeId);
                         }
@@ -1126,7 +1127,7 @@ namespace Cognite.OpcUa
                 };
                 operand.BrowsePath.Add(field.Item2);
                 selectClauses.Add(operand);
-                Log.Information("Select event attribute {id}: {name}", field.Item1, field.Item2);
+                Log.Debug("Select event attribute {id}: {name}", field.Item1, field.Item2);
             }
             return new EventFilter
             {

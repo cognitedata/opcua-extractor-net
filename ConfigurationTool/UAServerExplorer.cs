@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Serilog;
 using Exception = System.Exception;
+using KeyValuePair = System.Collections.Generic.KeyValuePair;
 
 namespace Cognite.OpcUa.Config
 {
@@ -17,6 +20,11 @@ namespace Cognite.OpcUa.Config
         private List<BufferedNode> dataTypes;
         private List<ProtoDataType> customNumericTypes;
         private List<BufferedNode> nodeList;
+        private List<NodeId> emitterIds;
+        private List<NodeId> emittedEvents;
+        private List<NodeId> historizingEmitters;
+        private Dictionary<string, string> NamespaceMap;
+        private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> activeEventFields;
         private bool history;
         private bool useServer = false;
 
@@ -36,10 +44,10 @@ namespace Cognite.OpcUa.Config
 
         private readonly List<int> testAttributeChunkSizes = new List<int>
         {
-            100000,
             10000,
             1000,
-            100
+            100,
+            10
         };
 
         private readonly List<int> testSubscriptionChunkSizes = new List<int>
@@ -52,7 +60,6 @@ namespace Cognite.OpcUa.Config
 
         private readonly List<int> testHistoryChunkSizes = new List<int>
         {
-            1000,
             100,
             10,
             1
@@ -161,7 +168,7 @@ namespace Cognite.OpcUa.Config
         {
             return (node, parentId) =>
             {
-                if (node.NodeClass == NodeClass.Object || node.NodeClass == NodeClass.DataType)
+                if (node.NodeClass == NodeClass.Object || node.NodeClass == NodeClass.DataType || node.NodeClass == NodeClass.ObjectType)
                 {
                     var bufferedNode = new BufferedNode(ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
@@ -657,8 +664,7 @@ namespace Cognite.OpcUa.Config
                 config.Source.SubscriptionChunk = chunkSize;
                 try
                 {
-                    SubscribeToNodes(states, GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.Id)),
-                        token);
+                    SubscribeToNodes(states, GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.Id)), token);
                     baseConfig.Source.SubscriptionChunk = chunkSize;
                     failed = false;
                     break;
@@ -927,10 +933,314 @@ namespace Cognite.OpcUa.Config
 
         }
 
-        public void GetEventConfig()
+        private BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
+        {
+            int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
+                                                                       && atr.BrowsePath[0] == BrowseNames.EventType);
+            if (eventTypeIndex < 0)
+            {
+                Log.Warning("Triggered event has no type, ignoring.");
+                return null;
+            }
+            var eventType = eventFields[eventTypeIndex].Value as NodeId;
+            // Many servers don't handle filtering on history data.
+            if (eventType == null || !activeEventFields.ContainsKey(eventType))
+            {
+                Log.Verbose("Invalid event type: {eventType}", eventType);
+                return null;
+            }
+            var targetEventFields = activeEventFields[eventType];
+
+            var extractedProperties = new Dictionary<string, object>();
+
+            for (int i = 0; i < filter.SelectClauses.Count; i++)
+            {
+                var clause = filter.SelectClauses[i];
+                if (!targetEventFields.Any(field =>
+                    field.Item1 == clause.TypeDefinitionId
+                    && field.Item2 == clause.BrowsePath[0]
+                    && clause.BrowsePath.Count == 1)) continue;
+
+                string name = clause.BrowsePath[0].Name;
+                if (config.Events.ExcludeProperties.Contains(name) || config.Events.BaseExcludeProperties.Contains(name)) continue;
+                if (config.Events.DestinationNameMap.ContainsKey(name) && name != "EventId" && name != "SourceNode" && name != "EventType")
+                {
+                    name = config.Events.DestinationNameMap[name];
+                }
+                if (!extractedProperties.ContainsKey(name) || extractedProperties[name] == null)
+                {
+                    extractedProperties[name] = eventFields[i].Value;
+                }
+            }
+            try
+            {
+                var buffEvent = new BufferedEvent
+                {
+                    Message = ConvertToString(extractedProperties.GetValueOrDefault("Message")),
+                    EventId = config.Extraction.IdPrefix + Convert.ToBase64String((byte[])extractedProperties["EventId"]),
+                    SourceNode = (NodeId)extractedProperties["SourceNode"],
+                    Time = (DateTime)extractedProperties.GetValueOrDefault("Time"),
+                    EventType = (NodeId)extractedProperties["EventType"],
+                    MetaData = extractedProperties
+                        .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
+                                      && kvp.Key != "Time" && kvp.Key != "EventType")
+                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                    EmittingNode = emitter,
+                    ReceivedTime = DateTime.UtcNow,
+                };
+                return buffEvent;
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "Failed to construct bufferedEvent from raw fields");
+                return null;
+            }
+        }
+
+        private BufferedEvent[] ReadResultToEvents(IEncodeable rawEvts, NodeId emitterId, ReadEventDetails details)
+        {
+            if (rawEvts == null) return Array.Empty<BufferedEvent>();
+            if (!(rawEvts is HistoryEvent evts))
+            {
+                Log.Warning("Incorrect return type of history read events");
+                return Array.Empty<BufferedEvent>();
+            }
+
+            var filter = details.Filter;
+            if (filter == null)
+            {
+                Log.Warning("No event filter, ignoring");
+                return Array.Empty<BufferedEvent>();
+            }
+
+            if (evts.Events == null) return Array.Empty<BufferedEvent>();
+
+            return evts.Events.Select(evt => ConstructEvent(filter, evt.EventFields, emitterId)).ToArray();
+        }
+
+        public async Task GetEventConfig(CancellationToken token)
         {
             Log.Information("Test for event configuration");
+            var eventTypes = new List<BufferedNode>();
 
+            try
+            {
+                visitedNodes.Clear();
+                BrowseDirectory(new List<NodeId> {ObjectTypeIds.BaseEventType}, GetSimpleListWriterCallback(eventTypes),
+                    token,
+                    ReferenceTypeIds.HasSubtype, (uint) NodeClass.ObjectType);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to read event types, the extractor will not be able to support events");
+                return;
+            }
+
+            var emitterReferences = new List<BufferedNode>();
+
+            Log.Information("Scan hierarchy for GeneratesEvent references");
+
+            try
+            {
+                visitedNodes.Clear();
+                BrowseDirectory(nodeList.Select(node => node.Id).ToList(),
+                    GetSimpleListWriterCallback(emitterReferences),
+                    token,
+                    ReferenceTypeIds.GeneratesEvent, (uint)NodeClass.ObjectType, false);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to look for GeneratesEvent references, this tool will not be able to identify non-server emitters");
+            }
+
+            visitedNodes.Clear();
+
+            var referencedEvents = emitterReferences.Select(evt => evt.Id)
+                .Distinct()
+                .Where(id => id.IdType != IdType.Numeric
+                             || id.NamespaceIndex > 0
+                              || id == ObjectTypeIds.BaseEventType).ToHashSet();
+
+            Log.Information("Referenced emitters: {cnt}", emitterReferences.Count);
+
+            emittedEvents = referencedEvents.ToList();
+
+            emitterIds = emitterReferences
+                .Where(evt => referencedEvents.Contains(evt.Id))
+                .Select(evt => evt.ParentId).Distinct().ToList();
+
+            Log.Information("Identified {cnt} emitters and {cnt2} events by looking at GeneratesEvent references", 
+                emitterIds.Count, emittedEvents.Count);
+
+            bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server && (
+                    evt.Id == ObjectTypeIds.AuditAddNodesEventType || evt.Id == ObjectTypeIds.AuditAddReferencesEventType));
+
+            baseConfig.Extraction.EnableAuditDiscovery |= auditReferences;
+            if (auditReferences)
+            {
+                Log.Information("Audit events on the server node detected, auditing can be enabled");
+            }
+
+            Log.Information("Listening to events on the server node a little while in order to find further events");
+
+            var eventsToListenFor = eventTypes.Where(evt =>
+                evt.Id.IdType != IdType.Numeric
+                || evt.Id.NamespaceIndex > 0
+                || evt.Id == ObjectTypeIds.BaseEventType
+                || IsChildOf(eventTypes, evt, ObjectTypeIds.AuditEventType))
+                .Select(evt => evt.Id);
+
+            activeEventFields = GetEventFields(eventsToListenFor, token);
+
+            var events = new List<BufferedEvent>();
+
+            SubscribeToEvents(new [] {ObjectIds.Server}, nodeList.Select(node => node.Id).ToList(),
+                (item, args) =>
+                {
+                    if (!(args.NotificationValue is EventFieldList triggeredEvent))
+                    {
+                        Log.Warning("No event in event subscription notification: {}", item.StartNodeId);
+                        return;
+                    }
+                    var eventFields = triggeredEvent.EventFields;
+                    if (!(item.Filter is EventFilter filter))
+                    {
+                        Log.Warning("Triggered event without filter");
+                        return;
+                    }
+                    var buffEvent = ConstructEvent(filter, eventFields, item.ResolvedNodeId);
+                    if (buffEvent == null) return;
+
+                    events.Add(buffEvent);
+
+                    Log.Verbose(buffEvent.ToDebugDescription());
+
+                }, token);
+
+            await Task.Delay(5000);
+
+            session.RemoveSubscriptions(session.Subscriptions.ToList());
+
+            if (!events.Any())
+            {
+                Log.Information("No events detected after 5 seconds");
+            }
+            else
+            {
+                Log.Information("Detected {cnt} events in 5 seconds", events.Count);
+                var discoveredEvents = events.Select(evt => evt.EventType).Distinct();
+
+
+                if (discoveredEvents.Any(id =>
+                    IsChildOf(eventTypes, eventTypes.Find(type => type.Id == id), ObjectTypeIds.AuditEventType)))
+                {
+                    Log.Information("Audit events detected on server node, auditing can be enabled");
+                    baseConfig.Extraction.EnableAuditDiscovery = true;
+                }
+
+                emittedEvents = emittedEvents.Concat(discoveredEvents).Distinct().ToList();
+
+                if (!emitterIds.Contains(ObjectIds.Server))
+                {
+                    emitterIds.Add(ObjectIds.Server);
+                }
+            }
+
+            if (emittedEvents.Any(id => id == ObjectTypeIds.BaseEventType))
+            {
+                Log.Warning("Using BaseEventType directly is not recommended, consider switching to a custom event type instead.");
+            }
+
+            Log.Information("Detected a total of {cnt} emitters and {cnt2} event types",
+                emitterIds.Count, emittedEvents.Count);
+
+            Log.Information("Attempt to read historical events for each emitter. Chunk size analysis is not performed here, " +
+                            "the results from normal history read is used if available.");
+
+            var earliestTime = DateTimeOffset.FromUnixTimeMilliseconds(config.History.StartTime).DateTime;
+
+            var details = new ReadEventDetails
+            {
+                EndTime = DateTime.UtcNow.AddDays(10),
+                StartTime = earliestTime,
+                NumValuesPerNode = 100,
+                Filter = BuildEventFilter(nodeList.Select(node => node.Id).ToList())
+            };
+
+            historizingEmitters = new List<NodeId>();
+
+            foreach (var emitter in emitterIds)
+            {
+                var historyParams = new HistoryReadParams(new[] {emitter}, details);
+
+                try
+                {
+                    // Add timeout failure
+                    var resultTask = Task.Run(() => DoHistoryRead(historyParams));
+                    var timeoutTask = Task.Delay(5000);
+
+                    await Task.WhenAny(resultTask, timeoutTask);
+
+                    if (!resultTask.IsCompleted) throw new Exception("Timeout");
+
+                    var result = resultTask.Result;
+
+                    var eventResult = ReadResultToEvents(result.First().Item2, emitter, details);
+
+                    if (eventResult.Any())
+                    {
+                        historizingEmitters.Add(emitter);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Information("Unable to read history for {id}", emitter);
+                    Log.Debug(ex, "Failed to read history for {id}", emitter);
+                }
+            }
+
+            Log.Information("Detected {cnt} historizing emitters", historizingEmitters.Count);
+        }
+
+        public void GetNamespaceMap()
+        {
+            var indices = nodeList.Select(node => node.Id.NamespaceIndex).Distinct();
+
+            var namespaces = indices.Select(idx => session.NamespaceUris.GetString(idx));
+
+            var startRegex = new Regex("^.*://");
+            var splitRegex = new Regex("[^a-zA-Z\\d]");
+
+            var map = namespaces.ToDictionary(ns => ns, ns =>
+                string.Concat(splitRegex.Split(startRegex.Replace(ns, ""))
+                    .Where(sub => !string.IsNullOrEmpty(sub))
+                    .Select(sub => sub.First()))
+            );
+
+            NamespaceMap = new Dictionary<string, string>();
+
+            foreach (var mapped in map)
+            {
+                var baseValue = mapped.Value;
+
+                var nextValue = baseValue;
+
+                int index = 1;
+
+                while (NamespaceMap.Any(kvp => nextValue == kvp.Value && mapped.Key != kvp.Key))
+                {
+                    nextValue = baseValue + index;
+                    index++;
+                }
+
+                NamespaceMap.Add(mapped.Key, nextValue.ToLower());
+            }
+
+            Log.Information("Suggested namespaceMap: ");
+            foreach (var kvp in NamespaceMap)
+            {
+                Log.Information("    {key}: {value}", kvp.Key, kvp.Value);
+            }
         }
     }
 }
