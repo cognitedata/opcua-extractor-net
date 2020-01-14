@@ -526,6 +526,10 @@ namespace Cognite.OpcUa
             int levelCnt = 0;
             int nodeCnt = 0;
             var localVisitedNodes = new HashSet<NodeId>();
+            foreach (var root in roots)
+            {
+                localVisitedNodes.Add(root);
+            }
             do
             {
                 var references = Utils.ChunkBy(nextIds, config.BrowseNodesChunk)
