@@ -1,13 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.0</TargetFramework>
     <RootNamespace>Cognite.OpcUa.Config</RootNamespace>
+	<AssemblyName>ConfigurationTool</AssemblyName>
+    <PublishTrimmed>true</PublishTrimmed>
+	<RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
-
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCpu'">
+    <PublishTrimmed>true</PublishTrimmed>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Extractor\Extractor.csproj" />
   </ItemGroup>
-
 </Project>

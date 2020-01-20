@@ -9,7 +9,7 @@ using Serilog;
 
 namespace Cognite.OpcUa.Config
 {
-    class UAServerExplorer : UAClient
+    public class UAServerExplorer : UAClient
     {
         private readonly FullConfig baseConfig;
         private readonly FullConfig config;
@@ -231,7 +231,7 @@ namespace Cognite.OpcUa.Config
 
             var best = scResults.Aggregate((agg, next) =>
                 next.NumNodes > agg.NumNodes
-                || next.NumNodes == agg.NumNodes && next.BrowseChunk == 0 && agg.BrowseChunk != 0
+                || next.NumNodes == agg.NumNodes && next.BrowseChunk > agg.BrowseChunk
                 || next.NumNodes == agg.NumNodes && next.BrowseChunk == agg.BrowseChunk && next.BrowseNodesChunk > agg.BrowseNodesChunk
                 ? next : agg);
 
@@ -347,7 +347,7 @@ namespace Cognite.OpcUa.Config
             summary.CustomNumTypesCount = customNumericTypes.Count;
         }
 
-        public async Task GetVariableChunkSizes(CancellationToken token)
+        public async Task GetAttributeChunkSizes(CancellationToken token)
         {
             var root = useServer
                 ? ObjectIds.Server
@@ -426,6 +426,8 @@ namespace Cognite.OpcUa.Config
         public async Task IdentifyDataTypeSettings(CancellationToken token)
         {
             var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
+
+            int oldArraySize = config.Extraction.MaxArraySize;
 
             int arrayLimit = config.Extraction.MaxArraySize == 0 ? 10 : config.Extraction.MaxArraySize;
 
@@ -535,8 +537,10 @@ namespace Cognite.OpcUa.Config
                 ? "Historizing variables were found, tests on history chunkSizes will be performed later"
                 : "No historizing variables were found, tests on history chunkSizes will be skipped");
 
+            config.Extraction.MaxArraySize = oldArraySize;
+
             baseConfig.Extraction.AllowStringVariables = baseConfig.Extraction.AllowStringVariables || stringVariables;
-            baseConfig.Extraction.MaxArraySize = maxLimitedArrayLength > 1 ? maxLimitedArrayLength : arrayLimit;
+            baseConfig.Extraction.MaxArraySize = maxLimitedArrayLength > 1 ? maxLimitedArrayLength : oldArraySize;
 
             summary.StringVariables = stringVariables;
             summary.MaxArraySize = maxLimitedArrayLength;
@@ -1136,6 +1140,10 @@ namespace Cognite.OpcUa.Config
 
             Log.Information("Detected {cnt} historizing emitters", historizingEmitters.Count);
             summary.NumHistorizingEmitters = historizingEmitters.Count;
+
+            baseConfig.Events.EventIds = emittedEvents.Distinct().Select(NodeIdToProto).ToList();
+            baseConfig.Events.EmitterIds = emitterIds.Distinct().Select(NodeIdToProto).ToList();
+            baseConfig.Events.HistorizingEmitterIds = historizingEmitters.Distinct().Select(NodeIdToProto).ToList();
         }
 
         public void GetNamespaceMap()
@@ -1180,6 +1188,8 @@ namespace Cognite.OpcUa.Config
             }
 
             summary.NamespaceMap = namespaceMap.Select(kvp => $"{kvp.Key}: {kvp.Value}").ToList();
+
+            baseConfig.Extraction.NamespaceMap = namespaceMap;
         }
 
         public void LogSummary()
@@ -1338,6 +1348,11 @@ namespace Cognite.OpcUa.Config
             {
                 Log.Information("    {ns}", ns);
             }
+        }
+
+        public FullConfig GetFinalConfig()
+        {
+            return baseConfig;
         }
     }
 }

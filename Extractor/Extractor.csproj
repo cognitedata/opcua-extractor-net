@@ -6,6 +6,7 @@
     <RootNamespace>Cognite.OpcUa</RootNamespace>
     <AssemblyName>OpcuaExtractor</AssemblyName>
     <PublishTrimmed>true</PublishTrimmed>
+	<RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCpu'">
     <PublishTrimmed>true</PublishTrimmed>

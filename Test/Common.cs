@@ -158,7 +158,7 @@ namespace Test
 
     public class ExtractorTester : IDisposable
     {
-        private static readonly Dictionary<ServerName, string> _hostNames = new Dictionary<ServerName, string>
+        public static readonly Dictionary<ServerName, string> _hostNames = new Dictionary<ServerName, string>
         {
             {ServerName.Basic, "opc.tcp://localhost:4840"},
             {ServerName.Full, "opc.tcp://localhost:4841"},

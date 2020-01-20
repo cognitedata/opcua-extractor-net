@@ -171,4 +171,3 @@ void packProject(String configuration, String version, boolean linux) {
     }
     sh("rm -r ./${configuration}")
 }
-

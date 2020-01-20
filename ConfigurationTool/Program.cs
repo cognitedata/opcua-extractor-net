@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Threading;
 using Serilog;
 
@@ -18,10 +19,9 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                string configFile = System.IO.Path.Combine(configDir, "config.config-tool.yml");
+                string configFile = Path.Combine(configDir, "config.config-tool.yml");
                 Log.Information($"Loading config from {configFile}");
                 fullConfig = Utils.GetConfig(configFile);
-                Log.Information("Loading config 2");
                 baseConfig = Utils.GetConfig(configFile);
             }
             catch (YamlDotNet.Core.YamlException e)
@@ -39,7 +39,7 @@ namespace Cognite.OpcUa.Config
             {
                 explorer.GetEndpoints(source.Token).Wait();
                 explorer.GetBrowseChunkSizes(source.Token).Wait();
-                explorer.GetVariableChunkSizes(source.Token).Wait();
+                explorer.GetAttributeChunkSizes(source.Token).Wait();
                 explorer.ReadCustomTypes(source.Token);
                 explorer.IdentifyDataTypeSettings(source.Token).Wait();
                 explorer.GetSubscriptionChunkSizes(source.Token).Wait();
@@ -53,7 +53,14 @@ namespace Cognite.OpcUa.Config
                 Log.Error(e, "ConfigurationTool failed fatally");
                 return 1;
             }
+            explorer.Close();
 
+            var result = ToolUtil.ConfigResultToString(explorer.GetFinalConfig());
+
+            Log.Information("");
+            var resultPath = Path.Combine(configDir, "config.config-tool-output.yml");
+            File.WriteAllText(resultPath, result);
+            Log.Information("Emitted suggested config file to {path}", resultPath);
 
             return 0;
         }
