@@ -1,5 +1,7 @@
 ﻿# Template for the config file,
 # Defaults to config.yml in ./config.
+# The config tool defaults to config/config.config-tool.yml, and uses the same config 
+# options, though only EndpointURL and if needed username/password/secure are required.
 # The values here are generally the default values, except for the contents of lists etc.
 # Your config file can contain only a subset of these config options. Any extra options will
 # cause the extractor to fail.

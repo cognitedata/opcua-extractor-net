@@ -200,6 +200,8 @@ namespace Cognite.OpcUa.Config
                     var df = prop?.GetValue(dfs);
                     var val = prop?.GetValue(container);
 
+                    if (!p.CanWrite) return false;
+
                     return df != null && !df.Equals(val) || df == null && val != null;
                 });
                     
