@@ -158,9 +158,9 @@ podTemplate(
 }
 
 void packProject(String configuration, String version, boolean linux) {
-    sh("dotnet publish -c Release -r $configuration --self-contained true /p:PublishSingleFile=\"true\" Extractor/")
+    sh("dotnet publish -c Release -r $configuration --self-contained true /p:PublishSingleFile=\"true\" ExtractorLauncher/")
     sh("mkdir -p ./${configuration}/")
-    sh("mv Extractor/bin/Release/netcoreapp3.0/${configuration}/publish/* ./${configuration}/")
+    sh("mv ExtractorLauncher/bin/Release/netcoreapp3.0/${configuration}/publish/* ./${configuration}/")
     sh("cp -r ./config ./${configuration}/")
     sh("cp ./LICENSE.md ./${configuration}/")
     if (linux) {

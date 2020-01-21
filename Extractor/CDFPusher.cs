@@ -649,13 +649,15 @@ namespace Cognite.OpcUa
             }
             catch (ResponseException ex)
             {
+                Log.Information("Err: {code}, {msg}, {missing}", ex.Code, ex.Message, ex.Missing.Any());
                 if (ex.Code == 400 && ex.Missing.Any())
                 {
                     foreach (var missing in ex.Missing)
                     {
-                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        if (missing.TryGetValue("externalId", out IErrorValue error))
                         {
-                            missingAssetIds.Add(value.ToString());
+                            if (!(error is StringValue value)) continue;
+                            missingAssetIds.Add(value.String);
                         }
                     }
 
@@ -737,7 +739,7 @@ namespace Cognite.OpcUa
                 {
                     foreach (var missing in ex.Missing)
                     {
-                        if (missing.TryGetValue("externalId", out ErrorValue value))
+                        if (missing.TryGetValue("externalId", out IErrorValue value))
                         {
                             missingTSIds.Add(value.ToString());
                         }
