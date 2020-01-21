@@ -20,7 +20,7 @@ buffer.bin
 *.lcov
 coverage.json
 paket-files/
-Extractor/Properties
+ExtractorLauncher/Properties
 *.bin
 
 # Config
