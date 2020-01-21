@@ -6,4 +6,4 @@ COPY . .
 RUN mono .paket/paket.exe restore
 RUN dotnet build
 
-RUN dotnet publish -c Release -o /build/deploy /p:PublishTrimmed="false" Extractor
+RUN dotnet publish -c Release -o /build/deploy /p:PublishTrimmed="false" ExtractorLauncher

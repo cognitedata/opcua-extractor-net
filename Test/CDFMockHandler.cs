@@ -27,7 +27,6 @@ using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Newtonsoft.Json;
 using Serilog;
-using HttpMethod = System.Net.Http.HttpMethod;
 
 #pragma warning disable IDE1006 // Naming Styles
 

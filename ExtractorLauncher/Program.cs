@@ -1,4 +1,21 @@
-﻿using System;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2019 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,6 +57,7 @@ namespace Cognite.OpcUa
                             "    -p|--password [pass]       - Override configured OPC-UA password\n" +
                             "    -s|--secure                - Use a secure connection to OPC-UA\n" +
                             "    -f|--config-file [path]    - Set the config-file path. Overrides config-dir for .yml config files\n" +
+                            "    -a|--auto-accept           - Auto-accept server certificates\n" +
                             "    -d|--config-dir [path]     - Set the path to the config directory\n" +
                             "    -ct|--config-target [path] - Set the path to the output file for the config tool. " +
                             "By default [config-dir]/config.config-tool-output.yml. This file is overwritten.\n" +
@@ -80,6 +98,7 @@ namespace Cognite.OpcUa
             if (!string.IsNullOrEmpty(setup.Password)) config.Source.Password = setup.Password;
             config.Source.Secure |= setup.Secure;
             if (!string.IsNullOrEmpty(setup.LogLevel)) config.Logging.ConsoleLevel = setup.LogLevel;
+            config.Source.AutoAccept |= setup.AutoAccept;
 
             Logger.Configure(config.Logging);
 
@@ -241,6 +260,10 @@ namespace Cognite.OpcUa
                     case "--log-level":
                         result.LogLevel = args[++i];
                         break;
+                    case "-a":
+                    case "--auto-accept":
+                        result.AutoAccept = true;
+                        break;
                     default:
                         throw new Exception($"Unrecognized parameter: {args[i]}");
                 }
@@ -261,6 +284,7 @@ namespace Cognite.OpcUa
             public string LogLevel;
             public string ConfigDir;
             public bool NoConfig;
+            public bool AutoAccept;
         }
     } 
 }
