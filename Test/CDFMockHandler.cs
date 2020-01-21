@@ -25,9 +25,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
-using Google.Protobuf.Collections;
 using Newtonsoft.Json;
-using Opc.Ua;
 using Serilog;
 using HttpMethod = System.Net.Http.HttpMethod;
 

@@ -75,7 +75,7 @@ namespace Cognite.OpcUa
         /// <param name="config">Full config object</param>
         /// <param name="provider">ServiceProvider with any required service for the pushers.</param>
         /// <param name="source">CancellationTokenSource used to create tokens and terminate the run-task on failure</param>
-        public void Run(CancellationTokenSource source)
+        public async Task Run(CancellationTokenSource source)
         {
             var client = new UAClient(config);
             int index = 0;
@@ -115,7 +115,7 @@ namespace Cognite.OpcUa
 
             try
             {
-                runTask.Wait();
+                await runTask;
             }
             catch
             {

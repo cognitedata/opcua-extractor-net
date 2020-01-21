@@ -136,7 +136,7 @@ namespace Cognite.OpcUa
 
                         try
                         {
-                            runTime.Run(source);
+                            runTime.Run(source).Wait();
                         }
                         catch (TaskCanceledException)
                         {

@@ -101,5 +101,69 @@ namespace Test
 
             explorer.Close();
         }
+
+        [Trait("Server", "basic")]
+        [Trait("Target", "ExtractorRuntime")]
+        [Trait("Test", "extractorruntime")]
+        [Fact]
+        public async Task TestExtractorRuntime()
+        {
+            var fullConfig = Utils.GetConfig("config.test.yml");
+            Logger.Configure(fullConfig.Logging);
+
+            fullConfig.Source.EndpointURL = ExtractorTester._hostNames[ServerName.Basic];
+            fullConfig.Pushers = new List<PusherConfig>();
+
+            var runTime = new ExtractorRuntime(fullConfig);
+
+            using var source = new CancellationTokenSource();
+
+            runTime.Configure();
+            var runTask = runTime.Run(source);
+
+            await Task.Delay(2000);
+
+            Assert.False(runTask.IsFaulted);
+
+            source.Cancel();
+
+            try
+            {
+                await runTask;
+            }
+            catch (Exception ex)
+            {
+                if (!Common.TestRunResult(ex)) throw;
+            }
+        }
+        [Trait("Server", "basic")]
+        [Trait("Target", "ConfigToolRuntime")]
+        [Trait("Test", "configtoolruntime")]
+        [Fact]
+        public async Task TestConfigToolRuntime()
+        {
+            var fullConfig = Utils.GetConfig("config.config-tool-test.yml");
+            var baseConfig = Utils.GetConfig("config.config-tool-test.yml");
+
+            Logger.Configure(fullConfig.Logging);
+
+            fullConfig.Source.EndpointURL = ExtractorTester._hostNames[ServerName.Basic];
+            baseConfig.Source.EndpointURL = ExtractorTester._hostNames[ServerName.Basic];
+
+            var runTime = new ConfigToolRuntime(fullConfig, baseConfig, "config.config-tool-output.yml");
+
+            using var source = new CancellationTokenSource();
+
+            var runTask = runTime.Run();
+
+            try
+            {
+                await runTask;
+            }
+            catch (Exception ex)
+            {
+                if (!Common.TestRunResult(ex)) throw;
+            }
+        }
     }
 }
