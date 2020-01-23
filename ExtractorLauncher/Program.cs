@@ -132,6 +132,7 @@ namespace Cognite.OpcUa
             var runTime = new ExtractorRuntime(config);
             runTime.Configure();
 
+            using var manualSource = new CancellationTokenSource();
             CancellationTokenSource source = null;
             using (var quitEvent = new ManualResetEvent(false))
             {
@@ -142,6 +143,7 @@ namespace Cognite.OpcUa
                     eArgs.Cancel = true;
                     source?.Cancel();
                     canceled = true;
+                    manualSource?.Cancel();
                 };
                 while (true)
                 {
@@ -168,7 +170,7 @@ namespace Cognite.OpcUa
                         }
                         try
                         {
-                            Task.Delay(1000, source.IsCancellationRequested ? CancellationToken.None : source.Token).Wait();
+                            Task.Delay(1000, manualSource.Token).Wait();
                         }
                         catch (TaskCanceledException)
                         {

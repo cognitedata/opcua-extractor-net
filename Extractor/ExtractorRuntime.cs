@@ -98,24 +98,18 @@ namespace Cognite.OpcUa
             int index = 0;
             IEnumerable<IPusher> pushers = config.Pushers.Select(pusher => pusher.ToPusher(index++, provider)).ToList();
             var removePushers = new List<IPusher>();
-            try
+
+            await Task.WhenAll(pushers.Select(pusher => pusher.TestConnection(source.Token).ContinueWith(result =>
             {
-                Task.WhenAll(pushers.Select(pusher => pusher.TestConnection(source.Token).ContinueWith(result =>
+                if (pusher.BaseConfig.Critical && !result.Result)
                 {
-                    if (pusher.BaseConfig.Critical && !result.Result)
-                    {
-                        throw new Exception("Critical pusher failed to connect");
-                    }
-                    if (!result.Result)
-                    {
-                        removePushers.Add(pusher);
-                    }
-                })).ToArray()).Wait();
-            }
-            catch (Exception ex)
-            {
-                throw new Exception("Failed to connect to a critical destination", ex);
-            }
+                    throw new Exception("Critical pusher failed to connect");
+                }
+                if (!result.Result)
+                {
+                    removePushers.Add(pusher);
+                }
+            })).ToArray());
 
             pushers = pushers.Except(removePushers).ToList();
             var extractor = new Extractor(config, pushers, client);
@@ -126,7 +120,7 @@ namespace Cognite.OpcUa
                     source.Cancel();
                     if (task.IsFaulted)
                     {
-                        throw task.Exception;
+                        throw task.Exception ?? new Exception("Unknown failure in runtask");
                     }
                 });
 
