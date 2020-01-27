@@ -1,42 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
     <RootNamespace>Cognite.OpcUa</RootNamespace>
-    <AssemblyName>OpcuaExtractor</AssemblyName>
-    <PublishTrimmed>true</PublishTrimmed>
+    <AssemblyName>Extractor</AssemblyName>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCpu'">
-    <PublishTrimmed>true</PublishTrimmed>
-    <Optimize>true</Optimize>
-  </PropertyGroup>
-  <ItemGroup>
-    <None Remove="App.config" />
-    <None Remove="Properties\GitCommitHash" />
-    <None Remove="Properties\GitCommitTime" />
-  </ItemGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
   </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Properties\GitCommitHash">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Properties\GitCommitTime">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </EmbeddedResource>
-  </ItemGroup>
-  <PropertyGroup>
-    <GitCleanVersion>
-    </GitCleanVersion>
-  </PropertyGroup>
-  <PropertyGroup>
-    <PreBuildEvent>
-mkdir "$(MSBuildProjectDirectory)/Properties"
-git describe --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
-git log -1  --format="%25%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
-</PreBuildEvent>
-  </PropertyGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

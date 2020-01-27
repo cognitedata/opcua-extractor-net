@@ -20,15 +20,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
-using Google.Protobuf.Collections;
 using Newtonsoft.Json;
-using Opc.Ua;
 using Serilog;
-using HttpMethod = System.Net.Http.HttpMethod;
 
 #pragma warning disable IDE1006 // Naming Styles
 
@@ -90,39 +88,50 @@ namespace Test
             catch { }
             lock (handlerLock)
             {
+                HttpResponseMessage res;
                 try
                 {
                     switch (reqPath)
                     {
                         case "/assets/byids":
-                            return HandleAssetsByIds(content);
+                            res = HandleAssetsByIds(content);
+                            break;
                         case "/assets":
-                            return HandleCreateAssets(content);
+                            res = HandleCreateAssets(content);
+                            break;
                         case "/timeseries/byids":
-                            return HandleGetTimeseries(content);
+                            res = HandleGetTimeseries(content);
+                            break;
                         case "/timeseries":
-                            return req.Method == HttpMethod.Get
+                            res = req.Method == HttpMethod.Get
                                 ? HandleListTimeseries()
                                 : HandleCreateTimeseries(content);
+                            break;
                         case "/timeseries/data":
-                            return HandleTimeseriesData(null);
+                            res = HandleTimeseriesData(null);
+                            break;
                         case "/timeseries/data/latest":
-                            return HandleGetTimeseries(content);
+                            res = HandleGetTimeseries(content);
+                            break;
                         case "/timeseries/data/list":
-                            return HandleGetDatapoints(content);
+                            res = HandleGetDatapoints(content);
+                            break;
                         case "/events":
-                            return HandleCreateEvents(content);
+                            res = HandleCreateEvents(content);
+                            break;
                         default:
                             Log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
-                            return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                            res = new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                            break;
                     }
                 }
                 catch (Exception e)
                 {
                     Log.Error(e, "Error in mock handler");
-                    return new HttpResponseMessage(HttpStatusCode.BadRequest);
+                    res = new HttpResponseMessage(HttpStatusCode.BadRequest);
                 }
-
+                res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                return res;
             }
         }
 

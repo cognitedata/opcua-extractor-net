@@ -123,6 +123,7 @@ namespace Cognite.OpcUa
                 ApplicationType = ApplicationType.Client,
                 ConfigSectionName = "opc.ua.net.extractor"
             };
+            Log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.ConfigRoot);
             appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
@@ -514,17 +515,22 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback for each node</param>
         /// <param name="referenceTypes">Permitted reference types, defaults to HierarchicalReferences</param>
         /// <param name="nodeClassMask">Mask for node classes as described in the OPC-UA specification</param>
-        private void BrowseDirectory(
+        protected void BrowseDirectory(
             IEnumerable<NodeId> roots,
             Action<ReferenceDescription, NodeId> callback,
             CancellationToken token,
             NodeId referenceTypes = null,
-            uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object)
+            uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
+            bool ignoreVisited = true)
         {
             var nextIds = roots.ToList();
             int levelCnt = 0;
             int nodeCnt = 0;
             var localVisitedNodes = new HashSet<NodeId>();
+            foreach (var root in roots)
+            {
+                localVisitedNodes.Add(root);
+            }
             do
             {
                 var references = Utils.ChunkBy(nextIds, config.BrowseNodesChunk)
@@ -552,7 +558,7 @@ namespace Cognite.OpcUa
                         bool docb = true;
                         lock (visitedNodesLock)
                         {
-                            if (!visitedNodes.Add(nodeId))
+                            if (!visitedNodes.Add(nodeId) && ignoreVisited)
                             {
                                 docb = false;
                                 Log.Verbose("Ignoring visited {nodeId}", nodeId);
@@ -564,7 +570,7 @@ namespace Cognite.OpcUa
                             callback(rd, parentId);
                         }
                         if (rd.NodeClass == NodeClass.Variable) continue;
-                        if (localVisitedNodes.Add(nodeId))
+                        if (localVisitedNodes.Add(nodeId) || !ignoreVisited)
                         {
                             nextIds.Add(nodeId);
                         }
@@ -1126,7 +1132,7 @@ namespace Cognite.OpcUa
                 };
                 operand.BrowsePath.Add(field.Item2);
                 selectClauses.Add(operand);
-                Log.Information("Select event attribute {id}: {name}", field.Item1, field.Item2);
+                Log.Debug("Select event attribute {id}: {name}", field.Item1, field.Item2);
             }
             return new EventFilter
             {

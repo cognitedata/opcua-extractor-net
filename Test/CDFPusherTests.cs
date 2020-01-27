@@ -21,7 +21,6 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
 using Serilog;
 using Xunit;
@@ -33,8 +32,7 @@ namespace Test
     public class CDFPusherTests : MakeConsoleWork
     {
         public CDFPusherTests(ITestOutputHelper output) : base(output) { }
-        [Trait("Server", "basic")]
-        [Trait("Server", "full")]
+        [Trait("Server", "basic+full")]
         [Trait("Target", "CDFPusher")]
         [Trait("Test", "pusher")]
         [Theory]

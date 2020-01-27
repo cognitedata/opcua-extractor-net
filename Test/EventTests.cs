@@ -17,11 +17,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
-using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
 using Serilog;
 using Xunit;

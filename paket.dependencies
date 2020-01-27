@@ -1,6 +1,7 @@
 source https://www.nuget.org/api/v2
 storage: none
 
+nuget Microsoft.CSharp
 nuget coverlet.msbuild
 nuget Microsoft.NET.Test.Sdk
 nuget xunit
@@ -10,6 +11,7 @@ nuget OPCFoundation.NetStandard.Opc.Ua
 nuget Prometheus.Client.MetricPusher
 nuget YamlDotNet
 nuget CogniteSdk
+nuget Oryx 0.16.1
 nuget AdysTech.InfluxDB.Client.Net.Core
 nuget Serilog
 nuget Serilog.Sinks.GoogleCloudLogging

@@ -9,4 +9,4 @@ ENV OPCUA_CONFIG_DIR="/config"
 ENV OPCUA_LOGGER_DIR="/logs"
 ENV OPCUA_CERTIFICATE_DIR="/certificates"
 
-ENTRYPOINT ["dotnet", "/extractor/Extractor.dll"]
+ENTRYPOINT ["dotnet", "/extractor/OpcuaExtractor.dll"]

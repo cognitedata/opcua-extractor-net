@@ -158,7 +158,7 @@ namespace Test
 
     public class ExtractorTester : IDisposable
     {
-        private static readonly Dictionary<ServerName, string> _hostNames = new Dictionary<ServerName, string>
+        public static readonly Dictionary<ServerName, string> _hostNames = new Dictionary<ServerName, string>
         {
             {ServerName.Basic, "opc.tcp://localhost:4840"},
             {ServerName.Full, "opc.tcp://localhost:4841"},
@@ -280,8 +280,6 @@ namespace Test
 
         public void StartExtractor()
         {
-            Log.Information("Starting OPC UA Extractor version {version}", Cognite.OpcUa.Version.GetVersion());
-            Log.Information("Revision information: {status}", Cognite.OpcUa.Version.Status());
             RunTask = Extractor.RunExtractor(Source.Token, testParams.QuitAfterMap);
         }
         public async Task WaitForCondition(Func<Task<bool>> condition, int seconds, Func<string> assertion)

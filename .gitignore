@@ -20,9 +20,11 @@ buffer.bin
 *.lcov
 coverage.json
 paket-files/
-Extractor/Properties
+ExtractorLauncher/Properties
 *.bin
 
 # Config
 config.yml
 config.yml.*
+config.config-tool.yml
+config.config-tool-output.yml
