@@ -31,28 +31,56 @@ namespace Cognite.OpcUa.Config
 {
     public static class ToolUtil
     {
+        /// <summary>
+        /// Run with timeout, returning the result of the task or throwing a TimeoutException
+        /// </summary>
+        /// <typeparam name="T">Type of return value</typeparam>
+        /// <param name="toRun">Task to run</param>
+        /// <param name="timeoutSec">Seconds before timeout</param>
+        /// <returns>The return value of toRun if it completed within timeout.</returns>
         public static async Task<T> RunWithTimeout<T>(Task<T> toRun, int timeoutSec)
         {
             await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(timeoutSec)), toRun);
             if (!toRun.IsCompleted) throw new TimeoutException();
             return toRun.Result;
         }
-
+        /// <summary>
+        /// Run with timeout, returning nothing or throwing a TimeoutException
+        /// </summary>
+        /// <param name="toRun">Task to run</param>
+        /// <param name="timeoutSec">Seconds before timeout</param>
         public static async Task RunWithTimeout(Task toRun, int timeoutSec)
         {
             await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(timeoutSec)), toRun);
             if (!toRun.IsCompleted) throw new TimeoutException();
         }
-
+        /// <summary>
+        /// Run with timeout, returning nothing or throwing a TimeoutException
+        /// </summary>
+        /// <param name="toRun">Action to run</param>
+        /// <param name="timeoutSec">Seconds before timeout</param>
         public static Task RunWithTimeout(Action toRun, int timeoutSec)
         {
             return RunWithTimeout(Task.Run(toRun), timeoutSec);
         }
-
+        /// <summary>
+        /// Run with timeout, returning the result of the task or throwing a TimeoutException
+        /// </summary>
+        /// <typeparam name="T">Type of return value</typeparam>
+        /// <param name="toRun">Action to run</param>
+        /// <param name="timeoutSec">Seconds before timeout</param>
+        /// <returns>The return value of toRun if it completed within timeout.</returns>
         public static Task<T> RunWithTimeout<T>(Func<T> toRun, int timeoutSec)
         {
             return RunWithTimeout(Task.Run(toRun), timeoutSec);
         }
+        /// <summary>
+        /// Returns true if, given the list of nodes, the node child has a parent/grandparent with id parent
+        /// </summary>
+        /// <param name="nodes">Node hierarchy</param>
+        /// <param name="child">Child to look for parents for</param>
+        /// <param name="parent">Parent to look for</param>
+        /// <returns>True if child is descendant of parent</returns>
         public static bool IsChildOf(IEnumerable<BufferedNode> nodes, BufferedNode child, NodeId parent)
         {
             var next = child;
@@ -73,6 +101,12 @@ namespace Cognite.OpcUa.Config
 
             return false;
         }
+        /// <summary>
+        /// Callback for browse, writes the resulting nodes to a list
+        /// </summary>
+        /// <param name="target">List to write to</param>
+        /// <param name="client">UAClient instance for namespaces</param>
+        /// <returns>Callback for Browse in UAClient</returns>
         public static Action<ReferenceDescription, NodeId> GetSimpleListWriterCallback(List<BufferedNode> target, UAClient client)
         {
             return (node, parentId) =>
@@ -135,7 +169,13 @@ namespace Cognite.OpcUa.Config
                     UAClient.ConvertToDouble(value.Value));
             return new[] { sdp };
         }
-
+        /// <summary>
+        /// Get a subscription handler that writes datapoints to a list
+        /// </summary>
+        /// <param name="points">Target list to write to</param>
+        /// <param name="states">Overview of states to use</param>
+        /// <param name="client">UAClient for namespaces</param>
+        /// <returns>Subscription handler for datapoints</returns>
         public static MonitoredItemNotificationEventHandler GetSimpleListWriterHandler(
             List<BufferedDataPoint> points,
             IDictionary<NodeId, NodeExtractionState> states,
@@ -232,6 +272,11 @@ namespace Cognite.OpcUa.Config
                 return props;
             }
         }
+        /// <summary>
+        /// Intelligently converts an instance of FullConfig to a string config file. Only writing entries that differ from the default values.
+        /// </summary>
+        /// <param name="config">Config to convert</param>
+        /// <returns>Final config string, can be written directly to file or parsed further</returns>
         public static string ConfigResultToString(FullConfig config)
         {
             var serializer = new SerializerBuilder()

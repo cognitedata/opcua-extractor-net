@@ -121,7 +121,9 @@ namespace Cognite.OpcUa.Config
 
             this.baseConfig.Source = config.Source;
         }
-
+        /// <summary>
+        /// Try connecting to the server, and treating it as a discovery server, to list other endpoints on the same server.
+        /// </summary>
         public async Task GetEndpoints(CancellationToken token)
         {
             bool failed = false;
@@ -189,7 +191,11 @@ namespace Cognite.OpcUa.Config
                 throw new Exception("Fatal: Provided configuration failed to connect to the server");
             }
         }
-
+        /// <summary>
+        /// Browse multiple times with different combination of BrowseChunk and BrowseNodesChunk, to determine them.
+        /// Uses the result with the greatest successfull values for BrowseChunk and BrowseNodesChunk, with the greatest number of received nodes.
+        /// Will read from the server hierarchy if the number of nodes in the main hierarchy is too small.
+        /// </summary>
         public async Task GetBrowseChunkSizes(CancellationToken token)
         {
             var results = new List<BrowseMapResult>();
@@ -289,7 +295,11 @@ namespace Cognite.OpcUa.Config
                 summary.ServerSizeWarning = true;
             }
         }
-
+        /// <summary>
+        /// Transform a NodeId to a ProtoNodeId, for writing to yml config file.
+        /// </summary>
+        /// <param name="id">NodeId to convert</param>
+        /// <returns>Converted ProtoNodeId</returns>
         public ProtoNodeId NodeIdToProto(NodeId id)
         {
             string nodeidstr = id.ToString();
@@ -305,12 +315,18 @@ namespace Cognite.OpcUa.Config
                 NodeId = nodeidstr
             };
         }
-
+        /// <summary>
+        /// Returns true if the id is for a custom object. Tested by checking for non-integer identifiertype, or >0 namespaceUri.
+        /// </summary>
+        /// <param name="id">Id to test</param>
+        /// <returns>True if id is a custom object</returns>
         private bool IsCustomObject(NodeId id)
         {
             return id.NamespaceIndex != 0 || id.IdType != IdType.Numeric;
         }
-
+        /// <summary>
+        /// Browse the datatype hierarchy, checking for custom numeric datatypes.
+        /// </summary>
         public void ReadCustomTypes(CancellationToken token)
         {
             dataTypes = new List<BufferedNode>();
@@ -363,7 +379,9 @@ namespace Cognite.OpcUa.Config
             Log.Information("Found {count} custom numeric datatypes", customNumericTypes.Count);
             summary.CustomNumTypesCount = customNumericTypes.Count;
         }
-
+        /// <summary>
+        /// Get AttributeChunk config value, by attempting to read for various chunk sizes.
+        /// </summary>
         public async Task GetAttributeChunkSizes(CancellationToken token)
         {
             var root = useServer
@@ -439,7 +457,9 @@ namespace Cognite.OpcUa.Config
                 throw new Exception("Failed to read node attributes for any chunk size");
             }
         }
-
+        /// <summary>
+        /// Look through the node hierarchy to find arrays and strings, setting MaxArraySize and StringVariables
+        /// </summary>
         public async Task IdentifyDataTypeSettings(CancellationToken token)
         {
             var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
@@ -570,7 +590,9 @@ namespace Cognite.OpcUa.Config
             public int NumNodes;
             public bool failed;
         }
-
+        /// <summary>
+        /// Attempts different chunk sizes for subscriptions. (number of created monitored items per attempt, most servers should support at least one subscription).
+        /// </summary>
         public async Task GetSubscriptionChunkSizes(CancellationToken token)
         {
             bool failed = true;
@@ -662,7 +684,10 @@ namespace Cognite.OpcUa.Config
 
             session.RemoveSubscriptions(session.Subscriptions.ToList());
         }
-
+        /// <summary>
+        /// Attempts history read if possible, getting chunk sizes. It also determines granularity, and sets backfill to true if it works and it estimates that there
+        /// are a lot of points in some variables.
+        /// </summary>
         public async Task GetHistoryReadConfig()
         {
             var historizingStates = nodeList.Where(node =>
@@ -846,7 +871,6 @@ namespace Cognite.OpcUa.Config
             }
 
         }
-
         private BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
         {
             int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
@@ -931,7 +955,11 @@ namespace Cognite.OpcUa.Config
 
             return evts.Events.Select(evt => ConstructEvent(filter, evt.EventFields, emitterId)).ToArray();
         }
-
+        /// <summary>
+        /// Look for emitter relationships, and attempt to listen to events on any identified emitters. Also look through the event hierarchy and find any
+        /// custom events that may be interesting for cognite. Then attempt to listen for audit events on the server node, if any at all are detected
+        /// assume that the server is auditing.
+        /// </summary>
         public async Task GetEventConfig(CancellationToken token)
         {
             Log.Information("Test for event configuration");
@@ -1162,7 +1190,9 @@ namespace Cognite.OpcUa.Config
             baseConfig.Events.EmitterIds = emitterIds.Distinct().Select(NodeIdToProto).ToList();
             baseConfig.Events.HistorizingEmitterIds = historizingEmitters.Distinct().Select(NodeIdToProto).ToList();
         }
-
+        /// <summary>
+        /// Generate an intelligent namespace-map, with unique values, base for the base opcfoundation namespace (I think that appears in most servers).
+        /// </summary>
         public void GetNamespaceMap()
         {
             var indices = nodeList.Concat(dataTypes).Concat(eventTypes).Select(node => node.Id.NamespaceIndex).Distinct();
@@ -1208,7 +1238,9 @@ namespace Cognite.OpcUa.Config
 
             baseConfig.Extraction.NamespaceMap = namespaceMap;
         }
-
+        /// <summary>
+        /// Log a summary of the run.
+        /// </summary>
         public void LogSummary()
         {
             Log.Information("");
