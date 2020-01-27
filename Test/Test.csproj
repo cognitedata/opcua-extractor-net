@@ -6,6 +6,12 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove=".editorconfig" />
+  </ItemGroup>
+  <ItemGroup>
+    <AdditionalFiles Include=".editorconfig" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\ConfigurationTool\ConfigurationTool.csproj" />
     <ProjectReference Include="..\Extractor\Extractor.csproj" />
   </ItemGroup>

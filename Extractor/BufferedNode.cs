@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using Opc.Ua;
@@ -31,19 +32,19 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Raw NodeId in OPC-UA.
         /// </summary>
-        public readonly NodeId Id;
+        public NodeId Id { get; }
         /// <summary>
         /// DisplayName in OPC-UA
         /// </summary>
-        public readonly string DisplayName;
+        public string DisplayName { get; }
         /// <summary>
         /// True if this is also a BufferedVariable.
         /// </summary>
-        public readonly bool IsVariable;
+        public bool IsVariable { get; }
         /// <summary>
         /// NodeId of the parent. May be NodeId.Null for rootNodes
         /// </summary>
-        public readonly NodeId ParentId;
+        public NodeId ParentId { get; }
         /// <summary>
         /// True if the properties of this object has been read.
         /// </summary>
@@ -70,7 +71,7 @@ namespace Cognite.OpcUa
                 + propertyString + "\n";
             return ret;
         }
-        public IList<BufferedVariable> Properties;
+        public IList<BufferedVariable> Properties { get; set; }
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
@@ -92,17 +93,18 @@ namespace Cognite.OpcUa
     /// </summary>
     public class BufferedDataType
     {
-        public readonly uint Identifier;
-        public readonly bool IsStep;
-        public readonly bool IsString;
-        public readonly NodeId raw;
+        public uint Identifier { get; }
+        public bool IsStep { get; }
+        public bool IsString { get; }
+        public NodeId Raw { get; }
         /// <summary>
         /// Construct BufferedDataType from NodeId of datatype
         /// </summary>
         /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
         public BufferedDataType(NodeId rawDataType)
         {
-            raw = rawDataType;
+            if (rawDataType == null) throw new ArgumentNullException(nameof(rawDataType));
+            Raw = rawDataType;
             if (rawDataType.IdType == IdType.Numeric)
             {
                 Identifier = (uint)rawDataType.Identifier;
@@ -122,6 +124,7 @@ namespace Cognite.OpcUa
         /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
         public BufferedDataType(ProtoDataType protoDataType, NodeId rawDataType) : this(rawDataType)
         {
+            if (protoDataType == null) throw new ArgumentNullException(nameof(protoDataType));
             IsStep = protoDataType.IsStep;
             IsString = false;
         }
@@ -145,6 +148,7 @@ namespace Cognite.OpcUa
         public BufferedDataType DataType { get; private set; }
         public void SetDataType(NodeId dataType, Dictionary<NodeId, ProtoDataType> numericalTypeMap)
         {
+            if (numericalTypeMap == null) throw new ArgumentNullException(nameof(numericalTypeMap));
             if (numericalTypeMap.ContainsKey(dataType))
             {
                 var proto = numericalTypeMap[dataType];
@@ -194,10 +198,12 @@ namespace Cognite.OpcUa
             return ret;
         }
         public BufferedVariable ArrayParent { get; }
+
+
         /// <summary>
         /// Fixed dimensions of the array-type variable, if any
         /// </summary>
-        public int[] ArrayDimensions { get; set; }
+        public Collection<int> ArrayDimensions { get; set; }
         /// <summary>
         /// Index of the variable in array, if relevant. -1 if the variable is scalar.
         /// </summary>
@@ -214,6 +220,7 @@ namespace Cognite.OpcUa
         /// <param name="client">Current client context</param>
         public void SetDataPoint(object value, DateTime sourceTimestamp, UAClient client)
         {
+            if (client == null) throw new ArgumentNullException(nameof(client));
             if (value == null) return;
             if (DataType.IsString || IsProperty)
             {
@@ -230,7 +237,8 @@ namespace Cognite.OpcUa
                     UAClient.ConvertToDouble(value));
             }
         }
-        public BufferedVariable(BufferedVariable other, int index) : base(other.Id, other.DisplayName + $"[{index}]", true, other.Id)
+        public BufferedVariable(BufferedVariable other, int index)
+            : base(OtherNonNull(other).Id, other.DisplayName + $"[{index}]", true, other.Id)
         {
             ArrayParent = other;
             Index = index;
@@ -239,17 +247,23 @@ namespace Cognite.OpcUa
             ValueRank = other.ValueRank;
             ArrayDimensions = other.ArrayDimensions;
         }
+
+        private static BufferedVariable OtherNonNull(BufferedVariable other)
+        {
+            if (other == null) throw new ArgumentNullException(nameof(other));
+            return other;
+        }
     }
     /// <summary>
     /// Represents a single value at specified timestamp
     /// </summary>
     public class BufferedDataPoint
     {
-        public readonly DateTime Timestamp;
-        public readonly string Id;
-        public readonly double DoubleValue;
-        public readonly string StringValue;
-        public readonly bool IsString;
+        public DateTime Timestamp { get; }
+        public string Id { get; }
+        public double DoubleValue { get; }
+        public string StringValue { get; }
+        public bool IsString { get; }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
@@ -273,6 +287,7 @@ namespace Cognite.OpcUa
 
         public BufferedDataPoint(BufferedDataPoint other, string replacement)
         {
+            if (other == null) throw new ArgumentNullException(nameof(other));
             Timestamp = other.Timestamp;
             Id = other.Id;
             StringValue = replacement;
@@ -280,6 +295,7 @@ namespace Cognite.OpcUa
         }
         public BufferedDataPoint(BufferedDataPoint other, double replacement)
         {
+            if (other == null) throw new ArgumentNullException(nameof(other));
             Timestamp = other.Timestamp;
             Id = other.Id;
             DoubleValue = replacement;
@@ -314,7 +330,7 @@ namespace Cognite.OpcUa
         /// <param name="bytes">Bytes to convert</param>
         public BufferedDataPoint(byte[] bytes)
         {
-            if (bytes.Length < sizeof(long) + sizeof(double)) return;
+            if (bytes == null || bytes.Length < sizeof(long) + sizeof(double)) return;
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(BitConverter.ToInt64(bytes, bytes.Length - sizeof(long))).DateTime;
             DoubleValue = BitConverter.ToDouble(bytes, bytes.Length - sizeof(double) - sizeof(long));
             char[] chars = new char[(bytes.Length - sizeof(long) - sizeof(double))/sizeof(char)];
@@ -338,7 +354,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public string Message { get; set; }
         /// <summary>
-        /// Transformed ID of the event. The raw id is a byte-string. This is the byte-string transformed into Base64 and prepended the globalprefix.
+        /// Transformed ID of the event. The Raw id is a byte-string. This is the byte-string transformed into Base64 and prepended the globalprefix.
         /// </summary>
         public string EventId { get; set; } // Base64
         /// <summary>

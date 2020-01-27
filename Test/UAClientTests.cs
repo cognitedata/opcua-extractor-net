@@ -34,7 +34,7 @@ namespace Test
         [Fact]
         public async Task TestConnectionFailure()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 QuitAfterMap = true
             });
@@ -54,10 +54,10 @@ namespace Test
                 }
                 else if (e is AggregateException aex)
                 {
-                    silent = Utils.GetRootSilentException(aex);
+                    silent = ExtractorUtils.GetRootSilentException(aex);
                 }
 
-                return silent != null && silent.Operation == Utils.SourceOp.SelectEndpoint;
+                return silent != null && silent.Operation == ExtractorUtils.SourceOp.SelectEndpoint;
             });
         }
         [Trait("Server", "basic")]
@@ -68,7 +68,7 @@ namespace Test
         [InlineData(3, 0)]
         public async Task TestHistoryReadGranularity(int expectedReads, int granularity)
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 HistoryGranularity = granularity
             });
@@ -78,8 +78,8 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => (int) Common.GetMetricValue("opcua_history_reads") == expectedReads, 20,
-                () => $"Expected history to be read {expectedReads} times, got {Common.GetMetricValue("opcua_history_reads")}");
+            await tester.WaitForCondition(() => (int) CommonTestUtils.GetMetricValue("opcua_history_reads") == expectedReads, 20,
+                () => $"Expected history to be read {expectedReads} times, got {CommonTestUtils.GetMetricValue("opcua_history_reads")}");
 
             await tester.TerminateRunTask();
         }

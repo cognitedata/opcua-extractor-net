@@ -23,6 +23,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
+using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
 using Prometheus.Client;
 using Serilog;
@@ -47,15 +48,23 @@ namespace Test
 
         public void Dispose()
         {
+
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
             _output.WriteLine(_textWriter.ToString());
+            _textWriter.Dispose();
             Console.SetOut(_originalOut);
         }
     }
-    public static class Common
+    public static class CommonTestUtils
     {
         public static FullConfig BuildConfig(string serverType, int index, string configname = "config.test.yml")
         {
-            var fullConfig = Utils.GetConfig(configname);
+            var fullConfig = ExtractorUtils.GetConfig(configname);
             if (fullConfig == null) throw new Exception("Failed to load config file");
             fullConfig.FailureBuffer.FilePath = $"buffers{index}";
             switch (serverType)
@@ -88,11 +97,12 @@ namespace Test
         }
         public static IServiceProvider GetDummyProvider(CDFMockHandler handler)
         {
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
             var services = new ServiceCollection();
-            services.AddHttpClient<DataCDFClient>()
-                .ConfigurePrimaryHttpMessageHandler(() => handler.GetHandler());
-            services.AddHttpClient<ContextCDFClient>()
-                .ConfigurePrimaryHttpMessageHandler(() => handler.GetHandler());
+            services.AddHttpClient("Context")
+                .ConfigurePrimaryHttpMessageHandler(handler.GetHandler);
+            services.AddHttpClient("Data")
+                .ConfigurePrimaryHttpMessageHandler(handler.GetHandler);
             return services.BuildServiceProvider();
         }
 
@@ -156,9 +166,9 @@ namespace Test
     public enum ServerName { Basic, Full, Array, Events, Audit }
     public enum ConfigName { Events, Influx, Test }
 
-    public class ExtractorTester : IDisposable
+    public sealed class ExtractorTester : IDisposable
     {
-        public static readonly Dictionary<ServerName, string> _hostNames = new Dictionary<ServerName, string>
+        public static readonly Dictionary<ServerName, string> hostNames = new Dictionary<ServerName, string>
         {
             {ServerName.Basic, "opc.tcp://localhost:4840"},
             {ServerName.Full, "opc.tcp://localhost:4841"},
@@ -167,7 +177,7 @@ namespace Test
             {ServerName.Audit, "opc.tcp://localhost:4844"},
         };
 
-        private static readonly Dictionary<ConfigName, string> _configNames = new Dictionary<ConfigName, string>
+        private static readonly Dictionary<ConfigName, string> configNames = new Dictionary<ConfigName, string>
         {
             {ConfigName.Test, "config.test.yml"},
             {ConfigName.Events, "config.events.yml"},
@@ -175,27 +185,22 @@ namespace Test
         };
 
 
-        public readonly FullConfig Config;
-        public readonly CDFMockHandler Handler;
-        public readonly Extractor Extractor;
-        public readonly UAClient UAClient;
-        public readonly IPusher Pusher;
-        public readonly InfluxClientConfig InfluxConfig;
-        public readonly CogniteClientConfig CogniteConfig;
-        public readonly CancellationTokenSource Source;
-        public readonly InfluxDBClient IfDbClient;
+        public FullConfig Config { get; }
+        public CDFMockHandler Handler { get; }
+        public Extractor Extractor { get; }
+        public UAClient UAClient { get; }
+        public IPusher Pusher { get; }
+        public InfluxClientConfig InfluxConfig { get; }
+        public CogniteClientConfig CogniteConfig { get; }
+        public CancellationTokenSource Source { get; }
+        public InfluxDBClient IfDbClient { get; }
         private readonly bool influx;
-        private readonly bool events;
-        public Task RunTask;
-        private readonly TestParameters testParams;
-        public ExtractorTester(TestParameters testParams)
+        public Task RunTask { get; private set; }
+        private readonly ExtractorTestParameters testParams;
+        public ExtractorTester(ExtractorTestParameters testParams)
         {
-            this.testParams = testParams;
-            Config = Utils.GetConfig(_configNames[testParams.ConfigName]);
-            if (testParams.ConfigName == ConfigName.Events)
-            {
-                events = true;
-            }
+            this.testParams = testParams ?? throw new ArgumentNullException(nameof(testParams));
+            Config = ExtractorUtils.GetConfig(configNames[testParams.ConfigName]);
 
             if (testParams.HistoryGranularity != null)
             {
@@ -203,12 +208,12 @@ namespace Test
             }
             Config.Logging.ConsoleLevel = testParams.LogLevel;
             Logger.Configure(Config.Logging);
-            Config.Source.EndpointURL = _hostNames[testParams.ServerName];
+            Config.Source.EndpointURL = hostNames[testParams.ServerName];
 
             FullConfig pusherConfig = null;
             if (testParams.PusherConfig != null)
             {
-                pusherConfig = Utils.GetConfig(_configNames[testParams.PusherConfig.Value]);
+                pusherConfig = ExtractorUtils.GetConfig(configNames[testParams.PusherConfig.Value]);
             }
 
             if (testParams.BufferDir != null || testParams.FailureInflux != null)
@@ -217,7 +222,7 @@ namespace Test
                 Config.FailureBuffer.FilePath = testParams.BufferDir;
                 if (testParams.FailureInflux != null)
                 {
-                    var failureInflux = Utils.GetConfig(_configNames[testParams.FailureInflux.Value]);
+                    var failureInflux = ExtractorUtils.GetConfig(configNames[testParams.FailureInflux.Value]);
                     if (failureInflux.Pushers.First() is InfluxClientConfig influxConfig)
                     {
                         influx = true;
@@ -242,7 +247,7 @@ namespace Test
                     CogniteConfig = cogniteClientConfig;
                     Handler = new CDFMockHandler(CogniteConfig.Project, testParams.MockMode);
                     Handler.StoreDatapoints = testParams.StoreDatapoints;
-                    Pusher = CogniteConfig.ToPusher(0, Common.GetDummyProvider(Handler));
+                    Pusher = CogniteConfig.ToPusher(0, CommonTestUtils.GetDummyProvider(Handler));
                     break;
                 case InfluxClientConfig influxClientConfig:
                     InfluxConfig = influxClientConfig;
@@ -260,12 +265,19 @@ namespace Test
             }
             UAClient = new UAClient(Config);
             Source = new CancellationTokenSource();
-            Extractor = testParams.Builder != null ? testParams.Builder(Config, Pusher, UAClient) : new Extractor(Config, Pusher, UAClient);
+            if (testParams.Builder != null)
+            {
+                Extractor = testParams.Builder(Config, Pusher, UAClient);
+            }
+            else
+            {
+                Extractor = new Extractor(Config, Pusher, UAClient);
+            }
         }
 
         public async Task ClearPersistentData()
         {
-            Common.ResetTestMetrics();
+            CommonTestUtils.ResetTestMetrics();
             if (influx)
             {
                 await IfDbClient.DropDatabaseAsync(new InfluxDatabase(InfluxConfig.Database));
@@ -334,7 +346,7 @@ namespace Test
             catch (Exception e)
             {
                 if (testResult != null && !testResult(e)) throw;
-                if (testResult == null && !Common.TestRunResult(e)) throw;
+                if (testResult == null && !CommonTestUtils.TestRunResult(e)) throw;
             }
             Extractor.Close();
         }
@@ -346,8 +358,9 @@ namespace Test
             TestContinuity(intdps);
         }
 
-        public void TestContinuity(List<int> intdps)
+        public static void TestContinuity(List<int> intdps)
         {
+            if (intdps == null) throw new ArgumentNullException(nameof(intdps));
             int min = intdps.Min();
             var check = new int[intdps.Count];
 
@@ -367,9 +380,10 @@ namespace Test
         {
             Source?.Dispose();
             IfDbClient?.Dispose();
+            Extractor?.Dispose();
         }
     }
-    public class TestParameters
+    public class ExtractorTestParameters
     {
         public ServerName ServerName { get; set; } = ServerName.Basic;
         public ConfigName ConfigName { get; set; } = ConfigName.Test;

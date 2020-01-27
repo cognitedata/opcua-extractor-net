@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -27,6 +28,7 @@ using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Newtonsoft.Json;
 using Serilog;
+using Xunit;
 
 #pragma warning disable IDE1006 // Naming Styles
 
@@ -36,19 +38,20 @@ namespace Test
     {
         readonly object handlerLock = new object();
         readonly string project;
-        public readonly Dictionary<string, AssetDummy> assets = new Dictionary<string, AssetDummy>();
-        public readonly Dictionary<string, TimeseriesDummy> timeseries = new Dictionary<string, TimeseriesDummy>();
-        public readonly Dictionary<string, EventDummy> events = new Dictionary<string, EventDummy>();
-        public readonly Dictionary<string, (List<NumericDatapoint>, List<StringDatapoint>)> datapoints =
+        public Dictionary<string, AssetDummy> assets { get; } = new Dictionary<string, AssetDummy>();
+        public Dictionary<string, TimeseriesDummy> timeseries { get; } = new Dictionary<string, TimeseriesDummy>();
+        public Dictionary<string, EventDummy> events { get; } = new Dictionary<string, EventDummy>();
+        public Dictionary<string, (List<NumericDatapoint>, List<StringDatapoint>)> datapoints { get; } =
             new Dictionary<string, (List<NumericDatapoint>, List<StringDatapoint>)>();
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
         long eventIdCounter = 1;
+        private long requestIdCounter = 1;
         public long RequestCount { get; private set; }
         public bool AllowPush { get; set; } = true;
         public bool AllowEvents { get; set; } = true;
         public bool StoreDatapoints { get; set; } = false;
-        public MockMode mode;
+        public MockMode mode { get; set; }
         public enum MockMode
         {
             None, Some, All, FailAsset
@@ -59,11 +62,13 @@ namespace Test
             this.mode = mode;
         }
 
-        public HttpMessageHandler GetHandler(string name = "client")
+        public HttpMessageHandler GetHandler()
         {
             return new HttpMessageHandlerStub(MessageHandler);
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+            Justification = "Messages should be disposed in the client")]
         private async Task<HttpResponseMessage> MessageHandler(HttpRequestMessage req, CancellationToken cancellationToken)
         {
             RequestCount++;
@@ -71,7 +76,7 @@ namespace Test
             {
                 return HandleLoginStatus();
             }
-            string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "");
+            string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "", StringComparison.InvariantCulture);
 
             if (reqPath == "/timeseries/data" && req.Method == HttpMethod.Post && StoreDatapoints)
             {
@@ -107,6 +112,9 @@ namespace Test
                                 ? HandleListTimeseries()
                                 : HandleCreateTimeseries(content);
                             break;
+                        case "/timeseries/list":
+                            res = HandleListTimeseries();
+                            break;
                         case "/timeseries/data":
                             res = HandleTimeseriesData(null);
                             break;
@@ -131,6 +139,10 @@ namespace Test
                     res = new HttpResponseMessage(HttpStatusCode.BadRequest);
                 }
                 res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
+                /*var contentTask = res.Content.ReadAsStringAsync();
+                contentTask.Wait();
+                Log.Information(contentTask.Result);*/
                 return res;
             }
         }
@@ -249,7 +261,7 @@ namespace Test
             };
         }
 
-        private HttpResponseMessage HandleListTimeseries()
+        private static HttpResponseMessage HandleListTimeseries()
         {
             string res = JsonConvert.SerializeObject(new TimeseriesReadWrapper
             {
@@ -593,7 +605,7 @@ namespace Test
         public int code { get; set; }
         public string message { get; set; }
         public IEnumerable<Identity> missing { get; set; }
-        public IEnumerable<Identity> duplicated { get; set; }
+        public IEnumerable<Identity> duplicated { get; set; } = new List<Identity>();
     }
     public class ErrorWrapper
     {

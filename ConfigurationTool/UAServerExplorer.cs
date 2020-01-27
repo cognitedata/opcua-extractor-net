@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -42,8 +43,8 @@ namespace Cognite.OpcUa.Config
         private bool history;
         private bool useServer;
 
-        private static readonly int serverSizeBase = 125;
-        private static readonly int serverWidest = 47;
+        private const int ServerSizeBase = 125;
+        private const int ServerWidest = 47;
 
         private readonly List<(int, int)> testBrowseChunkSizes = new List<(int, int)>
         {
@@ -116,8 +117,8 @@ namespace Cognite.OpcUa.Config
 
         public UAServerExplorer(FullConfig config, FullConfig baseConfig) : base(config)
         {
-            this.baseConfig = baseConfig;
-            this.config = config;
+            this.baseConfig = baseConfig ?? new FullConfig();
+            this.config = config ?? throw new ArgumentNullException(nameof(config));
 
             this.baseConfig.Source = config.Source;
         }
@@ -139,9 +140,9 @@ namespace Cognite.OpcUa.Config
             }
             Log.Information("Attempting to list endpoints using given url as discovery server");
 
-            var context = appconfig.CreateMessageContext();
-            var endpointConfig = EndpointConfiguration.Create(appconfig);
-            var channel = DiscoveryChannel.Create(new Uri(config.Source.EndpointURL), endpointConfig, context);
+            var context = Appconfig.CreateMessageContext();
+            var endpointConfig = EndpointConfiguration.Create(Appconfig);
+            using var channel = DiscoveryChannel.Create(new Uri(config.Source.EndpointURL), endpointConfig, context);
             DiscoveryClient disc = new DiscoveryClient(channel);
             EndpointDescriptionCollection endpoints = new EndpointDescriptionCollection();
             try
@@ -208,7 +209,7 @@ namespace Cognite.OpcUa.Config
             {
                 var nodes = new List<BufferedNode>();
 
-                visitedNodes.Clear();
+                VisitedNodes.Clear();
 
                 var browseNodesChunk = Math.Min(lbrowseNodesChunk, baseConfig.Source.BrowseNodesChunk);
                 var browseChunk = Math.Min(lbrowseChunk, baseConfig.Source.BrowseChunk);
@@ -262,7 +263,7 @@ namespace Cognite.OpcUa.Config
             {
                 Log.Warning("Size is smaller than BrowseNodesChunk, so it is not completely safe, the " +
                             "largest known safe value of BrowseNodesChunk is {max}", best.NumNodes);
-                if (best.NumNodes < serverWidest && !useServer)
+                if (best.NumNodes < ServerWidest && !useServer)
                 {
                     Log.Information("The server hierarchy is generally wider than this, so retry browse mapping using the " +
                                     "server hierarchy");
@@ -272,7 +273,7 @@ namespace Cognite.OpcUa.Config
                 }
                 summary.BrowseLimitWarning = true;
 
-                if (best.NumNodes < serverSizeBase && !useServer)
+                if (best.NumNodes < ServerSizeBase && !useServer)
                 {
                     Log.Information("The server hierarchy is larger than the main hierarchy, so use the server to identify " +
                                     "attribute chunk later");
@@ -288,7 +289,7 @@ namespace Cognite.OpcUa.Config
             summary.BrowseNodesChunk = best.BrowseNodesChunk;
             summary.BrowseChunk = best.BrowseChunk;
 
-            if (useServer && best.NumNodes < serverSizeBase)
+            if (useServer && best.NumNodes < ServerSizeBase)
             {
                 Log.Warning("The server is smaller than the known number of nodes in the specification defined base hierarchy. " +
                             "This may cause issues later, depending on what parts are missing.");
@@ -302,6 +303,7 @@ namespace Cognite.OpcUa.Config
         /// <returns>Converted ProtoNodeId</returns>
         public ProtoNodeId NodeIdToProto(NodeId id)
         {
+            if (id == null) return new ProtoNodeId();
             string nodeidstr = id.ToString();
             string nsstr = $"ns={id.NamespaceIndex};";
             int pos = nodeidstr.IndexOf(nsstr, StringComparison.CurrentCulture);
@@ -311,7 +313,7 @@ namespace Cognite.OpcUa.Config
             }
             return new ProtoNodeId
             {
-                NamespaceUri = session.NamespaceUris.GetString(id.NamespaceIndex),
+                NamespaceUri = Session.NamespaceUris.GetString(id.NamespaceIndex),
                 NodeId = nodeidstr
             };
         }
@@ -320,7 +322,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         /// <param name="id">Id to test</param>
         /// <returns>True if id is a custom object</returns>
-        private bool IsCustomObject(NodeId id)
+        private static bool IsCustomObject(NodeId id)
         {
             return id.NamespaceIndex != 0 || id.IdType != IdType.Numeric;
         }
@@ -333,7 +335,7 @@ namespace Cognite.OpcUa.Config
 
             Log.Information("Browsing data type hierarchy for custom datatypes");
 
-            visitedNodes.Clear();
+            VisitedNodes.Clear();
 
             try
             {
@@ -390,7 +392,7 @@ namespace Cognite.OpcUa.Config
 
             Log.Information("Reading variable chunk sizes to determine the AttributeChunk property");
 
-            visitedNodes.Clear();
+            VisitedNodes.Clear();
 
             nodeList = new List<BufferedNode>();
 
@@ -472,7 +474,7 @@ namespace Cognite.OpcUa.Config
 
             if (useServer)
             {
-                visitedNodes.Clear();
+                VisitedNodes.Clear();
                 Log.Information("Filling common node information since this has not been done when identifying attribute chunk size");
                 nodeList = new List<BufferedNode>();
                 try
@@ -505,14 +507,14 @@ namespace Cognite.OpcUa.Config
             foreach (var variable in variables)
             {
                 if (variable.ArrayDimensions != null
-                    && variable.ArrayDimensions.Length == 1
+                    && variable.ArrayDimensions.Count == 1
                     && variable.ArrayDimensions[0] <= arrayLimit
                     && variable.ArrayDimensions[0] > maxLimitedArrayLength)
                 {
                     maxLimitedArrayLength = variable.ArrayDimensions[0];
                 } else if (variable.ArrayDimensions != null
-                           && (variable.ArrayDimensions.Length > 1
-                               || variable.ArrayDimensions.Length == 1 &&
+                           && (variable.ArrayDimensions.Count > 1
+                               || variable.ArrayDimensions.Count == 1 &&
                                variable.ArrayDimensions[0] > arrayLimit)
                            || variable.ValueRank >= ValueRanks.TwoDimensions)
                 {
@@ -524,7 +526,7 @@ namespace Cognite.OpcUa.Config
                     history = true;
                 }
 
-                var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.DataType.raw);
+                var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.DataType.Raw);
                 if (dataType == null)
                 {
                     Log.Warning("DataType found on node but not in hierarchy, " +
@@ -635,7 +637,7 @@ namespace Cognite.OpcUa.Config
                     bool critical = false;
                     try
                     {
-                        await ToolUtil.RunWithTimeout(() => session.RemoveSubscriptions(session.Subscriptions.ToList()), 120);
+                        await ToolUtil.RunWithTimeout(() => Session.RemoveSubscriptions(Session.Subscriptions.ToList()), 120);
                     }
                     catch (Exception ex)
                     {
@@ -682,7 +684,7 @@ namespace Cognite.OpcUa.Config
                 summary.SilentSubscriptionsWarning = true;
             }
 
-            session.RemoveSubscriptions(session.Subscriptions.ToList());
+            Session.RemoveSubscriptions(Session.Subscriptions.ToList());
         }
         /// <summary>
         /// Attempts history read if possible, getting chunk sizes. It also determines granularity, and sets backfill to true if it works and it estimates that there
@@ -727,7 +729,7 @@ namespace Cognite.OpcUa.Config
 
             foreach (var chunkSize in testHistoryChunkSizes)
             {
-                foreach (var chunk in Utils.ChunkBy(historizingStates, chunkSize))
+                foreach (var chunk in ExtractorUtils.ChunkBy(historizingStates, chunkSize))
                 {
                     var historyParams = new HistoryReadParams(chunk.Select(state => state.Id), details);
                     try
@@ -930,7 +932,7 @@ namespace Cognite.OpcUa.Config
             }
             catch (Exception e)
             {
-                Log.Error(e, "Failed to construct bufferedEvent from raw fields");
+                Log.Error(e, "Failed to construct bufferedEvent from Raw fields");
                 return null;
             }
         }
@@ -967,7 +969,7 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                visitedNodes.Clear();
+                VisitedNodes.Clear();
                 BrowseDirectory(new List<NodeId> {ObjectTypeIds.BaseEventType}, ToolUtil.GetSimpleListWriterCallback(eventTypes, this),
                     token,
                     ReferenceTypeIds.HasSubtype, (uint) NodeClass.ObjectType);
@@ -984,7 +986,7 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                visitedNodes.Clear();
+                VisitedNodes.Clear();
                 BrowseDirectory(nodeList.Select(node => node.Id).Append(ObjectIds.Server).ToList(),
                     ToolUtil.GetSimpleListWriterCallback(emitterReferences, this),
                     token,
@@ -995,7 +997,7 @@ namespace Cognite.OpcUa.Config
                 Log.Warning(ex, "Failed to look for GeneratesEvent references, this tool will not be able to identify non-server emitters");
             }
 
-            visitedNodes.Clear();
+            VisitedNodes.Clear();
 
             var referencedEvents = emitterReferences.Select(evt => evt.Id)
                 .Distinct()
@@ -1105,7 +1107,7 @@ namespace Cognite.OpcUa.Config
 
             await Task.Delay(5000);
 
-            session.RemoveSubscriptions(session.Subscriptions.ToList());
+            Session.RemoveSubscriptions(Session.Subscriptions.ToList());
 
             if (!events.Any())
             {
@@ -1190,6 +1192,8 @@ namespace Cognite.OpcUa.Config
             baseConfig.Events.EmitterIds = emitterIds.Distinct().Select(NodeIdToProto).ToList();
             baseConfig.Events.HistorizingEmitterIds = historizingEmitters.Distinct().Select(NodeIdToProto).ToList();
         }
+
+
         /// <summary>
         /// Generate an intelligent namespace-map, with unique values, base for the base opcfoundation namespace (I think that appears in most servers).
         /// </summary>
@@ -1197,7 +1201,7 @@ namespace Cognite.OpcUa.Config
         {
             var indices = nodeList.Concat(dataTypes).Concat(eventTypes).Select(node => node.Id.NamespaceIndex).Distinct();
 
-            var namespaces = indices.Select(idx => session.NamespaceUris.GetString(idx));
+            var namespaces = indices.Select(idx => Session.NamespaceUris.GetString(idx));
 
             var startRegex = new Regex("^.*://");
             var splitRegex = new Regex("[^a-zA-Z\\d]");
@@ -1225,7 +1229,9 @@ namespace Cognite.OpcUa.Config
                     index++;
                 }
 
-                namespaceMap.Add(mapped.Key, nextValue.ToLower());
+#pragma warning disable CA1308 // Normalize strings to uppercase. Lowercase is prettier in externalId.
+                namespaceMap.Add(mapped.Key, nextValue.ToLowerInvariant());
+#pragma warning restore CA1308 // Normalize strings to uppercase
             }
 
             Log.Information("Suggested namespaceMap: ");

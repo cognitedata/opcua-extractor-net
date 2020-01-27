@@ -216,7 +216,7 @@ namespace Cognite.OpcUa
             Func<IEncodeable, bool, bool, NodeId, HistoryReadDetails, int> handler,
             CancellationToken token)
         {
-            var readParams = new UAClient.HistoryReadParams(nodes, details);
+            var readParams = new HistoryReadParams(nodes, details);
             while (readParams.Nodes.Any() && !token.IsCancellationRequested)
             {
                 int total = 0;
@@ -357,7 +357,7 @@ namespace Cognite.OpcUa
         /// <param name="states">Nodes to be read</param>
         public async Task FrontfillData(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
-            var frontFillChunks = Utils.GroupByTimeGranularity(
+            var frontFillChunks = ExtractorUtils.GroupByTimeGranularity(
                 states.Select(state => (state, state.ExtractedRange.End)),
                 historyGranularity, config.DataNodesChunk);
             await Task.WhenAll(frontFillChunks.Select(chunk => Task.Run(() => FrontfillDataChunk(chunk, token))));
@@ -368,7 +368,7 @@ namespace Cognite.OpcUa
         /// <param name="states">Nodes to be read</param>
         public async Task BackfillData(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
-            var backFillChunks = Utils.GroupByTimeGranularity(
+            var backFillChunks = ExtractorUtils.GroupByTimeGranularity(
                 states.Select(state => (state, state.ExtractedRange.Start)),
                 historyGranularity, config.DataNodesChunk);
             await Task.WhenAll(backFillChunks.Select(chunk => Task.Run(() => BackfillDataChunk(chunk, token))));
@@ -380,7 +380,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">SourceNodes to read for</param>
         public async Task FrontfillEvents(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
         {
-            var frontFillChunks = Utils.GroupByTimeGranularity(
+            var frontFillChunks = ExtractorUtils.GroupByTimeGranularity(
                 states.Select(state => (state, state.ExtractedRange.End)),
                 historyGranularity, config.EventNodesChunk);
             await Task.WhenAll(frontFillChunks.Select(chunk => Task.Run(() => FrontfillEventsChunk(chunk, nodes, token))));
@@ -392,7 +392,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">SourceNodes to read for</param>
         public async Task BackfillEvents(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
         {
-            var backFillChunks = Utils.GroupByTimeGranularity(
+            var backFillChunks = ExtractorUtils.GroupByTimeGranularity(
                 states.Select(state => (state, state.ExtractedRange.Start)),
                 historyGranularity, config.EventNodesChunk);
 

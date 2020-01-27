@@ -23,6 +23,7 @@ namespace Cognite.OpcUa
 
         public static ILogger Configure(LoggerConfig config)
         {
+            if (config == null) throw new ArgumentNullException(nameof(config));
             bool logToConsole = Enum.TryParse(config.ConsoleLevel, true, out LogEventLevel consoleLevel);
             bool logToFile = Enum.TryParse(config.FileLevel, true, out LogEventLevel fileLevel);
             bool logToStackdriver = config.StackdriverCredentials != null;
@@ -72,6 +73,8 @@ namespace Cognite.OpcUa
             return logger;
 
         }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1812:Uninstantiated internal class",
+            Justification = "Late initialization")]
         private class GpcCredentials
         {
             [JsonProperty("project_id")]

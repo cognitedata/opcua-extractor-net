@@ -37,9 +37,9 @@ namespace Cognite.OpcUa.Config
 
         public async Task Run()
         {
-            var explorer = new UAServerExplorer(config, baseConfig);
+            using var explorer = new UAServerExplorer(config, baseConfig);
 
-            var source = new CancellationTokenSource();
+            using var source = new CancellationTokenSource();
             try
             {
                 await explorer.GetEndpoints(source.Token);

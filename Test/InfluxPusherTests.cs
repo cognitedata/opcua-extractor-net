@@ -22,6 +22,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -37,7 +38,7 @@ namespace Test
         [Fact]
         public async Task TestInfluxPusher()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Influx
             });
@@ -63,7 +64,7 @@ namespace Test
         [Fact]
         public async Task TestArrayData()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Influx,
                 ServerName = ServerName.Array
@@ -92,7 +93,7 @@ namespace Test
         [Fact]
         public async Task TestNonFiniteInflux()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Influx,
                 QuitAfterMap = true
@@ -144,7 +145,7 @@ namespace Test
         [Fact]
         public async Task TestInfluxdbEvents()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
                 LogLevel = "debug",
@@ -173,7 +174,7 @@ namespace Test
         [Fact]
         public async Task TestInfluxBuffering()
         {
-            var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Test,
                 FailureInflux = ConfigName.Influx,
@@ -199,10 +200,10 @@ namespace Test
             
             tester.TestContinuity("gp.efg:i=10");
 
-            Assert.True(Common.VerifySuccessMetrics());
-            Assert.Equal(2, (int)Common.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(4, (int)Common.GetMetricValue("opcua_tracked_timeseries"));
-            Assert.NotEqual(0, (int)Common.GetMetricValue("opcua_datapoint_push_failures_cdf"));
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
+            Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_cdf"));
         }
 
         [Trait("Server", "basic")]
@@ -211,10 +212,11 @@ namespace Test
         [Fact]
         public async Task TestInfluxAutoBuffer()
         {
-            var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Influx,
-                BufferDir = "./"
+                BufferDir = "./",
+                LogLevel = "debug"
             });
             tester.Config.History.Enabled = false;
             await tester.ClearPersistentData();
@@ -222,7 +224,7 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => Common.GetMetricValue("opcua_datapoints_pushed_influx") > 0,
+            await tester.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_datapoints_pushed_influx") > 0,
                 20, "Expected InfluxPusher to start working");
 
             var oldHost = tester.InfluxConfig.Host;
@@ -238,17 +240,24 @@ namespace Test
             await tester.WaitForCondition(() => new FileInfo(bufferPath).Length == 0, 20,
                 () => $"Expected file to be emptied, but it contained {new FileInfo(bufferPath).Length} bytes of data");
 
+            await Task.Delay(1000);
+
             await tester.TerminateRunTask();
 
             var dps = await ((InfluxPusher)tester.Pusher)
-                .ReadDataPoints(DateTime.UnixEpoch, new Dictionary<string, bool> {{"gp.efg:i=10", false}}, tester.Source.Token);
+                .ReadDataPoints(DateTime.UnixEpoch, new Dictionary<string, bool> {{"gp.efg:i=10", false}}, CancellationToken.None);
+
+            foreach (var dp in dps)
+            {
+                 Log.Information("dp: {val}", dp.DoubleValue);
+            }
 
             var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)Math.Round(dp.First().DoubleValue)).ToList();
 
-            tester.TestContinuity(intdps);
+            ExtractorTester.TestContinuity(intdps);
 
-            Assert.True(Common.VerifySuccessMetrics());
-            Assert.NotEqual(0, (int)Common.GetMetricValue("opcua_datapoint_push_failures_influx"));
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
+            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_influx"));
         }
         [Trait("Server", "events")]
         [Trait("Target", "InfluxPusher")]
@@ -256,7 +265,7 @@ namespace Test
         [Fact]
         public async Task TestInfluxBackfill()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Influx,
                 LogLevel = "debug"
@@ -273,8 +282,8 @@ namespace Test
                 20, "Expected backfill to terminate");
 
             await tester.TerminateRunTask();
-            Assert.True(Common.GetMetricValue("opcua_backfill_data_count") >= 1);
-            Assert.True(Common.TestMetricValue("opcua_frontfill_data_count", 1));
+            Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
         }
         [Trait("Server", "events")]
         [Trait("Target", "InfluxPusher")]
@@ -282,7 +291,7 @@ namespace Test
         [Fact]
         public async Task TestInfluxBackfillRestart()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Influx,
                 LogLevel = "debug"
@@ -298,10 +307,10 @@ namespace Test
                     && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone,
                 20, "Expected backfill to terminate");
 
-            Assert.True(Common.GetMetricValue("opcua_backfill_data_count") >= 1);
-            Assert.True(Common.TestMetricValue("opcua_frontfill_data_count", 1));
+            Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
 
-            Common.ResetTestMetrics();
+            CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor(tester.Source.Token);
 
             await Task.Delay(500);
@@ -311,8 +320,8 @@ namespace Test
                     && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone,
                 20, "Expected backfill to terminate");
 
-            Assert.True(Common.TestMetricValue("opcua_backfill_data_count", 1));
-            Assert.True(Common.TestMetricValue("opcua_frontfill_data_count", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
 
             await tester.TerminateRunTask();
         }
@@ -322,7 +331,7 @@ namespace Test
         [Fact]
         public async Task TestInfluxBackfillEvents()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
                 LogLevel = "debug",
@@ -341,8 +350,8 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.True(Common.GetMetricValue("opcua_backfill_events_count") >= 1);
-            Assert.True(Common.TestMetricValue("opcua_frontfill_events_count", 1));
+            Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
         }
         [Trait("Server", "events")]
         [Trait("Target", "InfluxPusher")]
@@ -350,7 +359,7 @@ namespace Test
         [Fact]
         public async Task TestInfluxBackfillEventsRestart()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
                 LogLevel = "debug",
@@ -369,10 +378,10 @@ namespace Test
 
             await Task.Delay(1000);
 
-            Assert.True(Common.GetMetricValue("opcua_backfill_events_count") >= 1);
-            Assert.True(Common.TestMetricValue("opcua_frontfill_events_count", 1));
+            Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
 
-            Common.ResetTestMetrics();
+            CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor(tester.Source.Token);
 
             await Task.Delay(500);
@@ -381,8 +390,8 @@ namespace Test
                     !kvp.Value.Historizing || kvp.Value.BackfillDone && kvp.Value.IsStreaming),
                 60, "Expected backfill of events to terminate");
 
-            Assert.True(Common.TestMetricValue("opcua_backfill_events_count", 1));
-            Assert.True(Common.TestMetricValue("opcua_frontfill_events_count", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
 
             await tester.TerminateRunTask();
         }

@@ -13,12 +13,16 @@
     <ProjectReference Include="..\Extractor\Extractor.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove=".editorconfig" />
     <None Remove="App.config" />
     <None Remove="Properties\GitCommitHash" />
     <None Remove="Properties\GitCommitTime" />
   </ItemGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
+  </ItemGroup>
+  <ItemGroup>
+    <AdditionalFiles Include=".editorconfig" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Properties\GitCommitHash">

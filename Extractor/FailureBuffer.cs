@@ -9,14 +9,13 @@ using Serilog;
 
 namespace Cognite.OpcUa
 {
-    public class FailureBuffer
+    public sealed class FailureBuffer : IDisposable
     {
         private readonly InfluxPusher influxPusher;
         private readonly FailureBufferConfig config;
         private readonly Dictionary<string, bool> managedPoints;
         private readonly Dictionary<int, DateTime> startTimes;
         private readonly Dictionary<int, DateTime> eventStartTimes;
-        private readonly Extractor extractor;
         private readonly HashSet<NodeId> managedEvents = new HashSet<NodeId>();
         public bool Any { get; private set; }
         public bool AnyEvents { get; private set; }
@@ -25,8 +24,7 @@ namespace Cognite.OpcUa
         private readonly object fileLock = new object();
         public FailureBuffer(FailureBufferConfig config, Extractor extractor)
         {
-            this.config = config;
-            this.extractor = extractor;
+            this.config = config ?? throw new ArgumentNullException(nameof(config));
             managedPoints = new Dictionary<string, bool>();
             startTimes = new Dictionary<int, DateTime>();
             eventStartTimes = new Dictionary<int, DateTime>();
@@ -52,7 +50,7 @@ namespace Cognite.OpcUa
         public async Task WriteDatapoints(IEnumerable<BufferedDataPoint> points, int index,
             double? nonFiniteReplacement, CancellationToken token)
         {
-            if (!points.Any()) return;
+            if (points == null || !points.Any()) return;
             bool success = false;
             if (config.Influx != null && config.Influx.Write && influxPusher != null)
             {
@@ -139,7 +137,7 @@ namespace Cognite.OpcUa
 
         public async Task WriteEvents(IEnumerable<BufferedEvent> events, int index, CancellationToken token)
         {
-            if (!events.Any()) return;
+            if (events == null || !events.Any()) return;
 
             bool success = false;
             if (config.Influx != null && config.Influx.Write && influxPusher != null)
@@ -280,6 +278,11 @@ namespace Cognite.OpcUa
             }
 
             return result;
+        }
+
+        public void Dispose()
+        {
+            influxPusher?.Dispose();
         }
     }
 }

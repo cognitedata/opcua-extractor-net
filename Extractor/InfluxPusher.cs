@@ -14,12 +14,12 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Pusher for InfluxDb. Currently supports only double-valued datapoints
     /// </summary>
-    public class InfluxPusher : IPusher
+    public sealed class InfluxPusher : IPusher
     {
-        public Extractor Extractor { set; private get; }
+        public Extractor Extractor { set; get; }
         public int Index { get; set; }
         public PusherConfig BaseConfig { get; }
-        public bool Failing;
+        public bool Failing { get; set; }
 
         public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
         public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
@@ -48,7 +48,7 @@ namespace Cognite.OpcUa
 
         public InfluxPusher(InfluxClientConfig config)
         {
-            this.config = config;
+            this.config = config ?? throw new ArgumentNullException(nameof(config));
             BaseConfig = config;
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
             numInfluxPusher.Inc();
@@ -168,7 +168,7 @@ namespace Cognite.OpcUa
             var getRangeTasks = states.Select(async state =>
             {
                 var id = Extractor.GetUniqueId(state.Id,
-                    state.ArrayDimensions != null && state.ArrayDimensions.Length > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1);
+                    state.ArrayDimensions != null && state.ArrayDimensions.Count > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1);
                 var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\"");
 
@@ -218,6 +218,7 @@ namespace Cognite.OpcUa
             bool backfillEnabled,
             CancellationToken token)
         {
+            token.ThrowIfCancellationRequested();
             var mutex = new object();
             var bestRange = new TimeRange(DateTime.MaxValue, DateTime.MinValue);
             string emitterId = Extractor.GetUniqueId(state.Id);
@@ -258,6 +259,7 @@ namespace Cognite.OpcUa
                 }
             });
             await Task.WhenAll(tasks);
+            token.ThrowIfCancellationRequested();
             if (bestRange.End == DateTime.MinValue && backfillEnabled)
             {
                 bestRange.End = DateTime.UtcNow;
@@ -385,12 +387,15 @@ namespace Cognite.OpcUa
             IDictionary<string, bool> measurements,
             CancellationToken token)
         {
+            token.ThrowIfCancellationRequested();
+            if (measurements == null) throw new ArgumentNullException(nameof(measurements));
             var timestamp = startTime - DateTime.UnixEpoch;
             var fetchTasks = measurements.Keys.Select(measurement =>
                 client.QueryMultiSeriesAsync(config.Database, 
                     $"SELECT * FROM \"{measurement}\" WHERE time >= {timestamp.Ticks}")).ToList();
 
             var results = await Task.WhenAll(fetchTasks);
+            token.ThrowIfCancellationRequested();
             var finalPoints = new List<BufferedDataPoint>();
             foreach (var series in results)
             {
@@ -432,6 +437,7 @@ namespace Cognite.OpcUa
             IEnumerable<NodeId> measurements,
             CancellationToken token)
         {
+            token.ThrowIfCancellationRequested();
             var timestamp = startTime - DateTime.UnixEpoch;
             var nameToNodeId = measurements.ToDictionary(
                 id => "events." + Extractor.GetUniqueId(id),
@@ -440,6 +446,7 @@ namespace Cognite.OpcUa
                 client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT * FROM \"{"events." + Extractor.GetUniqueId(measurement)}\" WHERE time >= {timestamp.Ticks}")).ToList();
             var results = await Task.WhenAll(fetchTasks);
+            token.ThrowIfCancellationRequested();
             var finalEvents = new List<BufferedEvent>();
 
             foreach (var series in results)
@@ -480,6 +487,7 @@ namespace Cognite.OpcUa
 
         public void Reconfigure()
         {
+            Log.Information(config.Host);
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
         }
 
@@ -488,6 +496,11 @@ namespace Cognite.OpcUa
             BufferedDPQueue.Clear();
             BufferedEventQueue.Clear();
             ranges.Clear();
+        }
+
+        public void Dispose()
+        {
+            client?.Dispose();
         }
     }
 }

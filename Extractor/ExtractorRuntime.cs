@@ -22,7 +22,6 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
 using Polly;
 using Polly.Timeout;
@@ -44,22 +43,24 @@ namespace Cognite.OpcUa
             var services = new ServiceCollection();
             Configure(services);
             provider = services.BuildServiceProvider();
+            var factory = provider.GetRequiredService<IHttpClientFactory>();
+            factory.CreateClient("Context");
         }
 
         /// <summary>
         /// Configure two different configurations for the CDF client. One terminates on 410 or after 4 attempts. The other tries forever. Both terminate on 400.
         /// </summary>
         /// <param name="services"></param>
-        private void Configure(IServiceCollection services)
+        private static void Configure(IServiceCollection services)
         {
-            services.AddHttpClient<ContextCDFClient>(client => { client.Timeout = Timeout.InfiniteTimeSpan; })
+            services.AddHttpClient("Context", client => { client.Timeout = Timeout.InfiniteTimeSpan; })
                 .AddPolicyHandler(GetRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
-            services.AddHttpClient<DataCDFClient>(client => { client.Timeout = TimeSpan.FromSeconds(300); })
+            services.AddHttpClient("Data", client => { client.Timeout = TimeSpan.FromSeconds(300); })
                 .AddPolicyHandler(GetDataRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
         }
-        private IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+        private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
         {
             return Policy
                 .HandleResult<HttpResponseMessage>(msg =>
@@ -70,7 +71,7 @@ namespace Cognite.OpcUa
                 .Or<TimeoutRejectedException>()
                 .WaitAndRetryForeverAsync(retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
         }
-        private IAsyncPolicy<HttpResponseMessage> GetDataRetryPolicy()
+        private static IAsyncPolicy<HttpResponseMessage> GetDataRetryPolicy()
         {
             return Policy
                 .HandleResult<HttpResponseMessage>(msg =>
@@ -81,7 +82,7 @@ namespace Cognite.OpcUa
                 .Or<TimeoutRejectedException>()
                 .WaitAndRetryAsync(4, retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
         }
-        private IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
+        private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
         {
             return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(60));
         }
@@ -94,39 +95,34 @@ namespace Cognite.OpcUa
         /// <param name="source">CancellationTokenSource used to create tokens and terminate the run-task on failure</param>
         public async Task Run(CancellationTokenSource source)
         {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+
             var client = new UAClient(config);
             int index = 0;
             IEnumerable<IPusher> pushers = config.Pushers.Select(pusher => pusher.ToPusher(index++, provider)).ToList();
             var removePushers = new List<IPusher>();
 
-            await Task.WhenAll(pushers.Select(pusher => pusher.TestConnection(source.Token).ContinueWith(result =>
+            await Task.WhenAll(pushers.Select(async pusher =>
             {
-                if (pusher.BaseConfig.Critical && !result.Result)
+                var result = await pusher.TestConnection(source.Token);
+                if (pusher.BaseConfig.Critical && !result)
                 {
                     throw new Exception("Critical pusher failed to connect");
                 }
-                if (!result.Result)
+
+                if (!result)
                 {
                     removePushers.Add(pusher);
                 }
-            })).ToArray());
+            }));
 
             pushers = pushers.Except(removePushers).ToList();
-            var extractor = new Extractor(config, pushers, client);
-
-            var runTask = extractor.RunExtractor(source.Token)
-                .ContinueWith(task =>
-                {
-                    source.Cancel();
-                    if (task.IsFaulted)
-                    {
-                        throw task.Exception ?? new Exception("Unknown failure in runtask");
-                    }
-                });
+            using var extractor = new Extractor(config, pushers, client);
 
             try
             {
-                await runTask;
+                await extractor.RunExtractor(source.Token);
+                source.Cancel();
             }
             catch
             {
@@ -135,6 +131,4 @@ namespace Cognite.OpcUa
             }
         }
     }
-    public class DataCDFClient : Client { public DataCDFClient(HttpClient httpClient) : base(httpClient) { } }
-    public class ContextCDFClient : Client { public ContextCDFClient(HttpClient httpClient) : base(httpClient) { } }
 }

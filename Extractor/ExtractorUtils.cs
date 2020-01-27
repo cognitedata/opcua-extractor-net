@@ -25,11 +25,12 @@ using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa
 {
-    public static class Utils
+    public static class ExtractorUtils
     {
         public static IEnumerable<TSource> DistinctBy<TSource, TKey>(this IEnumerable<TSource> source,
             Func<TSource, TKey> selector)
         {
+            if (source == null) throw new ArgumentNullException(nameof(source));
             HashSet<TKey> seenKeys = new HashSet<TKey>();
             foreach (var elem in source)
             {
@@ -43,6 +44,7 @@ namespace Cognite.OpcUa
         public static IEnumerable<IDictionary<TKey, IEnumerable<TVal>>> ChunkDictOfLists<TKey, TVal>(
             IDictionary<TKey, List<TVal>> points, int maxPerList, int maxKeys)
         {
+            if (points == null) return new List<Dictionary<TKey, IEnumerable<TVal>>>();
             var ret = new List<Dictionary<TKey, IEnumerable<TVal>>>();
             var current = new Dictionary<TKey, IEnumerable<TVal>>();
             int count = 0;
@@ -176,6 +178,7 @@ namespace Cognite.OpcUa
 
         public static SilentServiceException GetRootSilentException(AggregateException aex)
         {
+            if (aex == null) throw new ArgumentNullException(nameof(aex));
             if (aex.InnerException is SilentServiceException silent)
             {
                 return silent;
@@ -207,6 +210,7 @@ namespace Cognite.OpcUa
         }
         public static Exception HandleServiceResult(ServiceResultException ex, SourceOp op)
         {
+            if (ex == null) throw new ArgumentNullException(nameof(ex));
             uint code = ex.StatusCode;
             string symId = StatusCode.LookupSymbolicId(code);
             switch (code)
@@ -237,8 +241,8 @@ namespace Cognite.OpcUa
                     return new SilentServiceException("Server had nothing to do", ex, op);
                 case StatusCodes.BadSessionClosed:
                     // This sometimes occurs if the client is closed during an operation, it is expected
-                    Log.Error("Service failed due to closed session: {code} at operation {op}", symId, op.ToString());
-                    return new SilentServiceException("Service failed due to closed session", ex, op);
+                    Log.Error("Service failed due to closed Session: {code} at operation {op}", symId, op.ToString());
+                    return new SilentServiceException("Service failed due to closed Session", ex, op);
                 case StatusCodes.BadServerNotConnected:
                     Log.Error("The client attempted a connection without being connected to the server: {code} at operation {op}", 
                         symId, op.ToString());
@@ -435,22 +439,24 @@ namespace Cognite.OpcUa
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1032:Implement standard exception constructors",
+        Justification = "Not a standard exception, throwing with default exception parameters would be incorrect usage")]
     public class SilentServiceException : Exception
     {
-        public readonly Utils.SourceOp Operation;
-        public readonly uint StatusCode;
+        public ExtractorUtils.SourceOp Operation { get; }
+        public uint StatusCode { get; }
 
-        public SilentServiceException(string msg, ServiceResultException ex, Utils.SourceOp op) : base(msg, ex)
+        public SilentServiceException(string msg, ServiceResultException ex, ExtractorUtils.SourceOp op) : base(msg, ex)
         {
             Operation = op;
-            StatusCode = ex.StatusCode;
+            StatusCode = ex?.StatusCode ?? StatusCodes.Bad;
         }
     }
 
     public class TimeRange
     {
-        public DateTime Start;
-        public DateTime End;
+        public DateTime Start { get; set; }
+        public DateTime End { get; set; }
 
         public TimeRange(DateTime start, DateTime end)
         {

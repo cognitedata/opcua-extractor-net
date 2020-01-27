@@ -33,11 +33,11 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Main extractor class, tying together the <see cref="uaClient"/> and CDF client.
     /// </summary>
-    public class Extractor
+    public class Extractor : IDisposable
     {
         private readonly UAClient uaClient;
         private readonly FullConfig config;
-        public readonly FailureBuffer FailureBuffer;
+        public FailureBuffer FailureBuffer { get; }
         private readonly HistoryReader historyReader;
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
@@ -94,10 +94,10 @@ namespace Cognite.OpcUa
         /// <param name="UAClient">UAClient to be used</param>
         public Extractor(FullConfig config, IEnumerable<IPusher> pushers, UAClient uaClient)
         {
-            this.pushers = pushers;
-            this.uaClient = uaClient;
+            this.pushers = pushers ?? throw new ArgumentNullException(nameof(pushers));
+            this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
+            this.config = config ?? throw new ArgumentNullException(nameof(config));
             FailureBuffer = new FailureBuffer(config.FailureBuffer, this);
-            this.config = config;
             this.uaClient.Extractor = this;
             historyReader = new HistoryReader(uaClient, this, pushers, config.History);
             Log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
@@ -133,7 +133,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception ex)
                 {
-                    Utils.LogException(ex, "Unexpected error starting UAClient",
+                    ExtractorUtils.LogException(ex, "Unexpected error starting UAClient",
                         "Handled service result exception on starting UAClient");
                     throw;
                 }
@@ -169,7 +169,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                Utils.LogException(ex, "Unexpected error in MapUAToDestinations", 
+                ExtractorUtils.LogException(ex, "Unexpected error in MapUAToDestinations", 
                     "Handled service result exception in MapUAToDestinations");
                 throw;
             }
@@ -188,7 +188,7 @@ namespace Cognite.OpcUa
             var failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
             if (failedTask != null)
             {
-                Utils.LogException(failedTask.Exception, "Unexpected error in main task list", "Handled error in main task list");
+                ExtractorUtils.LogException(failedTask.Exception, "Unexpected error in main task list", "Handled error in main task list");
             }
             while (tasks.Any() && failedTask == null)
             {
@@ -198,14 +198,14 @@ namespace Cognite.OpcUa
                     var terminated = await Task.WhenAny(tasks);
                     if (terminated.IsFaulted)
                     {
-                        Utils.LogException(terminated.Exception, 
+                        ExtractorUtils.LogException(terminated.Exception, 
                             "Unexpected error in main task list", 
                             "Handled error in main task list");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Utils.LogException(ex, "Unexpected error in main task list", "Handled error in main task list");
+                    ExtractorUtils.LogException(ex, "Unexpected error in main task list", "Handled error in main task list");
                 }
                 failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
 
@@ -219,7 +219,12 @@ namespace Cognite.OpcUa
             if (token.IsCancellationRequested) throw new TaskCanceledException();
             if (failedTask != null)
             {
-                ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
+                if (failedTask.Exception != null)
+                {
+                    ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
+                }
+
+                throw new Exception("Task failed without exception");
             }
             throw new Exception("Processes quit without failing");
         }
@@ -230,6 +235,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public void RestartExtractor(CancellationToken token)
         {
+            token.ThrowIfCancellationRequested();
             restart = true;
             triggerUpdateOperations.Set();
         }
@@ -309,11 +315,12 @@ namespace Cognite.OpcUa
         /// <returns>True if variable may be mapped to a timeseries</returns>
         public bool AllowTSMap(BufferedVariable node)
         {
+            if (node == null) throw new ArgumentNullException(nameof(node));
             return (!node.DataType.IsString || config.Extraction.AllowStringVariables)
                 && (node.ValueRank == ValueRanks.Scalar
-                    || config.Extraction.MaxArraySize > 0 && node.ArrayDimensions != null && node.ArrayDimensions.Length == 1
+                    || config.Extraction.MaxArraySize > 0 && node.ArrayDimensions != null && node.ArrayDimensions.Count == 1
                     && node.ArrayDimensions[0] > 0 && node.ArrayDimensions[0] <= config.Extraction.MaxArraySize)
-                && !ignoreDataTypes.Contains(node.DataType.raw);
+                && !ignoreDataTypes.Contains(node.DataType.Raw);
         }
 
         public NodeExtractionState GetNodeState(string externalId)
@@ -580,7 +587,7 @@ namespace Cognite.OpcUa
                 {
                     variables.Add(node);
                     NodeStates[node.Id] = new NodeExtractionState(node);
-                    if (node.ArrayDimensions != null && node.ArrayDimensions.Length > 0 && node.ArrayDimensions[0] > 0)
+                    if (node.ArrayDimensions != null && node.ArrayDimensions.Count > 0 && node.ArrayDimensions[0] > 0)
                     {
                         for (int i = 0; i < node.ArrayDimensions[0]; i++)
                         {
@@ -773,7 +780,10 @@ namespace Cognite.OpcUa
         /// <returns>UniqueId to be used, for efficiency</returns>
         public IEnumerable<BufferedDataPoint> ToDataPoint(DataValue value, NodeExtractionState variable, string uniqueId)
         {
-            if (variable.ArrayDimensions != null && variable.ArrayDimensions.Length > 0 && variable.ArrayDimensions[0] > 0)
+            if (value == null) throw new ArgumentNullException(nameof(value));
+            if (variable == null) throw new ArgumentNullException(nameof(value));
+
+            if (variable.ArrayDimensions != null && variable.ArrayDimensions.Count > 0 && variable.ArrayDimensions[0] > 0)
             {
                 var ret = new List<BufferedDataPoint>();
                 if (!(value.Value is Array))
@@ -850,6 +860,9 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         public BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
         {
+            if (filter == null) throw new ArgumentNullException(nameof(filter));
+            if (eventFields == null) throw new ArgumentNullException(nameof(eventFields));
+
             int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
                                                                        && atr.BrowsePath[0] == BrowseNames.EventType);
             if (eventTypeIndex < 0)
@@ -913,7 +926,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Log.Error(e, "Failed to construct bufferedEvent from raw fields");
+                Log.Error(e, "Failed to construct bufferedEvent from Raw fields");
                 return null;
             }
         }
@@ -982,7 +995,7 @@ namespace Cognite.OpcUa
             if (eventType == ObjectTypeIds.AuditAddNodesEventType)
             {
                 // This is a neat way to get the contents of the event, which may be fairly complicated (variant of arrays of extensionobjects)
-                var e = new AuditAddNodesEventState(null);
+                using var e = new AuditAddNodesEventState(null);
                 e.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
                 if (e.NodesToAdd?.Value == null)
                 {
@@ -1036,5 +1049,16 @@ namespace Cognite.OpcUa
             triggerUpdateOperations.Set();
         }
         #endregion
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            triggerUpdateOperations?.Dispose();
+        }
     }
 }

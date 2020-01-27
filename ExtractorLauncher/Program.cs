@@ -79,10 +79,10 @@ namespace Cognite.OpcUa
                 {
                     string configFile = setup.ConfigFile ?? System.IO.Path.Combine(configDir, setup.ConfigTool ? "config.config-tool.yml" : "config.yml");
                     Log.Information($"Loading config from {configFile}");
-                    config = Utils.GetConfig(configFile);
+                    config = ExtractorUtils.GetConfig(configFile);
                     if (setup.ConfigTool)
                     {
-                        baseConfig = Utils.GetConfig(configFile);
+                        baseConfig = ExtractorUtils.GetConfig(configFile);
                     }
                 }
                 catch (YamlDotNet.Core.YamlException e)

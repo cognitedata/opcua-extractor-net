@@ -24,14 +24,14 @@ using Opc.Ua;
 
 namespace Cognite.OpcUa
 {
-    public interface IPusher
+    public interface IPusher : IDisposable
     {
         int Index { get; set; }
         PusherConfig BaseConfig { get; }
         /// <summary>
         /// Parent extractor
         /// </summary>
-        Extractor Extractor { set; }
+        Extractor Extractor { get; set; }
 
         /// <summary>
         /// Push nodes, emptying the queue
