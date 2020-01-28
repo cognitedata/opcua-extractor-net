@@ -189,7 +189,7 @@ namespace Test
             await tester.WaitForCondition(() => tester.Extractor.Pushing, 20,
                 () => "Expected extractor to start pushing initially");
 
-            tester.Extractor.RestartExtractor(tester.Source.Token);
+            tester.Extractor.RestartExtractor();
 
             await Task.Delay(500);
 
@@ -568,7 +568,7 @@ namespace Test
             Assert.Contains(tester.Handler.datapoints["gp.efg:i=10"].Item1, pt => pt.Timestamp < startTime);
 
             CommonTestUtils.ResetTestMetrics();
-            tester.Extractor.RestartExtractor(tester.Source.Token);
+            tester.Extractor.RestartExtractor();
 
             await Task.Delay(500);
 

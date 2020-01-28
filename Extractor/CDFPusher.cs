@@ -492,11 +492,7 @@ namespace Cognite.OpcUa
             {
                 dps = await client.DataPoints.LatestAsync(new DataPointsLatestQueryDto
                 {
-                    Items = ids.Select(id => new IdentityWithBefore
-                    {
-                        Before = null,
-                        ExternalId = id
-                    })
+                    Items = ids.Select(IdentityWithBefore.Create)
                 }, token);
             }
             catch (ResponseException ex)

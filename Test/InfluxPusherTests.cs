@@ -247,6 +247,8 @@ namespace Test
             var dps = await ((InfluxPusher)tester.Pusher)
                 .ReadDataPoints(DateTime.UnixEpoch, new Dictionary<string, bool> {{"gp.efg:i=10", false}}, CancellationToken.None);
 
+            dps = dps.DistinctBy(pt => (int) Math.Round(pt.DoubleValue));
+
             foreach (var dp in dps)
             {
                  Log.Information("dp: {val}", dp.DoubleValue);
@@ -278,7 +280,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.GetNodeState("gp.efg:i=10") != null
-                    && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone,
+                    && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone
+                    && tester.Extractor.GetNodeState("gp.efg:i=10").IsStreaming,
                 20, "Expected backfill to terminate");
 
             await tester.TerminateRunTask();
@@ -307,11 +310,13 @@ namespace Test
                     && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone,
                 20, "Expected backfill to terminate");
 
+            await Task.Delay(2000);
+
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
 
             CommonTestUtils.ResetTestMetrics();
-            tester.Extractor.RestartExtractor(tester.Source.Token);
+            tester.Extractor.RestartExtractor();
 
             await Task.Delay(500);
 
@@ -382,7 +387,7 @@ namespace Test
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
 
             CommonTestUtils.ResetTestMetrics();
-            tester.Extractor.RestartExtractor(tester.Source.Token);
+            tester.Extractor.RestartExtractor();
 
             await Task.Delay(500);
 

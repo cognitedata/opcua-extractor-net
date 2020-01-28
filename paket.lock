@@ -3,15 +3,15 @@ NUGET
   remote: https://www.nuget.org/api/v2
     AdysTech.InfluxDB.Client.Net.Core (0.9)
       Newtonsoft.Json (>= 10.0.3) - restriction: >= netstandard2.0
-    CogniteSdk (1.0.0-alpha-023)
-      CogniteSdk.Types (>= 1.0.0-alpha-023) - restriction: >= netstandard2.0
+    CogniteSdk (1.0.0-alpha-024)
+      CogniteSdk.Types (>= 1.0.0-alpha-024) - restriction: >= netstandard2.0
       Microsoft.CodeAnalysis.FxCopAnalyzers (>= 2.9.8) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 3.1.1) - restriction: >= netstandard2.0
       Oryx (>= 1.0.0-alpha-004) - restriction: >= netstandard2.0
-      Oryx.Cognite (>= 1.0.0-alpha-023) - restriction: >= netstandard2.0
+      Oryx.Cognite (>= 1.0.0-alpha-024) - restriction: >= netstandard2.0
     CogniteSdk.Protobuf (0.9) - restriction: >= netstandard2.0
       Google.Protobuf (>= 3.9) - restriction: >= netstandard2.0
-    CogniteSdk.Types (1.0.0-alpha-023) - restriction: >= netstandard2.0
+    CogniteSdk.Types (1.0.0-alpha-024) - restriction: >= netstandard2.0
       Microsoft.CodeAnalysis.FxCopAnalyzers (>= 2.9.8) - restriction: >= netstandard2.0
       System.Text.Json (>= 4.7) - restriction: >= netstandard2.0
     coverlet.msbuild (2.8)
@@ -301,9 +301,9 @@ NUGET
       FSharp.Core (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 2.2) - restriction: >= netstandard2.0
       TaskBuilder.fs (>= 2.1) - restriction: >= netstandard2.0
-    Oryx.Cognite (1.0.0-alpha-023) - restriction: >= netstandard2.0
+    Oryx.Cognite (1.0.0-alpha-024) - restriction: >= netstandard2.0
       CogniteSdk.Protobuf (>= 0.9) - restriction: >= netstandard2.0
-      CogniteSdk.Types (>= 1.0.0-alpha-023) - restriction: >= netstandard2.0
+      CogniteSdk.Types (>= 1.0.0-alpha-024) - restriction: >= netstandard2.0
       FSharp.Core (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 3.1.1) - restriction: >= netstandard2.0
       Oryx (>= 1.0.0-alpha-004) - restriction: >= netstandard2.0

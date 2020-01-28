@@ -1039,7 +1039,7 @@ namespace Cognite.OpcUa
                 return;
             }
 
-            var ev = new AuditAddReferencesEventState(null);
+            using var ev = new AuditAddReferencesEventState(null);
             ev.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
 
             if (ev.ReferencesToAdd?.Value == null)

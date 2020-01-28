@@ -24,7 +24,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
-using CogniteSdk;
+using Cognite.OpcUa.Config;
 using Microsoft.Extensions.DependencyInjection;
 using Prometheus.Client;
 using Serilog;
@@ -163,12 +163,13 @@ namespace Test
                 ResetMetricValue(metric);
             }
         }
-        public static string Bash(string cmd)
+        public static Process Bash(string cmd)
         {
             if (cmd == null) throw new ArgumentNullException(nameof(cmd));
             var escapedArgs = cmd.Replace("\"", "\\\"", StringComparison.InvariantCulture);
+            Log.Information(escapedArgs);
 
-            using var process = new Process()
+            var process = new Process
             {
                 StartInfo = new ProcessStartInfo
                 {
@@ -179,29 +180,15 @@ namespace Test
                     CreateNoWindow = true,
                 }
             };
-            process.Start();
-            string result = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-            return result;
+            return process;
         }
 
-        public static void BlockTrafficOnPort(int port)
+        public static Process GetProxyProcess()
         {
-            // Create qdisc with handle 1 on the loopback device
-            Log.Information(Bash("tc qdisc add dev lo root handle 1: prio"));
-            // Add rule to drop 100% of packets to qdisc
-            Log.Information(Bash("tc qdisc add dev lo parent 1:3 handle 30: netem loss 100%"));
-            // Add filter to only drop packets on given port
-            Log.Information(Bash(
-                $"tc filter add dev lo protocol ip parent 1:0 u32 match ip sport {port} 0xffff flowid 1:3"));
-        }
-
-        public static void UndoBlock()
-        {
-            Log.Information(Bash("tc qdisc del dev lo root handle 1: prio"));
+            return Bash("ncat -lk 4839 -c \"ncat localhost 4840\" &");
         }
     }
-    public enum ServerName { Basic, Full, Array, Events, Audit }
+    public enum ServerName { Basic, Full, Array, Events, Audit, Proxy }
     public enum ConfigName { Events, Influx, Test }
 
     public sealed class ExtractorTester : IDisposable
@@ -213,6 +200,7 @@ namespace Test
             {ServerName.Array, "opc.tcp://localhost:4842"},
             {ServerName.Events, "opc.tcp://localhost:4843"},
             {ServerName.Audit, "opc.tcp://localhost:4844"},
+            {ServerName.Proxy, "opc.tcp://localhost:4839"}
         };
 
         private static readonly Dictionary<ConfigName, string> configNames = new Dictionary<ConfigName, string>

@@ -16,11 +16,10 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
-using Oryx.Cognite;
-using Serilog;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -92,43 +91,34 @@ namespace Test
         [Fact]
         public async Task TestServerReconnect()
         {
-            bool blocked = false;
-            try
+            Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux));
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                using var tester = new ExtractorTester(new ExtractorTestParameters());
+                ServerName = ServerName.Proxy
+            });
+            using var process = CommonTestUtils.GetProxyProcess();
+            process.Start();
+            await tester.ClearPersistentData();
 
-                await tester.ClearPersistentData();
 
-                Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux));
+            tester.StartExtractor();
 
-                tester.StartExtractor();
+            await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_extractor_starting", 0)
+                                                && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
+                "Expected the extractor to finish startup");
 
-                await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_extractor_starting", 0)
-                                                    && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
-                    "Expected the extractor to finish startup");
+            process.Kill();
 
-                CommonTestUtils.BlockTrafficOnPort(4840);
-                blocked = true;
+            await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0), 20,
+                "Expected client to disconnect");
 
-                await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0), 20,
-                    "Expected client to disconnect");
+            process.Start();
 
-                CommonTestUtils.UndoBlock();
-                blocked = false;
+            await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
+                "Excpected client to reconnect");
 
-                await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
-                    "Excpected client to reconnect");
-
-                await tester.TerminateRunTask();
-            }
-            finally
-            {
-                if (blocked)
-                {
-                    CommonTestUtils.UndoBlock();
-                }
-            }
-
+            await tester.TerminateRunTask();
+            process.Kill();
         }
         [Trait("Server", "basic")]
         [Trait("Target", "UAClient")]
@@ -136,37 +126,29 @@ namespace Test
         [Fact]
         public async Task TestServerDisconnect()
         {
-            bool blocked = false;
-            try
+            using var process = CommonTestUtils.GetProxyProcess();
+            Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux));
+            process.Start();
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                using var tester = new ExtractorTester(new ExtractorTestParameters());
-                tester.Config.Source.ForceRestart = true;
+                ServerName = ServerName.Proxy
+            });
+            tester.Config.Source.ForceRestart = true;
 
-                await tester.ClearPersistentData();
+            await tester.ClearPersistentData();
 
-                Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux));
 
-                tester.StartExtractor();
+            tester.StartExtractor();
 
-                await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_extractor_starting", 0)
-                                                    && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
-                    "Expected the extractor to finish startup");
+            await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_extractor_starting", 0)
+                                                && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
+                "Expected the extractor to finish startup");
+            process.Kill();
 
-                CommonTestUtils.BlockTrafficOnPort(4840);
-                blocked = true;
+            await tester.WaitForCondition(() => tester.RunTask.IsCompleted, 20, "Expected runtask to terminate");
 
-                await tester.WaitForCondition(() => tester.RunTask.IsCompleted, 20, "Expected runtask to terminate");
-
-                await tester.TerminateRunTask(ex =>
-                    ex is OperationCanceledException || ex is AggregateException aex && aex.InnerException is OperationCanceledException);
-            }
-            finally
-            {
-                if (blocked)
-                {
-                    CommonTestUtils.UndoBlock();
-                }
-            }
+            await tester.TerminateRunTask(ex =>
+                ex is OperationCanceledException || ex is AggregateException aex && aex.InnerException is OperationCanceledException);
         }
     }
 }
