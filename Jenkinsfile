@@ -91,7 +91,7 @@ podTemplate(
         }
         container('dotnet-mono') {
             stage('Install dependencies') {
-                sh('apt-get update && apt-get install -y python3-pip')
+                sh('apt-get update && apt-get install -y python3-pip tc')
                 sh('pip3 install pipenv')
                 sh('pipenv install -d --system')           
                 sh('mono .paket/paket.exe restore')

@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -161,6 +162,43 @@ namespace Test
             {
                 ResetMetricValue(metric);
             }
+        }
+        public static string Bash(string cmd)
+        {
+            if (cmd == null) throw new ArgumentNullException(nameof(cmd));
+            var escapedArgs = cmd.Replace("\"", "\\\"", StringComparison.InvariantCulture);
+
+            using var process = new Process()
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "/bin/bash",
+                    Arguments = $"-c \"{escapedArgs}\"",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+            process.Start();
+            string result = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+            return result;
+        }
+
+        public static void BlockTrafficOnPort(int port)
+        {
+            // Create qdisc with handle 1 on the loopback device
+            Log.Information(Bash("tc qdisc add dev lo root handle 1: prio"));
+            // Add rule to drop 100% of packets to qdisc
+            Log.Information(Bash("tc qdisc add dev lo parent 1:3 handle 30: netem loss 100%"));
+            // Add filter to only drop packets on given port
+            Log.Information(Bash(
+                $"tc filter add dev lo protocol ip parent 1:0 u32 match ip sport {port} 0xffff flowid 1:3"));
+        }
+
+        public static void UndoBlock()
+        {
+            Log.Information(Bash("tc qdisc del dev lo root handle 1: prio"));
         }
     }
     public enum ServerName { Basic, Full, Array, Events, Audit }

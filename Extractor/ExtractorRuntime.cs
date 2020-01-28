@@ -25,6 +25,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Polly;
 using Polly.Timeout;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -115,7 +116,7 @@ namespace Cognite.OpcUa
                     removePushers.Add(pusher);
                 }
             }));
-
+            Log.Information("Building extractor");
             pushers = pushers.Except(removePushers).ToList();
             using var extractor = new Extractor(config, pushers, client);
 

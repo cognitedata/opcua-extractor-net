@@ -102,7 +102,10 @@ namespace Cognite.OpcUa
         /// </summary>
         public void Close()
         {
-            Session.CloseSession(null, true);
+            if (!Session.Disposed)
+            {
+                Session.CloseSession(null, true);
+            }
             connected.Set(0);
         }
         /// <summary>
@@ -210,7 +213,7 @@ namespace Cognite.OpcUa
             }
             nodeOverrides?.Clear();
             eventFields?.Clear();
-            Task.Run(() => Extractor?.RestartExtractor(liveToken));
+            Task.Run(() => Extractor?.RestartExtractor());
             lock (visitedNodesLock)
             {
                 VisitedNodes.Clear();
@@ -240,6 +243,7 @@ namespace Cognite.OpcUa
                 try
                 {
                     Session.Close();
+                    Extractor?.QuitExtractorInternally();
                 }
                 catch
                 {

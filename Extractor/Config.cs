@@ -42,6 +42,7 @@ namespace Cognite.OpcUa
         public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
         public int AutoRebrowsePeriod { get; set; } = 0;
         public bool EnableAuditDiscovery { get; set; } = false;
+        public bool ExitOnFailure { get; set; } = false;
     }
     public abstract class PusherConfig
     {

@@ -104,7 +104,7 @@ namespace Test
 
             int lastCount = tester.Handler.events.Count;
             Assert.Equal(0, (int)CommonTestUtils.GetMetricValue("opcua_event_push_failures"));
-            tester.Extractor.RestartExtractor(tester.Source.Token);
+            tester.Extractor.RestartExtractor();
             await Task.Delay(500);
 
             await tester.WaitForCondition(() =>
@@ -428,7 +428,7 @@ namespace Test
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
 
             CommonTestUtils.ResetTestMetrics();
-            tester.Extractor.RestartExtractor(tester.Source.Token);
+            tester.Extractor.RestartExtractor();
 
             await Task.Delay(500);
 

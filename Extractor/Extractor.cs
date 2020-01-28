@@ -61,6 +61,7 @@ namespace Cognite.OpcUa
 
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
         private bool restart;
+        private bool quit;
         private readonly AutoResetEvent triggerUpdateOperations = new AutoResetEvent(false);
 
         private readonly object managedNodesLock = new object();
@@ -85,6 +86,9 @@ namespace Cognite.OpcUa
 
         public static readonly Counter BadDataPoints = Metrics
             .CreateCounter("opcua_bad_datapoints", "Datapoints skipped due to bad status");
+
+        public static readonly Gauge starting = Metrics
+            .CreateGauge("opcua_extractor_starting", "1 if the extractor is in the startup phase");
 
         /// <summary>
         /// Constructor
@@ -124,6 +128,7 @@ namespace Cognite.OpcUa
         /// <param name="quitAfterMap">If true, terminate the extractor after first map iteration</param>
         public async Task RunExtractor(CancellationToken token, bool quitAfterMap = false)
         {
+            starting.Set(1);
             if (!uaClient.Started)
             {
                 Log.Information("Start UAClient");
@@ -233,10 +238,15 @@ namespace Cognite.OpcUa
         /// allows data to be pushed to CDF, and begins mapping the opcua
         /// directory again
         /// </summary>
-        public void RestartExtractor(CancellationToken token)
+        public void RestartExtractor()
         {
-            token.ThrowIfCancellationRequested();
             restart = true;
+            triggerUpdateOperations.Set();
+        }
+
+        public void QuitExtractorInternally()
+        {
+            quit = true;
             triggerUpdateOperations.Set();
         }
         /// <summary>
@@ -447,6 +457,11 @@ namespace Cognite.OpcUa
                 WaitHandle.WaitAny(new[] { triggerUpdateOperations, token.WaitHandle });
                 if (token.IsCancellationRequested) break;
                 var tasks = new List<Task>();
+                if (quit)
+                {
+                    Log.Warning("Manually quitting extractor due to error in subsystem");
+                    throw new OperationCanceledException();
+                }
                 if (restart)
                 {
                     Log.Information("Restarting extractor...");
@@ -738,7 +753,9 @@ namespace Cognite.OpcUa
                 managedNodes = managedNodes.Concat(variables.Concat(objects).Select(node => node.Id)).ToHashSet();
             }
 
-            return Synchronize(variables, objects, token);
+            var historyTasks = Synchronize(variables, objects, token);
+            starting.Set(0);
+            return historyTasks;
         }
         #endregion
 
@@ -1058,6 +1075,7 @@ namespace Cognite.OpcUa
 
         protected virtual void Dispose(bool disposing)
         {
+            starting.Set(0);
             triggerUpdateOperations?.Dispose();
         }
     }

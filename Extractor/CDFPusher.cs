@@ -487,14 +487,30 @@ namespace Cognite.OpcUa
         private async Task<IEnumerable<(string, DateTime)>> GetLatestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
         {
             var client = GetClient();
-            var dps = await client.DataPoints.LatestAsync(new DataPointsLatestQueryDto
+            IEnumerable<DataPointsReadDto> dps;
+            try
             {
-                Items = ids.Select(id => new IdentityWithBefore
+                dps = await client.DataPoints.LatestAsync(new DataPointsLatestQueryDto
                 {
-                    Before = null,
-                    ExternalId = id
-                })
-            }, token);
+                    Items = ids.Select(id => new IdentityWithBefore
+                    {
+                        Before = null,
+                        ExternalId = id
+                    })
+                }, token);
+            }
+            catch (ResponseException ex)
+            {
+                Log.Information("Ex: {msg}", ex.Message);
+                foreach (var missing in ex.Missing)
+                {
+                    foreach (var kvp in missing)
+                    {
+                        Log.Information("{k}: {v}", kvp.Key, (kvp.Value as MultiValue.Long).Value);
+                    }
+                }
+                throw;
+            }
 
             var res = new List<(string, DateTime)>();
             foreach (var dp in dps)

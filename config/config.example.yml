@@ -21,7 +21,7 @@ Source:
     Password:
     # Use secured connection
     Secure: false
-    # If true, force restart the uaclient on disconnect. Required for some servers
+    # If true, force restart the extractor on disconnect. Required for some servers
     ForceRestart: false
     # Max sizes of various requests to OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
     # Maximum number of results per browse or browseNext operation
@@ -231,6 +231,8 @@ Extraction:
     # Enable using audit events to discover new nodes. If this is set to true, the client will expect AuditAddNodes/AuditAddReferences
     # events on the server node. These will be used to add new nodes automatically, by recursively browsing from each given ParentId.
     EnableAuditDiscovery:
+    # Completely exit the extractor on failure, instead of doing an internal restart.
+    ExitOnFailure: false
 
 
 Events:

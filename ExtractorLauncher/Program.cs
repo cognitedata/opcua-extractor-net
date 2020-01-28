@@ -157,6 +157,7 @@ namespace Cognite.OpcUa
 
                         try
                         {
+                            Log.Information("Starting extractor");
                             runTime.Run(source).Wait();
                         }
                         catch (TaskCanceledException)
@@ -168,8 +169,15 @@ namespace Cognite.OpcUa
                         {
                             Log.Error("Extractor crashed, restarting");
                         }
+
+                        if (config.Extraction.ExitOnFailure)
+                        {
+                            break;
+                        }
+
                         try
                         {
+                            Log.Information("Sleeping for 1 second");
                             Task.Delay(1000, manualSource.Token).Wait();
                         }
                         catch (TaskCanceledException)
