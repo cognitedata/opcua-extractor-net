@@ -96,10 +96,12 @@ namespace Test
             {
                 ServerName = ServerName.Proxy
             });
+            tester.Config.History.Enabled = false;
             using var process = CommonTestUtils.GetProxyProcess();
             process.Start();
             await tester.ClearPersistentData();
 
+            await Task.Delay(500);
 
             tester.StartExtractor();
 
@@ -107,7 +109,8 @@ namespace Test
                                                 && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
                 "Expected the extractor to finish startup");
 
-            process.Kill();
+            await Task.Delay(1000);
+            CommonTestUtils.StopProxyProcess();
 
             await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0), 20,
                 "Expected client to disconnect");
@@ -118,7 +121,7 @@ namespace Test
                 "Excpected client to reconnect");
 
             await tester.TerminateRunTask();
-            process.Kill();
+            CommonTestUtils.StopProxyProcess();
         }
         [Trait("Server", "basic")]
         [Trait("Target", "UAClient")]
@@ -126,29 +129,32 @@ namespace Test
         [Fact]
         public async Task TestServerDisconnect()
         {
-            using var process = CommonTestUtils.GetProxyProcess();
             Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux));
-            process.Start();
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Proxy
             });
+            using var process = CommonTestUtils.GetProxyProcess();
+            process.Start();
             tester.Config.Source.ForceRestart = true;
+            tester.Config.History.Enabled = false;
 
             await tester.ClearPersistentData();
-
+            await Task.Delay(500);
 
             tester.StartExtractor();
 
             await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_extractor_starting", 0)
                                                 && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
                 "Expected the extractor to finish startup");
-            process.Kill();
+            await Task.Delay(1000);
+            CommonTestUtils.StopProxyProcess();
+
 
             await tester.WaitForCondition(() => tester.RunTask.IsCompleted, 20, "Expected runtask to terminate");
 
             await tester.TerminateRunTask(ex =>
-                ex is OperationCanceledException || ex is AggregateException aex && aex.InnerException is OperationCanceledException);
+                ex is TimeoutException || ex is AggregateException aex && aex.InnerException is TimeoutException);
         }
     }
 }

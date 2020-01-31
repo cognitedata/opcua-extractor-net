@@ -460,7 +460,7 @@ namespace Cognite.OpcUa
                 if (quit)
                 {
                     Log.Warning("Manually quitting extractor due to error in subsystem");
-                    throw new OperationCanceledException();
+                    throw new TimeoutException();
                 }
                 if (restart)
                 {

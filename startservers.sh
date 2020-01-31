@@ -1,5 +1,8 @@
 #!/bin/sh
 
+rm -r Test/my_datavalue_history*
+rm -r my_datavalue_history*
+
 dir=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 cd $dir/Test
 python3 servers/server-test1.py  &

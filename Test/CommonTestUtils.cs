@@ -177,15 +177,22 @@ namespace Test
                     Arguments = $"-c \"{escapedArgs}\"",
                     RedirectStandardOutput = true,
                     UseShellExecute = false,
-                    CreateNoWindow = true,
+                    CreateNoWindow = false,
                 }
             };
+            process.Start();
             return process;
         }
 
         public static Process GetProxyProcess()
         {
-            return Bash("ncat -lk 4839 -c \"ncat localhost 4840\" &");
+            return Bash("ncat -lk 4839 -c \"ncat localhost 4840\"");
+        }
+
+        public static void StopProxyProcess()
+        {
+            using var process = Bash("kill $(ps aux | grep '[n]cat' | awk '{print $2}')");
+            process.WaitForExit();
         }
     }
     public enum ServerName { Basic, Full, Array, Events, Audit, Proxy }
