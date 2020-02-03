@@ -282,9 +282,9 @@ namespace Test
                 LogLevel = "debug"
             });
             await tester.ClearPersistentData();
+            tester.Handler.AllowEvents = false;
             tester.StartExtractor();
 
-            tester.Handler.AllowEvents = false;
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
                 20, "Expected failurebuffer to contain some events");
 

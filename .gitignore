@@ -24,7 +24,6 @@ ExtractorLauncher/Properties
 *.bin
 
 # Config
-config.yml
-config.yml.*
-config.config-tool.yml
-config.config-tool-output.yml
+config/*
+!config.example.yml
+!opc.ua.net.extractor.Config.xml

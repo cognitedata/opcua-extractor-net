@@ -162,7 +162,7 @@ namespace Test
             await tester.WaitForCondition(async () =>
             {
                 var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database, 
-                    "SELECT * FROM \"events.gp.efg:i=1\"");
+                    "SELECT * FROM /events.gp.efg:i=1*/");
                 return read.Count > 0 && read.First().HasEntries &&
                        tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming);
             }, 20, "Expected to get some events in influxdb");

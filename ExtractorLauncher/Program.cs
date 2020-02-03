@@ -171,6 +171,19 @@ namespace Cognite.OpcUa
                             log.Warning("Extractor stopped manually");
                             break;
                         }
+                        catch (AggregateException aex)
+                        {
+                            if (ExtractorUtils.GetRootExceptionOfType<ConfigurationException>(aex) != null)
+                            {
+                                log.Error("Invalid configuration, stopping");
+                                break;
+                            }
+                            if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) != null)
+                            {
+                                log.Warning("Extractor stopped manually");
+                                break;
+                            }
+                        }
                         catch (ConfigurationException)
                         {
                             log.Error("Invalid configuration, stopping");

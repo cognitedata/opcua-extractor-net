@@ -1128,7 +1128,11 @@ namespace Cognite.OpcUa.Config
                     summary.Auditing = true;
                 }
 
-                emittedEvents = emittedEvents.Concat(discoveredEvents).Distinct().ToList();
+                emittedEvents = emittedEvents
+                    .Concat(discoveredEvents)
+                    .Distinct()
+                    .Where(id => !ToolUtil.IsChildOf(eventTypes, eventTypes.Find(type => type.Id == id), ObjectTypeIds.AuditEventType))
+                    .ToList();
 
                 if (!emitterIds.Contains(ObjectIds.Server))
                 {

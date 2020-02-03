@@ -28,6 +28,7 @@ namespace Cognite.OpcUa
     {
         int Index { get; set; }
         PusherConfig BaseConfig { get; }
+
         /// <summary>
         /// Parent extractor
         /// </summary>

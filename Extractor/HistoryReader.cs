@@ -326,7 +326,7 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = (uint)config.EventChunk,
                 Filter = uaClient.BuildEventFilter(nodes)
             };
-            log.Information("Frontfill events from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
+            log.Information("Frontfill events from {start} for {cnt} emitters", finalTimeStamp, states.Count());
 
             BaseHistoryReadOp(details, states.Select(node => node.Id), true, false, HistoryEventHandler, token); 
 
@@ -349,7 +349,7 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = (uint)config.EventChunk,
                 Filter = uaClient.BuildEventFilter(nodes)
             };
-            log.Information("Backfill events from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
+            log.Information("Backfill events from {start} for {cnt} emitters", finalTimeStamp, states.Count());
 
             BaseHistoryReadOp(details, states.Select(node => node.Id), false, false, HistoryEventHandler, token);
         }

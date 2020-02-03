@@ -125,7 +125,7 @@ namespace Cognite.OpcUa
     }
     public class LoggerConfig
     {
-        public string ConsoleLevel { get; set; }
+        public string ConsoleLevel { get; set; } = "information";
         public string FileLevel { get; set; }
         public string LogFolder { get; set; }
         public int RetentionLimit { get; set; } = 31;

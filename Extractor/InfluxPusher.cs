@@ -150,8 +150,10 @@ namespace Cognite.OpcUa
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
                 eventsCounter.Inc(count);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                log.Warning("Failed to push events to influxdb");
+                log.Debug(ex, "Failed to push events to influxdb");
                 eventPushFailures.Inc();
                 return evts;
             }
@@ -218,15 +220,19 @@ namespace Cognite.OpcUa
         private async Task InitExtractedEventRange(EventExtractionState state,
             IEnumerable<NodeId> nodes,
             bool backfillEnabled,
+            IEnumerable<string> seriesNames,
             CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
             var mutex = new object();
             var bestRange = new TimeRange(DateTime.MaxValue, DateTime.MinValue);
             string emitterId = Extractor.GetUniqueId(state.Id);
-            var tasks = nodes.Select(async node =>
+
+            var ids = seriesNames.Where(name => nodes.Any(node =>
+                name.StartsWith("events." + Extractor.GetUniqueId(node), StringComparison.InvariantCulture)));
+
+            var tasks = ids.Select(async id =>
             {
-                string id = "events." + Extractor.GetUniqueId(node);
                 var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\" WHERE Emitter='{emitterId}'");
 
@@ -286,7 +292,26 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
-            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, nodes, backfillEnabled, token));
+            IEnumerable<string> eventSeries;
+            try
+            {
+                var measurements = await client.QueryMultiSeriesAsync(config.Database,
+                    "SHOW MEASUREMENTS");
+                eventSeries = measurements.SelectMany(series => series.Entries.Select(entry => entry.Name as string));
+                foreach (var series in eventSeries)
+                {
+                    Log.Information(series);
+                }
+                eventSeries = eventSeries.Where(series => series.StartsWith("events.", StringComparison.InvariantCulture));
+
+            }
+            catch (Exception e)
+            {
+                log.Error(e, "Failed to list measurements in influxdb");
+                return false;
+            }
+
+            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, nodes, backfillEnabled, eventSeries, token));
             try
             {
                 await Task.WhenAll(getRangeTasks);
@@ -372,16 +397,16 @@ namespace Cognite.OpcUa
             var idp = new InfluxDatapoint<string>
             {
                 UtcTimestamp = evt.Time,
-                MeasurementName = "events." + Extractor.GetUniqueId(evt.SourceNode)
+                MeasurementName = "events." + Extractor.GetUniqueId(evt.SourceNode) + ":" + Extractor.GetUniqueId(evt.EventType)
             };
             idp.Fields.Add("value", evt.Message);
             idp.Fields.Add("id", evt.EventId);
-            idp.Tags["Type"] = Extractor.GetUniqueId(evt.EventType);
             idp.Tags["Emitter"] = Extractor.GetUniqueId(evt.EmittingNode);
             foreach (var kvp in evt.MetaData)
             {
                 if (kvp.Key == "SourceNode") continue;
-                idp.Tags[kvp.Key] = Extractor.ConvertToString(kvp.Value);
+                var str = Extractor.ConvertToString(kvp.Value);
+                idp.Tags[kvp.Key] = string.IsNullOrEmpty(str) ? "null" : str;
             }
 
             return idp;
@@ -448,7 +473,7 @@ namespace Cognite.OpcUa
                 id => id);
             var fetchTasks = measurements.Select(measurement =>
                 client.QueryMultiSeriesAsync(config.Database,
-                    $"SELECT * FROM \"{"events." + Extractor.GetUniqueId(measurement)}\" WHERE time >= {timestamp.Ticks}")).ToList();
+                    $"SELECT * FROM /{"events." + Extractor.GetUniqueId(measurement)}*/ WHERE time >= {timestamp.Ticks}")).ToList();
             var results = await Task.WhenAll(fetchTasks);
             token.ThrowIfCancellationRequested();
             var finalEvents = new List<BufferedEvent>();
@@ -458,7 +483,8 @@ namespace Cognite.OpcUa
                 if (!series.Any()) continue;
                 var current = series.First();
                 if (!nameToNodeId.ContainsKey(current.SeriesName)) continue;
-                var sourceNode = nameToNodeId[current.SeriesName];
+                var baseKey = nameToNodeId.Keys.First(key => current.SeriesName.StartsWith(key, StringComparison.InvariantCulture));
+                var sourceNode = nameToNodeId[baseKey];
                 finalEvents.AddRange(current.Entries.Select(res =>
                 {
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
