@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
+using Prometheus.Client;
 using Prometheus.Client.MetricPusher;
 using Serilog;
 
@@ -33,6 +34,7 @@ namespace Cognite.OpcUa
     {
         private static MetricPushServer _worker;
 
+        private static Gauge version;
         static int Main(string[] args)
         {
             // Temporary logger config for capturing logs during configuration.
@@ -63,7 +65,8 @@ namespace Cognite.OpcUa
                             "By default [config-dir]/config.config-tool-output.yml. This file is overwritten.\n" +
                             "    -nc|--no-config            - Don't attempt to load yml config files. " +
                             "The OPC-UA XML config file will still be needed.\n" +
-                            "    -l|--log-level             - Set the console log-level [fatal/error/warning/information/debug/verbose]");
+                            "    -l|--log-level             - Set the console log-level [fatal/error/warning/information/debug/verbose].\n" +
+                            "    -x|--exit                  - Exit the extractor on failure, equivalent to Source.ExitOnFailure.");
                 return -1;
             }
 
@@ -104,6 +107,8 @@ namespace Cognite.OpcUa
 
             Log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
             Log.Information("Revision information: {status}", Version.Status());
+
+            version = Metrics.CreateGauge("opcua_version", $"version: {Version.GetVersion()}, status: {Version.Status()}");
 
             try
             {
@@ -178,6 +183,11 @@ namespace Cognite.OpcUa
                             Log.Error("Extractor crashed, restarting");
                         }
 
+                        if (config.Source.ExitOnFailure)
+                        {
+                            break;
+                        }
+
                         if (startTime > DateTime.Now - TimeSpan.FromSeconds(600))
                         {
                             waitRepeats++;
@@ -187,10 +197,7 @@ namespace Cognite.OpcUa
                             waitRepeats = 0;
                         }
 
-                        if (config.Extraction.ExitOnFailure)
-                        {
-                            break;
-                        }
+
 
                         try
                         {
@@ -292,6 +299,10 @@ namespace Cognite.OpcUa
                     case "--auto-accept":
                         result.AutoAccept = true;
                         break;
+                    case "--x":
+                    case "--exit":
+                        result.ExitOnFailure = true;
+                        break;
                     default:
                         throw new InvalidOperationException($"Unrecognized parameter: {args[i]}");
                 }
@@ -313,6 +324,7 @@ namespace Cognite.OpcUa
             public string ConfigDir;
             public bool NoConfig;
             public bool AutoAccept;
+            public bool ExitOnFailure;
         }
     } 
 }

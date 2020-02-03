@@ -15,6 +15,7 @@ namespace Cognite.OpcUa
         public string Password { get; set; }
         public bool Secure { get; set; } = false;
         public bool ForceRestart { get; set; } = false;
+        public bool ExitOnFailure { get; set; } = false;
         public int BrowseNodesChunk { get => browseNodesChunk; set => browseNodesChunk = Math.Max(1, value); }
         private int browseNodesChunk = 1000;
         public int BrowseChunk { get => browseChunk; set => browseChunk = Math.Max(0, value); }
@@ -42,7 +43,6 @@ namespace Cognite.OpcUa
         public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
         public int AutoRebrowsePeriod { get; set; } = 0;
         public bool EnableAuditDiscovery { get; set; } = false;
-        public bool ExitOnFailure { get; set; } = false;
     }
     public abstract class PusherConfig
     {

@@ -87,7 +87,7 @@ namespace Cognite.OpcUa
         public static readonly Counter BadDataPoints = Metrics
             .CreateCounter("opcua_bad_datapoints", "Datapoints skipped due to bad status");
 
-        public static readonly Gauge starting = Metrics
+        public static readonly Gauge Starting = Metrics
             .CreateGauge("opcua_extractor_starting", "1 if the extractor is in the startup phase");
 
         /// <summary>
@@ -128,7 +128,7 @@ namespace Cognite.OpcUa
         /// <param name="quitAfterMap">If true, terminate the extractor after first map iteration</param>
         public async Task RunExtractor(CancellationToken token, bool quitAfterMap = false)
         {
-            starting.Set(1);
+            Starting.Set(1);
             if (!uaClient.Started)
             {
                 Log.Information("Start UAClient");
@@ -749,7 +749,7 @@ namespace Cognite.OpcUa
             }
 
             var historyTasks = Synchronize(variables, objects, token);
-            starting.Set(0);
+            Starting.Set(0);
             return historyTasks;
         }
         #endregion
@@ -1078,7 +1078,7 @@ namespace Cognite.OpcUa
 
         protected virtual void Dispose(bool disposing)
         {
-            starting.Set(0);
+            Starting.Set(0);
             triggerUpdateOperations?.Dispose();
         }
     }
