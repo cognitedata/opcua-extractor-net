@@ -327,7 +327,7 @@ namespace Cognite.OpcUa
                 if (docb)
                 {
                     var rootNode = GetRootNode(root);
-                    if (rootNode == null) throw new Exception($"Root node does not exist: {root}");
+                    if (rootNode == null) throw new ExtractorFailureException($"Root node does not exist: {root}");
                     callback(rootNode, null);
                 }
             }
@@ -684,7 +684,7 @@ namespace Cognite.OpcUa
 
             if (values.Count() < nodes.Count(node => node.IsVariable) * 3 + nodes.Count())
             {
-                throw new Exception("Too few results in ReadNodeData");
+                throw new ExtractorFailureException("Too few results in ReadNodeData, this is a bug in the OPC-UA server implementation");
             }
 
             var enumerator = values.GetEnumerator();
@@ -996,7 +996,7 @@ namespace Cognite.OpcUa
                 .Select(sub => sub.ResolvedNodeId)
                 .ToHashSet();
 
-            if (eventFields == null) throw new Exception("EventFields not defined");
+            if (eventFields == null) throw new ExtractorFailureException("EventFields not defined");
 
             var filter = BuildEventFilter(nodeIds);
             foreach (var emitter in emitters)

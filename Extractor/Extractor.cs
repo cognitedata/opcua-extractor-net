@@ -145,7 +145,7 @@ namespace Cognite.OpcUa
 
                 if (!uaClient.Started)
                 {
-                    throw new Exception("UAClient failed to start");
+                    throw new ExtractorFailureException("UAClient failed to start");
                 }
             }
             if (config.FailureBuffer.Enabled && config.FailureBuffer.FilePath != null)
@@ -229,9 +229,9 @@ namespace Cognite.OpcUa
                     ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
                 }
 
-                throw new Exception("Task failed without exception");
+                throw new ExtractorFailureException("Task failed without exception");
             }
-            throw new Exception("Processes quit without failing");
+            throw new ExtractorFailureException("Processes quit without failing");
         }
         /// <summary>
         /// Restarts the extractor, to some extent, clears known asset ids,
@@ -259,7 +259,7 @@ namespace Cognite.OpcUa
             {
                 uaClient.Close();
             }
-            catch (Exception e)
+            catch (ServiceResultException e)
             {
                 Log.Error(e, "Failed to cleanly shut down UAClient");
             }
@@ -362,7 +362,7 @@ namespace Cognite.OpcUa
             while (!nextPushFlag && time++ < timeout) await Task.Delay(100);
             if (time >= timeout && !nextPushFlag)
             {
-                throw new Exception("Waiting for push timed out");
+                throw new TimeoutException("Waiting for push timed out");
             }
         }
         #endregion
@@ -414,17 +414,12 @@ namespace Cognite.OpcUa
                             }
                         }
                     }
-
                     nextPushFlag = true;
                     await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
                 }
                 catch (TaskCanceledException)
                 {
                     break;
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e, "Failed to push on pusher of type {FailedPusherName}", pusher.GetType().Name);
                 }
             }
         }
@@ -460,7 +455,7 @@ namespace Cognite.OpcUa
                 if (quit)
                 {
                     Log.Warning("Manually quitting extractor due to error in subsystem");
-                    throw new TimeoutException();
+                    throw new ExtractorFailureException("Manual exit due to error in subsystem");
                 }
                 if (restart)
                 {
@@ -538,7 +533,7 @@ namespace Cognite.OpcUa
                     var histEmitters = config.Events.HistorizingEmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
                     foreach (var id in histEmitters)
                     {
-                        if (!EmitterStates.ContainsKey(id)) throw new Exception("Historical emitter not in emitter list");
+                        if (!EmitterStates.ContainsKey(id)) throw new ConfigurationException("Historical emitter not in emitter list");
                         EmitterStates[id].Historizing = true;
                     }
                 }
@@ -628,7 +623,7 @@ namespace Cognite.OpcUa
         {
             var pushes = pushers.Select(pusher => pusher.PushNodes(objects, timeseries, token)).ToList();
             var pushResult = await Task.WhenAll(pushes);
-            if (!pushResult.All(res => res)) throw new Exception("Pushing nodes failed");
+            if (!pushResult.All(res => res)) throw new ExtractorFailureException("Pushing nodes failed");
 
             var statesToSync = timeseries
                 .Select(ts => ts.Id)
@@ -648,7 +643,7 @@ namespace Cognite.OpcUa
 
 
             var getRangeResult = await Task.WhenAll(getRangePushes);
-            if (!getRangeResult.All(res => res)) throw new Exception("Getting latest timestamp failed");
+            if (!getRangeResult.All(res => res)) throw new ExtractorFailureException("Getting latest timestamp failed");
             // If any nodes are still at default values, meaning no pusher can initialize them, initialize to default values.
             foreach (var state in statesToSync)
             {
@@ -869,12 +864,13 @@ namespace Cognite.OpcUa
                 }
             }
         }
+
+
         /// <summary>
         /// Construct event from filter and collection of event fields
         /// </summary>
         /// <param name="filter">Filter that resulted in this event</param>
         /// <param name="eventFields">Fields for a single event</param>
-        /// <returns></returns>
         public BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
         {
             if (filter == null) throw new ArgumentNullException(nameof(filter));
@@ -917,35 +913,42 @@ namespace Cognite.OpcUa
                     extractedProperties[name] = eventFields[i].Value;
                 }
             }
-            try
+
+            if (!(extractedProperties.GetValueOrDefault("EventId") is byte[] rawEventId))
             {
-                var sourceNode = extractedProperties["SourceNode"];
-                if (!managedNodes.Contains(sourceNode))
-                {
-                    Log.Verbose("Invalid source node for event of type: {type}", eventType);
-                    return null;
-                }
-                var buffEvent = new BufferedEvent
-                {
-                    Message = uaClient.ConvertToString(extractedProperties.GetValueOrDefault("Message")),
-                    EventId = config.Extraction.IdPrefix + Convert.ToBase64String((byte[])extractedProperties["EventId"]),
-                    SourceNode = (NodeId)extractedProperties["SourceNode"],
-                    Time = (DateTime)extractedProperties.GetValueOrDefault("Time"),
-                    EventType = (NodeId)extractedProperties["EventType"],
-                    MetaData = extractedProperties
-                        .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
-                                      && kvp.Key != "Time" && kvp.Key != "EventType")
-                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-                    EmittingNode = emitter,
-                    ReceivedTime = DateTime.UtcNow,
-                };
-                return buffEvent;
-            }
-            catch (Exception e)
-            {
-                Log.Error(e, "Failed to construct bufferedEvent from Raw fields");
+                Log.Verbose("Event of type {type} lacks id", eventType);
                 return null;
             }
+
+            var eventId = Convert.ToBase64String(rawEventId);
+            var sourceNode = extractedProperties.GetValueOrDefault("SourceNode");
+            if (sourceNode == null || !managedNodes.Contains(sourceNode))
+            {
+                Log.Verbose("Invalid source node, type: {type}, id: {id}", eventType, eventId);
+                return null;
+            }
+
+            var time = extractedProperties.GetValueOrDefault("Time");
+            if (time == null)
+            {
+                Log.Verbose("Event lacks specified time, type: {type}", eventType, eventId);
+                return null;
+            }
+            var buffEvent = new BufferedEvent
+            {
+                Message = uaClient.ConvertToString(extractedProperties.GetValueOrDefault("Message")),
+                EventId = config.Extraction.IdPrefix + eventId,
+                SourceNode = extractedProperties.GetValueOrDefault("SourceNode") as NodeId,
+                Time = (DateTime)time,
+                EventType = eventType,
+                MetaData = extractedProperties
+                    .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
+                                  && kvp.Key != "Time" && kvp.Key != "EventType")
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                EmittingNode = emitter,
+                ReceivedTime = DateTime.UtcNow,
+            };
+            return buffEvent;
         }
         /// <summary>
         /// Handle subscription callback for events

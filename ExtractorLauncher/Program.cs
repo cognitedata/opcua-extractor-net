@@ -132,6 +132,8 @@ namespace Cognite.OpcUa
             var runTime = new ExtractorRuntime(config);
             runTime.Configure();
 
+            int waitRepeats = 0;
+
             using var manualSource = new CancellationTokenSource();
             CancellationTokenSource source = null;
             using (var quitEvent = new ManualResetEvent(false))
@@ -155,6 +157,7 @@ namespace Cognite.OpcUa
                             break;
                         }
 
+                        DateTime startTime = DateTime.Now;
                         try
                         {
                             Log.Information("Starting extractor");
@@ -165,9 +168,23 @@ namespace Cognite.OpcUa
                             Log.Warning("Extractor stopped manually");
                             break;
                         }
+                        catch (ConfigurationException)
+                        {
+                            Log.Error("Invalid configuration, stopping");
+                            break;
+                        }
                         catch
                         {
                             Log.Error("Extractor crashed, restarting");
+                        }
+
+                        if (startTime > DateTime.Now - TimeSpan.FromSeconds(600))
+                        {
+                            waitRepeats++;
+                        }
+                        else
+                        {
+                            waitRepeats = 0;
                         }
 
                         if (config.Extraction.ExitOnFailure)
@@ -177,8 +194,9 @@ namespace Cognite.OpcUa
 
                         try
                         {
-                            Log.Information("Sleeping for 1 second");
-                            Task.Delay(1000, manualSource.Token).Wait();
+                            TimeSpan sleepTime = TimeSpan.FromSeconds(Math.Pow(2, Math.Min(waitRepeats, 9)));
+                            Log.Information("Sleeping for {time}", sleepTime);
+                            Task.Delay(sleepTime, manualSource.Token).Wait();
                         }
                         catch (TaskCanceledException)
                         {
@@ -275,7 +293,7 @@ namespace Cognite.OpcUa
                         result.AutoAccept = true;
                         break;
                     default:
-                        throw new Exception($"Unrecognized parameter: {args[i]}");
+                        throw new InvalidOperationException($"Unrecognized parameter: {args[i]}");
                 }
             }
 

@@ -143,8 +143,8 @@ namespace Cognite.OpcUa.Config
             var context = Appconfig.CreateMessageContext();
             var endpointConfig = EndpointConfiguration.Create(Appconfig);
             using var channel = DiscoveryChannel.Create(new Uri(config.Source.EndpointURL), endpointConfig, context);
-            DiscoveryClient disc = new DiscoveryClient(channel);
-            EndpointDescriptionCollection endpoints = new EndpointDescriptionCollection();
+            using var disc = new DiscoveryClient(channel);
+            var endpoints = new EndpointDescriptionCollection();
             try
             {
                 endpoints = disc.GetEndpoints(null);
@@ -189,7 +189,7 @@ namespace Cognite.OpcUa.Config
                                     "or add an open endpoint to the server");
                 }
 
-                throw new Exception("Fatal: Provided configuration failed to connect to the server");
+                throw new FatalException("Fatal: Provided configuration failed to connect to the server");
             }
         }
         /// <summary>
@@ -236,7 +236,7 @@ namespace Cognite.OpcUa.Config
                     Log.Debug(ex, "Failed to browse nodes");
                     if (ex is ServiceResultException exc && exc.StatusCode == StatusCodes.BadServiceUnsupported)
                     {
-                        throw new Exception(
+                        throw new FatalException(
                             "Browse unsupported by server, the extractor does not support servers without support for" +
                             " the \"Browse\" service");
                     }
@@ -250,7 +250,7 @@ namespace Cognite.OpcUa.Config
             var scResults = results.Where(res => !res.failed);
             if (!scResults.Any())
             {
-                throw new Exception("No configuration resulted in successful browse, manual configuration may work.");
+                throw new FatalException("No configuration resulted in successful browse, manual configuration may work.");
             }
 
             var best = scResults.Aggregate((agg, next) =>
@@ -436,7 +436,7 @@ namespace Cognite.OpcUa.Config
 
                     if (e is ServiceResultException exc && exc.StatusCode == StatusCodes.BadServiceUnsupported)
                     {
-                        throw new Exception(
+                        throw new FatalException(
                             "Attribute read is unsupported, the extractor does not support servers which do not " +
                             "support the \"Read\" service");
                     }
@@ -456,7 +456,7 @@ namespace Cognite.OpcUa.Config
 
             if (!succeeded)
             {
-                throw new Exception("Failed to read node attributes for any chunk size");
+                throw new FatalException("Failed to read node attributes for any chunk size");
             }
         }
         /// <summary>

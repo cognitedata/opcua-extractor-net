@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -487,7 +488,7 @@ namespace Cognite.OpcUa
         private async Task<IEnumerable<(string, DateTime)>> GetLatestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
         {
             var client = GetClient();
-            IEnumerable<DataPointsReadDto> dps;
+            IEnumerable<DataPointsReadDto<DataPointDto>> dps;
             try
             {
                 dps = await client.DataPoints.LatestAsync(new DataPointsLatestQueryDto
@@ -613,12 +614,14 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Failed to get login status from CDF. {project} at {url}", config.Project, config.Host);
+                Log.Debug(ex, "Failed to get login status from CDF. Project {project} at {url}", config.Project, config.Host);
+                Log.Error("Failed to get CDF login status, this is likely a problem with the network. Project {project} at {url}", 
+                    config.Project, config.Host);
                 return false;
             }
             if (!loginStatus.LoggedIn)
             {
-                Log.Error("API key is invalid. {project} at {url}", config.Project, config.Host);
+                Log.Error("API key is invalid. Project {project} at {url}", config.Project, config.Host);
                 return false;
             }
             if (!loginStatus.Project.Equals(config.Project, StringComparison.InvariantCulture))
@@ -632,7 +635,9 @@ namespace Cognite.OpcUa
             }
             catch (ResponseException ex)
             {
-                Log.Error(ex, "Could not access CDF Time Series - most likely due to insufficient access rights on API key. {project} at {host}",
+                Log.Error("Could not access CDF Time Series - most likely due to insufficient access rights on API key. Project {project} at {host}: {msg}",
+                    config.Project, config.Host, ex.Message);
+                Log.Debug(ex, "Could not access CDF Time Series - most likely due to insufficient access rights on API key. {project} at {host}",
                     config.Project, config.Host);
                 return false;
             }

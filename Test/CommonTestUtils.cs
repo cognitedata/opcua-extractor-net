@@ -66,7 +66,7 @@ namespace Test
         public static FullConfig BuildConfig(string serverType, int index, string configname = "config.test.yml")
         {
             var fullConfig = ExtractorUtils.GetConfig(configname);
-            if (fullConfig == null) throw new Exception("Failed to load config file");
+            if (fullConfig == null) throw new ConfigurationException("Failed to load config file");
             fullConfig.FailureBuffer.FilePath = $"buffers{index}";
             switch (serverType)
             {
@@ -366,7 +366,7 @@ namespace Test
 
         public async Task TerminateRunTask(Func<Exception, bool> testResult = null)
         {
-            if (RunTask == null) throw new Exception("Run task is not started");
+            if (RunTask == null) throw new FatalException("Run task is not started");
             if (!testParams.QuitAfterMap)
             {
                 await Extractor.WaitForNextPush();

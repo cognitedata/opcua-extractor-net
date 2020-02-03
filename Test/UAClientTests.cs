@@ -16,7 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
@@ -56,7 +55,7 @@ namespace Test
                 }
                 else if (e is AggregateException aex)
                 {
-                    silent = ExtractorUtils.GetRootSilentException(aex);
+                    silent = ExtractorUtils.GetRootExceptionOfType<SilentServiceException>(aex);
                 }
 
                 return silent != null && silent.Operation == ExtractorUtils.SourceOp.SelectEndpoint;
@@ -154,7 +153,7 @@ namespace Test
             await tester.WaitForCondition(() => tester.RunTask.IsCompleted, 20, "Expected runtask to terminate");
 
             await tester.TerminateRunTask(ex =>
-                ex is TimeoutException || ex is AggregateException aex && aex.InnerException is TimeoutException);
+                ex is ExtractorFailureException || ex is AggregateException aex && aex.InnerException is ExtractorFailureException);
         }
     }
 }

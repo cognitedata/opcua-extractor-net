@@ -44,7 +44,7 @@ namespace Cognite.OpcUa
             connTest.Wait();
             if (!connTest.Result)
             {
-                throw new Exception("Failed to connect to buffer influxdb");
+                throw new ExtractorFailureException("Failed to connect to buffer influxdb");
             }
         }
         public async Task WriteDatapoints(IEnumerable<BufferedDataPoint> points, int index,

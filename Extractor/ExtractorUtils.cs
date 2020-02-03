@@ -176,16 +176,16 @@ namespace Cognite.OpcUa
             HistoryReadEvents, ReadRootNode, DefaultOperation
         }
 
-        public static SilentServiceException GetRootSilentException(AggregateException aex)
+        public static T GetRootExceptionOfType<T>(AggregateException aex) where T : Exception
         {
             if (aex == null) throw new ArgumentNullException(nameof(aex));
-            if (aex.InnerException is SilentServiceException silent)
+            if (aex.InnerException is T ex)
             {
-                return silent;
+                return ex;
             }
             if (aex.InnerException is AggregateException aex2)
             {
-                return GetRootSilentException(aex2);
+                return GetRootExceptionOfType<T>(aex2);
             }
 
             return null;
@@ -194,17 +194,29 @@ namespace Cognite.OpcUa
         {
             if (e is AggregateException aex)
             {
-                var silent = GetRootSilentException(aex);
+                var silent = GetRootExceptionOfType<SilentServiceException>(aex);
                 if (silent != null)
                 {
                     Log.Debug(silent, silentMessage);
                     return;
+                }
+
+                var failure = GetRootExceptionOfType<ExtractorFailureException>(aex);
+                if (failure != null)
+                {
+                    Log.Error(message + " - {msg}", failure.Message);
+                    Log.Debug(failure, message);
                 }
             } 
             else if (e is SilentServiceException silent)
             {
                 Log.Debug(silent, silentMessage);
                 return;
+            }
+            else if (e is ExtractorFailureException failure)
+            {
+                Log.Error(message + " - {msg}", failure.Message);
+                Log.Debug(failure, message);
             }
             Log.Error(e, message);
         }
@@ -434,7 +446,7 @@ namespace Cognite.OpcUa
                             }
                             break;
                     }
-                    return new Exception("Unhandled ServiceResultException", ex);
+                    return ex;
             }
         }
     }
@@ -452,6 +464,39 @@ namespace Cognite.OpcUa
             StatusCode = ex?.StatusCode ?? StatusCodes.Bad;
         }
     }
+    /// <summary>
+    /// Used to indicate that an exception was thrown due to some controlled failure of the extractor.
+    /// </summary>
+    public class ExtractorFailureException : Exception
+    {
+        public ExtractorFailureException(string msg) : base(msg) { }
+        public ExtractorFailureException() { }
+
+        public ExtractorFailureException(string message, Exception innerException) : base(message, innerException) { }
+    }
+    /// <summary>
+    /// Indicates a fatal error in configuration
+    /// </summary>
+    public class ConfigurationException : Exception
+    {
+        public ConfigurationException(string message) : base(message) { }
+
+        public ConfigurationException(string message, Exception innerException) : base(message, innerException) { }
+
+        public ConfigurationException() { }
+    }
+    /// <summary>
+    /// Indicates a fatal error in some system
+    /// </summary>
+    public class FatalException : Exception
+    {
+        public FatalException(string message) : base(message) { }
+
+        public FatalException(string message, Exception innerException) : base(message, innerException) { }
+
+        public FatalException() { }
+    }
+
 
     public class TimeRange
     {

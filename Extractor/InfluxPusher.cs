@@ -306,7 +306,9 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Failed to get db names from influx server: {host}", config.Host);
+                Log.Error("Failed to get db names from influx server: {host}, this is most likely due to a faulty connection or" +
+                          " wrong credentials");
+                Log.Debug(ex, "Failed to get db names from influx server: {host}", config.Host);
                 return false;
             }
             if (dbs == null || !dbs.Contains(config.Database))

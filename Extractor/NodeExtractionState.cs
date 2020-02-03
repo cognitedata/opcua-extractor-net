@@ -147,7 +147,7 @@ namespace Cognite.OpcUa
         /// <returns>The contents of the buffer once called.</returns>
         public IEnumerable<IEnumerable<BufferedDataPoint>> FlushBuffer()
         {
-            if (!IsStreaming) throw new Exception("Flush non-streaming buffer");
+            if (!IsStreaming) throw new InvalidOperationException("Flush non-streaming buffer");
             if (!buffer.Any()) return new List<BufferedDataPoint[]>();
             lock (rangeMutex)
             {

@@ -108,7 +108,7 @@ namespace Cognite.OpcUa
                 var result = await pusher.TestConnection(source.Token);
                 if (pusher.BaseConfig.Critical && !result)
                 {
-                    throw new Exception("Critical pusher failed to connect");
+                    throw new ExtractorFailureException("Critical pusher failed to connect");
                 }
 
                 if (!result)
