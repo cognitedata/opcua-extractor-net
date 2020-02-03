@@ -91,6 +91,7 @@ podTemplate(
         }
         container('dotnet-mono') {
             stage('Install dependencies') {
+				sh('curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -')
                 sh('apt-get update && apt-get install -y python3-pip nmap ncat')
                 sh('pip3 install pipenv')
                 sh('pipenv install -d --system')           
