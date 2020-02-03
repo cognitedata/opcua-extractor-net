@@ -135,12 +135,25 @@ namespace Cognite.OpcUa
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:Uri properties should not be strings", Justification = "Yaml Deserialization")]
     public class MetricsConfig
     {
-        public string URL { get; set; }
+        public MetricsServerConfig Server { get; set; }
+#pragma warning disable CA2227 // Collection properties should be read only
+        public List<PushGatewayConfig> PushGateways { get; set; }
+#pragma warning restore CA2227 // Collection properties should be read only
+
+    }
+
+    public class MetricsServerConfig
+    {
+        public string Host { get; set; }
+        public int Port { get; set; }
+    }
+
+    public class PushGatewayConfig
+    {
+        public string Host { get; set; }
         public string Job { get; set; }
         public string Username { get; set; }
         public string Password { get; set; }
-        public int PushInterval { get; set; } = 1000;
-        public string Instance { get; set; }
     }
     public class EventConfig
     {

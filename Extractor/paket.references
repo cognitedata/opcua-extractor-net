@@ -3,6 +3,7 @@ Microsoft.Extensions.Http
 Newtonsoft.Json
 OPCFoundation.NetStandard.Opc.Ua
 Prometheus.Client.MetricPusher
+Prometheus.Client.MetricServer
 YamlDotNet
 Microsoft.Extensions.Http.Polly
 Polly

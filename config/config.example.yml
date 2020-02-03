@@ -155,21 +155,18 @@ Logging:
     StackdriverCredentials:
     # Name to be assigned to the Stackdriver log.
     StackdriverLogName:
-
+    
 Metrics:
-    # Leave host or job blank to disable metrics
-    # URL of prometheus host, ex my.prometheus.server gives final endpoint my.prometheus.server/metrics/jobs/myjob, 
-    URL:
-    # Job tag value
-    Job:
-    # Prometheus username
-    Username:
-    # Prometheus password
-    Password:
-    # Time in ms between each push
-    PushInterval: 1000
-    # Instance tag for prometheus
-    Instance:
+    # Start a metrics server in the extractor for Prometheus scrape
+    Server:
+        Host:
+        Port:
+    # Multiple Prometheus PushGateway destinations:
+    PushGateways:
+        - Host:
+          Job:
+          Username:
+          Password: 
 
 Extraction:
     # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.

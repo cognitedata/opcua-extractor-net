@@ -32,8 +32,6 @@ namespace Cognite.OpcUa
     /// </summary>
     class Program
     {
-        private static MetricPushServer _worker;
-
         private static Gauge version;
         static int Main(string[] args)
         {
@@ -112,7 +110,7 @@ namespace Cognite.OpcUa
 
             try
             {
-                SetupMetrics(config.Metrics);
+                MetricsManager.Setup(config.Metrics);
             }
             catch (Exception e)
             {
@@ -220,32 +218,6 @@ namespace Cognite.OpcUa
         {
             var runTime = new ConfigToolRuntime(config, baseConfig, output);
             runTime.Run().Wait();
-        }
-
-        /// <summary>
-        /// Starts prometheus pushgateway client
-        /// </summary>
-        /// <param name="config">The metrics config object</param>
-        private static void SetupMetrics(MetricsConfig config)
-        {
-            if (string.IsNullOrWhiteSpace(config.URL) || string.IsNullOrWhiteSpace(config.Job))
-            {
-                Log.Information("Not pushing metrics, missing URL or Job");
-                return;
-            }
-            var additionalHeaders = new Dictionary<string, string>();
-            if (!string.IsNullOrWhiteSpace(config.Username) && !string.IsNullOrWhiteSpace(config.Password))
-            {
-                string encoded = Convert.ToBase64String(
-                    System.Text.Encoding
-                        .GetEncoding("ISO-8859-1")
-                        .GetBytes($"{config.Username}:{config.Password}")
-                );
-                additionalHeaders.Add("Authorization", $"Basic {encoded}");
-            }
-            var pusher = new MetricPusher(config.URL, config.Job, config.Instance, additionalHeaders);
-            _worker = new MetricPushServer(pusher, TimeSpan.FromMilliseconds(config.PushInterval));
-            _worker.Start();
         }
 
         private static ExtractorParams ParseCommandLineArguments(string[] args)
