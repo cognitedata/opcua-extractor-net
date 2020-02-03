@@ -107,6 +107,10 @@ namespace Cognite.OpcUa
             this.uaClient.Extractor = this;
             historyReader = new HistoryReader(uaClient, this, pushers, config.History);
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
+            if (config.Extraction.IdPrefix == "events.")
+            {
+                throw new ConfigurationException("Avoid using events. as IdPrefix, as it is used internally");
+            }
             foreach (var pusher in pushers)
             {
                 pusher.Extractor = this;

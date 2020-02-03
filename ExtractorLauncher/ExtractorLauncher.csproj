@@ -39,8 +39,8 @@
   <PropertyGroup>
     <PreBuildEvent>
 mkdir "$(MSBuildProjectDirectory)/Properties"
-git describe --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
+git describe --tags --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
 git log -1  --format="%25%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
-    </PreBuildEvent>
+</PreBuildEvent>
   </PropertyGroup>
 </Project>

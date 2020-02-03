@@ -30,7 +30,8 @@ namespace Cognite.OpcUa
     /// </summary>
     class Program
     {
-        private static Gauge version;
+        private static readonly Gauge version =
+            Metrics.CreateGauge("opcua_version", $"version: {Version.GetVersion()}, status: {Version.Status()}");
         private static readonly ILogger log = Log.Logger.ForContext(typeof(Program));
         static int Main(string[] args)
         {
@@ -106,7 +107,9 @@ namespace Cognite.OpcUa
             log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
             log.Information("Revision information: {status}", Version.Status());
 
-            version = Metrics.CreateGauge("opcua_version", $"version: {Version.GetVersion()}, status: {Version.Status()}");
+            version.Set(0);
+
+
 
             try
             {
