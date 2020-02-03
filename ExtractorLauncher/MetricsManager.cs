@@ -10,12 +10,12 @@ namespace Cognite.OpcUa
 {
     public static class MetricsManager
     {
-        private static ILogger logger;
+        private static ILogger _logger;
         private static bool _isFirstRun = true;
 
         public static void Setup(MetricsConfig config)
         {
-            logger = Log.Logger.ForContext(typeof(MetricsManager));
+            _logger = Log.Logger.ForContext(typeof(MetricsManager));
 
             // Added this to be able to restart the extractor from the windows service, as setting this twice generates an exception
             if (_isFirstRun)
@@ -43,14 +43,14 @@ namespace Cognite.OpcUa
         {
             if (config?.Host == null || config.Port == 0)
             {
-                logger.Information("Metrics server disabled");
+                _logger.Information("Metrics server disabled");
                 return;
             }
             var metricServer = new MetricServer(
                 Metrics.DefaultCollectorRegistry,
                 new MetricServerOptions { Host = config.Host, Port = config.Port });
             metricServer.Start();
-            logger.Information("Metrics server started at {MetricsServerHost}:{MetricsServerPort}", config.Host, config.Port);
+            _logger.Information("Metrics server started at {MetricsServerHost}:{MetricsServerPort}", config.Host, config.Port);
         }
 
         /// <summary>
@@ -61,11 +61,11 @@ namespace Cognite.OpcUa
         {
             if (config.Host == null || config.Job == null)
             {
-                logger.Warning("Invalid metrics push destination (missing Host or Job)");
+                _logger.Warning("Invalid metrics push destination (missing Host or Job)");
                 return null;
             }
 
-            logger.Information("Pushing metrics to {PushgatewayHost} with job name {PushgatewayJob}", config.Host, config.Job);
+            _logger.Information("Pushing metrics to {PushgatewayHost} with job name {PushgatewayJob}", config.Host, config.Job);
 
             var additionalHeaders = new Dictionary<string, string>();
             if (config.Username != null && config.Password != null)
@@ -85,7 +85,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                logger.Warning("Failed to push metrics to {PushgatewayHost} with job name {PushgatewayJob}: {Message}", config.Host, config.Job, e.Message);
+                _logger.Warning("Failed to push metrics to {PushgatewayHost} with job name {PushgatewayJob}: {Message}", config.Host, config.Job, e.Message);
             }
             return pusher;
         }

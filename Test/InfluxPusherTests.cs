@@ -31,6 +31,8 @@ namespace Test
     [CollectionDefinition("Influx_tests", DisableParallelization = true)]
     public class InfluxPusherTests : MakeConsoleWork
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(InfluxPusherTests));
+
         public InfluxPusherTests(ITestOutputHelper output) : base(output) { }
         [Trait("Server", "basic")]
         [Trait("Target", "InfluxPusher")]
@@ -251,7 +253,7 @@ namespace Test
 
             foreach (var dp in dps)
             {
-                 Log.Information("dp: {val}", dp.DoubleValue);
+                 log.Information("dp: {val}", dp.DoubleValue);
             }
 
             var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)Math.Round(dp.First().DoubleValue)).ToList();

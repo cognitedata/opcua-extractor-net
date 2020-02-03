@@ -16,12 +16,10 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
 using Prometheus.Client;
-using Prometheus.Client.MetricPusher;
 using Serilog;
 
 namespace Cognite.OpcUa
@@ -33,6 +31,7 @@ namespace Cognite.OpcUa
     class Program
     {
         private static Gauge version;
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(Program));
         static int Main(string[] args)
         {
             // Temporary logger config for capturing logs during configuration.
@@ -48,9 +47,9 @@ namespace Cognite.OpcUa
             {
                 if (!(ex is ArgumentOutOfRangeException))
                 {
-                    Log.Error(ex.Message);
+                    log.Error(ex.Message);
                 }
-                Log.Warning("Bad command-line arguments passed. Usage:\n" +
+                log.Warning("Bad command-line arguments passed. Usage:\n" +
                             "    -t|--tool                  - Run the configuration tool\n" +
                             "    -h|--host [host]           - Override configured OPC-UA endpoint\n" +
                             "    -u|--user [user]           - Override configured OPC-UA username\n" +
@@ -79,7 +78,7 @@ namespace Cognite.OpcUa
                 try
                 {
                     string configFile = setup.ConfigFile ?? System.IO.Path.Combine(configDir, setup.ConfigTool ? "config.config-tool.yml" : "config.yml");
-                    Log.Information($"Loading config from {configFile}");
+                    log.Information($"Loading config from {configFile}");
                     config = ExtractorUtils.GetConfig(configFile);
                     if (setup.ConfigTool)
                     {
@@ -88,7 +87,7 @@ namespace Cognite.OpcUa
                 }
                 catch (YamlDotNet.Core.YamlException e)
                 {
-                    Log.Error("Failed to load config at {start}: {msg}", e.Start, e.InnerException?.Message ?? e.Message);
+                    log.Error("Failed to load config at {start}: {msg}", e.Start, e.InnerException?.Message ?? e.Message);
                     throw;
                 }
                 config.Source.ConfigRoot = configDir;
@@ -100,11 +99,12 @@ namespace Cognite.OpcUa
             config.Source.Secure |= setup.Secure;
             if (!string.IsNullOrEmpty(setup.LogLevel)) config.Logging.ConsoleLevel = setup.LogLevel;
             config.Source.AutoAccept |= setup.AutoAccept;
+            config.Source.ExitOnFailure |= setup.ExitOnFailure;
 
             Logger.Configure(config.Logging);
 
-            Log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
-            Log.Information("Revision information: {status}", Version.Status());
+            log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
+            log.Information("Revision information: {status}", Version.Status());
 
             version = Metrics.CreateGauge("opcua_version", $"version: {Version.GetVersion()}, status: {Version.Status()}");
 
@@ -114,7 +114,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Log.Error(e, "Failed to start metrics pusher");
+                log.Error(e, "Failed to start metrics pusher");
             }
 
             if (setup.ConfigTool)
@@ -156,29 +156,29 @@ namespace Cognite.OpcUa
                     {
                         if (canceled)
                         {
-                            Log.Warning("Extractor stopped manually");
+                            log.Warning("Extractor stopped manually");
                             break;
                         }
 
                         DateTime startTime = DateTime.Now;
                         try
                         {
-                            Log.Information("Starting extractor");
+                            log.Information("Starting extractor");
                             runTime.Run(source).Wait();
                         }
                         catch (TaskCanceledException)
                         {
-                            Log.Warning("Extractor stopped manually");
+                            log.Warning("Extractor stopped manually");
                             break;
                         }
                         catch (ConfigurationException)
                         {
-                            Log.Error("Invalid configuration, stopping");
+                            log.Error("Invalid configuration, stopping");
                             break;
                         }
                         catch
                         {
-                            Log.Error("Extractor crashed, restarting");
+                            log.Error("Extractor crashed, restarting");
                         }
 
                         if (config.Source.ExitOnFailure)
@@ -200,12 +200,12 @@ namespace Cognite.OpcUa
                         try
                         {
                             TimeSpan sleepTime = TimeSpan.FromSeconds(Math.Pow(2, Math.Min(waitRepeats, 9)));
-                            Log.Information("Sleeping for {time}", sleepTime);
+                            log.Information("Sleeping for {time}", sleepTime);
                             Task.Delay(sleepTime, manualSource.Token).Wait();
                         }
                         catch (TaskCanceledException)
                         {
-                            Log.Warning("Extractor stopped manually");
+                            log.Warning("Extractor stopped manually");
                             break;
                         }
                     }

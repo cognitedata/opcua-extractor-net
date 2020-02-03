@@ -90,6 +90,8 @@ namespace Cognite.OpcUa
         public static readonly Gauge Starting = Metrics
             .CreateGauge("opcua_extractor_starting", "1 if the extractor is in the startup phase");
 
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(Extractor));
+
         /// <summary>
         /// Constructor
         /// </summary>
@@ -104,7 +106,7 @@ namespace Cognite.OpcUa
             FailureBuffer = new FailureBuffer(config.FailureBuffer, this);
             this.uaClient.Extractor = this;
             historyReader = new HistoryReader(uaClient, this, pushers, config.History);
-            Log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
+            log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
             foreach (var pusher in pushers)
             {
                 pusher.Extractor = this;
@@ -131,7 +133,7 @@ namespace Cognite.OpcUa
             Starting.Set(1);
             if (!uaClient.Started)
             {
-                Log.Information("Start UAClient");
+                log.Information("Start UAClient");
                 try
                 {
                     await uaClient.Run(token);
@@ -163,9 +165,9 @@ namespace Cognite.OpcUa
                 pusher.Reset();
             }
 
-            Log.Debug("Begin mapping directory");
+            log.Debug("Begin mapping directory");
             await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
-            Log.Debug("End mapping directory");
+            log.Debug("End mapping directory");
 
             IEnumerable<Task> synchTasks;
             try
@@ -261,10 +263,10 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException e)
             {
-                Log.Error(e, "Failed to cleanly shut down UAClient");
+                log.Error(e, "Failed to cleanly shut down UAClient");
             }
             uaClient.WaitForOperations().Wait(10000);
-            Log.Information("Extractor closed");
+            log.Information("Extractor closed");
         }
 
         public string GetUniqueId(NodeId id, int index = -1)
@@ -454,12 +456,12 @@ namespace Cognite.OpcUa
                 var tasks = new List<Task>();
                 if (quit)
                 {
-                    Log.Warning("Manually quitting extractor due to error in subsystem");
+                    log.Warning("Manually quitting extractor due to error in subsystem");
                     throw new ExtractorFailureException("Manual exit due to error in subsystem");
                 }
                 if (restart)
                 {
-                    Log.Information("Restarting extractor...");
+                    log.Information("Restarting extractor...");
                     extraNodesToBrowse.Clear();
                     tasks.Add(Task.Run(async () =>
                     {
@@ -471,7 +473,7 @@ namespace Cognite.OpcUa
                         var synchTasks = await MapUAToDestinations(token);
                         await Task.WhenAll(synchTasks);
                         Started = true;
-                        Log.Information("Successfully restarted extractor");
+                        log.Information("Successfully restarted extractor");
                     }));
                     restart = false;
                 } 
@@ -583,12 +585,12 @@ namespace Cognite.OpcUa
                 }
                 nodeMap.Add(uaClient.GetUniqueId(buffer.Id), buffer);
             }
-            Log.Information("Getting data for {NumVariables} variables and {NumObjects} objects", 
+            log.Information("Getting data for {NumVariables} variables and {NumObjects} objects", 
                 rawVariables.Count, objects.Count);
             uaClient.ReadNodeData(objects.Concat(rawVariables), token);
             foreach (var node in objects.Concat(rawVariables))
             {
-                Log.Debug(node.ToDebugDescription());
+                log.Debug(node.ToDebugDescription());
             }
 
             foreach (var node in rawVariables)
@@ -708,7 +710,7 @@ namespace Cognite.OpcUa
         {
             var states = variables.Select(ts => ts.Id).Distinct().Select(id => NodeStates[id]);
 
-            Log.Information("Synchronize {NumNodesToSynch} nodes", variables.Count());
+            log.Information("Synchronize {NumNodesToSynch} nodes", variables.Count());
             var tasks = new List<Task>();
             // Create tasks to subscribe to nodes, then start history read. We might lose data if history read finished before subscriptions were created.
             if (states.Any())
@@ -735,7 +737,7 @@ namespace Cognite.OpcUa
 
             if (!objects.Any() && !timeseries.Any() && !variables.Any())
             {
-                Log.Information("Mapping resulted in no new nodes");
+                log.Information("Mapping resulted in no new nodes");
                 return Array.Empty<Task>();
             }
 
@@ -762,13 +764,13 @@ namespace Cognite.OpcUa
         /// <param name="parentId">Id of the parent node</param>
         private void HandleNode(ReferenceDescription node, NodeId parentId)
         {
-            Log.Verbose("HandleNode {parent} {node}", parentId, node);
+            log.Verbose("HandleNode {parent} {node}", parentId, node);
 
             if (node.NodeClass == NodeClass.Object)
             {
                 var bufferedNode = new BufferedNode(uaClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
-                Log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
+                log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
                 commonQueue.Enqueue(bufferedNode);
             }
             else if (node.NodeClass == NodeClass.Variable)
@@ -779,7 +781,7 @@ namespace Cognite.OpcUa
                 {
                     bufferedNode.IsProperty = true;
                 }
-                Log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
+                log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
                 commonQueue.Enqueue(bufferedNode);
             }
         }
@@ -801,7 +803,7 @@ namespace Cognite.OpcUa
                 if (!(value.Value is Array))
                 {
                     BadDataPoints.Inc();
-                    Log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
+                    log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
                     return Enumerable.Empty<BufferedDataPoint>();
                 }
                 var values = (Array)value.Value;
@@ -845,7 +847,7 @@ namespace Cognite.OpcUa
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
                     BadDataPoints.Inc();
-                    Log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
+                    log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                     continue;
                 }
                 var buffDps = ToDataPoint(datapoint, node, uniqueId);
@@ -853,7 +855,7 @@ namespace Cognite.OpcUa
                 if (!node.IsStreaming) return;
                 foreach (var buffDp in buffDps)
                 {
-                    Log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
+                    log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
                 }
                 foreach (var pusher in pushers)
                 {
@@ -880,14 +882,14 @@ namespace Cognite.OpcUa
                                                                        && atr.BrowsePath[0] == BrowseNames.EventType);
             if (eventTypeIndex < 0)
             {
-                Log.Warning("Triggered event has no type, ignoring.");
+                log.Warning("Triggered event has no type, ignoring.");
                 return null;
             }
             var eventType = eventFields[eventTypeIndex].Value as NodeId;
             // Many servers don't handle filtering on history data.
             if (eventType == null || !ActiveEvents.ContainsKey(eventType))
             {
-                Log.Verbose("Invalid event type: {eventType}", eventType);
+                log.Verbose("Invalid event type: {eventType}", eventType);
                 return null;
             }
             var targetEventFields = ActiveEvents[eventType];
@@ -916,7 +918,7 @@ namespace Cognite.OpcUa
 
             if (!(extractedProperties.GetValueOrDefault("EventId") is byte[] rawEventId))
             {
-                Log.Verbose("Event of type {type} lacks id", eventType);
+                log.Verbose("Event of type {type} lacks id", eventType);
                 return null;
             }
 
@@ -924,14 +926,14 @@ namespace Cognite.OpcUa
             var sourceNode = extractedProperties.GetValueOrDefault("SourceNode");
             if (sourceNode == null || !managedNodes.Contains(sourceNode))
             {
-                Log.Verbose("Invalid source node, type: {type}, id: {id}", eventType, eventId);
+                log.Verbose("Invalid source node, type: {type}, id: {id}", eventType, eventId);
                 return null;
             }
 
             var time = extractedProperties.GetValueOrDefault("Time");
             if (time == null)
             {
-                Log.Verbose("Event lacks specified time, type: {type}", eventType, eventId);
+                log.Verbose("Event lacks specified time, type: {type}", eventType, eventId);
                 return null;
             }
             var buffEvent = new BufferedEvent
@@ -957,13 +959,13 @@ namespace Cognite.OpcUa
         {
             if (!(eventArgs.NotificationValue is EventFieldList triggeredEvent))
             {
-                Log.Warning("No event in event subscription notification: {}", item.StartNodeId);
+                log.Warning("No event in event subscription notification: {}", item.StartNodeId);
                 return;
             }
             var eventFields = triggeredEvent.EventFields;
             if (!(item.Filter is EventFilter filter))
             {
-                Log.Warning("Triggered event without filter");
+                log.Warning("Triggered event without filter");
                 return;
             }
             var buffEvent = ConstructEvent(filter, eventFields, item.ResolvedNodeId);
@@ -975,7 +977,7 @@ namespace Cognite.OpcUa
             if (!((eventState.IsStreaming || buffEvent.Time < eventState.ExtractedRange.End)
                   && (eventState.BackfillDone || buffEvent.Time > eventState.ExtractedRange.Start))) return;
 
-            Log.Verbose(buffEvent.ToDebugDescription());
+            log.Verbose(buffEvent.ToDebugDescription());
             foreach (var pusher in pushers)
             {
                 pusher.BufferedEventQueue.Enqueue(buffEvent);
@@ -988,27 +990,27 @@ namespace Cognite.OpcUa
         {
             if (!(eventArgs.NotificationValue is EventFieldList triggeredEvent))
             {
-                Log.Warning("No event in event subscription notification: {}", item.StartNodeId);
+                log.Warning("No event in event subscription notification: {}", item.StartNodeId);
                 return;
             }
 
             var eventFields = triggeredEvent.EventFields;
             if (!(item.Filter is EventFilter filter))
             {
-                Log.Warning("Triggered event without filter");
+                log.Warning("Triggered event without filter");
                 return;
             }
             int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
                                                                        && atr.BrowsePath[0] == BrowseNames.EventType);
             if (eventTypeIndex < 0)
             {
-                Log.Warning("Triggered event has no type, ignoring");
+                log.Warning("Triggered event has no type, ignoring");
                 return;
             }
             var eventType = eventFields[eventTypeIndex].Value as NodeId;
             if (eventType == null || eventType != ObjectTypeIds.AuditAddNodesEventType && eventType != ObjectTypeIds.AuditAddReferencesEventType)
             {
-                Log.Warning("Non-audit event triggered on audit event listener");
+                log.Warning("Non-audit event triggered on audit event listener");
                 return;
             }
 
@@ -1019,7 +1021,7 @@ namespace Cognite.OpcUa
                 e.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
                 if (e.NodesToAdd?.Value == null)
                 {
-                    Log.Warning("Missing NodesToAdd object on AddNodes event");
+                    log.Warning("Missing NodesToAdd object on AddNodes event");
                     return;
                 }
 
@@ -1032,7 +1034,7 @@ namespace Cognite.OpcUa
                     .Select(added => uaClient.ToNodeId(added.ParentNodeId))
                     .Distinct();
                 if (!relevantIds.Any()) return;
-                Log.Information("Trigger rebrowse on {numnodes} node ids due to addNodes event", relevantIds.Count());
+                log.Information("Trigger rebrowse on {numnodes} node ids due to addNodes event", relevantIds.Count());
 
                 foreach (var id in relevantIds)
                 {
@@ -1047,7 +1049,7 @@ namespace Cognite.OpcUa
 
             if (ev.ReferencesToAdd?.Value == null)
             {
-                Log.Warning("Missing ReferencesToAdd object on AddReferences event");
+                log.Warning("Missing ReferencesToAdd object on AddReferences event");
                 return;
             }
 
@@ -1060,7 +1062,7 @@ namespace Cognite.OpcUa
 
             if (!relevantRefIds.Any()) return;
 
-            Log.Information("Trigger rebrowse on {numnodes} node ids due to addReference event", relevantRefIds.Count());
+            log.Information("Trigger rebrowse on {numnodes} node ids due to addReference event", relevantRefIds.Count());
 
             foreach (var id in relevantRefIds)
             {

@@ -25,6 +25,8 @@ namespace Cognite.OpcUa.Config
 {
     public class ConfigToolRuntime
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolRuntime));
+
         private readonly string output;
         private readonly FullConfig config;
         private readonly FullConfig baseConfig;
@@ -55,16 +57,16 @@ namespace Cognite.OpcUa.Config
             }
             catch (Exception e)
             {
-                Log.Error(e, "ConfigurationTool failed fatally");
+                log.Error(e, "ConfigurationTool failed fatally");
                 return;
             }
             explorer.Close();
 
             var result = ToolUtil.ConfigResultToString(explorer.GetFinalConfig());
 
-            Log.Information("");
+            log.Information("");
             File.WriteAllText(output, result);
-            Log.Information("Emitted suggested config file to {path}", output);
+            log.Information("Emitted suggested config file to {path}", output);
         }
     }
 }

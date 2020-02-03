@@ -30,6 +30,8 @@ namespace Test
     [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
     public class ConfigToolTests : MakeConsoleWork
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolTests));
+
         public ConfigToolTests(ITestOutputHelper output) : base(output) { }
 
 
@@ -44,7 +46,7 @@ namespace Test
         [Theory]
         public async Task DoConfigToolTest(ServerName server)
         {
-            Log.Information("Loading config from config.config - tool - test.yml");
+            log.Information("Loading config from config.config - tool - test.yml");
 
             var fullConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
             var baseConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");

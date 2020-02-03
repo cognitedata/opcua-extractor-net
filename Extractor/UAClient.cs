@@ -76,6 +76,8 @@ namespace Cognite.OpcUa
         private static readonly Counter browseFailures = Metrics
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
+
         /// <summary>
         /// Constructor, does not start the client.
         /// </summary>
@@ -129,7 +131,7 @@ namespace Cognite.OpcUa
                 ApplicationType = ApplicationType.Client,
                 ConfigSectionName = "opc.ua.net.extractor"
             };
-            Log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.ConfigRoot);
+            log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.ConfigRoot);
             Appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
@@ -143,7 +145,7 @@ namespace Cognite.OpcUa
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
             if (!validAppCert)
             {
-                Log.Warning("Missing application certificate, using insecure connection.");
+                log.Warning("Missing application certificate, using insecure connection.");
             }
             else
             {
@@ -152,7 +154,7 @@ namespace Cognite.OpcUa
                 config.AutoAccept |= Appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 Appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
-            Log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointURL);
+            log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointURL);
             EndpointDescription selectedEndpoint;
             try
             {
@@ -164,7 +166,7 @@ namespace Cognite.OpcUa
             }
             var endpointConfiguration = EndpointConfiguration.Create(Appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            Log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri}", endpoint.Description.SecurityPolicyUri);
+            log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri}", endpoint.Description.SecurityPolicyUri);
             try
             {
                 Session?.Dispose();
@@ -190,7 +192,7 @@ namespace Cognite.OpcUa
             Started = true;
             connects.Inc();
             connected.Set(1);
-            Log.Information("Successfully connected to server at {EndpointURL}", config.EndpointURL);
+            log.Information("Successfully connected to server at {EndpointURL}", config.EndpointURL);
 
             if (extractionConfig.CustomNumericTypes != null)
             {
@@ -206,7 +208,7 @@ namespace Cognite.OpcUa
             if (reconnectHandler == null) return;
             Session = reconnectHandler.Session;
             reconnectHandler.Dispose();
-            Log.Warning("--- RECONNECTED ---");
+            log.Warning("--- RECONNECTED ---");
             if (extractionConfig.CustomNumericTypes != null)
             {
                 numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
@@ -229,10 +231,10 @@ namespace Cognite.OpcUa
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
         {
             if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
-            Log.Warning(eventArgs.Status.ToString());
+            log.Warning(eventArgs.Status.ToString());
             if (reconnectHandler != null) return;
             connected.Set(0);
-            Log.Warning("--- RECONNECTING ---");
+            log.Warning("--- RECONNECTING ---");
             if (!config.ForceRestart && !liveToken.IsCancellationRequested)
             {
                 reconnectHandler = new SessionReconnectHandler();
@@ -247,7 +249,7 @@ namespace Cognite.OpcUa
                 }
                 catch
                 {
-                    Log.Warning("Client failed to close");
+                    log.Warning("Client failed to close");
                 }
             }
         }
@@ -262,11 +264,11 @@ namespace Cognite.OpcUa
             // TODO Verify client acceptance here somehow?
             if (eventArgs.Accept)
             {
-                Log.Warning("Accepted Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
+                log.Warning("Accepted Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
             }
             else
             {
-                Log.Error("Rejected Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
+                log.Error("Rejected Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
             }
         }
         /// <summary>
@@ -313,7 +315,7 @@ namespace Cognite.OpcUa
         public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
-            Log.Debug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
+            log.Debug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
             foreach (var root in roots)
             {
                 bool docb = true;
@@ -438,19 +440,19 @@ namespace Cognite.OpcUa
 
                 foreach (var d in diagnostics)
                 {
-                    Log.Warning("GetNodeChildren Browse diagnostics {msg}", d);
+                    log.Warning("GetNodeChildren Browse diagnostics {msg}", d);
                 }
 
                 var indexMap = new NodeId[parents.Count()];
                 var continuationPoints = new ByteStringCollection();
                 int index = 0;
                 int bindex = 0;
-                Log.Debug("GetNodeChildren parents {count}", parents.Count());
-                Log.Debug("GetNodeChildren results {count}", results.Count);
+                log.Debug("GetNodeChildren parents {count}", parents.Count());
+                log.Debug("GetNodeChildren results {count}", results.Count);
                 foreach (var result in results)
                 {
                     var nodeId = parents.ElementAt(bindex++);
-                    Log.Debug("GetNodeChildren Browse result {nodeId}", nodeId);
+                    log.Debug("GetNodeChildren Browse result {nodeId}", nodeId);
                     finalResults[nodeId] = result.References;
                     if (result.ContinuationPoint != null)
                     {
@@ -479,7 +481,7 @@ namespace Cognite.OpcUa
 
                     foreach (var d in diagnostics)
                     {
-                        Log.Warning("GetNodeChildren BrowseNext diagnostics {msg}", d);
+                        log.Warning("GetNodeChildren BrowseNext diagnostics {msg}", d);
                     }
 
                     int nindex = 0;
@@ -488,7 +490,7 @@ namespace Cognite.OpcUa
                     foreach (var result in results)
                     {
                         var nodeId = indexMap[pindex++];
-                        Log.Debug("GetNodeChildren BrowseNext result {nodeId}", nodeId);
+                        log.Debug("GetNodeChildren BrowseNext result {nodeId}", nodeId);
                         finalResults[nodeId].AddRange(result.References);
                         if (result.ContinuationPoint == null) continue;
                         indexMap[nindex++] = nodeId;
@@ -561,7 +563,7 @@ namespace Cognite.OpcUa
                             rd.DisplayName.Text.StartsWith(prefix, StringComparison.CurrentCulture))
                             || extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(rd.DisplayName.Text))
                         {
-                            Log.Verbose("Ignoring filtered {nodeId}", nodeId);
+                            log.Verbose("Ignoring filtered {nodeId}", nodeId);
                             continue;
                         }
 
@@ -571,12 +573,12 @@ namespace Cognite.OpcUa
                             if (!VisitedNodes.Add(nodeId) && ignoreVisited)
                             {
                                 docb = false;
-                                Log.Verbose("Ignoring visited {nodeId}", nodeId);
+                                log.Verbose("Ignoring visited {nodeId}", nodeId);
                             }
                         }
                         if (docb)
                         {
-                            Log.Debug("Discovered new node {nodeid}", nodeId);
+                            log.Debug("Discovered new node {nodeid}", nodeId);
                             callback(rd, parentId);
                         }
                         if (rd.NodeClass == NodeClass.Variable) continue;
@@ -587,7 +589,7 @@ namespace Cognite.OpcUa
                     }
                 }
             } while (nextIds.Any());
-            Log.Information("Found {NumUANodes} nodes in {NumNodeLevels} levels", nodeCnt, levelCnt);
+            log.Information("Found {NumUANodes} nodes in {NumNodeLevels} levels", nodeCnt, levelCnt);
             depth.Set(levelCnt);
         }
         #endregion
@@ -635,9 +637,9 @@ namespace Cognite.OpcUa
                     );
                     attributeRequests.Inc();
                     values = values.Concat(lvalues);
-                    Log.Information("Read {NumAttributesRead} attributes", lvalues.Count);
+                    log.Information("Read {NumAttributesRead} attributes", lvalues.Count);
                 }
-                Log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
+                log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
                     readValueIds.Count, count, nodes.Count());
             }
             catch
@@ -759,7 +761,7 @@ namespace Cognite.OpcUa
         {
             if (nodes == null || !nodes.Any()) return;
             var properties = new HashSet<BufferedVariable>();
-            Log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
+            log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
             var idsToCheck = new List<NodeId>();
             foreach (var node in nodes)
             {
@@ -854,7 +856,7 @@ namespace Cognite.OpcUa
                     idx++;
                 }
 
-                Log.Debug("Fetched historical "
+                log.Debug("Fetched historical "
                           + (readParams.Details is ReadEventDetails ? "events" : "datapoints")
                           + " for {nodeCount} nodes", readParams.Nodes.Count());
             }
@@ -921,7 +923,7 @@ namespace Cognite.OpcUa
                     })
                 );
 
-                Log.Information("Add subscriptions for {numnodes} nodes", chunk.Count());
+                log.Information("Add subscriptions for {numnodes} nodes", chunk.Count());
                 lock (subscriptionLock)
                 {
                     IncOperations();
@@ -965,7 +967,7 @@ namespace Cognite.OpcUa
                     numSubscriptions.Set(subscription.MonitoredItemCount);
                 }
             }
-            Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
+            log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
         }
         /// <summary>
         /// Subscribe to events from the given list of emitters.
@@ -1057,7 +1059,7 @@ namespace Cognite.OpcUa
                     DecOperations();
                 }
             }
-            Log.Information("Created {EventSubCount} event subscriptions", count);
+            log.Information("Created {EventSubCount} event subscriptions", count);
         }
         #endregion
 
@@ -1124,7 +1126,7 @@ namespace Cognite.OpcUa
 
             if (!fieldList.Any())
             {
-                Log.Warning("Missing valid event fields, no results will be returned");
+                log.Warning("Missing valid event fields, no results will be returned");
             }
             var selectClauses = new SimpleAttributeOperandCollection();
             foreach (var field in fieldList)
@@ -1138,7 +1140,7 @@ namespace Cognite.OpcUa
                 };
                 operand.BrowsePath.Add(field.Item2);
                 selectClauses.Add(operand);
-                Log.Debug("Select event attribute {id}: {name}", field.Item1, field.Item2);
+                log.Debug("Select event attribute {id}: {name}", field.Item1, field.Item2);
             }
             return new EventFilter
             {
@@ -1210,7 +1212,7 @@ namespace Cognite.OpcUa
             };
             item.Notification += callback;
             subscription.AddItem(item);
-            Log.Information("Subscribe to auditing events on the server node");
+            log.Information("Subscribe to auditing events on the server node");
             lock (subscriptionLock)
             {
                 IncOperations();
@@ -1222,7 +1224,7 @@ namespace Cognite.OpcUa
                     }
                     else if (!subscription.Created)
                     {
-                        Log.Information("Add subscription to the Session");
+                        log.Information("Add subscription to the Session");
                         Session.AddSubscription(subscription); 
                         subscription.Create();
                     }
@@ -1233,7 +1235,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception)
                 {
-                    Log.Error("Failed to create audit subscription");
+                    log.Error("Failed to create audit subscription");
                     throw;
                 }
                 finally
@@ -1429,7 +1431,7 @@ namespace Cognite.OpcUa
             if (nodeId == null)
             {
                 nodeId = NodeId.Null;
-                Log.Warning("Null converted to ExternalId");
+                log.Warning("Null converted to ExternalId");
             }
             if (nodeOverrides.ContainsKey(nodeId)) return nodeOverrides[nodeId];
 

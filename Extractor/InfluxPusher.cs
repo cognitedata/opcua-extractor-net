@@ -46,6 +46,8 @@ namespace Cognite.OpcUa
         private static readonly Counter skippedEvents = Metrics
             .CreateCounter("opcua_skipped_events_influx", "Number of events skipped by influxdb pusher");
 
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(InfluxPusher));
+
         public InfluxPusher(InfluxClientConfig config)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
@@ -90,7 +92,7 @@ namespace Cognite.OpcUa
 
             if (count == 0)
             {
-                Log.Verbose("Push 0 datapoints to influxdb");
+                log.Verbose("Push 0 datapoints to influxdb");
                 return null;
             }
             var groups = dataPointList.GroupBy(point => point.Id);
@@ -104,7 +106,7 @@ namespace Cognite.OpcUa
                 dataPointsCounter.Inc(group.Count());
                 points.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
             }
-            Log.Debug("Push {cnt} datapoints to influxdb {db}", points.Count, config.Database);
+            log.Debug("Push {cnt} datapoints to influxdb {db}", points.Count, config.Database);
             try
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
@@ -112,7 +114,7 @@ namespace Cognite.OpcUa
             catch (Exception e)
             {
                 dataPointPushFailures.Inc();
-                Log.Error(e, "Failed to insert datapoints into influxdb");
+                log.Error(e, "Failed to insert datapoints into influxdb");
                 return dataPointList;
             }
             dataPointPushes.Inc();
@@ -137,11 +139,11 @@ namespace Cognite.OpcUa
 
             if (count == 0)
             {
-                Log.Verbose("Push 0 events to influxdb");
+                log.Verbose("Push 0 events to influxdb");
                 return null;
             }
 
-            Log.Debug("Push {cnt} events to influxdb", count);
+            log.Debug("Push {cnt} events to influxdb", count);
             var points = evts.Select(BufferedEventToInflux);
             try
             {
@@ -208,7 +210,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Log.Error(e, "Failed to get timestamps from influxdb");
+                log.Error(e, "Failed to get timestamps from influxdb");
                 return false;
             }
             return true;
@@ -291,7 +293,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                Log.Error(e, "Failed to get timestamps from influxdb");
+                log.Error(e, "Failed to get timestamps from influxdb");
                 return false;
             }
             return true;
@@ -306,14 +308,14 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                Log.Error("Failed to get db names from influx server: {host}, this is most likely due to a faulty connection or" +
+                log.Error("Failed to get db names from influx server: {host}, this is most likely due to a faulty connection or" +
                           " wrong credentials");
-                Log.Debug(ex, "Failed to get db names from influx server: {host}", config.Host);
+                log.Debug(ex, "Failed to get db names from influx server: {host}", config.Host);
                 return false;
             }
             if (dbs == null || !dbs.Contains(config.Database))
             {
-                Log.Error("Database {db} does not exist in influxDb: {host}", config.Database, config.Host);
+                log.Error("Database {db} does not exist in influxDb: {host}", config.Database, config.Host);
                 return false;
             }
             return true;
@@ -478,7 +480,7 @@ namespace Cognite.OpcUa
                             || kvp.Key == "Emitter" || string.IsNullOrEmpty(kvp.Value as string)) continue;
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
-                    Log.Verbose(evt.ToDebugDescription());
+                    log.Verbose(evt.ToDebugDescription());
 
                     return evt;
                 }).Where(evt => evt != null));
@@ -489,7 +491,7 @@ namespace Cognite.OpcUa
 
         public void Reconfigure()
         {
-            Log.Information(config.Host);
+            log.Information(config.Host);
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
         }
 

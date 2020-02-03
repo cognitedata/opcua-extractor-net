@@ -31,6 +31,8 @@ namespace Cognite.OpcUa.Config
 {
     public static class ToolUtil
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(ToolUtil));
+
         /// <summary>
         /// Run with timeout, returning the result of the task or throwing a TimeoutException
         /// </summary>
@@ -117,7 +119,7 @@ namespace Cognite.OpcUa.Config
                 {
                     var bufferedNode = new BufferedNode(client.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
-                    Log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
+                    log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
                     target.Add(bufferedNode);
                 }
                 else if (node.NodeClass == NodeClass.Variable)
@@ -129,7 +131,7 @@ namespace Cognite.OpcUa.Config
                         bufferedNode.IsProperty = true;
                     }
 
-                    Log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
+                    log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
                     target.Add(bufferedNode);
                 }
             };
@@ -143,7 +145,7 @@ namespace Cognite.OpcUa.Config
                 var ret = new List<BufferedDataPoint>();
                 if (!(value.Value is Array))
                 {
-                    Log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
+                    log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
                     return Enumerable.Empty<BufferedDataPoint>();
                 }
                 var values = (Array)value.Value;
@@ -193,7 +195,7 @@ namespace Cognite.OpcUa.Config
                 {
                     if (StatusCode.IsNotGood(datapoint.StatusCode))
                     {
-                        Log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
+                        log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                         continue;
                     }
                     var buffDps = ToDataPoint(datapoint, state, uniqueId, client);
@@ -201,7 +203,7 @@ namespace Cognite.OpcUa.Config
                     if (!state.IsStreaming) return;
                     foreach (var buffDp in buffDps)
                     {
-                        Log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
+                        log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
                     }
                     points.AddRange(buffDps);
                 }
@@ -214,7 +216,7 @@ namespace Cognite.OpcUa.Config
             if (rawData == null || state == null) return Array.Empty<BufferedDataPoint>();
             if (!(rawData is HistoryData data))
             {
-                Log.Warning("Incorrect result type of history read data");
+                log.Warning("Incorrect result type of history read data");
                 return Array.Empty<BufferedDataPoint>();
             }
 
@@ -227,7 +229,7 @@ namespace Cognite.OpcUa.Config
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
+                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
                         datapoint.SourceTimestamp);
                     continue;
                 }
@@ -235,7 +237,7 @@ namespace Cognite.OpcUa.Config
                 var buffDps = ToDataPoint(datapoint, state, uniqueId, client);
                 foreach (var buffDp in buffDps)
                 {
-                    Log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
+                    log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
                     result.Add(buffDp);
                 }
             }

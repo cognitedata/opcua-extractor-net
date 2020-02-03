@@ -31,6 +31,8 @@ namespace Test
     [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
     public class CDFPusherTests : MakeConsoleWork
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusherTests));
+
         public CDFPusherTests(ITestOutputHelper output) : base(output) { }
         [Trait("Server", "basic+full")]
         [Trait("Target", "CDFPusher")]
@@ -56,7 +58,7 @@ namespace Test
             await tester.ClearPersistentData();
             CommonTestUtils.ResetTestMetrics();
 
-            Log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
+            log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
             tester.StartExtractor();
             await tester.TerminateRunTask(ex => mode == CDFMockHandler.MockMode.FailAsset || CommonTestUtils.TestRunResult(ex));
 

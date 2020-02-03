@@ -34,6 +34,8 @@ namespace Cognite.OpcUa
         private readonly FullConfig config;
         private IServiceProvider provider;
 
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorRuntime));
+
         public ExtractorRuntime(FullConfig config)
         {
             this.config = config;
@@ -116,7 +118,7 @@ namespace Cognite.OpcUa
                     removePushers.Add(pusher);
                 }
             }));
-            Log.Information("Building extractor");
+            log.Information("Building extractor");
             pushers = pushers.Except(removePushers).ToList();
             using var extractor = new Extractor(config, pushers, client);
 

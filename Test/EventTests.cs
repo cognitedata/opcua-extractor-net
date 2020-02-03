@@ -31,6 +31,8 @@ namespace Test
     [CollectionDefinition("Event_tests", DisableParallelization = true)]
     public class EventTests : MakeConsoleWork
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(EventTests));
+
         public EventTests(ITestOutputHelper output) : base(output) { }
         [Trait("Server", "events")]
         [Trait("Target", "CDFPusher")]
@@ -190,7 +192,7 @@ namespace Test
             }
             else if (ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
             {
-                Log.Information("Test event with extid {externalId}, source {source}", ev.externalId, ev.source);
+                log.Information("Test event with extid {externalId}, source {source}", ev.externalId, ev.source);
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));

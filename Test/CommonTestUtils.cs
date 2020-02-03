@@ -26,6 +26,7 @@ using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Microsoft.Extensions.DependencyInjection;
+using Oryx.Cognite;
 using Prometheus.Client;
 using Serilog;
 using Xunit.Abstractions;
@@ -63,6 +64,8 @@ namespace Test
     }
     public static class CommonTestUtils
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(CommonTestUtils));
+
         public static FullConfig BuildConfig(string serverType, int index, string configname = "config.test.yml")
         {
             var fullConfig = ExtractorUtils.GetConfig(configname);
@@ -167,7 +170,7 @@ namespace Test
         {
             if (cmd == null) throw new ArgumentNullException(nameof(cmd));
             var escapedArgs = cmd.Replace("\"", "\\\"", StringComparison.InvariantCulture);
-            Log.Information(escapedArgs);
+            log.Information(escapedArgs);
 
             var process = new Process
             {
@@ -230,6 +233,8 @@ namespace Test
         private readonly bool influx;
         public Task RunTask { get; private set; }
         private readonly ExtractorTestParameters testParams;
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorTester));
+
         public ExtractorTester(ExtractorTestParameters testParams)
         {
             this.testParams = testParams ?? throw new ArgumentNullException(nameof(testParams));
@@ -340,7 +345,7 @@ namespace Test
 
                 if (RunTask.IsFaulted)
                 {
-                    Log.Error(RunTask.Exception, "RunTask failed during WaitForCondition");
+                    log.Error(RunTask.Exception, "RunTask failed during WaitForCondition");
                     break;
                 }
 
@@ -402,7 +407,7 @@ namespace Test
             {
                 if (last != dp - 1)
                 {
-                    Log.Verbose("Out of order points at {dp}, {last}", dp, last);
+                    log.Verbose("Out of order points at {dp}, {last}", dp, last);
                 }
                 last = dp;
                 check[dp - min]++;

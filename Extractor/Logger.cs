@@ -31,19 +31,25 @@ namespace Cognite.OpcUa
             var logConfig = new LoggerConfiguration();
             logConfig.MinimumLevel.Verbose();
 
+            const string outputTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}";
+            const string outputTemplateDebug = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}";
+
             if (logToConsole)
             {
-                logConfig.WriteTo.Console(consoleLevel);
+                logConfig.WriteTo.Console(consoleLevel, consoleLevel <= LogEventLevel.Debug
+                    ? outputTemplateDebug : outputTemplate);
             }
 
             if (logToFile && config.LogFolder != null)
             {
-                string path = $"{config.LogFolder}{Path.DirectorySeparatorChar}log.log";
+                string path = $"{config.LogFolder}{Path.DirectorySeparatorChar}Log.log";
                 logConfig.WriteTo.Async(p => p.File(
                     path,
                     rollingInterval: RollingInterval.Day,
                     retainedFileCountLimit: config.RetentionLimit,
-                    restrictedToMinimumLevel: fileLevel));
+                    restrictedToMinimumLevel: fileLevel,
+                    outputTemplate: consoleLevel <= LogEventLevel.Debug
+                        ? outputTemplateDebug : outputTemplate));
             }
 
             if (logToStackdriver)

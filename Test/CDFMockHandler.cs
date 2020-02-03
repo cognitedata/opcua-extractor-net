@@ -52,6 +52,9 @@ namespace Test
         public bool AllowEvents { get; set; } = true;
         public bool StoreDatapoints { get; set; } = false;
         public MockMode mode { get; set; }
+
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(CDFMockHandler));
+
         public enum MockMode
         {
             None, Some, All, FailAsset
@@ -128,21 +131,21 @@ namespace Test
                             res = HandleCreateEvents(content);
                             break;
                         default:
-                            Log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
+                            log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
                             res = new HttpResponseMessage(HttpStatusCode.InternalServerError);
                             break;
                     }
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "Error in mock handler");
+                    log.Error(e, "Error in mock handler");
                     res = new HttpResponseMessage(HttpStatusCode.BadRequest);
                 }
                 res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
                 res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
                 /*var contentTask = res.Content.ReadAsStringAsync();
                 contentTask.Wait();
-                Log.Information(contentTask.Result);*/
+                log.Information(contentTask.Result);*/
                 return res;
             }
         }

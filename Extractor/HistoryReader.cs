@@ -34,6 +34,8 @@ namespace Cognite.OpcUa
         private readonly DateTime historyStartTime;
         private readonly IEnumerable<IPusher> pushers;
         private readonly TimeSpan historyGranularity;
+
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(HistoryReader));
         public HistoryReader(UAClient uaClient, Extractor extractor, IEnumerable<IPusher> pushers, HistoryConfig config)
         {
             this.config = config;
@@ -58,7 +60,7 @@ namespace Cognite.OpcUa
             if (rawData == null) return 0;
             if (!(rawData is HistoryData data))
             {
-                Log.Warning("Incorrect result type of history read data");
+                log.Warning("Incorrect result type of history read data");
                 return 0;
             }
 
@@ -71,13 +73,13 @@ namespace Cognite.OpcUa
             {
                 var last = data.DataValues.Any() ? data.DataValues.Max(dp => dp.SourceTimestamp) : DateTime.MinValue;
                 nodeState.UpdateFromFrontfill(last, final);
-                Log.Debug("Frontfill of data for {id} at {ts}", uniqueId, last);
+                log.Debug("Frontfill of data for {id} at {ts}", uniqueId, last);
             }
             else
             {
                 var first = data.DataValues.Any() ? data.DataValues.Min(dp => dp.SourceTimestamp) : DateTime.MaxValue;
                 nodeState.UpdateFromBackfill(first, final);
-                Log.Debug("Backfill of data for {id} at {ts}", uniqueId, first);
+                log.Debug("Backfill of data for {id} at {ts}", uniqueId, first);
             }
 
             int cnt = 0;
@@ -86,7 +88,7 @@ namespace Cognite.OpcUa
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
                     Extractor.BadDataPoints.Inc();
-                    Log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
+                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
                         datapoint.SourceTimestamp);
                     continue;
                 }
@@ -94,7 +96,7 @@ namespace Cognite.OpcUa
                 var buffDps = extractor.ToDataPoint(datapoint, nodeState, uniqueId);
                 foreach (var buffDp in buffDps)
                 {
-                    Log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
+                    log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
                     cnt++;
                 }
 
@@ -137,18 +139,18 @@ namespace Cognite.OpcUa
             if (rawEvts == null) return 0;
             if (!(rawEvts is HistoryEvent evts))
             {
-                Log.Warning("Incorrect return type of history read events");
+                log.Warning("Incorrect return type of history read events");
                 return 0;
             }
             if (!(details is ReadEventDetails eventDetails))
             {
-                Log.Warning("Incorrect details type of history read events");
+                log.Warning("Incorrect details type of history read events");
                 return 0;
             }
             var filter = eventDetails.Filter;
             if (filter == null)
             {
-                Log.Warning("No event filter, ignoring");
+                log.Warning("No event filter, ignoring");
                 return 0;
             }
             if (evts.Events == null) return 0;
@@ -182,12 +184,12 @@ namespace Cognite.OpcUa
             if (frontfill)
             {
                 emitterState.UpdateFromFrontfill(range.End, final);
-                Log.Debug("Frontfill of events for {id} at: {end}", nodeid, range.End);
+                log.Debug("Frontfill of events for {id} at: {end}", nodeid, range.End);
             }
             else
             {
                 emitterState.UpdateFromBackfill(range.Start, final);
-                Log.Debug("Backfill of events for {id} at: {end}", nodeid, range.Start);
+                log.Debug("Backfill of events for {id} at: {end}", nodeid, range.Start);
             }
 
             if (!final || !frontfill) return cnt;
@@ -227,10 +229,10 @@ namespace Cognite.OpcUa
                     int cnt = handler(res.Item2, readParams.Completed[res.Item1], frontfill, res.Item1, details);
 
                     total += cnt;
-                    Log.Debug("{mode} {cnt} {type} for node {nodeId}", 
+                    log.Debug("{mode} {cnt} {type} for node {nodeId}", 
                         frontfill ? "Frontfill" : "Backfill", cnt, data ? "datapoints" : "events", res.Item1);
                 }
-                Log.Information("{mode}ed {cnt} {type} for {nodeCount} states",
+                log.Information("{mode}ed {cnt} {type} for {nodeCount} states",
                     frontfill ? "Frontfill" : "Backfill", total, data ? "datapoints" : "events", count);
 
                 if (data && frontfill)
@@ -257,7 +259,7 @@ namespace Cognite.OpcUa
                 int termCount = readParams.Nodes.Count(id => readParams.Completed[id]);
                 if (termCount > 0)
                 {
-                    Log.Debug("Terminate {mode} of {type} for {count} states", frontfill ? "Frontfill" : "Backfill",
+                    log.Debug("Terminate {mode} of {type} for {count} states", frontfill ? "Frontfill" : "Backfill",
                         data ? "datapoints" : "events", termCount);
                 }
 
@@ -282,7 +284,7 @@ namespace Cognite.OpcUa
                 StartTime = finalTimeStamp,
                 NumValuesPerNode = (uint)config.DataChunk
             };
-            Log.Information("Frontfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
+            log.Information("Frontfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
             BaseHistoryReadOp(details, nodes.Select(node => node.Id), true, true, HistoryDataHandler, token);
         }
         /// <summary>
@@ -302,7 +304,7 @@ namespace Cognite.OpcUa
                 StartTime = finalTimeStamp,
                 NumValuesPerNode = (uint)config.DataChunk
             };
-            Log.Information("Backfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
+            log.Information("Backfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
 
             BaseHistoryReadOp(details, nodes.Select(node => node.Id), false, true, HistoryDataHandler, token);
         }
@@ -324,7 +326,7 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = (uint)config.EventChunk,
                 Filter = uaClient.BuildEventFilter(nodes)
             };
-            Log.Information("Frontfill events from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
+            log.Information("Frontfill events from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
 
             BaseHistoryReadOp(details, states.Select(node => node.Id), true, false, HistoryEventHandler, token); 
 
@@ -347,7 +349,7 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = (uint)config.EventChunk,
                 Filter = uaClient.BuildEventFilter(nodes)
             };
-            Log.Information("Backfill events from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
+            log.Information("Backfill events from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
 
             BaseHistoryReadOp(details, states.Select(node => node.Id), false, false, HistoryEventHandler, token);
         }

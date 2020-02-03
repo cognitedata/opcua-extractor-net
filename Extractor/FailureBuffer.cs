@@ -22,6 +22,8 @@ namespace Cognite.OpcUa
 
         private bool bufferFileEmpty;
         private readonly object fileLock = new object();
+
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(FailureBuffer));
         public FailureBuffer(FailureBufferConfig config, Extractor extractor)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
@@ -63,12 +65,12 @@ namespace Cognite.OpcUa
                 try
                 {
                     await influxPusher.PushDataPoints(token);
-                    Log.Information("Inserted {cnt} points into influxdb failure buffer", points.Count());
+                    log.Information("Inserted {cnt} points into influxdb failure buffer", points.Count());
                     success = true;
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "Failed to insert into influxdb buffer");
+                    log.Error(e, "Failed to insert into influxdb buffer");
                 }
             }
 
@@ -102,12 +104,12 @@ namespace Cognite.OpcUa
                 try
                 {
                     ret = ret.Concat(await influxPusher.ReadDataPoints(startTimes[index], managedPoints, token));
-                    Log.Information("Read {cnt} points from influxdb failure buffer", ret.Count());
+                    log.Information("Read {cnt} points from influxdb failure buffer", ret.Count());
                     success = true;
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "Failed to read from influxdb buffer");
+                    log.Error(e, "Failed to read from influxdb buffer");
                 }
             }
 
@@ -150,12 +152,12 @@ namespace Cognite.OpcUa
                 try
                 {
                     await influxPusher.PushEvents(token);
-                    Log.Information("Inserted {cnt} events into influxdb failure buffer", events.Count());
+                    log.Information("Inserted {cnt} events into influxdb failure buffer", events.Count());
                     success = true;
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "Failed to insert into influxdb buffer");
+                    log.Error(e, "Failed to insert into influxdb buffer");
                 }
             }
 
@@ -185,12 +187,12 @@ namespace Cognite.OpcUa
                 try
                 {
                     ret = ret.Concat(await influxPusher.ReadEvents(eventStartTimes[index], managedEvents, token));
-                    Log.Information("Read {cnt} events from influxdb failure buffer", ret.Count());
+                    log.Information("Read {cnt} events from influxdb failure buffer", ret.Count());
                     success = true;
                 }
                 catch (Exception e)
                 {
-                    Log.Error(e, "Failed to read events from influxdb buffer");
+                    log.Error(e, "Failed to read events from influxdb buffer");
                 }
             }
 
@@ -229,11 +231,11 @@ namespace Cognite.OpcUa
                 if (count > 0)
                 {
                     bufferFileEmpty = false;
-                    Log.Debug("Write {NumDatapointsToPersist} datapoints to file", count);
+                    log.Debug("Write {NumDatapointsToPersist} datapoints to file", count);
                 }
                 else
                 {
-                    Log.Verbose("Write 0 datapoints to file");
+                    log.Verbose("Write 0 datapoints to file");
                 }
             }
         }
@@ -261,20 +263,20 @@ namespace Cognite.OpcUa
                         var buffDp = new BufferedDataPoint(dataBytes);
                         if (buffDp.Id == null)
                         {
-                            Log.Warning($"Invalid datapoint in buffer file {path}: {buffDp.Id}");
+                            log.Warning($"Invalid datapoint in buffer file {path}: {buffDp.Id}");
                             continue;
                         }
                         count++;
-                        Log.Debug(buffDp.ToDebugDescription());
+                        log.Debug(buffDp.ToDebugDescription());
                         result.Add(buffDp);
                     }
                 }
 
                 if (count == 0)
                 {
-                    Log.Verbose("Read 0 point from file");
+                    log.Verbose("Read 0 point from file");
                 }
-                Log.Debug("Read {NumDatapointsToRead} points from file", count);
+                log.Debug("Read {NumDatapointsToRead} points from file", count);
             }
 
             return result;
