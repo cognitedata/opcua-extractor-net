@@ -42,7 +42,7 @@ namespace Cognite.OpcUa
 
             if (logToFile && config.LogFolder != null)
             {
-                string path = $"{config.LogFolder}{Path.DirectorySeparatorChar}Log.log";
+                string path = $"{config.LogFolder}{Path.DirectorySeparatorChar}log.log";
                 logConfig.WriteTo.Async(p => p.File(
                     path,
                     rollingInterval: RollingInterval.Day,

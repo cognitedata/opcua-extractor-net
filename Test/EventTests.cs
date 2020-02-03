@@ -192,7 +192,6 @@ namespace Test
             }
             else if (ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
             {
-                log.Information("Test event with extid {externalId}, source {source}", ev.externalId, ev.source);
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));

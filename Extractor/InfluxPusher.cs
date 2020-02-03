@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
@@ -298,10 +299,6 @@ namespace Cognite.OpcUa
                 var measurements = await client.QueryMultiSeriesAsync(config.Database,
                     "SHOW MEASUREMENTS");
                 eventSeries = measurements.SelectMany(series => series.Entries.Select(entry => entry.Name as string));
-                foreach (var series in eventSeries)
-                {
-                    Log.Information(series);
-                }
                 eventSeries = eventSeries.Where(series => series.StartsWith("events.", StringComparison.InvariantCulture));
 
             }
@@ -397,14 +394,15 @@ namespace Cognite.OpcUa
             var idp = new InfluxDatapoint<string>
             {
                 UtcTimestamp = evt.Time,
-                MeasurementName = "events." + Extractor.GetUniqueId(evt.SourceNode) + ":" + Extractor.GetUniqueId(evt.EventType)
+                MeasurementName = "events." + Extractor.GetUniqueId(evt.SourceNode) + ":"
+                                  + (evt.MetaData.ContainsKey("Type") ? evt.MetaData["Type"] : Extractor.GetUniqueId(evt.EventType))
             };
             idp.Fields.Add("value", evt.Message);
             idp.Fields.Add("id", evt.EventId);
             idp.Tags["Emitter"] = Extractor.GetUniqueId(evt.EmittingNode);
             foreach (var kvp in evt.MetaData)
             {
-                if (kvp.Key == "SourceNode") continue;
+                if (kvp.Key == "SourceNode" || kvp.Key == "Type") continue;
                 var str = Extractor.ConvertToString(kvp.Value);
                 idp.Tags[kvp.Key] = string.IsNullOrEmpty(str) ? "null" : str;
             }
@@ -478,14 +476,14 @@ namespace Cognite.OpcUa
             token.ThrowIfCancellationRequested();
             var finalEvents = new List<BufferedEvent>();
 
-            foreach (var series in results)
+            foreach (var series in results.SelectMany(res => res).DistinctBy(series => series.SeriesName))
             {
-                if (!series.Any()) continue;
-                var current = series.First();
-                if (!nameToNodeId.ContainsKey(current.SeriesName)) continue;
-                var baseKey = nameToNodeId.Keys.First(key => current.SeriesName.StartsWith(key, StringComparison.InvariantCulture));
+                if (!series.Entries.Any()) continue;
+                var baseKey = nameToNodeId.Keys.FirstOrDefault(key => series.SeriesName.StartsWith(key, StringComparison.InvariantCulture));
+                if (baseKey == null) continue;
                 var sourceNode = nameToNodeId[baseKey];
-                finalEvents.AddRange(current.Entries.Select(res =>
+                if (sourceNode == null) continue;
+                finalEvents.AddRange(series.Entries.Select(res =>
                 {
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
                     if (!(res is IDictionary<string, object> values)) return null;
@@ -500,10 +498,11 @@ namespace Cognite.OpcUa
                         SourceNode = sourceNode,
                         MetaData = new Dictionary<string, object>()
                     };
+                    evt.MetaData["Type"] = series.SeriesName.Substring(baseKey.Length + 1);
                     foreach (var kvp in values)
                     {
                         if (kvp.Key == "Time" || kvp.Key == "Id" || kvp.Key == "Value"
-                            || kvp.Key == "Emitter" || string.IsNullOrEmpty(kvp.Value as string)) continue;
+                            || kvp.Key == "Emitter" || kvp.Key == "Type" || string.IsNullOrEmpty(kvp.Value as string)) continue;
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
                     log.Verbose(evt.ToDebugDescription());
