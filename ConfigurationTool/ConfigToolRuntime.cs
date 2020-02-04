@@ -25,6 +25,8 @@ namespace Cognite.OpcUa.Config
 {
     public class ConfigToolRuntime
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolRuntime));
+
         private readonly string output;
         private readonly FullConfig config;
         private readonly FullConfig baseConfig;
@@ -37,9 +39,9 @@ namespace Cognite.OpcUa.Config
 
         public async Task Run()
         {
-            var explorer = new UAServerExplorer(config, baseConfig);
+            using var explorer = new UAServerExplorer(config, baseConfig);
 
-            var source = new CancellationTokenSource();
+            using var source = new CancellationTokenSource();
             try
             {
                 await explorer.GetEndpoints(source.Token);
@@ -55,16 +57,16 @@ namespace Cognite.OpcUa.Config
             }
             catch (Exception e)
             {
-                Log.Error(e, "ConfigurationTool failed fatally");
+                log.Error(e, "ConfigurationTool failed fatally");
                 return;
             }
             explorer.Close();
 
             var result = ToolUtil.ConfigResultToString(explorer.GetFinalConfig());
 
-            Log.Information("");
+            log.Information("");
             File.WriteAllText(output, result);
-            Log.Information("Emitted suggested config file to {path}", output);
+            log.Information("Emitted suggested config file to {path}", output);
         }
     }
 }

@@ -18,6 +18,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System;
+using System.Collections.ObjectModel;
+using System.Globalization;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
@@ -31,18 +33,18 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Client managing the connection to the opcua server, and providing wrapper methods to simplify interaction with the server.
     /// </summary>
-    public class UAClient
+    public class UAClient : IDisposable
     {
         private readonly UAClientConfig config;
         private readonly ExtractionConfig extractionConfig;
         private readonly EventConfig eventConfig;
         private readonly HistoryConfig historyConfig;
-        protected Session session;
-        protected ApplicationConfiguration appconfig;
+        protected Session Session { get; set; }
+        protected ApplicationConfiguration Appconfig { get; set; }
         private SessionReconnectHandler reconnectHandler;
         public Extractor Extractor { get; set; }
         private readonly object visitedNodesLock = new object();
-        protected readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
+        protected ISet<NodeId> VisitedNodes { get; }= new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         private Dictionary<NodeId, ProtoDataType> numericDataTypes = new Dictionary<NodeId, ProtoDataType>();
@@ -74,12 +76,15 @@ namespace Cognite.OpcUa
         private static readonly Counter browseFailures = Metrics
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
+
         /// <summary>
         /// Constructor, does not start the client.
         /// </summary>
         /// <param name="config">Full configuartion object</param>
         public UAClient(FullConfig config)
         {
+            if (config == null) throw new ArgumentNullException(nameof(config));
             this.config = config.Source;
             extractionConfig = config.Extraction;
             eventConfig = config.Events;
@@ -87,7 +92,7 @@ namespace Cognite.OpcUa
         }
         #region Session management
         /// <summary>
-        /// Entrypoint for starting the opcua session. Must be called before any further requests can be made.
+        /// Entrypoint for starting the opcua Session. Must be called before any further requests can be made.
         /// </summary>
         public async Task Run(CancellationToken token)
         {
@@ -95,23 +100,26 @@ namespace Cognite.OpcUa
             await StartSession();
         }
         /// <summary>
-        /// Close the session, cleaning up any client data on the server
+        /// Close the Session, cleaning up any client data on the server
         /// </summary>
         public void Close()
         {
-            session.CloseSession(null, true);
+            if (!Session.Disposed)
+            {
+                Session.CloseSession(null, true);
+            }
             connected.Set(0);
         }
         /// <summary>
-        /// Load security configuration for the session, then start the server.
+        /// Load security configuration for the Session, then start the server.
         /// </summary>
         private async Task StartSession()
         {
             lock (visitedNodesLock)
             {
-                visitedNodes.Clear();
+                VisitedNodes.Clear();
             }
-            // A restarted session might mean a restarted server, so all server-relevant data must be cleared.
+            // A restarted Session might mean a restarted server, so all server-relevant data must be cleared.
             // This includes any stored NodeId, which may refer to an outdated namespaceIndex
             eventFields?.Clear();
             nodeOverrides?.Clear();
@@ -123,30 +131,30 @@ namespace Cognite.OpcUa
                 ApplicationType = ApplicationType.Client,
                 ConfigSectionName = "opc.ua.net.extractor"
             };
-            Log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.ConfigRoot);
-            appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
+            log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.ConfigRoot);
+            Appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
             {
-                appconfig.SecurityConfiguration.ApplicationCertificate.StorePath = $"{certificateDir}/instance";
-                appconfig.SecurityConfiguration.TrustedIssuerCertificates.StorePath = $"{certificateDir}/pki/issuer";
-                appconfig.SecurityConfiguration.TrustedPeerCertificates.StorePath = $"{certificateDir}/pki/trusted";
-                appconfig.SecurityConfiguration.RejectedCertificateStore.StorePath = $"{certificateDir}/pki/rejected";
+                Appconfig.SecurityConfiguration.ApplicationCertificate.StorePath = $"{certificateDir}/instance";
+                Appconfig.SecurityConfiguration.TrustedIssuerCertificates.StorePath = $"{certificateDir}/pki/issuer";
+                Appconfig.SecurityConfiguration.TrustedPeerCertificates.StorePath = $"{certificateDir}/pki/trusted";
+                Appconfig.SecurityConfiguration.RejectedCertificateStore.StorePath = $"{certificateDir}/pki/rejected";
             }
 
             bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
             if (!validAppCert)
             {
-                Log.Warning("Missing application certificate, using insecure connection.");
+                log.Warning("Missing application certificate, using insecure connection.");
             }
             else
             {
-                appconfig.ApplicationUri = Opc.Ua.Utils.GetApplicationUriFromCertificate(
-                    appconfig.SecurityConfiguration.ApplicationCertificate.Certificate);
-                config.AutoAccept |= appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
-                appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
+                Appconfig.ApplicationUri = Opc.Ua.Utils.GetApplicationUriFromCertificate(
+                    Appconfig.SecurityConfiguration.ApplicationCertificate.Certificate);
+                config.AutoAccept |= Appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
+                Appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
-            Log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointURL);
+            log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointURL);
             EndpointDescription selectedEndpoint;
             try
             {
@@ -154,15 +162,16 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException ex)
             {
-                throw Utils.HandleServiceResult(ex, Utils.SourceOp.SelectEndpoint);
+                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.SelectEndpoint);
             }
-            var endpointConfiguration = EndpointConfiguration.Create(appconfig);
+            var endpointConfiguration = EndpointConfiguration.Create(Appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            Log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri}", endpoint.Description.SecurityPolicyUri);
+            log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri}", endpoint.Description.SecurityPolicyUri);
             try
             {
-                session = await Session.Create(
-                    appconfig,
+                Session?.Dispose();
+                Session = await Session.Create(
+                    Appconfig,
                     endpoint,
                     false,
                     ".NET OPC-UA Extractor Client",
@@ -175,15 +184,15 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException ex)
             {
-                throw Utils.HandleServiceResult(ex, Utils.SourceOp.CreateSession);
+                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateSession);
             }
 
 
-            session.KeepAlive += ClientKeepAlive;
+            Session.KeepAlive += ClientKeepAlive;
             Started = true;
             connects.Inc();
             connected.Set(1);
-            Log.Information("Successfully connected to server at {EndpointURL}", config.EndpointURL);
+            log.Information("Successfully connected to server at {EndpointURL}", config.EndpointURL);
 
             if (extractionConfig.CustomNumericTypes != null)
             {
@@ -197,19 +206,19 @@ namespace Cognite.OpcUa
         {
             if (!ReferenceEquals(sender, reconnectHandler)) return;
             if (reconnectHandler == null) return;
-            session = reconnectHandler.Session;
+            Session = reconnectHandler.Session;
             reconnectHandler.Dispose();
-            Log.Warning("--- RECONNECTED ---");
+            log.Warning("--- RECONNECTED ---");
             if (extractionConfig.CustomNumericTypes != null)
             {
                 numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
             }
             nodeOverrides?.Clear();
             eventFields?.Clear();
-            Task.Run(() => Extractor?.RestartExtractor(liveToken));
+            Task.Run(() => Extractor?.RestartExtractor());
             lock (visitedNodesLock)
             {
-                visitedNodes.Clear();
+                VisitedNodes.Clear();
             }
             connects.Inc();
             connected.Set(1);
@@ -222,10 +231,10 @@ namespace Cognite.OpcUa
         private void ClientKeepAlive(Session sender, KeepAliveEventArgs eventArgs)
         {
             if (eventArgs.Status == null || !ServiceResult.IsNotGood(eventArgs.Status)) return;
-            Log.Warning(eventArgs.Status.ToString());
+            log.Warning(eventArgs.Status.ToString());
             if (reconnectHandler != null) return;
             connected.Set(0);
-            Log.Warning("--- RECONNECTING ---");
+            log.Warning("--- RECONNECTING ---");
             if (!config.ForceRestart && !liveToken.IsCancellationRequested)
             {
                 reconnectHandler = new SessionReconnectHandler();
@@ -235,11 +244,12 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    session.Close();
+                    Session.Close();
+                    Extractor?.QuitExtractorInternally();
                 }
                 catch
                 {
-                    Log.Warning("Client failed to close");
+                    log.Warning("Client failed to close");
                 }
             }
         }
@@ -254,11 +264,11 @@ namespace Cognite.OpcUa
             // TODO Verify client acceptance here somehow?
             if (eventArgs.Accept)
             {
-                Log.Warning("Accepted Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
+                log.Warning("Accepted Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
             }
             else
             {
-                Log.Error("Rejected Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
+                log.Error("Rejected Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
             }
         }
         /// <summary>
@@ -304,13 +314,14 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
         public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
         {
-            Log.Debug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
+            if (roots == null) throw new ArgumentNullException(nameof(roots));
+            log.Debug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
             foreach (var root in roots)
             {
                 bool docb = true;
                 lock (visitedNodesLock)
                 {
-                    if (!visitedNodes.Add(root))
+                    if (!VisitedNodes.Add(root))
                     {
                         docb = false;
                     }
@@ -318,7 +329,7 @@ namespace Cognite.OpcUa
                 if (docb)
                 {
                     var rootNode = GetRootNode(root);
-                    if (rootNode == null) throw new Exception($"Root node does not exist: {root}");
+                    if (rootNode == null) throw new ExtractorFailureException($"Root node does not exist: {root}");
                     callback(rootNode, null);
                 }
             }
@@ -342,11 +353,11 @@ namespace Cognite.OpcUa
             DataValueCollection results;
             try
             {
-                session.Read(null, 0, TimestampsToReturn.Neither, new ReadValueIdCollection(readValueIds), out results, out _);
+                Session.Read(null, 0, TimestampsToReturn.Neither, new ReadValueIdCollection(readValueIds), out results, out _);
             }
             catch (ServiceResultException ex)
             {
-                throw Utils.HandleServiceResult(ex, Utils.SourceOp.ReadRootNode);
+                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadRootNode);
             }
             var refd = new ReferenceDescription();
             var enumerator = results.GetEnumerator();
@@ -383,9 +394,9 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(
             IEnumerable<NodeId> parents,
-            CancellationToken token,
             NodeId referenceTypes,
-            uint nodeClassMask)
+            uint nodeClassMask,
+            CancellationToken token)
         {
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             IncOperations();
@@ -412,7 +423,7 @@ namespace Cognite.OpcUa
                 DiagnosticInfoCollection diagnostics;
                 try
                 {
-                    session.Browse(
+                    Session.Browse(
                         null,
                         null,
                         (uint)config.BrowseChunk,
@@ -423,25 +434,25 @@ namespace Cognite.OpcUa
                 }
                 catch (ServiceResultException ex)
                 {
-                    throw Utils.HandleServiceResult(ex, Utils.SourceOp.Browse);
+                    throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.Browse);
                 }
 
 
                 foreach (var d in diagnostics)
                 {
-                    Log.Warning("GetNodeChildren Browse diagnostics {msg}", d);
+                    log.Warning("GetNodeChildren Browse diagnostics {msg}", d);
                 }
 
                 var indexMap = new NodeId[parents.Count()];
                 var continuationPoints = new ByteStringCollection();
                 int index = 0;
                 int bindex = 0;
-                Log.Debug("GetNodeChildren parents {count}", parents.Count());
-                Log.Debug("GetNodeChildren results {count}", results.Count);
+                log.Debug("GetNodeChildren parents {count}", parents.Count());
+                log.Debug("GetNodeChildren results {count}", results.Count);
                 foreach (var result in results)
                 {
                     var nodeId = parents.ElementAt(bindex++);
-                    Log.Debug("GetNodeChildren Browse result {nodeId}", nodeId);
+                    log.Debug("GetNodeChildren Browse result {nodeId}", nodeId);
                     finalResults[nodeId] = result.References;
                     if (result.ContinuationPoint != null)
                     {
@@ -454,7 +465,7 @@ namespace Cognite.OpcUa
                 {
                     try
                     {
-                        session.BrowseNext(
+                        Session.BrowseNext(
                             null,
                             false,
                             continuationPoints,
@@ -464,13 +475,13 @@ namespace Cognite.OpcUa
                     }
                     catch (ServiceResultException ex)
                     {
-                        throw Utils.HandleServiceResult(ex, Utils.SourceOp.BrowseNext);
+                        throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.BrowseNext);
                     }
 
 
                     foreach (var d in diagnostics)
                     {
-                        Log.Warning("GetNodeChildren BrowseNext diagnostics {msg}", d);
+                        log.Warning("GetNodeChildren BrowseNext diagnostics {msg}", d);
                     }
 
                     int nindex = 0;
@@ -479,7 +490,7 @@ namespace Cognite.OpcUa
                     foreach (var result in results)
                     {
                         var nodeId = indexMap[pindex++];
-                        Log.Debug("GetNodeChildren BrowseNext result {nodeId}", nodeId);
+                        log.Debug("GetNodeChildren BrowseNext result {nodeId}", nodeId);
                         finalResults[nodeId].AddRange(result.References);
                         if (result.ContinuationPoint == null) continue;
                         indexMap[nindex++] = nodeId;
@@ -505,7 +516,7 @@ namespace Cognite.OpcUa
         {
             lock (visitedNodesLock)
             {
-                visitedNodes.Clear();
+                VisitedNodes.Clear();
             }
         }
         /// <summary>
@@ -523,6 +534,7 @@ namespace Cognite.OpcUa
             uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
             bool ignoreVisited = true)
         {
+            if (roots == null) throw new ArgumentNullException(nameof(roots));
             var nextIds = roots.ToList();
             int levelCnt = 0;
             int nodeCnt = 0;
@@ -533,8 +545,8 @@ namespace Cognite.OpcUa
             }
             do
             {
-                var references = Utils.ChunkBy(nextIds, config.BrowseNodesChunk)
-                    .Select(ids => GetNodeChildren(ids.ToList(), token, referenceTypes, nodeClassMask))
+                var references = ExtractorUtils.ChunkBy(nextIds, config.BrowseNodesChunk)
+                    .Select(ids => GetNodeChildren(ids.ToList(), referenceTypes, nodeClassMask, token))
                     .SelectMany(dict => dict)
                     .ToDictionary(val => val.Key, val => val.Value);
 
@@ -551,22 +563,22 @@ namespace Cognite.OpcUa
                             rd.DisplayName.Text.StartsWith(prefix, StringComparison.CurrentCulture))
                             || extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(rd.DisplayName.Text))
                         {
-                            Log.Verbose("Ignoring filtered {nodeId}", nodeId);
+                            log.Verbose("Ignoring filtered {nodeId}", nodeId);
                             continue;
                         }
 
                         bool docb = true;
                         lock (visitedNodesLock)
                         {
-                            if (!visitedNodes.Add(nodeId) && ignoreVisited)
+                            if (!VisitedNodes.Add(nodeId) && ignoreVisited)
                             {
                                 docb = false;
-                                Log.Verbose("Ignoring visited {nodeId}", nodeId);
+                                log.Verbose("Ignoring visited {nodeId}", nodeId);
                             }
                         }
                         if (docb)
                         {
-                            Log.Debug("Discovered new node {nodeid}", nodeId);
+                            log.Debug("Discovered new node {nodeid}", nodeId);
                             callback(rd, parentId);
                         }
                         if (rd.NodeClass == NodeClass.Variable) continue;
@@ -577,7 +589,7 @@ namespace Cognite.OpcUa
                     }
                 }
             } while (nextIds.Any());
-            Log.Information("Found {NumUANodes} nodes in {NumNodeLevels} levels", nodeCnt, levelCnt);
+            log.Information("Found {NumUANodes} nodes in {NumNodeLevels} levels", nodeCnt, levelCnt);
             depth.Set(levelCnt);
         }
         #endregion
@@ -611,11 +623,11 @@ namespace Cognite.OpcUa
             try
             {
                 int count = 0;
-                foreach (var nextValues in Utils.ChunkBy(readValueIds, config.AttributesChunk))
+                foreach (var nextValues in ExtractorUtils.ChunkBy(readValueIds, config.AttributesChunk))
                 {
                     if (token.IsCancellationRequested) break;
                     count++;
-                    session.Read(
+                    Session.Read(
                         null,
                         0,
                         TimestampsToReturn.Source,
@@ -625,9 +637,9 @@ namespace Cognite.OpcUa
                     );
                     attributeRequests.Inc();
                     values = values.Concat(lvalues);
-                    Log.Information("Read {NumAttributesRead} attributes", lvalues.Count);
+                    log.Information("Read {NumAttributesRead} attributes", lvalues.Count);
                 }
-                Log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
+                log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
                     readValueIds.Count, count, nodes.Count());
             }
             catch
@@ -669,12 +681,12 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException ex)
             {
-                throw Utils.HandleServiceResult(ex, Utils.SourceOp.ReadAttributes);
+                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
 
             if (values.Count() < nodes.Count(node => node.IsVariable) * 3 + nodes.Count())
             {
-                throw new Exception("Too few results in ReadNodeData");
+                throw new ExtractorFailureException("Too few results in ReadNodeData, this is a bug in the OPC-UA server implementation");
             }
 
             var enumerator = values.GetEnumerator();
@@ -695,7 +707,7 @@ namespace Cognite.OpcUa
                     if (extractionConfig.MaxArraySize > 0)
                     {
                         enumerator.MoveNext();
-                        vnode.ArrayDimensions = (int[])enumerator.Current.GetValue(typeof(int[]));
+                        vnode.ArrayDimensions = new Collection<int>((int[])enumerator.Current.GetValue(typeof(int[])));
                     }
                 }
             }
@@ -724,7 +736,7 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException ex)
             {
-                throw Utils.HandleServiceResult(ex, Utils.SourceOp.ReadAttributes);
+                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
 
             var enumerator = values.GetEnumerator();
@@ -747,9 +759,9 @@ namespace Cognite.OpcUa
         /// <param name="nodes">Nodes to be updated with properties</param>
         public void GetNodeProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
         {
+            if (nodes == null || !nodes.Any()) return;
             var properties = new HashSet<BufferedVariable>();
-            Log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
-            if (!nodes.Any()) return;
+            log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
             var idsToCheck = new List<NodeId>();
             foreach (var node in nodes)
             {
@@ -771,7 +783,7 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            var result = GetNodeChildren(idsToCheck, token, ReferenceTypeIds.HasProperty, (uint)NodeClass.Variable);
+            var result = GetNodeChildren(idsToCheck, ReferenceTypeIds.HasProperty, (uint)NodeClass.Variable, token);
             foreach (var parent in nodes)
             {
                 if (!result.ContainsKey(parent.Id)) continue;
@@ -793,26 +805,7 @@ namespace Cognite.OpcUa
 
         #region Synchronization
 
-        public class HistoryReadParams
-        {
-            public HistoryReadDetails Details { get; }
-            public IEnumerable<NodeId> Nodes { get; set; }
-            public IDictionary<NodeId, byte[]> ContinuationPoints { get; }
-            public IDictionary<NodeId, bool> Completed { get; }
 
-            public HistoryReadParams(IEnumerable<NodeId> nodes, HistoryReadDetails details)
-            {
-                ContinuationPoints = new Dictionary<NodeId, byte[]>();
-                Completed = new Dictionary<NodeId, bool>();
-                this.Nodes = nodes;
-                this.Details = details;
-                foreach (var node in nodes)
-                {
-                    ContinuationPoints[node] = null;
-                    Completed[node] = false;
-                }
-            }
-        }
         /// <summary>
         /// Modifies passed HistoryReadParams while doing a single config-limited iteration of history read.
         /// </summary>
@@ -820,6 +813,7 @@ namespace Cognite.OpcUa
         /// <returns>Pairs of NodeId and history read results as IEncodable</returns>
         public IEnumerable<(NodeId, IEncodeable)> DoHistoryRead(HistoryReadParams readParams)
         {
+            if (readParams == null) throw new ArgumentNullException(nameof(readParams));
             IncOperations();
             var ids = new HistoryReadValueIdCollection();
             var nodesIndices = readParams.Nodes.ToArray();
@@ -835,7 +829,7 @@ namespace Cognite.OpcUa
             var result = new List<(NodeId, IEncodeable)>();
             try
             {
-                session.HistoryRead(
+                Session.HistoryRead(
                     null,
                     new ExtensionObject(readParams.Details),
                     TimestampsToReturn.Source,
@@ -862,16 +856,16 @@ namespace Cognite.OpcUa
                     idx++;
                 }
 
-                Log.Debug("Fetched historical "
+                log.Debug("Fetched historical "
                           + (readParams.Details is ReadEventDetails ? "events" : "datapoints")
                           + " for {nodeCount} nodes", readParams.Nodes.Count());
             }
             catch (ServiceResultException ex)
             {
                 historyReadFailures.Inc();
-                throw Utils.HandleServiceResult(ex, readParams.Details is ReadEventDetails
-                    ? Utils.SourceOp.HistoryReadEvents
-                    : Utils.SourceOp.HistoryRead);
+                throw ExtractorUtils.HandleServiceResult(ex, readParams.Details is ReadEventDetails
+                    ? ExtractorUtils.SourceOp.HistoryReadEvents
+                    : ExtractorUtils.SourceOp.HistoryRead);
             }
             catch
             {
@@ -897,18 +891,20 @@ namespace Cognite.OpcUa
         {
             if (!nodeList.Any()) return;
 
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("DataChangeListener"))
-                               ?? new Subscription(session.DefaultSubscription)
+            var subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture))
+#pragma warning disable CA2000 // Dispose objects before losing scope. The subscription is disposed properly or added to the client.
+                               ?? new Subscription(Session.DefaultSubscription)
             {
                 PublishingInterval = config.PollingInterval,
                 DisplayName = "DataChangeListener"
             };
+#pragma warning restore CA2000 // Dispose objects before losing scope
             int count = 0;
             var hasSubscription = subscription.MonitoredItems
                 .Select(sub => sub.ResolvedNodeId)
                 .ToHashSet();
 
-            foreach (var chunk in Utils.ChunkBy(nodeList, config.SubscriptionChunk))
+            foreach (var chunk in ExtractorUtils.ChunkBy(nodeList, config.SubscriptionChunk))
             {
                 if (token.IsCancellationRequested) break;
                 subscription.AddItems(chunk
@@ -927,7 +923,7 @@ namespace Cognite.OpcUa
                     })
                 );
 
-                Log.Information("Add subscriptions for {numnodes} nodes", chunk.Count());
+                log.Information("Add subscriptions for {numnodes} nodes", chunk.Count());
                 lock (subscriptionLock)
                 {
                     IncOperations();
@@ -943,21 +939,25 @@ namespace Cognite.OpcUa
                                 }
                                 catch (ServiceResultException ex)
                                 {
-                                    throw Utils.HandleServiceResult(ex, Utils.SourceOp.CreateMonitoredItems);
+                                    throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
                                 }
                             }
                             else
                             {
                                 try
                                 {
-                                    session.AddSubscription(subscription);
+                                    Session.AddSubscription(subscription);
                                     subscription.Create();
                                 }
                                 catch (ServiceResultException ex)
                                 {
-                                    throw Utils.HandleServiceResult(ex, Utils.SourceOp.CreateSubscription);
+                                    throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateSubscription);
                                 }
                             }
+                        }
+                        else if (!subscription.Created)
+                        {
+                            subscription.Dispose();
                         }
                     }
                     finally
@@ -967,7 +967,7 @@ namespace Cognite.OpcUa
                     numSubscriptions.Set(subscription.MonitoredItemCount);
                 }
             }
-            Log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
+            log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
         }
         /// <summary>
         /// Subscribe to events from the given list of emitters.
@@ -983,18 +983,22 @@ namespace Cognite.OpcUa
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("EventListener"))
-                               ?? new Subscription(session.DefaultSubscription)
+            if (emitters == null) throw new ArgumentNullException(nameof(emitters));
+            if (nodeIds == null) throw new ArgumentNullException(nameof(nodeIds));
+            var subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture))
+#pragma warning disable CA2000 // Dispose objects before losing scope
+                               ?? new Subscription(Session.DefaultSubscription)
             {
                 PublishingInterval = config.PollingInterval,
                 DisplayName = "EventListener"
             };
+#pragma warning restore CA2000 // Dispose objects before losing scope
             int count = 0;
             var hasSubscription = subscription.MonitoredItems
                 .Select(sub => sub.ResolvedNodeId)
                 .ToHashSet();
 
-            if (eventFields == null) throw new Exception("EventFields not defined");
+            if (eventFields == null) throw new ExtractorFailureException("EventFields not defined");
 
             var filter = BuildEventFilter(nodeIds);
             foreach (var emitter in emitters)
@@ -1028,22 +1032,26 @@ namespace Cognite.OpcUa
                             }
                             catch (ServiceResultException ex)
                             {
-                                throw Utils.HandleServiceResult(ex, Utils.SourceOp.CreateMonitoredItems);
+                                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
                             }
                         }
                         else
                         {
                             try
                             {
-                                session.AddSubscription(subscription);
+                                Session.AddSubscription(subscription);
                                 subscription.Create();
                             }
                             catch (ServiceResultException ex)
                             {
-                                throw Utils.HandleServiceResult(ex, Utils.SourceOp.CreateSubscription);
+                                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateSubscription);
                             }
 
                         }
+                    }
+                    else if (!subscription.Created)
+                    {
+                        subscription.Dispose();
                     }
                 }
                 finally
@@ -1051,7 +1059,7 @@ namespace Cognite.OpcUa
                     DecOperations();
                 }
             }
-            Log.Information("Created {EventSubCount} event subscriptions", count);
+            log.Information("Created {EventSubCount} event subscriptions", count);
         }
         #endregion
 
@@ -1059,7 +1067,7 @@ namespace Cognite.OpcUa
 
         public ISystemContext GetSystemContext()
         {
-            return session?.SystemContext;
+            return Session?.SystemContext;
         }
         public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventFields(IEnumerable<NodeId> eventIds, CancellationToken token)
         {
@@ -1118,7 +1126,7 @@ namespace Cognite.OpcUa
 
             if (!fieldList.Any())
             {
-                Log.Warning("Missing valid event fields, no results will be returned");
+                log.Warning("Missing valid event fields, no results will be returned");
             }
             var selectClauses = new SimpleAttributeOperandCollection();
             foreach (var field in fieldList)
@@ -1132,7 +1140,7 @@ namespace Cognite.OpcUa
                 };
                 operand.BrowsePath.Add(field.Item2);
                 selectClauses.Add(operand);
-                Log.Debug("Select event attribute {id}: {name}", field.Item1, field.Item2);
+                log.Debug("Select event attribute {id}: {name}", field.Item1, field.Item2);
             }
             return new EventFilter
             {
@@ -1141,7 +1149,7 @@ namespace Cognite.OpcUa
             };
         }
 
-        private EventFilter BuildAuditFilter()
+        private static EventFilter BuildAuditFilter()
         {
             var whereClause = new ContentFilter();
             var eventTypeOperand = new SimpleAttributeOperand
@@ -1187,12 +1195,14 @@ namespace Cognite.OpcUa
         public void SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback)
         {
             var filter = BuildAuditFilter();
-            var subscription = session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener"))
-                               ?? new Subscription(session.DefaultSubscription)
+            var subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener", StringComparison.InvariantCulture))
+#pragma warning disable CA2000 // Dispose objects before losing scope
+                               ?? new Subscription(Session.DefaultSubscription)
             {
                 PublishingInterval = config.PollingInterval,
                 DisplayName = "AuditListener"
             };
+#pragma warning restore CA2000 // Dispose objects before losing scope
             if (subscription.MonitoredItemCount != 0) return;
             var item = new MonitoredItem
             {
@@ -1202,7 +1212,7 @@ namespace Cognite.OpcUa
             };
             item.Notification += callback;
             subscription.AddItem(item);
-            Log.Information("Subscribe to auditing events on the server node");
+            log.Information("Subscribe to auditing events on the server node");
             lock (subscriptionLock)
             {
                 IncOperations();
@@ -1212,16 +1222,20 @@ namespace Cognite.OpcUa
                     { 
                         subscription.CreateItems();
                     }
+                    else if (!subscription.Created)
+                    {
+                        log.Information("Add subscription to the Session");
+                        Session.AddSubscription(subscription); 
+                        subscription.Create();
+                    }
                     else
                     {
-                        Log.Information("Add subscription to the session");
-                        session.AddSubscription(subscription); 
-                        subscription.Create();
+                        subscription.Dispose();
                     }
                 }
                 catch (Exception)
                 {
-                    Log.Error("Failed to create audit subscription");
+                    log.Error("Failed to create audit subscription");
                     throw;
                 }
                 finally
@@ -1312,13 +1326,13 @@ namespace Cognite.OpcUa
 
         #region Utils
         /// <summary>
-        /// Converts an ExpandedNodeId into a NodeId using the session
+        /// Converts an ExpandedNodeId into a NodeId using the Session
         /// </summary>
         /// <param name="nodeid"></param>
         /// <returns>Resulting NodeId</returns>
         public NodeId ToNodeId(ExpandedNodeId nodeid)
         {
-            return ExpandedNodeId.ToNodeId(nodeid, session.NamespaceUris);
+            return ExpandedNodeId.ToNodeId(nodeid, Session.NamespaceUris);
         }
         /// <summary>
         /// Converts identifier string and namespaceUri into NodeId. Identifier will be on form i=123 or s=abc etc.
@@ -1329,8 +1343,8 @@ namespace Cognite.OpcUa
         public NodeId ToNodeId(string identifier, string namespaceUri)
         {
             if (identifier == null || namespaceUri == null) return NodeId.Null;
-            string nsString = "ns=" + session.NamespaceUris.GetIndex(namespaceUri);
-            if (session.NamespaceUris.GetIndex(namespaceUri) == -1)
+            string nsString = "ns=" + Session.NamespaceUris.GetIndex(namespaceUri);
+            if (Session.NamespaceUris.GetIndex(namespaceUri) == -1)
             {
                 return NodeId.Null;
             }
@@ -1346,9 +1360,9 @@ namespace Cognite.OpcUa
             if (datavalue == null) return 0;
             if (datavalue.GetType().IsArray)
             {
-                return Convert.ToDouble((datavalue as IEnumerable<object>)?.First());
+                return Convert.ToDouble((datavalue as IEnumerable<object>)?.First(), CultureInfo.InvariantCulture);
             }
-            return Convert.ToDouble(datavalue);
+            return Convert.ToDouble(datavalue, CultureInfo.InvariantCulture);
         }
         /// <summary>
         /// Converts object fetched from ua server to string, contains cases for special types we want to represent in CDF
@@ -1411,28 +1425,30 @@ namespace Cognite.OpcUa
         /// </remarks>
         /// <param name="nodeid">Nodeid to be converted</param>
         /// <returns>Unique string representation</returns>
-        public string GetUniqueId(ExpandedNodeId nodeid, int index = -1)
+        public string GetUniqueId(ExpandedNodeId rNodeid, int index = -1)
         {
-            if (nodeid == null || (NodeId)nodeid == null)
+            NodeId nodeId = (NodeId)rNodeid;
+            if (nodeId == null)
             {
-                Log.Information("Null nodeid detected");
+                nodeId = NodeId.Null;
+                log.Warning("Null converted to ExternalId");
             }
-            if (nodeOverrides.ContainsKey((NodeId)nodeid)) return nodeOverrides[(NodeId)nodeid];
+            if (nodeOverrides.ContainsKey(nodeId)) return nodeOverrides[nodeId];
 
-            string namespaceUri = nodeid.NamespaceUri ?? session.NamespaceUris.GetString(nodeid.NamespaceIndex);
+            string namespaceUri = Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
             string prefix = extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
             // Strip the ns=namespaceIndex; part, as it may be inconsistent between sessions
             // We still want the identifierType part of the id, so we just remove the first ocurrence of ns=..
             // If we can find out if the value of the key alone is unique, then we can remove the identifierType, though I suspect
             // that i=1 and s=1 (1 as string key) would be considered distinct.
-            string nodeidstr = nodeid.ToString();
-            string nsstr = $"ns={nodeid.NamespaceIndex};";
+            string nodeidstr = nodeId.ToString();
+            string nsstr = $"ns={nodeId.NamespaceIndex};";
             int pos = nodeidstr.IndexOf(nsstr, StringComparison.CurrentCulture);
             if (pos == 0)
             {
                 nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
             }
-            string extId = $"{extractionConfig.IdPrefix}{prefix}{nodeidstr}".Replace("\n", "");
+            string extId = $"{extractionConfig.IdPrefix}{prefix}{nodeidstr}".Replace("\n", "", StringComparison.InvariantCulture);
 
             // ExternalId is limited to 255 characters
             extId = extId.Trim();
@@ -1449,6 +1465,39 @@ namespace Cognite.OpcUa
             return extId;
         }
 
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            Session?.Dispose();
+            reconnectHandler?.Dispose();
+
+        }
+
         #endregion
+    }
+    public class HistoryReadParams
+    {
+        public HistoryReadDetails Details { get; }
+        public IEnumerable<NodeId> Nodes { get; set; }
+        public IDictionary<NodeId, byte[]> ContinuationPoints { get; }
+        public IDictionary<NodeId, bool> Completed { get; }
+
+        public HistoryReadParams(IEnumerable<NodeId> nodes, HistoryReadDetails details)
+        {
+            Nodes = nodes ?? throw new ArgumentNullException(nameof(nodes));
+            ContinuationPoints = new Dictionary<NodeId, byte[]>();
+            Completed = new Dictionary<NodeId, bool>();
+            Details = details;
+            foreach (var node in nodes)
+            {
+                ContinuationPoints[node] = null;
+                Completed[node] = false;
+            }
+        }
     }
 }

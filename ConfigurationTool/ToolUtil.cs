@@ -31,6 +31,8 @@ namespace Cognite.OpcUa.Config
 {
     public static class ToolUtil
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(ToolUtil));
+
         /// <summary>
         /// Run with timeout, returning the result of the task or throwing a TimeoutException
         /// </summary>
@@ -40,6 +42,7 @@ namespace Cognite.OpcUa.Config
         /// <returns>The return value of toRun if it completed within timeout.</returns>
         public static async Task<T> RunWithTimeout<T>(Task<T> toRun, int timeoutSec)
         {
+            if (toRun == null) throw new ArgumentNullException(nameof(toRun));
             await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(timeoutSec)), toRun);
             if (!toRun.IsCompleted) throw new TimeoutException();
             return toRun.Result;
@@ -51,6 +54,7 @@ namespace Cognite.OpcUa.Config
         /// <param name="timeoutSec">Seconds before timeout</param>
         public static async Task RunWithTimeout(Task toRun, int timeoutSec)
         {
+            if (toRun == null) throw new ArgumentNullException(nameof(toRun));
             await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(timeoutSec)), toRun);
             if (!toRun.IsCompleted) throw new TimeoutException();
         }
@@ -83,7 +87,7 @@ namespace Cognite.OpcUa.Config
         /// <returns>True if child is descendant of parent</returns>
         public static bool IsChildOf(IEnumerable<BufferedNode> nodes, BufferedNode child, NodeId parent)
         {
-            var next = child;
+            var next = child ?? throw new ArgumentNullException(nameof(child));
 
             do
             {
@@ -115,7 +119,7 @@ namespace Cognite.OpcUa.Config
                 {
                     var bufferedNode = new BufferedNode(client.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
-                    Log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
+                    log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
                     target.Add(bufferedNode);
                 }
                 else if (node.NodeClass == NodeClass.Variable)
@@ -127,19 +131,21 @@ namespace Cognite.OpcUa.Config
                         bufferedNode.IsProperty = true;
                     }
 
-                    Log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
+                    log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
                     target.Add(bufferedNode);
                 }
             };
         }
         public static IEnumerable<BufferedDataPoint> ToDataPoint(DataValue value, NodeExtractionState variable, string uniqueId, UAClient client)
         {
-            if (variable.ArrayDimensions != null && variable.ArrayDimensions.Length > 0 && variable.ArrayDimensions[0] > 0)
+            if (client == null) throw new ArgumentNullException(nameof(client));
+            if (variable == null || value == null) return Array.Empty<BufferedDataPoint>();
+            if (variable.ArrayDimensions != null && variable.ArrayDimensions.Count > 0 && variable.ArrayDimensions[0] > 0)
             {
                 var ret = new List<BufferedDataPoint>();
                 if (!(value.Value is Array))
                 {
-                    Log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
+                    log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
                     return Enumerable.Empty<BufferedDataPoint>();
                 }
                 var values = (Array)value.Value;
@@ -189,7 +195,7 @@ namespace Cognite.OpcUa.Config
                 {
                     if (StatusCode.IsNotGood(datapoint.StatusCode))
                     {
-                        Log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
+                        log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                         continue;
                     }
                     var buffDps = ToDataPoint(datapoint, state, uniqueId, client);
@@ -197,7 +203,7 @@ namespace Cognite.OpcUa.Config
                     if (!state.IsStreaming) return;
                     foreach (var buffDp in buffDps)
                     {
-                        Log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
+                        log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
                     }
                     points.AddRange(buffDps);
                 }
@@ -206,10 +212,11 @@ namespace Cognite.OpcUa.Config
 
         public static BufferedDataPoint[] ReadResultToDataPoints(IEncodeable rawData, NodeExtractionState state, UAClient client)
         {
-            if (rawData == null) return Array.Empty<BufferedDataPoint>();
+            if (client == null) throw new ArgumentNullException(nameof(client));
+            if (rawData == null || state == null) return Array.Empty<BufferedDataPoint>();
             if (!(rawData is HistoryData data))
             {
-                Log.Warning("Incorrect result type of history read data");
+                log.Warning("Incorrect result type of history read data");
                 return Array.Empty<BufferedDataPoint>();
             }
 
@@ -222,7 +229,7 @@ namespace Cognite.OpcUa.Config
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
+                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
                         datapoint.SourceTimestamp);
                     continue;
                 }
@@ -230,7 +237,7 @@ namespace Cognite.OpcUa.Config
                 var buffDps = ToDataPoint(datapoint, state, uniqueId, client);
                 foreach (var buffDp in buffDps)
                 {
-                    Log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
+                    log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
                     result.Add(buffDp);
                 }
             }
@@ -238,40 +245,7 @@ namespace Cognite.OpcUa.Config
             return result.ToArray();
         }
 
-        public class DefaultFilterTypeInspector : TypeInspectorSkeleton
-        {
-            private readonly ITypeInspector innerTypeDescriptor;
-            public DefaultFilterTypeInspector(ITypeInspector innerTypeDescriptor)
-            {
-                this.innerTypeDescriptor = innerTypeDescriptor;
-            }
-
-            public override IEnumerable<IPropertyDescriptor> GetProperties(Type type, object container)
-            {
-                var props = innerTypeDescriptor.GetProperties(type, container);
-
-                var dfs = Activator.CreateInstance(type);
-
-                props = props.Where(p =>
-                {
-                    var prop = type.GetProperty(p.Name);
-                    var df = prop?.GetValue(dfs);
-                    var val = prop?.GetValue(container);
-
-                    // Some config objects have private properties, since this is a write-back of config we shouldn't save those
-                    if (!p.CanWrite) return false;
-                    // Some custom properties are kept on the config object for convenience
-                    if (p.Name == "ConfigDir") return false;
-                    // Compare the value of each property with its default, and check for empty arrays, don't save those.
-                    // This creates minimal config files
-                    if (val != null && (val is IEnumerable list) && !list.GetEnumerator().MoveNext()) return false;
-
-                    return df != null && !df.Equals(val) || df == null && val != null;
-                });
-                    
-                return props;
-            }
-        }
+        
         /// <summary>
         /// Intelligently converts an instance of FullConfig to a string config file. Only writing entries that differ from the default values.
         /// </summary>
@@ -286,11 +260,54 @@ namespace Cognite.OpcUa.Config
                 .Build();
 
             var clearEmptyRegex = new Regex("^\\s*\\w*:\\s*({}|\\[\\])\\s*\n", RegexOptions.Multiline);
+            var doubleIndentRegex = new Regex("(^ +)", RegexOptions.Multiline);
+            var fixListIndentRegex = new Regex("(^ +-)", RegexOptions.Multiline);
+
+            var raw = serializer.Serialize(config);
+            raw = clearEmptyRegex.Replace(raw, "");
+            raw = doubleIndentRegex.Replace(raw, "$1$1");
+            raw = fixListIndentRegex.Replace(raw, "  $1");
 
             var configText = "# This suggested configuration was generated by the ConfigurationTool.\n\n"
-                             + clearEmptyRegex.Replace(serializer.Serialize(config), "");
+                             + raw;
 
             return configText;
+        }
+    }
+    public class DefaultFilterTypeInspector : TypeInspectorSkeleton
+    {
+        private readonly ITypeInspector innerTypeDescriptor;
+        public DefaultFilterTypeInspector(ITypeInspector innerTypeDescriptor)
+        {
+            this.innerTypeDescriptor = innerTypeDescriptor;
+        }
+
+        public override IEnumerable<IPropertyDescriptor> GetProperties(Type type, object container)
+        {
+            var props = innerTypeDescriptor.GetProperties(type, container);
+
+            var dfs = Activator.CreateInstance(type);
+
+            props = props.Where(p =>
+            {
+                var prop = type.GetProperty(p.Name);
+                var df = prop?.GetValue(dfs);
+                var val = prop?.GetValue(container);
+
+                // Some config objects have private properties, since this is a write-back of config we shouldn't save those
+                if (!p.CanWrite) return false;
+                // Some custom properties are kept on the config object for convenience
+                if (p.Name == "ConfigDir") return false;
+                // A few properties are kept in order to encourage the user to define them
+                if (p.Name == "IdPrefix") return true;
+                // Compare the value of each property with its default, and check for empty arrays, don't save those.
+                // This creates minimal config files
+                if (val != null && (val is IEnumerable list) && !list.GetEnumerator().MoveNext()) return false;
+
+                return df != null && !df.Equals(val) || df == null && val != null;
+            });
+
+            return props;
         }
     }
 }

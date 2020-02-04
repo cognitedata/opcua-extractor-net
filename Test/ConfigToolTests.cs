@@ -30,6 +30,8 @@ namespace Test
     [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
     public class ConfigToolTests : MakeConsoleWork
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolTests));
+
         public ConfigToolTests(ITestOutputHelper output) : base(output) { }
 
 
@@ -44,14 +46,14 @@ namespace Test
         [Theory]
         public async Task DoConfigToolTest(ServerName server)
         {
-            Log.Information("Loading config from config.config - tool - test.yml");
+            log.Information("Loading config from config.config - tool - test.yml");
 
-            var fullConfig = Utils.GetConfig("config.config-tool-test.yml");
-            var baseConfig = Utils.GetConfig("config.config-tool-test.yml");
+            var fullConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
+            var baseConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester._hostNames[server];
-            baseConfig.Source.EndpointURL = ExtractorTester._hostNames[server];
+            fullConfig.Source.EndpointURL = ExtractorTester.hostNames[server];
+            baseConfig.Source.EndpointURL = ExtractorTester.hostNames[server];
 
             var explorer = new UAServerExplorer(fullConfig, baseConfig);
 
@@ -124,10 +126,10 @@ namespace Test
         [Fact]
         public async Task TestExtractorRuntime()
         {
-            var fullConfig = Utils.GetConfig("config.test.yml");
+            var fullConfig = ExtractorUtils.GetConfig("config.test.yml");
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester._hostNames[ServerName.Basic];
+            fullConfig.Source.EndpointURL = ExtractorTester.hostNames[ServerName.Basic];
             fullConfig.Pushers = new List<PusherConfig>();
 
             var runTime = new ExtractorRuntime(fullConfig);
@@ -149,7 +151,7 @@ namespace Test
             }
             catch (Exception ex)
             {
-                if (!Common.TestRunResult(ex)) throw;
+                if (!CommonTestUtils.TestRunResult(ex)) throw;
             }
         }
         [Trait("Server", "basic")]
@@ -158,13 +160,13 @@ namespace Test
         [Fact]
         public async Task TestConfigToolRuntime()
         {
-            var fullConfig = Utils.GetConfig("config.config-tool-test.yml");
-            var baseConfig = Utils.GetConfig("config.config-tool-test.yml");
+            var fullConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
+            var baseConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
 
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester._hostNames[ServerName.Basic];
-            baseConfig.Source.EndpointURL = ExtractorTester._hostNames[ServerName.Basic];
+            fullConfig.Source.EndpointURL = ExtractorTester.hostNames[ServerName.Basic];
+            baseConfig.Source.EndpointURL = ExtractorTester.hostNames[ServerName.Basic];
 
             var runTime = new ConfigToolRuntime(fullConfig, baseConfig, "config.config-tool-output.yml");
 
@@ -178,7 +180,7 @@ namespace Test
             }
             catch (Exception ex)
             {
-                if (!Common.TestRunResult(ex)) throw;
+                if (!CommonTestUtils.TestRunResult(ex)) throw;
             }
         }
     }

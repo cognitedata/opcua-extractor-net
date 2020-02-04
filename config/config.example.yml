@@ -21,8 +21,11 @@ Source:
     Password:
     # Use secured connection
     Secure: false
-    # If true, force restart the uaclient on disconnect. Required for some servers
+    # If true, force restart the extractor on disconnect. Required for some servers
     ForceRestart: false
+    # Completely exit the extractor on failure, instead of doing an internal restart. Internal reset should re-initialize everything relevant,
+    # but this can be set to do restart with some external tool instead.
+    ExitOnFailure: false
     # Max sizes of various requests to OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
     # Maximum number of results per browse or browseNext operation
     BrowseChunk: 1000
@@ -152,21 +155,18 @@ Logging:
     StackdriverCredentials:
     # Name to be assigned to the Stackdriver log.
     StackdriverLogName:
-
+    
 Metrics:
-    # Leave host or job blank to disable metrics
-    # URL of prometheus host, ex my.prometheus.server gives final endpoint my.prometheus.server/metrics/jobs/myjob, 
-    URL:
-    # Job tag value
-    Job:
-    # Prometheus username
-    Username:
-    # Prometheus password
-    Password:
-    # Time in ms between each push
-    PushInterval: 1000
-    # Instance tag for prometheus
-    Instance:
+    # Start a metrics server in the extractor for Prometheus scrape
+    Server:
+        Host:
+        Port:
+    # Multiple Prometheus PushGateway destinations:
+    PushGateways:
+        - Host:
+          Job:
+          Username:
+          Password: 
 
 Extraction:
     # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.

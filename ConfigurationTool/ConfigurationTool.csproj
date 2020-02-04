@@ -6,6 +6,12 @@
 	  <AssemblyName>ConfigurationTool</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove=".editorconfig" />
+  </ItemGroup>
+  <ItemGroup>
+    <AdditionalFiles Include=".editorconfig" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Extractor\Extractor.csproj" />
   </ItemGroup>
 </Project>

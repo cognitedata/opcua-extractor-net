@@ -3,6 +3,7 @@ Microsoft.Extensions.Http
 Newtonsoft.Json
 OPCFoundation.NetStandard.Opc.Ua
 Prometheus.Client.MetricPusher
+Prometheus.Client.MetricServer
 YamlDotNet
 Microsoft.Extensions.Http.Polly
 Polly
@@ -15,3 +16,4 @@ Serilog.Formatting.Compact
 Serilog.Sinks.Console
 Serilog.Sinks.Async
 Serilog.Sinks.File
+Microsoft.CodeAnalysis.FxCopAnalyzers

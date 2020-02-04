@@ -23,6 +23,7 @@ namespace Cognite.OpcUa
 
         public static ILogger Configure(LoggerConfig config)
         {
+            if (config == null) throw new ArgumentNullException(nameof(config));
             bool logToConsole = Enum.TryParse(config.ConsoleLevel, true, out LogEventLevel consoleLevel);
             bool logToFile = Enum.TryParse(config.FileLevel, true, out LogEventLevel fileLevel);
             bool logToStackdriver = config.StackdriverCredentials != null;
@@ -30,9 +31,13 @@ namespace Cognite.OpcUa
             var logConfig = new LoggerConfiguration();
             logConfig.MinimumLevel.Verbose();
 
+            const string outputTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}";
+            const string outputTemplateDebug = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}";
+
             if (logToConsole)
             {
-                logConfig.WriteTo.Console(consoleLevel);
+                logConfig.WriteTo.Console(consoleLevel, consoleLevel <= LogEventLevel.Debug
+                    ? outputTemplateDebug : outputTemplate);
             }
 
             if (logToFile && config.LogFolder != null)
@@ -42,7 +47,9 @@ namespace Cognite.OpcUa
                     path,
                     rollingInterval: RollingInterval.Day,
                     retainedFileCountLimit: config.RetentionLimit,
-                    restrictedToMinimumLevel: fileLevel));
+                    restrictedToMinimumLevel: fileLevel,
+                    outputTemplate: consoleLevel <= LogEventLevel.Debug
+                        ? outputTemplateDebug : outputTemplate));
             }
 
             if (logToStackdriver)
@@ -72,6 +79,8 @@ namespace Cognite.OpcUa
             return logger;
 
         }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1812:Uninstantiated internal class",
+            Justification = "Late initialization")]
         private class GpcCredentials
         {
             [JsonProperty("project_id")]

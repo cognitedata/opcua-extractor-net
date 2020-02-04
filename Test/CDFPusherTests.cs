@@ -31,6 +31,8 @@ namespace Test
     [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
     public class CDFPusherTests : MakeConsoleWork
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusherTests));
+
         public CDFPusherTests(ITestOutputHelper output) : base(output) { }
         [Trait("Server", "basic+full")]
         [Trait("Target", "CDFPusher")]
@@ -46,7 +48,7 @@ namespace Test
         [InlineData(CDFMockHandler.MockMode.FailAsset, ServerName.Full)]
         public async Task TestBasicPushing(CDFMockHandler.MockMode mode, ServerName serverType)
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = serverType,
                 QuitAfterMap = true,
@@ -54,14 +56,14 @@ namespace Test
             });
             tester.Config.Extraction.AllowStringVariables = false;
             await tester.ClearPersistentData();
-            Common.ResetTestMetrics();
+            CommonTestUtils.ResetTestMetrics();
 
-            Log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
+            log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
             tester.StartExtractor();
-            await tester.TerminateRunTask(ex => mode == CDFMockHandler.MockMode.FailAsset || Common.TestRunResult(ex));
+            await tester.TerminateRunTask(ex => mode == CDFMockHandler.MockMode.FailAsset || CommonTestUtils.TestRunResult(ex));
 
-            Assert.True(Common.VerifySuccessMetrics());
-            Assert.Equal(mode == CDFMockHandler.MockMode.FailAsset ? 1 : 0, (int)Common.GetMetricValue("opcua_node_ensure_failures"));
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
+            Assert.Equal(mode == CDFMockHandler.MockMode.FailAsset ? 1 : 0, (int)CommonTestUtils.GetMetricValue("opcua_node_ensure_failures"));
 
             if (mode == CDFMockHandler.MockMode.None)
             {
@@ -88,7 +90,7 @@ namespace Test
         [Fact]
         public async Task TestAutoBuffering()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 StoreDatapoints = true,
                 BufferDir = "./"
@@ -111,10 +113,10 @@ namespace Test
             await tester.TerminateRunTask();
 
             tester.TestContinuity("gp.efg:i=10");
-            Assert.True(Common.VerifySuccessMetrics());
-            Assert.Equal(2, (int)Common.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(4, (int)Common.GetMetricValue("opcua_tracked_timeseries"));
-            Assert.NotEqual(0, (int)Common.GetMetricValue("opcua_datapoint_push_failures_cdf"));
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
+            Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_cdf"));
         }
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
@@ -122,7 +124,7 @@ namespace Test
         [Fact]
         public async Task TestDebugMode()
         {
-            using var tester = new ExtractorTester(new TestParameters());
+            using var tester = new ExtractorTester(new ExtractorTestParameters());
             await tester.ClearPersistentData();
 
             tester.CogniteConfig.Debug = true;
@@ -135,7 +137,7 @@ namespace Test
             await tester.TerminateRunTask();
 
             Assert.Equal(0, tester.Handler.RequestCount);
-            Assert.True(Common.VerifySuccessMetrics());
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
         }
         [Trait("Server", "array")]
         [Trait("Target", "CDFPusher")]
@@ -143,7 +145,7 @@ namespace Test
         [Fact]
         public async Task TestArrayData()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Array,
                 StoreDatapoints = true
@@ -172,9 +174,9 @@ namespace Test
 
             tester.TestContinuity("gp.efg:i=2[2]");
 
-            Assert.True(Common.VerifySuccessMetrics());
-            Assert.Equal(4, (int)Common.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(7, (int)Common.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
+            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(7, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
         }
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
@@ -182,14 +184,14 @@ namespace Test
         [Fact]
         public async Task TestExtractorRestart()
         {
-            using var tester = new ExtractorTester(new TestParameters());
+            using var tester = new ExtractorTester(new ExtractorTestParameters());
             await tester.ClearPersistentData();
             tester.StartExtractor();
 
             await tester.WaitForCondition(() => tester.Extractor.Pushing, 20,
                 () => "Expected extractor to start pushing initially");
 
-            tester.Extractor.RestartExtractor(tester.Source.Token);
+            tester.Extractor.RestartExtractor();
 
             await Task.Delay(500);
 
@@ -219,7 +221,7 @@ namespace Test
 
                 dict["id" + i] = points;
             }
-            var results = Utils.ChunkDictOfLists(dict, 100000, 10000);
+            var results = ExtractorUtils.ChunkDictOfLists(dict, 100000, 10000);
             var min = results.Min(dct => dct.Values.Min(val => val.Count()));
             Assert.True(min > 0);
             var max = results.Max(dct => dct.Values.Sum(val => val.Count()));
@@ -250,12 +252,12 @@ namespace Test
         [Trait("Test", "connectiontest")]
         public async Task TestConnectionTest()
         {
-            var fullConfig = Common.BuildConfig("basic", 9);
+            var fullConfig = CommonTestUtils.BuildConfig("basic", 9);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             Logger.Configure(fullConfig.Logging);
 
             var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            var pusher = new CDFPusher(Common.GetDummyProvider(handler), config);
+            using var pusher = new CDFPusher(CommonTestUtils.GetDummyProvider(handler), config);
             var res = await pusher.TestConnection(CancellationToken.None);
             Assert.True(res);
         }
@@ -265,9 +267,10 @@ namespace Test
         [Trait("Test", "continuity")]
         public async Task TestDataContinuity()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                StoreDatapoints = true
+                StoreDatapoints = true,
+                LogLevel = "debug"
             });
             await tester.ClearPersistentData();
 
@@ -285,9 +288,9 @@ namespace Test
 
             tester.TestContinuity("gp.efg:i=10");
 
-            Assert.True(Common.VerifySuccessMetrics());
-            Assert.Equal(2, (int)Common.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(4, (int)Common.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
+            Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
         }
 
         [Fact]
@@ -297,17 +300,17 @@ namespace Test
         // Multiple pushers that fetch properties does some magic to avoid fetching data twice
         public async Task TestMultipleCDFPushers()
         {
-            Common.ResetTestMetrics();
-            var fullConfig = Common.BuildConfig("basic", 16);
+            CommonTestUtils.ResetTestMetrics();
+            var fullConfig = CommonTestUtils.BuildConfig("basic", 16);
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             fullConfig.Logging.ConsoleLevel = "debug";
             Logger.Configure(fullConfig.Logging);
 
-            var client = new UAClient(fullConfig);
+            using var client = new UAClient(fullConfig);
             var handler1 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
             var handler2 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            var pusher1 = new CDFPusher(Common.GetDummyProvider(handler1), config);
-            var pusher2 = new CDFPusher(Common.GetDummyProvider(handler2), config);
+            var pusher1 = new CDFPusher(CommonTestUtils.GetDummyProvider(handler1), config);
+            var pusher2 = new CDFPusher(CommonTestUtils.GetDummyProvider(handler2), config);
 
             var extractor = new Extractor(fullConfig, new List<IPusher> { pusher1, pusher2 }, client);
             try
@@ -316,7 +319,7 @@ namespace Test
             }
             catch (Exception e)
             {
-                if (!Common.TestRunResult(e)) throw;
+                if (!CommonTestUtils.TestRunResult(e)) throw;
             }
             extractor.Close();
             Assert.DoesNotContain(handler1.timeseries.Values, ts => ts.name == "MyString");
@@ -342,11 +345,11 @@ namespace Test
                 && ts.metadata["TS property 1"] == "test"
                 && ts.metadata["TS property 2"] == "123.2");
             // Note that each pusher counts on the same metrics, so we would expect double values here.
-            Assert.True(Common.VerifySuccessMetrics());
-            Assert.Equal(4, (int)Common.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(8, (int)Common.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
+            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(8, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
             // 1 for root, 1 for MyObject, 1 for asset/timeseries properties
-            Assert.Equal(3, (int)Common.GetMetricValue("opcua_browse_operations"));
+            Assert.Equal(3, (int)CommonTestUtils.GetMetricValue("opcua_browse_operations"));
         }
         [Fact]
         [Trait("Server", "basic")]
@@ -354,7 +357,7 @@ namespace Test
         [Trait("Test", "nodemap")]
         public async Task TestNodeMap()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 StoreDatapoints = true
             });
@@ -384,7 +387,7 @@ namespace Test
         {
             // It is awfully difficult to test anything without a UAClient to use for creating unique-ids etc, unfortunately
             // Perhaps in the future a final rewrite to make the pusher not use NodeId would be in order, it is not that easy, however.
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 LogLevel = "verbose",
                 QuitAfterMap = true
@@ -437,7 +440,7 @@ namespace Test
         [Trait("Test", "badpoints")]
         public async Task TestBadPoints()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 LogLevel = "verbose",
                 QuitAfterMap = true
@@ -507,7 +510,7 @@ namespace Test
         public async Task TestBackfill()
         {
             long startTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 LogLevel = "debug",
                 QuitAfterMap = false,
@@ -530,9 +533,9 @@ namespace Test
             await tester.TerminateRunTask();
 
             tester.TestContinuity("gp.efg:i=10");
-            Assert.True(Common.TestMetricValue("opcua_frontfill_data_count", 1));
-            Assert.True(Common.GetMetricValue("opcua_backfill_data_count") >= 1);
-            Assert.True(Common.VerifySuccessMetrics());
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
+            Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Contains(tester.Handler.datapoints["gp.efg:i=10"].Item1,pt => pt.Timestamp < startTime);
         }
         [Fact]
@@ -542,7 +545,7 @@ namespace Test
         public async Task TestBackfillRestart()
         {
             long startTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 LogLevel = "debug",
                 QuitAfterMap = false,
@@ -558,17 +561,18 @@ namespace Test
                     tester.Extractor.GetNodeState("gp.efg:i=10") != null
                     && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone
                     && tester.Extractor.GetNodeState("gp.efg:i=10").IsStreaming
-                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=10"), 20,
+                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=10")
+                    && tester.Handler.datapoints["gp.efg:i=10"].Item1.Any(pt => pt.Timestamp < startTime), 20,
                 "Expected integer datapoint to finish backfill and frontfill");
 
             tester.TestContinuity("gp.efg:i=10");
-            Assert.True(Common.TestMetricValue("opcua_frontfill_data_count", 1));
-            Assert.True(Common.GetMetricValue("opcua_backfill_data_count") >= 1);
-            Assert.True(Common.VerifySuccessMetrics());
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
+            Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Contains(tester.Handler.datapoints["gp.efg:i=10"].Item1, pt => pt.Timestamp < startTime);
 
-            Common.ResetTestMetrics();
-            tester.Extractor.RestartExtractor(tester.Source.Token);
+            CommonTestUtils.ResetTestMetrics();
+            tester.Extractor.RestartExtractor();
 
             await Task.Delay(500);
 
@@ -580,8 +584,8 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.True(Common.TestMetricValue("opcua_frontfill_data_count", 1));
-            Assert.True(Common.TestMetricValue("opcua_backfill_data_count", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 1));
         }
     }
 }

@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
 using Xunit;
@@ -34,7 +35,7 @@ namespace Test
         [Fact]
         public async Task TestConnectionFailure()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 QuitAfterMap = true
             });
@@ -54,10 +55,10 @@ namespace Test
                 }
                 else if (e is AggregateException aex)
                 {
-                    silent = Utils.GetRootSilentException(aex);
+                    silent = ExtractorUtils.GetRootExceptionOfType<SilentServiceException>(aex);
                 }
 
-                return silent != null && silent.Operation == Utils.SourceOp.SelectEndpoint;
+                return silent != null && silent.Operation == ExtractorUtils.SourceOp.SelectEndpoint;
             });
         }
         [Trait("Server", "basic")]
@@ -68,7 +69,7 @@ namespace Test
         [InlineData(3, 0)]
         public async Task TestHistoryReadGranularity(int expectedReads, int granularity)
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 HistoryGranularity = granularity
             });
@@ -78,10 +79,81 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => (int) Common.GetMetricValue("opcua_history_reads") == expectedReads, 20,
-                () => $"Expected history to be read {expectedReads} times, got {Common.GetMetricValue("opcua_history_reads")}");
+            await tester.WaitForCondition(() => (int) CommonTestUtils.GetMetricValue("opcua_history_reads") == expectedReads, 20,
+                () => $"Expected history to be read {expectedReads} times, got {CommonTestUtils.GetMetricValue("opcua_history_reads")}");
 
             await tester.TerminateRunTask();
+        }
+        [Trait("Server", "basic")]
+        [Trait("Target", "UAClient")]
+        [Trait("Test", "reconnect")]
+        [Fact]
+        public async Task TestServerReconnect()
+        {
+            Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux));
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Proxy
+            });
+            tester.Config.History.Enabled = false;
+            using var process = CommonTestUtils.GetProxyProcess();
+            process.Start();
+            await tester.ClearPersistentData();
+
+            await Task.Delay(500);
+
+            tester.StartExtractor();
+
+            await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_extractor_starting", 0)
+                                                && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
+                "Expected the extractor to finish startup");
+
+            await Task.Delay(1000);
+            CommonTestUtils.StopProxyProcess();
+
+            await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0), 20,
+                "Expected client to disconnect");
+
+            process.Start();
+
+            await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
+                "Excpected client to reconnect");
+
+            await tester.TerminateRunTask();
+            CommonTestUtils.StopProxyProcess();
+        }
+        [Trait("Server", "basic")]
+        [Trait("Target", "UAClient")]
+        [Trait("Test", "disconnect")]
+        [Fact]
+        public async Task TestServerDisconnect()
+        {
+            Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux));
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Proxy
+            });
+            using var process = CommonTestUtils.GetProxyProcess();
+            process.Start();
+            tester.Config.Source.ForceRestart = true;
+            tester.Config.History.Enabled = false;
+
+            await tester.ClearPersistentData();
+            await Task.Delay(500);
+
+            tester.StartExtractor();
+
+            await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_extractor_starting", 0)
+                                                && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
+                "Expected the extractor to finish startup");
+            await Task.Delay(1000);
+            CommonTestUtils.StopProxyProcess();
+
+
+            await tester.WaitForCondition(() => tester.RunTask.IsCompleted, 20, "Expected runtask to terminate");
+
+            await tester.TerminateRunTask(ex =>
+                ex is ExtractorFailureException || ex is AggregateException aex && aex.InnerException is ExtractorFailureException);
         }
     }
 }

@@ -9,9 +9,9 @@ nuget xunit.runner.visualstudio
 nuget Microsoft.Extensions.Http.Polly
 nuget OPCFoundation.NetStandard.Opc.Ua
 nuget Prometheus.Client.MetricPusher
+nuget Prometheus.Client.MetricServer
 nuget YamlDotNet
 nuget CogniteSdk
-nuget Oryx 0.16.1
 nuget AdysTech.InfluxDB.Client.Net.Core
 nuget Serilog
 nuget Serilog.Sinks.GoogleCloudLogging
@@ -19,3 +19,4 @@ nuget Serilog.Formatting.Compact
 nuget Serilog.Sinks.Console
 nuget Serilog.Sinks.Async
 nuget Serilog.Sinks.File
+nuget Microsoft.CodeAnalysis.FxCopAnalyzers

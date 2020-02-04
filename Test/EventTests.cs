@@ -17,9 +17,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Microsoft.FSharp.Core;
 using Serilog;
 using Xunit;
 using Xunit.Abstractions;
@@ -29,6 +31,8 @@ namespace Test
     [CollectionDefinition("Event_tests", DisableParallelization = true)]
     public class EventTests : MakeConsoleWork
     {
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(EventTests));
+
         public EventTests(ITestOutputHelper output) : base(output) { }
         [Trait("Server", "events")]
         [Trait("Target", "CDFPusher")]
@@ -36,7 +40,7 @@ namespace Test
         [Fact]
         public async Task TestEventServer()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
                 ConfigName = ConfigName.Events
@@ -53,7 +57,7 @@ namespace Test
 
             var events = tester.Handler.events.Values.ToList();
             Assert.True(events.Any());
-            Assert.Contains(events, ev => ev.description.StartsWith("prop "));
+            Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
             Assert.Contains(events, ev => ev.description == "prop 0");
             Assert.Contains(events, ev => ev.description == "basicPass 0");
             Assert.Contains(events, ev => ev.description == "basicPassSource 0");
@@ -63,12 +67,12 @@ namespace Test
             await tester.WaitForCondition(() =>
             {
                 events = tester.Handler.events.Values.ToList();
-                return events.Any(ev => ev.description.StartsWith("propOther "))
-                       && events.Any(ev => ev.description.StartsWith("basicPass "))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource "))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
-                       && events.Any(ev => ev.description.StartsWith("basicVarSource "))
-                       && events.Any(ev => ev.description.StartsWith("mappedType "));
+                return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture));
             }, 40, "Expected remaining event subscriptions to trigger");
 
             await tester.TerminateRunTask();
@@ -86,7 +90,7 @@ namespace Test
         [Fact]
         public async Task TestEventServerRestart()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
                 ConfigName = ConfigName.Events
@@ -101,8 +105,8 @@ namespace Test
                 40, "Expected history read to finish");
 
             int lastCount = tester.Handler.events.Count;
-            Assert.Equal(0, (int)Common.GetMetricValue("opcua_event_push_failures"));
-            tester.Extractor.RestartExtractor(tester.Source.Token);
+            Assert.Equal(0, (int)CommonTestUtils.GetMetricValue("opcua_event_push_failures"));
+            tester.Extractor.RestartExtractor();
             await Task.Delay(500);
 
             await tester.WaitForCondition(() =>
@@ -111,10 +115,10 @@ namespace Test
                     && tester.Handler.events.Count > lastCount,
                 40, "Expected number of events to be increasing");
 
-            Assert.True((int)Common.GetMetricValue("opcua_duplicated_events") > 0);
+            Assert.True((int)CommonTestUtils.GetMetricValue("opcua_duplicated_events") > 0);
             var events = tester.Handler.events.Values.ToList();
             Assert.True(events.Any());
-            Assert.Contains(events, ev => ev.description.StartsWith("prop "));
+            Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
             Assert.Contains(events, ev => ev.description == "prop 0");
             Assert.Contains(events, ev => ev.description == "basicPass 0");
             Assert.Contains(events, ev => ev.description == "basicPassSource 0");
@@ -124,12 +128,12 @@ namespace Test
             await tester.WaitForCondition(() =>
             {
                 events = tester.Handler.events.Values.ToList();
-                return events.Any(ev => ev.description.StartsWith("propOther "))
-                       && events.Any(ev => ev.description.StartsWith("basicPass "))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource "))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
-                       && events.Any(ev => ev.description.StartsWith("basicVarSource "))
-                       && events.Any(ev => ev.description.StartsWith("mappedType "));
+                return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture));
             }, 40, "Expected remaining event subscriptions to trigger");
 
             await tester.TerminateRunTask();
@@ -147,11 +151,11 @@ namespace Test
         /// <param name="ev"></param>
         private static void TestEvent(EventDummy ev, CDFMockHandler factory)
         {
-            Assert.False(ev.description.StartsWith("propOther2 "));
-            Assert.False(ev.description.StartsWith("basicBlock "));
-            Assert.False(ev.description.StartsWith("basicNoVarSource "));
-            Assert.False(ev.description.StartsWith("basicExcludeSource "));
-            if (ev.description.StartsWith("prop "))
+            Assert.False(ev.description.StartsWith("propOther2 ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basicBlock ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basicNoVarSource ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basicExcludeSource ", StringComparison.InvariantCulture));
+            if (ev.description.StartsWith("prop ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata.ContainsKey("PropertyString") && !string.IsNullOrEmpty(ev.metadata["PropertyString"]));
                 Assert.False(ev.metadata.ContainsKey("PropertyNum"));
@@ -159,7 +163,7 @@ namespace Test
                 Assert.Equal("gp.efg:i=12", ev.type);
                 Assert.True(EventSourceIs(ev, factory, "MyObject", false));
             }
-            else if (ev.description.StartsWith("propOther "))
+            else if (ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
             {
                 // This node is not historizing, so the first event should be lost
                 Assert.NotEqual("propOther 0", ev.description);
@@ -167,7 +171,7 @@ namespace Test
                 Assert.False(ev.metadata.ContainsKey("PropertyNum"));
                 Assert.True(EventSourceIs(ev, factory, "MyObject", false));
             }
-            else if (ev.description.StartsWith("basicPass "))
+            else if (ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
@@ -175,27 +179,26 @@ namespace Test
                 Assert.True(EventSourceIs(ev, factory, "MyObject", false));
             }
             // both source1 and 2
-            else if (ev.description.StartsWith("basicPassSource"))
+            else if (ev.description.StartsWith("basicPassSource", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));
                 Assert.True(EventSourceIs(ev, factory, "MyObject2", false));
-                if (ev.description.StartsWith("basicPassSource2 "))
+                if (ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
                 {
                     Assert.NotEqual("basicPassSource2 0", ev.description);
                 }
             }
-            else if (ev.description.StartsWith("basicVarSource "))
+            else if (ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
             {
-                Log.Information("Test event with extid {externalId}, source {source}", ev.externalId, ev.source);
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));
                 Assert.True(EventSourceIs(ev, factory, "MyObject", false));
                 Assert.True(EventSourceIs(ev, factory, "MyVariable", true));
             }
-            else if (ev.description.StartsWith("mappedType "))
+            else if (ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("TypeProp"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));
@@ -222,7 +225,7 @@ namespace Test
         [Trait("Test", "audit")]
         public async Task TestAuditEvents()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Audit
             });
@@ -237,12 +240,12 @@ namespace Test
                 20, "Expected some assets and timeseries to be discovered");
 
             int lastAssetBefore = tester.Handler.assets.Values
-                .Where(asset => asset.name.StartsWith("Add"))
-                .Select(asset => int.Parse(asset.name.Split(' ')[1])).Max();
+                .Where(asset => asset.name.StartsWith("Add", StringComparison.InvariantCulture))
+                .Select(asset => int.Parse(asset.name.Split(' ')[1], CultureInfo.InvariantCulture)).Max();
 
             int lastTimeseriesBefore = tester.Handler.timeseries.Values
-                .Where(timeseries => timeseries.name.StartsWith("Add"))
-                .Select(timeseries => int.Parse(timeseries.name.Split(' ')[1])).Max();
+                .Where(timeseries => timeseries.name.StartsWith("Add", StringComparison.InvariantCulture))
+                .Select(timeseries => int.Parse(timeseries.name.Split(' ')[1], CultureInfo.InvariantCulture)).Max();
 
             int assetCount = tester.Handler.assets.Count;
             int tsCount = tester.Handler.timeseries.Count;
@@ -269,7 +272,7 @@ namespace Test
         [Trait("Test", "influxeventsbuffering")]
         public async Task TestEventsInfluxBuffering()
         {
-            var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Events,
                 ServerName = ServerName.Events,
@@ -278,9 +281,9 @@ namespace Test
                 LogLevel = "debug"
             });
             await tester.ClearPersistentData();
+            tester.Handler.AllowEvents = false;
             tester.StartExtractor();
 
-            tester.Handler.AllowEvents = false;
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
                 20, "Expected failurebuffer to contain some events");
 
@@ -295,12 +298,12 @@ namespace Test
             await tester.WaitForCondition(() =>
             {
                 var events = tester.Handler.events.Values.ToList();
-                return events.Any(ev => ev.description.StartsWith("propOther "))
-                       && events.Any(ev => ev.description.StartsWith("basicPass "))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource "))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
-                       && events.Any(ev => ev.description.StartsWith("basicVarSource "))
-                       && events.Any(ev => ev.description.StartsWith("mappedType "))
+                return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description == "prop 0")
                        && events.Any(ev => ev.description == "basicPass 0")
                        && events.Any(ev => ev.description == "basicPassSource 0")
@@ -324,7 +327,7 @@ namespace Test
         [Trait("Test", "cdfeventsbackfill")]
         public async Task TestCDFEventsBackfill()
         {
-            using var tester = new ExtractorTester(new TestParameters
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
                 ConfigName = ConfigName.Events,
@@ -345,7 +348,7 @@ namespace Test
             var events = tester.Handler.events.Values.ToList();
             Assert.True(events.Any());
 
-            Assert.Contains(events, ev => ev.description.StartsWith("prop "));
+            Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
             Assert.Contains(events, ev => ev.description == "prop 0");
             Assert.Contains(events, ev => ev.description == "basicPass 0");
             Assert.Contains(events, ev => ev.description == "basicPassSource 0");
@@ -355,12 +358,12 @@ namespace Test
             await tester.WaitForCondition(() =>
             {
                 events = tester.Handler.events.Values.ToList();
-                return events.Any(ev => ev.description.StartsWith("propOther "))
-                       && events.Any(ev => ev.description.StartsWith("basicPass "))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource "))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
-                       && events.Any(ev => ev.description.StartsWith("basicVarSource "))
-                       && events.Any(ev => ev.description.StartsWith("mappedType "));
+                return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture));
             }, 40, "Expected remaining event subscriptions to trigger");
 
             await tester.TerminateRunTask();
@@ -372,9 +375,9 @@ namespace Test
                 TestEvent(ev, tester.Handler);
             }
 
-            Assert.True(Common.TestMetricValue("opcua_frontfill_events_count", 1));
-            Assert.True(Common.GetMetricValue("opcua_backfill_events_count") >= 1);
-            Assert.True(Common.VerifySuccessMetrics());
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
+            Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
         }
         [Fact]
         [Trait("Server", "events")]
@@ -382,8 +385,8 @@ namespace Test
         [Trait("Test", "multipushereventbackfill")]
         public async Task TestMultiPusherBackfillRestart()
         {
-            var influxCfg = Utils.GetConfig("config.influxtest.yml");
-            using var tester = new ExtractorTester(new TestParameters
+            var influxCfg = ExtractorUtils.GetConfig("config.influxtest.yml");
+            using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
                 ConfigName = ConfigName.Events,
@@ -413,20 +416,20 @@ namespace Test
             await tester.WaitForCondition(() =>
             {
                 var events = tester.Handler.events.Values.ToList();
-                return events.Any(ev => ev.description.StartsWith("propOther "))
-                       && events.Any(ev => ev.description.StartsWith("basicPass "))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource "))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 "))
-                       && events.Any(ev => ev.description.StartsWith("basicVarSource "))
-                       && events.Any(ev => ev.description.StartsWith("mappedType "));
+                return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture));
             }, 20, "Expected remaining event subscriptions to trigger");
 
-            Assert.True(Common.TestMetricValue("opcua_frontfill_events_count", 1));
-            Assert.True(Common.GetMetricValue("opcua_backfill_events_count") >= 1);
-            Assert.True(Common.VerifySuccessMetrics());
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
+            Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
 
-            Common.ResetTestMetrics();
-            tester.Extractor.RestartExtractor(tester.Source.Token);
+            CommonTestUtils.ResetTestMetrics();
+            tester.Extractor.RestartExtractor();
 
             await Task.Delay(500);
 
@@ -435,8 +438,8 @@ namespace Test
                     && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
                 20, "Expected backfill to finish");
 
-            Assert.True(Common.TestMetricValue("opcua_frontfill_events_count", 1));
-            Assert.True(Common.TestMetricValue("opcua_backfill_events_count", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 1));
 
 
         }

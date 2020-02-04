@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace Cognite.OpcUa
 {
-    public class Version
+    public static class Version
     {
         private static string Read(string property)
         {

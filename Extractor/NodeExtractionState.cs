@@ -1,6 +1,7 @@
 ﻿using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 
 namespace Cognite.OpcUa
@@ -34,7 +35,7 @@ namespace Cognite.OpcUa
         /// Each entry in the array defines the fixed size of the given dimension of the variable.
         /// The extractor generally requires fixed dimensions in order to push arrays to destination systems.
         /// </summary>
-        public int[] ArrayDimensions { get; }
+        public Collection<int> ArrayDimensions { get; }
         public string DisplayName { get; }
         /// <summary>
         /// Earliest of the latest timestamps and latest of the earliest timestamps from destination systems.
@@ -51,6 +52,7 @@ namespace Cognite.OpcUa
         /// <param name="variable">Variable to be used as base</param>
         public NodeExtractionState(BufferedVariable variable)
         {
+            if (variable == null) throw new ArgumentNullException(nameof(variable));
             ExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
             Id = variable.Id;
             Historizing = variable.Historizing;
@@ -145,7 +147,7 @@ namespace Cognite.OpcUa
         /// <returns>The contents of the buffer once called.</returns>
         public IEnumerable<IEnumerable<BufferedDataPoint>> FlushBuffer()
         {
-            if (!IsStreaming) throw new Exception("Flush non-streaming buffer");
+            if (!IsStreaming) throw new InvalidOperationException("Flush non-streaming buffer");
             if (!buffer.Any()) return new List<BufferedDataPoint[]>();
             lock (rangeMutex)
             {
@@ -235,6 +237,7 @@ namespace Cognite.OpcUa
         /// <param name="points">Event received for current stream iteration</param>
         public void UpdateFromStream(BufferedEvent evt)
         {
+            if (evt == null) return;
             lock (rangeMutex)
             {
                 if (evt.Time > ExtractedRange.End && evt.Time > ExtractedRange.Start && IsStreaming)
