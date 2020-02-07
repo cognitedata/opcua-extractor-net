@@ -109,9 +109,9 @@ namespace Test
             explorer.GetNamespaceMap();
 
             Assert.True(baseConfig.Extraction.NamespaceMap.ContainsKey("http://opcfoundation.org/UA/")
-                && baseConfig.Extraction.NamespaceMap["http://opcfoundation.org/UA/"] == "base");
+                && baseConfig.Extraction.NamespaceMap["http://opcfoundation.org/UA/"] == "base:");
             Assert.True(baseConfig.Extraction.NamespaceMap.ContainsKey("http://examples.freeopcua.github.io")
-                && baseConfig.Extraction.NamespaceMap["http://examples.freeopcua.github.io"] == "efg");
+                && baseConfig.Extraction.NamespaceMap["http://examples.freeopcua.github.io"] == "efg:");
 
             explorer.LogSummary();
 

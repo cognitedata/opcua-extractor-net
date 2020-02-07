@@ -53,7 +53,6 @@ namespace Cognite.OpcUa
         private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> eventFields;
 
         private int pendingOperations;
-        private readonly object pendingOpLock = new object();
 
         private static readonly Counter connects = Metrics
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
@@ -276,20 +275,14 @@ namespace Cognite.OpcUa
         /// </summary>
         private void IncOperations()
         {
-            lock (pendingOpLock)
-            {
-                pendingOperations++;
-            }
+            Interlocked.Increment(ref pendingOperations);
         }
         /// <summary>
         /// Safely decrement number of active opcua operations
         /// </summary>
         private void DecOperations()
         {
-            lock (pendingOpLock)
-            {
-                pendingOperations--;
-            }
+            Interlocked.Decrement(ref pendingOperations);
         }
         /// <summary>
         /// Wait for all opcua operations to finish

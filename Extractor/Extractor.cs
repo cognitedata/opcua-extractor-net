@@ -470,6 +470,7 @@ namespace Cognite.OpcUa
                     tasks.Add(Task.Run(async () =>
                     {
                         Started = false;
+                        await historyReader.Terminate(token, 30);
                         await uaClient.WaitForOperations();
                         ConfigureExtractor(token);
                         uaClient.ResetVisitedNodes();

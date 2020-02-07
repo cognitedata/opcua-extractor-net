@@ -17,7 +17,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -1238,6 +1237,11 @@ namespace Cognite.OpcUa.Config
 #pragma warning disable CA1308 // Normalize strings to uppercase. Lowercase is prettier in externalId.
                 namespaceMap.Add(mapped.Key, nextValue.ToLowerInvariant());
 #pragma warning restore CA1308 // Normalize strings to uppercase
+            }
+
+            foreach (var key in namespaceMap.Keys.ToList())
+            {
+                namespaceMap[key] += ":";
             }
 
             log.Information("Suggested namespaceMap: ");
