@@ -246,6 +246,9 @@ namespace Cognite.OpcUa
         /// </summary>
         public void RestartExtractor()
         {
+            foreach (var state in NodeStates.Values) {
+                state.ClearIsStreaming();
+            }
             restart = true;
             triggerUpdateOperations.Set();
         }
