@@ -229,7 +229,8 @@ namespace Cognite.OpcUa.Config
                 {
                     await ToolUtil.RunWithTimeout(BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodes, this), token), 120);
                     log.Information("Browse succeeded, attempting to read children of all nodes, to further test operation limit");
-                    await ToolUtil.RunWithTimeout(() => BrowseDirectory(nodes.Select(node => node.Id), (_, __) => { }, token), 120);
+                    await ToolUtil.RunWithTimeout(() => BrowseDirectory(nodes.Select(node => node.Id).Take(browseNodesChunk),
+                        (_, __) => { }, token), 120);
                 }
                 catch (Exception ex)
                 {
@@ -527,11 +528,18 @@ namespace Cognite.OpcUa.Config
                     history = true;
                 }
 
-                var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.DataType.Raw);
+                if (variable.DataType == null)
+                {
+                    Log.Warning("Variable datatype is null on id: {id}", variable.Id);
+                    continue;
+                }
+
+                var dataType = dataTypes.FirstOrDefault(type => variable.DataType != null && type.Id == variable.DataType.Raw);
+
                 if (dataType == null)
                 {
                     log.Warning("DataType found on node but not in hierarchy, " +
-                                "this may mean that some datatypes are defined outside of the main datatype hierarchy.");
+                                "this may mean that some datatypes are defined outside of the main datatype hierarchy: {type}", variable.DataType.Raw);
                     continue;
                 }
 
@@ -593,6 +601,20 @@ namespace Cognite.OpcUa.Config
             public int NumNodes;
             public bool failed;
         }
+        private bool AllowTSMap(BufferedVariable node)
+        {
+            if (node == null) throw new ArgumentNullException(nameof(node));
+
+            if (node.ValueRank == ValueRanks.Scalar) return true;
+
+            if (node.ArrayDimensions != null && node.ArrayDimensions.Count == 1)
+            {
+                int length = node.ArrayDimensions.First();
+                return config.Extraction.MaxArraySize < 0 || length > 0 && length <= config.Extraction.MaxArraySize;
+            }
+
+            return false;
+        }
         /// <summary>
         /// Attempts different chunk sizes for subscriptions. (number of created monitored items per attempt, most servers should support at least one subscription).
         /// </summary>
@@ -600,7 +622,8 @@ namespace Cognite.OpcUa.Config
         {
             bool failed = true;
             var states = nodeList.Where(node =>
-                    node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty)
+                    node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty
+                    && AllowTSMap(variable))
                 .Select(node => new NodeExtractionState(node as BufferedVariable)).ToList();
 
             log.Information("Get chunkSizes for subscribing to variables");
