@@ -611,7 +611,6 @@ namespace Cognite.OpcUa
             LoginStatusReadDto loginStatus;
             try
             {
-
                 loginStatus = await client.Login.StatusAsync(new CancellationToken());
             }
             catch (Exception ex)
