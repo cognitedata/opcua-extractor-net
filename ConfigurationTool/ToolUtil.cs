@@ -189,24 +189,34 @@ namespace Cognite.OpcUa.Config
         {
             return (item, args) =>
             {
-                string uniqueId = client.GetUniqueId(item.ResolvedNodeId);
-                var state = states[item.ResolvedNodeId];
-                foreach (var datapoint in item.DequeueValues())
+                try
                 {
-                    if (StatusCode.IsNotGood(datapoint.StatusCode))
+                    string uniqueId = client.GetUniqueId(item.ResolvedNodeId);
+                    var state = states[item.ResolvedNodeId];
+                    foreach (var datapoint in item.DequeueValues())
                     {
-                        log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
-                        continue;
+                        if (StatusCode.IsNotGood(datapoint.StatusCode))
+                        {
+                            log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
+                                datapoint.SourceTimestamp);
+                            continue;
+                        }
+
+                        var buffDps = ToDataPoint(datapoint, state, uniqueId, client);
+                        state.UpdateFromStream(buffDps);
+                        foreach (var buffDp in buffDps)
+                        {
+                            log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
+                        }
+
+                        points.AddRange(buffDps);
                     }
-                    var buffDps = ToDataPoint(datapoint, state, uniqueId, client);
-                    state.UpdateFromStream(buffDps);
-                    if (!state.IsStreaming) return;
-                    foreach (var buffDp in buffDps)
-                    {
-                        log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
-                    }
-                    points.AddRange(buffDps);
                 }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Error in list writer callback");
+                }
+
             };
         }
 
