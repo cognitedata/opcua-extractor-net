@@ -604,10 +604,16 @@ namespace Cognite.OpcUa.Config
         private bool AllowTSMap(BufferedVariable node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
-            return node.ValueRank == ValueRanks.Scalar
-                       || node.ArrayDimensions != null && node.ArrayDimensions.Count == 1
-                       && (config.Extraction.MaxArraySize < 0 || node.ArrayDimensions[0] > 0
-                           && node.ArrayDimensions[0] <= config.Extraction.MaxArraySize);
+
+            if (node.ValueRank == ValueRanks.Scalar) return true;
+
+            if (node.ArrayDimensions != null && node.ArrayDimensions.Count == 1)
+            {
+                int length = node.ArrayDimensions.First();
+                return config.Extraction.MaxArraySize < 0 || length > 0 && length <= config.Extraction.MaxArraySize;
+            }
+
+            return false;
         }
         /// <summary>
         /// Attempts different chunk sizes for subscriptions. (number of created monitored items per attempt, most servers should support at least one subscription).

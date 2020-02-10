@@ -341,13 +341,18 @@ namespace Cognite.OpcUa
         public bool AllowTSMap(BufferedVariable node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
-            return (!node.DataType.IsString || config.Extraction.AllowStringVariables)
-                && (node.ValueRank == ValueRanks.Scalar
-                    || node.ArrayDimensions != null
-                    && node.ArrayDimensions.Count == 1 
-                    && (config.Extraction.MaxArraySize < 0 || node.ArrayDimensions[0] > 0
-                        && node.ArrayDimensions[0] <= config.Extraction.MaxArraySize))
-                && !ignoreDataTypes.Contains(node.DataType.Raw);
+
+            if (node.DataType.IsString && !config.Extraction.AllowStringVariables) return false;
+            if (ignoreDataTypes.Contains(node.DataType.Raw)) return false;
+            if (node.ValueRank == ValueRanks.Scalar) return true;
+
+            if (node.ArrayDimensions != null && node.ArrayDimensions.Count == 1)
+            {
+                int length = node.ArrayDimensions.First();
+                return config.Extraction.MaxArraySize < 0 || length > 0 && length <= config.Extraction.MaxArraySize;
+            }
+
+            return false;
         }
 
         public NodeExtractionState GetNodeState(string externalId)

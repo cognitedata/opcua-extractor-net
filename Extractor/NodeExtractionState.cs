@@ -160,7 +160,7 @@ namespace Cognite.OpcUa
         public void ClearIsStreaming()
         {
             IsStreaming = false;
-            buffer.Clear();
+            buffer?.Clear();
         }
     }
     /// <summary>
@@ -305,7 +305,7 @@ namespace Cognite.OpcUa
         public void ClearIsStreaming()
         {
             IsStreaming = false;
-            buffer.Clear();
+            buffer?.Clear();
         }
     }
 }
