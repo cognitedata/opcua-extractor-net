@@ -337,8 +337,10 @@ namespace Cognite.OpcUa
             if (node == null) throw new ArgumentNullException(nameof(node));
             return (!node.DataType.IsString || config.Extraction.AllowStringVariables)
                 && (node.ValueRank == ValueRanks.Scalar
-                    || config.Extraction.MaxArraySize > 0 && node.ArrayDimensions != null && node.ArrayDimensions.Count == 1
-                    && node.ArrayDimensions[0] > 0 && node.ArrayDimensions[0] <= config.Extraction.MaxArraySize)
+                    || node.ArrayDimensions != null
+                    && node.ArrayDimensions.Count == 1 
+                    && (config.Extraction.MaxArraySize < 0 || node.ArrayDimensions[0] > 0
+                        && node.ArrayDimensions[0] <= config.Extraction.MaxArraySize))
                 && !ignoreDataTypes.Contains(node.DataType.Raw);
         }
 

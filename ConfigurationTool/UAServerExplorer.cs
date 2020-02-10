@@ -528,12 +528,14 @@ namespace Cognite.OpcUa.Config
                     history = true;
                 }
 
-                var dataType = dataTypes.FirstOrDefault(type => variable.DataType != null && type.Id == variable.DataType.Raw);
                 if (variable.DataType == null)
                 {
                     Log.Warning("Variable datatype is null on id: {id}", variable.Id);
                     continue;
                 }
+
+                var dataType = dataTypes.FirstOrDefault(type => variable.DataType != null && type.Id == variable.DataType.Raw);
+
                 if (dataType == null)
                 {
                     log.Warning("DataType found on node but not in hierarchy, " +
@@ -603,9 +605,9 @@ namespace Cognite.OpcUa.Config
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
             return node.ValueRank == ValueRanks.Scalar
-                       || config.Extraction.MaxArraySize > 0 && node.ArrayDimensions != null &&
-                       node.ArrayDimensions.Count == 1
-                       && node.ArrayDimensions[0] > 0 && node.ArrayDimensions[0] <= config.Extraction.MaxArraySize;
+                       || node.ArrayDimensions != null && node.ArrayDimensions.Count == 1
+                       && (config.Extraction.MaxArraySize < 0 || node.ArrayDimensions[0] > 0
+                           && node.ArrayDimensions[0] <= config.Extraction.MaxArraySize);
         }
         /// <summary>
         /// Attempts different chunk sizes for subscriptions. (number of created monitored items per attempt, most servers should support at least one subscription).
