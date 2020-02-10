@@ -246,6 +246,9 @@ namespace Cognite.OpcUa
         /// </summary>
         public void RestartExtractor()
         {
+            foreach (var state in NodeStates.Values) {
+                state.ClearIsStreaming();
+            }
             restart = true;
             triggerUpdateOperations.Set();
         }
@@ -470,6 +473,7 @@ namespace Cognite.OpcUa
                     tasks.Add(Task.Run(async () =>
                     {
                         Started = false;
+                        await historyReader.Terminate(token, 30);
                         await uaClient.WaitForOperations();
                         ConfigureExtractor(token);
                         uaClient.ResetVisitedNodes();
