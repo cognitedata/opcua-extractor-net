@@ -160,6 +160,7 @@ namespace Cognite.OpcUa
         public void ClearIsStreaming()
         {
             IsStreaming = false;
+            buffer.Clear();
         }
     }
     /// <summary>
@@ -292,6 +293,7 @@ namespace Cognite.OpcUa
         /// <returns>The contents of the buffer</returns>
         public IEnumerable<BufferedEvent> FlushBuffer()
         {
+            if (!IsStreaming) throw new InvalidOperationException("Flush non-streaming buffer");
             if (!buffer.Any()) return new List<BufferedEvent>();
             lock (rangeMutex)
             {
@@ -299,6 +301,11 @@ namespace Cognite.OpcUa
                 buffer.Clear();
                 return result;
             }
+        }
+        public void ClearIsStreaming()
+        {
+            IsStreaming = false;
+            buffer.Clear();
         }
     }
 }

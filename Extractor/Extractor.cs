@@ -246,7 +246,13 @@ namespace Cognite.OpcUa
         /// </summary>
         public void RestartExtractor()
         {
+            historyReader.Terminate(CancellationToken.None, 30).Wait();
             foreach (var state in NodeStates.Values) {
+                state.ClearIsStreaming();
+            }
+
+            foreach (var state in EmitterStates.Values)
+            {
                 state.ClearIsStreaming();
             }
             restart = true;
