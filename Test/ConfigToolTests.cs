@@ -77,6 +77,9 @@ namespace Test
             if (server == ServerName.Array)
             {
                 Assert.Equal(4, baseConfig.Extraction.MaxArraySize);
+                Assert.Equal(2, baseConfig.Extraction.CustomNumericTypes.Count());
+                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=11");
+                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=12");
             }
             else
             {
@@ -89,6 +92,14 @@ namespace Test
 
             await explorer.GetHistoryReadConfig();
             Assert.Equal(100, baseConfig.History.DataNodesChunk);
+            if (server == ServerName.Audit || server == ServerName.Events)
+            {
+                Assert.False(baseConfig.History.Enabled);
+            }
+            else
+            {
+                Assert.True(baseConfig.History.Enabled);
+            }
 
             await explorer.GetEventConfig(source.Token);
             if (server == ServerName.Events)

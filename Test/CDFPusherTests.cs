@@ -22,6 +22,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Microsoft.VisualBasic;
+using Opc.Ua;
 using Serilog;
 using Xunit;
 using Xunit.Abstractions;
@@ -158,11 +160,11 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                tester.Handler.assets.Count == 4
-                && tester.Handler.timeseries.Count == 7
+                tester.Handler.assets.Count == 5
+                && tester.Handler.timeseries.Count == 10
                 && tester.Handler.datapoints.ContainsKey("gp.efg:i=2[2]"), 20, 
-                () => $"Expected to get 4 assets and got {tester.Handler.assets.Count}"
-                      + $", 7 timeseries and got {tester.Handler.timeseries.Count}");
+                () => $"Expected to get 5 assets and got {tester.Handler.assets.Count}"
+                      + $", 10 timeseries and got {tester.Handler.timeseries.Count}");
 
             int lastData = tester.Handler.datapoints["gp.efg:i=2[2]"].Item1.Count;
 
@@ -171,12 +173,65 @@ namespace Test
                 "Expected data to be increasing");
 
             await tester.TerminateRunTask();
-
+            
             tester.TestContinuity("gp.efg:i=2[2]");
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(7, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.Equal(5, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(10, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+        }
+        [Trait("Server", "array")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "customdatatypes")]
+        [Fact]
+        public async Task TestCustomDataTypes()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Array,
+                StoreDatapoints = true,
+                LogLevel = "debug"
+            });
+            await tester.ClearPersistentData();
+
+            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.MaxArraySize = 4;
+
+            tester.StartExtractor();
+
+            await tester.WaitForCondition(() =>
+                    tester.Handler.assets.Count == 5
+                    && tester.Handler.timeseries.Count == 10
+                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=2[2]"), 20,
+                () => $"Expected to get 5 assets and got {tester.Handler.assets.Count}"
+                      + $", 10 timeseries and got {tester.Handler.timeseries.Count}");
+
+            await tester.WaitForCondition(() =>
+                    tester.Handler.datapoints["gp.efg:i=16"].Item1.Any()
+                    && tester.Handler.datapoints["gp.efg:i=17"].Item1.Any()
+                    && tester.Handler.datapoints["gp.efg:i=14"].Item2.Any(), 20,
+                "Expected to get some data");
+
+            await tester.TerminateRunTask();
+
+            var numericTypeVar = tester.Handler.timeseries.Values.First(ts => ts.name == "NumericTypeVar");
+            Assert.False(numericTypeVar.isString);
+            Assert.True(numericTypeVar.metadata.ContainsKey("EngineeringUnits"));
+            Assert.Equal("°C: degree Celsius", numericTypeVar.metadata["EngineeringUnits"]);
+            Assert.True(numericTypeVar.metadata.ContainsKey("EURange"));
+            Assert.Equal("(0, 100)", numericTypeVar.metadata["EURange"]);
+
+            var numericTypeVar2 = tester.Handler.timeseries.Values.First(ts => ts.name == "NumericTypeVar2");
+            Assert.False(numericTypeVar2.isString);
+
+            var stringyVar = tester.Handler.timeseries.Values.First(ts => ts.name == "StringyVar");
+            Assert.True(stringyVar.isString);
+
+            Assert.DoesNotContain(tester.Handler.timeseries.Values, ts => ts.name == "IgnoreTypeVar");
+
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
+            Assert.Equal(5, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(10, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
         }
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]

@@ -29,3 +29,15 @@ Extraction:
         # If not specified, the full URI is used instead.
         "urn:freeopcua:python:server": "fps:"
         "http://examples.freeopcua.github.io": "efg:"
+
+    IgnoreDataTypes:
+        - NamespaceUri: http://examples.freeopcua.github.io
+          NodeId: i=10
+
+    CustomNumericTypes:
+      - NodeId:
+            NamespaceUri: http://examples.freeopcua.github.io
+            NodeId: i=12
+      - NodeId:
+            NamespaceUri: http://examples.freeopcua.github.io
+            NodeId: i=11
