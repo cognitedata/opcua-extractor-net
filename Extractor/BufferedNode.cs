@@ -105,7 +105,7 @@ namespace Cognite.OpcUa
         {
             if (rawDataType == null) throw new ArgumentNullException(nameof(rawDataType));
             Raw = rawDataType;
-            if (rawDataType.IdType == IdType.Numeric)
+            if (rawDataType.IdType == IdType.Numeric && rawDataType.NamespaceIndex == 0)
             {
                 Identifier = (uint)rawDataType.Identifier;
                 IsString = (Identifier < DataTypes.Boolean || Identifier > DataTypes.Double)
@@ -153,6 +153,7 @@ namespace Cognite.OpcUa
             {
                 var proto = numericalTypeMap[dataType];
                 DataType = new BufferedDataType(proto, dataType);
+                return;
             }
             DataType = new BufferedDataType(dataType);
         }

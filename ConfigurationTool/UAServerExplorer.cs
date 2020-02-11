@@ -343,7 +343,7 @@ namespace Cognite.OpcUa.Config
             {
                 BrowseDirectory(new List<NodeId> {DataTypes.BaseDataType}, ToolUtil.GetSimpleListWriterCallback(dataTypes, this),
                     token,
-                    ReferenceTypeIds.HasSubtype, (uint) NodeClass.DataType);
+                    ReferenceTypeIds.HasSubtype, (uint) NodeClass.DataType | (uint) NodeClass.ObjectType);
             }
             catch (Exception e)
             {
@@ -356,7 +356,7 @@ namespace Cognite.OpcUa.Config
             {
                 string identifier = type.Id.IdType == IdType.String ? (string) type.Id.Identifier : null;
                 if (IsCustomObject(type.Id)
-                    && identifier != null && ((
+                    && (identifier != null && (
                         identifier.Contains("real", StringComparison.InvariantCultureIgnoreCase)
                         || identifier.Contains("integer", StringComparison.InvariantCultureIgnoreCase)
                         || identifier.StartsWith("int", StringComparison.InvariantCultureIgnoreCase)
@@ -369,12 +369,14 @@ namespace Cognite.OpcUa.Config
                         || type.DisplayName.Contains("number", StringComparison.InvariantCultureIgnoreCase)
                     )
                     || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number)
+                    || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean)
                     ))
                 {
                     log.Information("Found potential custom numeric datatype: {id}", type.Id);
                     customNumericTypes.Add(new ProtoDataType
                     {
-                        IsStep = identifier.Contains("bool", StringComparison.InvariantCultureIgnoreCase)
+                        IsStep = identifier != null && identifier.Contains("bool", StringComparison.InvariantCultureIgnoreCase)
+                                 || type.DisplayName != null && type.DisplayName.Contains("bool", StringComparison.InvariantCultureIgnoreCase)
                                  || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean),
                         NodeId = NodeIdToProto(type.Id)
                     });
@@ -382,6 +384,7 @@ namespace Cognite.OpcUa.Config
             }
             log.Information("Found {count} custom numeric datatypes", customNumericTypes.Count);
             summary.CustomNumTypesCount = customNumericTypes.Count;
+            baseConfig.Extraction.CustomNumericTypes = customNumericTypes;
         }
         /// <summary>
         /// Get AttributeChunk config value, by attempting to read for various chunk sizes.
@@ -393,6 +396,8 @@ namespace Cognite.OpcUa.Config
                 : config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
 
             log.Information("Reading variable chunk sizes to determine the AttributeChunk property");
+
+            config.History.Enabled = true;
 
             VisitedNodes.Clear();
 
@@ -818,6 +823,7 @@ namespace Cognite.OpcUa.Config
             }
 
             summary.History = true;
+            baseConfig.History.Enabled = true;
             log.Information("Settled on chunkSize: {size}", baseConfig.History.DataNodesChunk);
             summary.HistoryChunkSize = baseConfig.History.DataNodesChunk;
             log.Information("Largest estimated number of datapoints in a single nodes history is {largestEstimate}, " +

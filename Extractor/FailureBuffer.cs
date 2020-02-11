@@ -267,7 +267,7 @@ namespace Cognite.OpcUa
                             continue;
                         }
                         count++;
-                        log.Debug(buffDp.ToDebugDescription());
+                        log.Verbose(buffDp.ToDebugDescription());
                         result.Add(buffDp);
                     }
                 }

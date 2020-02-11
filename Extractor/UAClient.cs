@@ -430,12 +430,6 @@ namespace Cognite.OpcUa
                     throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.Browse);
                 }
 
-
-                foreach (var d in diagnostics)
-                {
-                    log.Warning("GetNodeChildren Browse diagnostics {msg}", d);
-                }
-
                 var indexMap = new NodeId[parents.Count()];
                 var continuationPoints = new ByteStringCollection();
                 int index = 0;

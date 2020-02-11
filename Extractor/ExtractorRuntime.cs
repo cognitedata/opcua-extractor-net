@@ -115,6 +115,7 @@ namespace Cognite.OpcUa
 
                 if (!result)
                 {
+                    Log.Warning("Removing pusher of type {type}", pusher.GetType());
                     removePushers.Add(pusher);
                 }
             }));

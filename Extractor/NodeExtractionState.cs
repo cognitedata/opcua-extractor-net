@@ -157,9 +157,10 @@ namespace Cognite.OpcUa
             }
         }
 
-        public void ClearIsStreaming()
+        public void ResetStreamingState()
         {
-            IsStreaming = false;
+            IsStreaming = !Historizing;
+            BackfillDone = false;
             buffer?.Clear();
         }
     }
@@ -302,9 +303,10 @@ namespace Cognite.OpcUa
                 return result;
             }
         }
-        public void ClearIsStreaming()
+        public void ResetStreamingState()
         {
-            IsStreaming = false;
+            IsStreaming = !Historizing;
+            BackfillDone = false;
             buffer?.Clear();
         }
     }

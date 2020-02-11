@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
@@ -76,6 +77,9 @@ namespace Test
             if (server == ServerName.Array)
             {
                 Assert.Equal(4, baseConfig.Extraction.MaxArraySize);
+                Assert.Equal(2, baseConfig.Extraction.CustomNumericTypes.Count());
+                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=11");
+                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=12");
             }
             else
             {
@@ -88,6 +92,14 @@ namespace Test
 
             await explorer.GetHistoryReadConfig();
             Assert.Equal(100, baseConfig.History.DataNodesChunk);
+            if (server == ServerName.Audit || server == ServerName.Events)
+            {
+                Assert.False(baseConfig.History.Enabled);
+            }
+            else
+            {
+                Assert.True(baseConfig.History.Enabled);
+            }
 
             await explorer.GetEventConfig(source.Token);
             if (server == ServerName.Events)
@@ -126,7 +138,7 @@ namespace Test
         [Fact]
         public async Task TestExtractorRuntime()
         {
-            var fullConfig = ExtractorUtils.GetConfig("config.test.yml");
+            var fullConfig = ExtractorUtils.GetConfig("config.influxtest.yml");
             Logger.Configure(fullConfig.Logging);
 
             fullConfig.Source.EndpointURL = ExtractorTester.hostNames[ServerName.Basic];
@@ -155,6 +167,53 @@ namespace Test
             }
         }
         [Trait("Server", "basic")]
+        [Trait("Target", "ExtractorRuntime")]
+        [Trait("Test", "extractorruntimefailure")]
+        [Fact]
+        public async Task TestExtractorRuntimeFailure()
+        {
+            var fullConfig = ExtractorUtils.GetConfig("config.test.yml");
+            Logger.Configure(fullConfig.Logging);
+
+            fullConfig.Source.EndpointURL = ExtractorTester.hostNames[ServerName.Basic];
+            fullConfig.Pushers.First().Critical = true;
+            fullConfig.Logging.ConsoleLevel = "debug";
+
+            var runTime = new ExtractorRuntime(fullConfig);
+
+            using var source = new CancellationTokenSource();
+
+            runTime.Configure();
+            var runTask = runTime.Run(source);
+
+            for (int i = 0; i < 10; i++)
+            {
+                if (runTask.IsFaulted) break;
+                await Task.Delay(1000);
+            }
+
+            source.Cancel();
+
+            try
+            {
+                await runTask;
+            }
+            catch (Exception ex)
+            {
+                ExtractorFailureException efe = null;
+                switch (ex)
+                {
+                    case ExtractorFailureException exception:
+                        efe = exception;
+                        break;
+                    case AggregateException aex:
+                        efe = ExtractorUtils.GetRootExceptionOfType<ExtractorFailureException>(aex);
+                        break;
+                }
+                if (efe == null || efe.Message != "Critical pusher failed to connect") throw;
+            }
+        }
+        [Trait("Server", "basic")]
         [Trait("Target", "ConfigToolRuntime")]
         [Trait("Test", "configtoolruntime")]
         [Fact]
@@ -169,8 +228,6 @@ namespace Test
             baseConfig.Source.EndpointURL = ExtractorTester.hostNames[ServerName.Basic];
 
             var runTime = new ConfigToolRuntime(fullConfig, baseConfig, "config.config-tool-output.yml");
-
-            using var source = new CancellationTokenSource();
 
             var runTask = runTime.Run();
 
