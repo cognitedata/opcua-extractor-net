@@ -397,6 +397,8 @@ namespace Cognite.OpcUa.Config
 
             log.Information("Reading variable chunk sizes to determine the AttributeChunk property");
 
+            config.History.Enabled = true;
+
             VisitedNodes.Clear();
 
             nodeList = new List<BufferedNode>();
@@ -474,8 +476,6 @@ namespace Cognite.OpcUa.Config
             int oldArraySize = config.Extraction.MaxArraySize;
 
             int arrayLimit = config.Extraction.MaxArraySize == 0 ? 10 : config.Extraction.MaxArraySize;
-
-            config.History.Enabled = true;
 
             config.Extraction.MaxArraySize = 10;
 

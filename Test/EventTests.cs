@@ -431,7 +431,9 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor();
 
-            await Task.Delay(500);
+            await tester.WaitForCondition(() =>
+                    CommonTestUtils.TestMetricValue("opcua_extractor_starting", 0), 20,
+                "Expected restart to begin");
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()

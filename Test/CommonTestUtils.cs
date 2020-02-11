@@ -26,7 +26,6 @@ using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Microsoft.Extensions.DependencyInjection;
-using Oryx.Cognite;
 using Prometheus.Client;
 using Serilog;
 using Xunit.Abstractions;

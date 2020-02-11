@@ -14,6 +14,9 @@ Logging:
     # If not present, or if the level is invalid, Console is not used. 
     ConsoleLevel: "information"
 
+History:
+    Enabled: true
+
 Extraction:
     # Global prefix for externalId. Should be unique to prevent name conflicts.
     IdPrefix: "gp."

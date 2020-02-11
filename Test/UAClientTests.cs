@@ -90,7 +90,7 @@ namespace Test
         [Fact]
         public async Task TestServerReconnect()
         {
-            Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux));
+            Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux), "This test only runs on Linux");
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Proxy
@@ -128,7 +128,7 @@ namespace Test
         [Fact]
         public async Task TestServerDisconnect()
         {
-            Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux));
+            Assert.True(RuntimeInformation.IsOSPlatform(OSPlatform.Linux), "This test only runs on Linux");
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Proxy

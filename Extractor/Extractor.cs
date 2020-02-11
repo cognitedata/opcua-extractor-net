@@ -248,13 +248,14 @@ namespace Cognite.OpcUa
         {
             historyReader.Terminate(CancellationToken.None, 30).Wait();
             foreach (var state in NodeStates.Values) {
-                state.ClearIsStreaming();
+                state.ResetStreamingState();
             }
 
             foreach (var state in EmitterStates.Values)
             {
-                state.ClearIsStreaming();
+                state.ResetStreamingState();
             }
+            Starting.Set(1);
             restart = true;
             triggerUpdateOperations.Set();
         }
@@ -539,7 +540,7 @@ namespace Cognite.OpcUa
 
             foreach (var state in NodeStates.Values)
             {
-                state.ClearIsStreaming();
+                state.ResetStreamingState();
             }
 
             if (config.Events.EmitterIds != null && config.Events.EventIds != null && config.Events.EmitterIds.Any() && config.Events.EventIds.Any())

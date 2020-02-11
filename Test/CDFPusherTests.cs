@@ -22,8 +22,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
-using Microsoft.VisualBasic;
-using Opc.Ua;
 using Serilog;
 using Xunit;
 using Xunit.Abstractions;
@@ -444,7 +442,6 @@ namespace Test
             // Perhaps in the future a final rewrite to make the pusher not use NodeId would be in order, it is not that easy, however.
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                LogLevel = "verbose",
                 QuitAfterMap = true
             });
             await tester.ClearPersistentData();
@@ -497,7 +494,6 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                LogLevel = "verbose",
                 QuitAfterMap = true
             });
             await tester.ClearPersistentData();
