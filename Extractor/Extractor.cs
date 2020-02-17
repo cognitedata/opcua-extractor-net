@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
@@ -38,6 +37,7 @@ namespace Cognite.OpcUa
         private readonly UAClient uaClient;
         private readonly FullConfig config;
         public FailureBuffer FailureBuffer { get; }
+        public StateStorage StateStorage { get; }
         private readonly HistoryReader historyReader;
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
@@ -111,6 +111,10 @@ namespace Cognite.OpcUa
             this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             FailureBuffer = new FailureBuffer(config.FailureBuffer, this);
+            if (!string.IsNullOrWhiteSpace(config.StateStorage.Location))
+            {
+                StateStorage = new StateStorage(this, config);
+            }
             this.uaClient.Extractor = this;
             historyReader = new HistoryReader(uaClient, this, pushers, config.History);
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
@@ -190,16 +194,23 @@ namespace Cognite.OpcUa
 
             Pushing = true;
 
-            IEnumerable<Task> tasks = new List<Task>
+            var tasks = new List<Task>
                 {
-                    PushersLoop(token),
-                    Task.Run(() => ExtraTaskLoop(token), token)
-                }.Concat(synchTasks).ToList();
+                    Task.Run(() => PushersLoop(token)),
+                    Task.Run(() => ExtraTaskLoop(token))
+                }.Concat(synchTasks);
 
             if (config.Extraction.AutoRebrowsePeriod > 0)
             {
-                tasks = tasks.Append(Task.Run(() => RebrowseLoop(token))).ToList();
+                tasks = tasks.Append(Task.Run(() => RebrowseLoop(token)));
             }
+
+            if (StateStorage != null && config.StateStorage.Interval > 0)
+            {
+                tasks = tasks.Append(Task.Run(() => StoreStateLoop(token)));
+            }
+
+            tasks = tasks.ToList();
 
             triggerUpdateOperations.Reset();
             var failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
@@ -478,7 +489,7 @@ namespace Cognite.OpcUa
             {
                 foreach (var kvp in eventRanges)
                 {
-                    var state = GetNodeState(kvp.Key);
+                    var state = GetEmitterState(kvp.Key);
                     state.UpdateDestinationRange(kvp.Value);
                 }
                 if (FailureBuffer.Any)
@@ -494,6 +505,19 @@ namespace Cognite.OpcUa
             {
                 await Task.WhenAll(PushDataPoints(token), PushEvents(token), Task.Delay(config.Extraction.DataPushDelay, token));
                 nextPushFlag = true;
+            }
+        }
+
+        private async Task StoreStateLoop(CancellationToken token)
+        {
+            var delay = TimeSpan.FromSeconds(config.StateStorage.Interval);
+            while (!token.IsCancellationRequested)
+            {
+                await Task.WhenAll(
+                    Task.Delay(delay, token),
+                    StateStorage.StoreExtractionState(NodeStates.Values, StateStorage.VariableStates, token),
+                    StateStorage.StoreExtractionState(EmitterStates.Values, StateStorage.EmitterStates, token)
+                );
             }
         }
 
@@ -594,7 +618,10 @@ namespace Cognite.OpcUa
                 state.ResetStreamingState();
             }
 
-            if (config.Events.EmitterIds != null && config.Events.EventIds != null && config.Events.EmitterIds.Any() && config.Events.EventIds.Any())
+            if (config.Events.EmitterIds != null
+                && config.Events.EventIds != null
+                && config.Events.EmitterIds.Any()
+                && config.Events.EventIds.Any())
             {
                 pushEvents = true;
                 var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
@@ -605,10 +632,12 @@ namespace Cognite.OpcUa
                 }
                 if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
                 {
-                    var histEmitters = config.Events.HistorizingEmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
+                    var histEmitters = config.Events.HistorizingEmitterIds.Select(proto =>
+                        proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
                     foreach (var id in histEmitters)
                     {
-                        if (!EmitterStates.ContainsKey(id)) throw new ConfigurationException("Historical emitter not in emitter list");
+                        if (!EmitterStates.ContainsKey(id)) throw new ConfigurationException(
+                            "Historical emitter not in emitter list");
                         EmitterStates[id].Historizing = true;
                     }
                 }
@@ -706,14 +735,37 @@ namespace Cognite.OpcUa
                 .Select(id => NodeStates[id])
                 .Where(state => state.Historizing);
 
-            var getRangePushes = pushers.Select(pusher => pusher.InitExtractedRanges(statesToSync, config.History.Backfill, token));
+            var getRangePushes = pushers
+                .Where(pusher => pusher.BaseConfig.ReadExtractedRanges)
+                .Select(pusher => pusher.InitExtractedRanges(statesToSync, config.History.Backfill, token));
 
             if (EmitterStates.Any(kvp => kvp.Value.Historizing))
             {
-                var getEventRanges = pushers.Select(pusher =>
-                    pusher.InitExtractedEventRanges(EmitterStates.Values.Where(state => state.Historizing),
-                        timeseries.Concat(objects).Select(ts => ts.Id).Distinct(), config.History.Backfill, token));
+                var getEventRanges = pushers
+                    .Where(pusher => pusher.BaseConfig.ReadExtractedRanges)
+                    .Select(pusher => pusher.InitExtractedEventRanges(
+                        EmitterStates.Values.Where(state => state.Historizing),
+                        timeseries.Concat(objects).Select(ts => ts.Id).Distinct(),
+                        config.History.Backfill,
+                        token)
+                    );
                 getRangePushes = getRangePushes.Concat(getEventRanges);
+            }
+
+            if (StateStorage != null && config.StateStorage.Interval > 0)
+            {
+                getRangePushes = getRangePushes
+                    .Append(StateStorage.ReadExtractionStates(
+                        statesToSync, 
+                        StateStorage.VariableStates,
+                        timeseries.Count() * Math.Log(timeseries.Count(), 2) < NodeStates.Count(kvp => kvp.Value.Historizing),
+                        token)
+                    ).Append(StateStorage.ReadExtractionStates(
+                        EmitterStates.Values.Where(state => state.Historizing),
+                        StateStorage.EmitterStates, 
+                        false, 
+                        token)
+                    );
             }
 
 
@@ -722,36 +774,13 @@ namespace Cognite.OpcUa
             // If any nodes are still at default values, meaning no pusher can initialize them, initialize to default values.
             foreach (var state in statesToSync)
             {
-                if (state.SourceExtractedRange.Start == DateTime.MinValue && state.SourceExtractedRange.End == DateTime.MaxValue)
-                {
-                    if (config.History.Backfill)
-                    {
-                        state.SourceExtractedRange.Start = DateTime.UtcNow;
-                        state.SourceExtractedRange.End = DateTime.UtcNow;
-                    }
-                    else
-                    {
-                        state.SourceExtractedRange.End = DateTime.MinValue;
-                    }
-                }
+                state.FinalizeRangeInit(config.History.Backfill);
             }
 
             foreach (var state in EmitterStates.Values.Where(state => state.Historizing))
             {
-                if (state.SourceExtractedRange.Start == DateTime.MinValue && state.SourceExtractedRange.End == DateTime.MaxValue)
-                {
-                    if (config.History.Backfill)
-                    {
-                        state.SourceExtractedRange.Start = DateTime.UtcNow;
-                        state.SourceExtractedRange.End = DateTime.UtcNow;
-                    }
-                    else
-                    {
-                        state.SourceExtractedRange.End = DateTime.MinValue;
-                    }
-                }
+                state.FinalizeRangeInit(config.History.Backfill);
             }
-
         }
 
         private async Task SynchronizeEvents(IEnumerable<NodeId> nodes, CancellationToken token)
@@ -1149,6 +1178,7 @@ namespace Cognite.OpcUa
         {
             Starting.Set(0);
             triggerUpdateOperations?.Dispose();
+            StateStorage?.Dispose();
         }
     }
 }

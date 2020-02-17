@@ -21,9 +21,6 @@ nuget Serilog.Sinks.Console
 nuget Serilog.Sinks.Async
 nuget Serilog.Sinks.File
 nuget Microsoft.CodeAnalysis.FxCopAnalyzers
-<<<<<<< HEAD
 nuget Microsoft.Windows.Compatibility
-=======
 nuget LiteDB
 nuget LiteQueue
->>>>>>> Refactor pushers to use a central queue. Add config for litedb

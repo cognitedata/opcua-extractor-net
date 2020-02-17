@@ -6,13 +6,23 @@ using System.Linq;
 
 namespace Cognite.OpcUa
 {
+    public interface IExtractionState
+    {
+        NodeId Id { get; }
+        bool IsDirty { get; set; }
+        bool Historizing { get; }
+        TimeRange SourceExtractedRange { get; }
+        TimeRange DestinationExtractedRange { get; }
+        void InitExtractedRange(DateTime first, DateTime last);
+        void FinalizeRangeInit(bool backfill);
+    }
     /// <summary>
     /// State of a node currently being extracted for data. Contains information about the data,
     /// a thread-safe last timestamp in destination systems,
     /// and a buffer for subscribed values arriving while HistoryRead is running.
     /// Represents a single OPC-UA variable, not necessarily a destination timeseries.
     /// </summary>
-    public class NodeExtractionState
+    public class NodeExtractionState : IExtractionState
     {
         private readonly object rangeMutex = new object();
         /// <summary>
@@ -45,6 +55,7 @@ namespace Cognite.OpcUa
         public TimeRange SourceExtractedRange { get; }
         public TimeRange DestinationExtractedRange { get; }
         public bool BackfillDone { get; private set; }
+        public bool IsDirty { get; set; }
 
         private readonly IList<IEnumerable<BufferedDataPoint>> buffer;
         /// <summary>
@@ -172,11 +183,13 @@ namespace Cognite.OpcUa
             {
                 if (update.End > DestinationExtractedRange.End)
                 {
+                    IsDirty = true;
                     DestinationExtractedRange.End = update.End;
                 }
 
                 if (update.Start < DestinationExtractedRange.Start)
                 {
+                    IsDirty = true;
                     DestinationExtractedRange.Start = update.Start;
                 }
             }
@@ -188,13 +201,33 @@ namespace Cognite.OpcUa
             BackfillDone = false;
             buffer?.Clear();
         }
+
+        public void FinalizeRangeInit(bool backfill)
+        {
+            if (SourceExtractedRange.Start == DateTime.MinValue && SourceExtractedRange.End == DateTime.MaxValue)
+            {
+                if (backfill)
+                {
+                    SourceExtractedRange.Start = DateTime.UtcNow;
+                    SourceExtractedRange.End = DateTime.UtcNow;
+                    DestinationExtractedRange.Start = DateTime.UtcNow;
+                    DestinationExtractedRange.End = DateTime.UtcNow;
+                }
+                else
+                {
+                    SourceExtractedRange.End = DateTime.MinValue;
+                    DestinationExtractedRange.Start = DateTime.MaxValue;
+                    DestinationExtractedRange.End = DateTime.MinValue;
+                }
+            }
+        }
     }
     /// <summary>
     /// State of a node currently being extracted for events. Contains information about the data,
     /// a thread-safe last timestamp in destination systems,
     /// and a buffer for subscribed values arriving while HistoryRead is running.
     /// </summary>
-    public class EventExtractionState
+    public class EventExtractionState : IExtractionState
     {
         private readonly object rangeMutex = new object();
         /// <summary>
@@ -230,8 +263,9 @@ namespace Cognite.OpcUa
         /// </summary>
         public TimeRange SourceExtractedRange { get; }
         public TimeRange DestinationExtractedRange { get; }
+        public bool IsDirty { get; set; }
 
-        public bool BackfillDone { get; private set; } = true;
+        public bool BackfillDone { get; set; } = true;
         /// <summary>
         /// Last known timestamp of events from OPC-UA.
         /// </summary>
@@ -345,11 +379,13 @@ namespace Cognite.OpcUa
                 if (update.End > DestinationExtractedRange.End)
                 {
                     DestinationExtractedRange.End = update.End;
+                    IsDirty = true;
                 }
 
                 if (update.Start < DestinationExtractedRange.Start)
                 {
                     DestinationExtractedRange.Start = update.Start;
+                    IsDirty = true;
                 }
             }
         }
@@ -359,6 +395,27 @@ namespace Cognite.OpcUa
             IsStreaming = !Historizing;
             BackfillDone = false;
             buffer?.Clear();
+        }
+
+        public void FinalizeRangeInit(bool backfill)
+        {
+            if (SourceExtractedRange.Start == DateTime.MinValue && SourceExtractedRange.End == DateTime.MaxValue)
+            {
+                if (backfill)
+                {
+                    SourceExtractedRange.Start = DateTime.UtcNow;
+                    SourceExtractedRange.End = DateTime.UtcNow;
+                    DestinationExtractedRange.Start = DateTime.UtcNow;
+                    DestinationExtractedRange.End = DateTime.UtcNow;
+                }
+                else
+                {
+                    SourceExtractedRange.End = DateTime.MinValue;
+                    SourceExtractedRange.Start = DateTime.MaxValue;
+                    DestinationExtractedRange.Start = DateTime.MaxValue;
+                    DestinationExtractedRange.End = DateTime.MinValue;
+                }
+            }
         }
     }
 }

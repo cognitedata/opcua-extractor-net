@@ -25,6 +25,7 @@ using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using LiteDB;
 using Microsoft.Extensions.DependencyInjection;
 using Prometheus.Client;
 using Serilog;
@@ -317,6 +318,16 @@ namespace Test
             {
                 await IfDbClient.DropDatabaseAsync(new InfluxDatabase(InfluxConfig.Database));
                 await IfDbClient.CreateDatabaseAsync(InfluxConfig.Database);
+            }
+
+            if (Config.StateStorage.Location != null)
+            {
+                using var db = new LiteDatabase(Config.StateStorage.Location);
+                var collections = db.GetCollectionNames();
+                foreach (var collection in collections)
+                {
+                    db.DropCollection(collection);
+                }
             }
 
         }

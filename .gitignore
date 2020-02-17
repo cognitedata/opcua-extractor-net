@@ -22,6 +22,7 @@ coverage.json
 paket-files/
 ExtractorLauncher/Properties
 *.bin
+*.db
 
 # Config
 config/*
