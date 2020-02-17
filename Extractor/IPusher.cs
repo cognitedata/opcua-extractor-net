@@ -27,6 +27,7 @@ namespace Cognite.OpcUa
     public interface IPusher : IDisposable
     {
         int Index { get; set; }
+        bool Failing { get; set; }
         PusherConfig BaseConfig { get; }
 
         /// <summary>
@@ -66,30 +67,24 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push events, emptying the event queue
         /// </summary>
-        Task<IEnumerable<BufferedEvent>> PushEvents(CancellationToken token)
+        Task<bool?> PushEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
-            BufferedEventQueue.Clear();
-            return Task.FromResult((IEnumerable<BufferedEvent>)Array.Empty<BufferedEvent>());
+            return Task.FromResult((bool?)true);
         }
         /// <summary>
         /// Push data points, emptying the queue
         /// </summary>
         /// <param name="dataPointQueue">Data points to be pushed</param>
         /// <returns>A list of datapoints that failed to be inserted</returns>
-        Task<IEnumerable<BufferedDataPoint>> PushDataPoints(CancellationToken token)
+        Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
         {
-            BufferedDPQueue.Clear();
-            return Task.FromResult((IEnumerable<BufferedDataPoint>)Array.Empty<BufferedDataPoint>());
+            return Task.FromResult((bool?)true);
         }
         /// <summary>
         /// Reset relevant persistent information in the pusher, preparing it to be restarted
         /// </summary>
         void Reset()
         {
-            BufferedDPQueue.Clear();
-            BufferedEventQueue.Clear();
         }
-        ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; }
-        ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; }
     }
 }

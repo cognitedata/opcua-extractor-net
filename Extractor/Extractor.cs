@@ -51,7 +51,8 @@ namespace Cognite.OpcUa
         public ConcurrentDictionary<NodeId, NodeExtractionState> NodeStates { get; } =
             new ConcurrentDictionary<NodeId, NodeExtractionState>();
 
-        private readonly ConcurrentDictionary<string, NodeExtractionState> nodeStatesByExtId = new ConcurrentDictionary<string, NodeExtractionState>();
+        private readonly ConcurrentDictionary<string, NodeExtractionState> nodeStatesByExtId =
+            new ConcurrentDictionary<string, NodeExtractionState>();
 
         public ConcurrentDictionary<NodeId, EventExtractionState> EmitterStates { get; } =
             new ConcurrentDictionary<NodeId, EventExtractionState>();
@@ -71,6 +72,12 @@ namespace Cognite.OpcUa
 
         public ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> ActiveEvents { get; }
             = new ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>>();
+
+        public ConcurrentQueue<BufferedDataPoint> DataPointQueue { get; }
+            = new ConcurrentQueue<BufferedDataPoint>();
+
+        public ConcurrentQueue<BufferedEvent> EventQueue { get; }
+            = new ConcurrentQueue<BufferedEvent>();
 
         private bool pushEvents;
         private bool pushData;
@@ -154,10 +161,6 @@ namespace Cognite.OpcUa
                     throw new ExtractorFailureException("UAClient failed to start");
                 }
             }
-            if (config.FailureBuffer.Enabled && config.FailureBuffer.FilePath != null)
-            {
-                Directory.CreateDirectory(config.FailureBuffer.FilePath);
-            }
 
             ConfigureExtractor(token);
 
@@ -187,9 +190,12 @@ namespace Cognite.OpcUa
 
             Pushing = true;
 
-            IEnumerable<Task> tasks = pushers
-                .Select(pusher => PusherLoop(pusher, token))
-                .Concat(synchTasks).Append(Task.Run(() => ExtraTaskLoop(token), token)).ToList();
+            IEnumerable<Task> tasks = new List<Task>
+                {
+                    PushersLoop(token),
+                    Task.Run(() => ExtraTaskLoop(token), token)
+                }.Concat(synchTasks).ToList();
+
             if (config.Extraction.AutoRebrowsePeriod > 0)
             {
                 tasks = tasks.Append(Task.Run(() => RebrowseLoop(token))).ToList();
@@ -381,6 +387,7 @@ namespace Cognite.OpcUa
         /// <param name="timeout">Timeout in 1/10th of a second</param>
         public async Task WaitForNextPush(int timeout = 100)
         {
+            nextPushFlag = false;
             int time = 0;
             while (!nextPushFlag && time++ < timeout) await Task.Delay(100);
             if (time >= timeout && !nextPushFlag)
@@ -391,61 +398,105 @@ namespace Cognite.OpcUa
         #endregion
         #region Loops
 
-        private async Task PusherLoop(IPusher pusher, CancellationToken token)
+        private async Task PushDataPoints(CancellationToken token)
         {
-            while (!token.IsCancellationRequested)
+            if (!pushData) return;
+            var dataPointList = new List<BufferedDataPoint>();
+            var pointRanges = new Dictionary<string, TimeRange>();
+
+            while (DataPointQueue.TryDequeue(out BufferedDataPoint dp))
             {
-                try
+                dataPointList.Add(dp);
+                if (!pointRanges.ContainsKey(dp.Id))
                 {
-                    if (pushData)
-                    {
-                        var failed = await pusher.PushDataPoints(token);
-                        // If failed is null, there were no points, so we can't conclude success or failure
-                        if (failed != null && config.FailureBuffer.Enabled)
-                        {
-                            if (failed.Any())
-                            {
-                                await FailureBuffer.WriteDatapoints(failed, pusher.Index,
-                                    pusher.BaseConfig.NonFiniteReplacement, token);
-                            }
-                            else if (FailureBuffer.Any)
-                            {
-                                var recovered = await FailureBuffer.ReadDatapoints(pusher.Index, token);
-                                foreach (var dp in recovered)
-                                {
-                                    pusher.BufferedDPQueue.Enqueue(dp);
-                                }
-                            }
-                        }
-                    }
-                    if (pushEvents)
-                    {
-                        var failed = await pusher.PushEvents(token);
-                        if (failed != null && config.FailureBuffer.Enabled)
-                        {
-                            if (failed.Any())
-                            {
-                                await FailureBuffer.WriteEvents(failed, pusher.Index, token);
-                            }
-                            else if (FailureBuffer.AnyEvents)
-                            {
-                                var recovered = await FailureBuffer.ReadEvents(pusher.Index, token);
-                                foreach (var evt in recovered)
-                                {
-                                    pusher.BufferedEventQueue.Enqueue(evt);
-                                }
-                            }
-                        }
-                    }
-                    nextPushFlag = true;
-                    await Task.Delay(pusher.BaseConfig.DataPushDelay, token);
+                    pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
+                    continue;
                 }
-                catch (TaskCanceledException)
+
+                var range = pointRanges[dp.Id];
+                if (dp.Timestamp < range.Start)
                 {
-                    break;
+                    range.Start = dp.Timestamp;
+                }
+                else if (dp.Timestamp > range.End)
+                {
+                    range.End = dp.Timestamp;
+                }
+            }
+
+            var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
+            if (results.Any(failed => failed == false))
+            {
+                // Write to failurebuffer, also remember to register which indices are failed
+
+            }
+            else
+            {
+                foreach (var kvp in pointRanges)
+                {
+                    var state = GetNodeState(kvp.Key);
+                    state.UpdateDestinationRange(kvp.Value);
+                }
+                if (FailureBuffer.Any)
+                {
+                    // Read from buffer, trigger history for relevant states...
                 }
             }
         }
+
+        private async Task PushEvents(CancellationToken token)
+        {
+            if (!pushEvents) return;
+            var eventList = new List<BufferedEvent>();
+            var eventRanges = new Dictionary<NodeId, TimeRange>();
+            while (EventQueue.TryDequeue(out BufferedEvent evt))
+            {
+                eventList.Add(evt);
+                if (!eventRanges.ContainsKey(evt.EmittingNode))
+                {
+                    eventRanges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
+                    continue;
+                }
+
+                var range = eventRanges[evt.EmittingNode];
+                if (evt.Time < range.Start)
+                {
+                    range.Start = evt.Time;
+                }
+                else if (evt.Time > range.End)
+                {
+                    range.End = evt.Time;
+                }
+            }
+            var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(eventList, token)));
+            if (results.Any(failed => failed == false))
+            {
+                // Write to failurebuffer, also remember to register which indices are failed
+
+            }
+            else
+            {
+                foreach (var kvp in eventRanges)
+                {
+                    var state = GetNodeState(kvp.Key);
+                    state.UpdateDestinationRange(kvp.Value);
+                }
+                if (FailureBuffer.Any)
+                {
+                    // Read from buffer, trigger history for relevant states...
+                }
+            }
+        }
+
+        private async Task PushersLoop(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                await Task.WhenAll(PushDataPoints(token), PushEvents(token), Task.Delay(config.Extraction.DataPushDelay, token));
+                nextPushFlag = true;
+            }
+        }
+
         private async Task RebrowseLoop(CancellationToken token)
         {
             var delay = TimeSpan.FromMinutes(config.Extraction.AutoRebrowsePeriod);
@@ -671,32 +722,32 @@ namespace Cognite.OpcUa
             // If any nodes are still at default values, meaning no pusher can initialize them, initialize to default values.
             foreach (var state in statesToSync)
             {
-                if (state.ExtractedRange.Start == DateTime.MinValue && state.ExtractedRange.End == DateTime.MaxValue)
+                if (state.SourceExtractedRange.Start == DateTime.MinValue && state.SourceExtractedRange.End == DateTime.MaxValue)
                 {
                     if (config.History.Backfill)
                     {
-                        state.ExtractedRange.Start = DateTime.UtcNow;
-                        state.ExtractedRange.End = DateTime.UtcNow;
+                        state.SourceExtractedRange.Start = DateTime.UtcNow;
+                        state.SourceExtractedRange.End = DateTime.UtcNow;
                     }
                     else
                     {
-                        state.ExtractedRange.End = DateTime.MinValue;
+                        state.SourceExtractedRange.End = DateTime.MinValue;
                     }
                 }
             }
 
             foreach (var state in EmitterStates.Values.Where(state => state.Historizing))
             {
-                if (state.ExtractedRange.Start == DateTime.MinValue && state.ExtractedRange.End == DateTime.MaxValue)
+                if (state.SourceExtractedRange.Start == DateTime.MinValue && state.SourceExtractedRange.End == DateTime.MaxValue)
                 {
                     if (config.History.Backfill)
                     {
-                        state.ExtractedRange.Start = DateTime.UtcNow;
-                        state.ExtractedRange.End = DateTime.UtcNow;
+                        state.SourceExtractedRange.Start = DateTime.UtcNow;
+                        state.SourceExtractedRange.End = DateTime.UtcNow;
                     }
                     else
                     {
-                        state.ExtractedRange.End = DateTime.MinValue;
+                        state.SourceExtractedRange.End = DateTime.MinValue;
                     }
                 }
             }
@@ -879,12 +930,9 @@ namespace Cognite.OpcUa
                 {
                     log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
                 }
-                foreach (var pusher in pushers)
-                {
-                    foreach (var buffDp in buffDps)
-                    {
-                        pusher.BufferedDPQueue.Enqueue(buffDp);
-                    }
+                foreach (var buffDp in buffDps)
+                { 
+                    DataPointQueue.Enqueue(buffDp);
                 }
             }
         }
@@ -996,14 +1044,11 @@ namespace Cognite.OpcUa
             eventState.UpdateFromStream(buffEvent);
 
             // Either backfill/frontfill is done, or we are not outside of each respective bound
-            if (!((eventState.IsStreaming || buffEvent.Time < eventState.ExtractedRange.End)
-                  && (eventState.BackfillDone || buffEvent.Time > eventState.ExtractedRange.Start))) return;
+            if (!((eventState.IsStreaming || buffEvent.Time < eventState.SourceExtractedRange.End)
+                  && (eventState.BackfillDone || buffEvent.Time > eventState.SourceExtractedRange.Start))) return;
 
             log.Verbose(buffEvent.ToDebugDescription());
-            foreach (var pusher in pushers)
-            {
-                pusher.BufferedEventQueue.Enqueue(buffEvent);
-            }
+            EventQueue.Enqueue(buffEvent);
         }
         /// <summary>
         /// Handle subscription callback for audit events (AddReferences/AddNodes). Triggers partial re-browse when necessary

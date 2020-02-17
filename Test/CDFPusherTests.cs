@@ -84,7 +84,7 @@ namespace Test
                 Assert.Equal(serverType == ServerName.Basic ? 4 : 2002, tester.Handler.timeseries.Count);
             }
         }
-        [Trait("Server", "basic")]
+        /*[Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
         [Trait("Test", "autobuffer")]
         [Fact]
@@ -93,7 +93,6 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 StoreDatapoints = true,
-                BufferDir = "./"
             });
             await tester.ClearPersistentData();
             tester.StartExtractor();
@@ -117,7 +116,7 @@ namespace Test
             Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
             Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
             Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_cdf"));
-        }
+        }*/
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
         [Trait("Test", "debugmode")]
@@ -305,7 +304,7 @@ namespace Test
         [Trait("Test", "connectiontest")]
         public async Task TestConnectionTest()
         {
-            var fullConfig = CommonTestUtils.BuildConfig("basic", 9);
+            var fullConfig = CommonTestUtils.BuildConfig("basic");
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             Logger.Configure(fullConfig.Logging);
 
@@ -354,7 +353,7 @@ namespace Test
         public async Task TestMultipleCDFPushers()
         {
             CommonTestUtils.ResetTestMetrics();
-            var fullConfig = CommonTestUtils.BuildConfig("basic", 16);
+            var fullConfig = CommonTestUtils.BuildConfig("basic");
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             fullConfig.Logging.ConsoleLevel = "debug";
             Logger.Configure(fullConfig.Logging);
@@ -452,37 +451,37 @@ namespace Test
 
             var pusher = tester.Pusher;
 
-            await pusher.PushDataPoints(CancellationToken.None);
+            var badPoints = new List<BufferedDataPoint>
+            {
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.PositiveInfinity),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NegativeInfinity),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NaN),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E100),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E100),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E105),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E105),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MaxValue),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MinValue)
+            };
+
             Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
             tester.Handler.StoreDatapoints = true;
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.PositiveInfinity));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NegativeInfinity));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NaN));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E100));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E100));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E105));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E105));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MaxValue));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MinValue));
-            await pusher.PushDataPoints(CancellationToken.None);
+
+            await pusher.PushDataPoints(badPoints, CancellationToken.None);
             Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
             tester.CogniteConfig.NonFiniteReplacement = -1;
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.PositiveInfinity));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NegativeInfinity));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NaN));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E100));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E100));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E105));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E105));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MaxValue));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MinValue));
-            await pusher.PushDataPoints(CancellationToken.None);
+
+            await pusher.PushDataPoints(badPoints, CancellationToken.None);
             Assert.True(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
             Assert.Equal(9, tester.Handler.datapoints["gp.efg:i=2"].Item1.Count);
             Assert.True(tester.Handler.datapoints["gp.efg:i=2"].Item1.TrueForAll(item => Math.Abs(item.Value + 1) < 0.01));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E99));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E99));
-            await pusher.PushDataPoints(CancellationToken.None);
+
+            var badPoints2 = new List<BufferedDataPoint>
+            {
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E99),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E99)
+            };
+            await pusher.PushDataPoints(badPoints2, CancellationToken.None);
             Assert.Equal(11, tester.Handler.datapoints["gp.efg:i=2"].Item1.Count);
         }
 
@@ -522,32 +521,40 @@ namespace Test
             await tester.TerminateRunTask();
 
             var pusher = tester.Pusher;
-
-            await pusher.PushDataPoints(CancellationToken.None);
             Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
-            // The extractor does not actually close completely if quitAfterMap is specified, but leaves connections open, including subscriptions
+            // The extractor does not actually close completely if quitAfterMap is specified,
+            // but leaves connections open, including subscriptions
             tester.Handler.StoreDatapoints = true;
-            // Too low datetime
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(new DateTime(1970, 1, 1), "gp.efg:i=3", 0));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(new DateTime(1900, 1, 1), "gp.efg:i=3", 0));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.MinValue, "gp.efg:i=3", 0));
-            // Incorrect type
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 123));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", "123"));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", null));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=4", 123));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=4", "123"));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=4", null));
 
-            await pusher.PushDataPoints(CancellationToken.None);
+            var badPoints = new List<BufferedDataPoint>
+            {
+                // Too low datetime
+                new BufferedDataPoint(new DateTime(1970, 1, 1), "gp.efg:i=3", 0),
+                new BufferedDataPoint(new DateTime(1900, 1, 1), "gp.efg:i=3", 0),
+                new BufferedDataPoint(DateTime.MinValue, "gp.efg:i=3", 0),
+                // Incorrect type
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 123),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", "123"),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", null),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=4", 123),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=4", "123"),
+                new BufferedDataPoint(DateTime.Now, "gp.efg:i=4", null)
+            };
+
+            await pusher.PushDataPoints(badPoints, CancellationToken.None);
             Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
             Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=4"));
             Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=3"));
-            // Remember that this does not test against CDF
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(new DateTime(1971, 1, 1), "gp.efg:i=3", 0));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(new DateTime(2040, 1, 1), "gp.efg:i=3", 0));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(new DateTime(1980, 1, 1), "gp.efg:i=3", 0));
-            await pusher.PushDataPoints(CancellationToken.None);
+
+            var badPoints2 = new List<BufferedDataPoint>
+            {
+                // Remember that this does not test against CDF
+                new BufferedDataPoint(new DateTime(1971, 1, 1), "gp.efg:i=3", 0),
+                new BufferedDataPoint(new DateTime(2040, 1, 1), "gp.efg:i=3", 0),
+                new BufferedDataPoint(new DateTime(1980, 1, 1), "gp.efg:i=3", 0)
+            };
+
+            await pusher.PushDataPoints(badPoints2, CancellationToken.None);
 
             Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
             Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=4"));

@@ -65,11 +65,10 @@ namespace Test
     {
         private static readonly ILogger log = Log.Logger.ForContext(typeof(CommonTestUtils));
 
-        public static FullConfig BuildConfig(string serverType, int index, string configname = "config.test.yml")
+        public static FullConfig BuildConfig(string serverType, string configname = "config.test.yml")
         {
             var fullConfig = ExtractorUtils.GetConfig(configname);
             if (fullConfig == null) throw new ConfigurationException("Failed to load config file");
-            fullConfig.FailureBuffer.FilePath = $"buffers{index}";
             switch (serverType)
             {
                 case "basic":
@@ -253,10 +252,9 @@ namespace Test
                 pusherConfig = ExtractorUtils.GetConfig(configNames[testParams.PusherConfig.Value]);
             }
 
-            if (testParams.BufferDir != null || testParams.FailureInflux != null)
+            if (testParams.FailureInflux != null)
             {
                 Config.FailureBuffer.Enabled = true;
-                Config.FailureBuffer.FilePath = testParams.BufferDir;
                 if (testParams.FailureInflux != null)
                 {
                     var failureInflux = ExtractorUtils.GetConfig(configNames[testParams.FailureInflux.Value]);
@@ -321,10 +319,6 @@ namespace Test
                 await IfDbClient.CreateDatabaseAsync(InfluxConfig.Database);
             }
 
-            if (Config.FailureBuffer.Enabled && !string.IsNullOrEmpty(Config.FailureBuffer.FilePath))
-            {
-                File.Create(Path.Join(Config.FailureBuffer.FilePath, "buffer.bin")).Close();
-            }
         }
 
         public void StartExtractor()
@@ -431,7 +425,6 @@ namespace Test
         public bool StoreDatapoints { get; set; } = false;
         public int? HistoryGranularity { get; set; } = null;
         public ConfigName? FailureInflux { get; set; } = null;
-        public string BufferDir { get; set; } = null;
         public bool FailureInfluxWrite { get; set; } = true;
         public Func<FullConfig, IPusher, UAClient, Extractor> Builder { get; set; } = null;
         public InfluxClientConfig InfluxOverride { get; set; } = null;

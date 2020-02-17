@@ -42,7 +42,8 @@ namespace Cognite.OpcUa
         /// Represents the last common value for the pushers, not safe, as it updates before
         /// the pushers are done pushing. Each pusher should keep track of its own range as needed.
         /// </summary>
-        public TimeRange ExtractedRange { get; }
+        public TimeRange SourceExtractedRange { get; }
+        public TimeRange DestinationExtractedRange { get; }
         public bool BackfillDone { get; private set; }
 
         private readonly IList<IEnumerable<BufferedDataPoint>> buffer;
@@ -53,7 +54,8 @@ namespace Cognite.OpcUa
         public NodeExtractionState(BufferedVariable variable)
         {
             if (variable == null) throw new ArgumentNullException(nameof(variable));
-            ExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
+            SourceExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
+            DestinationExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
             Id = variable.Id;
             Historizing = variable.Historizing;
             DataType = variable.DataType;
@@ -74,14 +76,16 @@ namespace Cognite.OpcUa
         {
             lock (rangeMutex)
             {
-                if (last < ExtractedRange.End)
+                if (last < DestinationExtractedRange.End)
                 {
-                    ExtractedRange.End = last;
+                    DestinationExtractedRange.End = last;
+                    SourceExtractedRange.End = last;
                 }
 
-                if (first > ExtractedRange.Start)
+                if (first > DestinationExtractedRange.Start)
                 {
-                    ExtractedRange.Start = first;
+                    DestinationExtractedRange.Start = first;
+                    SourceExtractedRange.Start = first;
                 }
             }
         }
@@ -95,9 +99,9 @@ namespace Cognite.OpcUa
             var last = points.Max(pt => pt.Timestamp);
             lock (rangeMutex)
             {
-                if (last > ExtractedRange.End && IsStreaming)
+                if (last > SourceExtractedRange.End && IsStreaming)
                 {
-                    ExtractedRange.End = last;
+                    SourceExtractedRange.End = last;
                 }
                 else if (!IsStreaming)
                 {
@@ -114,9 +118,9 @@ namespace Cognite.OpcUa
         {
             lock (rangeMutex)
             {
-                if (last > ExtractedRange.End)
+                if (last > SourceExtractedRange.End)
                 {
-                    ExtractedRange.End = last;
+                    SourceExtractedRange.End = last;
                 }
                 if (!final)
                 {
@@ -133,9 +137,9 @@ namespace Cognite.OpcUa
         {
             lock (rangeMutex)
             {
-                if (first < ExtractedRange.Start)
+                if (first < SourceExtractedRange.Start)
                 {
-                    ExtractedRange.Start = first;
+                    SourceExtractedRange.Start = first;
                 }
 
                 BackfillDone |= final;
@@ -151,9 +155,30 @@ namespace Cognite.OpcUa
             if (!buffer.Any()) return new List<BufferedDataPoint[]>();
             lock (rangeMutex)
             {
-                var result = buffer.Where(arr => arr.Max(pt => pt.Timestamp) > ExtractedRange.End);
+                var result = buffer.Where(arr => arr.Max(pt => pt.Timestamp) > SourceExtractedRange.End);
                 buffer.Clear();
                 return result;
+            }
+        }
+        /// <summary>
+        /// Use results of push to destinations to update the record of newest/latest points pushed to destinations.
+        /// </summary>
+        /// <param name="first"></param>
+        /// <param name="last"></param>
+        public void UpdateDestinationRange(TimeRange update)
+        {
+            if (update == null) return;
+            lock (rangeMutex)
+            {
+                if (update.End > DestinationExtractedRange.End)
+                {
+                    DestinationExtractedRange.End = update.End;
+                }
+
+                if (update.Start < DestinationExtractedRange.Start)
+                {
+                    DestinationExtractedRange.Start = update.Start;
+                }
             }
         }
 
@@ -203,7 +228,8 @@ namespace Cognite.OpcUa
         /// Represents the last common value for the pushers, not safe, as it updates before
         /// the pushers are done pushing. Each pusher should keep track of its own range as needed.
         /// </summary>
-        public TimeRange ExtractedRange { get; }
+        public TimeRange SourceExtractedRange { get; }
+        public TimeRange DestinationExtractedRange { get; }
 
         public bool BackfillDone { get; private set; } = true;
         /// <summary>
@@ -212,7 +238,9 @@ namespace Cognite.OpcUa
         private IList<BufferedEvent> buffer;
         public EventExtractionState(NodeId emitterId)
         {
-            ExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
+            SourceExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
+            DestinationExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
+
             Id = emitterId;
         }
         /// <summary>
@@ -223,13 +251,15 @@ namespace Cognite.OpcUa
         {
             lock (rangeMutex)
             {
-                if (last < ExtractedRange.End)
+                if (last < SourceExtractedRange.End)
                 {
-                    ExtractedRange.End = last;
+                    SourceExtractedRange.End = last;
+                    DestinationExtractedRange.End = last;
                 }
-                if (first > ExtractedRange.Start)
+                if (first > SourceExtractedRange.Start)
                 {
-                    ExtractedRange.Start = first;
+                    SourceExtractedRange.Start = first;
+                    DestinationExtractedRange.Start = first;
                 }
             }
         }
@@ -242,9 +272,9 @@ namespace Cognite.OpcUa
             if (evt == null) return;
             lock (rangeMutex)
             {
-                if (evt.Time > ExtractedRange.End && evt.Time > ExtractedRange.Start && IsStreaming)
+                if (evt.Time > SourceExtractedRange.End && evt.Time > SourceExtractedRange.Start && IsStreaming)
                 {
-                    ExtractedRange.End = evt.ReceivedTime;
+                    SourceExtractedRange.End = evt.ReceivedTime;
                 }
                 else if (!IsStreaming)
                 {
@@ -261,9 +291,9 @@ namespace Cognite.OpcUa
         {
             lock (rangeMutex)
             {
-                if (last > ExtractedRange.End)
+                if (last > SourceExtractedRange.End)
                 {
-                    ExtractedRange.End = last;
+                    SourceExtractedRange.End = last;
                 }
                 if (!final)
                 {
@@ -280,9 +310,9 @@ namespace Cognite.OpcUa
         {
             lock (rangeMutex)
             {
-                if (first < ExtractedRange.Start)
+                if (first < SourceExtractedRange.Start)
                 {
-                    ExtractedRange.Start = first;
+                    SourceExtractedRange.Start = first;
                 }
 
                 BackfillDone |= final;
@@ -298,11 +328,32 @@ namespace Cognite.OpcUa
             if (!buffer.Any()) return new List<BufferedEvent>();
             lock (rangeMutex)
             {
-                var result = buffer.Where(evt => evt.ReceivedTime > ExtractedRange.End);
+                var result = buffer.Where(evt => evt.ReceivedTime > SourceExtractedRange.End);
                 buffer.Clear();
                 return result;
             }
         }
+
+        /// <summary>
+        /// Use results of push to destinations to update the record of newest/latest points pushed to destinations.
+        /// </summary>
+        public void UpdateDestinationRange(TimeRange update)
+        {
+            if (update == null) return;
+            lock (rangeMutex)
+            {
+                if (update.End > DestinationExtractedRange.End)
+                {
+                    DestinationExtractedRange.End = update.End;
+                }
+
+                if (update.Start < DestinationExtractedRange.Start)
+                {
+                    DestinationExtractedRange.Start = update.Start;
+                }
+            }
+        }
+
         public void ResetStreamingState()
         {
             IsStreaming = !Historizing;

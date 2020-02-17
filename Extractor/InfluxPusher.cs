@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
@@ -22,8 +21,6 @@ namespace Cognite.OpcUa
         public PusherConfig BaseConfig { get; }
         public bool Failing { get; set; }
 
-        public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
-        public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
         private readonly InfluxClientConfig config;
         private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
         private InfluxDBClient client;
@@ -59,13 +56,15 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push each datapoint to influxdb. The datapoint Id, which corresponds to timeseries externalId in CDF, is used as MeasurementName
         /// </summary>
-        public async Task<IEnumerable<BufferedDataPoint>> PushDataPoints(CancellationToken token)
+        public async Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
         {
+            if (points == null) return null;
             var dataPointList = new List<BufferedDataPoint>();
 
             int count = 0;
-            while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer))
+            foreach (var _buffer in points)
             {
+                var buffer = _buffer;
                 if (buffer.Timestamp <= DateTime.UnixEpoch)
                 {
                     skippedDatapoints.Inc();
@@ -98,35 +97,36 @@ namespace Cognite.OpcUa
             }
             var groups = dataPointList.GroupBy(point => point.Id);
 
-            var points = new List<IInfluxDatapoint>();
+            var ipoints = new List<IInfluxDatapoint>();
 
             foreach (var group in groups)
             {
                 var ts = Extractor.GetNodeState(group.Key);
                 if (ts == null) continue;
                 dataPointsCounter.Inc(group.Count());
-                points.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
+                ipoints.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
             }
-            log.Debug("Push {cnt} datapoints to influxdb {db}", points.Count, config.Database);
+            log.Debug("Push {cnt} datapoints to influxdb {db}", ipoints.Count, config.Database);
             try
             {
-                await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
+                await client.PostPointsAsync(config.Database, ipoints, config.PointChunkSize);
             }
             catch (Exception e)
             {
                 dataPointPushFailures.Inc();
                 log.Error(e, "Failed to insert datapoints into influxdb");
-                return dataPointList;
+                return false;
             }
             dataPointPushes.Inc();
-            return Array.Empty<BufferedDataPoint>();
+            return true;
         }
 
-        public async Task<IEnumerable<BufferedEvent>> PushEvents(CancellationToken token)
+        public async Task<bool?> PushEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
+            if (events == null) return null;
             var evts = new List<BufferedEvent>();
             int count = 0;
-            while (BufferedEventQueue.TryDequeue(out BufferedEvent evt))
+            foreach (var evt in events)
             {
                 if (evt.Time < DateTime.UnixEpoch)
                 {
@@ -156,10 +156,10 @@ namespace Cognite.OpcUa
                 log.Warning("Failed to push events to influxdb");
                 log.Debug(ex, "Failed to push events to influxdb");
                 eventPushFailures.Inc();
-                return evts;
+                return false;
             }
             eventsPushes.Inc();
-            return Array.Empty<BufferedEvent>();
+            return true;
         }
         /// <summary>
         /// Reads the first and last datapoint from influx for each timeseries, sending the timestamps to each passed state
@@ -522,8 +522,6 @@ namespace Cognite.OpcUa
 
         public void Reset()
         {
-            BufferedDPQueue.Clear();
-            BufferedEventQueue.Clear();
             ranges.Clear();
         }
 

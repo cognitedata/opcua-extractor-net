@@ -43,11 +43,11 @@ namespace Cognite.OpcUa
         public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
         public int AutoRebrowsePeriod { get; set; } = 0;
         public bool EnableAuditDiscovery { get; set; } = false;
+        public int DataPushDelay { get; set; } = 1000;
     }
     public abstract class PusherConfig
     {
         public bool Debug { get; set; } = false;
-        public int DataPushDelay { get; set; } = 1000;
         public bool Critical { get; set; } = true;
         public bool ReadExtractedRanges { get; set; } = true;
         public double? NonFiniteReplacement
@@ -91,8 +91,9 @@ namespace Cognite.OpcUa
     public class FailureBufferConfig
     {
         public bool Enabled { get; set; } = false;
-        public string FilePath { get; set; } = "./";
         public InfluxBufferConfig Influx { get; set; }
+        public bool LocalQueue { get; set; }
+        public bool StoreHistorizing { get; set; }
     }
 
     public class InfluxBufferConfig
@@ -103,6 +104,7 @@ namespace Cognite.OpcUa
         public string Database { get; set; }
         public bool Write { get; set; } = true;
         public int PointChunkSize { get; set; } = 100000;
+        public bool StateStorage { get; set; }
     }
     public class FullConfig
     {
@@ -122,6 +124,8 @@ namespace Cognite.OpcUa
         private FailureBufferConfig failureBufferConfig = new FailureBufferConfig();
         public HistoryConfig History { get => historyConfig; set => historyConfig = value ?? historyConfig; }
         private HistoryConfig historyConfig = new HistoryConfig();
+        public StateStorageConfig StateStorage { get => stateStorage; set => stateStorage = value ?? stateStorage; }
+        private StateStorageConfig stateStorage = new StateStorageConfig();
     }
     public class LoggerConfig
     {
@@ -201,5 +205,11 @@ namespace Cognite.OpcUa
     {
         public ProtoNodeId NodeId { get; set; }
         public bool IsStep { get; set; } = false;
+    }
+
+    public class StateStorageConfig
+    {
+        public string Location { get; set; }
+        public int Interval { get; set; }
     }
 }

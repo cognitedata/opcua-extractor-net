@@ -68,8 +68,6 @@ Pushers:
         ApiKey:
         # Cognite service url
         Host: "https://api.cognitedata.com"
-        # Delay in ms between each push of data points to target
-        DataPushDelay: 1000
         # Debug mode, if true, Extractor will not push to target
         Debug: false
         # False if this destination can be ignored on failed connection
@@ -97,8 +95,6 @@ Pushers:
         Password:
         # Database to connect to, will not be created automatically
         Database:
-        # Delay in ms between each push of data points to target
-        DataPushDelay: 1000
         # Debug mode, if true, Extractor will not push to target
         Debug:
         # False if this destination can be ignored on failed connection
@@ -117,13 +113,10 @@ Pushers:
 FailureBuffer:
     # If false, buffering is disabled
     Enabled: false
-    # Create a binary dump of the data and store points there, and a json dump for events.
-    # Should be a relative path to a folder. datapoints.bin will be created there if enabled.
-    # Leave empty to disable pushing to file
-    FilePath: ./
     # Use influxdb as buffer
     # Points will be written to influxdb on failure unless Write is false, and read once pushing succeeds again.
-    # They will not be deleted.
+    # They will not be deleted, even once pushed to CDF. If you want a local storage, it is better to use the LocalQueue LiteDB solution.
+    # This takes priority over pushing to LiteDB queue, but if pushing to influx somehow fails, LiteDB may be used instead.
     Influx:
         Host:
         Username:
@@ -134,7 +127,25 @@ FailureBuffer:
         Write: true
         # Max number of points to send in each request to influx
         PointChunkSize: 100000
-    
+        # Store the state of which points/ranges are persisted to influxdb to local state storage. Requires the
+        # StateStorage.Location option to be set
+        StateStorage: false
+    # If true, store failed points in a queue in the state storage. The StateStorage.Location option must be set for this to work.
+    LocalQueue: false
+    # If true, also store datapoints from historizing timeseries in the buffer.
+    # Otherwise only the last timestamp before failure will be stored, and the variables
+    # will be frontfilled again connection is re-established.
+    # This may be worth enabling if OPC-UA history is considered unreliable or limited.
+    StoreHistorizing: false
+
+# Periodically store state in a local database to speed up starting, by not having to read state from destinations
+# This allows you to set the ReadExtractedRanges option to false on the pushers without having to read all of history on startup.
+# If the OPC-UA server does not support history this does nothing.
+StateStorage:
+    # Path to .db file used by the state storage
+    Location: "buffer.db"
+    # Interval between each write to the buffer file, in seconds. 0 or less disables the state storage.
+    Interval: 10
 
 
 Logging:
@@ -185,6 +196,9 @@ Extraction:
     IgnoreDataTypes:
         # - NamespaceUri:
         #	NodeId:
+
+    # Delay in ms between each push of data points to targets
+    DataPushDelay: 1000
     
     # Maximum size of array variables. Only arrays with the ArrayDimensions property in opc-ua specified will be used,
     # leave at 0 to only allow scalar values.

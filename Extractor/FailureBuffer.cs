@@ -57,16 +57,12 @@ namespace Cognite.OpcUa
             if (config.Influx != null && config.Influx.Write && influxPusher != null)
             {
                 influxPusher.BaseConfig.NonFiniteReplacement = nonFiniteReplacement;
-                foreach (var dp in points)
-                {
-                    influxPusher.BufferedDPQueue.Enqueue(dp);
-                }
 
                 try
                 {
-                    await influxPusher.PushDataPoints(token);
+                    var result = await influxPusher.PushDataPoints(points, token);
                     log.Information("Inserted {cnt} points into influxdb failure buffer", points.Count());
-                    success = true;
+                    success = result.GetValueOrDefault();
                 }
                 catch (Exception e)
                 {
@@ -74,11 +70,11 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (!success && config.FilePath != null)
+            /* if (!success && config.FilePath != null)
             {
                 WriteBufferToFile(points, Path.Join(config.FilePath, "buffer.bin"), token);
                 success = true;
-            }
+            } */
 
             if (success)
             {
@@ -99,25 +95,19 @@ namespace Cognite.OpcUa
             if (!startTimes.ContainsKey(index)) return Array.Empty<BufferedDataPoint>();
             bool success = false;
             IEnumerable<BufferedDataPoint> ret = new List<BufferedDataPoint>();
+
             if (config.Influx != null && config.Influx.Write && influxPusher != null)
             {
-                try
-                {
-                    ret = ret.Concat(await influxPusher.ReadDataPoints(startTimes[index], managedPoints, token));
-                    log.Information("Read {cnt} points from influxdb failure buffer", ret.Count());
-                    success = true;
-                }
-                catch (Exception e)
-                {
-                    log.Error(e, "Failed to read from influxdb buffer");
-                }
+                ret = ret.Concat(await influxPusher.ReadDataPoints(startTimes[index], managedPoints, token));
+                log.Information("Read {cnt} points from influxdb failure buffer", ret.Count());
+                success = true;
             }
 
-            if (config.FilePath != null && (!success || !bufferFileEmpty))
+            /* if (config.FilePath != null && (!success || !bufferFileEmpty))
             {
                 ret = ret.Concat(ReadBufferFromFile(Path.Join(config.FilePath, "buffer.bin"), token));
                 success = true;
-            }
+            } */
 
             ret = ret.DistinctBy(dp => new {dp.Id, dp.Timestamp}).ToList();
             if (success)
@@ -129,7 +119,7 @@ namespace Cognite.OpcUa
                     Any = false;
                     lock (fileLock)
                     {
-                        File.Create(Path.Join(config.FilePath, "buffer.bin")).Close();
+                        // File.Create(Path.Join(config.FilePath, "buffer.bin")).Close();
                     }
                     bufferFileEmpty = false;
                 }
@@ -144,21 +134,9 @@ namespace Cognite.OpcUa
             bool success = false;
             if (config.Influx != null && config.Influx.Write && influxPusher != null)
             {
-                foreach (var evt in events)
-                {
-                    influxPusher.BufferedEventQueue.Enqueue(evt);
-                }
-
-                try
-                {
-                    await influxPusher.PushEvents(token);
-                    log.Information("Inserted {cnt} events into influxdb failure buffer", events.Count());
-                    success = true;
-                }
-                catch (Exception e)
-                {
-                    log.Error(e, "Failed to insert into influxdb buffer");
-                }
+                var result = await influxPusher.PushEvents(events, token);
+                success = result.GetValueOrDefault();
+                log.Information("Inserted {cnt} events into influxdb failure buffer", events.Count());
             }
 
             if (success)
@@ -209,79 +187,6 @@ namespace Cognite.OpcUa
 
             return ret;
         }
-        /// <summary>
-        /// Write a list of datapoints to buffer file.
-        /// </summary>
-        /// <param name="dataPoints">List of points to be buffered</param>
-        private void WriteBufferToFile(IEnumerable<BufferedDataPoint> dataPoints,
-            string path,
-            CancellationToken token)
-        {
-            lock (fileLock)
-            {
-                using FileStream fs = new FileStream(path, FileMode.Append, FileAccess.Write);
-                int count = 0;
-                foreach (var dp in dataPoints)
-                {
-                    if (token.IsCancellationRequested) return;
-                    count++;
-                    byte[] bytes = dp.ToStorableBytes();
-                    fs.Write(bytes, 0, bytes.Length);
-                }
-                if (count > 0)
-                {
-                    bufferFileEmpty = false;
-                    log.Debug("Write {NumDatapointsToPersist} datapoints to file", count);
-                }
-                else
-                {
-                    log.Verbose("Write 0 datapoints to file");
-                }
-            }
-        }
-
-        /// <summary>
-        /// Reads buffer from file
-        /// </summary>
-        private IEnumerable<BufferedDataPoint> ReadBufferFromFile(string path, CancellationToken token)
-        {
-            var result = new List<BufferedDataPoint>();
-            lock (fileLock)
-            {
-                int count = 0;
-                using (FileStream fs = new FileStream(path, FileMode.OpenOrCreate, FileAccess.Read))
-                {
-                    byte[] sizeBytes = new byte[sizeof(ushort)];
-                    while (!token.IsCancellationRequested)
-                    {
-                        int read = fs.Read(sizeBytes, 0, sizeBytes.Length);
-                        if (read < sizeBytes.Length) break;
-                        ushort size = BitConverter.ToUInt16(sizeBytes, 0);
-                        byte[] dataBytes = new byte[size];
-                        int dRead = fs.Read(dataBytes, 0, size);
-                        if (dRead < size) break;
-                        var buffDp = new BufferedDataPoint(dataBytes);
-                        if (buffDp.Id == null)
-                        {
-                            log.Warning($"Invalid datapoint in buffer file {path}: {buffDp.Id}");
-                            continue;
-                        }
-                        count++;
-                        log.Verbose(buffDp.ToDebugDescription());
-                        result.Add(buffDp);
-                    }
-                }
-
-                if (count == 0)
-                {
-                    log.Verbose("Read 0 point from file");
-                }
-                log.Debug("Read {NumDatapointsToRead} points from file", count);
-            }
-
-            return result;
-        }
-
         public void Dispose()
         {
             influxPusher?.Dispose();

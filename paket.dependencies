@@ -12,6 +12,7 @@ nuget Prometheus.Client.MetricPusher
 nuget Prometheus.Client.MetricServer
 nuget YamlDotNet
 nuget CogniteSdk
+nuget Oryx 1.0.0-alpha-007
 nuget AdysTech.InfluxDB.Client.Net.Core
 nuget Serilog
 nuget Serilog.Sinks.GoogleCloudLogging
@@ -20,4 +21,9 @@ nuget Serilog.Sinks.Console
 nuget Serilog.Sinks.Async
 nuget Serilog.Sinks.File
 nuget Microsoft.CodeAnalysis.FxCopAnalyzers
+<<<<<<< HEAD
 nuget Microsoft.Windows.Compatibility
+=======
+nuget LiteDB
+nuget LiteQueue
+>>>>>>> Refactor pushers to use a central queue. Add config for litedb

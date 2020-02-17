@@ -114,20 +114,17 @@ namespace Test
                 1E105,
                 -1E105,
                 double.MaxValue,
-                double.MinValue
+                double.MinValue,
+                double.PositiveInfinity,
+                double.NegativeInfinity,
+                double.NaN
             };
 
             var pusher = tester.Pusher;
 
-            foreach (var value in values)
-            {
-                pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", value));
-            }
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.PositiveInfinity));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NegativeInfinity));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NaN));
+            var badPoints = values.Select(value => new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", value)).ToList();
 
-            await pusher.PushDataPoints(CancellationToken.None);
+            await pusher.PushDataPoints(badPoints, CancellationToken.None);
 
             var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database, 
                 "SELECT * FROM \"gp.efg:i=2\"");
@@ -208,7 +205,7 @@ namespace Test
             Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_cdf"));
         }
 
-        [Trait("Server", "basic")]
+        /*[Trait("Server", "basic")]
         [Trait("Target", "InfluxPusher")]
         [Trait("Test", "influxautobuffer")]
         [Fact]
@@ -262,7 +259,7 @@ namespace Test
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_influx"));
-        }
+        }*/
         [Trait("Server", "events")]
         [Trait("Target", "InfluxPusher")]
         [Trait("Test", "influxbackfill")]
