@@ -435,9 +435,17 @@ namespace Cognite.OpcUa
                 }
             }
 
-            var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
+            var results = await Task.WhenAll(pushers.Select(pusher =>
+                pusher.DataFailing ? pusher.TestConnection(token) : pusher.PushDataPoints(dataPointList, token)));
+
             if (results.Any(failed => failed == false))
             {
+                var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
+                foreach (var pair in failed)
+                {
+                    var pusher = pushers.ElementAt(pair.Index);
+                    pusher.DataFailing = true;
+                }
                 // Write to failurebuffer, also remember to register which indices are failed
 
             }
@@ -479,7 +487,8 @@ namespace Cognite.OpcUa
                     range.End = evt.Time;
                 }
             }
-            var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(eventList, token)));
+            var results = await Task.WhenAll(pushers.Select(pusher =>
+                pusher.EventsFailing ? pusher.TestConnection(token) : pusher.PushEvents(eventList, token)));
             if (results.Any(failed => failed == false))
             {
                 // Write to failurebuffer, also remember to register which indices are failed

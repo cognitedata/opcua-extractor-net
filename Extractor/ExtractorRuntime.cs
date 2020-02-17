@@ -108,12 +108,12 @@ namespace Cognite.OpcUa
             await Task.WhenAll(pushers.Select(async pusher =>
             {
                 var result = await pusher.TestConnection(source.Token);
-                if (pusher.BaseConfig.Critical && !result)
+                if (pusher.BaseConfig.Critical && !result.Value)
                 {
                     throw new ExtractorFailureException("Critical pusher failed to connect");
                 }
 
-                if (!result)
+                if (!result.Value)
                 {
                     Log.Warning("Removing pusher of type {type}", pusher.GetType());
                     removePushers.Add(pusher);

@@ -20,7 +20,6 @@ namespace Cognite.OpcUa
         public bool Any { get; private set; }
         public bool AnyEvents { get; private set; }
 
-        private bool bufferFileEmpty;
         private readonly object fileLock = new object();
 
         private static readonly ILogger log = Log.Logger.ForContext(typeof(FailureBuffer));
@@ -44,7 +43,7 @@ namespace Cognite.OpcUa
             };
             var connTest = influxPusher.TestConnection(CancellationToken.None);
             connTest.Wait();
-            if (!connTest.Result)
+            if (connTest.Result == null || !connTest.Result.Value)
             {
                 throw new ExtractorFailureException("Failed to connect to buffer influxdb");
             }
@@ -103,12 +102,6 @@ namespace Cognite.OpcUa
                 success = true;
             }
 
-            /* if (config.FilePath != null && (!success || !bufferFileEmpty))
-            {
-                ret = ret.Concat(ReadBufferFromFile(Path.Join(config.FilePath, "buffer.bin"), token));
-                success = true;
-            } */
-
             ret = ret.DistinctBy(dp => new {dp.Id, dp.Timestamp}).ToList();
             if (success)
             {
@@ -117,11 +110,6 @@ namespace Cognite.OpcUa
                 {
                     managedPoints.Clear();
                     Any = false;
-                    lock (fileLock)
-                    {
-                        // File.Create(Path.Join(config.FilePath, "buffer.bin")).Close();
-                    }
-                    bufferFileEmpty = false;
                 }
             }
             return ret;

@@ -19,7 +19,8 @@ namespace Cognite.OpcUa
         public Extractor Extractor { set; get; }
         public int Index { get; set; }
         public PusherConfig BaseConfig { get; }
-        public bool Failing { get; set; }
+        public bool DataFailing { get; set; }
+        public bool EventsFailing { get; set; }
 
         private readonly InfluxClientConfig config;
         private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
@@ -321,7 +322,7 @@ namespace Cognite.OpcUa
             return true;
         }
 
-        public async Task<bool> TestConnection(CancellationToken token)
+        public async Task<bool?> TestConnection(CancellationToken token)
         {
             IEnumerable<string> dbs;
             try

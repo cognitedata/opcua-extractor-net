@@ -49,7 +49,8 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
         
         public int Index { get; set; }
-        public bool Failing { get; set; }
+        public bool DataFailing { get; set; }
+        public bool EventsFailing { get; set; }
 
         public Extractor Extractor { get; set; }
         public PusherConfig BaseConfig { get; }
@@ -574,7 +575,7 @@ namespace Cognite.OpcUa
             return true;
         }
 
-        public async Task<bool> TestConnection(CancellationToken token)
+        public async Task<bool?> TestConnection(CancellationToken token)
         {
             // Use data client because it gives up after a little while
             var client = GetClient("Data");

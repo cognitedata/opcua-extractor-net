@@ -58,7 +58,7 @@ namespace Test
             }, 20, "Expected to find some data in influxdb");
 
             await tester.TerminateRunTask();
-            Assert.False(((InfluxPusher) tester.Pusher).Failing);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 0));
         }
         [Trait("Server", "array")]
         [Trait("Target", "InfluxPusher")]
@@ -86,7 +86,7 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.False(((InfluxPusher)tester.Pusher).Failing);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 0));
         }
 
         [Trait("Server", "basic")]
@@ -133,9 +133,10 @@ namespace Test
 
             foreach (var value in values)
             {
+                if (!double.IsFinite(value)) continue;
                 Assert.Contains(readValues.Entries, entry => Math.Abs(Convert.ToDouble(entry.Value) - value) < 1);
             }
-            Assert.False(((InfluxPusher)tester.Pusher).Failing);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 0));
         }
 
         [Trait("Server", "events")]

@@ -16,7 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,7 +26,8 @@ namespace Cognite.OpcUa
     public interface IPusher : IDisposable
     {
         int Index { get; set; }
-        bool Failing { get; set; }
+        bool DataFailing { get; set; }
+        bool EventsFailing { get; set; }
         PusherConfig BaseConfig { get; }
 
         /// <summary>
@@ -45,7 +45,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Test the connection to the destination, should return false on failure
         /// </summary>
-        Task<bool> TestConnection(CancellationToken token);
+        Task<bool?> TestConnection(CancellationToken token);
         /// <summary>
         /// Get earliest and latest timestamps in destination system, if possible
         /// </summary>
