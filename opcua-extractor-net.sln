@@ -24,7 +24,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Misc", "Misc", "{F9D856F4-2
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConfigurationTool", "ConfigurationTool\ConfigurationTool.csproj", "{F9A30D7C-1F8D-41F2-9A84-26C2B86DCDBE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExtractorLauncher", "ExtractorLauncher\ExtractorLauncher.csproj", "{0F78788D-DC43-4323-9208-FA59BC2C973A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExtractorLauncher", "ExtractorLauncher\ExtractorLauncher.csproj", "{0F78788D-DC43-4323-9208-FA59BC2C973A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpcUaService", "OpcUaService\OpcUaService.csproj", "{5E1BA45F-0D46-48CD-B305-990A98DDA242}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -48,6 +50,10 @@ Global
 		{0F78788D-DC43-4323-9208-FA59BC2C973A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0F78788D-DC43-4323-9208-FA59BC2C973A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0F78788D-DC43-4323-9208-FA59BC2C973A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E1BA45F-0D46-48CD-B305-990A98DDA242}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E1BA45F-0D46-48CD-B305-990A98DDA242}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E1BA45F-0D46-48CD-B305-990A98DDA242}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E1BA45F-0D46-48CD-B305-990A98DDA242}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

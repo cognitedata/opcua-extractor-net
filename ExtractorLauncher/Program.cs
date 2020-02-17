@@ -28,11 +28,16 @@ namespace Cognite.OpcUa
     /// Console launcher for the OPC-UA extractor and Configuration tool. Includes basic setup of logging/config/metrics and
     /// parsing of command-line arguments
     /// </summary>
-    class Program
+    public class Program
     {
+        private static CancellationTokenSource _sourceProgram;
+        private static bool _isRunning = false;
+        private static bool _isWindowsService = false;
+
         private static readonly Gauge version =
             Metrics.CreateGauge("opcua_version", $"version: {Version.GetVersion()}, status: {Version.Status()}");
         private static readonly ILogger log = Log.Logger.ForContext(typeof(Program));
+
         static int Main(string[] args)
         {
             // Temporary logger config for capturing logs during configuration.
@@ -124,6 +129,10 @@ namespace Cognite.OpcUa
             {
                 string configOutput = setup.ConfigTarget ?? System.IO.Path.Combine(configDir, "config.config-tool-output.yml");
                 RunConfigTool(config, baseConfig, configOutput);
+            }
+            else if (_isWindowsService)
+            {
+                RunExtractorService(config);
             }
             else
             {
@@ -230,6 +239,49 @@ namespace Cognite.OpcUa
             Log.CloseAndFlush();
         }
 
+        /// <summary>
+        /// Own function used when starting up from the windows service layer.
+        /// </summary>
+        /// <param name="config"></param>
+        private static void RunExtractorService(FullConfig config)
+        {
+            var runTime = new ExtractorRuntime(config);
+            runTime.Configure();
+
+            try
+            {
+                log.Information("Starting extractor");
+                runTime.Run(_sourceProgram).Wait();
+            }
+            catch (TaskCanceledException)
+            {
+                log.Warning("Extractor stopped manually");
+            }
+            catch (AggregateException aex)
+            {
+                if (ExtractorUtils.GetRootExceptionOfType<ConfigurationException>(aex) != null)
+                {
+                    log.Error("Invalid configuration, stopping");
+                }
+                if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) != null)
+                {
+                    log.Warning("Extractor stopped manually");
+                }
+            }
+            catch (ConfigurationException)
+            {
+                log.Error("Invalid configuration, stopping");
+            }
+            catch
+            {
+                log.Error("Extractor crashed, restarting");
+            }
+
+            log.Information("Stopping extractor");
+            Log.CloseAndFlush();
+            _isRunning = false;
+        }
+
         private static void RunConfigTool(FullConfig config, FullConfig baseConfig, string output)
         {
             var runTime = new ConfigToolRuntime(config, baseConfig, output);
@@ -298,6 +350,44 @@ namespace Cognite.OpcUa
 
             return result;
         }
+
+        #region Windows service helper methods
+
+        /// <summary>
+        /// Start the extractor
+        /// </summary>
+        /// <param name="args"></param>
+        /// <returns></returns>
+        public static int Start(string[] args)
+        {
+            _isWindowsService = true;
+            _isRunning = true;
+            _sourceProgram = new CancellationTokenSource();
+            int exitStatus = Main(args);
+            return exitStatus;
+        }
+
+        /// <summary>
+        /// Stop method for use by the windows service.
+        /// </summary>
+        public static void Stop()
+        {
+            _sourceProgram.Cancel();
+            //_isRunning = false;
+            Thread.Sleep(2000);
+        }
+
+        /// <summary>
+        /// Returns extractor status, used by the windows service  
+        /// </summary>
+        /// <returns></returns>
+        public static bool RunningStatus()
+        {
+            return _isRunning;
+        }
+
+        #endregion
+
 
         private struct ExtractorParams
         {
