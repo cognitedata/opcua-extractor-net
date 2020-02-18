@@ -1,5 +1,14 @@
 # OPC-UA Extractor Changelog
 
+1.1.0 2020-02-18
+------------------
+* Add support for events to influxdb pusher
+* Improve buffering on failure, add support for buffering to influxdb
+* Add support for Backfill/Frontfill logic.
+* Add new configuration tool to analyze server structure and generate a suggested config file.
+* Add support for simple command-line arguments.
+* Numerous fixes. Notably, custom datatypes were broken, as was the ForceRestart option.
+
 1.0.0 2019-11-07
 ------------------
 * Moved responsibility for handling non-finite datapoints to the pushers, resulting in a small change to the config scheme.
