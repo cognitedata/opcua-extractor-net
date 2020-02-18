@@ -110,11 +110,11 @@ namespace Cognite.OpcUa
             this.pushers = pushers ?? throw new ArgumentNullException(nameof(pushers));
             this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
-            FailureBuffer = new FailureBuffer(config.FailureBuffer, this);
             if (!string.IsNullOrWhiteSpace(config.StateStorage.Location))
             {
                 StateStorage = new StateStorage(this, config);
             }
+            FailureBuffer = new FailureBuffer(config.FailureBuffer, this);
             this.uaClient.Extractor = this;
             historyReader = new HistoryReader(uaClient, this, pushers, config.History);
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
@@ -451,14 +451,14 @@ namespace Cognite.OpcUa
             }
             else
             {
+                if (FailureBuffer.Any)
+                {
+                    // Read from buffer, trigger history for relevant states...
+                }
                 foreach (var kvp in pointRanges)
                 {
                     var state = GetNodeState(kvp.Key);
                     state.UpdateDestinationRange(kvp.Value);
-                }
-                if (FailureBuffer.Any)
-                {
-                    // Read from buffer, trigger history for relevant states...
                 }
             }
         }
@@ -496,14 +496,16 @@ namespace Cognite.OpcUa
             }
             else
             {
+                // Only update destination ranges once the FailureBuffer has been emptied.
+                // Otherwise a crash in this phase could result in lost points.
+                if (FailureBuffer.Any)
+                {
+                    // Read from buffer, trigger history for relevant states...
+                }
                 foreach (var kvp in eventRanges)
                 {
                     var state = GetEmitterState(kvp.Key);
                     state.UpdateDestinationRange(kvp.Value);
-                }
-                if (FailureBuffer.Any)
-                {
-                    // Read from buffer, trigger history for relevant states...
                 }
             }
         }
@@ -625,6 +627,19 @@ namespace Cognite.OpcUa
             foreach (var state in NodeStates.Values)
             {
                 state.ResetStreamingState();
+                if (!config.History.Enabled || !config.History.Backfill)
+                {
+                    state.BackfillDone = true;
+                }
+            }
+
+            foreach (var state in EmitterStates.Values)
+            {
+                state.ResetStreamingState();
+                if (!config.History.Enabled || !config.History.Backfill)
+                {
+                    state.BackfillDone = true;
+                }
             }
 
             if (config.Events.EmitterIds != null

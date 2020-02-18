@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Serilog;
 using LiteDB;
 using LiteQueue;
+using Opc.Ua;
 
 namespace Cognite.OpcUa
 {
@@ -18,8 +19,8 @@ namespace Cognite.OpcUa
         public const string EmitterStates = "emitter_states";
         public const string EventQueue = "event_queue";
 
-        public const int dataBatchSize = 100000;
-        public const int eventBatchSize = 1000;
+        private const int DataBatchSize = 100000;
+        private const int EventBatchSize = 1000;
 
         private readonly Extractor extractor;
         private readonly LiteDatabase db;
@@ -46,10 +47,10 @@ namespace Cognite.OpcUa
                 stringDataQueue.ResetOrphans();
                 doubleDataQueue = new LiteQueue<DoubleDataPointPoco>(db, DoubleDPQueue);
                 doubleDataQueue.ResetOrphans();
-                AnyPoints = stringDataQueue.Dequeue() != null || doubleDataQueue.Dequeue() != null;
+                AnyPoints = QueueAny(stringDataQueue).Result || QueueAny(doubleDataQueue).Result;
                 eventQueue = new LiteQueue<EventPoco>(db, EventQueue);
                 eventQueue.ResetOrphans();
-                AnyEvents = eventQueue.Dequeue() != null;
+                AnyEvents = QueueAny(eventQueue).Result;
             }
         }
 
@@ -79,7 +80,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="states">States to persist, if dirty</param>
         /// <param name="name">Name of the collection to persist to</param>
-        public async Task StoreExtractionState(IEnumerable<IExtractionState> states, string name, CancellationToken token)
+        public async Task StoreExtractionState(IEnumerable<BaseExtractionState> states, string name, CancellationToken token)
         {
             var toStore = states.Where(s => s.IsDirty).ToList();
             var pocos = toStore
@@ -98,7 +99,7 @@ namespace Cognite.OpcUa
                 {
                     var col = db.GetCollection<ExtractionStatePoco>(name);
                     col.Upsert(pocos);
-                });
+                }, token);
                 log.Debug("Saved {Stored} out of {TotalNumber} extraction states to store", 
                     toStore.Count, states.Count());
                 foreach (var state in toStore)
@@ -114,11 +115,11 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Reads all states for convenience. Instead of doing nlog(n) searches, we just read m entries. So long as
         /// we're not reading a fraction of all known states smaller than 1/log(n), this is more efficient. With how it is used
-        /// this is almost certainly better.
+        /// this is almost certainly better. For when it isn't, a search parameter is provided.
         /// </summary>
         /// <param name="states">States to read into</param>
         /// <param name="name">Name of collection to read</param>
-        public async Task<bool> ReadExtractionStates(IEnumerable<IExtractionState> states, string name,
+        public async Task<bool> ReadExtractionStates(IEnumerable<BaseExtractionState> states, string name,
             bool search, CancellationToken token)
         {
             if (!states.Any()) return true;
@@ -142,7 +143,7 @@ namespace Cognite.OpcUa
                         }
 
                         return ret;
-                    });
+                    }, token);
                 }
                 else
                 {
@@ -152,7 +153,6 @@ namespace Cognite.OpcUa
                         return col.FindAll();
                     }, token);
                 }
-                log.Debug("Found {cnt} states in the state storage", pocos.Count());
                 int count = 0;
                 foreach (var poco in pocos)
                 {
@@ -161,12 +161,10 @@ namespace Cognite.OpcUa
                         count++;
                         stateMap[poco.Id].InitExtractedRange(poco.FirstTimestamp,
                             poco.LastTimestamp);
-                        log.Information("Initialized {id} to ({start}, {end}), new: ({start}, {end})",
+                        log.Debug("Initialized {id} to ({start}, {end}) from state storage",
                             poco.Id,
                             poco.FirstTimestamp,
-                            poco.LastTimestamp,
-                            stateMap[poco.Id].SourceExtractedRange.Start.ToUniversalTime(),
-                            stateMap[poco.Id].SourceExtractedRange.End.ToUniversalTime());
+                            poco.LastTimestamp);
                     }
                 }
                 log.Information("Initialized extracted ranges from statestore for {cnt} nodes", count);
@@ -180,9 +178,20 @@ namespace Cognite.OpcUa
             return true;
         }
 
-        public async Task WritePointsToQueue(IEnumerable<BufferedDataPoint> points, CancellationToken token)
+        private Task<bool> QueueAny<T>(LiteQueue<T> queue)
         {
-            if (points == null) return;
+            return Task.Run(() =>
+            {
+                var head = queue.Dequeue();
+                if (head == null) return false;
+                queue.Abort(head);
+                return true;
+            });
+        }
+
+        public async Task<bool> WritePointsToQueue(IEnumerable<BufferedDataPoint> points, CancellationToken token)
+        {
+            if (points == null) return true;
             var stringPoints = new List<StringDataPointPoco>();
             var doublePoints = new List<DoubleDataPointPoco>();
 
@@ -207,7 +216,11 @@ namespace Cognite.OpcUa
             catch (LiteException e)
             {
                 log.Error(e, "Failed to insert datapoints into litedb queue");
+                return false;
             }
+
+            AnyPoints = true;
+            return true;
         }
         public async Task<bool> ReadPointsFromQueue(IEnumerable<IPusher> pushers, CancellationToken token)
         {
@@ -217,11 +230,12 @@ namespace Cognite.OpcUa
             {
                 while (!token.IsCancellationRequested)
                 {
-                    var stringRecords = stringDataQueue.Dequeue(dataBatchSize);
-                    var doubleRecords = doubleDataQueue.Dequeue(dataBatchSize);
+                    var stringRecords = stringDataQueue.Dequeue(DataBatchSize);
+                    var doubleRecords = doubleDataQueue.Dequeue(DataBatchSize);
                     var points = stringRecords.Select(record => record.Payload.ToDataPoint());
                     points = points.Concat(doubleRecords.Select(record => record.Payload.ToDataPoint())).ToList();
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(points, token)));
+
                     if (results.Any(res => res == false))
                     {
                         stringDataQueue.Abort(stringRecords);
@@ -229,10 +243,42 @@ namespace Cognite.OpcUa
                         failed = true;
                         return;
                     }
+                    // At this point, it should be safe to write points to destination ranges, even if
+                    // not all pushers are being pushed to here. Those that are not should already have the points.
+                    // If the extractor has been down we push to all just to be safe
+                    var ranges = new Dictionary<string, TimeRange>();
+
+                    foreach (var point in points)
+                    {
+                        if (!ranges.ContainsKey(point.Id))
+                        {
+                            ranges[point.Id] = new TimeRange(point.Timestamp, point.Timestamp);
+                            continue;
+                        }
+
+                        var range = ranges[point.Id];
+                        if (range.Start > point.Timestamp)
+                        {
+                            range.Start = point.Timestamp;
+                        }
+                        else if (range.End < point.Timestamp)
+                        {
+                            range.End = point.Timestamp;
+                        }
+                    }
+
+                    foreach (var kvp in ranges)
+                    {
+                        var state = extractor.GetNodeState(kvp.Key);
+                        state.UpdateDestinationRange(kvp.Value);
+                    }
+
                     stringDataQueue.Commit(stringRecords);
                     doubleDataQueue.Commit(doubleRecords);
-                    if (stringRecords.Count < dataBatchSize && doubleRecords.Count < dataBatchSize) break;
+                    if (stringRecords.Count < DataBatchSize && doubleRecords.Count < DataBatchSize) break;
                 }
+
+                AnyPoints = false;
             }, token);
             if (!failed)
             {
@@ -244,9 +290,9 @@ namespace Cognite.OpcUa
             return failed;
         }
 
-        public async Task WriteEventsToQueue(IEnumerable<BufferedEvent> events, CancellationToken token)
+        public async Task<bool> WriteEventsToQueue(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
-            if (events == null) return;
+            if (events == null) return true;
             var eventPocos = events.Select(evt => new EventPoco(evt, extractor)).ToList();
 
             try
@@ -256,7 +302,11 @@ namespace Cognite.OpcUa
             catch (LiteException e)
             {
                 log.Error(e, "Failed to insert datapoints into litedb queue");
+                return false;
             }
+
+            AnyEvents = true;
+            return true;
         }
 
         public async Task<bool> ReadEventsFromQueue(IEnumerable<IPusher> pushers, CancellationToken token)
@@ -267,7 +317,7 @@ namespace Cognite.OpcUa
             {
                 while (!token.IsCancellationRequested)
                 {
-                    var records = eventQueue.Dequeue(eventBatchSize);
+                    var records = eventQueue.Dequeue(EventBatchSize);
                     var events = records.Select(record => record.Payload.ToBufferedEvent(extractor));
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
 
@@ -277,9 +327,39 @@ namespace Cognite.OpcUa
                         failed = true;
                         return;
                     }
+
+                    var ranges = new Dictionary<NodeId, TimeRange>();
+
+                    foreach (var evt in events)
+                    {
+                        if (!ranges.ContainsKey(evt.EmittingNode))
+                        {
+                            ranges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
+                            continue;
+                        }
+
+                        var range = ranges[evt.EmittingNode];
+                        if (range.Start > evt.Time)
+                        {
+                            range.Start = evt.Time;
+                        }
+                        else if (range.End < evt.Time)
+                        {
+                            range.End = evt.Time;
+                        }
+                    }
+
+                    foreach (var kvp in ranges)
+                    {
+                        var state = extractor.GetEmitterState(kvp.Key);
+                        state.UpdateDestinationRange(kvp.Value);
+                    }
+
                     eventQueue.Commit(records);
-                    if (records.Count < eventBatchSize) break;
+                    if (records.Count < EventBatchSize) break;
                 }
+
+                AnyEvents = false;
             }, token);
             if (!failed)
             {
@@ -288,6 +368,7 @@ namespace Cognite.OpcUa
                     pusher.EventsFailing = false;
                 }
             }
+
             return failed;
         }
         public void Dispose()

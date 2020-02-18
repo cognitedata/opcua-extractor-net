@@ -36,9 +36,11 @@ Source:
 
 # Config for reading of history from the server
 History:
-    # Enable/disable history synchronization from the OPC-UA server to CDF:
+    # Enable/disable history synchronization from the OPC-UA server to CDF.
+    # Note that historizing event emitters are not affected by this option
     Enabled: false
     # Enable/disable backfill behavior. If this is false, data is read using frontfill only. (Pre 1.1 behavior)
+    # This applied to both datapoints and events.
     Backfill: false
     # Max number of datapoints per history read request, 0 for server specified
     DataChunk: 1000

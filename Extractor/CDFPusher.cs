@@ -240,12 +240,26 @@ namespace Cognite.OpcUa
             {
                 await client.DataPoints.CreateAsync(req, token);
             }
+            catch (ResponseException e)
+            {
+                dataPointPushFailures.Inc();
+                if (e.Code != 400 || !e.Missing.Any()) return false;
+                var missing = e.Missing
+                    .Select(mis => (mis["externalId"] as MultiValue.String)?.Value)
+                    .Where(id => id != null).ToHashSet();
+
+                if (!missing.Any()) return false;
+                log.Warning("While pushing points to CDF, {cnt} timeseries were missing. " +
+                            "If this happens on startup it may be due to points stored in a local buffer.", missing.Count);
+                var next = dataPointList.Where(kvp => !missing.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                return await PushDataPointsChunk(next, token);
+            }
             catch (Exception e)
             {
                 log.Warning(e, "Failed to push {count} points to CDF", count);
                 dataPointPushFailures.Inc();
                 // Return false indicating unexpected failure if we want to buffer.
-                return !(e is ResponseException ex) || ex.Code == 400 || ex.Code == 409;
+                return false;
             }
 
             dataPointPushes.Inc();

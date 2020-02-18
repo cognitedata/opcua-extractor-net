@@ -17,14 +17,19 @@ namespace Cognite.OpcUa
         private readonly Dictionary<int, DateTime> startTimes;
         private readonly Dictionary<int, DateTime> eventStartTimes;
         private readonly HashSet<NodeId> managedEvents = new HashSet<NodeId>();
-        public bool Any { get; private set; }
-        public bool AnyEvents { get; private set; }
+        private readonly Extractor extractor;
 
-        private readonly object fileLock = new object();
+        private readonly bool useLocalQueue;
+
+        public bool Any => any || useLocalQueue && extractor.StateStorage.AnyPoints;
+        private bool any;
+        public bool AnyEvents => anyEvents || useLocalQueue && extractor.StateStorage.AnyEvents;
+        private bool anyEvents;
 
         private static readonly ILogger log = Log.Logger.ForContext(typeof(FailureBuffer));
         public FailureBuffer(FailureBufferConfig config, Extractor extractor)
         {
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             managedPoints = new Dictionary<string, bool>();
             startTimes = new Dictionary<int, DateTime>();
@@ -41,6 +46,8 @@ namespace Cognite.OpcUa
             {
                 Extractor = extractor
             };
+            this.extractor = extractor;
+            useLocalQueue = extractor.StateStorage != null && config.LocalQueue;
             var connTest = influxPusher.TestConnection(CancellationToken.None);
             connTest.Wait();
             if (connTest.Result == null || !connTest.Result.Value)
@@ -48,15 +55,12 @@ namespace Cognite.OpcUa
                 throw new ExtractorFailureException("Failed to connect to buffer influxdb");
             }
         }
-        public async Task WriteDatapoints(IEnumerable<BufferedDataPoint> points, int index,
-            double? nonFiniteReplacement, CancellationToken token)
+        public async Task WriteDatapoints(IEnumerable<BufferedDataPoint> points, IEnumerable<int> indices, CancellationToken token)
         {
-            if (points == null || !points.Any()) return;
+            if (points == null || !points.Any() || indices == null || !indices.Any()) return;
             bool success = false;
             if (config.Influx != null && config.Influx.Write && influxPusher != null)
             {
-                influxPusher.BaseConfig.NonFiniteReplacement = nonFiniteReplacement;
-
                 try
                 {
                     var result = await influxPusher.PushDataPoints(points, token);
@@ -69,24 +73,29 @@ namespace Cognite.OpcUa
                 }
             }
 
-            /* if (!success && config.FilePath != null)
+            if (!success && useLocalQueue)
             {
-                WriteBufferToFile(points, Path.Join(config.FilePath, "buffer.bin"), token);
-                success = true;
-            } */
+                success = await extractor.StateStorage.WritePointsToQueue(points, token);
+            }
+
 
             if (success)
             {
-                if (!startTimes.ContainsKey(index))
+                var min = points.Select(dp => dp.Timestamp).Min();
+                foreach (int index in indices)
                 {
-                    startTimes[index] = points.Select(dp => dp.Timestamp).Min();
+                    if (!startTimes.ContainsKey(index))
+                    {
+                        startTimes[index] = min;
+                    }
                 }
+
                 foreach (var dp in points)
                 {
                     managedPoints[dp.Id] = dp.IsString;
                 }
 
-                Any = true;
+                any = true;
             }
         }
         public async Task<IEnumerable<BufferedDataPoint>> ReadDatapoints(int index, CancellationToken token)
@@ -109,7 +118,7 @@ namespace Cognite.OpcUa
                 if (!startTimes.Any())
                 {
                     managedPoints.Clear();
-                    Any = false;
+                    any = false;
                 }
             }
             return ret;
@@ -139,7 +148,7 @@ namespace Cognite.OpcUa
                     managedEvents.Add(evt.SourceNode);
                 }
 
-                AnyEvents = true;
+                anyEvents = true;
             }
         }
 
@@ -169,7 +178,7 @@ namespace Cognite.OpcUa
                 if (!eventStartTimes.Any())
                 {
                     managedEvents.Clear();
-                    AnyEvents = false;
+                    anyEvents = false;
                 }
             }
 
