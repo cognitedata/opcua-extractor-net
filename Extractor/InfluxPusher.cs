@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
@@ -411,27 +412,31 @@ namespace Cognite.OpcUa
             return idp;
         }
 
-        public async Task<IEnumerable<BufferedDataPoint>> ReadDataPoints(DateTime startTime,
-            IDictionary<string, bool> measurements,
+        public async Task<IEnumerable<BufferedDataPoint>> ReadDataPoints(
+            IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
-            if (measurements == null) throw new ArgumentNullException(nameof(measurements));
-            var timestamp = startTime - DateTime.UnixEpoch;
-            var fetchTasks = measurements.Keys.Select(measurement =>
-                client.QueryMultiSeriesAsync(config.Database, 
-                    $"SELECT * FROM \"{measurement}\" WHERE time >= {timestamp.Ticks}")).ToList();
+            if (states == null) throw new ArgumentNullException(nameof(states));
+
+            var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
+                    $"SELECT * FROM \"{state.Key}\"" +
+                    $" WHERE time >= {state.Value.DestinationExtractedRange.Start.Ticks}" +
+                    $" AND time <= {state.Value.DestinationExtractedRange.End.Ticks}")
+            ).ToList();
 
             var results = await Task.WhenAll(fetchTasks);
             token.ThrowIfCancellationRequested();
+
             var finalPoints = new List<BufferedDataPoint>();
+
             foreach (var series in results)
             {
                 if (!series.Any()) continue;
                 var current = series.First();
                 string id = current.SeriesName;
-                if (!measurements.ContainsKey(id)) continue;
-                bool isString = measurements[id];
+                if (!states.ContainsKey(id)) continue;
+                bool isString = states[id].Type == InfluxBufferType.StringType;
                 finalPoints.AddRange(current.Entries.Select(dp =>
                 {
                     if (isString)
@@ -461,26 +466,31 @@ namespace Cognite.OpcUa
         /// <param name="startTime">Time to read from, reading forwards</param>
         /// <param name="measurements">Nodes to read events from</param>
         /// <returns>A list of read events</returns>
-        public async Task<IEnumerable<BufferedEvent>> ReadEvents(DateTime startTime,
-            IEnumerable<NodeId> measurements,
+        public async Task<IEnumerable<BufferedEvent>> ReadEvents(
+            IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
-            var timestamp = startTime - DateTime.UnixEpoch;
-            var nameToNodeId = measurements.ToDictionary(
-                id => "events." + Extractor.GetUniqueId(id),
-                id => id);
-            var fetchTasks = measurements.Select(measurement =>
-                client.QueryMultiSeriesAsync(config.Database,
-                    $"SELECT * FROM /{"events." + Extractor.GetUniqueId(measurement)}*/ WHERE time >= {timestamp.Ticks}")).ToList();
+
+            var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
+                $"SELECT * FROM \"events.{state.Key}\"" +
+                $" WHERE time >= {state.Value.DestinationExtractedRange.Start.Ticks}" +
+                $" AND time <= {state.Value.DestinationExtractedRange.End.Ticks}")
+            ).ToList();
+
+            var nameToNodeId = states.ToDictionary(kvp => "events." + kvp.Key, kvp => kvp.Value.Id);
+
             var results = await Task.WhenAll(fetchTasks);
             token.ThrowIfCancellationRequested();
             var finalEvents = new List<BufferedEvent>();
 
+            var removeArrayRegex = new Regex("\\[[0-9]+\\]$");
+
             foreach (var series in results.SelectMany(res => res).DistinctBy(series => series.SeriesName))
             {
                 if (!series.Entries.Any()) continue;
-                var baseKey = nameToNodeId.Keys.FirstOrDefault(key => series.SeriesName.StartsWith(key, StringComparison.InvariantCulture));
+                var baseKey = nameToNodeId.Keys.FirstOrDefault(key =>
+                    key.Equals(removeArrayRegex.Replace(series.SeriesName, ""), StringComparison.InvariantCulture));
                 if (baseKey == null) continue;
                 var sourceNode = nameToNodeId[baseKey];
                 if (sourceNode == null) continue;

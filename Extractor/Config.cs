@@ -93,7 +93,6 @@ namespace Cognite.OpcUa
         public bool Enabled { get; set; } = false;
         public InfluxBufferConfig Influx { get; set; }
         public bool LocalQueue { get; set; }
-        public bool StoreHistorizing { get; set; }
     }
 
     public class InfluxBufferConfig

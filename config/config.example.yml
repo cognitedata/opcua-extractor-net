@@ -118,7 +118,7 @@ FailureBuffer:
     # Use influxdb as buffer
     # Points will be written to influxdb on failure unless Write is false, and read once pushing succeeds again.
     # They will not be deleted, even once pushed to CDF. If you want a local storage, it is better to use the LocalQueue LiteDB solution.
-    # This takes priority over pushing to LiteDB queue, but if pushing to influx somehow fails, LiteDB may be used instead.
+    # This, however, allows a remote buffer, and it allows using an existing influxdb pusher as a buffer, with write set to false.
     Influx:
         Host:
         Username:
@@ -134,11 +134,6 @@ FailureBuffer:
         StateStorage: false
     # If true, store failed points in a queue in the state storage. The StateStorage.Location option must be set for this to work.
     LocalQueue: false
-    # If true, also store datapoints from historizing timeseries in the buffer.
-    # Otherwise only the last timestamp before failure will be stored, and the variables
-    # will be frontfilled again connection is re-established.
-    # This may be worth enabling if OPC-UA history is considered unreliable or limited.
-    StoreHistorizing: false
 
 # Periodically store state in a local database to speed up starting, by not having to read state from destinations
 # This allows you to set the ReadExtractedRanges option to false on the pushers without having to read all of history on startup.

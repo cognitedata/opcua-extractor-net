@@ -15,9 +15,12 @@ namespace Cognite.OpcUa
     {
         public const string StringDPQueue = "string_dp_queue";
         public const string DoubleDPQueue = "double_dp_queue";
+        public const string EventQueue = "event_queue";
+
         public const string VariableStates = "variable_states";
         public const string EmitterStates = "emitter_states";
-        public const string EventQueue = "event_queue";
+        public const string InfluxVariableStates = "influx_variable_states";
+        public const string InfluxEventStates = "influx_event_states";
 
         private const int DataBatchSize = 100000;
         private const int EventBatchSize = 1000;
@@ -377,14 +380,9 @@ namespace Cognite.OpcUa
         }
         private class ExtractionStatePoco
         {
-            [BsonId]
-            public string Id { get; set; }
-
-            [BsonField("first")]
-            public DateTime FirstTimestamp { get; set; }
-
-            [BsonField("last")]
-            public DateTime LastTimestamp { get; set; }
+            [BsonId] public string Id { get; set; }
+            [BsonField("first")] public DateTime FirstTimestamp { get; set; }
+            [BsonField("last")] public DateTime LastTimestamp { get; set; }
         }
 
         private class StringDataPointPoco

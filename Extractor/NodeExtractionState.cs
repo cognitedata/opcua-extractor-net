@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Security.Cryptography;
 
 namespace Cognite.OpcUa
 {
@@ -15,7 +16,6 @@ namespace Cognite.OpcUa
         public bool IsDirty { get; set; }
         public TimeRange SourceExtractedRange { get; }
         public TimeRange DestinationExtractedRange { get; }
-
         protected object RangeMutex { get; } = new object();
         public bool BackfillDone { get; set; }
 
@@ -118,6 +118,15 @@ namespace Cognite.OpcUa
                     IsDirty = true;
                     DestinationExtractedRange.Start = update.Start;
                 }
+            }
+        }
+
+        public void RestartHistory()
+        {
+            lock (RangeMutex)
+            {
+                SourceExtractedRange.Start = DestinationExtractedRange.Start;
+                SourceExtractedRange.End = DestinationExtractedRange.End;
             }
         }
     }
@@ -336,4 +345,39 @@ namespace Cognite.OpcUa
         }
     }
 
+    public enum InfluxBufferType
+    {
+        StringType, DoubleType, EventType
+    }
+
+    public sealed class InfluxBufferState : BaseExtractionState
+    {
+        public InfluxBufferType Type { get; }
+        public override bool Historizing { get; set; }
+
+        public InfluxBufferState(NodeExtractionState other, bool events) : base(other?.Id)
+        {
+            if (other == null) throw new ArgumentNullException(nameof(other));
+            Historizing = other.Historizing;
+            DestinationExtractedRange.Start = DateTime.UtcNow;
+            DestinationExtractedRange.End = DateTime.UtcNow;
+            if (events)
+            {
+                Type = InfluxBufferType.EventType;
+            }
+            else
+            {
+                Type = other.DataType.IsString ? InfluxBufferType.StringType : InfluxBufferType.DoubleType;
+            }
+        }
+
+        public void ClearRanges()
+        {
+            lock (RangeMutex)
+            {
+                DestinationExtractedRange.Start = DateTime.MaxValue;
+                DestinationExtractedRange.End = DateTime.MinValue;
+            }
+        }
+    }
 }

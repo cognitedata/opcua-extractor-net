@@ -22,6 +22,7 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32.SafeHandles;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus.Client;
@@ -64,6 +65,7 @@ namespace Cognite.OpcUa
         private bool restart;
         private bool quit;
         private readonly AutoResetEvent triggerUpdateOperations = new AutoResetEvent(false);
+        private readonly ManualResetEvent triggerHistoryRestart = new ManualResetEvent(false);
 
         private readonly object managedNodesLock = new object();
         private HashSet<NodeId> managedNodes = new HashSet<NodeId>();
@@ -210,6 +212,9 @@ namespace Cognite.OpcUa
                 tasks = tasks.Append(Task.Run(() => StoreStateLoop(token)));
             }
 
+            tasks = tasks.Append(Task.Run(() => WaitHandle.WaitAny(
+                new[] {triggerHistoryRestart, token.WaitHandle})));
+
             tasks = tasks.ToList();
 
             triggerUpdateOperations.Reset();
@@ -218,6 +223,7 @@ namespace Cognite.OpcUa
             {
                 ExtractorUtils.LogException(failedTask.Exception, "Unexpected error in main task list", "Handled error in main task list");
             }
+
             while (tasks.Any() && failedTask == null)
             {
 
@@ -242,6 +248,12 @@ namespace Cognite.OpcUa
                 tasks = tasks
                     .Where(task => !task.IsCompleted && !task.IsFaulted && !task.IsCanceled)
                     .ToList();
+
+                if (triggerHistoryRestart.WaitOne(0))
+                {
+                    triggerHistoryRestart.Reset();
+                    tasks = tasks.Append(RestartHistory(token)).ToList();
+                }
             }
 
             if (token.IsCancellationRequested) throw new TaskCanceledException();
@@ -409,9 +421,43 @@ namespace Cognite.OpcUa
         #endregion
         #region Loops
 
-        private async Task PushDataPoints(CancellationToken token)
+        private async Task RestartHistory(CancellationToken token)
         {
-            if (!pushData) return;
+            bool success = await historyReader.Terminate(token, 30);
+            if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
+            foreach (var state in NodeStates.Values.Where(state => state.Historizing))
+            {
+                state.RestartHistory();
+            }
+
+            await Task.WhenAll(Task.Run(async () =>
+            {
+                await historyReader.FrontfillEvents(EmitterStates.Values.Where(state => state.Historizing),
+                    managedNodes.ToList(), token);
+                if (config.History.Backfill)
+                {
+                    await historyReader.BackfillEvents(
+                        EmitterStates.Values.Where(state => state.Historizing),
+                        managedNodes.ToList(), token);
+                }
+            }), Task.Run(async () =>
+            {
+                await historyReader.FrontfillData(
+                    NodeStates.Values.Where(state => state.Historizing).ToList(), token);
+                if (config.History.Backfill)
+                {
+                    await historyReader.BackfillData(
+                        NodeStates.Values.Where(state => state.Historizing).ToList(), token);
+                }
+            }));
+        }
+
+        private async Task<bool> PushDataPoints(CancellationToken token)
+        {
+            if (!pushData) return false;
+
+            bool restartHistory = false;
+
             var dataPointList = new List<BufferedDataPoint>();
             var pointRanges = new Dictionary<string, TimeRange>();
 
@@ -441,19 +487,49 @@ namespace Cognite.OpcUa
             if (results.Any(failed => failed == false))
             {
                 var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
+                var failedPushers = new List<IPusher>();
                 foreach (var pair in failed)
                 {
                     var pusher = pushers.ElementAt(pair.Index);
                     pusher.DataFailing = true;
+                    failedPushers.Add(pusher);
                 }
-                // Write to failurebuffer, also remember to register which indices are failed
+
+                await FailureBuffer.WriteDatapoints(dataPointList, pointRanges, failedPushers, token);
 
             }
             else
             {
+                var failedPushers = pushers.Where(pusher => pusher.DataFailing).ToList();
+                if (failedPushers.Any())
+                {
+                    // Try to push any non-historizing points
+                    var nonHistorizing = pointRanges.Keys.Where(key => !GetNodeState(key).Historizing).ToHashSet();
+                    var pointsToPush = dataPointList.Where(point => !nonHistorizing.Contains(point.Id)).ToList();
+                    var pushResults = await Task.WhenAll(failedPushers.Select(pusher => pusher.PushDataPoints(pointsToPush, token)));
+
+                    // Here we are fine with "null" result. Not ideal, but it is what it is.
+                    // In theory we might end up in an expensive loop, but the connection tests should be designed so that
+                    // success there implies success otherwise.
+                    if (!pushResults.All(res => res == null || res == true)) return false;
+
+                    if (config.History.Enabled)
+                    {
+                        if (pointRanges.Keys.Any(key => GetNodeState(key).Historizing))
+                        {
+                            restartHistory = true;
+                        }
+                    }
+
+                    foreach (var pusher in failedPushers)
+                    {
+                        pusher.DataFailing = false;
+                    }
+
+                }
                 if (FailureBuffer.Any)
                 {
-                    // Read from buffer, trigger history for relevant states...
+                    await FailureBuffer.ReadDatapoints(pushers, token);
                 }
                 foreach (var kvp in pointRanges)
                 {
@@ -461,13 +537,18 @@ namespace Cognite.OpcUa
                     state.UpdateDestinationRange(kvp.Value);
                 }
             }
+
+            return restartHistory;
         }
 
-        private async Task PushEvents(CancellationToken token)
+        private async Task<bool> PushEvents(CancellationToken token)
         {
-            if (!pushEvents) return;
+            if (!pushEvents) return false;
             var eventList = new List<BufferedEvent>();
             var eventRanges = new Dictionary<NodeId, TimeRange>();
+
+            bool restartHistory = false;
+
             while (EventQueue.TryDequeue(out BufferedEvent evt))
             {
                 eventList.Add(evt);
@@ -508,13 +589,21 @@ namespace Cognite.OpcUa
                     state.UpdateDestinationRange(kvp.Value);
                 }
             }
+
+            return restartHistory;
         }
 
         private async Task PushersLoop(CancellationToken token)
         {
             while (!token.IsCancellationRequested)
             {
-                await Task.WhenAll(PushDataPoints(token), PushEvents(token), Task.Delay(config.Extraction.DataPushDelay, token));
+                var waitTask = Task.Delay(config.Extraction.DataPushDelay, token);
+                var results = await Task.WhenAll(PushDataPoints(token), PushEvents(token));
+                if (results.Any(res => res))
+                {
+                    triggerHistoryRestart.Set();
+                }
+                await waitTask;
                 nextPushFlag = true;
             }
         }
@@ -1203,6 +1292,7 @@ namespace Cognite.OpcUa
             Starting.Set(0);
             triggerUpdateOperations?.Dispose();
             StateStorage?.Dispose();
+            triggerHistoryRestart?.Dispose();
         }
     }
 }

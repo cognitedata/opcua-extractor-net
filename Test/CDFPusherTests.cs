@@ -204,7 +204,10 @@ namespace Test
                       + $", 10 timeseries and got {tester.Handler.timeseries.Count}");
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.datapoints["gp.efg:i=16"].Item1.Any()
+                    tester.Handler.datapoints.ContainsKey("gp.efg:i=16")
+                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=17")
+                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=14")
+                    && tester.Handler.datapoints["gp.efg:i=16"].Item1.Any()
                     && tester.Handler.datapoints["gp.efg:i=17"].Item1.Any()
                     && tester.Handler.datapoints["gp.efg:i=14"].Item2.Any(), 20,
                 "Expected to get some data");

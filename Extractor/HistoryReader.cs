@@ -352,6 +352,8 @@ namespace Cognite.OpcUa
             try
             {
                 Interlocked.Increment(ref running);
+
+
                 var frontFillChunks = ExtractorUtils.GroupByTimeGranularity(
                     states.Select(state => (state, state.SourceExtractedRange.End)),
                     historyGranularity, config.DataNodesChunk);
@@ -372,8 +374,16 @@ namespace Cognite.OpcUa
             try
             {
                 Interlocked.Increment(ref running);
+                foreach (var state in states)
+                {
+                    if (state.SourceExtractedRange.Start < historyStartTime)
+                    {
+                        state.UpdateFromBackfill(DateTime.MinValue, true);
+                    }
+                }
                 var backFillChunks = ExtractorUtils.GroupByTimeGranularity(
-                    states.Select(state => (state, state.SourceExtractedRange.Start)),
+                    states.Where(state => state.SourceExtractedRange.Start > historyStartTime)
+                        .Select(state => (state, state.SourceExtractedRange.Start)),
                     historyGranularity, config.DataNodesChunk);
                 await Task.WhenAll(backFillChunks.Select(chunk => Task.Run(() => BackfillDataChunk(chunk, token))));
             }
@@ -415,8 +425,16 @@ namespace Cognite.OpcUa
             try
             {
                 Interlocked.Increment(ref running);
+                foreach (var state in states)
+                {
+                    if (state.SourceExtractedRange.Start < historyStartTime)
+                    {
+                        state.UpdateFromBackfill(DateTime.MinValue, true);
+                    }
+                }
                 var backFillChunks = ExtractorUtils.GroupByTimeGranularity(
-                    states.Select(state => (state, state.SourceExtractedRange.Start)),
+                    states.Where(state => state.SourceExtractedRange.Start > historyStartTime)
+                        .Select(state => (state, state.SourceExtractedRange.Start)),
                     historyGranularity, config.EventNodesChunk);
 
                 await Task.WhenAll(backFillChunks.Select(chunk =>
@@ -428,17 +446,20 @@ namespace Cognite.OpcUa
             }
         }
 
-        public async Task Terminate(CancellationToken token, int timeoutsec = 30)
+        public async Task<bool> Terminate(CancellationToken token, int timeoutsec = 30)
         {
             aborting = true;
             int timeout = timeoutsec * 10;
             int cycles = 0;
             while (running > 0 && cycles++ < timeout) await Task.Delay(100, token);
+            aborting = false;
             if (running > 0)
             {
                 Log.Warning("Failed to abort HistoryReader");
+                return false;
             }
-            aborting = false;
+
+            return true;
         }
     }
 }
