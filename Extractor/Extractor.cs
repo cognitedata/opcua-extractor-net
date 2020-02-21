@@ -197,6 +197,15 @@ namespace Cognite.OpcUa
             if (FailureBuffer != null)
             {
                 await FailureBuffer.InitializeBufferStates(NodeStates.Values, token);
+                if (FailureBuffer.Any)
+                {
+                    await FailureBuffer.ReadDatapoints(pushers, token);
+                }
+
+                if (FailureBuffer.AnyEvents)
+                {
+                    await FailureBuffer.ReadEvents(pushers, token);
+                }
             }
 
             Pushing = true;
@@ -504,7 +513,7 @@ namespace Cognite.OpcUa
                 {
                     // Try to push any non-historizing points
                     var nonHistorizing = pointRanges.Keys.Where(key => !GetNodeState(key).Historizing).ToHashSet();
-                    var pointsToPush = dataPointList.Where(point => !nonHistorizing.Contains(point.Id)).ToList();
+                    var pointsToPush = dataPointList.Where(point => nonHistorizing.Contains(point.Id)).ToList();
                     var pushResults = await Task.WhenAll(failedPushers.Select(pusher => pusher.PushDataPoints(pointsToPush, token)));
 
                     // Here we are fine with "null" result. Not ideal, but it is what it is.

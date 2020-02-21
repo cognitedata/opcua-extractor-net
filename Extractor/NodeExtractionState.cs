@@ -119,6 +119,10 @@ namespace Cognite.OpcUa
                     IsDirty = true;
                     DestinationExtractedRange.Start = update.Start;
                 }
+                if (BackfillDone && DestinationExtractedRange.Start == SourceExtractedRange.Start)
+                {
+                    DestinationExtractedRange.Start = DateTime.MinValue;
+                }
             }
         }
 

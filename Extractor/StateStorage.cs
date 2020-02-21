@@ -164,11 +164,6 @@ namespace Cognite.OpcUa
                         count++;
                         stateMap[poco.Id].InitExtractedRange(poco.FirstTimestamp,
                             poco.LastTimestamp);
-                        log.Debug("Initialized {id} to ({start}, {end}) from state storage {name}",
-                            poco.Id,
-                            poco.FirstTimestamp,
-                            poco.LastTimestamp,
-                            name);
                     }
                 }
                 log.Information("Initialized extracted ranges from statestore {name} for {cnt} nodes", 
