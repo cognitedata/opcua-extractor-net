@@ -20,3 +20,4 @@ nuget Serilog.Sinks.Console
 nuget Serilog.Sinks.Async
 nuget Serilog.Sinks.File
 nuget Microsoft.CodeAnalysis.FxCopAnalyzers
+nuget Microsoft.Windows.Compatibility
