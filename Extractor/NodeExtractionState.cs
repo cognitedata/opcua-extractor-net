@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Security.Cryptography;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -123,11 +124,15 @@ namespace Cognite.OpcUa
 
         public void RestartHistory()
         {
+
             lock (RangeMutex)
             {
-                SourceExtractedRange.Start = DestinationExtractedRange.Start;
-                SourceExtractedRange.End = DestinationExtractedRange.End;
+                IsStreaming = false;
+                BackfillDone = false;
+                SourceExtractedRange.Start = new DateTime(DestinationExtractedRange.Start.Ticks);
+                SourceExtractedRange.End = new DateTime(DestinationExtractedRange.End.Ticks);
             }
+
         }
     }
     /// <summary>
@@ -165,13 +170,14 @@ namespace Cognite.OpcUa
             ArrayDimensions = variable.ArrayDimensions;
             DisplayName = variable.DisplayName;
             BackfillDone = false;
-            if (!variable.Historizing)
+            if (variable.Historizing)
             {
                 Historizing = true;
+                buffer = new List<IEnumerable<BufferedDataPoint>>();
             }
             else
             {
-                buffer = new List<IEnumerable<BufferedDataPoint>>();
+                Historizing = false;
             }
 
             IsStreaming = !Historizing;
@@ -227,7 +233,7 @@ namespace Cognite.OpcUa
         public IEnumerable<IEnumerable<BufferedDataPoint>> FlushBuffer()
         {
             if (!IsStreaming) throw new InvalidOperationException("Flush non-streaming buffer");
-            if (!buffer.Any()) return new List<BufferedDataPoint[]>();
+            if (buffer == null || !buffer.Any()) return new List<BufferedDataPoint[]>();
             lock (RangeMutex)
             {
                 var result = buffer.Where(arr => arr.Max(pt => pt.Timestamp) > SourceExtractedRange.End);
@@ -328,7 +334,7 @@ namespace Cognite.OpcUa
         public IEnumerable<BufferedEvent> FlushBuffer()
         {
             if (!IsStreaming) throw new InvalidOperationException("Flush non-streaming buffer");
-            if (!buffer.Any()) return new List<BufferedEvent>();
+            if (buffer == null || !buffer.Any()) return new List<BufferedEvent>();
             lock (RangeMutex)
             {
                 var result = buffer.Where(evt => evt.ReceivedTime > SourceExtractedRange.End);

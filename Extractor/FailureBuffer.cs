@@ -30,6 +30,10 @@ namespace Cognite.OpcUa
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
+
+            useLocalQueue = extractor.StateStorage != null && config.LocalQueue;
+            this.extractor = extractor;
+
             if (config.Influx?.Database == null) return;
 
             nodeBufferStates = new Dictionary<string, InfluxBufferState>();
@@ -45,8 +49,6 @@ namespace Cognite.OpcUa
             {
                 Extractor = extractor
             };
-            this.extractor = extractor;
-            useLocalQueue = extractor.StateStorage != null && config.LocalQueue;
             var connTest = influxPusher.TestConnection(CancellationToken.None);
             connTest.Wait();
             if (connTest.Result == null || !connTest.Result.Value)
@@ -78,7 +80,7 @@ namespace Cognite.OpcUa
 
                 foreach (var state in eventStates)
                 {
-                    nodeBufferStates[extractor.GetUniqueId(state.Id)] = state;
+                    eventBufferStates[extractor.GetUniqueId(state.Id)] = state;
                 }
             }
         }
@@ -88,6 +90,11 @@ namespace Cognite.OpcUa
         {
             if (points == null || !points.Any() || pushers == null || !pushers.Any() || pointRanges == null
                 || !pointRanges.Any()) return true;
+
+            points = points.GroupBy(pt => pt.Id)
+                .Where(group => !extractor.GetNodeState(group.Key).Historizing)
+                .SelectMany(group => group)
+                .ToList();
 
             bool success = true;
             if (config.Influx != null && influxPusher != null)
@@ -137,37 +144,41 @@ namespace Cognite.OpcUa
         }
         public async Task<bool> ReadDatapoints(IEnumerable<IPusher> pushers, CancellationToken token)
         {
-            var activeStates = nodeBufferStates.Where(kvp => !kvp.Value.Historizing
-                && kvp.Value.DestinationExtractedRange.End > kvp.Value.DestinationExtractedRange.Start)
-                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-
             bool success = true;
 
-            if (config.Influx != null && influxPusher != null && activeStates.Any())
+            if (config.Influx != null && influxPusher != null)
             {
-                try
+                var activeStates = nodeBufferStates.Where(kvp =>
+                        !kvp.Value.Historizing
+                        && kvp.Value.DestinationExtractedRange.End > kvp.Value.DestinationExtractedRange.Start)
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+                if (activeStates.Any())
                 {
-                    var dps = await influxPusher.ReadDataPoints(activeStates, token);
-                    log.Information("Read {cnt} points from influxdb failure buffer", dps.Count());
-                    await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(dps, token)));
-
-                    foreach (var state in activeStates)
+                    try
                     {
-                        state.Value.ClearRanges();
-                    }
+                        var dps = await influxPusher.ReadDataPoints(activeStates, token);
+                        log.Information("Read {cnt} points from influxdb failure buffer", dps.Count());
+                        await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(dps, token)));
 
-                    if (config.Influx.StateStorage)
+                        foreach (var state in activeStates)
+                        {
+                            state.Value.ClearRanges();
+                        }
+
+                        if (config.Influx.StateStorage)
+                        {
+                            await extractor.StateStorage.StoreExtractionState(activeStates.Values,
+                                StateStorage.InfluxVariableStates, token).ConfigureAwait(false);
+                        }
+
+                        any = false;
+                    }
+                    catch (Exception e)
                     {
-                        await extractor.StateStorage.StoreExtractionState(activeStates.Values,
-                            StateStorage.InfluxVariableStates, token).ConfigureAwait(false);
+                        success = false;
+                        Log.Error(e, "Failed to read points from influxdb");
                     }
-
-                    any = false;
-                }
-                catch (Exception e)
-                {
-                    success = false;
-                    Log.Error(e, "Failed to read points from influxdb");
                 }
             }
 
@@ -184,6 +195,11 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             if (events == null || !events.Any() || pushers == null || !pushers.Any()) return true;
+
+            events = events.GroupBy(evt => evt.EmittingNode)
+                .Where(group => !extractor.GetEmitterState(group.Key).Historizing)
+                .SelectMany(group => group)
+                .ToList();
 
             bool success = true;
 
@@ -255,37 +271,41 @@ namespace Cognite.OpcUa
 
         public async Task<bool> ReadEvents(IEnumerable<IPusher> pushers, CancellationToken token)
         {
-            var activeStates = eventBufferStates.Where(kvp =>
-                    !kvp.Value.Historizing
-                    && kvp.Value.DestinationExtractedRange.End > kvp.Value.DestinationExtractedRange.Start)
-                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
 
             bool success = true;
 
-            if (config.Influx != null && influxPusher != null && activeStates.Any())
+            if (config.Influx != null && influxPusher != null)
             {
-                try
+                var activeStates = eventBufferStates.Where(kvp =>
+                        !kvp.Value.Historizing
+                        && kvp.Value.DestinationExtractedRange.End > kvp.Value.DestinationExtractedRange.Start)
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                if (activeStates.Any())
                 {
-                    var events = await influxPusher.ReadEvents(activeStates, token);
-                    log.Information("Read {cnt} events from influxdb failure buffer", events.Count());
-                    await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
-
-                    foreach (var state in activeStates)
+                    try
                     {
-                        state.Value.ClearRanges();
-                    }
+                        var events = await influxPusher.ReadEvents(activeStates, token);
+                        log.Information("Read {cnt} events from influxdb failure buffer", events.Count());
+                        await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
 
-                    if (config.Influx.StateStorage)
-                    {
-                        await extractor.StateStorage.StoreExtractionState(activeStates.Values, 
-                            StateStorage.InfluxEventStates, token).ConfigureAwait(false);
+                        foreach (var state in activeStates)
+                        {
+                            state.Value.ClearRanges();
+                        }
+
+                        if (config.Influx.StateStorage)
+                        {
+                            await extractor.StateStorage.StoreExtractionState(activeStates.Values,
+                                StateStorage.InfluxEventStates, token).ConfigureAwait(false);
+                        }
+                        anyEvents = false;
                     }
-                    anyEvents = false;
-                }
-                catch (Exception e)
-                {
-                    success = false;
-                    Log.Error(e, "Failed to read events from influxdb");
+                    catch (Exception e)
+                    {
+                        success = false;
+                        Log.Error(e, "Failed to read events from influxdb");
+                    }
                 }
             }
 

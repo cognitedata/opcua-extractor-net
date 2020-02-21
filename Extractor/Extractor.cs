@@ -122,7 +122,7 @@ namespace Cognite.OpcUa
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
             if (config.Extraction.IdPrefix == "events.")
             {
-                throw new ConfigurationException("Avoid using events. as IdPrefix, as it is used internally");
+                throw new ConfigurationException("Avoid using \"events.\" as IdPrefix, as it is used internally");
             }
             foreach (var pusher in pushers)
             {
@@ -194,6 +194,11 @@ namespace Cognite.OpcUa
                 throw;
             }
 
+            if (FailureBuffer != null)
+            {
+                await FailureBuffer.InitializeBufferStates(NodeStates.Values, token);
+            }
+
             Pushing = true;
 
             var tasks = new List<Task>
@@ -252,7 +257,8 @@ namespace Cognite.OpcUa
                 if (triggerHistoryRestart.WaitOne(0))
                 {
                     triggerHistoryRestart.Reset();
-                    tasks = tasks.Append(RestartHistory(token)).ToList();
+                    tasks = tasks.Append(RestartHistory(token)).Append(Task.Run(() => WaitHandle.WaitAny(
+                        new[] { triggerHistoryRestart, token.WaitHandle }))).ToList();
                 }
             }
 
@@ -423,13 +429,6 @@ namespace Cognite.OpcUa
 
         private async Task RestartHistory(CancellationToken token)
         {
-            bool success = await historyReader.Terminate(token, 30);
-            if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
-            foreach (var state in NodeStates.Values.Where(state => state.Historizing))
-            {
-                state.RestartHistory();
-            }
-
             await Task.WhenAll(Task.Run(async () =>
             {
                 await historyReader.FrontfillEvents(EmitterStates.Values.Where(state => state.Historizing),
@@ -517,6 +516,12 @@ namespace Cognite.OpcUa
                     {
                         if (pointRanges.Keys.Any(key => GetNodeState(key).Historizing))
                         {
+                            bool success = await historyReader.Terminate(token, 30);
+                            if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
+                            foreach (var state in NodeStates.Values.Where(state => state.Historizing))
+                            {
+                                state.RestartHistory();
+                            }
                             restartHistory = true;
                         }
                     }

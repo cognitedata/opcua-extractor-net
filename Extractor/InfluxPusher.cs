@@ -421,8 +421,8 @@ namespace Cognite.OpcUa
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT * FROM \"{state.Key}\"" +
-                    $" WHERE time >= {state.Value.DestinationExtractedRange.Start.Ticks}" +
-                    $" AND time <= {state.Value.DestinationExtractedRange.End.Ticks}")
+                    $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks*100}" +
+                    $" AND time <= {(state.Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks*100}")
             ).ToList();
 
             var results = await Task.WhenAll(fetchTasks);
@@ -472,10 +472,12 @@ namespace Cognite.OpcUa
         {
             token.ThrowIfCancellationRequested();
 
+            var unixTicks = DateTime.UnixEpoch.Ticks;
+
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
                 $"SELECT * FROM \"events.{state.Key}\"" +
-                $" WHERE time >= {state.Value.DestinationExtractedRange.Start.Ticks}" +
-                $" AND time <= {state.Value.DestinationExtractedRange.End.Ticks}")
+                $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks*100}" +
+                $" AND time <= {(state.Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks * 100}")
             ).ToList();
 
             var nameToNodeId = states.ToDictionary(kvp => "events." + kvp.Key, kvp => kvp.Value.Id);

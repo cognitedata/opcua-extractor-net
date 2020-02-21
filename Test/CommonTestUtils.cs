@@ -244,7 +244,7 @@ namespace Test
                 Config.History.Granularity = testParams.HistoryGranularity.Value;
             }
             Config.Logging.ConsoleLevel = testParams.LogLevel;
-            Logger.Configure(Config.Logging);
+            Cognite.OpcUa.Logger.Configure(Config.Logging);
             Config.Source.EndpointURL = hostNames[testParams.ServerName];
 
             FullConfig pusherConfig = null;

@@ -59,7 +59,7 @@ namespace Cognite.OpcUa
             services.AddHttpClient("Context", client => { client.Timeout = Timeout.InfiniteTimeSpan; })
                 .AddPolicyHandler(GetRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
-            services.AddHttpClient("Data", client => { client.Timeout = TimeSpan.FromSeconds(300); })
+            services.AddHttpClient("Data", client => { client.Timeout = TimeSpan.FromSeconds(10); })
                 .AddPolicyHandler(GetDataRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
         }

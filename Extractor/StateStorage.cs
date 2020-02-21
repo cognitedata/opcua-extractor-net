@@ -103,8 +103,8 @@ namespace Cognite.OpcUa
                     var col = db.GetCollection<ExtractionStatePoco>(name);
                     col.Upsert(pocos);
                 }, token);
-                log.Debug("Saved {Stored} out of {TotalNumber} extraction states to store", 
-                    toStore.Count, states.Count());
+                log.Debug("Saved {Stored} out of {TotalNumber} extraction states to store {name}", 
+                    toStore.Count, states.Count(), name);
                 foreach (var state in toStore)
                 {
                     state.IsDirty = false;
@@ -164,13 +164,15 @@ namespace Cognite.OpcUa
                         count++;
                         stateMap[poco.Id].InitExtractedRange(poco.FirstTimestamp,
                             poco.LastTimestamp);
-                        log.Debug("Initialized {id} to ({start}, {end}) from state storage",
+                        log.Debug("Initialized {id} to ({start}, {end}) from state storage {name}",
                             poco.Id,
                             poco.FirstTimestamp,
-                            poco.LastTimestamp);
+                            poco.LastTimestamp,
+                            name);
                     }
                 }
-                log.Information("Initialized extracted ranges from statestore for {cnt} nodes", count);
+                log.Information("Initialized extracted ranges from statestore {name} for {cnt} nodes", 
+                    name, count);
             }
             catch (LiteException e)
             {
@@ -210,6 +212,8 @@ namespace Cognite.OpcUa
                 }
             }
 
+
+            log.Information("Write {cnt} points to queue", stringPoints.Count + doublePoints.Count);
             try
             {
                 await Task.WhenAll(
@@ -275,6 +279,7 @@ namespace Cognite.OpcUa
                         var state = extractor.GetNodeState(kvp.Key);
                         state.UpdateDestinationRange(kvp.Value);
                     }
+                    log.Information("Read {cnt} points from litedb queue", points.Count());
 
                     stringDataQueue.Commit(stringRecords);
                     doubleDataQueue.Commit(doubleRecords);
@@ -398,6 +403,10 @@ namespace Cognite.OpcUa
                 Value = dp.StringValue;
                 ExternalId = dp.Id;
             }
+
+            public StringDataPointPoco()
+            {
+            }
             public BufferedDataPoint ToDataPoint()
             {
                 return new BufferedDataPoint(Timestamp, ExternalId, Value);
@@ -415,6 +424,9 @@ namespace Cognite.OpcUa
                 Timestamp = dp.Timestamp;
                 Value = dp.DoubleValue;
                 ExternalId = dp.Id;
+            }
+            public DoubleDataPointPoco()
+            {
             }
             public BufferedDataPoint ToDataPoint()
             {
