@@ -110,7 +110,7 @@ podTemplate(
             stage('Build') {
                 sh('dotnet build -r linux-x64')
             }
-            timeout(5) {
+            timeout(10) {
                 stage('Run tests') {
                     sh('./test.sh')
                     archiveArtifacts artifacts: 'coverage.lcov', fingerprint: true
