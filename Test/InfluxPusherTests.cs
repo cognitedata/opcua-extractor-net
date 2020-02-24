@@ -18,11 +18,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Serilog;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -31,7 +29,7 @@ namespace Test
     [CollectionDefinition("Influx_tests", DisableParallelization = true)]
     public class InfluxPusherTests : MakeConsoleWork
     {
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(InfluxPusherTests));
+        // private static readonly ILogger log = Log.Logger.ForContext(typeof(InfluxPusherTests));
 
         public InfluxPusherTests(ITestOutputHelper output) : base(output) { }
         [Trait("Server", "basic")]
@@ -185,8 +183,6 @@ namespace Test
             await tester.ClearPersistentData();
             tester.Config.Extraction.AllowStringVariables = true;
             tester.StartExtractor();
-            tester.Handler.AllowPush = true;
-            tester.Handler.AllowConnectionTest = true;
 
             await tester.Extractor.WaitForNextPush();
 
@@ -220,61 +216,6 @@ namespace Test
             Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_cdf"));
         }
 
-        /*[Trait("Server", "basic")]
-        [Trait("Target", "InfluxPusher")]
-        [Trait("Test", "influxautobuffer")]
-        [Fact]
-        public async Task TestInfluxAutoBuffer()
-        {
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                ConfigName = ConfigName.Influx,
-                BufferDir = "./",
-                LogLevel = "debug"
-            });
-            tester.Config.History.Enabled = false;
-            await tester.ClearPersistentData();
-            var bufferPath = Path.Join(tester.Config.FailureBuffer.FilePath, "buffer.bin");
-
-            tester.StartExtractor();
-
-            await tester.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_datapoints_pushed_influx") > 0,
-                20, "Expected InfluxPusher to start working");
-
-            var oldHost = tester.InfluxConfig.Host;
-            tester.InfluxConfig.Host = "testWrong";
-            ((InfluxPusher)tester.Pusher).Reconfigure();
-
-            await tester.WaitForCondition(() => new FileInfo(bufferPath).Length > 0, 20,
-                "Expected some data to be written");
-
-            tester.InfluxConfig.Host = oldHost;
-            ((InfluxPusher)tester.Pusher).Reconfigure();
-
-            await tester.WaitForCondition(() => new FileInfo(bufferPath).Length == 0, 20,
-                () => $"Expected file to be emptied, but it contained {new FileInfo(bufferPath).Length} bytes of data");
-
-            await Task.Delay(1000);
-
-            await tester.TerminateRunTask();
-
-            var dps = await ((InfluxPusher)tester.Pusher)
-                .ReadDataPoints(DateTime.UnixEpoch, new Dictionary<string, bool> {{"gp.efg:i=10", false}}, CancellationToken.None);
-
-            dps = dps.DistinctBy(pt => (int) Math.Round(pt.DoubleValue));
-
-            foreach (var dp in dps)
-            {
-                 log.Information("dp: {val}", dp.DoubleValue);
-            }
-
-            var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)Math.Round(dp.First().DoubleValue)).ToList();
-
-            ExtractorTester.TestContinuity(intdps);
-
-            Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_influx"));
-        }*/
         [Trait("Server", "events")]
         [Trait("Target", "InfluxPusher")]
         [Trait("Test", "influxbackfill")]

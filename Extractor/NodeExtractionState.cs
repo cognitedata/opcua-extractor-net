@@ -371,8 +371,8 @@ namespace Cognite.OpcUa
         public InfluxBufferState(NodeExtractionState other, bool events) : base(other?.Id)
         {
             if (other == null) throw new ArgumentNullException(nameof(other));
-            DestinationExtractedRange.Start = DateTime.UtcNow;
-            DestinationExtractedRange.End = DateTime.UtcNow;
+            DestinationExtractedRange.Start = DateTime.MaxValue;
+            DestinationExtractedRange.End = DateTime.MinValue;
             if (events)
             {
                 Type = InfluxBufferType.EventType;
@@ -387,14 +387,15 @@ namespace Cognite.OpcUa
         public InfluxBufferState(NodeId objectId) : base(objectId)
         {
             Type = InfluxBufferType.EventType;
-            DestinationExtractedRange.Start = DateTime.UtcNow;
-            DestinationExtractedRange.End = DateTime.UtcNow;
+            DestinationExtractedRange.Start = DateTime.MaxValue;
+            DestinationExtractedRange.End = DateTime.MinValue;
         }
 
         public void ClearRanges()
         {
             lock (RangeMutex)
             {
+                IsDirty = true;
                 DestinationExtractedRange.Start = DateTime.MaxValue;
                 DestinationExtractedRange.End = DateTime.MinValue;
             }

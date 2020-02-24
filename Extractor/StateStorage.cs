@@ -28,7 +28,7 @@ namespace Cognite.OpcUa
         private readonly Extractor extractor;
         private readonly LiteDatabase db;
 
-        private readonly ILogger log = Log.Logger.ForContext<StateStorage>();
+        private readonly ILogger log = Log.Logger.ForContext(typeof(StateStorage));
 
         private readonly LiteQueue<StringDataPointPoco> stringDataQueue;
         private readonly LiteQueue<DoubleDataPointPoco> doubleDataQueue;

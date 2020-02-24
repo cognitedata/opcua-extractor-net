@@ -63,19 +63,29 @@ namespace Cognite.OpcUa
             {
                 var variableStates = states
                     .Where(state => !state.Historizing)
-                    .Select(state => new InfluxBufferState(state, false));
+                    .Select(state => new InfluxBufferState(state, false))
+                    .ToList();
+
+                foreach (var state in variableStates)
+                {
+                    state.DestinationExtractedRange.Start = DateTime.MinValue;
+                    state.DestinationExtractedRange.End = DateTime.MaxValue;
+                }
 
                 await extractor.StateStorage.ReadExtractionStates(variableStates, StateStorage.InfluxVariableStates,
                     false, token);
+
                 foreach (var state in variableStates)
                 {
-                    if (state.StatePersisted)
+                    if (!state.StatePersisted) continue;
+                    nodeBufferStates[extractor.GetUniqueId(state.Id)] = state;
+                    if (state.DestinationExtractedRange.Start <= state.DestinationExtractedRange.End)
                     {
-                        nodeBufferStates[extractor.GetUniqueId(state.Id)] = state;
+                        any = true;
                     }
                 }
 
-                var eventStates = nodeIds.Select(id => new InfluxBufferState(id));
+                var eventStates = nodeIds.Select(id => new InfluxBufferState(id)).ToList();
 
                 await extractor.StateStorage.ReadExtractionStates(eventStates,
                     StateStorage.InfluxEventStates, false,
@@ -83,9 +93,19 @@ namespace Cognite.OpcUa
 
                 foreach (var state in eventStates)
                 {
+                    state.DestinationExtractedRange.Start = DateTime.MinValue;
+                    state.DestinationExtractedRange.End = DateTime.MaxValue;
+                }
+
+                foreach (var state in eventStates)
+                {
                     if (state.StatePersisted)
                     {
                         eventBufferStates[extractor.GetUniqueId(state.Id)] = state;
+                        if (state.DestinationExtractedRange.Start < state.DestinationExtractedRange.End)
+                        {
+                            anyEvents = true;
+                        }
                     }
                 }
             }
@@ -124,11 +144,12 @@ namespace Cognite.OpcUa
                         {
                             if (!nodeBufferStates.ContainsKey(key))
                             {
-                                nodeBufferStates[key] = new InfluxBufferState(extractor.GetNodeState(key), false);
+                                var state = extractor.GetNodeState(key);
+                                if (state.Historizing) continue;
+                                nodeBufferStates[key] = new InfluxBufferState(state, false);
                             }
                             nodeBufferStates[key].UpdateDestinationRange(value);
                         }
-
                         if (config.Influx.StateStorage)
                         {
                             await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,

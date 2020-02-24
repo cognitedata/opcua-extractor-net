@@ -56,7 +56,6 @@ namespace Test
             });
             tester.Config.Extraction.AllowStringVariables = false;
             await tester.ClearPersistentData();
-            CommonTestUtils.ResetTestMetrics();
 
             log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
             tester.StartExtractor();
@@ -84,39 +83,6 @@ namespace Test
                 Assert.Equal(serverType == ServerName.Basic ? 4 : 2002, tester.Handler.timeseries.Count);
             }
         }
-        /*[Trait("Server", "basic")]
-        [Trait("Target", "CDFPusher")]
-        [Trait("Test", "autobuffer")]
-        [Fact]
-        public async Task TestAutoBuffering()
-        {
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                StoreDatapoints = true,
-            });
-            await tester.ClearPersistentData();
-            tester.StartExtractor();
-            tester.Handler.AllowPush = false;
-
-            var bufferPath = Path.Join(tester.Config.FailureBuffer.FilePath, "buffer.bin");
-
-            await tester.WaitForCondition(() => new FileInfo(bufferPath).Length > 0, 20, 
-                "Some data must be written");
-            tester.Handler.AllowPush = true;
-
-            await tester.WaitForCondition(() => new FileInfo(bufferPath).Length == 0, 20,
-                () => $"Expecting file to be emptied but it contained {new FileInfo(bufferPath).Length} bytes");
-
-            await Task.Delay(500);
-
-            await tester.TerminateRunTask();
-
-            tester.TestContinuity("gp.efg:i=10");
-            Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
-            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_cdf"));
-        }*/
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
         [Trait("Test", "debugmode")]

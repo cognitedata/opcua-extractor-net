@@ -344,7 +344,7 @@ namespace Cognite.OpcUa
             return uaClient.ConvertToString(value);
         }
         /// <summary>
-        /// Read properties for the given list of BufferedNode. This in intelligent, and keeps track of which properties are in the process of being read,
+        /// Read properties for the given list of BufferedNode. This is intelligent, and keeps track of which properties are in the process of being read,
         /// to prevent multiple pushers from starting PropertyRead operations at the same time. If this is called on a given node twice in short time, the second call
         /// waits on the first.
         /// </summary>
@@ -500,7 +500,7 @@ namespace Cognite.OpcUa
             var results = await Task.WhenAll(pushers.Select(pusher =>
                 pusher.DataFailing ? pusher.TestConnection(token) : pusher.PushDataPoints(dataPointList, token)));
 
-            if (results.Any(failed => failed == false))
+            if (results.Any(status => status == false))
             {
                 var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
                 var failedPushers = new List<IPusher>();
