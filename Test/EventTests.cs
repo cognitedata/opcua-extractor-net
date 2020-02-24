@@ -104,6 +104,8 @@ namespace Test
                     && tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming),
                 40, "Expected history read to finish");
 
+            await tester.Extractor.WaitForNextPush();
+
             int lastCount = tester.Handler.events.Count;
             Assert.Equal(0, (int)CommonTestUtils.GetMetricValue("opcua_event_push_failures"));
             tester.Extractor.RestartExtractor();

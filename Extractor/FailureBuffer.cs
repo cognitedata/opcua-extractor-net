@@ -103,6 +103,7 @@ namespace Cognite.OpcUa
                 .ToList();
 
             bool success = true;
+
             if (config.Influx != null && influxPusher != null)
             {
                 try
@@ -117,7 +118,7 @@ namespace Cognite.OpcUa
                         }
                     }
 
-                    if (config.Influx.StateStorage && success && !influxPusher.DataFailing)
+                    if (success && !influxPusher.DataFailing)
                     {
                         foreach ((string key, var value) in pointRanges)
                         {
@@ -128,8 +129,11 @@ namespace Cognite.OpcUa
                             nodeBufferStates[key].UpdateDestinationRange(value);
                         }
 
-                        await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
-                            StateStorage.InfluxVariableStates, token).ConfigureAwait(false);
+                        if (config.Influx.StateStorage)
+                        {
+                            await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
+                                StateStorage.InfluxVariableStates, token).ConfigureAwait(false);
+                        }
 
                         any = true;
                     }
@@ -228,7 +232,7 @@ namespace Cognite.OpcUa
                         }
                     }
 
-                    if (config.Influx.StateStorage && success && !influxPusher.EventsFailing)
+                    if (success && !influxPusher.EventsFailing)
                     {
                         var eventRanges = new Dictionary<string, TimeRange>();
                         foreach (var evt in events)
@@ -259,8 +263,12 @@ namespace Cognite.OpcUa
                             }
                             eventBufferStates[sourceId].UpdateDestinationRange(range);
                         }
-                        await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
-                            StateStorage.InfluxEventStates, token).ConfigureAwait(false);
+
+                        if (config.Influx.StateStorage)
+                        {
+                            await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
+                                StateStorage.InfluxEventStates, token).ConfigureAwait(false);
+                        }
 
                         anyEvents = true;
                     }

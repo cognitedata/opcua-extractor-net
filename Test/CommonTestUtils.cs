@@ -25,6 +25,7 @@ using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
+using Google.Type;
 using LiteDB;
 using Microsoft.Extensions.DependencyInjection;
 using Prometheus.Client;
@@ -397,6 +398,7 @@ namespace Test
         {
             var dps = Handler.datapoints[id].Item1;
             var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)Math.Round(dp.First().Value)).ToList();
+            intdps.Sort();
             TestContinuity(intdps);
         }
 
@@ -411,12 +413,34 @@ namespace Test
             {
                 if (last != dp - 1)
                 {
-                    log.Verbose("Out of order points at {dp}, {last}", dp, last);
+                    log.Debug("Out of order points at {dp}, {last}", dp, last);
                 }
                 last = dp;
                 check[dp - min]++;
             }
             Assert.All(check, val => Assert.Equal(1, val));
+        }
+        /// <summary>
+        /// Test that the points given by the id is within ms +/- 200ms of eachother.
+        /// This does introduce some issues in tests when jenkins hiccups, but it is needed to test
+        /// continuity on points that aren't incrementing.
+        /// </summary>
+        /// <param name="ms">Expected interval</param>
+        /// <param name="id">Id in handler (numeric datapoints only)</param>
+        /// <param name="delta">Allowed deviation. For OPC-UA above 100ms has been observed.</param>
+        public void TestConstantRate(int ms, string id, int delta = 200)
+        {
+            var dps = Handler.datapoints[id].Item1;
+            var tss = dps.Select(dp => dp.Timestamp).Distinct().ToList();
+            tss.Sort();
+            long last = 0;
+            foreach (var ts in tss)
+            {
+                Assert.True(last == 0
+                            || Math.Abs(ts - last) < ms + delta,
+                    $"Expected difference to be less than {ms + delta}, but it was {ts - last}");
+                last = ts;
+            }
         }
         public void Dispose()
         {

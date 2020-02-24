@@ -301,6 +301,11 @@ namespace Cognite.OpcUa
             {
                 state.ResetStreamingState();
             }
+
+            foreach (var pusher in pushers)
+            {
+                pusher.Reset();
+            }
             Starting.Set(1);
             restart = true;
             triggerUpdateOperations.Set();
@@ -434,6 +439,7 @@ namespace Cognite.OpcUa
             {
                 throw new TimeoutException("Waiting for push timed out");
             }
+            log.Debug("Waited {s} milliseconds for push", time * 100);
         }
         #endregion
         #region Loops
@@ -550,7 +556,6 @@ namespace Cognite.OpcUa
                     state.UpdateDestinationRange(kvp.Value);
                 }
             }
-
             return restartHistory;
         }
 
@@ -646,7 +651,8 @@ namespace Cognite.OpcUa
             while (!token.IsCancellationRequested)
             {
                 var waitTask = Task.Delay(config.Extraction.DataPushDelay, token);
-                var results = await Task.WhenAll(PushDataPoints(token), PushEvents(token));
+                var results = await Task.WhenAll(Task.Run(() => PushDataPoints(token)),
+                    Task.Run(() => PushEvents(token)));
                 if (results.Any(res => res))
                 {
                     triggerHistoryRestart.Set();

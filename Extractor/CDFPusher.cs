@@ -243,6 +243,8 @@ namespace Cognite.OpcUa
             catch (ResponseException e)
             {
                 dataPointPushFailures.Inc();
+                log.Error("Failed to push {count} points to CDF: {msg}", count, e.Message);
+
                 if (e.Code != 400 || !e.Missing.Any()) return false;
                 var missing = e.Missing
                     .Select(mis => (mis["externalId"] as MultiValue.String)?.Value)

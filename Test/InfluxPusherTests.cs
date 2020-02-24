@@ -183,26 +183,40 @@ namespace Test
                 LogLevel = "debug"
             });
             await tester.ClearPersistentData();
+            tester.Config.Extraction.AllowStringVariables = true;
             tester.StartExtractor();
+            tester.Handler.AllowPush = true;
+            tester.Handler.AllowConnectionTest = true;
+
+            await tester.Extractor.WaitForNextPush();
+
+            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+
+            await tester.Extractor.WaitForNextPush();
 
             tester.Handler.AllowPush = false;
+            tester.Handler.AllowConnectionTest = false;
 
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
                 20, "Failurebuffer must receive some data");
 
             await Task.Delay(500);
             tester.Handler.AllowPush = true;
+            tester.Handler.AllowConnectionTest = true;
 
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.Any,
                 20, "FailureBuffer should be emptied");
 
+            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+
             await tester.TerminateRunTask();
             
             tester.TestContinuity("gp.efg:i=10");
+            tester.TestConstantRate(1000, "gp.efg:i=9");
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.Equal(5, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
             Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_cdf"));
         }
 
@@ -381,7 +395,7 @@ namespace Test
                     !kvp.Value.Historizing || kvp.Value.BackfillDone && kvp.Value.IsStreaming),
                 60, "Expected backfill of events to terminate");
 
-            await Task.Delay(1000);
+            await tester.Extractor.WaitForNextPush();
 
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));

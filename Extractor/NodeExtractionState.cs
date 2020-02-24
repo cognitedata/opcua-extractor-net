@@ -178,11 +178,13 @@ namespace Cognite.OpcUa
             if (variable.Historizing)
             {
                 Historizing = true;
+                IsStreaming = false;
                 buffer = new List<IEnumerable<BufferedDataPoint>>();
             }
             else
             {
                 Historizing = false;
+                IsStreaming = true;
             }
 
             IsStreaming = !Historizing;

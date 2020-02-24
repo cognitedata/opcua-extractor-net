@@ -446,7 +446,8 @@ namespace Cognite.OpcUa
 
         public async Task<bool> Terminate(CancellationToken token, int timeoutsec = 30)
         {
-            log.Information("Attempting to abort history read");
+            if (running == 0) return true;
+            log.Debug("Attempting to abort history read");
             aborting = true;
             int timeout = timeoutsec * 10;
             int cycles = 0;
@@ -457,7 +458,7 @@ namespace Cognite.OpcUa
                 Log.Warning("Failed to abort HistoryReader");
                 return false;
             }
-            log.Information("Aborted history read");
+            log.Debug("Aborted history read");
 
             return true;
         }
