@@ -22,7 +22,6 @@ using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Win32.SafeHandles;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus.Client;
@@ -57,6 +56,9 @@ namespace Cognite.OpcUa
 
         public ConcurrentDictionary<NodeId, EventExtractionState> EmitterStates { get; } =
             new ConcurrentDictionary<NodeId, EventExtractionState>();
+
+        public ConcurrentDictionary<string, NodeId> ExternalToNodeId { get; } =
+            new ConcurrentDictionary<string, NodeId>();
 
         private readonly ConcurrentDictionary<string, EventExtractionState> emitterStatesByExtId =
             new ConcurrentDictionary<string, EventExtractionState>();
@@ -196,7 +198,7 @@ namespace Cognite.OpcUa
 
             if (FailureBuffer != null)
             {
-                await FailureBuffer.InitializeBufferStates(NodeStates.Values, token);
+                await FailureBuffer.InitializeBufferStates(NodeStates.Values, ExternalToNodeId.Values, token);
                 if (FailureBuffer.Any)
                 {
                     await FailureBuffer.ReadDatapoints(pushers, token);
@@ -523,16 +525,13 @@ namespace Cognite.OpcUa
 
                     if (config.History.Enabled)
                     {
-                        if (pointRanges.Keys.Any(key => GetNodeState(key).Historizing))
+                        bool success = await historyReader.Terminate(token, 30);
+                        if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
+                        foreach (var state in NodeStates.Values.Where(state => state.Historizing))
                         {
-                            bool success = await historyReader.Terminate(token, 30);
-                            if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
-                            foreach (var state in NodeStates.Values.Where(state => state.Historizing))
-                            {
-                                state.RestartHistory();
-                            }
-                            restartHistory = true;
+                            state.RestartHistory();
                         }
+                        restartHistory = true;
                     }
 
                     foreach (var pusher in failedPushers)
@@ -586,16 +585,51 @@ namespace Cognite.OpcUa
                 pusher.EventsFailing ? pusher.TestConnection(token) : pusher.PushEvents(eventList, token)));
             if (results.Any(failed => failed == false))
             {
-                // Write to failurebuffer, also remember to register which indices are failed
+                var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
+                var failedPushers = new List<IPusher>();
+                foreach (var pair in failed)
+                {
+                    var pusher = pushers.ElementAt(pair.Index);
+                    pusher.EventsFailing = true;
+                    failedPushers.Add(pusher);
+                }
 
+                await FailureBuffer.WriteEvents(eventList, failedPushers, token);
             }
             else
             {
-                // Only update destination ranges once the FailureBuffer has been emptied.
-                // Otherwise a crash in this phase could result in lost points.
-                if (FailureBuffer.Any)
+                var failedPushers = pushers.Where(pusher => pusher.EventsFailing).ToList();
+                if (failedPushers.Any())
                 {
-                    // Read from buffer, trigger history for relevant states...
+                    // Try to push any non-historizing points
+                    var nonHistorizing = eventRanges.Keys.Where(key => !GetEmitterState(key).Historizing).ToHashSet();
+                    var eventsToPush = eventList.Where(point => nonHistorizing.Contains(point.EmittingNode)).ToList();
+                    var pushResults = await Task.WhenAll(failedPushers.Select(pusher => pusher.PushEvents(eventsToPush, token)));
+
+                    // Here we are fine with "null" result. Not ideal, but it is what it is.
+                    // In theory we might end up in an expensive loop, but the connection tests should be designed so that
+                    // success there implies success otherwise.
+                    if (!pushResults.All(res => res == null || res == true)) return false;
+
+                    if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
+                    {
+                        bool success = await historyReader.Terminate(token, 30);
+                        if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
+                        foreach (var state in EmitterStates.Values.Where(state => state.Historizing))
+                        {
+                            state.RestartHistory();
+                        }
+                        restartHistory = true;
+                    }
+
+                    foreach (var pusher in failedPushers)
+                    {
+                        pusher.EventsFailing = false;
+                    }
+                }
+                if (FailureBuffer.AnyEvents)
+                {
+                    await FailureBuffer.ReadEvents(pushers, token);
                 }
                 foreach (var kvp in eventRanges)
                 {
@@ -812,7 +846,7 @@ namespace Cognite.OpcUa
                 {
                     objects.Add(buffer);
                 }
-                nodeMap.Add(uaClient.GetUniqueId(buffer.Id), buffer);
+                nodeMap.Add(GetUniqueId(buffer.Id), buffer);
             }
             log.Information("Getting data for {NumVariables} variables and {NumObjects} objects", 
                 rawVariables.Count, objects.Count);
@@ -833,13 +867,14 @@ namespace Cognite.OpcUa
                         for (int i = 0; i < node.ArrayDimensions[0]; i++)
                         {
                             timeseries.Add(new BufferedVariable(node, i));
-                            nodeStatesByExtId[uaClient.GetUniqueId(node.Id, i)] = NodeStates[node.Id];
+                            nodeStatesByExtId[GetUniqueId(node.Id, i)] = NodeStates[node.Id];
+                            ExternalToNodeId[GetUniqueId(node.Id, i)] = node.Id;
                         }
                         objects.Add(node);
                     }
                     else
                     {
-                        nodeStatesByExtId[uaClient.GetUniqueId(node.Id)] = NodeStates[node.Id];
+                        nodeStatesByExtId[GetUniqueId(node.Id)] = NodeStates[node.Id];
                         timeseries.Add(node);
                     }
                 }
@@ -1000,6 +1035,7 @@ namespace Cognite.OpcUa
                 var bufferedNode = new BufferedNode(uaClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
                 log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
+                ExternalToNodeId[GetUniqueId(bufferedNode.Id)] = bufferedNode.Id;
                 commonQueue.Enqueue(bufferedNode);
             }
             else if (node.NodeClass == NodeClass.Variable)
@@ -1010,6 +1046,7 @@ namespace Cognite.OpcUa
                 {
                     bufferedNode.IsProperty = true;
                 }
+                ExternalToNodeId[GetUniqueId(bufferedNode.Id)] = bufferedNode.Id;
                 log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
                 commonQueue.Enqueue(bufferedNode);
             }

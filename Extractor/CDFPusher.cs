@@ -256,7 +256,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                log.Warning(e, "Failed to push {count} points to CDF", count);
+                log.Error("Failed to push {count} points to CDF: {msg}", count, e.Message);
                 dataPointPushFailures.Inc();
                 // Return false indicating unexpected failure if we want to buffer.
                 return false;
@@ -278,10 +278,12 @@ namespace Cognite.OpcUa
             {
                 if (buffEvent.Time < minDateTime || !nodeToAssetIds.ContainsKey(buffEvent.SourceNode) && !config.Debug)
                 {
+                    log.Information("Skipping event: {evt}", buffEvent.ToDebugDescription());
                     skippedEvents.Inc();
                     continue;
                 }
                 eventList.Add(buffEvent);
+                count++;
             }
             if (count == 0)
             {
@@ -320,21 +322,24 @@ namespace Cognite.OpcUa
                     }
                     catch (Exception exc)
                     {
-                        log.Error(exc, "Failed to push {NumFailedEvents} events to CDF", eventEntities.Count());
+                        log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", 
+                            eventEntities.Count(), exc.Message);
                         eventPushFailures.Inc();
-                        return !(exc is ResponseException rex) || rex.Code == 400 || rex.Code == 409;
+                        return exc is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
                     }
                 }
                 else
                 {
-                    log.Error(ex, "Failed to push {NumFailedEvents} events to CDF", count);
+                    log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}",
+                        count, ex.Message);
                     eventPushFailures.Inc();
                     return ex.Code == 400 || ex.Code == 409;
                 }
             }
             catch (Exception ex)
             {
-                log.Error(ex, "Failed to push {NumFailedEvents} events to CDF", count);
+                log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", 
+                    count, ex.Message);
                 eventPushFailures.Inc();
                 return false;
             }
@@ -471,7 +476,6 @@ namespace Cognite.OpcUa
             await Task.WhenAll(tasks);
             return tasks.SelectMany(task => task.Result);
         }
-
         private async Task<IEnumerable<(string, DateTime)>> GetLatestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
         {
             var client = GetClient();
@@ -512,7 +516,6 @@ namespace Cognite.OpcUa
 
             return res;
         }
-
         private async Task<IEnumerable<(string, DateTime)>> GetLatestTimestamp(IEnumerable<string> ids,
             CancellationToken token)
         {
@@ -588,7 +591,6 @@ namespace Cognite.OpcUa
 
             return true;
         }
-
         public async Task<bool?> TestConnection(CancellationToken token)
         {
             // Use data client because it gives up after a little while

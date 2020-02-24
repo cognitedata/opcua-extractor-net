@@ -108,6 +108,7 @@ namespace Cognite.OpcUa
                 foreach (var state in toStore)
                 {
                     state.IsDirty = false;
+                    state.StatePersisted = true;
                 }
             }
             catch (LiteException e)
@@ -164,6 +165,7 @@ namespace Cognite.OpcUa
                         count++;
                         stateMap[poco.Id].InitExtractedRange(poco.FirstTimestamp,
                             poco.LastTimestamp);
+                        stateMap[poco.Id].StatePersisted = true;
                     }
                 }
                 log.Information("Initialized extracted ranges from statestore {name} for {cnt} nodes", 
@@ -236,6 +238,9 @@ namespace Cognite.OpcUa
                     var doubleRecords = doubleDataQueue.Dequeue(DataBatchSize);
                     var points = stringRecords.Select(record => record.Payload.ToDataPoint());
                     points = points.Concat(doubleRecords.Select(record => record.Payload.ToDataPoint())).ToList();
+
+                    log.Information("Read {cnt} points from litedb queue", points.Count());
+
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(points, token)));
 
                     if (results.Any(res => res == false))
@@ -274,7 +279,6 @@ namespace Cognite.OpcUa
                         var state = extractor.GetNodeState(kvp.Key);
                         state.UpdateDestinationRange(kvp.Value);
                     }
-                    log.Information("Read {cnt} points from litedb queue", points.Count());
 
                     stringDataQueue.Commit(stringRecords);
                     doubleDataQueue.Commit(doubleRecords);
@@ -283,13 +287,7 @@ namespace Cognite.OpcUa
 
                 AnyPoints = false;
             }, token);
-            if (!failed)
-            {
-                foreach (var pusher in pushers)
-                {
-                    pusher.DataFailing = false;
-                }
-            }
+
             return failed;
         }
 
@@ -298,13 +296,15 @@ namespace Cognite.OpcUa
             if (events == null) return true;
             var eventPocos = events.Select(evt => new EventPoco(evt, extractor)).ToList();
 
+            log.Information("Write {cnt} events to queue", events.Count());
+
             try
             {
                 await Task.Run(() => eventQueue.Enqueue(eventPocos), token);
             }
             catch (LiteException e)
             {
-                log.Error(e, "Failed to insert datapoints into litedb queue");
+                log.Error(e, "Failed to insert events into litedb queue");
                 return false;
             }
 
@@ -322,6 +322,9 @@ namespace Cognite.OpcUa
                 {
                     var records = eventQueue.Dequeue(EventBatchSize);
                     var events = records.Select(record => record.Payload.ToBufferedEvent(extractor));
+
+                    log.Information("Read {cnt} events from litedb queue", events.Count());
+
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
 
                     if (results.Any(res => res == false))
@@ -364,13 +367,6 @@ namespace Cognite.OpcUa
 
                 AnyEvents = false;
             }, token);
-            if (!failed)
-            {
-                foreach (var pusher in pushers)
-                {
-                    pusher.EventsFailing = false;
-                }
-            }
 
             return failed;
         }
@@ -453,6 +449,8 @@ namespace Cognite.OpcUa
                 }
             }
 
+            public EventPoco() {}
+
             public BufferedEvent ToBufferedEvent(Extractor extractor)
             {
                 var evt = new BufferedEvent
@@ -460,14 +458,15 @@ namespace Cognite.OpcUa
                     EventId = Id,
                     EmittingNode = extractor.GetEmitterState(Emitter).Id,
                     Time = Time,
-                    SourceNode = extractor.GetNodeState(SourceNode).Id,
+                    SourceNode = extractor.ExternalToNodeId[SourceNode],
                     Message = Message,
                     ReceivedTime = DateTime.UtcNow,
-                    MetaData = MetaData.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value)
+                    MetaData = MetaData == null ? new Dictionary<string, object>()
+                        : MetaData.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value)
                 };
-                if (!evt.MetaData.ContainsKey("EventType"))
+                if (!evt.MetaData.ContainsKey("Type"))
                 {
-                    evt.MetaData["EventType"] = EventType;
+                    evt.MetaData["Type"] = EventType;
                 }
 
                 return evt;

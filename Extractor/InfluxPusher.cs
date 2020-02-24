@@ -472,15 +472,15 @@ namespace Cognite.OpcUa
         {
             token.ThrowIfCancellationRequested();
 
-            var unixTicks = DateTime.UnixEpoch.Ticks;
+            log.Information($"SELECT * FROM \"events.{states.Last().Key}\"" +
+                            $" WHERE time >= {(states.Last().Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks * 100}" +
+                            $" AND time <= {(states.Last().Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks * 100}");
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
-                $"SELECT * FROM \"events.{state.Key}\"" +
-                $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks*100}" +
+                $"SELECT * FROM /events.{state.Key}*/" +
+                $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks * 100}" +
                 $" AND time <= {(state.Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks * 100}")
             ).ToList();
-
-            var nameToNodeId = states.ToDictionary(kvp => "events." + kvp.Key, kvp => kvp.Value.Id);
 
             var results = await Task.WhenAll(fetchTasks);
             token.ThrowIfCancellationRequested();
@@ -491,10 +491,17 @@ namespace Cognite.OpcUa
             foreach (var series in results.SelectMany(res => res).DistinctBy(series => series.SeriesName))
             {
                 if (!series.Entries.Any()) continue;
-                var baseKey = nameToNodeId.Keys.FirstOrDefault(key =>
-                    key.Equals(removeArrayRegex.Replace(series.SeriesName, ""), StringComparison.InvariantCulture));
+
+                var name = series.SeriesName.Substring(7);
+
+                var baseKey = Extractor.ExternalToNodeId.Keys.FirstOrDefault(key =>
+                    name.StartsWith(key, StringComparison.InvariantCulture));
+
                 if (baseKey == null) continue;
-                var sourceNode = nameToNodeId[baseKey];
+
+                baseKey = removeArrayRegex.Replace(baseKey, "");
+
+                var sourceNode = Extractor.ExternalToNodeId[baseKey];
                 if (sourceNode == null) continue;
                 finalEvents.AddRange(series.Entries.Select(res =>
                 {
@@ -511,7 +518,7 @@ namespace Cognite.OpcUa
                         SourceNode = sourceNode,
                         MetaData = new Dictionary<string, object>()
                     };
-                    evt.MetaData["Type"] = series.SeriesName.Substring(baseKey.Length + 1);
+                    evt.MetaData["Type"] = name.Substring(baseKey.Length + 1);
                     foreach (var kvp in values)
                     {
                         if (kvp.Key == "Time" || kvp.Key == "Id" || kvp.Key == "Value"

@@ -19,6 +19,7 @@ namespace Cognite.OpcUa
         public TimeRange DestinationExtractedRange { get; }
         protected object RangeMutex { get; } = new object();
         public bool BackfillDone { get; set; }
+        public bool StatePersisted { get; set; }
 
         public virtual bool Historizing { get; set; }
         /// <summary>
@@ -368,7 +369,6 @@ namespace Cognite.OpcUa
         public InfluxBufferState(NodeExtractionState other, bool events) : base(other?.Id)
         {
             if (other == null) throw new ArgumentNullException(nameof(other));
-            Historizing = other.Historizing;
             DestinationExtractedRange.Start = DateTime.UtcNow;
             DestinationExtractedRange.End = DateTime.UtcNow;
             if (events)
@@ -377,8 +377,16 @@ namespace Cognite.OpcUa
             }
             else
             {
+                Historizing = other.Historizing;
                 Type = other.DataType.IsString ? InfluxBufferType.StringType : InfluxBufferType.DoubleType;
             }
+        }
+
+        public InfluxBufferState(NodeId objectId) : base(objectId)
+        {
+            Type = InfluxBufferType.EventType;
+            DestinationExtractedRange.Start = DateTime.UtcNow;
+            DestinationExtractedRange.End = DateTime.UtcNow;
         }
 
         public void ClearRanges()

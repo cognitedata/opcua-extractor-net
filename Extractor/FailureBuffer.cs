@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -57,7 +56,8 @@ namespace Cognite.OpcUa
             }
         }
 
-        public async Task InitializeBufferStates(IEnumerable<NodeExtractionState> states, CancellationToken token)
+        public async Task InitializeBufferStates(IEnumerable<NodeExtractionState> states,
+            IEnumerable<NodeId> nodeIds, CancellationToken token)
         {
             if (config.Influx != null && influxPusher != null && config.Influx.StateStorage)
             {
@@ -69,18 +69,24 @@ namespace Cognite.OpcUa
                     false, token);
                 foreach (var state in variableStates)
                 {
-                    nodeBufferStates[extractor.GetUniqueId(state.Id)] = state;
+                    if (state.StatePersisted)
+                    {
+                        nodeBufferStates[extractor.GetUniqueId(state.Id)] = state;
+                    }
                 }
 
-                var eventStates = states.Select(state => new InfluxBufferState(state, true));
+                var eventStates = nodeIds.Select(id => new InfluxBufferState(id));
 
-                await extractor.StateStorage.ReadExtractionStates(eventStates, 
+                await extractor.StateStorage.ReadExtractionStates(eventStates,
                     StateStorage.InfluxEventStates, false,
                     token);
 
                 foreach (var state in eventStates)
                 {
-                    eventBufferStates[extractor.GetUniqueId(state.Id)] = state;
+                    if (state.StatePersisted)
+                    {
+                        eventBufferStates[extractor.GetUniqueId(state.Id)] = state;
+                    }
                 }
             }
         }
@@ -159,7 +165,12 @@ namespace Cognite.OpcUa
                     {
                         var dps = await influxPusher.ReadDataPoints(activeStates, token);
                         log.Information("Read {cnt} points from influxdb failure buffer", dps.Count());
-                        await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(dps, token)));
+                        await Task.WhenAll(pushers
+                            .Where(pusher =>
+                                !(pusher.BaseConfig is InfluxClientConfig ifc)
+                                || ifc.Host != config.Influx.Host
+                                || ifc.Database != config.Influx.Database)
+                            .Select(pusher => pusher.PushDataPoints(dps, token)));
 
                         foreach (var state in activeStates)
                         {
@@ -244,7 +255,7 @@ namespace Cognite.OpcUa
                         {
                             if (!eventBufferStates.ContainsKey(sourceId))
                             {
-                                eventBufferStates[sourceId] = new InfluxBufferState(extractor.GetNodeState(sourceId), true);
+                                eventBufferStates[sourceId] = new InfluxBufferState(extractor.ExternalToNodeId[sourceId]);
                             }
                             eventBufferStates[sourceId].UpdateDestinationRange(range);
                         }
@@ -271,8 +282,6 @@ namespace Cognite.OpcUa
 
         public async Task<bool> ReadEvents(IEnumerable<IPusher> pushers, CancellationToken token)
         {
-
-
             bool success = true;
 
             if (config.Influx != null && influxPusher != null)
@@ -287,7 +296,12 @@ namespace Cognite.OpcUa
                     {
                         var events = await influxPusher.ReadEvents(activeStates, token);
                         log.Information("Read {cnt} events from influxdb failure buffer", events.Count());
-                        await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
+                        await Task.WhenAll(pushers
+                            .Where(pusher =>
+                                !(pusher.BaseConfig is InfluxClientConfig ifc)
+                                || ifc.Host != config.Influx.Host
+                                || ifc.Database != config.Influx.Database)
+                            .Select(pusher => pusher.PushEvents(events, token)));
 
                         foreach (var state in activeStates)
                         {

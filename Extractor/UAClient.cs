@@ -1419,6 +1419,7 @@ namespace Cognite.OpcUa
             {
                 nodeId = NodeId.Null;
                 log.Warning("Null converted to ExternalId");
+                throw new Exception("Null converted to ExternalId");
             }
             if (nodeOverrides.ContainsKey(nodeId)) return nodeOverrides[nodeId];
 
