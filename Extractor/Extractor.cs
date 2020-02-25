@@ -196,7 +196,7 @@ namespace Cognite.OpcUa
                 throw;
             }
 
-            if (FailureBuffer != null)
+            if (config.FailureBuffer.Enabled)
             {
                 await FailureBuffer.InitializeBufferStates(NodeStates.Values, ExternalToNodeId.Values, token);
                 if (FailureBuffer.Any)
@@ -214,8 +214,8 @@ namespace Cognite.OpcUa
 
             var tasks = new List<Task>
                 {
-                    Task.Run(() => PushersLoop(token)),
-                    Task.Run(() => ExtraTaskLoop(token))
+                    Task.Run(async () => await PushersLoop(token), token),
+                    Task.Run(async () => await ExtraTaskLoop(token), token)
                 }.Concat(synchTasks);
 
             if (config.Extraction.AutoRebrowsePeriod > 0)
@@ -511,7 +511,10 @@ namespace Cognite.OpcUa
                     failedPushers.Add(pusher);
                 }
 
-                await FailureBuffer.WriteDatapoints(dataPointList, pointRanges, failedPushers, token);
+                if (config.FailureBuffer.Enabled)
+                {
+                    await FailureBuffer.WriteDatapoints(dataPointList, pointRanges, failedPushers, token);
+                }
 
             }
             else
@@ -546,7 +549,7 @@ namespace Cognite.OpcUa
                     }
 
                 }
-                if (FailureBuffer.Any)
+                if (FailureBuffer.Any && config.FailureBuffer.Enabled)
                 {
                     await FailureBuffer.ReadDatapoints(pushers, token);
                 }
@@ -599,7 +602,10 @@ namespace Cognite.OpcUa
                     failedPushers.Add(pusher);
                 }
 
-                await FailureBuffer.WriteEvents(eventList, failedPushers, token);
+                if (config.FailureBuffer.Enabled)
+                {
+                    await FailureBuffer.WriteEvents(eventList, failedPushers, token);
+                }
             }
             else
             {
@@ -632,7 +638,7 @@ namespace Cognite.OpcUa
                         pusher.EventsFailing = false;
                     }
                 }
-                if (FailureBuffer.AnyEvents)
+                if (FailureBuffer.AnyEvents && config.FailureBuffer.Enabled)
                 {
                     await FailureBuffer.ReadEvents(pushers, token);
                 }
@@ -651,8 +657,9 @@ namespace Cognite.OpcUa
             while (!token.IsCancellationRequested)
             {
                 var waitTask = Task.Delay(config.Extraction.DataPushDelay, token);
-                var results = await Task.WhenAll(Task.Run(() => PushDataPoints(token)),
-                    Task.Run(() => PushEvents(token)));
+                var results = await Task.WhenAll(Task.Run(async () => await PushDataPoints(token), token),
+                    Task.Run(async () => await PushEvents(token), token));
+
                 if (results.Any(res => res))
                 {
                     triggerHistoryRestart.Set();

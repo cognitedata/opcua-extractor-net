@@ -866,6 +866,7 @@ namespace Cognite.OpcUa
 
             return result;
         }
+
         /// <summary>
         /// Create datapoint subscriptions for given list of nodes
         /// </summary>
@@ -878,41 +879,44 @@ namespace Cognite.OpcUa
         {
             if (!nodeList.Any()) return;
 
-            var subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture))
+            lock (subscriptionLock)
+            {
+                var subscription = Session.Subscriptions.FirstOrDefault(sub =>
+                                       sub.DisplayName.StartsWith("DataChangeListener",
+                                           StringComparison.InvariantCulture))
 #pragma warning disable CA2000 // Dispose objects before losing scope. The subscription is disposed properly or added to the client.
-                               ?? new Subscription(Session.DefaultSubscription)
-            {
-                PublishingInterval = config.PollingInterval,
-                DisplayName = "DataChangeListener"
-            };
+                                   ?? new Subscription(Session.DefaultSubscription)
+                                   {
+                                       PublishingInterval = config.PollingInterval,
+                                       DisplayName = "DataChangeListener"
+                                   };
 #pragma warning restore CA2000 // Dispose objects before losing scope
-            int count = 0;
-            var hasSubscription = subscription.MonitoredItems
-                .Select(sub => sub.ResolvedNodeId)
-                .ToHashSet();
+                int count = 0;
+                var hasSubscription = subscription.MonitoredItems
+                    .Select(sub => sub.ResolvedNodeId)
+                    .ToHashSet();
 
-            foreach (var chunk in ExtractorUtils.ChunkBy(nodeList, config.SubscriptionChunk))
-            {
-                if (token.IsCancellationRequested) break;
-                subscription.AddItems(chunk
-                    .Where(node => !hasSubscription.Contains(node.Id))
-                    .Select(node =>
-                    {
-                        var monitor = new MonitoredItem(subscription.DefaultItem)
-                        {
-                            StartNodeId = node.Id,
-                            DisplayName = "Value: " + node.DisplayName,
-                            SamplingInterval = config.PollingInterval
-                        };
-                        monitor.Notification += subscriptionHandler;
-                        count++;
-                        return monitor;
-                    })
-                );
-
-                log.Information("Add subscriptions for {numnodes} nodes", chunk.Count());
-                lock (subscriptionLock)
+                foreach (var chunk in ExtractorUtils.ChunkBy(nodeList, config.SubscriptionChunk))
                 {
+                    if (token.IsCancellationRequested) break;
+                    subscription.AddItems(chunk
+                        .Where(node => !hasSubscription.Contains(node.Id))
+                        .Select(node =>
+                        {
+                            var monitor = new MonitoredItem(subscription.DefaultItem)
+                            {
+                                StartNodeId = node.Id,
+                                DisplayName = "Value: " + node.DisplayName,
+                                SamplingInterval = config.PollingInterval
+                            };
+                            monitor.Notification += subscriptionHandler;
+                            count++;
+                            return monitor;
+                        })
+                    );
+
+                    log.Information("Add subscriptions for {numnodes} nodes", chunk.Count());
+
                     IncOperations();
                     try
                     {
@@ -926,7 +930,8 @@ namespace Cognite.OpcUa
                                 }
                                 catch (ServiceResultException ex)
                                 {
-                                    throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
+                                    throw ExtractorUtils.HandleServiceResult(ex,
+                                        ExtractorUtils.SourceOp.CreateMonitoredItems);
                                 }
                             }
                             else
@@ -938,7 +943,8 @@ namespace Cognite.OpcUa
                                 }
                                 catch (ServiceResultException ex)
                                 {
-                                    throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateSubscription);
+                                    throw ExtractorUtils.HandleServiceResult(ex,
+                                        ExtractorUtils.SourceOp.CreateSubscription);
                                 }
                             }
                         }
@@ -951,10 +957,11 @@ namespace Cognite.OpcUa
                     {
                         DecOperations();
                     }
+
                     numSubscriptions.Set(subscription.MonitoredItemCount);
                 }
+                log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
             }
-            log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
         }
         /// <summary>
         /// Subscribe to events from the given list of emitters.
@@ -972,40 +979,47 @@ namespace Cognite.OpcUa
         {
             if (emitters == null) throw new ArgumentNullException(nameof(emitters));
             if (nodeIds == null) throw new ArgumentNullException(nameof(nodeIds));
-            var subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture))
-#pragma warning disable CA2000 // Dispose objects before losing scope
-                               ?? new Subscription(Session.DefaultSubscription)
-            {
-                PublishingInterval = config.PollingInterval,
-                DisplayName = "EventListener"
-            };
-#pragma warning restore CA2000 // Dispose objects before losing scope
-            int count = 0;
-            var hasSubscription = subscription.MonitoredItems
-                .Select(sub => sub.ResolvedNodeId)
-                .ToHashSet();
-
-            if (eventFields == null) throw new ExtractorFailureException("EventFields not defined");
-
-            var filter = BuildEventFilter(nodeIds);
-            foreach (var emitter in emitters)
-            {
-                if (token.IsCancellationRequested) return;
-                if (!hasSubscription.Contains(emitter))
-                {
-                    var item = new MonitoredItem
-                    {
-                        StartNodeId = emitter,
-                        Filter = filter,
-                        AttributeId = Attributes.EventNotifier
-                    };
-                    count++;
-                    item.Notification += subscriptionHandler;
-                    subscription.AddItem(item);
-                }
-            }
             lock (subscriptionLock)
             {
+                var subscription = Session.Subscriptions.FirstOrDefault(sub =>
+                    sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture));
+
+                if (subscription == null)
+                {
+#pragma warning disable CA2000 // Dispose objects before losing scope
+                    subscription = new Subscription(Session.DefaultSubscription)
+                    {
+                        PublishingInterval = config.PollingInterval,
+                        DisplayName = "EventListener"
+                    };
+#pragma warning restore CA2000 // Dispose objects before losing scope
+
+                }
+                int count = 0;
+                var hasSubscription = subscription.MonitoredItems
+                    .Select(sub => sub.ResolvedNodeId)
+                    .ToHashSet();
+
+                if (eventFields == null) throw new ExtractorFailureException("EventFields not defined");
+
+                var filter = BuildEventFilter(nodeIds);
+                foreach (var emitter in emitters)
+                {
+                    if (token.IsCancellationRequested) return;
+                    if (!hasSubscription.Contains(emitter))
+                    {
+                        var item = new MonitoredItem
+                        {
+                            StartNodeId = emitter,
+                            Filter = filter,
+                            AttributeId = Attributes.EventNotifier
+                        };
+                        count++;
+                        item.Notification += subscriptionHandler;
+                        subscription.AddItem(item);
+                    }
+                }
+
                 IncOperations();
                 try
                 {
@@ -1045,8 +1059,8 @@ namespace Cognite.OpcUa
                 {
                     DecOperations();
                 }
+                log.Information("Created {EventSubCount} event subscriptions", count);
             }
-            log.Information("Created {EventSubCount} event subscriptions", count);
         }
         #endregion
 
@@ -1182,26 +1196,27 @@ namespace Cognite.OpcUa
         public void SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback)
         {
             var filter = BuildAuditFilter();
-            var subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener", StringComparison.InvariantCulture))
-#pragma warning disable CA2000 // Dispose objects before losing scope
-                               ?? new Subscription(Session.DefaultSubscription)
-            {
-                PublishingInterval = config.PollingInterval,
-                DisplayName = "AuditListener"
-            };
-#pragma warning restore CA2000 // Dispose objects before losing scope
-            if (subscription.MonitoredItemCount != 0) return;
-            var item = new MonitoredItem
-            {
-                StartNodeId = ObjectIds.Server,
-                Filter = filter,
-                AttributeId = Attributes.EventNotifier
-            };
-            item.Notification += callback;
-            subscription.AddItem(item);
-            log.Information("Subscribe to auditing events on the server node");
             lock (subscriptionLock)
             {
+                var subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener", StringComparison.InvariantCulture))
+#pragma warning disable CA2000 // Dispose objects before losing scope
+                               ?? new Subscription(Session.DefaultSubscription)
+                {
+                    PublishingInterval = config.PollingInterval,
+                    DisplayName = "AuditListener"
+                };
+#pragma warning restore CA2000 // Dispose objects before losing scope
+                if (subscription.MonitoredItemCount != 0) return;
+                var item = new MonitoredItem
+                {
+                    StartNodeId = ObjectIds.Server,
+                    Filter = filter,
+                    AttributeId = Attributes.EventNotifier
+                };
+                item.Notification += callback;
+                subscription.AddItem(item);
+                log.Information("Subscribe to auditing events on the server node");
+
                 IncOperations();
                 try
                 {

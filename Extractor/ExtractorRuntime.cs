@@ -116,6 +116,7 @@ namespace Cognite.OpcUa
                 if (!result.Value)
                 {
                     Log.Warning("Removing pusher of type {type}", pusher.GetType());
+                    pusher.Dispose();
                     removePushers.Add(pusher);
                 }
             }));
@@ -132,6 +133,13 @@ namespace Cognite.OpcUa
             {
                 extractor.Close();
                 throw;
+            }
+            finally
+            {
+                foreach (var pusher in pushers)
+                {
+                    pusher.Dispose();
+                }
             }
         }
     }

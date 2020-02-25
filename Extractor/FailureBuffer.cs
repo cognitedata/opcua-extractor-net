@@ -137,7 +137,6 @@ namespace Cognite.OpcUa
                             log.Information("Inserted {cnt} points into influxdb failure buffer", points.Count());
                         }
                     }
-
                     if (success && !influxPusher.DataFailing)
                     {
                         foreach ((string key, var value) in pointRanges)
@@ -181,7 +180,7 @@ namespace Cognite.OpcUa
             {
                 var activeStates = nodeBufferStates.Where(kvp =>
                         !kvp.Value.Historizing
-                        && kvp.Value.DestinationExtractedRange.End > kvp.Value.DestinationExtractedRange.Start)
+                        && kvp.Value.DestinationExtractedRange.End >= kvp.Value.DestinationExtractedRange.Start)
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
                 if (activeStates.Any())
@@ -317,7 +316,7 @@ namespace Cognite.OpcUa
             {
                 var activeStates = eventBufferStates.Where(kvp =>
                         !kvp.Value.Historizing
-                        && kvp.Value.DestinationExtractedRange.End > kvp.Value.DestinationExtractedRange.Start)
+                        && kvp.Value.DestinationExtractedRange.End >= kvp.Value.DestinationExtractedRange.Start)
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
                 if (activeStates.Any())
                 {

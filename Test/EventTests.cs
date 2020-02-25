@@ -209,15 +209,20 @@ namespace Test
             });
             await tester.ClearPersistentData();
             tester.Handler.AllowEvents = false;
+            tester.Handler.AllowPush = false;
+            tester.Handler.AllowConnectionTest = false;
             tester.StartExtractor();
 
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
                 20, "Expected failurebuffer to contain some events");
 
             tester.Handler.AllowEvents = true;
+            tester.Handler.AllowPush = true;
+            tester.Handler.AllowConnectionTest = true;
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.AnyEvents,
                 20, "Expected FailureBuffer to be emptied");
-            Assert.False(tester.Extractor.FailureBuffer.Any);
+
+            Assert.False(tester.Extractor.FailureBuffer.AnyEvents);
 
             await tester.WaitForCondition(() => tester.Handler.events.Count > 20, 20,
                 "Expected to receive some events");
@@ -260,7 +265,7 @@ namespace Test
                 ConfigName = ConfigName.Events,
                 LogLevel = "debug"
             });
-            tester.Config.History.EventChunk = 100;
+            tester.Config.History.EventChunk = 1000;
             tester.Config.History.Backfill = true;
             await tester.ClearPersistentData();
 
@@ -351,6 +356,8 @@ namespace Test
                        && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture));
             }, 20, "Expected remaining event subscriptions to trigger");
 
+            await tester.Extractor.WaitForNextPush();
+
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
@@ -365,12 +372,12 @@ namespace Test
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
                     && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
-                20, "Expected backfill to finish");
+                20, "Expected backfill to finish"); 
+            
+            await tester.TerminateRunTask();
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 1));
-
-
         }
     }
 }

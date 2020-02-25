@@ -108,7 +108,7 @@ namespace Test
                                                 && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
                 "Expected the extractor to finish startup");
 
-            await Task.Delay(1000);
+            await tester.Extractor.WaitForNextPush();
             CommonTestUtils.StopProxyProcess();
 
             await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0), 20,
@@ -146,7 +146,7 @@ namespace Test
             await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_extractor_starting", 0)
                                                 && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
                 "Expected the extractor to finish startup");
-            await Task.Delay(1000);
+            await tester.Extractor.WaitForNextPush();
             CommonTestUtils.StopProxyProcess();
 
 

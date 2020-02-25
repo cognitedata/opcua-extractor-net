@@ -115,8 +115,14 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
+                if (e is InfluxDBException iex)
+                {
+                    log.Debug("Failed to insert datapoints into influxdb: {line}, {reason}", 
+                        iex.FailedLine, iex.Reason);
+                }
                 dataPointPushFailures.Inc();
-                log.Error(e, "Failed to insert datapoints into influxdb");
+                log.Error("Failed to insert datapoints into influxdb: {msg}", e.Message);
+                log.Debug(e, "Failed to insert datapoints into influxdb");
                 return false;
             }
             dataPointPushes.Inc();

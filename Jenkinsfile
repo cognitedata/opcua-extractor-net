@@ -108,7 +108,7 @@ podTemplate(
             }
 
             stage('Build') {
-                sh('dotnet build -r linux-x64')
+                sh('dotnet build')
             }
             timeout(10) {
                 stage('Run tests') {

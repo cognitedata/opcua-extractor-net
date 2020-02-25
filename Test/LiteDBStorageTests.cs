@@ -199,55 +199,58 @@ namespace Test
         [Fact]
         public async Task TestStateStorageData()
         {
-            var tester = new ExtractorTester(new ExtractorTestParameters
+            using (var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 BufferQueue = true,
                 StateStorage = true,
                 LogLevel = "debug"
-            });
-            await tester.ClearPersistentData();
-
-            tester.CogniteConfig.ReadExtractedRanges = false;
-
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.History.Backfill = true;
-
-            tester.StartExtractor();
-
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state =>
-                    !state.Value.Historizing
-                    || state.Value.BackfillDone
-                    && state.Value.IsStreaming),
-                20, "Expected history to complete");
-
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.Any(state => state.Value.IsDirty),
-                20, "Expected states to become dirty");
-
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => !state.Value.IsDirty),
-                20, "Expected states to become clean again");
-
-            await tester.Extractor.WaitForNextPush();
-
-            await tester.TerminateRunTask();
-
-            Assert.Contains(tester.Extractor.NodeStates, state => state.Value.IsDirty);
-
-            var dummyStates = tester.Extractor.NodeStates.Select(state => new InfluxBufferState(state.Value, false))
-                .ToList();
-
-            foreach (var state in dummyStates)
+            }))
             {
-                state.DestinationExtractedRange.Start = DateTime.MinValue;
-                state.DestinationExtractedRange.End = DateTime.MaxValue;
+                await tester.ClearPersistentData();
+
+                tester.CogniteConfig.ReadExtractedRanges = false;
+
+                tester.Config.Extraction.AllowStringVariables = true;
+                tester.Config.History.Backfill = true;
+
+                tester.StartExtractor();
+
+                await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state =>
+                        !state.Value.Historizing
+                        || state.Value.BackfillDone
+                        && state.Value.IsStreaming),
+                    20, "Expected history to complete");
+
+                await tester.WaitForCondition(() => tester.Extractor.NodeStates.Any(state => state.Value.IsDirty),
+                    20, "Expected states to become dirty");
+
+                await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => !state.Value.IsDirty),
+                    20, "Expected states to become clean again");
+
+                await tester.Extractor.WaitForNextPush();
+
+                await tester.TerminateRunTask();
+
+                Assert.Contains(tester.Extractor.NodeStates, state => state.Value.IsDirty);
+
+                var dummyStates = tester.Extractor.NodeStates.Select(state => new InfluxBufferState(state.Value, false))
+                    .ToList();
+
+                foreach (var state in dummyStates)
+                {
+                    state.DestinationExtractedRange.Start = DateTime.MinValue;
+                    state.DestinationExtractedRange.End = DateTime.MaxValue;
+                }
+
+                await tester.Extractor.StateStorage.ReadExtractionStates(dummyStates, StateStorage.VariableStates, false,
+                    CancellationToken.None);
+
+                Assert.True(dummyStates.All(state => !state.Historizing
+                                                     || state.StatePersisted 
+                                                     && state.DestinationExtractedRange.Start < state.DestinationExtractedRange.End
+                                                     && state.DestinationExtractedRange.End != DateTime.MaxValue));
             }
 
-            await tester.Extractor.StateStorage.ReadExtractionStates(dummyStates, StateStorage.VariableStates, false,
-                CancellationToken.None);
-
-            Assert.True(dummyStates.All(state => !state.Historizing
-                || state.StatePersisted && state.DestinationExtractedRange.Start < state.DestinationExtractedRange.End
-                && state.DestinationExtractedRange.End != DateTime.MaxValue));
-            tester.Dispose();
             using var tester2 = new ExtractorTester(new ExtractorTestParameters
             {
                 BufferQueue = true,
@@ -259,7 +262,7 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
 
             tester2.StartExtractor();
-            await tester2.WaitForCondition(() => tester.Extractor.NodeStates.All(state => !state.Value.Historizing
+            await tester2.WaitForCondition(() => tester2.Extractor.NodeStates.All(state => !state.Value.Historizing
                     || state.Value.BackfillDone && state.Value.IsStreaming),
                 20, "Expected history to complete");
             await tester2.Extractor.WaitForNextPush();
@@ -349,7 +352,8 @@ namespace Test
         [Fact]
         public async Task TestInfluxBufferStateData()
         {
-            var tester = new ExtractorTester(new ExtractorTestParameters
+            var states = new List<InfluxBufferState>();
+            using (var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Test,
                 FailureInflux = ConfigName.Influx,
@@ -357,43 +361,44 @@ namespace Test
                 FailureInfluxWrite = true,
                 StateInflux = true,
                 LogLevel = "debug"
-            });
-
-            await tester.ClearPersistentData();
-
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.History.Enabled = false;
-
-            tester.StartExtractor();
-
-            await tester.Extractor.WaitForNextPush();
-            await tester.Extractor.WaitForNextPush();
-
-            tester.Handler.AllowPush = false;
-            tester.Handler.AllowConnectionTest = false;
-
-            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
-                20, "Failurebuffer must receive some data");
-
-            await tester.Extractor.WaitForNextPush();
-
-            await tester.TerminateRunTask();
-
-            var states = tester.Extractor.NodeStates.Select(state => new InfluxBufferState(state.Value, false)).ToList();
-            foreach (var state in states)
+            }))
             {
-                state.DestinationExtractedRange.Start = DateTime.MinValue;
-                state.DestinationExtractedRange.End = DateTime.MaxValue;
+                await tester.ClearPersistentData();
+
+                tester.Config.Extraction.AllowStringVariables = true;
+                tester.Config.History.Enabled = false;
+
+                tester.StartExtractor();
+
+                await tester.Extractor.WaitForNextPush();
+                await tester.Extractor.WaitForNextPush();
+
+                tester.Handler.AllowPush = false;
+                tester.Handler.AllowConnectionTest = false;
+
+                await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
+                    20, "Failurebuffer must receive some data");
+
+                await tester.Extractor.WaitForNextPush();
+
+                await tester.TerminateRunTask();
+
+                states = tester.Extractor.NodeStates.Select(state => new InfluxBufferState(state.Value, false)).ToList();
+                foreach (var state in states)
+                {
+                    state.DestinationExtractedRange.Start = DateTime.MinValue;
+                    state.DestinationExtractedRange.End = DateTime.MaxValue;
+                }
+
+                await tester.Extractor.StateStorage.ReadExtractionStates(states, StateStorage.InfluxVariableStates, false,
+                    CancellationToken.None);
+
+                Assert.True(states.All(state =>
+                    state.DestinationExtractedRange.Start <= state.DestinationExtractedRange.End
+                    && state.DestinationExtractedRange.End != DateTime.MaxValue));
             }
 
-            await tester.Extractor.StateStorage.ReadExtractionStates(states, StateStorage.InfluxVariableStates, false,
-                CancellationToken.None);
-
-            Assert.True(states.All(state =>
-                state.DestinationExtractedRange.Start <= state.DestinationExtractedRange.End
-                && state.DestinationExtractedRange.End != DateTime.MaxValue));
-
-            tester.Dispose();
+            
 
             using var tester2 = new ExtractorTester(new ExtractorTestParameters
             {
@@ -431,7 +436,8 @@ namespace Test
         [Fact]
         public async Task TestInfluxBufferStateEvents()
         {
-            var tester = new ExtractorTester(new ExtractorTestParameters
+            var states = new List<InfluxBufferState>();
+            using (var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Events,
                 ServerName = ServerName.Events,
@@ -440,43 +446,42 @@ namespace Test
                 FailureInfluxWrite = true,
                 StateInflux = true,
                 LogLevel = "debug"
-            });
+            }))
+            {
+                await tester.ClearPersistentData();
 
-            await tester.ClearPersistentData();
+                tester.Config.Events.HistorizingEmitterIds = new List<ProtoNodeId>();
 
-            tester.Config.Events.HistorizingEmitterIds = new List<ProtoNodeId>();
+                tester.StartExtractor();
 
-            tester.StartExtractor();
+                await tester.Extractor.WaitForNextPush();
+                await tester.Extractor.WaitForNextPush();
 
-            await tester.Extractor.WaitForNextPush();
-            await tester.Extractor.WaitForNextPush();
+                tester.Handler.AllowPush = false;
+                tester.Handler.AllowEvents = false;
+                tester.Handler.AllowConnectionTest = false;
 
-            tester.Handler.AllowPush = false;
-            tester.Handler.AllowEvents = false;
-            tester.Handler.AllowConnectionTest = false;
-
-            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
+                await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
                 20, "Failurebuffer must receive some data");
 
-            await tester.Extractor.WaitForNextPush();
+                await tester.Extractor.WaitForNextPush();
 
-            await tester.TerminateRunTask();
+                await tester.TerminateRunTask();
 
-            var states = tester.Extractor.ExternalToNodeId.Select(state => new InfluxBufferState(state.Value)).ToList();
-            foreach (var state in states)
-            {
-                state.DestinationExtractedRange.Start = DateTime.MinValue;
-                state.DestinationExtractedRange.End = DateTime.MaxValue;
+                states = tester.Extractor.ExternalToNodeId.Select(state => new InfluxBufferState(state.Value)).ToList();
+                foreach (var state in states)
+                {
+                    state.DestinationExtractedRange.Start = DateTime.MinValue;
+                    state.DestinationExtractedRange.End = DateTime.MaxValue;
+                }
+
+                await tester.Extractor.StateStorage.ReadExtractionStates(states, StateStorage.InfluxEventStates, false,
+                    CancellationToken.None);
+
+                Assert.True(states.All(state => !state.StatePersisted
+                                                || state.DestinationExtractedRange.Start <= state.DestinationExtractedRange.End
+                                                && state.DestinationExtractedRange.End != DateTime.MaxValue));
             }
-
-            await tester.Extractor.StateStorage.ReadExtractionStates(states, StateStorage.InfluxEventStates, false,
-                CancellationToken.None);
-
-            Assert.True(states.All(state => !state.StatePersisted
-                || state.DestinationExtractedRange.Start <= state.DestinationExtractedRange.End
-                && state.DestinationExtractedRange.End != DateTime.MaxValue));
-
-            tester.Dispose();
 
             using var tester2 = new ExtractorTester(new ExtractorTestParameters
             {
@@ -488,7 +493,7 @@ namespace Test
                 StateInflux = true,
                 LogLevel = "debug"
             });
-            tester.Config.Events.HistorizingEmitterIds = new List<ProtoNodeId>();
+            tester2.Config.Events.HistorizingEmitterIds = new List<ProtoNodeId>();
 
             tester2.StartExtractor();
 

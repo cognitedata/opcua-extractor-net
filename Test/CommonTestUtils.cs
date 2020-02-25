@@ -121,12 +121,21 @@ namespace Test
         public static bool TestMetricValue(string name, double value)
         {
             Metrics.DefaultCollectorRegistry.TryGet(name, out var collector);
-            return collector switch
+            double? val = collector switch
             {
-                Gauge gauge => (Math.Abs(gauge.Value - value) < 0.01),
-                Counter counter => (Math.Abs(counter.Value - value) < 0.01),
-                _ => false
+                Gauge gauge => (double?)gauge.Value,
+                Counter counter => (double?)counter.Value,
+                _ => null
             };
+            if (val == null) return false;
+            if (Math.Abs(val.Value - value) > 0.01)
+            {
+                log.Information("Expected {val} but got {value} for metric {name}", 
+                    value, val.Value, name);
+                return false;
+            }
+
+            return true;
         }
 
         public static bool VerifySuccessMetrics()
@@ -153,11 +162,24 @@ namespace Test
         {
             var metrics = new List<string>
             {
-                "opcua_attribute_request_failures", "opcua_history_read_failures", "opcua_browse_failures",
-                "opcua_browse_operations", "opcua_history_reads", "opcua_tracked_timeseries",
-                "opcua_tracked_assets", "opcua_node_ensure_failures", "opcua_datapoint_pushes",
-                "opcua_datapoint_push_failures", "opcua_backfill_data_count", "opcua_frontfill_data_count",
-                "opcua_backfill_events_count", "opcua_frontfill_events_count"
+                "opcua_attribute_request_failures",
+                "opcua_history_read_failures",
+                "opcua_browse_failures",
+                "opcua_browse_operations",
+                "opcua_history_reads",
+                "opcua_tracked_timeseries",
+                "opcua_tracked_assets",
+                "opcua_node_ensure_failures",
+                "opcua_datapoint_pushes",
+                "opcua_datapoint_push_failures",
+                "opcua_backfill_data_count",
+                "opcua_frontfill_data_count",
+                "opcua_backfill_events_count",
+                "opcua_frontfill_events_count",
+                "opcua_datapoint_push_failures_influx",
+                "opcua_event_push_failures",
+                "opcua_event_push_failures_influx",
+                "opcua_duplicated_events"
             };
             foreach (var metric in metrics)
             {
@@ -349,25 +371,22 @@ namespace Test
             if (testParams.FailureInflux != null)
             {
                 Config.FailureBuffer.Enabled = true;
-                if (testParams.FailureInflux != null)
+                var failureInflux = ExtractorUtils.GetConfig(configNames[testParams.FailureInflux.Value]);
+                if (failureInflux.Pushers.First() is InfluxClientConfig influxConfig)
                 {
-                    var failureInflux = ExtractorUtils.GetConfig(configNames[testParams.FailureInflux.Value]);
-                    if (failureInflux.Pushers.First() is InfluxClientConfig influxConfig)
+                    influx = true;
+                    InfluxConfig = influxConfig;
+                    IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
+                    Config.FailureBuffer.Influx = new InfluxBufferConfig
                     {
-                        influx = true;
-                        InfluxConfig = influxConfig;
-                        IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
-                        Config.FailureBuffer.Influx = new InfluxBufferConfig
-                        {
-                            Database = influxConfig.Database,
-                            Host = influxConfig.Host,
-                            Password = influxConfig.Password,
-                            PointChunkSize = influxConfig.PointChunkSize,
-                            Username = influxConfig.Username,
-                            Write = testParams.FailureInfluxWrite,
-                            StateStorage = testParams.StateInflux
-                        };
-                    }
+                        Database = influxConfig.Database,
+                        Host = influxConfig.Host,
+                        Password = influxConfig.Password,
+                        PointChunkSize = influxConfig.PointChunkSize,
+                        Username = influxConfig.Username,
+                        Write = testParams.FailureInfluxWrite,
+                        StateStorage = testParams.StateInflux
+                    };
                 }
             }
 
@@ -410,10 +429,11 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
             if (influx)
             {
+                Log.Information("Clearing database: {db}", InfluxConfig.Database);
                 await IfDbClient.DropDatabaseAsync(new InfluxDatabase(InfluxConfig.Database));
                 await IfDbClient.CreateDatabaseAsync(InfluxConfig.Database);
             }
-
+            log.Information("FailureBuffer: {st}", Config.FailureBuffer.Enabled);
             if (Config.StateStorage.Location != null)
             {
                 using var db = new LiteDatabase(Config.StateStorage.Location);
@@ -473,11 +493,16 @@ namespace Test
             if (!testParams.QuitAfterMap)
             {
                 await Extractor.WaitForNextPush();
+                await Task.Delay(100);
                 Source.Cancel();
             }
             try
             {
                 await RunTask;
+                if (testParams.QuitAfterMap)
+                {
+                    Source.Cancel();
+                }
             }
             catch (Exception e)
             {
@@ -491,13 +516,13 @@ namespace Test
         {
             var dps = Handler.datapoints[id].Item1;
             var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)Math.Round(dp.First().Value)).ToList();
-            intdps.Sort();
             TestContinuity(intdps);
         }
 
         public static void TestContinuity(List<int> intdps)
         {
             if (intdps == null) throw new ArgumentNullException(nameof(intdps));
+            intdps.Sort();
             int min = intdps.Min();
             var check = new int[intdps.Count];
 
@@ -537,9 +562,11 @@ namespace Test
         }
         public void Dispose()
         {
+            Source?.Cancel();
             Source?.Dispose();
             IfDbClient?.Dispose();
             Extractor?.Dispose();
+            Pusher?.Dispose();
         }
     }
     public class ExtractorTestParameters

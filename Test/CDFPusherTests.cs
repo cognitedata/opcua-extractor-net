@@ -106,7 +106,7 @@ namespace Test
         }
         [Trait("Server", "array")]
         [Trait("Target", "CDFPusher")]
-        [Trait("Test", "arraydata")]
+        [Trait("Test", "cdfarraydata")]
         [Fact]
         public async Task TestArrayData()
         {
@@ -597,7 +597,7 @@ namespace Test
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Contains(tester.Handler.datapoints["gp.efg:i=10"].Item1, pt => pt.Timestamp < startTime);
-
+            await tester.Extractor.WaitForNextPush();
             CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor();
 
