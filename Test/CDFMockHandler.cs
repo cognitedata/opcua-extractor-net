@@ -128,8 +128,13 @@ namespace Test
                         case "/timeseries/data/list":
                             res = HandleGetDatapoints(content);
                             break;
+                        case "/events/list":
+                            res = HandleListEvents();
+                            break;
                         case "/events":
-                            res = HandleCreateEvents(content);
+                            res = req.Method == HttpMethod.Get
+                                ? HandleListEvents()
+                                : HandleCreateEvents(content);
                             break;
                         default:
                             log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
@@ -262,6 +267,18 @@ namespace Test
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(result)
+            };
+        }
+
+        private static HttpResponseMessage HandleListEvents()
+        {
+            string res = JsonConvert.SerializeObject(new EventsReadWrapper
+            {
+                items = new List<EventDummy>()
+            });
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(res)
             };
         }
 
@@ -632,6 +649,11 @@ namespace Test
     public class TimeseriesReadWrapper
     {
         public IEnumerable<TimeseriesDummy> items { get; set; }
+    }
+
+    public class EventsReadWrapper
+    {
+        public IEnumerable<EventDummy> items { get; set; }
     }
     public class TimeseriesDummy
     {

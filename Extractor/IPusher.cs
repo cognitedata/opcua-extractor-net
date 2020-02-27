@@ -45,7 +45,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Test the connection to the destination, should return false on failure
         /// </summary>
-        Task<bool?> TestConnection(CancellationToken token);
+        Task<bool?> TestConnection(FullConfig config, CancellationToken token);
         /// <summary>
         /// Get earliest and latest timestamps in destination system, if possible
         /// </summary>

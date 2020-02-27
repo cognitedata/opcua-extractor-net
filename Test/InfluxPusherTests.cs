@@ -44,7 +44,7 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
-            Assert.True(await tester.Pusher.TestConnection(tester.Source.Token));
+            Assert.True(await tester.Pusher.TestConnection(tester.Config, tester.Source.Token));
 
             tester.StartExtractor();
 

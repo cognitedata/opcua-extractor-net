@@ -121,7 +121,7 @@ namespace Cognite.OpcUa
 
             if (config.FailureBuffer.Enabled)
             {
-                FailureBuffer = new FailureBuffer(config.FailureBuffer, this);
+                FailureBuffer = new FailureBuffer(config, this);
             }
             this.uaClient.Extractor = this;
             historyReader = new HistoryReader(uaClient, this, pushers, config.History);
@@ -502,7 +502,7 @@ namespace Cognite.OpcUa
             }
 
             var results = await Task.WhenAll(pushers.Select(pusher =>
-                pusher.DataFailing ? pusher.TestConnection(token) : pusher.PushDataPoints(dataPointList, token)));
+                pusher.DataFailing ? pusher.TestConnection(config, token) : pusher.PushDataPoints(dataPointList, token)));
 
             if (results.Any(status => status == false))
             {
@@ -594,7 +594,7 @@ namespace Cognite.OpcUa
                 }
             }
             var results = await Task.WhenAll(pushers.Select(pusher =>
-                pusher.EventsFailing ? pusher.TestConnection(token) : pusher.PushEvents(eventList, token)));
+                pusher.EventsFailing ? pusher.TestConnection(config, token) : pusher.PushEvents(eventList, token)));
             if (results.Any(failed => failed == false))
             {
                 var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();

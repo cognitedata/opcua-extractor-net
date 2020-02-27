@@ -25,10 +25,11 @@ namespace Cognite.OpcUa
         private bool anyEvents;
 
         private static readonly ILogger log = Log.Logger.ForContext(typeof(FailureBuffer));
-        public FailureBuffer(FailureBufferConfig config, Extractor extractor)
+        public FailureBuffer(FullConfig fullConfig, Extractor extractor)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
-            this.config = config ?? throw new ArgumentNullException(nameof(config));
+            if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
+            config = fullConfig.FailureBuffer;
 
             useLocalQueue = extractor.StateStorage != null && config.LocalQueue;
             this.extractor = extractor;
@@ -48,7 +49,7 @@ namespace Cognite.OpcUa
             {
                 Extractor = extractor
             };
-            var connTest = influxPusher.TestConnection(CancellationToken.None);
+            var connTest = influxPusher.TestConnection(fullConfig, CancellationToken.None);
             connTest.Wait();
             if (connTest.Result == null || !connTest.Result.Value)
             {

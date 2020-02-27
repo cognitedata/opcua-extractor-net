@@ -273,13 +273,13 @@ namespace Test
         [Trait("Test", "connectiontest")]
         public async Task TestConnectionTest()
         {
-            var fullConfig = CommonTestUtils.BuildConfig("basic");
+            var fullConfig = CommonTestUtils.BuildConfig("basic", "config.events.yml");
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             Logger.Configure(fullConfig.Logging);
 
             var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
             using var pusher = new CDFPusher(CommonTestUtils.GetDummyProvider(handler), config);
-            var res = await pusher.TestConnection(CancellationToken.None);
+            var res = await pusher.TestConnection(fullConfig, CancellationToken.None);
             Assert.True(res);
         }
         [Fact]

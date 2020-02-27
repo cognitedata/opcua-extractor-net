@@ -329,7 +329,7 @@ namespace Cognite.OpcUa
             return true;
         }
 
-        public async Task<bool?> TestConnection(CancellationToken token)
+        public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
             IEnumerable<string> dbs;
             try

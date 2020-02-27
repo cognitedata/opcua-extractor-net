@@ -121,7 +121,7 @@ namespace Cognite.OpcUa
 
             foreach (var _buffer in points)
             {
-                BufferedDataPoint buffer = _buffer;
+                var buffer = _buffer;
                 if (buffer.Timestamp < minDateTime || mismatchedTimeseries.Contains(buffer.Id))
                 {
                     skippedDatapoints.Inc();
@@ -172,24 +172,24 @@ namespace Cognite.OpcUa
 
             if (!results.All(res => res)) return false;
 
-            foreach (var group in dataPointList)
+            foreach ((string key, var value) in dataPointList)
             {
-                var last = group.Value.Max(dp => dp.Timestamp);
-                var first = group.Value.Min(dp => dp.Timestamp);
-                if (!ranges.ContainsKey(group.Key))
+                var last = value.Max(dp => dp.Timestamp);
+                var first = value.Min(dp => dp.Timestamp);
+                if (!ranges.ContainsKey(key))
                 {
-                    ranges[group.Key] = new TimeRange(first, last);
+                    ranges[key] = new TimeRange(first, last);
                 }
                 else
                 {
-                    if (last < ranges[group.Key].End)
+                    if (last < ranges[key].End)
                     {
-                        ranges[group.Key].End = last;
+                        ranges[key].End = last;
                     }
 
-                    if (first > ranges[group.Key].Start)
+                    if (first > ranges[key].Start)
                     {
-                        ranges[group.Key].Start = first;
+                        ranges[key].Start = first;
                     }
                 }
             }
@@ -200,8 +200,7 @@ namespace Cognite.OpcUa
             int count = 0;
             var inserts = dataPointList.Select(kvp =>
             {
-                string externalId = kvp.Key;
-                var values = kvp.Value;
+                (string externalId, var values) = kvp;
                 var item = new DataPointInsertionItem
                 {
                     ExternalId = externalId
@@ -280,7 +279,6 @@ namespace Cognite.OpcUa
             {
                 if (buffEvent.Time < minDateTime || !nodeToAssetIds.ContainsKey(buffEvent.SourceNode) && !config.Debug)
                 {
-                    log.Information("Skipping event: {evt}", buffEvent.ToDebugDescription());
                     skippedEvents.Inc();
                     continue;
                 }
@@ -593,14 +591,15 @@ namespace Cognite.OpcUa
 
             return true;
         }
-        public async Task<bool?> TestConnection(CancellationToken token)
+        public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
+            if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
             // Use data client because it gives up after a little while
             var client = GetClient("Data");
             LoginStatusReadDto loginStatus;
             try
             {
-                loginStatus = await client.Login.StatusAsync(new CancellationToken());
+                loginStatus = await client.Login.StatusAsync(token);
             }
             catch (Exception ex)
             {
@@ -619,17 +618,36 @@ namespace Cognite.OpcUa
                 log.Error("API key is not associated with project {project} at {url}", config.Project, config.Host);
                 return false;
             }
+
             try
             {
-                await client.TimeSeries.ListAsync(new TimeSeriesQueryDto { Limit = 1 });
+                await client.TimeSeries.ListAsync(new TimeSeriesQueryDto { Limit = 1 }, token);
             }
             catch (ResponseException ex)
             {
-                log.Error("Could not access CDF Time Series - most likely due to insufficient access rights on API key. Project {project} at {host}: {msg}",
+                log.Error("Could not access CDF Time Series - most likely due " +
+                          "to insufficient access rights on API key. Project {project} at {host}: {msg}",
                     config.Project, config.Host, ex.Message);
-                log.Debug(ex, "Could not access CDF Time Series - most likely due to insufficient access rights on API key. {project} at {host}",
-                    config.Project, config.Host);
+                log.Debug(ex, "Could not access CDF Time Series");
                 return false;
+            }
+
+            if (fullConfig.Events.EventIds != null 
+                && fullConfig.Events.EmitterIds != null
+                && fullConfig.Events.EventIds.Any()
+                && fullConfig.Events.EmitterIds.Any())
+            {
+                try
+                {
+                    await client.Events.ListAsync(new EventQueryDto {Limit = 1}, token);
+                }
+                catch (ResponseException ex)
+                {
+                    log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
+                              "to insufficient acces rights on API key. Project {project} at {host}: {msg}",
+                        config.Project, config.Host, ex.Message);
+                    log.Debug(ex, "Could not access CDF Events");
+                }
             }
 
             return true;
