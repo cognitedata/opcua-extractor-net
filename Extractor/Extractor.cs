@@ -118,7 +118,11 @@ namespace Cognite.OpcUa
             {
                 StateStorage = new StateStorage(this, config);
             }
-            FailureBuffer = new FailureBuffer(config.FailureBuffer, this);
+
+            if (config.FailureBuffer.Enabled)
+            {
+                FailureBuffer = new FailureBuffer(config.FailureBuffer, this);
+            }
             this.uaClient.Extractor = this;
             historyReader = new HistoryReader(uaClient, this, pushers, config.History);
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
@@ -549,7 +553,7 @@ namespace Cognite.OpcUa
                     }
 
                 }
-                if (FailureBuffer.Any && config.FailureBuffer.Enabled)
+                if (config.FailureBuffer.Enabled && FailureBuffer.Any)
                 {
                     await FailureBuffer.ReadDatapoints(pushers, token);
                 }
@@ -638,7 +642,7 @@ namespace Cognite.OpcUa
                         pusher.EventsFailing = false;
                     }
                 }
-                if (FailureBuffer.AnyEvents && config.FailureBuffer.Enabled)
+                if (config.FailureBuffer.Enabled && FailureBuffer.AnyEvents)
                 {
                     await FailureBuffer.ReadEvents(pushers, token);
                 }

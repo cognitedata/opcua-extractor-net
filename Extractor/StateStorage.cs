@@ -8,6 +8,7 @@ using Serilog;
 using LiteDB;
 using LiteQueue;
 using Opc.Ua;
+using Prometheus.Client;
 
 namespace Cognite.OpcUa
 {
@@ -35,6 +36,22 @@ namespace Cognite.OpcUa
         private readonly LiteQueue<EventPoco> eventQueue;
         public bool AnyPoints { get; set; }
         public bool AnyEvents { get; set; }
+
+        private static readonly Counter statesStoredCounter = Metrics.CreateCounter(
+            "opcua_num_state_stored", "The number of ranges stored in state storage");
+
+        private static readonly Counter stateReadOperations = Metrics.CreateCounter(
+            "opcua_state_read_count", "The number of times ranges have been read from state storage");
+
+        private static readonly Gauge numDoublePointsInQueue = Metrics.CreateGauge(
+            "opcua_queue_num_points_double", "The number of double-valued datapoints in the local buffer queue");
+
+        private static readonly Gauge numStringPointsInQueue = Metrics.CreateGauge(
+            "opcua_queue_num_points_string", "The number of string-valued datapoints in the local buffer queue");
+
+        private static readonly Gauge numEventsInQueue = Metrics.CreateGauge(
+            "opcua_queue_num_events", "The number of events in the local buffer queue");
+
         public StateStorage(Extractor extractor, FullConfig config)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
@@ -54,6 +71,9 @@ namespace Cognite.OpcUa
                 eventQueue = new LiteQueue<EventPoco>(db, EventQueue);
                 eventQueue.ResetOrphans();
                 AnyEvents = QueueAny(eventQueue).Result;
+                numDoublePointsInQueue.Set(doubleDataQueue.Count());
+                numStringPointsInQueue.Set(stringDataQueue.Count());
+                numEventsInQueue.Set(eventQueue.Count());
             }
         }
 
@@ -98,11 +118,16 @@ namespace Cognite.OpcUa
 
             try
             {
-                await Task.Run(() =>
+                foreach (var chunk in ExtractorUtils.ChunkBy(pocos, 100))
                 {
-                    var col = db.GetCollection<ExtractionStatePoco>(name);
-                    col.Upsert(pocos);
-                }, token);
+                    await Task.Run(() =>
+                    {
+                        var col = db.GetCollection<ExtractionStatePoco>(name);
+                        col.Upsert(chunk);
+                    }, token);
+                    statesStoredCounter.Inc(chunk.Count());
+                }
+
                 log.Debug("Saved {Stored} out of {TotalNumber} extraction states to store {name}", 
                     toStore.Count, states.Count(), name);
                 foreach (var state in toStore)
@@ -143,6 +168,7 @@ namespace Cognite.OpcUa
                             if (token.IsCancellationRequested) break;
                             var poco = col.FindById(kvp.Key);
                             if (poco == null) continue;
+                            stateReadOperations.Inc();
                             ret.Add(poco);
                         }
 
@@ -154,6 +180,7 @@ namespace Cognite.OpcUa
                     pocos = await Task.Run(() =>
                     {
                         var col = db.GetCollection<ExtractionStatePoco>(name);
+                        stateReadOperations.Inc();
                         return col.FindAll();
                     }, token);
                 }
@@ -222,7 +249,8 @@ namespace Cognite.OpcUa
                 log.Error(e, "Failed to insert datapoints into litedb queue");
                 return false;
             }
-
+            numStringPointsInQueue.Inc(stringPoints.Count);
+            numDoublePointsInQueue.Inc(doublePoints.Count);
             AnyPoints = true;
             return true;
         }
@@ -236,10 +264,12 @@ namespace Cognite.OpcUa
                 {
                     var stringRecords = stringDataQueue.Dequeue(DataBatchSize);
                     var doubleRecords = doubleDataQueue.Dequeue(DataBatchSize);
-                    var points = stringRecords.Select(record => record.Payload.ToDataPoint());
-                    points = points.Concat(doubleRecords.Select(record => record.Payload.ToDataPoint())).ToList();
+                    var points = stringRecords.Select(record => record.Payload.ToDataPoint()).ToList();
+                    int stringPoints = points.Count;
+                    points.AddRange(doubleRecords.Select(record => record.Payload.ToDataPoint()));
+                    int doublePoints = points.Count - stringPoints;
+                    log.Information("Read {cnt} points from litedb queue", points.Count);
 
-                    log.Information("Read {cnt} points from litedb queue", points.Count());
 
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(points, token)));
 
@@ -281,10 +311,19 @@ namespace Cognite.OpcUa
                     }
 
                     stringDataQueue.Commit(stringRecords);
+                    numStringPointsInQueue.Dec(stringPoints);
                     doubleDataQueue.Commit(doubleRecords);
+                    numDoublePointsInQueue.Dec(doublePoints);
                     if (stringRecords.Count < DataBatchSize && doubleRecords.Count < DataBatchSize) break;
                 }
-
+                if (numStringPointsInQueue.Value < 0)
+                {
+                    numStringPointsInQueue.Set(stringDataQueue.Count());
+                }
+                if (numDoublePointsInQueue.Value < 0)
+                {
+                    numDoublePointsInQueue.Set(doubleDataQueue.Count());
+                }
                 AnyPoints = false;
             }, token);
 
@@ -296,7 +335,7 @@ namespace Cognite.OpcUa
             if (events == null) return true;
             var eventPocos = events.Select(evt => new EventPoco(evt, extractor)).ToList();
 
-            log.Information("Write {cnt} events to queue", events.Count());
+            log.Information("Write {cnt} events to queue", eventPocos.Count);
 
             try
             {
@@ -307,6 +346,7 @@ namespace Cognite.OpcUa
                 log.Error(e, "Failed to insert events into litedb queue");
                 return false;
             }
+            numEventsInQueue.Inc(eventPocos.Count);
 
             AnyEvents = true;
             return true;
@@ -321,9 +361,9 @@ namespace Cognite.OpcUa
                 while (!token.IsCancellationRequested)
                 {
                     var records = eventQueue.Dequeue(EventBatchSize);
-                    var events = records.Select(record => record.Payload.ToBufferedEvent(extractor));
+                    var events = records.Select(record => record.Payload.ToBufferedEvent(extractor)).ToList();
 
-                    log.Information("Read {cnt} events from litedb queue", events.Count());
+                    log.Information("Read {cnt} events from litedb queue", events.Count);
 
                     var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
 
@@ -360,11 +400,15 @@ namespace Cognite.OpcUa
                         var state = extractor.GetEmitterState(kvp.Key);
                         state.UpdateDestinationRange(kvp.Value);
                     }
-
+                    numEventsInQueue.Dec(events.Count);
                     eventQueue.Commit(records);
                     if (records.Count < EventBatchSize) break;
                 }
 
+                if (numEventsInQueue.Value < 0)
+                {
+                    numEventsInQueue.Set(eventQueue.Count());
+                }
                 AnyEvents = false;
             }, token);
 

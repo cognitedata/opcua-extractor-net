@@ -59,7 +59,7 @@ namespace Cognite.OpcUa
             services.AddHttpClient("Context", client => { client.Timeout = Timeout.InfiniteTimeSpan; })
                 .AddPolicyHandler(GetRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
-            services.AddHttpClient("Data", client => { client.Timeout = TimeSpan.FromSeconds(10); })
+            services.AddHttpClient("Data", client => { client.Timeout = TimeSpan.FromSeconds(120); })
                 .AddPolicyHandler(GetDataRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
         }
@@ -87,7 +87,7 @@ namespace Cognite.OpcUa
         }
         private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
         {
-            return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(60));
+            return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(20));
         }
 
         /// <summary>
