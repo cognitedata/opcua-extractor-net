@@ -18,11 +18,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Serilog;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -31,7 +29,7 @@ namespace Test
     [CollectionDefinition("Influx_tests", DisableParallelization = true)]
     public class InfluxPusherTests : MakeConsoleWork
     {
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(InfluxPusherTests));
+        // private static readonly ILogger log = Log.Logger.ForContext(typeof(InfluxPusherTests));
 
         public InfluxPusherTests(ITestOutputHelper output) : base(output) { }
         [Trait("Server", "basic")]
@@ -46,7 +44,7 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
-            Assert.True(await tester.Pusher.TestConnection(tester.Source.Token));
+            Assert.True(await tester.Pusher.TestConnection(tester.Config, tester.Source.Token));
 
             tester.StartExtractor();
 
@@ -58,7 +56,7 @@ namespace Test
             }, 20, "Expected to find some data in influxdb");
 
             await tester.TerminateRunTask();
-            Assert.False(((InfluxPusher) tester.Pusher).Failing);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 0));
         }
         [Trait("Server", "array")]
         [Trait("Target", "InfluxPusher")]
@@ -86,7 +84,7 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.False(((InfluxPusher)tester.Pusher).Failing);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 0));
         }
 
         [Trait("Server", "basic")]
@@ -114,20 +112,17 @@ namespace Test
                 1E105,
                 -1E105,
                 double.MaxValue,
-                double.MinValue
+                double.MinValue,
+                double.PositiveInfinity,
+                double.NegativeInfinity,
+                double.NaN
             };
 
             var pusher = tester.Pusher;
 
-            foreach (var value in values)
-            {
-                pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", value));
-            }
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.PositiveInfinity));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NegativeInfinity));
-            pusher.BufferedDPQueue.Enqueue(new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NaN));
+            var badPoints = values.Select(value => new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", value)).ToList();
 
-            await pusher.PushDataPoints(CancellationToken.None);
+            await pusher.PushDataPoints(badPoints, CancellationToken.None);
 
             var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database, 
                 "SELECT * FROM \"gp.efg:i=2\"");
@@ -136,9 +131,10 @@ namespace Test
 
             foreach (var value in values)
             {
+                if (!double.IsFinite(value)) continue;
                 Assert.Contains(readValues.Entries, entry => Math.Abs(Convert.ToDouble(entry.Value) - value) < 1);
             }
-            Assert.False(((InfluxPusher)tester.Pusher).Failing);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 0));
         }
 
         [Trait("Server", "events")]
@@ -185,84 +181,41 @@ namespace Test
                 LogLevel = "debug"
             });
             await tester.ClearPersistentData();
+            tester.Config.Extraction.AllowStringVariables = true;
             tester.StartExtractor();
 
+            await tester.Extractor.WaitForNextPush();
+
+            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+
+            await tester.Extractor.WaitForNextPush();
+
             tester.Handler.AllowPush = false;
+            tester.Handler.AllowConnectionTest = false;
 
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
                 20, "Failurebuffer must receive some data");
 
             await Task.Delay(500);
             tester.Handler.AllowPush = true;
+            tester.Handler.AllowConnectionTest = true;
 
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.Any,
                 20, "FailureBuffer should be emptied");
 
+            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+
             await tester.TerminateRunTask();
             
             tester.TestContinuity("gp.efg:i=10");
+            tester.TestConstantRate(1000, "gp.efg:i=9");
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.Equal(5, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
             Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_cdf"));
         }
 
-        [Trait("Server", "basic")]
-        [Trait("Target", "InfluxPusher")]
-        [Trait("Test", "influxautobuffer")]
-        [Fact]
-        public async Task TestInfluxAutoBuffer()
-        {
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                ConfigName = ConfigName.Influx,
-                BufferDir = "./",
-                LogLevel = "debug"
-            });
-            tester.Config.History.Enabled = false;
-            await tester.ClearPersistentData();
-            var bufferPath = Path.Join(tester.Config.FailureBuffer.FilePath, "buffer.bin");
-
-            tester.StartExtractor();
-
-            await tester.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_datapoints_pushed_influx") > 0,
-                20, "Expected InfluxPusher to start working");
-
-            var oldHost = tester.InfluxConfig.Host;
-            tester.InfluxConfig.Host = "testWrong";
-            ((InfluxPusher)tester.Pusher).Reconfigure();
-
-            await tester.WaitForCondition(() => new FileInfo(bufferPath).Length > 0, 20,
-                "Expected some data to be written");
-
-            tester.InfluxConfig.Host = oldHost;
-            ((InfluxPusher)tester.Pusher).Reconfigure();
-
-            await tester.WaitForCondition(() => new FileInfo(bufferPath).Length == 0, 20,
-                () => $"Expected file to be emptied, but it contained {new FileInfo(bufferPath).Length} bytes of data");
-
-            await Task.Delay(1000);
-
-            await tester.TerminateRunTask();
-
-            var dps = await ((InfluxPusher)tester.Pusher)
-                .ReadDataPoints(DateTime.UnixEpoch, new Dictionary<string, bool> {{"gp.efg:i=10", false}}, CancellationToken.None);
-
-            dps = dps.DistinctBy(pt => (int) Math.Round(pt.DoubleValue));
-
-            foreach (var dp in dps)
-            {
-                 log.Information("dp: {val}", dp.DoubleValue);
-            }
-
-            var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)Math.Round(dp.First().DoubleValue)).ToList();
-
-            ExtractorTester.TestContinuity(intdps);
-
-            Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_influx"));
-        }
         [Trait("Server", "events")]
         [Trait("Target", "InfluxPusher")]
         [Trait("Test", "influxbackfill")]
@@ -383,7 +336,7 @@ namespace Test
                     !kvp.Value.Historizing || kvp.Value.BackfillDone && kvp.Value.IsStreaming),
                 60, "Expected backfill of events to terminate");
 
-            await Task.Delay(1000);
+            await tester.Extractor.WaitForNextPush();
 
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));

@@ -49,11 +49,11 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
         
         public int Index { get; set; }
+        public bool DataFailing { get; set; }
+        public bool EventsFailing { get; set; }
+
         public Extractor Extractor { get; set; }
         public PusherConfig BaseConfig { get; }
-
-        public ConcurrentQueue<BufferedDataPoint> BufferedDPQueue { get; } = new ConcurrentQueue<BufferedDataPoint>();
-        public ConcurrentQueue<BufferedEvent> BufferedEventQueue { get; } = new ConcurrentQueue<BufferedEvent>();
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
 
@@ -113,111 +113,94 @@ namespace Cognite.OpcUa
         /// Dequeues up to 100000 points from the BufferedDPQueue, then pushes them to CDF. On failure, writes to file if enabled.
         /// </summary>
 
-        public async Task<IEnumerable<BufferedDataPoint>> PushDataPoints(CancellationToken token)
+        public async Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
         {
+            if (points == null) return null;
             int count = 0;
             var dataPointList = new Dictionary<string, List<BufferedDataPoint>>();
-            while (BufferedDPQueue.Any())
+
+            foreach (var _buffer in points)
             {
-                while (BufferedDPQueue.TryDequeue(out BufferedDataPoint buffer))
+                var buffer = _buffer;
+                if (buffer.Timestamp < minDateTime || mismatchedTimeseries.Contains(buffer.Id))
                 {
-                    if (buffer.Timestamp < minDateTime || mismatchedTimeseries.Contains(buffer.Id))
+                    skippedDatapoints.Inc();
+                    continue;
+                }
+                // We do not subscribe to changes in history, so an update to a point within the known range is due to
+                // something being out of synch.
+                if (ranges.ContainsKey(buffer.Id)
+                    && buffer.Timestamp < ranges[buffer.Id].End 
+                    && buffer.Timestamp > ranges[buffer.Id].Start) continue;
+
+                if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
+                {
+                    if (config.NonFiniteReplacement != null)
+                    {
+                        buffer = new BufferedDataPoint(buffer, config.NonFiniteReplacement.Value);
+                    }
+                    else
                     {
                         skippedDatapoints.Inc();
                         continue;
                     }
-                    // We do not subscribe to changes in history, so an update to a point within the known range is due to
-                    // something being out of synch.
-                    if (ranges.ContainsKey(buffer.Id)
-                        && buffer.Timestamp < ranges[buffer.Id].End 
-                        && buffer.Timestamp > ranges[buffer.Id].Start) continue;
-
-                    if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
-                    {
-                        if (config.NonFiniteReplacement != null)
-                        {
-                            buffer = new BufferedDataPoint(buffer, config.NonFiniteReplacement.Value);
-                        }
-                        else
-                        {
-                            skippedDatapoints.Inc();
-                            continue;
-                        }
-                    }
-
-                    if (buffer.IsString && buffer.StringValue == null)
-                    {
-                        buffer = new BufferedDataPoint(buffer, "");
-                    }
-
-                    count++;
-                    if (!dataPointList.ContainsKey(buffer.Id))
-                    {
-                        dataPointList[buffer.Id] = new List<BufferedDataPoint>();
-                    }
-                    dataPointList[buffer.Id].Add(buffer);
                 }
 
-                if (count == 0)
+                if (buffer.IsString && buffer.StringValue == null)
                 {
-                    log.Verbose("Push 0 datapoints to CDF");
-                    return null;
+                    buffer = new BufferedDataPoint(buffer, "");
                 }
-                log.Debug("Push {NumDatapointsToPush} datapoints to CDF", count);
+
+                count++;
+                if (!dataPointList.ContainsKey(buffer.Id))
+                {
+                    dataPointList[buffer.Id] = new List<BufferedDataPoint>();
+                }
+                dataPointList[buffer.Id].Add(buffer);
             }
+
+            if (count == 0)
+            {
+                log.Verbose("Push 0 datapoints to CDF");
+                return null;
+            }
+            log.Debug("Push {NumDatapointsToPush} datapoints to CDF", count);
             var dpChunks = ExtractorUtils.ChunkDictOfLists(dataPointList, 100000, 10000).ToArray();
             var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk, token)).ToList();
             var results = await Task.WhenAll(pushTasks);
 
 
-            if (results.All(res => res))
-            {
-                foreach (var group in dataPointList)
-                {
-                    var last = group.Value.Max(dp => dp.Timestamp);
-                    var first = group.Value.Min(dp => dp.Timestamp);
-                    if (!ranges.ContainsKey(group.Key))
-                    {
-                        ranges[group.Key] = new TimeRange(first, last);
-                    }
-                    else
-                    {
-                        if (last < ranges[group.Key].End)
-                        {
-                            ranges[group.Key].End = last;
-                        }
+            if (!results.All(res => res)) return false;
 
-                        if (first > ranges[group.Key].Start)
-                        {
-                            ranges[group.Key].Start = first;
-                        }
+            foreach ((string key, var value) in dataPointList)
+            {
+                var last = value.Max(dp => dp.Timestamp);
+                var first = value.Min(dp => dp.Timestamp);
+                if (!ranges.ContainsKey(key))
+                {
+                    ranges[key] = new TimeRange(first, last);
+                }
+                else
+                {
+                    if (last < ranges[key].End)
+                    {
+                        ranges[key].End = last;
+                    }
+
+                    if (first > ranges[key].Start)
+                    {
+                        ranges[key].Start = first;
                     }
                 }
-                return Array.Empty<BufferedDataPoint>();
             }
-            int index = 0;
-            var failedPoints = new List<BufferedDataPoint>();
-            foreach (var result in results)
-            {
-                if (!result)
-                {
-                    foreach (var points in dpChunks[index].Values)
-                    {
-                        failedPoints.AddRange(points);
-                    }
-                }
-
-                index++;
-            }
-            return failedPoints;
+            return true;
         }
         private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<BufferedDataPoint>> dataPointList, CancellationToken token) {
             if (config.Debug) return true;
             int count = 0;
             var inserts = dataPointList.Select(kvp =>
             {
-                string externalId = kvp.Key;
-                var values = kvp.Value;
+                (string externalId, var values) = kvp;
                 var item = new DataPointInsertionItem
                 {
                     ExternalId = externalId
@@ -256,12 +239,28 @@ namespace Cognite.OpcUa
             {
                 await client.DataPoints.CreateAsync(req, token);
             }
+            catch (ResponseException e)
+            {
+                dataPointPushFailures.Inc();
+                log.Error("Failed to push {count} points to CDF: {msg}", count, e.Message);
+
+                if (e.Code != 400 || !e.Missing.Any()) return false;
+                var missing = e.Missing
+                    .Select(mis => (mis["externalId"] as MultiValue.String)?.Value)
+                    .Where(id => id != null).ToHashSet();
+
+                if (!missing.Any()) return false;
+                log.Warning("While pushing points to CDF, {cnt} timeseries were missing. " +
+                            "If this happens on startup it may be due to points stored in a local buffer.", missing.Count);
+                var next = dataPointList.Where(kvp => !missing.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                return await PushDataPointsChunk(next, token);
+            }
             catch (Exception e)
             {
-                log.Warning(e, "Failed to push {count} points to CDF", count);
+                log.Error("Failed to push {count} points to CDF: {msg}", count, e.Message);
                 dataPointPushFailures.Inc();
                 // Return false indicating unexpected failure if we want to buffer.
-                return !(e is ResponseException ex) || ex.Code == 400 || ex.Code == 409;
+                return false;
             }
 
             dataPointPushes.Inc();
@@ -271,11 +270,12 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Dequeues up to 1000 events from the BufferedEventQueue, then pushes them to CDF.
         /// </summary>
-        public async Task<IEnumerable<BufferedEvent>> PushEvents(CancellationToken token)
+        public async Task<bool?> PushEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
+            if (events == null) return null;
             var eventList = new List<BufferedEvent>();
             int count = 0;
-            while (BufferedEventQueue.TryDequeue(out BufferedEvent buffEvent) && count++ < 1000)
+            foreach (var buffEvent in events)
             {
                 if (buffEvent.Time < minDateTime || !nodeToAssetIds.ContainsKey(buffEvent.SourceNode) && !config.Debug)
                 {
@@ -283,6 +283,7 @@ namespace Cognite.OpcUa
                     continue;
                 }
                 eventList.Add(buffEvent);
+                count++;
             }
             if (count == 0)
             {
@@ -292,21 +293,9 @@ namespace Cognite.OpcUa
             log.Debug("Push {NumEventsToPush} events to CDF", count);
             var chunks = ExtractorUtils.ChunkBy(eventList, 1000).ToArray();
             if (config.Debug) return null;
-            bool[] results = await Task.WhenAll(chunks.Select(chunk => PushEventsChunk(chunk, token)));
-            if (results.All(result => result)) return Array.Empty<BufferedEvent>();
-            int index = 0;
-            var failedEvents = new List<BufferedEvent>();
-            foreach (var result in results)
-            {
-                if (!result)
-                {
-                    failedEvents.AddRange(chunks[index]);
-                }
 
-                index++;
-            }
-
-            return failedEvents;
+            var results = await Task.WhenAll(chunks.Select(chunk => PushEventsChunk(chunk, token)));
+            return results.All(result => result);
         }
 
         private async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> events, CancellationToken token)
@@ -333,21 +322,24 @@ namespace Cognite.OpcUa
                     }
                     catch (Exception exc)
                     {
-                        log.Error(exc, "Failed to push {NumFailedEvents} events to CDF", eventEntities.Count());
+                        log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", 
+                            eventEntities.Count(), exc.Message);
                         eventPushFailures.Inc();
-                        return !(exc is ResponseException rex) || rex.Code == 400 || rex.Code == 409;
+                        return exc is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
                     }
                 }
                 else
                 {
-                    log.Error(ex, "Failed to push {NumFailedEvents} events to CDF", count);
+                    log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}",
+                        count, ex.Message);
                     eventPushFailures.Inc();
                     return ex.Code == 400 || ex.Code == 409;
                 }
             }
             catch (Exception ex)
             {
-                log.Error(ex, "Failed to push {NumFailedEvents} events to CDF", count);
+                log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", 
+                    count, ex.Message);
                 eventPushFailures.Inc();
                 return false;
             }
@@ -441,8 +433,6 @@ namespace Cognite.OpcUa
             nodeToAssetIds.Clear();
             trackedAssets.Set(0);
             trackedTimeseres.Set(0);
-            BufferedDPQueue.Clear();
-            BufferedEventQueue.Clear();
             ranges.Clear();
         }
         private async Task<IEnumerable<(string, DateTime)>> GetEarliestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
@@ -486,7 +476,6 @@ namespace Cognite.OpcUa
             await Task.WhenAll(tasks);
             return tasks.SelectMany(task => task.Result);
         }
-
         private async Task<IEnumerable<(string, DateTime)>> GetLatestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
         {
             var client = GetClient();
@@ -527,7 +516,6 @@ namespace Cognite.OpcUa
 
             return res;
         }
-
         private async Task<IEnumerable<(string, DateTime)>> GetLatestTimestamp(IEnumerable<string> ids,
             CancellationToken token)
         {
@@ -603,15 +591,15 @@ namespace Cognite.OpcUa
 
             return true;
         }
-
-        public async Task<bool> TestConnection(CancellationToken token)
+        public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
+            if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
             // Use data client because it gives up after a little while
             var client = GetClient("Data");
             LoginStatusReadDto loginStatus;
             try
             {
-                loginStatus = await client.Login.StatusAsync(new CancellationToken());
+                loginStatus = await client.Login.StatusAsync(token);
             }
             catch (Exception ex)
             {
@@ -630,17 +618,36 @@ namespace Cognite.OpcUa
                 log.Error("API key is not associated with project {project} at {url}", config.Project, config.Host);
                 return false;
             }
+
             try
             {
-                await client.TimeSeries.ListAsync(new TimeSeriesQueryDto { Limit = 1 });
+                await client.TimeSeries.ListAsync(new TimeSeriesQueryDto { Limit = 1 }, token);
             }
             catch (ResponseException ex)
             {
-                log.Error("Could not access CDF Time Series - most likely due to insufficient access rights on API key. Project {project} at {host}: {msg}",
+                log.Error("Could not access CDF Time Series - most likely due " +
+                          "to insufficient access rights on API key. Project {project} at {host}: {msg}",
                     config.Project, config.Host, ex.Message);
-                log.Debug(ex, "Could not access CDF Time Series - most likely due to insufficient access rights on API key. {project} at {host}",
-                    config.Project, config.Host);
+                log.Debug(ex, "Could not access CDF Time Series");
                 return false;
+            }
+
+            if (fullConfig.Events.EventIds != null 
+                && fullConfig.Events.EmitterIds != null
+                && fullConfig.Events.EventIds.Any()
+                && fullConfig.Events.EmitterIds.Any())
+            {
+                try
+                {
+                    await client.Events.ListAsync(new EventQueryDto {Limit = 1}, token);
+                }
+                catch (ResponseException ex)
+                {
+                    log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
+                              "to insufficient acces rights on API key. Project {project} at {host}: {msg}",
+                        config.Project, config.Host, ex.Message);
+                    log.Debug(ex, "Could not access CDF Events");
+                }
             }
 
             return true;

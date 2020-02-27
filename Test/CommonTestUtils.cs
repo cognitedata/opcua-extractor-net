@@ -24,7 +24,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Cognite.OpcUa;
-using Cognite.OpcUa.Config;
+using LiteDB;
 using Microsoft.Extensions.DependencyInjection;
 using Prometheus.Client;
 using Serilog;
@@ -65,11 +65,10 @@ namespace Test
     {
         private static readonly ILogger log = Log.Logger.ForContext(typeof(CommonTestUtils));
 
-        public static FullConfig BuildConfig(string serverType, int index, string configname = "config.test.yml")
+        public static FullConfig BuildConfig(string serverType, string configname = "config.test.yml")
         {
             var fullConfig = ExtractorUtils.GetConfig(configname);
             if (fullConfig == null) throw new ConfigurationException("Failed to load config file");
-            fullConfig.FailureBuffer.FilePath = $"buffers{index}";
             switch (serverType)
             {
                 case "basic":
@@ -122,12 +121,21 @@ namespace Test
         public static bool TestMetricValue(string name, double value)
         {
             Metrics.DefaultCollectorRegistry.TryGet(name, out var collector);
-            return collector switch
+            double? val = collector switch
             {
-                Gauge gauge => (Math.Abs(gauge.Value - value) < 0.01),
-                Counter counter => (Math.Abs(counter.Value - value) < 0.01),
-                _ => false
+                Gauge gauge => (double?)gauge.Value,
+                Counter counter => (double?)counter.Value,
+                _ => null
             };
+            if (val == null) return false;
+            if (Math.Abs(val.Value - value) > 0.01)
+            {
+                log.Information("Expected {val} but got {value} for metric {name}", 
+                    value, val.Value, name);
+                return false;
+            }
+
+            return true;
         }
 
         public static bool VerifySuccessMetrics()
@@ -154,11 +162,24 @@ namespace Test
         {
             var metrics = new List<string>
             {
-                "opcua_attribute_request_failures", "opcua_history_read_failures", "opcua_browse_failures",
-                "opcua_browse_operations", "opcua_history_reads", "opcua_tracked_timeseries",
-                "opcua_tracked_assets", "opcua_node_ensure_failures", "opcua_datapoint_pushes",
-                "opcua_datapoint_push_failures", "opcua_backfill_data_count", "opcua_frontfill_data_count",
-                "opcua_backfill_events_count", "opcua_frontfill_events_count"
+                "opcua_attribute_request_failures",
+                "opcua_history_read_failures",
+                "opcua_browse_failures",
+                "opcua_browse_operations",
+                "opcua_history_reads",
+                "opcua_tracked_timeseries",
+                "opcua_tracked_assets",
+                "opcua_node_ensure_failures",
+                "opcua_datapoint_pushes",
+                "opcua_datapoint_push_failures",
+                "opcua_backfill_data_count",
+                "opcua_frontfill_data_count",
+                "opcua_backfill_events_count",
+                "opcua_frontfill_events_count",
+                "opcua_datapoint_push_failures_influx",
+                "opcua_event_push_failures",
+                "opcua_event_push_failures_influx",
+                "opcua_duplicated_events"
             };
             foreach (var metric in metrics)
             {
@@ -196,13 +217,91 @@ namespace Test
             using var process = Bash("kill $(ps aux | grep '[n]cat' | awk '{print $2}')");
             process.WaitForExit();
         }
+
+        /// <summary>
+        /// Test that the event contains the appropriate data for the event server test
+        /// </summary>
+        /// <param name="ev"></param>
+        public static void TestEvent(EventDummy ev, CDFMockHandler factory)
+        {
+            if (ev == null) throw new ArgumentNullException(nameof(ev));
+            if (factory == null) throw new ArgumentNullException(nameof(factory));
+            Assert.False(ev.description.StartsWith("propOther2 ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basicBlock ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basicNoVarSource ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basicExcludeSource ", StringComparison.InvariantCulture));
+            if (ev.description.StartsWith("prop ", StringComparison.InvariantCulture))
+            {
+                Assert.True(ev.metadata.ContainsKey("PropertyString") && !string.IsNullOrEmpty(ev.metadata["PropertyString"]));
+                Assert.False(ev.metadata.ContainsKey("PropertyNum"));
+                Assert.Equal("TestSubType", ev.subtype);
+                Assert.Equal("gp.efg:i=12", ev.type);
+                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
+            }
+            else if (ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+            {
+                // This node is not historizing, so the first event should be lost
+                Assert.NotEqual("propOther 0", ev.description);
+                Assert.True(ev.metadata.ContainsKey("PropertyString") && !String.IsNullOrEmpty(ev.metadata["PropertyString"]));
+                Assert.False(ev.metadata.ContainsKey("PropertyNum"));
+                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
+            }
+            else if (ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
+            {
+                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
+                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
+                Assert.True(String.IsNullOrEmpty(ev.subtype));
+                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
+            }
+            // both source1 and 2
+            else if (ev.description.StartsWith("basicPassSource", StringComparison.InvariantCulture))
+            {
+                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
+                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
+                Assert.True(string.IsNullOrEmpty(ev.subtype));
+                Assert.True(EventSourceIs(ev, factory, "MyObject2", false));
+                if (ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
+                {
+                    Assert.NotEqual("basicPassSource2 0", ev.description);
+                }
+            }
+            else if (ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
+            {
+                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
+                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
+                Assert.True(string.IsNullOrEmpty(ev.subtype));
+                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
+                Assert.True(EventSourceIs(ev, factory, "MyVariable", true));
+            }
+            else if (ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture))
+            {
+                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("TypeProp"));
+                Assert.True(string.IsNullOrEmpty(ev.subtype));
+                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
+                Assert.Equal("MySpecialType", ev.type);
+            }
+            else
+            {
+                throw new Exception("Unknown event found");
+            }
+        }
+
+        private static bool EventSourceIs(EventDummy ev, CDFMockHandler handler, string name, bool rawSource)
+        {
+            var asset = handler.assets.Values.FirstOrDefault(ast => ast.name == name);
+            var timeseries = handler.timeseries.Values.FirstOrDefault(ts => ts.name == name);
+            if (asset == null && timeseries == null) return false;
+            return rawSource
+                ? asset != null && asset.externalId == ev.metadata["SourceNode"] || timeseries != null && timeseries.externalId == ev.metadata["SourceNode"]
+                : asset != null && ev.assetIds.Contains(asset.id);
+        }
     }
     public enum ServerName { Basic, Full, Array, Events, Audit, Proxy }
     public enum ConfigName { Events, Influx, Test }
 
     public sealed class ExtractorTester : IDisposable
     {
-        public static readonly Dictionary<ServerName, string> hostNames = new Dictionary<ServerName, string>
+        public static readonly Dictionary<ServerName, string> HostNames = new Dictionary<ServerName, string>
         {
             {ServerName.Basic, "opc.tcp://localhost:4840"},
             {ServerName.Full, "opc.tcp://localhost:4841"},
@@ -244,8 +343,8 @@ namespace Test
                 Config.History.Granularity = testParams.HistoryGranularity.Value;
             }
             Config.Logging.ConsoleLevel = testParams.LogLevel;
-            Logger.Configure(Config.Logging);
-            Config.Source.EndpointURL = hostNames[testParams.ServerName];
+            Cognite.OpcUa.Logger.Configure(Config.Logging);
+            Config.Source.EndpointURL = HostNames[testParams.ServerName];
 
             FullConfig pusherConfig = null;
             if (testParams.PusherConfig != null)
@@ -253,28 +352,41 @@ namespace Test
                 pusherConfig = ExtractorUtils.GetConfig(configNames[testParams.PusherConfig.Value]);
             }
 
-            if (testParams.BufferDir != null || testParams.FailureInflux != null)
+            if (testParams.StateStorage || testParams.BufferQueue || testParams.StateInflux)
+            {
+                Config.StateStorage.Location = "testbuffer.db";
+            }
+
+            if (testParams.StateStorage)
+            {
+                Config.StateStorage.Interval = 3;
+            }
+
+            if (testParams.BufferQueue)
             {
                 Config.FailureBuffer.Enabled = true;
-                Config.FailureBuffer.FilePath = testParams.BufferDir;
-                if (testParams.FailureInflux != null)
+                Config.FailureBuffer.LocalQueue = true;
+            }
+
+            if (testParams.FailureInflux != null)
+            {
+                Config.FailureBuffer.Enabled = true;
+                var failureInflux = ExtractorUtils.GetConfig(configNames[testParams.FailureInflux.Value]);
+                if (failureInflux.Pushers.First() is InfluxClientConfig influxConfig)
                 {
-                    var failureInflux = ExtractorUtils.GetConfig(configNames[testParams.FailureInflux.Value]);
-                    if (failureInflux.Pushers.First() is InfluxClientConfig influxConfig)
+                    influx = true;
+                    InfluxConfig = influxConfig;
+                    IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
+                    Config.FailureBuffer.Influx = new InfluxBufferConfig
                     {
-                        influx = true;
-                        InfluxConfig = influxConfig;
-                        IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
-                        Config.FailureBuffer.Influx = new InfluxBufferConfig
-                        {
-                            Database = influxConfig.Database,
-                            Host = influxConfig.Host,
-                            Password = influxConfig.Password,
-                            PointChunkSize = influxConfig.PointChunkSize,
-                            Username = influxConfig.Username,
-                            Write = testParams.FailureInfluxWrite
-                        };
-                    }
+                        Database = influxConfig.Database,
+                        Host = influxConfig.Host,
+                        Password = influxConfig.Password,
+                        PointChunkSize = influxConfig.PointChunkSize,
+                        Username = influxConfig.Username,
+                        Write = testParams.FailureInfluxWrite,
+                        StateStorage = testParams.StateInflux
+                    };
                 }
             }
 
@@ -317,14 +429,21 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
             if (influx)
             {
+                Log.Information("Clearing database: {db}", InfluxConfig.Database);
                 await IfDbClient.DropDatabaseAsync(new InfluxDatabase(InfluxConfig.Database));
                 await IfDbClient.CreateDatabaseAsync(InfluxConfig.Database);
             }
-
-            if (Config.FailureBuffer.Enabled && !string.IsNullOrEmpty(Config.FailureBuffer.FilePath))
+            log.Information("FailureBuffer: {st}", Config.FailureBuffer.Enabled);
+            if (Config.StateStorage.Location != null)
             {
-                File.Create(Path.Join(Config.FailureBuffer.FilePath, "buffer.bin")).Close();
+                using var db = new LiteDatabase(Config.StateStorage.Location);
+                var collections = db.GetCollectionNames();
+                foreach (var collection in collections)
+                {
+                    db.DropCollection(collection);
+                }
             }
+
         }
 
         public void StartExtractor()
@@ -374,11 +493,16 @@ namespace Test
             if (!testParams.QuitAfterMap)
             {
                 await Extractor.WaitForNextPush();
+                await Task.Delay(100);
                 Source.Cancel();
             }
             try
             {
                 await RunTask;
+                if (testParams.QuitAfterMap)
+                {
+                    Source.Cancel();
+                }
             }
             catch (Exception e)
             {
@@ -398,6 +522,7 @@ namespace Test
         public static void TestContinuity(List<int> intdps)
         {
             if (intdps == null) throw new ArgumentNullException(nameof(intdps));
+            intdps.Sort();
             int min = intdps.Min();
             var check = new int[intdps.Count];
 
@@ -406,18 +531,42 @@ namespace Test
             {
                 if (last != dp - 1)
                 {
-                    log.Verbose("Out of order points at {dp}, {last}", dp, last);
+                    log.Debug("Out of order points at {dp}, {last}", dp, last);
                 }
                 last = dp;
                 check[dp - min]++;
             }
             Assert.All(check, val => Assert.Equal(1, val));
         }
+        /// <summary>
+        /// Test that the points given by the id is within ms +/- 200ms of eachother.
+        /// This does introduce some issues in tests when jenkins hiccups, but it is needed to test
+        /// continuity on points that aren't incrementing.
+        /// </summary>
+        /// <param name="ms">Expected interval</param>
+        /// <param name="id">Id in handler (numeric datapoints only)</param>
+        /// <param name="delta">Allowed deviation. For OPC-UA above 100ms has been observed.</param>
+        public void TestConstantRate(int ms, string id, int delta = 200)
+        {
+            var dps = Handler.datapoints[id].Item1;
+            var tss = dps.Select(dp => dp.Timestamp).Distinct().ToList();
+            tss.Sort();
+            long last = 0;
+            foreach (var ts in tss)
+            {
+                Assert.True(last == 0
+                            || Math.Abs(ts - last) < ms + delta,
+                    $"Expected difference to be less than {ms + delta}, but it was {ts - last}");
+                last = ts;
+            }
+        }
         public void Dispose()
         {
+            Source?.Cancel();
             Source?.Dispose();
             IfDbClient?.Dispose();
             Extractor?.Dispose();
+            Pusher?.Dispose();
         }
     }
     public class ExtractorTestParameters
@@ -431,9 +580,11 @@ namespace Test
         public bool StoreDatapoints { get; set; } = false;
         public int? HistoryGranularity { get; set; } = null;
         public ConfigName? FailureInflux { get; set; } = null;
-        public string BufferDir { get; set; } = null;
         public bool FailureInfluxWrite { get; set; } = true;
         public Func<FullConfig, IPusher, UAClient, Extractor> Builder { get; set; } = null;
         public InfluxClientConfig InfluxOverride { get; set; } = null;
+        public bool StateStorage { get; set; } = false;
+        public bool StateInflux { get; set; } = false;
+        public bool BufferQueue { get; set; } = false;
     }
 }

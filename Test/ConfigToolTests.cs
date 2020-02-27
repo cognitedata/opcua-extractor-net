@@ -53,8 +53,8 @@ namespace Test
             var baseConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.hostNames[server];
-            baseConfig.Source.EndpointURL = ExtractorTester.hostNames[server];
+            fullConfig.Source.EndpointURL = ExtractorTester.HostNames[server];
+            baseConfig.Source.EndpointURL = ExtractorTester.HostNames[server];
 
             var explorer = new UAServerExplorer(fullConfig, baseConfig);
 
@@ -141,7 +141,7 @@ namespace Test
             var fullConfig = ExtractorUtils.GetConfig("config.influxtest.yml");
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.hostNames[ServerName.Basic];
+            fullConfig.Source.EndpointURL = ExtractorTester.HostNames[ServerName.Basic];
             fullConfig.Pushers = new List<PusherConfig>();
 
             var runTime = new ExtractorRuntime(fullConfig);
@@ -175,7 +175,7 @@ namespace Test
             var fullConfig = ExtractorUtils.GetConfig("config.test.yml");
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.hostNames[ServerName.Basic];
+            fullConfig.Source.EndpointURL = ExtractorTester.HostNames[ServerName.Basic];
             fullConfig.Pushers.First().Critical = true;
             fullConfig.Logging.ConsoleLevel = "debug";
 
@@ -224,8 +224,8 @@ namespace Test
 
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.hostNames[ServerName.Basic];
-            baseConfig.Source.EndpointURL = ExtractorTester.hostNames[ServerName.Basic];
+            fullConfig.Source.EndpointURL = ExtractorTester.HostNames[ServerName.Basic];
+            baseConfig.Source.EndpointURL = ExtractorTester.HostNames[ServerName.Basic];
 
             var runTime = new ConfigToolRuntime(fullConfig, baseConfig, "config.config-tool-output.yml");
 

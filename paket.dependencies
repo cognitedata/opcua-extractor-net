@@ -21,3 +21,5 @@ nuget Serilog.Sinks.Async
 nuget Serilog.Sinks.File
 nuget Microsoft.CodeAnalysis.FxCopAnalyzers
 nuget Microsoft.Windows.Compatibility
+nuget LiteDB 4.1.4
+nuget LiteQueue

@@ -8,6 +8,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Test", "Test\Test.csproj", 
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Misc", "Misc", "{F9D856F4-28DD-4A99-A325-E37860B8FDB4}"
 	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
 		CHANGELOG.md = CHANGELOG.md
 		CONTRIBUTORS.md = CONTRIBUTORS.md
 		Dockerfile = Dockerfile

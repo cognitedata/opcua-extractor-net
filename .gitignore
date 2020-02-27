@@ -21,7 +21,9 @@ buffer.bin
 coverage.json
 paket-files/
 ExtractorLauncher/Properties
+OpcUaService/Properties
 *.bin
+*.db
 
 # Config
 config/*

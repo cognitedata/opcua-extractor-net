@@ -102,27 +102,20 @@ namespace Cognite.OpcUa
                     log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
                     cnt++;
                 }
-
-                foreach (var pusher in pushers)
+                foreach (var buffDp in buffDps)
                 {
-                    foreach (var buffDp in buffDps)
-                    {
-                        pusher.BufferedDPQueue.Enqueue(buffDp);
-                    }
+                    extractor.DataPointQueue.Enqueue(buffDp);
                 }
             }
 
             if (!final || !frontfill) return cnt;
 
             var buffered = nodeState.FlushBuffer();
-            foreach (var pusher in pushers)
+            foreach (var dplist in buffered)
             {
-                foreach (var dplist in buffered)
+                foreach (var dp in dplist)
                 {
-                    foreach (var dp in dplist)
-                    {
-                        pusher.BufferedDPQueue.Enqueue(dp);
-                    }
+                    extractor.DataPointQueue.Enqueue(dp);
                 }
             }
 
@@ -177,10 +170,7 @@ namespace Cognite.OpcUa
                     range.End = buffEvt.Time;
                 }
 
-                foreach (var pusher in pushers)
-                {
-                    pusher.BufferedEventQueue.Enqueue(buffEvt);
-                }
+                extractor.EventQueue.Enqueue(buffEvt);
                 cnt++;
             }
 
@@ -197,12 +187,9 @@ namespace Cognite.OpcUa
 
             if (!final || !frontfill) return cnt;
             var buffered = emitterState.FlushBuffer();
-            foreach (var pusher in pushers)
-            {
-                foreach (var evt in buffered)
-                {
-                    pusher.BufferedEventQueue.Enqueue(evt);
-                }
+            foreach (var evt in buffered)
+            { 
+                extractor.EventQueue.Enqueue(evt);
             }
             return cnt;
         }
@@ -277,7 +264,7 @@ namespace Cognite.OpcUa
         private void FrontfillDataChunk(IEnumerable<NodeExtractionState> nodes, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
-            var finalTimeStamp = nodes.Select(node => node.ExtractedRange.End).Min();
+            var finalTimeStamp = nodes.Select(node => node.SourceExtractedRange.End).Min();
             finalTimeStamp = finalTimeStamp < historyStartTime ? historyStartTime : finalTimeStamp;
             finalTimeStamp = finalTimeStamp > DateTime.UtcNow ? DateTime.UtcNow : finalTimeStamp;
             var details = new ReadRawModifiedDetails
@@ -297,7 +284,7 @@ namespace Cognite.OpcUa
         private void BackfillDataChunk(IEnumerable<NodeExtractionState> nodes, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
-            var finalTimeStamp = nodes.Select(node => node.ExtractedRange.Start).Max();
+            var finalTimeStamp = nodes.Select(node => node.SourceExtractedRange.Start).Max();
             if (finalTimeStamp <= historyStartTime) return;
             var details = new ReadRawModifiedDetails
             {
@@ -319,7 +306,7 @@ namespace Cognite.OpcUa
         private void FrontfillEventsChunk(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
-            var finalTimeStamp = states.Select(node => node.ExtractedRange.End).Min();
+            var finalTimeStamp = states.Select(node => node.SourceExtractedRange.End).Min();
             finalTimeStamp = finalTimeStamp < historyStartTime ? historyStartTime : finalTimeStamp;
             finalTimeStamp = finalTimeStamp > DateTime.UtcNow ? DateTime.UtcNow : finalTimeStamp;
             var details = new ReadEventDetails
@@ -342,7 +329,7 @@ namespace Cognite.OpcUa
         private void BackfillEventsChunk(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
-            var finalTimeStamp = states.Select(node => node.ExtractedRange.Start).Max();
+            var finalTimeStamp = states.Select(node => node.SourceExtractedRange.Start).Max();
             if (finalTimeStamp <= historyStartTime) return;
             var details = new ReadEventDetails
             {
@@ -366,7 +353,7 @@ namespace Cognite.OpcUa
             {
                 Interlocked.Increment(ref running);
                 var frontFillChunks = ExtractorUtils.GroupByTimeGranularity(
-                    states.Select(state => (state, state.ExtractedRange.End)),
+                    states.Select(state => (state, state.SourceExtractedRange.End)),
                     historyGranularity, config.DataNodesChunk);
                 await Task.WhenAll(frontFillChunks.Select(chunk => Task.Run(() => FrontfillDataChunk(chunk, token))));
             }
@@ -385,8 +372,16 @@ namespace Cognite.OpcUa
             try
             {
                 Interlocked.Increment(ref running);
+                foreach (var state in states)
+                {
+                    if (state.SourceExtractedRange.Start < historyStartTime)
+                    {
+                        state.UpdateFromBackfill(DateTime.MinValue, true);
+                    }
+                }
                 var backFillChunks = ExtractorUtils.GroupByTimeGranularity(
-                    states.Select(state => (state, state.ExtractedRange.Start)),
+                    states.Where(state => state.SourceExtractedRange.Start > historyStartTime)
+                        .Select(state => (state, state.SourceExtractedRange.Start)),
                     historyGranularity, config.DataNodesChunk);
                 await Task.WhenAll(backFillChunks.Select(chunk => Task.Run(() => BackfillDataChunk(chunk, token))));
             }
@@ -407,7 +402,7 @@ namespace Cognite.OpcUa
             {
                 Interlocked.Increment(ref running);
                 var frontFillChunks = ExtractorUtils.GroupByTimeGranularity(
-                    states.Select(state => (state, state.ExtractedRange.End)),
+                    states.Select(state => (state, state.SourceExtractedRange.End)),
                     historyGranularity, config.EventNodesChunk);
                 await Task.WhenAll(frontFillChunks.Select(chunk =>
                     Task.Run(() => FrontfillEventsChunk(chunk, nodes, token))));
@@ -428,8 +423,16 @@ namespace Cognite.OpcUa
             try
             {
                 Interlocked.Increment(ref running);
+                foreach (var state in states)
+                {
+                    if (state.SourceExtractedRange.Start < historyStartTime)
+                    {
+                        state.UpdateFromBackfill(DateTime.MinValue, true);
+                    }
+                }
                 var backFillChunks = ExtractorUtils.GroupByTimeGranularity(
-                    states.Select(state => (state, state.ExtractedRange.Start)),
+                    states.Where(state => state.SourceExtractedRange.Start > historyStartTime)
+                        .Select(state => (state, state.SourceExtractedRange.Start)),
                     historyGranularity, config.EventNodesChunk);
 
                 await Task.WhenAll(backFillChunks.Select(chunk =>
@@ -441,17 +444,23 @@ namespace Cognite.OpcUa
             }
         }
 
-        public async Task Terminate(CancellationToken token, int timeoutsec = 30)
+        public async Task<bool> Terminate(CancellationToken token, int timeoutsec = 30)
         {
+            if (running == 0) return true;
+            log.Debug("Attempting to abort history read");
             aborting = true;
             int timeout = timeoutsec * 10;
             int cycles = 0;
             while (running > 0 && cycles++ < timeout) await Task.Delay(100, token);
+            aborting = false;
             if (running > 0)
             {
                 Log.Warning("Failed to abort HistoryReader");
+                return false;
             }
-            aborting = false;
+            log.Debug("Aborted history read");
+
+            return true;
         }
     }
 }

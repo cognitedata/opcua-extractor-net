@@ -21,8 +21,6 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
-using Microsoft.FSharp.Core;
-using Serilog;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -31,7 +29,7 @@ namespace Test
     [CollectionDefinition("Event_tests", DisableParallelization = true)]
     public class EventTests : MakeConsoleWork
     {
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(EventTests));
+        // private static readonly ILogger log = Log.Logger.ForContext(typeof(EventTests));
 
         public EventTests(ITestOutputHelper output) : base(output) { }
         [Trait("Server", "events")]
@@ -81,7 +79,7 @@ namespace Test
 
             foreach (var ev in events)
             {
-                TestEvent(ev, tester.Handler);
+                CommonTestUtils.TestEvent(ev, tester.Handler);
             }
         }
         [Trait("Server", "events")]
@@ -103,6 +101,8 @@ namespace Test
                     tester.Handler.events.Values.Any()
                     && tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming),
                 40, "Expected history read to finish");
+
+            await tester.Extractor.WaitForNextPush();
 
             int lastCount = tester.Handler.events.Count;
             Assert.Equal(0, (int)CommonTestUtils.GetMetricValue("opcua_event_push_failures"));
@@ -142,83 +142,10 @@ namespace Test
 
             foreach (var ev in events)
             {
-                TestEvent(ev, tester.Handler);
+                CommonTestUtils.TestEvent(ev, tester.Handler);
             }
         }
-        /// <summary>
-        /// Test that the event contains the appropriate data for the event server test
-        /// </summary>
-        /// <param name="ev"></param>
-        private static void TestEvent(EventDummy ev, CDFMockHandler factory)
-        {
-            Assert.False(ev.description.StartsWith("propOther2 ", StringComparison.InvariantCulture));
-            Assert.False(ev.description.StartsWith("basicBlock ", StringComparison.InvariantCulture));
-            Assert.False(ev.description.StartsWith("basicNoVarSource ", StringComparison.InvariantCulture));
-            Assert.False(ev.description.StartsWith("basicExcludeSource ", StringComparison.InvariantCulture));
-            if (ev.description.StartsWith("prop ", StringComparison.InvariantCulture))
-            {
-                Assert.True(ev.metadata.ContainsKey("PropertyString") && !string.IsNullOrEmpty(ev.metadata["PropertyString"]));
-                Assert.False(ev.metadata.ContainsKey("PropertyNum"));
-                Assert.Equal("TestSubType", ev.subtype);
-                Assert.Equal("gp.efg:i=12", ev.type);
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
-            }
-            else if (ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
-            {
-                // This node is not historizing, so the first event should be lost
-                Assert.NotEqual("propOther 0", ev.description);
-                Assert.True(ev.metadata.ContainsKey("PropertyString") && !string.IsNullOrEmpty(ev.metadata["PropertyString"]));
-                Assert.False(ev.metadata.ContainsKey("PropertyNum"));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
-            }
-            else if (ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
-            {
-                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
-                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
-                Assert.True(string.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
-            }
-            // both source1 and 2
-            else if (ev.description.StartsWith("basicPassSource", StringComparison.InvariantCulture))
-            {
-                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
-                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
-                Assert.True(string.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject2", false));
-                if (ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
-                {
-                    Assert.NotEqual("basicPassSource2 0", ev.description);
-                }
-            }
-            else if (ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
-            {
-                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
-                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
-                Assert.True(string.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
-                Assert.True(EventSourceIs(ev, factory, "MyVariable", true));
-            }
-            else if (ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture))
-            {
-                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("TypeProp"));
-                Assert.True(string.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
-                Assert.Equal("MySpecialType", ev.type);
-            }
-            else
-            {
-                throw new Exception("Unknown event found");
-            }
-        }
-        private static bool EventSourceIs(EventDummy ev, CDFMockHandler handler, string name, bool rawSource)
-        {
-            var asset = handler.assets.Values.FirstOrDefault(ast => ast.name == name);
-            var timeseries = handler.timeseries.Values.FirstOrDefault(ts => ts.name == name);
-            if (asset == null && timeseries == null) return false;
-            return rawSource
-                ? asset != null && asset.externalId == ev.metadata["SourceNode"] || timeseries != null && timeseries.externalId == ev.metadata["SourceNode"]
-                : asset != null && ev.assetIds.Contains(asset.id);
-        }
+
         [Fact]
         [Trait("Server", "audit")]
         [Trait("Target", "CDFPusher")]
@@ -282,15 +209,20 @@ namespace Test
             });
             await tester.ClearPersistentData();
             tester.Handler.AllowEvents = false;
+            tester.Handler.AllowPush = false;
+            tester.Handler.AllowConnectionTest = false;
             tester.StartExtractor();
 
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
                 20, "Expected failurebuffer to contain some events");
 
             tester.Handler.AllowEvents = true;
+            tester.Handler.AllowPush = true;
+            tester.Handler.AllowConnectionTest = true;
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.AnyEvents,
                 20, "Expected FailureBuffer to be emptied");
-            Assert.False(tester.Extractor.FailureBuffer.Any);
+
+            Assert.False(tester.Extractor.FailureBuffer.AnyEvents);
 
             await tester.WaitForCondition(() => tester.Handler.events.Count > 20, 20,
                 "Expected to receive some events");
@@ -317,7 +249,7 @@ namespace Test
 
             foreach (var ev in events)
             {
-                TestEvent(ev, tester.Handler);
+                CommonTestUtils.TestEvent(ev, tester.Handler);
             }
         }
 
@@ -333,7 +265,7 @@ namespace Test
                 ConfigName = ConfigName.Events,
                 LogLevel = "debug"
             });
-            tester.Config.History.EventChunk = 100;
+            tester.Config.History.EventChunk = 1000;
             tester.Config.History.Backfill = true;
             await tester.ClearPersistentData();
 
@@ -343,7 +275,7 @@ namespace Test
                     && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
                 40, "Expected backfill to finish");
 
-            await Task.Delay(1000); // Wait for final pushes to complete
+            await tester.Extractor.WaitForNextPush();
 
             var events = tester.Handler.events.Values.ToList();
             Assert.True(events.Any());
@@ -372,7 +304,7 @@ namespace Test
 
             foreach (var ev in events)
             {
-                TestEvent(ev, tester.Handler);
+                CommonTestUtils.TestEvent(ev, tester.Handler);
             }
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
@@ -424,6 +356,8 @@ namespace Test
                        && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture));
             }, 20, "Expected remaining event subscriptions to trigger");
 
+            await tester.Extractor.WaitForNextPush();
+
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
@@ -438,12 +372,12 @@ namespace Test
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
                     && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
-                20, "Expected backfill to finish");
+                20, "Expected backfill to finish"); 
+            
+            await tester.TerminateRunTask();
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 1));
-
-
         }
     }
 }

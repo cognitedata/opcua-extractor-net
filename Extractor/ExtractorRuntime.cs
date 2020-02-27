@@ -59,7 +59,7 @@ namespace Cognite.OpcUa
             services.AddHttpClient("Context", client => { client.Timeout = Timeout.InfiniteTimeSpan; })
                 .AddPolicyHandler(GetRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
-            services.AddHttpClient("Data", client => { client.Timeout = TimeSpan.FromSeconds(300); })
+            services.AddHttpClient("Data", client => { client.Timeout = TimeSpan.FromSeconds(120); })
                 .AddPolicyHandler(GetDataRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
         }
@@ -87,7 +87,7 @@ namespace Cognite.OpcUa
         }
         private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
         {
-            return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(60));
+            return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(20));
         }
 
         /// <summary>
@@ -107,15 +107,16 @@ namespace Cognite.OpcUa
 
             await Task.WhenAll(pushers.Select(async pusher =>
             {
-                var result = await pusher.TestConnection(source.Token);
-                if (pusher.BaseConfig.Critical && !result)
+                var result = await pusher.TestConnection(config, source.Token);
+                if (pusher.BaseConfig.Critical && !result.Value)
                 {
                     throw new ExtractorFailureException("Critical pusher failed to connect");
                 }
 
-                if (!result)
+                if (!result.Value)
                 {
                     Log.Warning("Removing pusher of type {type}", pusher.GetType());
+                    pusher.Dispose();
                     removePushers.Add(pusher);
                 }
             }));
@@ -132,6 +133,13 @@ namespace Cognite.OpcUa
             {
                 extractor.Close();
                 throw;
+            }
+            finally
+            {
+                foreach (var pusher in pushers)
+                {
+                    pusher.Dispose();
+                }
             }
         }
     }
