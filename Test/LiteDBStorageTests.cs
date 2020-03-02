@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Opc.Ua;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -513,6 +515,206 @@ namespace Test
             Assert.True(states.All(state => !state.StatePersisted
                 || state.DestinationExtractedRange.Start == DateTime.MaxValue
                 && state.DestinationExtractedRange.End == DateTime.MinValue));
+        }
+        [Fact]
+        [Trait("Server", "events")]
+        [Trait("Target", "OldBuffer")]
+        [Trait("Test", "eventbyteconversion")]
+        public async Task TextEventByteConversion()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Events,
+                ConfigName = ConfigName.Events,
+                LogLevel = "information",
+                QuitAfterMap = true
+            });
+            await tester.ClearPersistentData();
+
+            tester.StartExtractor();
+
+            await tester.TerminateRunTask();
+
+            var evt = new BufferedEvent
+            {
+                EmittingNode = tester.Extractor.EmitterStates.First().Key,
+                EventId = "123456789",
+                EventType = new NodeId("test", 1),
+                Message = "msg",
+                MetaData = new Dictionary<string, object>
+                {
+                    ["dt1"] = "data1",
+                    ["dt2"] = "data2"
+                },
+                SourceNode = tester.Extractor.ExternalToNodeId.First().Value,
+                ReceivedTime = DateTime.Now,
+                Time = DateTime.Now
+            };
+            var bytes = evt.ToStorableBytes(tester.Extractor);
+
+            (var converted, int last) = BufferedEvent.FromStorableBytes(bytes, tester.Extractor, sizeof(uint));
+
+            Assert.Equal(last, bytes.Length);
+            Assert.Equal(evt.EmittingNode, converted.EmittingNode);
+            Assert.Equal(evt.EventId, converted.EventId);
+            Assert.Equal(tester.Extractor.GetUniqueId(evt.EventType), converted.MetaData["Type"]);
+            Assert.Equal(evt.Message, converted.Message);
+            foreach (var kvp in evt.MetaData)
+            {
+                Assert.Equal(kvp.Value, converted.MetaData[kvp.Key]);
+            }
+            Assert.Equal(evt.SourceNode, converted.SourceNode);
+            Assert.Equal(evt.Time, converted.Time);
+        }
+        [Fact]
+        [Trait("Target", "OldBuffer")]
+        [Trait("Test", "datapointconversion")]
+        public void TestDataPointConversion()
+        {
+            var dp = new BufferedDataPoint(DateTime.Now, "testid", 123.123);
+            var dp2 = new BufferedDataPoint(DateTime.Now, "testid2", "testvalue");
+
+            var dpc = dp.ToStorableBytes();
+            var dp2c = dp2.ToStorableBytes();
+
+            var dpconv = BufferedDataPoint.FromStorableBytes(dpc, sizeof(ushort));
+            var dp2conv = BufferedDataPoint.FromStorableBytes(dp2c, sizeof(ushort));
+
+            Assert.Equal(dpc.Length, BitConverter.ToUInt16(dpc) + sizeof(ushort));
+            Assert.Equal(dp.Timestamp, dpconv.Item1.Timestamp);
+            Assert.Equal(dp.DoubleValue, dpconv.Item1.DoubleValue);
+            Assert.Equal(dp.Id, dpconv.Item1.Id);
+            Assert.Equal(dp.IsString, dpconv.Item1.IsString);
+
+            Assert.Equal(dp2c.Length, BitConverter.ToUInt16(dp2c) + sizeof(ushort));
+            Assert.Equal(dp2.Timestamp, dp2conv.Item1.Timestamp);
+            Assert.Equal(dp2.DoubleValue, dp2conv.Item1.DoubleValue);
+            Assert.Equal(dp2.Id, dp2conv.Item1.Id);
+            Assert.Equal(dp2.IsString, dp2conv.Item1.IsString);
+        }
+
+        [Fact]
+        [Trait("Target", "OldBuffer")]
+        [Trait("Test", "datapointconversionwrite")]
+        public void TestDataPointConversionWrite()
+        {
+            var dps = new List<BufferedDataPoint>();
+            for (int i = 0; i < 10000; i++)
+            {
+                dps.Add(new BufferedDataPoint(DateTime.Now, "testid", i));
+                dps.Add(new BufferedDataPoint(DateTime.Now, "testid", "test " + i));
+            }
+
+            File.Create("datapoints.bin").Close();
+
+            FailureBuffer.WriteDatapointsToFile("datapoints.bin", dps, CancellationToken.None);
+
+            Assert.True(new FileInfo("datapoints.bin").Length > 0);
+
+            long nextPos = 0;
+
+            var readPoints = new List<BufferedDataPoint>();
+
+            int count = 0;
+
+            do
+            {
+                IEnumerable<BufferedDataPoint> localRead;
+                (localRead, nextPos) =
+                    FailureBuffer.ReadDatapointsFromFile("datapoints.bin", nextPos, 1000, CancellationToken.None);
+                readPoints.AddRange(localRead);
+                count++;
+            } while (nextPos > 0);
+
+            Assert.Equal(20, count);
+
+            for (int i = 0; i < 10000; i++)
+            {
+                var dp = dps[i];
+                var dpconv = readPoints[i];
+                Assert.Equal(dp.Timestamp, dpconv.Timestamp);
+                Assert.Equal(dp.DoubleValue, dpconv.DoubleValue);
+                Assert.Equal(dp.Id, dpconv.Id);
+                Assert.Equal(dp.IsString, dpconv.IsString);
+            }
+        }
+        [Fact]
+        [Trait("Server", "events")]
+        [Trait("Target", "OldBuffer")]
+        [Trait("Test", "eventconversionwrite")]
+        public async Task TextEventConversionWrite()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Events,
+                ConfigName = ConfigName.Events,
+                LogLevel = "information",
+                QuitAfterMap = true
+            });
+            await tester.ClearPersistentData();
+
+            tester.StartExtractor();
+
+            await tester.TerminateRunTask();
+
+            var evts = new List<BufferedEvent>();
+
+            for (int i = 0; i < 10000; i++)
+            {
+                evts.Add(new BufferedEvent
+                {
+                    EmittingNode = tester.Extractor.EmitterStates.First().Key,
+                    EventId = "id " + i,
+                    EventType = new NodeId("test", 1),
+                    Message = "msg " + i,
+                    MetaData = new Dictionary<string, object>
+                    {
+                        ["dt1"] = "data1",
+                        ["dt2"] = "data2"
+                    },
+                    SourceNode = tester.Extractor.ExternalToNodeId.First().Value,
+                    ReceivedTime = DateTime.Now,
+                    Time = DateTime.Now
+                });
+            }
+
+            File.Create("events.bin").Close();
+
+            FailureBuffer.WriteEventsToFile("events.bin", evts, tester.Extractor, CancellationToken.None);
+
+            Assert.True(new FileInfo("events.bin").Length > 0);
+
+            long nextPos = 0;
+
+            var finalRead = new List<BufferedEvent>();
+            int count = 0;
+            do
+            {
+                IEnumerable<BufferedEvent> readEvents;
+                (readEvents, nextPos) =
+                    FailureBuffer.ReadEventsFromFile("events.bin", tester.Extractor, nextPos, 1000,
+                        CancellationToken.None);
+                finalRead.AddRange(readEvents);
+                count++;
+            } while (nextPos > 0);
+
+            Assert.Equal(10, count);
+
+            for (int i = 0; i < 10000; i++)
+            {
+                var evt = evts[i];
+                var converted = finalRead[i];
+                Assert.Equal(evt.EmittingNode, converted.EmittingNode);
+                Assert.Equal(evt.EventId, converted.EventId);
+                Assert.Equal(tester.Extractor.GetUniqueId(evt.EventType), converted.MetaData["Type"]);
+                Assert.Equal(evt.Message, converted.Message);
+                foreach ((string key, var value) in evt.MetaData)
+                {
+                    Assert.Equal(value, converted.MetaData[key]);
+                }
+                Assert.Equal(evt.SourceNode, converted.SourceNode);
+                Assert.Equal(evt.Time, converted.Time);
+            }
         }
     }
 }

@@ -27,7 +27,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConfigurationTool", "Config
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExtractorLauncher", "ExtractorLauncher\ExtractorLauncher.csproj", "{0F78788D-DC43-4323-9208-FA59BC2C973A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpcUaService", "OpcUaService\OpcUaService.csproj", "{EB4EE67D-1395-469B-B1D2-DDF71FD59AF3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpcUaService", "OpcUaService\OpcUaService.csproj", "{EB4EE67D-1395-469B-B1D2-DDF71FD59AF3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -20,7 +20,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using Com.Cognite.V1.Timeseries.Proto;
 using Opc.Ua;
+using Org.BouncyCastle.Asn1.Crmf;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -314,14 +317,37 @@ namespace Cognite.OpcUa
         /// <returns>Array of bytes</returns>
         public byte[] ToStorableBytes()
         {
-            string externalId = Id;
-            ushort size = (ushort)(externalId.Length * sizeof(char) + sizeof(double) + sizeof(long));
-            byte[] bytes = new byte[size + sizeof(ushort)];
-            Buffer.BlockCopy(externalId.ToCharArray(), 0, bytes, sizeof(ushort), externalId.Length * sizeof(char));
-            Buffer.BlockCopy(BitConverter.GetBytes(DoubleValue), 0, bytes, sizeof(ushort) + externalId.Length * sizeof(char), sizeof(double));
-            Buffer.BlockCopy(BitConverter.GetBytes(new DateTimeOffset(Timestamp).ToUnixTimeMilliseconds()), 0, bytes, sizeof(ushort) + externalId.Length * sizeof(char)
-                + sizeof(double), sizeof(long));
-            Buffer.BlockCopy(BitConverter.GetBytes(size), 0, bytes, 0, sizeof(ushort));
+            ushort size = (ushort)(Id.Length * sizeof(char) + sizeof(ushort) + sizeof(long) + sizeof(bool));
+            if (IsString)
+            {
+                size += (ushort)(StringValue.Length * sizeof(char) + sizeof(ushort));
+            }
+            else
+            {
+                size += sizeof(double);
+            }
+            var bytes = new byte[size + sizeof(ushort)];
+            int pos = 0;
+            Buffer.BlockCopy(BitConverter.GetBytes(size), 0, bytes, pos, sizeof(ushort));
+            pos += sizeof(ushort);
+            var idBytes = ExtractorUtils.StringToStorable(Id);
+            Buffer.BlockCopy(idBytes, 0, bytes, pos, idBytes.Length);
+            pos += idBytes.Length;
+            Buffer.BlockCopy(BitConverter.GetBytes(Timestamp.ToBinary()), 0, bytes, pos, sizeof(long));
+            pos += sizeof(long);
+            Buffer.BlockCopy(BitConverter.GetBytes(IsString), 0, bytes, pos, sizeof(bool));
+            pos += sizeof(bool);
+
+            if (IsString)
+            {
+                var valBytes = ExtractorUtils.StringToStorable(StringValue);
+                Buffer.BlockCopy(valBytes, 0, bytes, pos, valBytes.Length);
+            }
+            else
+            {
+                Buffer.BlockCopy(BitConverter.GetBytes(DoubleValue), 0, bytes, pos, sizeof(double));
+            }
+
             return bytes;
         }
         /// <summary>
@@ -329,15 +355,26 @@ namespace Cognite.OpcUa
         /// to read at a time.
         /// </summary>
         /// <param name="bytes">Bytes to convert</param>
-        public BufferedDataPoint(byte[] bytes)
+        public static (BufferedDataPoint, int) FromStorableBytes(byte[] bytes, int next)
         {
-            if (bytes == null || bytes.Length < sizeof(long) + sizeof(double)) return;
-            Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(BitConverter.ToInt64(bytes, bytes.Length - sizeof(long))).DateTime;
-            DoubleValue = BitConverter.ToDouble(bytes, bytes.Length - sizeof(double) - sizeof(long));
-            char[] chars = new char[(bytes.Length - sizeof(long) - sizeof(double))/sizeof(char)];
-            Buffer.BlockCopy(bytes, 0, chars, 0, bytes.Length - sizeof(long) - sizeof(double));
-            Id = new string(chars);
-            IsString = false;
+            if (bytes == null || bytes.Length < sizeof(long) + sizeof(double) + sizeof(bool)) return (null, next);
+            string txt;
+            (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
+            string id = txt;
+            long dt = BitConverter.ToInt64(bytes, next);
+            next += sizeof(long);
+            DateTime ts = DateTime.FromBinary(dt);
+            bool isstr = BitConverter.ToBoolean(bytes, next);
+            next += sizeof(bool);
+
+            if (isstr)
+            {
+                (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
+                return (new BufferedDataPoint(ts, id, txt), next);
+            }
+            double val = BitConverter.ToDouble(bytes, next);
+            next += sizeof(double);
+            return (new BufferedDataPoint(ts, id, val), next);
         }
         public string ToDebugDescription()
         {
@@ -401,6 +438,69 @@ namespace Cognite.OpcUa
                 + $"    Time: {Time}\n"
                 + $"    EventTypeId: {EventType}\n"
                 + $"    MetaData: {metadata}\n";
+        }
+
+        public byte[] ToStorableBytes(Extractor extractor)
+        {
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
+            var bytes = new List<byte>();
+            bytes.AddRange(ExtractorUtils.StringToStorable(Message));
+            bytes.AddRange(ExtractorUtils.StringToStorable(EventId));
+            bytes.AddRange(ExtractorUtils.StringToStorable(extractor.GetUniqueId(SourceNode)));
+            bytes.AddRange(BitConverter.GetBytes(Time.ToBinary()));
+            bytes.AddRange(ExtractorUtils.StringToStorable(extractor.GetUniqueId(EventType)));
+            bytes.AddRange(ExtractorUtils.StringToStorable(extractor.GetUniqueId(EmittingNode)));
+            var metaDataBytes = new List<byte>();
+            ushort count = 0;
+            foreach (var kvp in MetaData)
+            {
+                count++;
+                metaDataBytes.AddRange(ExtractorUtils.StringToStorable(kvp.Key));
+                metaDataBytes.AddRange(ExtractorUtils.StringToStorable(extractor.ConvertToString(kvp.Value)));
+            }
+            bytes.AddRange(BitConverter.GetBytes(count));
+            bytes.AddRange(metaDataBytes);
+            bytes.InsertRange(0, BitConverter.GetBytes((ushort)bytes.Count));
+            return bytes.ToArray();
+        }
+
+        public static (BufferedEvent, int) FromStorableBytes(byte[] bytes, Extractor extractor, int next)
+        {
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
+            if (bytes == null) throw new ArgumentNullException(nameof(bytes));
+            var evt = new BufferedEvent();
+            string txt;
+            (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
+            evt.Message = txt;
+            (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
+            evt.EventId = txt;
+            (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
+            evt.SourceNode = extractor.ExternalToNodeId[txt];
+            long dt = BitConverter.ToInt64(bytes, next);
+            next += sizeof(long);
+            evt.Time = DateTime.FromBinary(dt);
+            string eventType;
+            (eventType, next) = ExtractorUtils.StringFromStorable(bytes, next);
+            (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
+            evt.EmittingNode = extractor.GetEmitterState(txt).Id;
+            
+            ushort count = BitConverter.ToUInt16(bytes, next);
+            next += sizeof(ushort);
+
+            evt.MetaData = new Dictionary<string, object>
+            {
+                ["Type"] = eventType
+            };
+
+            for (int i = 0; i < count; i++)
+            {
+                string key, value;
+                (key, next) = ExtractorUtils.StringFromStorable(bytes, next);
+                (value, next) = ExtractorUtils.StringFromStorable(bytes, next);
+                evt.MetaData[key] = value;
+            }
+
+            return (evt, next);
         }
     }
 }

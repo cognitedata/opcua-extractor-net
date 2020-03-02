@@ -132,8 +132,15 @@ FailureBuffer:
         # Store the state of which points/ranges are persisted to influxdb to local state storage. Requires the
         # StateStorage.Location option to be set
         StateStorage: false
+    # There are two possible solutions for local storage. The queue is ACID, and is more reliable if the amount of data is low,
+    # expected breaks are short, and is more reliable. The binary buffers are much faster, but potentially less reliable.
     # If true, store failed points in a queue in the state storage. The StateStorage.Location option must be set for this to work.
     LocalQueue: false
+    # Path to a local binary buffer file for datapoints.
+    DatapointPath:
+    # Path to a local binary buffer file for events.
+    # The two buffer file paths must be different.
+    EventPath:
 
 # Periodically store state in a local database to speed up starting, by not having to read state from destinations
 # This allows you to set the ReadExtractedRanges option to false on the pushers without having to read all of history on startup.
