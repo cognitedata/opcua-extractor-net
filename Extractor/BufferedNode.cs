@@ -20,10 +20,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
-using Com.Cognite.V1.Timeseries.Proto;
 using Opc.Ua;
-using Org.BouncyCastle.Asn1.Crmf;
-using Serilog;
 
 namespace Cognite.OpcUa
 {

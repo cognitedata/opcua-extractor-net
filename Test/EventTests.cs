@@ -116,7 +116,6 @@ namespace Test
                     && tester.Handler.events.Count > lastCount,
                 40, "Expected number of events to be increasing");
 
-            Assert.True((int)CommonTestUtils.GetMetricValue("opcua_duplicated_events") > 0);
             var events = tester.Handler.events.Values.ToList();
             Assert.True(events.Any());
             Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
@@ -357,6 +356,7 @@ namespace Test
                        && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture));
             }, 20, "Expected remaining event subscriptions to trigger");
 
+            await tester.Extractor.WaitForNextPush();
             await tester.Extractor.WaitForNextPush();
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));

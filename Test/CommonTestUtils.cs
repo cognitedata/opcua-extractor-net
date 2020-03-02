@@ -368,6 +368,18 @@ namespace Test
                 Config.FailureBuffer.LocalQueue = true;
             }
 
+            if (testParams.DataBufferPath != null)
+            {
+                Config.FailureBuffer.Enabled = true;
+                Config.FailureBuffer.DatapointPath = testParams.DataBufferPath;
+            }
+
+            if (testParams.EventBufferPath != null)
+            {
+                Config.FailureBuffer.Enabled = true;
+                Config.FailureBuffer.EventPath = testParams.EventBufferPath;
+            }
+
             if (testParams.FailureInflux != null)
             {
                 Config.FailureBuffer.Enabled = true;
@@ -433,6 +445,17 @@ namespace Test
                 await IfDbClient.DropDatabaseAsync(new InfluxDatabase(InfluxConfig.Database));
                 await IfDbClient.CreateDatabaseAsync(InfluxConfig.Database);
             }
+
+            if (Config.FailureBuffer.DatapointPath != null)
+            {
+                File.Create(Config.FailureBuffer.DatapointPath).Close();
+            }
+
+            if (Config.FailureBuffer.EventPath != null)
+            {
+                File.Create(Config.FailureBuffer.EventPath).Close();
+            }
+
             log.Information("FailureBuffer: {st}", Config.FailureBuffer.Enabled);
             if (Config.StateStorage.Location != null)
             {
@@ -531,7 +554,7 @@ namespace Test
             {
                 if (last != dp - 1)
                 {
-                    log.Debug("Out of order points at {dp}, {last}", dp, last);
+                    log.Information("Out of order points at {dp}, {last}", dp, last);
                 }
                 last = dp;
                 check[dp - min]++;
@@ -586,5 +609,7 @@ namespace Test
         public bool StateStorage { get; set; } = false;
         public bool StateInflux { get; set; } = false;
         public bool BufferQueue { get; set; } = false;
+        public string DataBufferPath { get; set; }
+        public string EventBufferPath { get; set; }
     }
 }

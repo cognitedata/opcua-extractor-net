@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
+using Prometheus.Client;
 using Serilog;
 
 namespace Cognite.OpcUa
@@ -27,6 +28,12 @@ namespace Cognite.OpcUa
         private bool fileAnyEvents;
         private bool anyEvents;
 
+        private static readonly Gauge numPointsInBuffer = Metrics.CreateGauge(
+            "opcua_buffer_num_points", "The number of datapoints in the local buffer file");
+
+        private static readonly Gauge numEventsInBuffer = Metrics.CreateGauge(
+            "opcua_buffer_num_events", "The number of events in the local buffer file");
+
         private static readonly ILogger log = Log.Logger.ForContext(typeof(FailureBuffer));
         public FailureBuffer(FullConfig fullConfig, Extractor extractor)
         {
@@ -44,7 +51,7 @@ namespace Cognite.OpcUa
                     File.Create(config.DatapointPath).Close();
                 }
 
-                anyPoints |= new FileInfo(config.DatapointPath).Length > 0;
+                fileAnyPoints |= new FileInfo(config.DatapointPath).Length > 0;
             }
 
             if (!string.IsNullOrEmpty(config.EventPath))
@@ -54,7 +61,7 @@ namespace Cognite.OpcUa
                     File.Create(config.EventPath).Close();
                 }
 
-                anyEvents |= new FileInfo(config.EventPath).Length > 0;
+                fileAnyEvents |= new FileInfo(config.EventPath).Length > 0;
             }
 
             if (config.Influx?.Database == null) return;
@@ -480,8 +487,10 @@ namespace Cognite.OpcUa
 
             if (success)
             {
+                log.Information("Wipe datapoint buffer file");
                 File.Create(config.DatapointPath).Close();
                 fileAnyPoints = false;
+                numPointsInBuffer.Set(0);
             }
 
             return success;
@@ -543,8 +552,10 @@ namespace Cognite.OpcUa
 
             if (success)
             {
+                log.Information("Wipe event buffer file");
                 File.Create(config.EventPath).Close();
                 fileAnyEvents = false;
+                numEventsInBuffer.Set(0);
             }
 
             return success;
@@ -567,7 +578,8 @@ namespace Cognite.OpcUa
             }
             if (count > 0)
             {
-                log.Debug("Write {cnt} events to file", count);
+                log.Debug("Write {cnt} points to file", count);
+                numPointsInBuffer.Inc(count);
             }
             fs.Flush();
         }
@@ -592,6 +604,7 @@ namespace Cognite.OpcUa
             if (count > 0)
             {
                 log.Debug("Write {cnt} events to file", count);
+                numEventsInBuffer.Inc();
             }
             fs.Flush();
         }
@@ -681,18 +694,16 @@ namespace Cognite.OpcUa
                     log.Verbose(evt.ToDebugDescription());
                     evts.Add(evt);
                 }
-                if (count == 0)
+                if (count > 0)
                 {
-                    log.Verbose("Read 0 point from file");
+                    log.Debug("Read {NumEventsToRead} events from file", count);
                 }
-
                 pos = fs.Position;
                 final = pos == fs.Length;
-                log.Debug("Read {NumEventsToRead} events from file", count);
                 fs.Flush();
             }
 
-            if (final || evts.Count < limit)
+            if (final || count < limit)
             {
                 pos = 0;
             }

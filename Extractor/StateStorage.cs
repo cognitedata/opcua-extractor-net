@@ -130,6 +130,7 @@ namespace Cognite.OpcUa
 
                 log.Debug("Saved {Stored} out of {TotalNumber} extraction states to store {name}", 
                     toStore.Count, states.Count(), name);
+
                 foreach (var state in toStore)
                 {
                     state.IsDirty = false;

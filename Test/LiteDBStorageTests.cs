@@ -226,14 +226,13 @@ namespace Test
                 await tester.WaitForCondition(() => tester.Extractor.NodeStates.Any(state => state.Value.IsDirty),
                     20, "Expected states to become dirty");
 
-                await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => !state.Value.IsDirty),
+                await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => 
+                        !state.Value.Historizing || state.Value.StatePersisted),
                     20, "Expected states to become clean again");
 
                 await tester.Extractor.WaitForNextPush();
 
                 await tester.TerminateRunTask();
-
-                Assert.Contains(tester.Extractor.NodeStates, state => state.Value.IsDirty);
 
                 var dummyStates = tester.Extractor.NodeStates.Select(state => new InfluxBufferState(state.Value, false))
                     .ToList();
@@ -285,7 +284,8 @@ namespace Test
                 BufferQueue = true,
                 StateStorage = true,
                 ConfigName = ConfigName.Events,
-                ServerName = ServerName.Events
+                ServerName = ServerName.Events,
+                LogLevel = "debug"
             });
             await tester.ClearPersistentData();
 
@@ -298,20 +298,18 @@ namespace Test
                     || state.Value.BackfillDone && state.Value.IsStreaming),
                 20, "Expected history to complete");
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.Any(state => state.Value.IsDirty),
+            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.ToList().Any(state => state.Value.IsDirty),
                 20, "Expected states to become dirty");
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(state => !state.Value.IsDirty),
-                20, "Expected states to become clean again");
+            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.ToList().Any(state =>
+                    !state.Value.Historizing || state.Value.StatePersisted),
+                20, "Expected states to be persisted");
 
             await tester.Extractor.WaitForNextPush();
 
             await tester.TerminateRunTask();
 
-            Assert.Contains(tester.Extractor.EmitterStates, state => state.Value.IsDirty);
-
-            var dummyStates = tester.Extractor.EmitterStates.Select(state => new InfluxBufferState(state.Value.Id))
-                .ToList();
+            var dummyStates = tester.Extractor.EmitterStates.Select(state => new InfluxBufferState(state.Value.Id)).ToList();
 
             foreach (var state in dummyStates)
             {
@@ -550,9 +548,22 @@ namespace Test
                 ReceivedTime = DateTime.Now,
                 Time = DateTime.Now
             };
+
+            var evt2 = new BufferedEvent
+            {
+                EmittingNode = tester.Extractor.EmitterStates.First().Key,
+                EventId = "123456789",
+                EventType = new NodeId("test", 1),
+                Message = null,
+                MetaData = new Dictionary<string, object>(),
+                SourceNode = tester.Extractor.ExternalToNodeId.First().Value,
+                ReceivedTime = DateTime.Now,
+                Time = DateTime.Now
+            };
+
             var bytes = evt.ToStorableBytes(tester.Extractor);
 
-            (var converted, int last) = BufferedEvent.FromStorableBytes(bytes, tester.Extractor, sizeof(uint));
+            (var converted, int last) = BufferedEvent.FromStorableBytes(bytes, tester.Extractor, sizeof(ushort));
 
             Assert.Equal(last, bytes.Length);
             Assert.Equal(evt.EmittingNode, converted.EmittingNode);
@@ -565,6 +576,23 @@ namespace Test
             }
             Assert.Equal(evt.SourceNode, converted.SourceNode);
             Assert.Equal(evt.Time, converted.Time);
+
+            var bytes2 = evt2.ToStorableBytes(tester.Extractor);
+
+            (var converted2, int last2) = BufferedEvent.FromStorableBytes(bytes2, tester.Extractor, sizeof(ushort));
+
+            Assert.Equal(last2, bytes2.Length);
+            Assert.Equal(evt2.EmittingNode, converted2.EmittingNode);
+            Assert.Equal(evt2.EventId, converted2.EventId);
+            Assert.Equal(tester.Extractor.GetUniqueId(evt2.EventType), converted2.MetaData["Type"]);
+            Assert.Equal(evt2.Message, converted2.Message);
+            foreach (var kvp in evt2.MetaData)
+            {
+                Assert.Equal(kvp.Value, converted2.MetaData[kvp.Key]);
+            }
+            Assert.Equal(evt2.SourceNode, converted2.SourceNode);
+            Assert.Equal(evt2.Time, converted2.Time);
+
         }
         [Fact]
         [Trait("Target", "OldBuffer")]
@@ -642,7 +670,7 @@ namespace Test
         [Trait("Server", "events")]
         [Trait("Target", "OldBuffer")]
         [Trait("Test", "eventconversionwrite")]
-        public async Task TextEventConversionWrite()
+        public async Task TestEventConversionWrite()
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
@@ -715,6 +743,137 @@ namespace Test
                 Assert.Equal(evt.SourceNode, converted.SourceNode);
                 Assert.Equal(evt.Time, converted.Time);
             }
+        }
+        [Trait("Server", "basic")]
+        [Trait("Target", "OldBuffer")]
+        [Trait("Test", "filebufferdata")]
+        [Fact]
+        public async Task TestFileBufferData()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                StoreDatapoints = true,
+                DataBufferPath = "datapoints.bin"
+            });
+            await tester.ClearPersistentData();
+
+            tester.Config.Extraction.AllowStringVariables = true;
+
+            tester.StartExtractor();
+
+            await tester.Extractor.WaitForNextPush();
+
+            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+
+            await tester.Extractor.WaitForNextPush();
+
+            tester.Handler.AllowPush = false;
+            tester.Handler.AllowConnectionTest = false;
+
+            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
+                20, "Failurebuffer must receive some data");
+
+            tester.Handler.AllowPush = true;
+            tester.Handler.AllowConnectionTest = true;
+
+            await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.Any,
+                20, "FailureBuffer should be emptied");
+
+            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+
+            await tester.Extractor.WaitForNextPush();
+
+            await tester.TerminateRunTask();
+
+            tester.TestContinuity("gp.efg:i=10");
+            tester.TestConstantRate(1000, "gp.efg:i=9");
+
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
+            Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(5, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_cdf"));
+        }
+        [Trait("Server", "events")]
+        [Trait("Target", "OldBuffer")]
+        [Trait("Test", "filebufferevents")]
+        [Fact]
+        public async Task TestFileBufferEvents()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                StoreDatapoints = true,
+                EventBufferPath = "events.bin",
+                ServerName = ServerName.Events,
+                ConfigName = ConfigName.Events
+            });
+            await tester.ClearPersistentData();
+
+            tester.Config.Extraction.AllowStringVariables = true;
+
+            tester.StartExtractor();
+
+            await tester.Extractor.WaitForNextPush();
+
+            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming), 20);
+
+            await tester.Extractor.WaitForNextPush();
+
+            // In theory it will work as expected if only pushes to events fail, so long as the connection test also fails,
+            // but there is no real reason to test this on an unrealistic scenario.
+            // In this case, history will still restart in its entirity once connection is re-established.
+            // In theory we could have separated the two, but it is an edge case. Perhaps in the future.
+            // The behavior if only the push fails but not the connection test is less clear,
+            // what we would expect is that if there are events in the given push, then we end up with double pushes as expected.
+            // If not, the pushers will end up getting set to succeeding, but then the read from failurebuffer will fail,
+            // so we will continue to read from there.
+            // The same conditions still hold: If state storage is enabled on influx, or the queue is used, points will not be lost.
+            tester.Handler.AllowPush = false;
+            tester.Handler.AllowEvents = false;
+            tester.Handler.AllowConnectionTest = false;
+
+            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
+                20, "Failurebuffer must receive some events");
+
+            tester.Handler.AllowPush = true;
+            tester.Handler.AllowEvents = true;
+            tester.Handler.AllowConnectionTest = true;
+
+            await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.AnyEvents,
+                20, "FailureBuffer should be emptied");
+
+            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming), 20);
+
+            await tester.Extractor.WaitForNextPush();
+
+            await tester.TerminateRunTask();
+
+            var events = tester.Handler.events.Values.ToList();
+            Assert.True(events.Any());
+
+            Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
+            Assert.Contains(events, ev => ev.description == "prop 0");
+            Assert.Contains(events, ev => ev.description == "basicPass 0");
+            Assert.Contains(events, ev => ev.description == "basicPassSource 0");
+            Assert.Contains(events, ev => ev.description == "basicVarSource 0");
+            Assert.Contains(events, ev => ev.description == "mappedType 0");
+
+            var countregex = new Regex("\\d+$");
+            var propNumbers = events
+                .Where(evt => evt.description.StartsWith("prop ", StringComparison.InvariantCulture))
+                .Select(evt => Convert.ToInt32(countregex.Match(evt.description).Value, CultureInfo.InvariantCulture))
+                .Distinct()
+                .ToList();
+            ExtractorTester.TestContinuity(propNumbers);
+
+            var nonHistNumbers = events
+                .Where(evt => evt.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+                .Select(evt => Convert.ToInt32(countregex.Match(evt.description).Value, CultureInfo.InvariantCulture))
+                .Distinct()
+                .ToList();
+            ExtractorTester.TestContinuity(nonHistNumbers);
+
+            Assert.True(CommonTestUtils.VerifySuccessMetrics());
+            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_event_push_failures"));
         }
     }
 }
