@@ -221,6 +221,26 @@ namespace Cognite.OpcUa
             }
             log.Error(e, message);
         }
+
+        public static byte[] StringToStorable(string str)
+        {
+            ushort size = (ushort)((str?.Length ?? 0) * sizeof(char));
+            byte[] bytes = new byte[size + sizeof(ushort)];
+            Buffer.BlockCopy(BitConverter.GetBytes(size), 0, bytes, 0, sizeof(ushort));
+            if (size == 0) return bytes;
+            Buffer.BlockCopy(str?.ToCharArray() ?? Array.Empty<char>(), 0, bytes, sizeof(ushort), 
+                size);
+            return bytes;
+        }
+
+        public static (string, int) StringFromStorable(byte[] bytes, int pos)
+        {
+            ushort size = BitConverter.ToUInt16(bytes, pos);
+            if (size == 0) return (null, pos + sizeof(ushort));
+            var chars = new char[size/sizeof(char)];
+            Buffer.BlockCopy(bytes, pos + sizeof(ushort), chars, 0, size);
+            return (new string(chars), pos + size + sizeof(ushort));
+        }
         public static Exception HandleServiceResult(ServiceResultException ex, SourceOp op)
         {
             if (ex == null) throw new ArgumentNullException(nameof(ex));

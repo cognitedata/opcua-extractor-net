@@ -306,6 +306,7 @@ namespace Cognite.OpcUa
                 state.ResetStreamingState();
             }
 
+            WaitForNextPush().Wait();
             foreach (var pusher in pushers)
             {
                 pusher.Reset();

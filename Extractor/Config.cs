@@ -93,6 +93,8 @@ namespace Cognite.OpcUa
         public bool Enabled { get; set; } = false;
         public InfluxBufferConfig Influx { get; set; }
         public bool LocalQueue { get; set; }
+        public string DatapointPath { get; set; }
+        public string EventPath { get; set; }
     }
 
     public class InfluxBufferConfig

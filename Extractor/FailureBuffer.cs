@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
+using Prometheus.Client;
 using Serilog;
 
 namespace Cognite.OpcUa
@@ -19,10 +21,18 @@ namespace Cognite.OpcUa
 
         private readonly bool useLocalQueue;
 
-        public bool Any => any || useLocalQueue && extractor.StateStorage.AnyPoints;
-        private bool any;
-        public bool AnyEvents => anyEvents || useLocalQueue && extractor.StateStorage.AnyEvents;
+        public bool Any => anyPoints || fileAnyPoints || useLocalQueue && extractor.StateStorage.AnyPoints;
+        private bool fileAnyPoints;
+        private bool anyPoints;
+        public bool AnyEvents => anyEvents || fileAnyEvents || useLocalQueue && extractor.StateStorage.AnyEvents;
+        private bool fileAnyEvents;
         private bool anyEvents;
+
+        private static readonly Gauge numPointsInBuffer = Metrics.CreateGauge(
+            "opcua_buffer_num_points", "The number of datapoints in the local buffer file");
+
+        private static readonly Gauge numEventsInBuffer = Metrics.CreateGauge(
+            "opcua_buffer_num_events", "The number of events in the local buffer file");
 
         private static readonly ILogger log = Log.Logger.ForContext(typeof(FailureBuffer));
         public FailureBuffer(FullConfig fullConfig, Extractor extractor)
@@ -33,6 +43,26 @@ namespace Cognite.OpcUa
 
             useLocalQueue = extractor.StateStorage != null && config.LocalQueue;
             this.extractor = extractor;
+
+            if (!string.IsNullOrEmpty(config.DatapointPath))
+            {
+                if (!File.Exists(config.DatapointPath))
+                {
+                    File.Create(config.DatapointPath).Close();
+                }
+
+                fileAnyPoints |= new FileInfo(config.DatapointPath).Length > 0;
+            }
+
+            if (!string.IsNullOrEmpty(config.EventPath))
+            {
+                if (!File.Exists(config.EventPath))
+                {
+                    File.Create(config.EventPath).Close();
+                }
+
+                fileAnyEvents |= new FileInfo(config.EventPath).Length > 0;
+            }
 
             if (config.Influx?.Database == null) return;
 
@@ -82,7 +112,7 @@ namespace Cognite.OpcUa
                     nodeBufferStates[extractor.GetUniqueId(state.Id)] = state;
                     if (state.DestinationExtractedRange.Start <= state.DestinationExtractedRange.End)
                     {
-                        any = true;
+                        anyPoints = true;
                     }
                 }
 
@@ -156,7 +186,7 @@ namespace Cognite.OpcUa
                                 StateStorage.InfluxVariableStates, token).ConfigureAwait(false);
                         }
 
-                        any = true;
+                        anyPoints = true;
                     }
                 }
                 catch (Exception e)
@@ -171,10 +201,25 @@ namespace Cognite.OpcUa
                 success &= await extractor.StateStorage.WritePointsToQueue(points, token);
             }
 
+            if (!string.IsNullOrEmpty(config.DatapointPath))
+            {
+                try
+                {
+                    await Task.Run(() => WriteDatapointsToFile(config.DatapointPath, points, token));
+                    fileAnyPoints |= points.Any();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to write datapoints to file");
+                    success = false;
+                }
+            }
+
             return success;
         }
         public async Task<bool> ReadDatapoints(IEnumerable<IPusher> pushers, CancellationToken token)
         {
+            if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
             if (config.Influx != null && influxPusher != null)
@@ -208,7 +253,7 @@ namespace Cognite.OpcUa
                                 StateStorage.InfluxVariableStates, token).ConfigureAwait(false);
                         }
 
-                        any = false;
+                        anyPoints = false;
                     }
                     catch (Exception e)
                     {
@@ -221,6 +266,11 @@ namespace Cognite.OpcUa
             if (useLocalQueue && extractor.StateStorage.AnyPoints)
             {
                 success &= await extractor.StateStorage.ReadPointsFromQueue(pushers, token);
+            }
+
+            if (!string.IsNullOrEmpty(config.DatapointPath))
+            {
+                success &= await ReadDatapointsFromFile(pushers, token);
             }
 
             return success;
@@ -306,11 +356,26 @@ namespace Cognite.OpcUa
                 success &= await extractor.StateStorage.WriteEventsToQueue(events, token);
             }
 
+            if (!string.IsNullOrEmpty(config.EventPath))
+            {
+                try
+                {
+                    await Task.Run(() => WriteEventsToFile(config.EventPath, events, extractor, token));
+                    fileAnyEvents |= events.Any();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to write events to file");
+                    success = false;
+                }
+            }
+
             return success;
         }
 
         public async Task<bool> ReadEvents(IEnumerable<IPusher> pushers, CancellationToken token)
         {
+            if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
             if (config.Influx != null && influxPusher != null)
@@ -357,8 +422,293 @@ namespace Cognite.OpcUa
                 success &= await extractor.StateStorage.ReadEventsFromQueue(pushers, token);
             }
 
+            if (!string.IsNullOrEmpty(config.EventPath))
+            {
+                success &= await ReadEventsFromFile(pushers, token);
+            }
+
             return success;
 
+        }
+
+        private async Task<bool> ReadDatapointsFromFile(IEnumerable<IPusher> pushers, CancellationToken token)
+        {
+            long nextPos = 0;
+            bool success = true;
+
+            do
+            {
+                IEnumerable<BufferedDataPoint> points;
+                try
+                {
+                    (points, nextPos) =
+                        await Task.Run(() => ReadDatapointsFromFile(config.DatapointPath, nextPos, 100000, token));
+                    foreach (var pusher in pushers)
+                    {
+                        success &= await pusher.PushDataPoints(points, token) ?? true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to read datapoints from file");
+                    success = false;
+                    break;
+                }
+
+                if (!success) break;
+                var ranges = new Dictionary<string, TimeRange>();
+
+                foreach (var point in points)
+                {
+                    if (!ranges.ContainsKey(point.Id))
+                    {
+                        ranges[point.Id] = new TimeRange(point.Timestamp, point.Timestamp);
+                        continue;
+                    }
+
+                    var range = ranges[point.Id];
+                    if (range.Start > point.Timestamp)
+                    {
+                        range.Start = point.Timestamp;
+                    }
+                    else if (range.End < point.Timestamp)
+                    {
+                        range.End = point.Timestamp;
+                    }
+                }
+
+                foreach (var kvp in ranges)
+                {
+                    var state = extractor.GetNodeState(kvp.Key);
+                    state.UpdateDestinationRange(kvp.Value);
+                }
+
+            } while (nextPos > 0);
+
+            if (success)
+            {
+                log.Information("Wipe datapoint buffer file");
+                File.Create(config.DatapointPath).Close();
+                fileAnyPoints = false;
+                numPointsInBuffer.Set(0);
+            }
+
+            return success;
+        }
+
+        private async Task<bool> ReadEventsFromFile(IEnumerable<IPusher> pushers, CancellationToken token)
+        {
+            long nextPos = 0;
+            bool success = true;
+
+            do
+            {
+                IEnumerable<BufferedEvent> events;
+                try
+                {
+                    (events, nextPos) =
+                        await Task.Run(() => ReadEventsFromFile(config.EventPath, extractor, nextPos, 10000, token));
+                    foreach (var pusher in pushers)
+                    {
+                        success &= await pusher.PushEvents(events, token) ?? true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Failed to read datapoints from file");
+                    success = false;
+                    break;
+                }
+
+                if (!success) break;
+                var ranges = new Dictionary<NodeId, TimeRange>();
+
+                foreach (var evt in events)
+                {
+                    if (!ranges.ContainsKey(evt.EmittingNode))
+                    {
+                        ranges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
+                        continue;
+                    }
+
+                    var range = ranges[evt.EmittingNode];
+                    if (range.Start > evt.Time)
+                    {
+                        range.Start = evt.Time;
+                    }
+                    else if (range.End < evt.Time)
+                    {
+                        range.End = evt.Time;
+                    }
+                }
+
+                foreach (var kvp in ranges)
+                {
+                    var state = extractor.GetEmitterState(kvp.Key);
+                    state.UpdateDestinationRange(kvp.Value);
+                }
+
+            } while (nextPos > 0);
+
+            if (success)
+            {
+                log.Information("Wipe event buffer file");
+                File.Create(config.EventPath).Close();
+                fileAnyEvents = false;
+                numEventsInBuffer.Set(0);
+            }
+
+            return success;
+        }
+
+        public static void WriteDatapointsToFile(string file, IEnumerable<BufferedDataPoint> dps, CancellationToken token)
+        {
+            if (dps == null) throw new ArgumentNullException(nameof(dps));
+            if (file == null) throw new ArgumentNullException(nameof(file));
+            using FileStream fs = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.None);
+
+            int count = 0;
+
+            foreach (var dp in dps)
+            {
+                if (token.IsCancellationRequested) break;
+                var bytes = dp.ToStorableBytes();
+                fs.Write(bytes, 0, bytes.Length);
+                count++;
+            }
+            if (count > 0)
+            {
+                log.Debug("Write {cnt} points to file", count);
+                numPointsInBuffer.Inc(count);
+            }
+            fs.Flush();
+        }
+
+        public static void WriteEventsToFile(string file, IEnumerable<BufferedEvent> evts, Extractor extractor, CancellationToken token)
+        {
+            if (evts == null) throw new ArgumentNullException(nameof(evts));
+            if (file == null) throw new ArgumentNullException(nameof(file));
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
+            using FileStream fs = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.None);
+
+            int count = 0;
+
+            foreach (var evt in evts)
+            {
+                if (token.IsCancellationRequested) break;
+                var bytes = evt.ToStorableBytes(extractor);
+                fs.Write(bytes, 0, bytes.Length);
+                count++;
+            }
+
+            if (count > 0)
+            {
+                log.Debug("Write {cnt} events to file", count);
+                numEventsInBuffer.Inc();
+            }
+            fs.Flush();
+        }
+
+        public static (IEnumerable<BufferedDataPoint>, long) ReadDatapointsFromFile(string file, long startPos, int limit,
+            CancellationToken token)
+        {
+            if (file == null) throw new ArgumentNullException(nameof(file));
+            var dps = new List<BufferedDataPoint>();
+            int count = 0;
+            long pos;
+            bool final = false;
+            using (FileStream fs = new FileStream(file, FileMode.OpenOrCreate, FileAccess.Read, FileShare.None))
+            {
+                byte[] sizeBytes = new byte[sizeof(ushort)];
+                fs.Seek(startPos, SeekOrigin.Begin);
+                while (!token.IsCancellationRequested && count < limit)
+                {
+                    int read = fs.Read(sizeBytes, 0, sizeBytes.Length);
+                    if (read < sizeBytes.Length) break;
+                    ushort size = BitConverter.ToUInt16(sizeBytes, 0);
+                    byte[] dataBytes = new byte[size];
+                    int dRead = fs.Read(dataBytes, 0, size);
+                    if (dRead < size) break;
+                    var (buffDp, _) = BufferedDataPoint.FromStorableBytes(dataBytes, 0);
+                    if (buffDp.Id == null)
+                    {
+                        log.Warning("Invalid datapoint in buffer file");
+                        continue;
+                    }
+
+                    count++;
+                    log.Verbose(buffDp.ToDebugDescription());
+                    dps.Add(buffDp);
+                }
+
+                pos = fs.Position;
+                final = pos == fs.Length;
+                if (count == 0)
+                {
+                    log.Verbose("Read 0 point from file");
+                }
+                else
+                {
+                    log.Debug("Read {NumDatapointsToRead} points from file", count);
+                }
+                fs.Flush();
+            }
+
+            if (final || dps.Count < limit)
+            {
+                pos = 0;
+            }
+
+
+            return (dps, pos);
+        }
+
+        public static (IEnumerable<BufferedEvent>, long) ReadEventsFromFile(string file,
+            Extractor extractor, long startPos, int limit, CancellationToken token)
+        {
+            if (file == null) throw new ArgumentNullException(nameof(file));
+            var evts = new List<BufferedEvent>();
+            int count = 0;
+            long pos;
+            bool final;
+            using (FileStream fs = new FileStream(file, FileMode.OpenOrCreate, FileAccess.Read, FileShare.None))
+            {
+                fs.Seek(startPos, SeekOrigin.Begin);
+                byte[] sizeBytes = new byte[sizeof(ushort)];
+                while (!token.IsCancellationRequested && count < limit)
+                {
+                    int read = fs.Read(sizeBytes, 0, sizeBytes.Length);
+                    if (read < sizeBytes.Length) break;
+                    ushort size = BitConverter.ToUInt16(sizeBytes, 0);
+                    byte[] dataBytes = new byte[size];
+                    int dRead = fs.Read(dataBytes, 0, size);
+                    if (dRead < size) break;
+                    var (evt, _) = BufferedEvent.FromStorableBytes(dataBytes, extractor, 0);
+                    if (evt.EventId == null || evt.SourceNode == null)
+                    {
+                        log.Warning("Invalid datapoint in buffer file");
+                        continue;
+                    }
+
+                    count++;
+                    log.Verbose(evt.ToDebugDescription());
+                    evts.Add(evt);
+                }
+                if (count > 0)
+                {
+                    log.Debug("Read {NumEventsToRead} events from file", count);
+                }
+                pos = fs.Position;
+                final = pos == fs.Length;
+                fs.Flush();
+            }
+
+            if (final || count < limit)
+            {
+                pos = 0;
+            }
+
+            return (evts, pos);
         }
         public void Dispose()
         {
