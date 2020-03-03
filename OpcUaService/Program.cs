@@ -17,7 +17,7 @@ namespace OpcUaService
             ServiceBase[] ServicesToRun;
             ServicesToRun = new ServiceBase[]
             {
-                new OpcUaService(args)
+                new OpcUaWindowsService(args)
             };
             ServiceBase.Run(ServicesToRun);
         }

@@ -13,7 +13,7 @@ using System.Globalization;
 
 namespace OpcUaService
 {
-    public partial class OpcUaService : ServiceBase
+    public partial class OpcUaWindowsService : ServiceBase
     {
         // Private vars
         private const string _eventLogSource = "CogniteOpcUa";
@@ -22,7 +22,7 @@ namespace OpcUaService
         private static Thread _extractorThread;
         private static bool _isFirstStart = true;
         private static int _numberOfFailures;
-        private static int _maxNumberOfFailures = 1;
+        private static int _maxNumberOfFailures = 3;
         private static System.Timers.Timer _timer;
         private const double _statusCheckInterval = 10000;
         private string _path;
@@ -32,7 +32,7 @@ namespace OpcUaService
         /// <summary>
         /// Initializing the service
         /// </summary>
-        public OpcUaService(string[] args)
+        public OpcUaWindowsService(string[] args)
         {
             InitializeComponent();
             _args = args;
@@ -67,7 +67,7 @@ namespace OpcUaService
             }
             else
             {
-                _path = Directory.GetParent(typeof(OpcUaService).Assembly.Location).ToString();
+                _path = Directory.GetParent(typeof(OpcUaWindowsService).Assembly.Location).ToString();
             }
 
             _configFile = $@"{_path}\{_configFileName}";

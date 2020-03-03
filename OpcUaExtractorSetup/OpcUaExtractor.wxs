@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  <?define OpcUaExtractor_TargetDir=$(var.OpcUaService.TargetDir)?>
+  <!-- Important to update ProductVersion for new releases so it gets upgraded -->
+  <?define ProductVersion="1.0.0"?>
+  <?define ProductId="*" ?>
+  <?define CogniteName="Cognite OpcUa Extractor $(var.ProductVersion)" ?>
+  <?define CogniteNameSimple="Cognite OpcUa Extractor" ?>
+
+
+  <Product Id="$(var.ProductId)" Name="$(var.CogniteName)" Language="1033" Version="$(var.ProductVersion)"
+           Manufacturer="Cognite AS" UpgradeCode="3bd281b5-ad7d-4bb0-8dcf-11949ba9c592">
+    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of $(var.CogniteNameSimple) is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <UIRef Id="WixUI_InstallDir" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+    <WixVariable Id="WixUILicenseRtf" Value="Resources\License.rtf" />
+    <WixVariable Id="WixUIBannerBmp" Value="Resources\OpcUa-InstBanner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="Resources\OpcUa-InstDialog.bmp" />
+    <WixVariable Id="WixUIExclamationIco" Value="Resources\black32x32.ico" />
+    <WixVariable Id="WixUIInfoIco" Value="Resources\black32x32.ico" />
+    <WixVariable Id="WixUINewIco" Value="Resources\black16x16.ico" />
+    <WixVariable Id="WixUIUpIco" Value="Resources\black16x16.ico" />
+
+    <Icon Id="AppIcon.ico" SourceFile="Resources\black16x16.ico" />
+
+    <Property Id="INSTALLFOLDER" Value="C:\Cognite">
+      <RegistrySearch Id="CogniteRegistryOpcUaExtractorFolder" Type="raw" Root="HKLM" Key="Software\Cognite\OpcUaExtractor" Name="InstallFolder" />
+    </Property>
+
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="$(var.CogniteName) - Is now installed." />
+
+    <Property Id="ARPCOMMENTS">Cognite OpcUa Extractor</Property>
+    <Property Id="ARPCONTACT">Cognite Support</Property>
+    <Property Id="ARPHELPLINK">http://www.cognite.com</Property>
+    <Property Id="ARPURLINFOABOUT">http://www.cognite.com</Property>
+    <Property Id="ARPURLUPDATEINFO">http://www.cognite.com</Property>
+    <Property Id="ARPPRODUCTICON">AppIcon.ico</Property>
+
+    <Feature Id="OpcUaExtractorFeature" Title="OpcUa Extractor" Level="1">
+      <ComponentGroupRef Id="OpcUaExtractorServiceComponentGroup" />
+      <ComponentGroupRef Id="OpcUaExtractorConfigFilesComponentGroup"/>
+    </Feature>
+
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="Cognite">
+          <Directory Id="OpcUaExtractorFolder" Name="OpcUaExtractor">
+            <Directory Id="ConfigFolder" Name="config" />
+            <Directory Id="LogsFolder" Name="logs" />
+          </Directory>
+        </Directory>
+      </Directory>
+    </Directory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="OpcUaExtractorServiceComponentGroup">
+      <ComponentGroupRef Id="ProductFilesComponentGroup"/>
+      <Component Id="OpcUaService_exe" Guid="6FD4B99A-422C-4703-A9BB-D2837459F15B" Directory="OpcUaExtractorFolder">
+        <File Source="$(var.OpcUaExtractor_TargetDir)OpcUaService.exe" />
+        <!--
+        <ComponentRef Id="cmpFB7C1B7AFE6B78B1A8E464042F47BA4A" Primary="yes" />
+        <File Id="[#fil4FF089F0F3026D97861EE6BC791D6FF1]" />        
+        <Component Id="cmpFB7C1B7AFE6B78B1A8E464042F47BA4A" 
+        -->
+        <ServiceInstall Id="ServiceInstaller"
+                        Type="ownProcess"
+                        Vital="yes"
+                        Name="OpcUa-Extractor"
+                        DisplayName="Cognite OpcUa Extractor"
+                        Description="Cognite OpcUa Extractor service, extracts data from a OpcUa server and ingest the data into CDF."
+                        Start="auto"
+                        Account="LocalSystem"
+                        ErrorControl="ignore"
+                        Interactive="no">
+          <util:ServiceConfig
+            FirstFailureActionType="restart"
+            SecondFailureActionType="restart"
+            ThirdFailureActionType="restart"
+            RestartServiceDelayInSeconds="10" />
+          <!--<ServiceDependency Id="Dnscache" /> -->
+          <ServiceConfig DelayedAutoStart="yes" OnInstall="yes" OnReinstall="yes" />
+        </ServiceInstall>
+        <ServiceControl Id="StartService"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Name="OpcUa-Extractor"
+                        Wait="no"  />
+        <!-- This EventSource Name need to match whats being used as event source in the service. -->
+        <!-- Reference to a specific framework version looks scary... -->
+        <util:EventSource
+          Name="CogniteOpcUa"
+          Log="Application"
+          EventMessageFile="%SystemRoot%\Microsoft.NET\Framework\v2.0.50727\EventLogMessages.dll" />
+        <RegistryKey Id="ProductKey" Action="createAndRemoveOnUninstall" Root="HKLM" Key="Software\Cognite\OpcUaExtractor">
+          <RegistryValue Id="OpcUaExtractorRegPath" Action="write" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]"/>
+        </RegistryKey>
+      </Component>
+      <Component Id="OpcUaService_dll" Guid="08E73D25-7416-4934-87A4-C824A5866912" Directory="OpcUaExtractorFolder">
+        <File Id="OpcUaService.dll" Name="OpcUaService.dll" Source="$(var.OpcUaExtractor_TargetDir)OpcUaService.dll" />
+      </Component>
+      <Component Id="LICENSE_md" Guid="263C79F7-B6CA-441B-B544-CD23FA54A3CA" Directory="OpcUaExtractorFolder">
+        <File Id="LICENSE.md" Name="LICENSE.md" Source="$(var.SolutionDir)LICENSE.md" />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="OpcUaExtractorConfigFilesComponentGroup">
+      <!--OpcUaExtractor config file-->
+      <Component Id="config_example_yml" Guid="BD4BFAD2-3D5E-4718-BF38-04ADE8209EAF" Directory="ConfigFolder">
+        <File Id="config.example.yml" Name="config.example.yml" Source="$(var.OpcUaExtractor_TargetDir)config\config.example.yml" />
+      </Component>
+      <Component Id="opc_ua_net_extractor_Config" Guid="C1F2FD46-1E38-4C1F-B4CF-58BFD589618C" Directory="ConfigFolder">
+        <File Id="opc.ua.net.extractor.Config.xml" Name="opc.ua.net.extractor.Config.xml" Source="$(var.OpcUaExtractor_TargetDir)config\opc.ua.net.extractor.Config.xml" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>
+
