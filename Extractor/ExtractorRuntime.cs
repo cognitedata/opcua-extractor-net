@@ -56,10 +56,10 @@ namespace Cognite.OpcUa
         /// <param name="services"></param>
         private static void Configure(IServiceCollection services)
         {
-            services.AddHttpClient("Context", client => { client.Timeout = Timeout.InfiniteTimeSpan; })
+            services.AddHttpClient("Context", client => { client.Timeout = TimeSpan.FromSeconds(120); })
                 .AddPolicyHandler(GetRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
-            services.AddHttpClient("Data", client => { client.Timeout = TimeSpan.FromSeconds(120); })
+            services.AddHttpClient("Data", client => { client.Timeout = TimeSpan.FromSeconds(60); })
                 .AddPolicyHandler(GetDataRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
         }
@@ -72,7 +72,7 @@ namespace Cognite.OpcUa
                         || msg.StatusCode == HttpStatusCode.Unauthorized
                         || msg.StatusCode == HttpStatusCode.TooManyRequests))
                 .Or<TimeoutRejectedException>()
-                .WaitAndRetryForeverAsync(retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
+                .WaitAndRetryAsync(8, retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
         }
         private static IAsyncPolicy<HttpResponseMessage> GetDataRetryPolicy()
         {
@@ -103,25 +103,7 @@ namespace Cognite.OpcUa
             var client = new UAClient(config);
             int index = 0;
             IEnumerable<IPusher> pushers = config.Pushers.Select(pusher => pusher.ToPusher(index++, provider)).ToList();
-            var removePushers = new List<IPusher>();
-
-            await Task.WhenAll(pushers.Select(async pusher =>
-            {
-                var result = await pusher.TestConnection(config, source.Token);
-                if (pusher.BaseConfig.Critical && !result.Value)
-                {
-                    throw new ExtractorFailureException("Critical pusher failed to connect");
-                }
-
-                if (!result.Value)
-                {
-                    Log.Warning("Removing pusher of type {type}", pusher.GetType());
-                    pusher.Dispose();
-                    removePushers.Add(pusher);
-                }
-            }));
             log.Information("Building extractor");
-            pushers = pushers.Except(removePushers).ToList();
             using var extractor = new Extractor(config, pushers, client);
 
             try

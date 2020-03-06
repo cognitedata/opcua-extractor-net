@@ -51,6 +51,8 @@ namespace Cognite.OpcUa
         public int Index { get; set; }
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
+        public bool Initialized { get; set; }
+
 
         public Extractor Extractor { get; set; }
         public PusherConfig BaseConfig { get; }

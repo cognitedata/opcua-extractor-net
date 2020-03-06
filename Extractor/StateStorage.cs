@@ -105,7 +105,7 @@ namespace Cognite.OpcUa
         /// <param name="name">Name of the collection to persist to</param>
         public async Task StoreExtractionState(IEnumerable<BaseExtractionState> states, string name, CancellationToken token)
         {
-            var toStore = states.Where(s => s.IsDirty).ToList();
+            var toStore = states.Where(s => s.IsDirty && s.Historizing).ToList();
             var pocos = toStore
                 .Select(state => new ExtractionStatePoco()
                 {
@@ -128,8 +128,8 @@ namespace Cognite.OpcUa
                     statesStoredCounter.Inc(chunk.Count());
                 }
 
-                log.Debug("Saved {Stored} out of {TotalNumber} extraction states to store {name}", 
-                    toStore.Count, states.Count(), name);
+                log.Debug("Saved {Stored} out of {TotalNumber} historizing extraction states to store {name}", 
+                    toStore.Count, states.Count(state => state.Historizing), name);
 
                 foreach (var state in toStore)
                 {
@@ -152,6 +152,7 @@ namespace Cognite.OpcUa
         public async Task<bool> ReadExtractionStates(IEnumerable<BaseExtractionState> states, string name,
             bool search, CancellationToken token)
         {
+            log.Information("Read for {cnt} states", states.Count());
             if (!states.Any()) return true;
             var stateMap = states.ToDictionary(state => extractor.GetUniqueId(state.Id));
 
