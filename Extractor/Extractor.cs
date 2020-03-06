@@ -206,15 +206,6 @@ namespace Cognite.OpcUa
             if (config.FailureBuffer.Enabled)
             {
                 await FailureBuffer.InitializeBufferStates(NodeStates.Values, ExternalToNodeId.Values, token);
-                if (FailureBuffer.Any)
-                {
-                    await FailureBuffer.ReadDatapoints(pushers, token);
-                }
-
-                if (FailureBuffer.AnyEvents)
-                {
-                    await FailureBuffer.ReadEvents(pushers, token);
-                }
             }
 
             Pushing = true;
@@ -983,7 +974,10 @@ namespace Cognite.OpcUa
             if (!result)
             {
                 Log.Error("Failed to push nodes on pusher with index {idx}", pusher.Index);
-                pusher.Initialized = false;
+                if (initial)
+                {
+                    pusher.Initialized = false;
+                }
                 pusher.DataFailing = true;
                 pusher.EventsFailing = true;
                 return;
@@ -1004,7 +998,10 @@ namespace Cognite.OpcUa
                 if (!results.All(res => res))
                 {
                     Log.Error("Initialization of extracted ranges failed for pusher with index {idx}", pusher.Index);
-                    pusher.Initialized = false;
+                    if (initial)
+                    {
+                        pusher.Initialized = false;
+                    }
                     pusher.DataFailing = true;
                     pusher.EventsFailing = true;
                 }
@@ -1047,20 +1044,26 @@ namespace Cognite.OpcUa
         private async Task SynchronizeEvents(IEnumerable<NodeId> nodes, CancellationToken token)
         {
             await Task.Run(() => uaClient.SubscribeToEvents(EmitterStates.Keys, nodes, EventSubscriptionHandler, token));
-            await historyReader.FrontfillEvents(EmitterStates.Values.Where(state => state.Historizing), nodes, token);
-            if (config.History.Backfill)
+            if (pushers.Any(pusher => pusher.Initialized))
             {
-                await historyReader.BackfillEvents(EmitterStates.Values.Where(state => state.Historizing), nodes, token);
+                await historyReader.FrontfillEvents(EmitterStates.Values.Where(state => state.Historizing), nodes, token);
+                if (config.History.Backfill)
+                {
+                    await historyReader.BackfillEvents(EmitterStates.Values.Where(state => state.Historizing), nodes, token);
+                }
             }
         }
 
         private async Task SynchronizeNodes(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             await Task.Run(() => uaClient.SubscribeToNodes(states, DataSubscriptionHandler, token));
-            await historyReader.FrontfillData(states.Where(state => state.Historizing), token);
-            if (config.History.Backfill)
+            if (pushers.Any(pusher => pusher.Initialized))
             {
-                await historyReader.BackfillData(states.Where(state => state.Historizing), token);
+                await historyReader.FrontfillData(states.Where(state => state.Historizing), token);
+                if (config.History.Backfill)
+                {
+                    await historyReader.BackfillData(states.Where(state => state.Historizing), token);
+                }
             }
         }
         /// <summary>
