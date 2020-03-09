@@ -820,7 +820,8 @@ namespace Cognite.OpcUa
                 Name = ExtractorUtils.Truncate(variable.DisplayName, 255),
                 LegacyName = externalId,
                 IsString = variable.DataType.IsString,
-                IsStep = variable.DataType.IsStep
+                IsStep = variable.DataType.IsStep,
+                DataSetId = config.DataSetId
             };
             if (variable.Properties != null && variable.Properties.Any())
             {

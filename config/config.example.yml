@@ -82,6 +82,8 @@ Pushers:
         # The CDF pusher is not able to read start/end points for events, so if reading historical events is enabled, one other pusher
         # able to do this should be enabled.
         ReadExtractedRanges: true
+        # Data set to use for new timeseries. Existing timeseries will not be updated
+        DataSetId:
         # Chunk sizes in CDF requests
         LatestChunk: 100
         EarliestChunk: 1000
