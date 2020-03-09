@@ -3,15 +3,13 @@ NUGET
   remote: https://www.nuget.org/api/v2
     AdysTech.InfluxDB.Client.Net.Core (0.11.1)
       Newtonsoft.Json (>= 10.0.3) - restriction: >= netstandard2.0
-    CogniteSdk (1.0.0-alpha-037)
-      CogniteSdk.Types (>= 1.0.0-alpha-037) - restriction: >= netstandard2.0
-      Microsoft.CodeAnalysis.FxCopAnalyzers (>= 2.9.8) - restriction: >= netstandard2.0
-      Oryx (>= 1.0.0-alpha-009) - restriction: >= netstandard2.0
-      Oryx.Cognite (>= 1.0.0-alpha-037) - restriction: >= netstandard2.0
+    CogniteSdk (1.0.0-beta-003)
+      CogniteSdk.Types (>= 1.0.0-beta-003) - restriction: >= netstandard2.0
+      Oryx (>= 1.0.0-beta-001) - restriction: >= netstandard2.0
+      Oryx.Cognite (>= 1.0.0-beta-003) - restriction: >= netstandard2.0
     CogniteSdk.Protobuf (0.9) - restriction: >= netstandard2.0
       Google.Protobuf (>= 3.9) - restriction: >= netstandard2.0
-    CogniteSdk.Types (1.0.0-alpha-037) - restriction: >= netstandard2.0
-      Microsoft.CodeAnalysis.FxCopAnalyzers (>= 2.9.8) - restriction: >= netstandard2.0
+    CogniteSdk.Types (1.0.0-beta-003) - restriction: >= netstandard2.0
       System.Text.Json (>= 4.7.1) - restriction: >= netstandard2.0
     coverlet.msbuild (2.8)
     FSharp.Core (4.7) - restriction: >= netstandard2.0
@@ -29,18 +27,18 @@ NUGET
       Grpc.Auth (>= 1.22 < 2.0) - restriction: || (>= net45) (>= netstandard1.5)
       Grpc.Core (>= 1.22 < 2.0) - restriction: || (>= net45) (>= netstandard1.5)
       NETStandard.Library (>= 1.6.1) - restriction: && (< net45) (>= netstandard1.5) (< netstandard2.0)
-    Google.Apis (1.44) - restriction: >= netstandard1.5
-      Google.Apis.Core (>= 1.44) - restriction: || (>= net45) (>= netstandard1.3)
+    Google.Apis (1.44.1) - restriction: >= netstandard1.5
+      Google.Apis.Core (>= 1.44.1) - restriction: || (>= net45) (>= netstandard1.3)
       NETStandard.Library (>= 1.6.1) - restriction: && (< net45) (>= netstandard1.3) (< netstandard2.0)
       System.Net.Http (>= 4.3.1) - restriction: && (< net45) (>= netstandard1.3) (< netstandard2.0)
       System.Reflection.TypeExtensions (>= 4.3) - restriction: && (< net45) (>= netstandard1.3) (< netstandard2.0)
-    Google.Apis.Auth (1.44) - restriction: >= netstandard1.5
-      Google.Apis (>= 1.44) - restriction: || (>= net45) (>= netstandard1.3)
-      Google.Apis.Core (>= 1.44) - restriction: || (>= net45) (>= netstandard1.3)
+    Google.Apis.Auth (1.44.1) - restriction: >= netstandard1.5
+      Google.Apis (>= 1.44.1) - restriction: || (>= net45) (>= netstandard1.3)
+      Google.Apis.Core (>= 1.44.1) - restriction: || (>= net45) (>= netstandard1.3)
       NETStandard.Library (>= 1.6.1) - restriction: && (< net45) (>= netstandard1.3) (< netstandard2.0)
       System.Diagnostics.Process (>= 4.3) - restriction: && (< net45) (>= netstandard1.3) (< netstandard2.0)
       System.Net.Requests (>= 4.3) - restriction: && (< net45) (>= netstandard1.3) (< netstandard2.0)
-    Google.Apis.Core (1.44) - restriction: >= netstandard1.5
+    Google.Apis.Core (1.44.1) - restriction: >= netstandard1.5
       NETStandard.Library (>= 1.6.1) - restriction: && (< net45) (>= netstandard1.3) (< netstandard2.0)
       Newtonsoft.Json (>= 12.0.3) - restriction: || (>= net45) (>= netstandard1.3)
       System.Net.Http (>= 4.3.1) - restriction: && (< net45) (>= netstandard1.3) (< netstandard2.0)
@@ -350,27 +348,27 @@ NUGET
       System.Net.WebSockets.Client (>= 4.3.2) - restriction: && (< net46) (>= netstandard2.0)
       System.Reflection.TypeExtensions (>= 4.4) - restriction: && (< net46) (>= netstandard2.0)
       System.ServiceModel.Primitives (>= 4.5.3) - restriction: && (< net46) (>= netstandard2.0)
-    Oryx (1.0.0-alpha-009) - restriction: >= netstandard2.0
+    Oryx (1.0.0-beta-002) - restriction: >= netstandard2.0
       FSharp.Core (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.Logging (>= 3.1.1) - restriction: >= netstandard2.0
       TaskBuilder.fs (>= 2.1) - restriction: >= netstandard2.0
-    Oryx.Cognite (1.0.0-alpha-037) - restriction: >= netstandard2.0
+    Oryx.Cognite (1.0.0-beta-003) - restriction: >= netstandard2.0
       CogniteSdk.Protobuf (>= 0.9) - restriction: >= netstandard2.0
-      CogniteSdk.Types (>= 1.0.0-alpha-037) - restriction: >= netstandard2.0
+      CogniteSdk.Types (>= 1.0.0-beta-003) - restriction: >= netstandard2.0
       FSharp.Core (>= 4.7) - restriction: >= netstandard2.0
-      Oryx (>= 1.0.0-alpha-009) - restriction: >= netstandard2.0
-      Oryx.Protobuf (>= 1.0.0-alpha-009) - restriction: >= netstandard2.0
-      Oryx.SystemTextJson (>= 1.0.0-alpha-009) - restriction: >= netstandard2.0
+      Oryx (>= 1.0.0-beta-001) - restriction: >= netstandard2.0
+      Oryx.Protobuf (>= 1.0.0-beta-001) - restriction: >= netstandard2.0
+      Oryx.SystemTextJson (>= 1.0.0-beta-001) - restriction: >= netstandard2.0
       System.Text.Json (>= 4.7.1) - restriction: >= netstandard2.0
       TaskBuilder.fs (>= 2.1) - restriction: >= netstandard2.0
-    Oryx.Protobuf (1.0.0-alpha-009) - restriction: >= netstandard2.0
+    Oryx.Protobuf (1.0.0-beta-002) - restriction: >= netstandard2.0
       FSharp.Core (>= 4.7) - restriction: >= netstandard2.0
       Google.Protobuf (>= 3.11.3) - restriction: >= netstandard2.0
-      Oryx (>= 1.0.0-alpha-009) - restriction: >= netstandard2.0
+      Oryx (>= 1.0.0-beta-002) - restriction: >= netstandard2.0
       TaskBuilder.fs (>= 2.1) - restriction: >= netstandard2.0
-    Oryx.SystemTextJson (1.0.0-alpha-009) - restriction: >= netstandard2.0
+    Oryx.SystemTextJson (1.0.0-beta-002) - restriction: >= netstandard2.0
       FSharp.Core (>= 4.7) - restriction: >= netstandard2.0
-      Oryx (>= 1.0.0-alpha-009) - restriction: >= netstandard2.0
+      Oryx (>= 1.0.0-beta-002) - restriction: >= netstandard2.0
       System.Text.Json (>= 4.7) - restriction: >= netstandard2.0
       TaskBuilder.fs (>= 2.1) - restriction: >= netstandard2.0
     Polly (7.2) - restriction: >= netstandard2.0
@@ -486,7 +484,7 @@ NUGET
       Serilog (>= 2.9) - restriction: >= netstandard1.5
       Serilog.Sinks.PeriodicBatching (>= 2.2) - restriction: >= netstandard1.5
       System.Text.Encodings.Web (>= 4.7) - restriction: >= netstandard1.5
-    Serilog.Sinks.PeriodicBatching (2.2) - restriction: >= netstandard1.5
+    Serilog.Sinks.PeriodicBatching (2.3) - restriction: >= netstandard1.5
       Serilog (>= 2.0) - restriction: >= netstandard1.1
       System.Collections.Concurrent (>= 4.0.12) - restriction: || (&& (< net45) (>= netstandard1.1) (< netstandard1.2)) (&& (< net45) (>= netstandard1.2) (< netstandard2.0)) (&& (< net45) (>= netstandard2.0))
       System.Threading.Timer (>= 4.0.1) - restriction: || (&& (< net45) (>= netstandard1.2) (< netstandard2.0)) (&& (< net45) (>= netstandard2.0))
