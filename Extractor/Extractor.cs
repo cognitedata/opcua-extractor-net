@@ -104,6 +104,12 @@ namespace Cognite.OpcUa
         public static readonly Gauge Starting = Metrics
             .CreateGauge("opcua_extractor_starting", "1 if the extractor is in the startup phase");
 
+        private static readonly Gauge trackedAssets = Metrics
+            .CreateGauge("opcua_tracked_assets", "Number of objects on the opcua server mapped to assets");
+
+        private static readonly Gauge trackedTimeseres = Metrics
+            .CreateGauge("opcua_tracked_timeseries", "Number of variables on the opcua server mapped to timeseries");
+
         private static readonly ILogger log = Log.Logger.ForContext(typeof(Extractor));
 
         /// <summary>
@@ -127,7 +133,7 @@ namespace Cognite.OpcUa
                 FailureBuffer = new FailureBuffer(config, this);
             }
             this.uaClient.Extractor = this;
-            historyReader = new HistoryReader(uaClient, this, pushers, config.History);
+            historyReader = new HistoryReader(uaClient, this, config.History);
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
             if (config.Extraction.IdPrefix == "events.")
             {
@@ -718,8 +724,8 @@ namespace Cognite.OpcUa
             {
                 await Task.WhenAll(
                     Task.Delay(delay, token),
-                    StateStorage.StoreExtractionState(NodeStates.Values, StateStorage.VariableStates, token),
-                    StateStorage.StoreExtractionState(EmitterStates.Values, StateStorage.EmitterStates, token)
+                    StateStorage.StoreExtractionState(NodeStates.Values.Where(state => state.Historizing), StateStorage.VariableStates, token),
+                    StateStorage.StoreExtractionState(EmitterStates.Values.Where(state => state.Historizing), StateStorage.EmitterStates, token)
                 );
             }
         }
@@ -970,14 +976,19 @@ namespace Cognite.OpcUa
         private async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries,
             IPusher pusher, bool initial, CancellationToken token)
         {
+            if (pusher.DataFailing || pusher.EventsFailing)
+            {
+                log.Warning("Skipping pushing on pusher with index {idx}", pusher.Index);
+                pusher.Initialized = false;
+                pusher.DataFailing = true;
+                pusher.EventsFailing = true;
+                return;
+            }
             var result = await pusher.PushNodes(objects, timeseries, token);
             if (!result)
             {
-                Log.Error("Failed to push nodes on pusher with index {idx}", pusher.Index);
-                if (initial)
-                {
-                    pusher.Initialized = false;
-                }
+                log.Error("Failed to push nodes on pusher with index {idx}", pusher.Index);
+                pusher.Initialized = false;
                 pusher.DataFailing = true;
                 pusher.EventsFailing = true;
                 return;
@@ -997,13 +1008,11 @@ namespace Cognite.OpcUa
                         token));
                 if (!results.All(res => res))
                 {
-                    Log.Error("Initialization of extracted ranges failed for pusher with index {idx}", pusher.Index);
-                    if (initial)
-                    {
-                        pusher.Initialized = false;
-                    }
+                    log.Error("Initialization of extracted ranges failed for pusher with index {idx}", pusher.Index);
+                    pusher.Initialized = false;
                     pusher.DataFailing = true;
                     pusher.EventsFailing = true;
+                    return;
                 }
             }
 
@@ -1021,19 +1030,44 @@ namespace Cognite.OpcUa
                 .Distinct()
                 .Select(id => NodeStates[id]);
 
-            await Task.WhenAll(pushers.Select(pusher => PushNodes(objects, timeseries, pusher,
-                    objects.Count() + timeseries.Count() == activeNodes.Count, token))
-                .Append(StateStorage.ReadExtractionStates(
-                    EmitterStates.Values.Where(state => state.Historizing),
-                    StateStorage.EmitterStates,
-                    false,
-                    token))
-                .Append(StateStorage.ReadExtractionStates(
-                    newStates.Where(state => state.Historizing),
-                    StateStorage.VariableStates,
-                    false,
-                    token))
-                .ToList());
+            bool initial = objects.Count() + timeseries.Count() == activeNodes.Count;
+
+            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, pusher, initial, token));
+
+            if (StateStorage != null && config.StateStorage.Interval > 0 && pushData)
+            {
+                if (pushEvents)
+                {
+                    pushTasks = pushTasks.Append(StateStorage.ReadExtractionStates(
+                        EmitterStates.Values.Where(state => state.Historizing),
+                        StateStorage.EmitterStates,
+                        false,
+                        token));
+                }
+
+                if (pushData)
+                {
+                    pushTasks = pushTasks.Append(StateStorage.ReadExtractionStates(
+                        newStates.Where(state => state.Historizing),
+                        StateStorage.VariableStates,
+                        false,
+                        token));
+                }
+            }
+
+            pushTasks = pushTasks.ToList();
+            await Task.WhenAll(pushTasks);
+
+            if (initial)
+            {
+                trackedAssets.Set(objects.Count());
+                trackedTimeseres.Set(timeseries.Count());
+            }
+            else
+            {
+                trackedAssets.Inc(objects.Count());
+                trackedTimeseres.Inc(timeseries.Count());
+            }
 
             foreach (var state in newStates.Concat<BaseExtractionState>(EmitterStates.Values))
             {

@@ -383,7 +383,8 @@ namespace Test
 
                 await tester.TerminateRunTask();
 
-                states = tester.Extractor.NodeStates.Select(state => new InfluxBufferState(state.Value, false)).ToList();
+                states = tester.Extractor.NodeStates.Where(state => !state.Value.Historizing)
+                    .Select(state => new InfluxBufferState(state.Value, false)).ToList();
                 foreach (var state in states)
                 {
                     state.DestinationExtractedRange.Start = DateTime.MinValue;

@@ -32,19 +32,17 @@ namespace Cognite.OpcUa
         private readonly Extractor extractor;
         private readonly HistoryConfig config;
         private readonly DateTime historyStartTime;
-        private readonly IEnumerable<IPusher> pushers;
         private readonly TimeSpan historyGranularity;
 
         private bool aborting;
-        private int running = 0;
+        private int running;
 
         private static readonly ILogger log = Log.Logger.ForContext(typeof(HistoryReader));
-        public HistoryReader(UAClient uaClient, Extractor extractor, IEnumerable<IPusher> pushers, HistoryConfig config)
+        public HistoryReader(UAClient uaClient, Extractor extractor, HistoryConfig config)
         {
             this.config = config;
             this.uaClient = uaClient;
             this.extractor = extractor;
-            this.pushers = pushers;
             historyStartTime = DateTimeOffset.FromUnixTimeMilliseconds(config.StartTime).DateTime;
             historyGranularity = config.Granularity <= 0 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.Granularity);

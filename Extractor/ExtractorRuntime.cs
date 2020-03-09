@@ -103,6 +103,16 @@ namespace Cognite.OpcUa
             var client = new UAClient(config);
             int index = 0;
             IEnumerable<IPusher> pushers = config.Pushers.Select(pusher => pusher.ToPusher(index++, provider)).ToList();
+            await Task.WhenAll(pushers.Select(async pusher =>
+            {
+                var res = await pusher.TestConnection(config, source.Token);
+                if (!(res ?? false))
+                {
+                    pusher.DataFailing = true;
+                    pusher.EventsFailing = true;
+                }
+            }));
+
             log.Information("Building extractor");
             using var extractor = new Extractor(config, pushers, client);
 

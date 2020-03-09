@@ -121,17 +121,16 @@ namespace Test
         public static bool TestMetricValue(string name, double value)
         {
             Metrics.DefaultCollectorRegistry.TryGet(name, out var collector);
-            double? val = collector switch
+            double val = collector switch
             {
-                Gauge gauge => (double?)gauge.Value,
-                Counter counter => (double?)counter.Value,
-                _ => null
+                Gauge gauge => gauge.Value,
+                Counter counter => counter.Value,
+                _ => 0
             };
-            if (val == null) return false;
-            if (Math.Abs(val.Value - value) > 0.01)
+            if (Math.Abs(val - value) > 0.01)
             {
                 log.Information("Expected {val} but got {value} for metric {name}", 
-                    value, val.Value, name);
+                    value, val, name);
                 return false;
             }
 

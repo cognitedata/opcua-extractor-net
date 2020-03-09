@@ -55,6 +55,8 @@ namespace Test
                 MockMode = mode
             });
             tester.Config.Extraction.AllowStringVariables = false;
+
+            tester.Handler.AllowConnectionTest = mode != CDFMockHandler.MockMode.FailAsset;
             await tester.ClearPersistentData();
 
             log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
@@ -365,10 +367,9 @@ namespace Test
                 && ts.metadata != null
                 && ts.metadata["TS property 1"] == "test"
                 && ts.metadata["TS property 2"] == "123.2");
-            // Note that each pusher counts on the same metrics, so we would expect double values here.
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(8, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
             // 1 for root, 1 for MyObject, 1 for asset/timeseries properties
             Assert.Equal(3, (int)CommonTestUtils.GetMetricValue("opcua_browse_operations"));
         }
@@ -613,6 +614,45 @@ namespace Test
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 1));
+        }
+        [Fact]
+        [Trait("Server", "array")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "lateinit")]
+        public async Task TestLateInitialization()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                LogLevel = "debug",
+                QuitAfterMap = false,
+                StoreDatapoints = true,
+                ServerName = ServerName.Array
+            });
+            await tester.ClearPersistentData();
+            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.MaxArraySize = 4;
+
+            tester.Handler.BlockAllConnections = true;
+            tester.StartExtractor();
+
+            await tester.Extractor.WaitForNextPush();
+            // Since no pusher is available, expect history to not have been started
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 0));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 0));
+
+            Assert.True(tester.Extractor.NodeStates.Values.All(state => state.Historizing && !state.IsStreaming || state.IsStreaming));
+
+            Assert.Empty(tester.Handler.assets);
+            Assert.Empty(tester.Handler.timeseries);
+
+            tester.Handler.BlockAllConnections = false;
+
+            await tester.WaitForCondition(() => tester.Extractor.NodeStates.Values.All(state => state.IsStreaming), 20);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 5));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));
+
+            await tester.TerminateRunTask();
         }
     }
 }
