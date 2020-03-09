@@ -844,7 +844,8 @@ namespace Cognite.OpcUa
                 Description = ExtractorUtils.Truncate(node.Description, 500),
                 ExternalId = Extractor.GetUniqueId(node.Id),
                 Name = string.IsNullOrEmpty(node.DisplayName)
-                    ? ExtractorUtils.Truncate(Extractor.GetUniqueId(node.Id), 140) : ExtractorUtils.Truncate(node.DisplayName, 140)
+                    ? ExtractorUtils.Truncate(Extractor.GetUniqueId(node.Id), 140) : ExtractorUtils.Truncate(node.DisplayName, 140),
+                DataSetId = config.DataSetId
             };
             if (node.ParentId != null && !node.ParentId.IsNullNodeId)
             {
@@ -898,7 +899,8 @@ namespace Cognite.OpcUa
                 ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
                 Type = ExtractorUtils.Truncate(evt.MetaData.ContainsKey("Type")
                     ? Extractor.ConvertToString(evt.MetaData["Type"])
-                    : Extractor.GetUniqueId(evt.EventType), 64)
+                    : Extractor.GetUniqueId(evt.EventType), 64),
+                DataSetId = config.DataSetId
             };
             var finalMetaData = new Dictionary<string, string>();
             int len = 1;
