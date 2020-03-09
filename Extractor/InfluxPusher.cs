@@ -23,6 +23,7 @@ namespace Cognite.OpcUa
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
+        public bool NoInit { get; set; }
 
 
         private readonly InfluxClientConfig config;

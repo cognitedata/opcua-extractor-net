@@ -108,8 +108,7 @@ namespace Cognite.OpcUa
                 var res = await pusher.TestConnection(config, source.Token);
                 if (!(res ?? false))
                 {
-                    pusher.DataFailing = true;
-                    pusher.EventsFailing = true;
+                    pusher.NoInit = true;
                 }
             }));
 

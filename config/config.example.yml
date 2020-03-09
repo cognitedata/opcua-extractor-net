@@ -72,9 +72,6 @@ Pushers:
         Host: "https://api.cognitedata.com"
         # Debug mode, if true, Extractor will not push to target
         Debug: false
-        # False if this destination can be ignored on failed connection
-        # default is true, meaning the extractor will terminate if connection test fails
-        Critical: true
         # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
         NonFiniteReplacement:
         # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,

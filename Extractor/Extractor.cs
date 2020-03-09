@@ -976,12 +976,11 @@ namespace Cognite.OpcUa
         private async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries,
             IPusher pusher, bool initial, CancellationToken token)
         {
-            if (pusher.DataFailing || pusher.EventsFailing)
+            if (pusher.NoInit)
             {
                 log.Warning("Skipping pushing on pusher with index {idx}", pusher.Index);
                 pusher.Initialized = false;
-                pusher.DataFailing = true;
-                pusher.EventsFailing = true;
+                pusher.NoInit = false;
                 return;
             }
             var result = await pusher.PushNodes(objects, timeseries, token);

@@ -29,6 +29,7 @@ namespace Cognite.OpcUa
         bool DataFailing { get; set; }
         bool EventsFailing { get; set; }
         bool Initialized { get; set; }
+        bool NoInit { get; set; }
         PusherConfig BaseConfig { get; }
 
         /// <summary>

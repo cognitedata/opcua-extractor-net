@@ -48,7 +48,6 @@ namespace Cognite.OpcUa
     public abstract class PusherConfig
     {
         public bool Debug { get; set; } = false;
-        public bool Critical { get; set; } = true;
         public bool ReadExtractedRanges { get; set; } = true;
         public double? NonFiniteReplacement
         {
