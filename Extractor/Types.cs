@@ -20,7 +20,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Opc.Ua;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -472,14 +474,14 @@ namespace Cognite.OpcUa
             (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
             evt.EventId = txt;
             (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
-            evt.SourceNode = extractor.ExternalToNodeId[txt];
+            evt.SourceNode = extractor.State.GetNodeId(txt);
             long dt = BitConverter.ToInt64(bytes, next);
             next += sizeof(long);
             evt.Time = DateTime.FromBinary(dt);
             string eventType;
             (eventType, next) = ExtractorUtils.StringFromStorable(bytes, next);
             (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
-            evt.EmittingNode = extractor.GetEmitterState(txt).Id;
+            evt.EmittingNode = extractor.State.GetEmitterState(txt).Id;
             
             ushort count = BitConverter.ToUInt16(bytes, next);
             next += sizeof(ushort);
@@ -498,6 +500,207 @@ namespace Cognite.OpcUa
             }
 
             return (evt, next);
+        }
+    }
+    public class InternalId
+    {
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:Uri properties should not be strings",
+            Justification = "NamespaceUris are arbitrary")]
+        public string NamespaceUri { get; }
+        public object Identifier { get; }
+        public IdType IdType { get; }
+
+        private string externalId;
+        private NodeId nodeId;
+
+        public int Index { get; } = -1;
+
+        private readonly ExtractionConfig config;
+
+        private static readonly Regex idTypeRegex = new Regex(@"([g|i|b|s])=", RegexOptions.Singleline);
+        private static readonly Regex indexRegex = new Regex(@"\[([0-9]+)\]$");
+
+        public bool Invalid { get; }
+
+        public InternalId(NodeId id, UAClient uaClient, ExtractionConfig config, int index = -1)
+        {
+            if (id == null || id.IsNullNodeId)
+            {
+                Invalid = true;
+                return;
+            }
+            if (uaClient == null) throw new ArgumentNullException(nameof(uaClient));
+            this.config = config ?? throw new ArgumentNullException(nameof(config));
+            NamespaceUri = uaClient.GetNamespaceTable().GetString(id.NamespaceIndex);
+            Identifier = id.Identifier;
+            IdType = id.IdType;
+            Index = index;
+            nodeId = id;
+        }
+
+        public InternalId(string id, ExtractionConfig config)
+        {
+            if (id == null)
+            {
+                Invalid = true;
+                Log.Error("Invalid due to null id");
+                return;
+            }
+            this.config = config ?? throw new ArgumentNullException(nameof(config));
+
+            externalId = id;
+
+            int skip = config.IdPrefix.Length;
+            if (!id.StartsWith(config.IdPrefix, StringComparison.InvariantCulture))
+            {
+                skip += 7;
+            }
+
+            id = id.Substring(skip);
+
+            var idMatch = idTypeRegex.Match(id);
+            if (!idMatch.Success)
+            {
+                Log.Error("Invalid due to no match: {id}", id);
+                Invalid = true;
+                return;
+            }
+
+            IdType = FromSymbol(idMatch.Groups[1].Captures[0].Value.First());
+
+            var namespaceStr = id.Substring(0, idMatch.Index);
+            var map = config.NamespaceMap.FirstOrDefault(kvp => kvp.Value == namespaceStr);
+            NamespaceUri = map.Key ?? namespaceStr[..^1];
+
+            var idtStr = id.Substring(idMatch.Index + 2);
+            var idxMatch = indexRegex.Match(idtStr);
+            if (idxMatch.Success)
+            {
+                Index = Convert.ToInt32(idxMatch.Groups[1].Captures[0].Value, CultureInfo.InvariantCulture);
+                Identifier = idtStr.Substring(0, idtStr.Length - idxMatch.Length);
+            }
+            else
+            {
+                Index = -1;
+                Identifier = idtStr;
+            }
+
+        }
+
+        private static IdType FromSymbol(char symbol)
+        {
+            return symbol switch
+            {
+                'g' => IdType.Guid,
+                'i' => IdType.Numeric,
+                'b' => IdType.Opaque,
+                's' => IdType.String,
+                _ => IdType.String
+            };
+        }
+        private static char IdSymbol(IdType type)
+        {
+            return type switch
+            {
+                IdType.Guid => 'g',
+                IdType.Numeric => 'i',
+                IdType.Opaque => 'b',
+                IdType.String => 's',
+                _ => 's'
+            };
+        }
+
+        private static string SanitizeIdentifier(object idtf, IdType idType)
+        {
+            string id = IdentifierToString(idtf, idType).Replace("\n", "", StringComparison.InvariantCulture);
+            var idxMatch = indexRegex.Match(id);
+            if (idxMatch.Success)
+            {
+                id = id.Substring(0, id.Length - idxMatch.Length) + $"\\[{idxMatch.Groups[1].Captures[0].Value}\\]";
+            }
+
+            return id;
+        }
+
+        public string ToExternalId()
+        {
+            if (externalId != null) return externalId;
+            string prefix = config.NamespaceMap.TryGetValue(NamespaceUri, out string prefixNode) ? prefixNode : (NamespaceUri + ":");
+
+            string id = $"{config.IdPrefix}{prefix}{SanitizeIdentifier(Identifier, IdType)}";
+
+
+            if (Index > -1)
+            {
+                string idxString = $"[{Index}]";
+                if (id.Length > 255 - idxString.Length)
+                {
+                    id = id.Substring(0, 255 - idxString.Length) + idxString;
+                }
+            } else if (id.Length > 255)
+            {
+                id = id.Substring(0, 255);
+            }
+
+            externalId = id;
+            return id;
+        }
+
+        public NodeId ToNodeId(UAClient uaClient)
+        {
+            if (uaClient == null) throw new ArgumentNullException(nameof(uaClient));
+            if (nodeId != null) return nodeId;
+            return Invalid ? NodeId.Null : NodeId.Create(Identifier, NamespaceUri, uaClient.GetNamespaceTable());
+        }
+
+        public override string ToString()
+        {
+            return ToExternalId();
+        }
+
+        private static string IdentifierToString(object identifier, IdType idType)
+        {
+            switch (idType)
+            {
+                case IdType.Numeric:
+                    if (identifier == null)
+                    {
+                        return "i=0";
+                    }
+
+                    return $"i={identifier}";
+                case IdType.String:
+                    return $"s={identifier}";
+                case IdType.Guid:
+                    if (identifier == null)
+                    {
+                        return $"g={Guid.Empty}";
+                    }
+
+                    return $"g={identifier}";
+                case IdType.Opaque:
+                    if (identifier == null)
+                        return "b=";
+                    if (identifier is string)
+                    {
+                        return $"b={identifier}";
+                    }
+                    return $"b={Convert.ToBase64String((byte[]) identifier)}";
+                default:
+                    return "s=";
+            }
+        }
+
+        public override bool Equals(object other)
+        {
+            if (other == null || !(other is InternalId otherId) || otherId.Invalid) return false;
+
+            return otherId.ToExternalId() == ToExternalId();
+        }
+
+        public override int GetHashCode()
+        {
+            return ToExternalId().GetHashCode(StringComparison.InvariantCulture);
         }
     }
 }

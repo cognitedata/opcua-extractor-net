@@ -106,7 +106,7 @@ namespace Cognite.OpcUa
 
             foreach (var group in groups)
             {
-                var ts = Extractor.GetNodeState(group.Key);
+                var ts = Extractor.State.GetNodeState(group.Key);
                 if (ts == null) continue;
                 dataPointsCounter.Inc(group.Count());
                 ipoints.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
@@ -505,20 +505,18 @@ namespace Cognite.OpcUa
 
                 var name = series.SeriesName.Substring(7);
 
-                var baseKey = Extractor.ExternalToNodeId.Keys.FirstOrDefault(key =>
+                var baseKey = Extractor.State.AllActiveExternalIds.FirstOrDefault(key =>
                     name.StartsWith(key, StringComparison.InvariantCulture));
 
                 if (baseKey == null) continue;
 
-                baseKey = removeArrayRegex.Replace(baseKey, "");
-
-                var sourceNode = Extractor.ExternalToNodeId[baseKey];
+                var sourceNode = Extractor.State.GetNodeId(baseKey);
                 if (sourceNode == null) continue;
                 finalEvents.AddRange(series.Entries.Select(res =>
                 {
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
                     if (!(res is IDictionary<string, object> values)) return null;
-                    var emitter = Extractor.GetEmitterState((string)values["Emitter"]);
+                    var emitter = Extractor.State.GetEmitterState((string)values["Emitter"]);
                     if (emitter == null) return null;
                     var evt = new BufferedEvent
                     {

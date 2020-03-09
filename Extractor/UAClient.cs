@@ -1327,6 +1327,11 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Utils
+
+        public NamespaceTable GetNamespaceTable()
+        {
+            return Session.NamespaceUris;
+        }
         /// <summary>
         /// Converts an ExpandedNodeId into a NodeId using the Session
         /// </summary>
@@ -1429,7 +1434,7 @@ namespace Cognite.OpcUa
         /// <returns>Unique string representation</returns>
         public string GetUniqueId(ExpandedNodeId rNodeid, int index = -1)
         {
-            NodeId nodeId = (NodeId)rNodeid;
+            NodeId nodeId = ToNodeId(rNodeid);
             if (nodeId == null)
             {
                 nodeId = NodeId.Null;

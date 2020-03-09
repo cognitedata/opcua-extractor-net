@@ -160,7 +160,7 @@ namespace Test
                 var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database, 
                     "SELECT * FROM /events.gp.efg:i=1*/");
                 return read.Count > 0 && read.First().HasEntries &&
-                       tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming);
+                       tester.Extractor.State.EmitterStates.All(state => state.IsStreaming);
             }, 20, "Expected to get some events in influxdb");
 
             await tester.TerminateRunTask();
@@ -186,7 +186,7 @@ namespace Test
 
             await tester.Extractor.WaitForNextPush();
 
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.WaitForNextPush();
 
@@ -203,7 +203,7 @@ namespace Test
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.Any,
                 20, "FailureBuffer should be emptied");
 
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
             await tester.TerminateRunTask();
             
@@ -234,9 +234,9 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Extractor.GetNodeState("gp.efg:i=10") != null
-                    && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone
-                    && tester.Extractor.GetNodeState("gp.efg:i=10").IsStreaming,
+                    tester.Extractor.State.GetNodeState("gp.efg:i=10") != null
+                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").BackfillDone
+                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").IsStreaming,
                 20, "Expected backfill to terminate");
 
             await tester.TerminateRunTask();
@@ -261,8 +261,8 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Extractor.GetNodeState("gp.efg:i=10") != null
-                    && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone,
+                    tester.Extractor.State.GetNodeState("gp.efg:i=10") != null
+                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").BackfillDone,
                 20, "Expected backfill to terminate");
 
             await Task.Delay(2000);
@@ -276,8 +276,8 @@ namespace Test
             await Task.Delay(500);
 
             await tester.WaitForCondition(() =>
-                    tester.Extractor.GetNodeState("gp.efg:i=10") != null
-                    && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone,
+                    tester.Extractor.State.GetNodeState("gp.efg:i=10") != null
+                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").BackfillDone,
                 20, "Expected backfill to terminate");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 1));
@@ -304,8 +304,8 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(kvp =>
-                    !kvp.Value.Historizing || kvp.Value.BackfillDone && kvp.Value.IsStreaming),
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
+                    !state.Historizing || state.BackfillDone && state.IsStreaming),
                 60, "Expected backfill of events to terminate");
 
             await tester.TerminateRunTask();
@@ -332,8 +332,8 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(kvp =>
-                    !kvp.Value.Historizing || kvp.Value.BackfillDone && kvp.Value.IsStreaming),
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
+                    !state.Historizing || state.BackfillDone && state.IsStreaming),
                 60, "Expected backfill of events to terminate");
 
             await tester.Extractor.WaitForNextPush();
@@ -346,8 +346,8 @@ namespace Test
 
             await Task.Delay(500);
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(kvp =>
-                    !kvp.Value.Historizing || kvp.Value.BackfillDone && kvp.Value.IsStreaming),
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
+                    !state.Historizing || state.BackfillDone && state.IsStreaming),
                 60, "Expected backfill of events to terminate");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 1));

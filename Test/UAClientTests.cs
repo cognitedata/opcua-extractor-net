@@ -16,9 +16,12 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Opc.Ua;
+using Serilog;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -154,6 +157,53 @@ namespace Test
 
             await tester.TerminateRunTask(ex =>
                 ex is ExtractorFailureException || ex is AggregateException aex && aex.InnerException is ExtractorFailureException);
+        }
+
+        private void TestOPCUAId(ExtractorTester tester, InternalId id, NodeId rawId)
+        {
+            Log.Information($"\"{id.ToExternalId()}\"");
+            Assert.Equal(rawId.Identifier, id.Identifier);
+            Assert.Equal(rawId.IdType, id.IdType);
+            Assert.Equal(rawId, id.ToNodeId(tester.UAClient));
+            Assert.Equal(id, new InternalId(id.ToExternalId(), tester.Config.Extraction));
+        }
+        [Fact]
+        [Trait("Server", "basic")]
+        [Trait("Target", "InternalId")]
+        [Trait("Test", "internalid")]
+        public async Task TestNodeIdConversion()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                QuitAfterMap = true
+            });
+            tester.Config.History.Enabled = false;
+            await tester.ClearPersistentData();
+            tester.StartExtractor();
+            await tester.TerminateRunTask();
+
+            var identifiers = new List<object>()
+            {
+                "identifier",
+                123U,
+                new byte[] {1, 2, 3, 4},
+                "identifier[123]",
+                new Guid(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+            };
+
+            foreach (var identifier in identifiers)
+            {
+                var rawId = NodeId.Create(identifier, "http://examples.freeopcua.github.io", tester.UAClient.GetNamespaceTable());
+                var id = new InternalId(rawId, tester.UAClient, tester.Config.Extraction);
+                TestOPCUAId(tester, id, rawId);
+            }
+
+            foreach (var identifier in identifiers)
+            {
+                var rawId = NodeId.Create(identifier, "urn:freeopcua:python:server", tester.UAClient.GetNamespaceTable());
+                var id = new InternalId(rawId, tester.UAClient, tester.Config.Extraction, 0);
+                TestOPCUAId(tester, id, rawId);
+            }
         }
     }
 }

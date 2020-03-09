@@ -149,7 +149,7 @@ namespace Cognite.OpcUa
                 || !pointRanges.Any()) return true;
 
             points = points.GroupBy(pt => pt.Id)
-                .Where(group => !extractor.GetNodeState(group.Key).Historizing)
+                .Where(group => !extractor.State.GetNodeState(group.Key).Historizing)
                 .SelectMany(group => group)
                 .ToList();
 
@@ -174,7 +174,7 @@ namespace Cognite.OpcUa
                         {
                             if (!nodeBufferStates.ContainsKey(key))
                             {
-                                var state = extractor.GetNodeState(key);
+                                var state = extractor.State.GetNodeState(key);
                                 if (state.Historizing) continue;
                                 nodeBufferStates[key] = new InfluxBufferState(state, false);
                             }
@@ -283,7 +283,7 @@ namespace Cognite.OpcUa
             if (events == null || !events.Any() || pushers == null || !pushers.Any()) return true;
 
             events = events.GroupBy(evt => evt.EmittingNode)
-                .Where(group => !extractor.GetEmitterState(group.Key).Historizing)
+                .Where(group => !extractor.State.GetEmitterState(group.Key).Historizing)
                 .SelectMany(group => group)
                 .ToList();
 
@@ -330,7 +330,7 @@ namespace Cognite.OpcUa
                         {
                             if (!eventBufferStates.ContainsKey(sourceId))
                             {
-                                eventBufferStates[sourceId] = new InfluxBufferState(extractor.ExternalToNodeId[sourceId]);
+                                eventBufferStates[sourceId] = new InfluxBufferState(extractor.State.GetNodeId(sourceId));
                             }
                             eventBufferStates[sourceId].UpdateDestinationRange(range);
                         }
@@ -479,7 +479,7 @@ namespace Cognite.OpcUa
 
                 foreach (var kvp in ranges)
                 {
-                    var state = extractor.GetNodeState(kvp.Key);
+                    var state = extractor.State.GetNodeState(kvp.Key);
                     state.UpdateDestinationRange(kvp.Value);
                 }
 
@@ -544,7 +544,7 @@ namespace Cognite.OpcUa
 
                 foreach (var kvp in ranges)
                 {
-                    var state = extractor.GetEmitterState(kvp.Key);
+                    var state = extractor.State.GetEmitterState(kvp.Key);
                     state.UpdateDestinationRange(kvp.Value);
                 }
 

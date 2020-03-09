@@ -50,7 +50,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Count > 20 &&
-                    tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming),
+                    tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
                 40, "Expected history read to finish");
 
 
@@ -100,7 +100,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming),
+                    && tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
                 40, "Expected history read to finish");
 
             await tester.Extractor.WaitForNextPush();
@@ -112,7 +112,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming)
+                    && tester.Extractor.State.EmitterStates.All(state => state.IsStreaming)
                     && tester.Handler.events.Count > lastCount,
                 40, "Expected number of events to be increasing");
 
@@ -272,7 +272,7 @@ namespace Test
             tester.StartExtractor();
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Any()
-                    && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
+                    && tester.Extractor.State.EmitterStates.All(state => state.BackfillDone),
                 40, "Expected backfill to finish");
 
             await tester.Extractor.WaitForNextPush();
@@ -342,7 +342,7 @@ namespace Test
             tester.StartExtractor();
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
+                    && tester.Extractor.State.EmitterStates.All(state => state.BackfillDone),
                 40, "Expected backfill to finish");
 
             await tester.WaitForCondition(() =>
@@ -372,8 +372,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
-                20, "Expected backfill to finish"); 
+                    && tester.Extractor.State.EmitterStates.All(state => state.BackfillDone),
+                20, "Expected backfill to finish");
             
             await tester.TerminateRunTask();
 

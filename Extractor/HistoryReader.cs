@@ -66,7 +66,7 @@ namespace Cognite.OpcUa
             }
 
             if (data.DataValues == null) return 0;
-            var nodeState = extractor.GetNodeState(nodeid);
+            var nodeState = extractor.State.GetNodeState(nodeid);
 
             string uniqueId = uaClient.GetUniqueId(nodeid);
 
@@ -94,7 +94,7 @@ namespace Cognite.OpcUa
                     continue;
                 }
 
-                var buffDps = extractor.ToDataPoint(datapoint, nodeState, uniqueId);
+                var buffDps = extractor.Streamer.ToDataPoint(datapoint, nodeState, uniqueId);
                 foreach (var buffDp in buffDps)
                 {
                     log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
@@ -102,7 +102,7 @@ namespace Cognite.OpcUa
                 }
                 foreach (var buffDp in buffDps)
                 {
-                    extractor.DataPointQueue.Enqueue(buffDp);
+                    extractor.Streamer.DataPointQueue.Enqueue(buffDp);
                 }
             }
 
@@ -113,7 +113,7 @@ namespace Cognite.OpcUa
             {
                 foreach (var dp in dplist)
                 {
-                    extractor.DataPointQueue.Enqueue(dp);
+                    extractor.Streamer.DataPointQueue.Enqueue(dp);
                 }
             }
 
@@ -148,14 +148,14 @@ namespace Cognite.OpcUa
                 return 0;
             }
             if (evts.Events == null) return 0;
-            var emitterState = extractor.GetEmitterState(nodeid);
+            var emitterState = extractor.State.GetEmitterState(nodeid);
             int cnt = 0;
 
             var range = new TimeRange(DateTime.MaxValue, DateTime.MinValue);
 
             foreach (var evt in evts.Events)
             {
-                var buffEvt = extractor.ConstructEvent(filter, evt.EventFields, nodeid);
+                var buffEvt = extractor.Streamer.ConstructEvent(filter, evt.EventFields, nodeid);
                 if (buffEvt == null) continue;
 
                 if (buffEvt.Time < range.Start)
@@ -168,7 +168,7 @@ namespace Cognite.OpcUa
                     range.End = buffEvt.Time;
                 }
 
-                extractor.EventQueue.Enqueue(buffEvt);
+                extractor.Streamer.EventQueue.Enqueue(buffEvt);
                 cnt++;
             }
 
@@ -187,7 +187,7 @@ namespace Cognite.OpcUa
             var buffered = emitterState.FlushBuffer();
             foreach (var evt in buffered)
             { 
-                extractor.EventQueue.Enqueue(evt);
+                extractor.Streamer.EventQueue.Enqueue(evt);
             }
             return cnt;
         }

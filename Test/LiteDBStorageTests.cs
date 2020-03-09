@@ -37,7 +37,7 @@ namespace Test
 
             await tester.Extractor.WaitForNextPush();
 
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.WaitForNextPush();
 
@@ -53,7 +53,7 @@ namespace Test
             await tester.WaitForCondition(() => !tester.Extractor.StateStorage.AnyPoints,
                 20, "FailureBuffer should be emptied");
 
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.WaitForNextPush();
 
@@ -89,7 +89,7 @@ namespace Test
 
             await tester.Extractor.WaitForNextPush();
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.WaitForNextPush();
 
@@ -116,7 +116,7 @@ namespace Test
             await tester.WaitForCondition(() => !tester.Extractor.StateStorage.AnyEvents,
                 20, "FailureBuffer should be emptied");
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.WaitForNextPush();
 
@@ -168,7 +168,7 @@ namespace Test
 
             await tester.Extractor.WaitForNextPush();
 
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.WaitForNextPush();
 
@@ -185,7 +185,7 @@ namespace Test
             await tester.WaitForCondition(() => !tester.Extractor.StateStorage.AnyPoints,
                 20, "FailureBuffer should be emptied");
 
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.WaitForNextPush();
 
@@ -217,24 +217,24 @@ namespace Test
 
                 tester.StartExtractor();
 
-                await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state =>
-                        !state.Value.Historizing
-                        || state.Value.BackfillDone
-                        && state.Value.IsStreaming),
+                await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state =>
+                        !state.Historizing
+                        || state.BackfillDone
+                        && state.IsStreaming),
                     20, "Expected history to complete");
 
-                await tester.WaitForCondition(() => tester.Extractor.NodeStates.Any(state => state.Value.IsDirty),
+                await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.Any(state => state.IsDirty),
                     20, "Expected states to become dirty");
 
-                await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => 
-                        !state.Value.Historizing || state.Value.StatePersisted),
+                await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => 
+                        !state.Historizing || state.StatePersisted),
                     20, "Expected states to become clean again");
 
                 await tester.Extractor.WaitForNextPush();
 
                 await tester.TerminateRunTask();
 
-                var dummyStates = tester.Extractor.NodeStates.Select(state => new InfluxBufferState(state.Value, false))
+                var dummyStates = tester.Extractor.State.NodeStates.Select(state => new InfluxBufferState(state, false))
                     .ToList();
 
                 foreach (var state in dummyStates)
@@ -263,8 +263,8 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
 
             tester2.StartExtractor();
-            await tester2.WaitForCondition(() => tester2.Extractor.NodeStates.All(state => !state.Value.Historizing
-                    || state.Value.BackfillDone && state.Value.IsStreaming),
+            await tester2.WaitForCondition(() => tester2.Extractor.State.NodeStates.All(state => !state.Historizing
+                    || state.BackfillDone && state.IsStreaming),
                 20, "Expected history to complete");
             await tester2.Extractor.WaitForNextPush();
 
@@ -294,22 +294,22 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(state => !state.Value.Historizing
-                    || state.Value.BackfillDone && state.Value.IsStreaming),
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => !state.Historizing
+                    || state.BackfillDone && state.IsStreaming),
                 20, "Expected history to complete");
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.ToList().Any(state => state.Value.IsDirty),
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.Any(state => state.IsDirty),
                 20, "Expected states to become dirty");
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.ToList().Any(state =>
-                    !state.Value.Historizing || state.Value.StatePersisted),
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.Any(state =>
+                    !state.Historizing || state.StatePersisted),
                 20, "Expected states to be persisted");
 
             await tester.Extractor.WaitForNextPush();
 
             await tester.TerminateRunTask();
 
-            var dummyStates = tester.Extractor.EmitterStates.Select(state => new InfluxBufferState(state.Value.Id)).ToList();
+            var dummyStates = tester.Extractor.State.EmitterStates.Select(state => new InfluxBufferState(state.Id)).ToList();
 
             foreach (var state in dummyStates)
             {
@@ -337,8 +337,8 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
 
             tester2.StartExtractor();
-            await tester2.WaitForCondition(() => tester.Extractor.EmitterStates.All(state => !state.Value.Historizing
-                    || state.Value.BackfillDone && state.Value.IsStreaming),
+            await tester2.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => !state.Historizing
+                    || state.BackfillDone && state.IsStreaming),
                 20, "Expected history to complete");
             await tester2.Extractor.WaitForNextPush();
 
@@ -383,8 +383,8 @@ namespace Test
 
                 await tester.TerminateRunTask();
 
-                states = tester.Extractor.NodeStates.Where(state => !state.Value.Historizing)
-                    .Select(state => new InfluxBufferState(state.Value, false)).ToList();
+                states = tester.Extractor.State.NodeStates.Where(state => !state.Historizing)
+                    .Select(state => new InfluxBufferState(state, false)).ToList();
                 foreach (var state in states)
                 {
                     state.DestinationExtractedRange.Start = DateTime.MinValue;
@@ -469,7 +469,7 @@ namespace Test
 
                 await tester.TerminateRunTask();
 
-                states = tester.Extractor.ExternalToNodeId.Select(state => new InfluxBufferState(state.Value)).ToList();
+                states = tester.Extractor.State.AllActiveIds.Select(state => new InfluxBufferState(state)).ToList();
                 foreach (var state in states)
                 {
                     state.DestinationExtractedRange.Start = DateTime.MinValue;
@@ -536,7 +536,7 @@ namespace Test
 
             var evt = new BufferedEvent
             {
-                EmittingNode = tester.Extractor.EmitterStates.First().Key,
+                EmittingNode = tester.Extractor.State.EmitterStates.First().Id,
                 EventId = "123456789",
                 EventType = new NodeId("test", 1),
                 Message = "msg",
@@ -545,19 +545,19 @@ namespace Test
                     ["dt1"] = "data1",
                     ["dt2"] = "data2"
                 },
-                SourceNode = tester.Extractor.ExternalToNodeId.First().Value,
+                SourceNode = tester.Extractor.State.AllActiveIds.First(),
                 ReceivedTime = DateTime.Now,
                 Time = DateTime.Now
             };
 
             var evt2 = new BufferedEvent
             {
-                EmittingNode = tester.Extractor.EmitterStates.First().Key,
+                EmittingNode = tester.Extractor.State.EmitterStates.First().Id,
                 EventId = "123456789",
                 EventType = new NodeId("test", 1),
                 Message = null,
                 MetaData = new Dictionary<string, object>(),
-                SourceNode = tester.Extractor.ExternalToNodeId.First().Value,
+                SourceNode = tester.Extractor.State.AllActiveIds.First(),
                 ReceivedTime = DateTime.Now,
                 Time = DateTime.Now
             };
@@ -692,7 +692,7 @@ namespace Test
             {
                 evts.Add(new BufferedEvent
                 {
-                    EmittingNode = tester.Extractor.EmitterStates.First().Key,
+                    EmittingNode = tester.Extractor.State.EmitterStates.First().Id,
                     EventId = "id " + i,
                     EventType = new NodeId("test", 1),
                     Message = "msg " + i,
@@ -701,7 +701,7 @@ namespace Test
                         ["dt1"] = "data1",
                         ["dt2"] = "data2"
                     },
-                    SourceNode = tester.Extractor.ExternalToNodeId.First().Value,
+                    SourceNode = tester.Extractor.State.AllActiveIds.First(),
                     ReceivedTime = DateTime.Now,
                     Time = DateTime.Now
                 });
@@ -764,7 +764,7 @@ namespace Test
 
             await tester.Extractor.WaitForNextPush();
 
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.WaitForNextPush();
 
@@ -780,7 +780,7 @@ namespace Test
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.Any,
                 20, "FailureBuffer should be emptied");
 
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.WaitForNextPush();
 
@@ -815,7 +815,7 @@ namespace Test
 
             await tester.Extractor.WaitForNextPush();
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.WaitForNextPush();
 
@@ -842,7 +842,7 @@ namespace Test
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.AnyEvents,
                 20, "FailureBuffer should be emptied");
 
-            await tester.WaitForCondition(() => tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.WaitForNextPush();
 

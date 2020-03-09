@@ -576,7 +576,7 @@ namespace Cognite.OpcUa
 
             foreach (var id in ids)
             {
-                var state = Extractor.GetNodeState(id);
+                var state = Extractor.State.GetNodeState(id);
                 state.InitExtractedRange(ranges[id].Start, ranges[id].End);
             }
 
@@ -748,7 +748,7 @@ namespace Cognite.OpcUa
                 log.Information("Found {NumRetrievedTimeseries} timeseries", readResults.Count());
                 foreach (var res in readResults)
                 {
-                    var state = Extractor.GetNodeState(res.ExternalId);
+                    var state = Extractor.State.GetNodeState(res.ExternalId);
                     if (state.DataType.IsString != res.IsString)
                     {
                         mismatchedTimeseries.Add(res.ExternalId);
@@ -789,7 +789,7 @@ namespace Cognite.OpcUa
 
             foreach (var res in remainingResults)
             {
-                var state = Extractor.GetNodeState(res.ExternalId);
+                var state = Extractor.State.GetNodeState(res.ExternalId);
                 if (state.DataType.IsString != res.IsString)
                 {
                     log.Warning("Mismatched timeseries: {id}. "
