@@ -348,7 +348,7 @@ NUGET
       System.Net.WebSockets.Client (>= 4.3.2) - restriction: && (< net46) (>= netstandard2.0)
       System.Reflection.TypeExtensions (>= 4.4) - restriction: && (< net46) (>= netstandard2.0)
       System.ServiceModel.Primitives (>= 4.5.3) - restriction: && (< net46) (>= netstandard2.0)
-    Oryx (1.0.0-beta-002) - restriction: >= netstandard2.0
+    Oryx (1.0.0-beta-001)
       FSharp.Core (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.Logging (>= 3.1.1) - restriction: >= netstandard2.0
       TaskBuilder.fs (>= 2.1) - restriction: >= netstandard2.0
@@ -361,14 +361,14 @@ NUGET
       Oryx.SystemTextJson (>= 1.0.0-beta-001) - restriction: >= netstandard2.0
       System.Text.Json (>= 4.7.1) - restriction: >= netstandard2.0
       TaskBuilder.fs (>= 2.1) - restriction: >= netstandard2.0
-    Oryx.Protobuf (1.0.0-beta-002) - restriction: >= netstandard2.0
+    Oryx.Protobuf (1.0.0-beta-001) - restriction: >= netstandard2.0
       FSharp.Core (>= 4.7) - restriction: >= netstandard2.0
       Google.Protobuf (>= 3.11.3) - restriction: >= netstandard2.0
-      Oryx (>= 1.0.0-beta-002) - restriction: >= netstandard2.0
+      Oryx (>= 1.0.0-beta-001) - restriction: >= netstandard2.0
       TaskBuilder.fs (>= 2.1) - restriction: >= netstandard2.0
-    Oryx.SystemTextJson (1.0.0-beta-002) - restriction: >= netstandard2.0
+    Oryx.SystemTextJson (1.0.0-beta-001) - restriction: >= netstandard2.0
       FSharp.Core (>= 4.7) - restriction: >= netstandard2.0
-      Oryx (>= 1.0.0-beta-002) - restriction: >= netstandard2.0
+      Oryx (>= 1.0.0-beta-001) - restriction: >= netstandard2.0
       System.Text.Json (>= 4.7) - restriction: >= netstandard2.0
       TaskBuilder.fs (>= 2.1) - restriction: >= netstandard2.0
     Polly (7.2) - restriction: >= netstandard2.0
