@@ -25,10 +25,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Com.Cognite.V1.Timeseries.Proto;
 using CogniteSdk;
-using CogniteSdk.Assets;
-using CogniteSdk.TimeSeries;
-using CogniteSdk.DataPoints;
-using CogniteSdk.Events;
 using CogniteSdk.Login;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
@@ -77,7 +73,7 @@ namespace Cognite.OpcUa
                 .AddHeader("api-key", config.ApiKey)
                 .SetAppId("OPC-UA Extractor")
                 .SetProject(config.Project)
-                .SetServiceUrl(new Uri(config.Host, UriKind.Absolute))
+                .SetBaseUrl(new Uri(config.Host, UriKind.Absolute))
                 .Build();
         }
 
@@ -300,7 +296,7 @@ namespace Cognite.OpcUa
         private async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
             var client = GetClient("Data");
-            IEnumerable<EventWriteDto> eventEntities = events.Select(EventToCDFEvent).DistinctBy(evt => evt.ExternalId).ToList();
+            IEnumerable<EventCreate> eventEntities = events.Select(EventToCDFEvent).DistinctBy(evt => evt.ExternalId).ToList();
             var count = events.Count();
             try
             {
@@ -474,10 +470,10 @@ namespace Cognite.OpcUa
         private async Task<IEnumerable<(string, DateTime)>> GetLatestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
         {
             var client = GetClient();
-            IEnumerable<DataPointsReadDto<DataPointDto>> dps;
+            IEnumerable<DataPointsItem<DataPoint>> dps;
             try
             {
-                dps = await client.DataPoints.LatestAsync(new DataPointsLatestQueryDto
+                dps = await client.DataPoints.LatestAsync(new DataPointsLatestQuery
                 {
                     Items = ids.Select(IdentityWithBefore.Create)
                 }, token);
@@ -591,7 +587,7 @@ namespace Cognite.OpcUa
             if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
             // Use data client because it gives up after a little while
             var client = GetClient("Data");
-            LoginStatusReadDto loginStatus;
+            LoginStatus loginStatus;
             try
             {
                 loginStatus = await client.Login.StatusAsync(token);
@@ -616,7 +612,7 @@ namespace Cognite.OpcUa
 
             try
             {
-                await client.TimeSeries.ListAsync(new TimeSeriesQueryDto { Limit = 1 }, token);
+                await client.TimeSeries.ListAsync(new TimeSeriesQuery { Limit = 1 }, token);
             }
             catch (ResponseException ex)
             {
@@ -634,7 +630,7 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    await client.Events.ListAsync(new EventQueryDto {Limit = 1}, token);
+                    await client.Events.ListAsync(new EventQuery { Limit = 1 }, token);
                 }
                 catch (ResponseException ex)
                 {
@@ -808,10 +804,10 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="variable">Variable to be converted</param>
         /// <returns>Complete timeseries write poco</returns>
-        private TimeSeriesWriteDto VariableToTimeseries(BufferedVariable variable)
+        private TimeSeriesCreate VariableToTimeseries(BufferedVariable variable)
         {
             string externalId = Extractor.GetUniqueId(variable.Id, variable.Index);
-            var writePoco = new TimeSeriesWriteDto
+            var writePoco = new TimeSeriesCreate
             {
                 Description = ExtractorUtils.Truncate(variable.Description, 1000),
                 ExternalId = externalId,
@@ -819,7 +815,8 @@ namespace Cognite.OpcUa
                 Name = ExtractorUtils.Truncate(variable.DisplayName, 255),
                 LegacyName = externalId,
                 IsString = variable.DataType.IsString,
-                IsStep = variable.DataType.IsStep
+                IsStep = variable.DataType.IsStep,
+                DataSetId = config.DataSetId
             };
             if (variable.Properties != null && variable.Properties.Any())
             {
@@ -835,14 +832,15 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="node">Node to be converted</param>
         /// <returns>Full asset write poco</returns>
-        private AssetWriteDto NodeToAsset(BufferedNode node)
+        private AssetCreate NodeToAsset(BufferedNode node)
         {
-            var writePoco = new AssetWriteDto
+            var writePoco = new AssetCreate
             {
                 Description = ExtractorUtils.Truncate(node.Description, 500),
                 ExternalId = Extractor.GetUniqueId(node.Id),
                 Name = string.IsNullOrEmpty(node.DisplayName)
-                    ? ExtractorUtils.Truncate(Extractor.GetUniqueId(node.Id), 140) : ExtractorUtils.Truncate(node.DisplayName, 140)
+                    ? ExtractorUtils.Truncate(Extractor.GetUniqueId(node.Id), 140) : ExtractorUtils.Truncate(node.DisplayName, 140),
+                DataSetId = config.DataSetId
             };
             if (node.ParentId != null && !node.ParentId.IsNullNodeId)
             {
@@ -881,9 +879,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="evt">Event to be transformed.</param>
         /// <returns>Final EventEntity object</returns>
-        private EventWriteDto EventToCDFEvent(BufferedEvent evt)
+        private EventCreate EventToCDFEvent(BufferedEvent evt)
         {
-            var entity = new EventWriteDto
+            var entity = new EventCreate
             {
                 Description = ExtractorUtils.Truncate(evt.Message, 500),
                 StartTime = evt.MetaData.ContainsKey("StartTime")
@@ -896,7 +894,8 @@ namespace Cognite.OpcUa
                 ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
                 Type = ExtractorUtils.Truncate(evt.MetaData.ContainsKey("Type")
                     ? Extractor.ConvertToString(evt.MetaData["Type"])
-                    : Extractor.GetUniqueId(evt.EventType), 64)
+                    : Extractor.GetUniqueId(evt.EventType), 64),
+                DataSetId = config.DataSetId
             };
             var finalMetaData = new Dictionary<string, string>();
             int len = 1;

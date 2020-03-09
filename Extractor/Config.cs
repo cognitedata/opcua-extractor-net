@@ -66,7 +66,7 @@ namespace Cognite.OpcUa
         {
             return new CDFPusher(provider, this) {Index = index};
         }
-
+        public long? DataSetId { get; set; }
         public int EarliestChunk { get; set; } = 1000;
         // Limits can change without notice in CDF API end-points.
         // The limit on number of time series on the "latest" end-point is currently 100.
