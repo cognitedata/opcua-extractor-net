@@ -43,6 +43,9 @@ namespace Cognite.OpcUa
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
 
+        private readonly ConcurrentDictionary<(NodeId, int), BufferedNode> activeNodes =
+            new ConcurrentDictionary<(NodeId, int), BufferedNode>();
+
         // Concurrent reading of properties
         private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
         private readonly object propertySetLock = new object();
@@ -101,6 +104,12 @@ namespace Cognite.OpcUa
         public static readonly Gauge Starting = Metrics
             .CreateGauge("opcua_extractor_starting", "1 if the extractor is in the startup phase");
 
+        private static readonly Gauge trackedAssets = Metrics
+            .CreateGauge("opcua_tracked_assets", "Number of objects on the opcua server mapped to assets");
+
+        private static readonly Gauge trackedTimeseres = Metrics
+            .CreateGauge("opcua_tracked_timeseries", "Number of variables on the opcua server mapped to timeseries");
+
         private static readonly ILogger log = Log.Logger.ForContext(typeof(Extractor));
 
         /// <summary>
@@ -124,7 +133,7 @@ namespace Cognite.OpcUa
                 FailureBuffer = new FailureBuffer(config, this);
             }
             this.uaClient.Extractor = this;
-            historyReader = new HistoryReader(uaClient, this, pushers, config.History);
+            historyReader = new HistoryReader(uaClient, this, config.History);
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
             if (config.Extraction.IdPrefix == "events.")
             {
@@ -203,15 +212,6 @@ namespace Cognite.OpcUa
             if (config.FailureBuffer.Enabled)
             {
                 await FailureBuffer.InitializeBufferStates(NodeStates.Values, ExternalToNodeId.Values, token);
-                if (FailureBuffer.Any)
-                {
-                    await FailureBuffer.ReadDatapoints(pushers, token);
-                }
-
-                if (FailureBuffer.AnyEvents)
-                {
-                    await FailureBuffer.ReadEvents(pushers, token);
-                }
             }
 
             Pushing = true;
@@ -473,7 +473,8 @@ namespace Cognite.OpcUa
             }));
         }
 
-        private async Task<bool> PushDataPoints(CancellationToken token)
+        private async Task<bool> PushDataPoints(IEnumerable<IPusher> passingPushers,
+            IEnumerable<IPusher> failingPushers, CancellationToken token)
         {
             if (!pushData) return false;
 
@@ -502,72 +503,74 @@ namespace Cognite.OpcUa
                 }
             }
 
-            var results = await Task.WhenAll(pushers.Select(pusher =>
-                pusher.DataFailing ? pusher.TestConnection(config, token) : pusher.PushDataPoints(dataPointList, token)));
+            var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
 
-            if (results.Any(status => status == false))
+            var anyFailed = results.Any(status => status == false);
+
+            if (anyFailed || failingPushers.Any())
             {
-                var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
-                var failedPushers = new List<IPusher>();
-                foreach (var pair in failed)
+                List<IPusher> failedPushers = new List<IPusher>();
+                if (anyFailed)
                 {
-                    var pusher = pushers.ElementAt(pair.Index);
-                    pusher.DataFailing = true;
-                    failedPushers.Add(pusher);
+                    var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
+                    foreach (var pair in failed)
+                    {
+                        var pusher = passingPushers.ElementAt(pair.Index);
+                        pusher.DataFailing = true;
+                        failedPushers.Add(pusher);
+                    }
                 }
-
                 if (config.FailureBuffer.Enabled)
                 {
-                    await FailureBuffer.WriteDatapoints(dataPointList, pointRanges, failedPushers, token);
+                    await FailureBuffer.WriteDatapoints(dataPointList, pointRanges, failingPushers.Concat(failedPushers), token);
+                }
+
+                return false;
+            }
+            var reconnectedPushers = passingPushers.Where(pusher => pusher.DataFailing).ToList();
+            if (reconnectedPushers.Any())
+            {
+                // Try to push any non-historizing points
+                var nonHistorizing = pointRanges.Keys.Where(key => !GetNodeState(key).Historizing).ToHashSet();
+                var pointsToPush = dataPointList.Where(point => nonHistorizing.Contains(point.Id)).ToList();
+                var pushResults = await Task.WhenAll(reconnectedPushers.Select(pusher => pusher.PushDataPoints(pointsToPush, token)));
+
+                // Here we are fine with "null" result. Not ideal, but it is what it is.
+                // In theory we might end up in an expensive loop, but the connection tests should be designed so that
+                // success there implies success otherwise.
+                if (!pushResults.All(res => res == null || res == true)) return false;
+
+                if (config.History.Enabled)
+                {
+                    bool success = await historyReader.Terminate(token, 30);
+                    if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
+                    foreach (var state in NodeStates.Values.Where(state => state.Historizing))
+                    {
+                        state.RestartHistory();
+                    }
+                    restartHistory = true;
+                }
+
+                foreach (var pusher in reconnectedPushers)
+                {
+                    pusher.DataFailing = false;
                 }
 
             }
-            else
+            if (config.FailureBuffer.Enabled && FailureBuffer.Any)
             {
-                var failedPushers = pushers.Where(pusher => pusher.DataFailing).ToList();
-                if (failedPushers.Any())
-                {
-                    // Try to push any non-historizing points
-                    var nonHistorizing = pointRanges.Keys.Where(key => !GetNodeState(key).Historizing).ToHashSet();
-                    var pointsToPush = dataPointList.Where(point => nonHistorizing.Contains(point.Id)).ToList();
-                    var pushResults = await Task.WhenAll(failedPushers.Select(pusher => pusher.PushDataPoints(pointsToPush, token)));
-
-                    // Here we are fine with "null" result. Not ideal, but it is what it is.
-                    // In theory we might end up in an expensive loop, but the connection tests should be designed so that
-                    // success there implies success otherwise.
-                    if (!pushResults.All(res => res == null || res == true)) return false;
-
-                    if (config.History.Enabled)
-                    {
-                        bool success = await historyReader.Terminate(token, 30);
-                        if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
-                        foreach (var state in NodeStates.Values.Where(state => state.Historizing))
-                        {
-                            state.RestartHistory();
-                        }
-                        restartHistory = true;
-                    }
-
-                    foreach (var pusher in failedPushers)
-                    {
-                        pusher.DataFailing = false;
-                    }
-
-                }
-                if (config.FailureBuffer.Enabled && FailureBuffer.Any)
-                {
-                    await FailureBuffer.ReadDatapoints(pushers, token);
-                }
-                foreach (var kvp in pointRanges)
-                {
-                    var state = GetNodeState(kvp.Key);
-                    state.UpdateDestinationRange(kvp.Value);
-                }
+                await FailureBuffer.ReadDatapoints(passingPushers, token);
+            }
+            foreach (var kvp in pointRanges)
+            {
+                var state = GetNodeState(kvp.Key);
+                state.UpdateDestinationRange(kvp.Value);
             }
             return restartHistory;
         }
 
-        private async Task<bool> PushEvents(CancellationToken token)
+        private async Task<bool> PushEvents(IEnumerable<IPusher> passingPushers,
+            IEnumerable<IPusher> failingPushers, CancellationToken token)
         {
             if (!pushEvents) return false;
             var eventList = new List<BufferedEvent>();
@@ -594,83 +597,123 @@ namespace Cognite.OpcUa
                     range.End = evt.Time;
                 }
             }
-            var results = await Task.WhenAll(pushers.Select(pusher =>
-                pusher.EventsFailing ? pusher.TestConnection(config, token) : pusher.PushEvents(eventList, token)));
-            if (results.Any(failed => failed == false))
+            var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));
+
+            var anyFailed = results.Any(status => status == false);
+
+            if (anyFailed || failingPushers.Any())
             {
-                var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
                 var failedPushers = new List<IPusher>();
-                foreach (var pair in failed)
+                if (anyFailed)
                 {
-                    var pusher = pushers.ElementAt(pair.Index);
-                    pusher.EventsFailing = true;
-                    failedPushers.Add(pusher);
+                    var failed = results.Select((res, idx) => (result: res, Index: idx)).Where(x => x.result == false).ToList();
+                    foreach (var pair in failed)
+                    {
+                        var pusher = passingPushers.ElementAt(pair.Index);
+                        pusher.EventsFailing = true;
+                        failedPushers.Add(pusher);
+                    }
                 }
 
                 if (config.FailureBuffer.Enabled)
                 {
-                    await FailureBuffer.WriteEvents(eventList, failedPushers, token);
+                    await FailureBuffer.WriteEvents(eventList, failedPushers.Concat(failingPushers), token);
                 }
+
+                return false;
             }
-            else
+            var reconnectedPushers = passingPushers.Where(pusher => pusher.EventsFailing).ToList();
+            if (reconnectedPushers.Any())
             {
-                var failedPushers = pushers.Where(pusher => pusher.EventsFailing).ToList();
-                if (failedPushers.Any())
+                // Try to push any non-historizing points
+                var nonHistorizing = eventRanges.Keys.Where(key => !GetEmitterState(key).Historizing).ToHashSet();
+                var eventsToPush = eventList.Where(point => nonHistorizing.Contains(point.EmittingNode)).ToList();
+                var pushResults = await Task.WhenAll(reconnectedPushers.Select(pusher => pusher.PushEvents(eventsToPush, token)));
+
+                // Here we are fine with "null" result. Not ideal, but it is what it is.
+                // In theory we might end up in an expensive loop, but the connection tests should be designed so that
+                // success there implies success otherwise.
+                if (!pushResults.All(res => res == null || res == true)) return false;
+
+                if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
                 {
-                    // Try to push any non-historizing points
-                    var nonHistorizing = eventRanges.Keys.Where(key => !GetEmitterState(key).Historizing).ToHashSet();
-                    var eventsToPush = eventList.Where(point => nonHistorizing.Contains(point.EmittingNode)).ToList();
-                    var pushResults = await Task.WhenAll(failedPushers.Select(pusher => pusher.PushEvents(eventsToPush, token)));
-
-                    // Here we are fine with "null" result. Not ideal, but it is what it is.
-                    // In theory we might end up in an expensive loop, but the connection tests should be designed so that
-                    // success there implies success otherwise.
-                    if (!pushResults.All(res => res == null || res == true)) return false;
-
-                    if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
+                    bool success = await historyReader.Terminate(token, 30);
+                    if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
+                    foreach (var state in EmitterStates.Values.Where(state => state.Historizing))
                     {
-                        bool success = await historyReader.Terminate(token, 30);
-                        if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
-                        foreach (var state in EmitterStates.Values.Where(state => state.Historizing))
-                        {
-                            state.RestartHistory();
-                        }
-                        restartHistory = true;
+                        state.RestartHistory();
                     }
+                    restartHistory = true;
+                }
 
-                    foreach (var pusher in failedPushers)
-                    {
-                        pusher.EventsFailing = false;
-                    }
-                }
-                if (config.FailureBuffer.Enabled && FailureBuffer.AnyEvents)
+                foreach (var pusher in reconnectedPushers)
                 {
-                    await FailureBuffer.ReadEvents(pushers, token);
-                }
-                foreach (var kvp in eventRanges)
-                {
-                    var state = GetEmitterState(kvp.Key);
-                    state.UpdateDestinationRange(kvp.Value);
+                    pusher.EventsFailing = false;
                 }
             }
+            if (config.FailureBuffer.Enabled && FailureBuffer.AnyEvents)
+            {
+                await FailureBuffer.ReadEvents(passingPushers, token);
+            }
+            foreach (var kvp in eventRanges)
+            {
+                var state = GetEmitterState(kvp.Key);
+                state.UpdateDestinationRange(kvp.Value);
+            }
+            
 
             return restartHistory;
         }
 
         private async Task PushersLoop(CancellationToken token)
         {
+            var failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
+            var passingPushers = pushers.Except(failingPushers).ToList();
             while (!token.IsCancellationRequested)
             {
+                if (failingPushers.Any())
+                {
+                    var result = await Task.WhenAll(failingPushers.Select(pusher => pusher.TestConnection(config, token)));
+                    var recovered = result.Select((res, idx) => (result: res, pusher: failingPushers.ElementAt(idx)))
+                        .Where(x => x.result == true).ToList();
+
+                    if (recovered.Any(pair => !pair.pusher.Initialized))
+                    {
+                        var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);
+                        var (nodes, timeseries) = SortNodes(activeNodes.Values);
+                        await Task.WhenAll(toInit.Select(pusher => PushNodes(nodes, timeseries, pusher, true, token)));
+                    }
+                    foreach (var pair in recovered)
+                    {
+                        if (pair.pusher.Initialized)
+                        {
+                            failingPushers.Remove(pair.pusher);
+                            passingPushers.Add(pair.pusher);
+                        }
+                    }
+                }
+
+
                 var waitTask = Task.Delay(config.Extraction.DataPushDelay, token);
-                var results = await Task.WhenAll(Task.Run(async () => await PushDataPoints(token), token),
-                    Task.Run(async () => await PushEvents(token), token));
+                var results = await Task.WhenAll(Task.Run(async () =>
+                        await PushDataPoints(passingPushers, failingPushers, token), token),
+                    Task.Run(async () => await PushEvents(passingPushers, failingPushers, token), token));
 
                 if (results.Any(res => res))
                 {
                     triggerHistoryRestart.Set();
                 }
+
+                foreach (var pusher in passingPushers.Where(pusher =>
+                    pusher.DataFailing && pushData || pusher.EventsFailing && pushEvents || !pusher.Initialized).ToList())
+                {
+                    failingPushers.Add(pusher);
+                    passingPushers.Remove(pusher);
+                }
+
                 await waitTask;
                 nextPushFlag = true;
+
             }
         }
 
@@ -681,8 +724,8 @@ namespace Cognite.OpcUa
             {
                 await Task.WhenAll(
                     Task.Delay(delay, token),
-                    StateStorage.StoreExtractionState(NodeStates.Values, StateStorage.VariableStates, token),
-                    StateStorage.StoreExtractionState(EmitterStates.Values, StateStorage.EmitterStates, token)
+                    StateStorage.StoreExtractionState(NodeStates.Values.Where(state => state.Historizing), StateStorage.VariableStates, token),
+                    StateStorage.StoreExtractionState(EmitterStates.Values.Where(state => state.Historizing), StateStorage.EmitterStates, token)
                 );
             }
         }
@@ -869,22 +912,27 @@ namespace Cognite.OpcUa
             log.Information("Getting data for {NumVariables} variables and {NumObjects} objects", 
                 rawVariables.Count, objects.Count);
             uaClient.ReadNodeData(objects.Concat(rawVariables), token);
-            foreach (var node in objects.Concat(rawVariables))
+            foreach (var node in objects)
             {
                 log.Debug(node.ToDebugDescription());
+                activeNodes[(node.Id, -1)] = node;
             }
 
             foreach (var node in rawVariables)
             {
+                log.Debug(node.ToDebugDescription());
                 if (AllowTSMap(node))
                 {
                     variables.Add(node);
                     NodeStates[node.Id] = new NodeExtractionState(node);
+                    activeNodes[(node.Id, node.Index)] = node;
                     if (node.ArrayDimensions != null && node.ArrayDimensions.Count > 0 && node.ArrayDimensions[0] > 0)
                     {
                         for (int i = 0; i < node.ArrayDimensions[0]; i++)
                         {
-                            timeseries.Add(new BufferedVariable(node, i));
+                            var ts = new BufferedVariable(node, i);
+                            timeseries.Add(ts);
+                            activeNodes[(ts.Id, ts.Index)] = ts;
                             nodeStatesByExtId[GetUniqueId(node.Id, i)] = NodeStates[node.Id];
                             ExternalToNodeId[GetUniqueId(node.Id, i)] = node.Id;
                         }
@@ -898,6 +946,77 @@ namespace Cognite.OpcUa
                 }
             }
         }
+
+        private static (IEnumerable<BufferedNode>, IEnumerable<BufferedVariable>) SortNodes(IEnumerable<BufferedNode> nodes)
+        {
+            var timeseries = new List<BufferedVariable>();
+            var objects = new List<BufferedNode>();
+            foreach (var node in nodes)
+            {
+                if (node.IsVariable && node is BufferedVariable variable)
+                {
+                    if (variable.ArrayDimensions != null && variable.ArrayDimensions.Count > 0 &&
+                        variable.ArrayDimensions[0] > 0 && variable.Index == -1)
+                    {
+                        objects.Add(variable);
+                    }
+                    else
+                    {
+                        timeseries.Add(variable);
+                    }
+                }
+                else
+                {
+                    objects.Add(node);
+                }
+            }
+
+            return (objects, timeseries);
+        }
+        private async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries,
+            IPusher pusher, bool initial, CancellationToken token)
+        {
+            if (pusher.NoInit)
+            {
+                log.Warning("Skipping pushing on pusher with index {idx}", pusher.Index);
+                pusher.Initialized = false;
+                pusher.NoInit = false;
+                return;
+            }
+            var result = await pusher.PushNodes(objects, timeseries, token);
+            if (!result)
+            {
+                log.Error("Failed to push nodes on pusher with index {idx}", pusher.Index);
+                pusher.Initialized = false;
+                pusher.DataFailing = true;
+                pusher.EventsFailing = true;
+                return;
+            }
+
+            if (pusher.BaseConfig.ReadExtractedRanges)
+            {
+                var statesToSync = timeseries
+                    .Select(ts => ts.Id)
+                    .Distinct()
+                    .Select(id => NodeStates[id])
+                    .Where(state => state.Historizing);
+                var results = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, token), 
+                    pusher.InitExtractedEventRanges(EmitterStates.Values.Where(state => state.Historizing),
+                        timeseries.Concat(objects).Select(ts => ts.Id).Distinct(),
+                        config.History.Backfill,
+                        token));
+                if (!results.All(res => res))
+                {
+                    log.Error("Initialization of extracted ranges failed for pusher with index {idx}", pusher.Index);
+                    pusher.Initialized = false;
+                    pusher.DataFailing = true;
+                    pusher.EventsFailing = true;
+                    return;
+                }
+            }
+
+            pusher.Initialized |= initial;
+        }
         /// <summary>
         /// Push given lists of nodes to pusher destinations, and fetches latest timestamp for relevant nodes.
         /// </summary>
@@ -905,59 +1024,51 @@ namespace Cognite.OpcUa
         /// <param name="timeseries">Variables to synchronize with destinations</param>
         private async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries, CancellationToken token)
         {
-            var pushes = pushers.Select(pusher => pusher.PushNodes(objects, timeseries, token)).ToList();
-            var pushResult = await Task.WhenAll(pushes);
-            if (!pushResult.All(res => res)) throw new ExtractorFailureException("Pushing nodes failed");
-
-            var statesToSync = timeseries
+            var newStates = timeseries
                 .Select(ts => ts.Id)
                 .Distinct()
-                .Select(id => NodeStates[id])
-                .Where(state => state.Historizing);
+                .Select(id => NodeStates[id]);
 
-            var getRangePushes = pushers
-                .Where(pusher => pusher.BaseConfig.ReadExtractedRanges)
-                .Select(pusher => pusher.InitExtractedRanges(statesToSync, config.History.Backfill, token));
+            bool initial = objects.Count() + timeseries.Count() == activeNodes.Count;
 
-            if (EmitterStates.Any(kvp => kvp.Value.Historizing))
+            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, pusher, initial, token));
+
+            if (StateStorage != null && config.StateStorage.Interval > 0 && pushData)
             {
-                var getEventRanges = pushers
-                    .Where(pusher => pusher.BaseConfig.ReadExtractedRanges)
-                    .Select(pusher => pusher.InitExtractedEventRanges(
+                if (pushEvents)
+                {
+                    pushTasks = pushTasks.Append(StateStorage.ReadExtractionStates(
                         EmitterStates.Values.Where(state => state.Historizing),
-                        timeseries.Concat(objects).Select(ts => ts.Id).Distinct(),
-                        config.History.Backfill,
-                        token)
-                    );
-                getRangePushes = getRangePushes.Concat(getEventRanges);
-            }
+                        StateStorage.EmitterStates,
+                        false,
+                        token));
+                }
 
-            if (StateStorage != null && config.StateStorage.Interval > 0)
-            {
-                getRangePushes = getRangePushes
-                    .Append(StateStorage.ReadExtractionStates(
-                        statesToSync, 
+                if (pushData)
+                {
+                    pushTasks = pushTasks.Append(StateStorage.ReadExtractionStates(
+                        newStates.Where(state => state.Historizing),
                         StateStorage.VariableStates,
-                        timeseries.Count() * Math.Log(timeseries.Count(), 2) < NodeStates.Count(kvp => kvp.Value.Historizing),
-                        token)
-                    ).Append(StateStorage.ReadExtractionStates(
-                        EmitterStates.Values.Where(state => state.Historizing),
-                        StateStorage.EmitterStates, 
-                        false, 
-                        token)
-                    );
+                        false,
+                        token));
+                }
             }
 
+            pushTasks = pushTasks.ToList();
+            await Task.WhenAll(pushTasks);
 
-            var getRangeResult = await Task.WhenAll(getRangePushes);
-            if (!getRangeResult.All(res => res)) throw new ExtractorFailureException("Getting latest timestamp failed");
-            // If any nodes are still at default values, meaning no pusher can initialize them, initialize to default values.
-            foreach (var state in statesToSync)
+            if (initial)
             {
-                state.FinalizeRangeInit(config.History.Backfill);
+                trackedAssets.Set(objects.Count());
+                trackedTimeseres.Set(timeseries.Count());
+            }
+            else
+            {
+                trackedAssets.Inc(objects.Count());
+                trackedTimeseres.Inc(timeseries.Count());
             }
 
-            foreach (var state in EmitterStates.Values.Where(state => state.Historizing))
+            foreach (var state in newStates.Concat<BaseExtractionState>(EmitterStates.Values))
             {
                 state.FinalizeRangeInit(config.History.Backfill);
             }
@@ -966,20 +1077,26 @@ namespace Cognite.OpcUa
         private async Task SynchronizeEvents(IEnumerable<NodeId> nodes, CancellationToken token)
         {
             await Task.Run(() => uaClient.SubscribeToEvents(EmitterStates.Keys, nodes, EventSubscriptionHandler, token));
-            await historyReader.FrontfillEvents(EmitterStates.Values.Where(state => state.Historizing), nodes, token);
-            if (config.History.Backfill)
+            if (pushers.Any(pusher => pusher.Initialized))
             {
-                await historyReader.BackfillEvents(EmitterStates.Values.Where(state => state.Historizing), nodes, token);
+                await historyReader.FrontfillEvents(EmitterStates.Values.Where(state => state.Historizing), nodes, token);
+                if (config.History.Backfill)
+                {
+                    await historyReader.BackfillEvents(EmitterStates.Values.Where(state => state.Historizing), nodes, token);
+                }
             }
         }
 
         private async Task SynchronizeNodes(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             await Task.Run(() => uaClient.SubscribeToNodes(states, DataSubscriptionHandler, token));
-            await historyReader.FrontfillData(states.Where(state => state.Historizing), token);
-            if (config.History.Backfill)
+            if (pushers.Any(pusher => pusher.Initialized))
             {
-                await historyReader.BackfillData(states.Where(state => state.Historizing), token);
+                await historyReader.FrontfillData(states.Where(state => state.Historizing), token);
+                if (config.History.Backfill)
+                {
+                    await historyReader.BackfillData(states.Where(state => state.Historizing), token);
+                }
             }
         }
         /// <summary>

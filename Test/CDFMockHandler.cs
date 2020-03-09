@@ -48,6 +48,7 @@ namespace Test
         long eventIdCounter = 1;
         private long requestIdCounter = 1;
         public long RequestCount { get; private set; }
+        public bool BlockAllConnections { get; set; } = false;
         public bool AllowPush { get; set; } = true;
         public bool AllowEvents { get; set; } = true;
         public bool AllowConnectionTest { get; set; } = true;
@@ -76,6 +77,22 @@ namespace Test
         private async Task<HttpResponseMessage> MessageHandler(HttpRequestMessage req, CancellationToken cancellationToken)
         {
             RequestCount++;
+
+            if (BlockAllConnections)
+            {
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
+                    {
+                        error = new ErrorContent
+                        {
+                            code = 501,
+                            message = "bad something or other"
+                        }
+                    }))
+                };
+            }
+
             if (req.RequestUri.AbsolutePath == "/login/status")
             {
                 return HandleLoginStatus();

@@ -167,53 +167,6 @@ namespace Test
             }
         }
         [Trait("Server", "basic")]
-        [Trait("Target", "ExtractorRuntime")]
-        [Trait("Test", "extractorruntimefailure")]
-        [Fact]
-        public async Task TestExtractorRuntimeFailure()
-        {
-            var fullConfig = ExtractorUtils.GetConfig("config.test.yml");
-            Logger.Configure(fullConfig.Logging);
-
-            fullConfig.Source.EndpointURL = ExtractorTester.HostNames[ServerName.Basic];
-            fullConfig.Pushers.First().Critical = true;
-            fullConfig.Logging.ConsoleLevel = "debug";
-
-            var runTime = new ExtractorRuntime(fullConfig);
-
-            using var source = new CancellationTokenSource();
-
-            runTime.Configure();
-            var runTask = runTime.Run(source);
-
-            for (int i = 0; i < 10; i++)
-            {
-                if (runTask.IsFaulted) break;
-                await Task.Delay(1000);
-            }
-
-            source.Cancel();
-
-            try
-            {
-                await runTask;
-            }
-            catch (Exception ex)
-            {
-                ExtractorFailureException efe = null;
-                switch (ex)
-                {
-                    case ExtractorFailureException exception:
-                        efe = exception;
-                        break;
-                    case AggregateException aex:
-                        efe = ExtractorUtils.GetRootExceptionOfType<ExtractorFailureException>(aex);
-                        break;
-                }
-                if (efe == null || efe.Message != "Critical pusher failed to connect") throw;
-            }
-        }
-        [Trait("Server", "basic")]
         [Trait("Target", "ConfigToolRuntime")]
         [Trait("Test", "configtoolruntime")]
         [Fact]

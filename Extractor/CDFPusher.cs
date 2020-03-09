@@ -51,6 +51,9 @@ namespace Cognite.OpcUa
         public int Index { get; set; }
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
+        public bool Initialized { get; set; }
+        public bool NoInit { get; set; }
+
 
         public Extractor Extractor { get; set; }
         public PusherConfig BaseConfig { get; }
@@ -92,10 +95,6 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_event_pushes", "Number of times events have been pushed to CDF");
         private static readonly Counter eventPushFailures = Metrics
             .CreateCounter("opcua_event_push_failures", "Number of times events have been pushed to CDF");
-        private static readonly Gauge trackedAssets = Metrics
-            .CreateGauge("opcua_tracked_assets", "Number of objects on the opcua server mapped to assets in CDF");
-        private static readonly Gauge trackedTimeseres = Metrics
-            .CreateGauge("opcua_tracked_timeseries", "Number of variables on the opcua server mapped to timeseries in CDF");
         private static readonly Counter nodeEnsuringFailures = Metrics
             .CreateCounter("opcua_node_ensure_failures",
             "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
@@ -401,7 +400,6 @@ namespace Cognite.OpcUa
                 return false;
             }
 
-            trackedAssets.Inc(objects.Count());
             // At this point the assets should all be synchronized and mapped
             // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
             // This also sets the LastTimestamp property of each BufferedVariable
@@ -421,7 +419,6 @@ namespace Cognite.OpcUa
                 nodeEnsuringFailures.Inc();
                 return false;
             }
-            trackedTimeseres.Inc(tsList.Count);
             log.Information("Finish pushing nodes to CDF");
             return true;
         }
@@ -431,8 +428,6 @@ namespace Cognite.OpcUa
         public void Reset()
         {
             nodeToAssetIds.Clear();
-            trackedAssets.Set(0);
-            trackedTimeseres.Set(0);
             ranges.Clear();
         }
         private async Task<IEnumerable<(string, DateTime)>> GetEarliestTimestampChunk(IEnumerable<string> ids, CancellationToken token)

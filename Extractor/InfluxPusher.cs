@@ -22,6 +22,9 @@ namespace Cognite.OpcUa
         public PusherConfig BaseConfig { get; }
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
+        public bool Initialized { get; set; }
+        public bool NoInit { get; set; }
+
 
         private readonly InfluxClientConfig config;
         private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
@@ -108,6 +111,7 @@ namespace Cognite.OpcUa
                 dataPointsCounter.Inc(group.Count());
                 ipoints.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
             }
+
             log.Debug("Push {cnt} datapoints to influxdb {db}", ipoints.Count, config.Database);
             try
             {
@@ -353,6 +357,7 @@ namespace Cognite.OpcUa
 
         private IInfluxDatapoint BufferedDPToInflux(NodeExtractionState state, BufferedDataPoint dp)
         {
+
             if (state.DataType.IsString)
             {
                 var idp = new InfluxDatapoint<string>
@@ -360,7 +365,7 @@ namespace Cognite.OpcUa
                     UtcTimestamp = dp.Timestamp,
                     MeasurementName = dp.Id
                 };
-                idp.Fields.Add("value", dp.StringValue);
+                idp.Fields.Add("value", dp.StringValue ?? "");
                 return idp;
             }
             if (state.DataType.Identifier == DataTypes.Boolean)

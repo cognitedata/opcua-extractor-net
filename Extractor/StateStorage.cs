@@ -128,8 +128,8 @@ namespace Cognite.OpcUa
                     statesStoredCounter.Inc(chunk.Count());
                 }
 
-                log.Debug("Saved {Stored} out of {TotalNumber} extraction states to store {name}", 
-                    toStore.Count, states.Count(), name);
+                log.Debug("Saved {Stored} out of {TotalNumber} historizing extraction states to store {name}", 
+                    toStore.Count, states.Count(state => state.Historizing), name);
 
                 foreach (var state in toStore)
                 {
