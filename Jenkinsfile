@@ -1,5 +1,7 @@
 @Library('jenkins-helpers@v0.1.10')
 
+msbuild = '"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\MSBuild\\Current\\Bin\\msbuild.exe"'
+
 def label = "opcua-extractor-net-${UUID.randomUUID().toString()}"
 
 podTemplate(
@@ -156,6 +158,38 @@ podTemplate(
             }
         }
     }
+
+    node('windows-static-001') {
+        stage('Building MSI on windows node') {
+            powershell('echo $env:Path')
+        }
+
+        stage('Checkout') {
+            checkout(scm)
+            version = powershell(returnStdout: true, script: "git describe --tags HEAD || true").trim()
+            version = version.replaceFirst(/-(\d+)-.*/, '-pre.$1')
+            lastTag = powershell(returnStdout: true, script: "git describe --tags --abbrev=0").trim()
+            echo "$version"
+            echo "$lastTag"
+            echo "${env.BRANCH_NAME}"
+        }
+
+        try {
+                stage ('Build MSI') {
+                    buildStatus = bat(returnStatus: true, script: "${msbuild} /t:rebuild /p:Configuration=Release .\\OpcUaExtractorSetup\\OpcUaExtractorSetup.wixproj")
+                    if (buildStatus != 0) {
+                        error("Build MSI failed.")
+                    }
+                }
+        }
+        finally {
+            stage('Cleanup') {
+                deleteDir()
+            }
+        }
+ 
+    }
+
 }
 
 void packProject(String configuration, String version, boolean linux) {
