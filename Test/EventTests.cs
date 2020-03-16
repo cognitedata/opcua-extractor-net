@@ -21,7 +21,6 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
-using Opc.Ua;
 using Xunit;
 using Xunit.Abstractions;
 
