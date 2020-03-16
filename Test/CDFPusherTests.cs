@@ -17,7 +17,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -598,7 +597,7 @@ namespace Test
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Contains(tester.Handler.datapoints["gp.efg:i=10"].Item1, pt => pt.Timestamp < startTime);
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
             CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor();
 
@@ -635,7 +634,7 @@ namespace Test
             tester.Handler.BlockAllConnections = true;
             tester.StartExtractor();
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
             // Since no pusher is available, expect history to not have been started
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 0));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 0));

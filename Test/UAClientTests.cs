@@ -16,12 +16,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
-using Opc.Ua;
-using Serilog;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -111,7 +108,7 @@ namespace Test
                                                 && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
                 "Expected the extractor to finish startup");
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
             CommonTestUtils.StopProxyProcess();
 
             await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0), 20,
@@ -149,7 +146,7 @@ namespace Test
             await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_extractor_starting", 0)
                                                 && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
                 "Expected the extractor to finish startup");
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
             CommonTestUtils.StopProxyProcess();
 
 
@@ -157,55 +154,6 @@ namespace Test
 
             await tester.TerminateRunTask(ex =>
                 ex is ExtractorFailureException || ex is AggregateException aex && aex.InnerException is ExtractorFailureException);
-        }
-
-        private void TestOPCUAId(ExtractorTester tester, InternalId id, string expected, NodeId rawId)
-        {
-            Log.Information($"\"{id.ToExternalId()}\", {rawId.ToString()}, {id.Index}");
-            Assert.Equal(rawId, id.ToNodeId(tester.UAClient));
-            Assert.Equal(id, new InternalId(id.ToExternalId(), tester.Config.Extraction));
-            Assert.Equal(rawId, new InternalId(id.ToExternalId(), tester.Config.Extraction).ToNodeId(tester.UAClient));
-            Assert.Equal(expected, id.ToExternalId());
-        }
-        [Fact]
-        [Trait("Server", "basic")]
-        [Trait("Target", "InternalId")]
-        [Trait("Test", "internalid")]
-        public async Task TestNodeIdConversion()
-        {
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                QuitAfterMap = true
-            });
-            tester.Config.History.Enabled = false;
-            await tester.ClearPersistentData();
-            tester.StartExtractor();
-            await tester.TerminateRunTask();
-
-            var identifiers = new List<(object, string)>
-            {
-                ("identifier", "gp.efg:s=identifier"),
-                (123U, "gp.efg:i=123"),
-                (new byte[] {1, 2, 3, 4}, "gp.efg:b=AQIDBA=="),
-                ("identifier[123]", "gp.efg:s=identifier\\[123]"),
-                (new Guid(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1), "gp.efg:g=00000001-0001-0001-0101-010101010101"),
-                ("identifier\n\n\r\nbleh", "gp.efg:s=identifier\\n\\n\\r\\nbleh"),
-                ("identifier     ", "gp.efg:s=identifier\\ \\ \\ \\ \\ ")
-            };
-
-            foreach (var identifier in identifiers)
-            {
-                var rawId = NodeId.Create(identifier.Item1, "http://examples.freeopcua.github.io", tester.UAClient.GetNamespaceTable());
-                var id = new InternalId(rawId, tester.UAClient, tester.Config.Extraction);
-                TestOPCUAId(tester, id, identifier.Item2, rawId);
-            }
-
-            foreach (var identifier in identifiers)
-            {
-                var rawId = NodeId.Create(identifier.Item1, "http://examples.freeopcua.github.io", tester.UAClient.GetNamespaceTable());
-                var id = new InternalId(rawId, tester.UAClient, tester.Config.Extraction, 0);
-                TestOPCUAId(tester, id, identifier.Item2 + "[0]", rawId);
-            }
         }
     }
 }

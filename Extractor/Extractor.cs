@@ -19,7 +19,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
@@ -36,6 +35,7 @@ namespace Cognite.OpcUa
     {
         private readonly UAClient uaClient;
         private readonly FullConfig config;
+        public Looper Looper { get; }
         public FailureBuffer FailureBuffer { get; }
         public StateStorage StateStorage { get; }
         public State State { get; }
@@ -45,27 +45,17 @@ namespace Cognite.OpcUa
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
-
-        private readonly ConcurrentDictionary<(NodeId, int), BufferedNode> activeNodes =
-            new ConcurrentDictionary<(NodeId, int), BufferedNode>();
+        private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
 
         // Concurrent reading of properties
         private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
 
-        private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
-        private bool restart;
-        private bool quit;
-        private readonly AutoResetEvent triggerUpdateOperations = new AutoResetEvent(false);
-        private readonly ManualResetEvent triggerHistoryRestart = new ManualResetEvent(false);
-
         private HashSet<NodeId> ignoreDataTypes;
 
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
-
-        private bool nextPushFlag;
 
 
         private static readonly Gauge startTime = Metrics
@@ -120,6 +110,7 @@ namespace Cognite.OpcUa
             {
                 pusher.Extractor = this;
             }
+            Looper = new Looper(this, config, pushers);
         }
 
         /// <summary>
@@ -190,81 +181,10 @@ namespace Cognite.OpcUa
             {
                 await FailureBuffer.InitializeBufferStates(State.NodeStates, State.AllActiveIds, token);
             }
-
+            if (quitAfterMap) return;
             Pushing = true;
+            await Looper.InitTaskLoop(synchTasks, token);
 
-            var tasks = new List<Task>
-                {
-                    Task.Run(async () => await PushersLoop(token), token),
-                    Task.Run(async () => await ExtraTaskLoop(token), token)
-                }.Concat(synchTasks);
-
-            if (config.Extraction.AutoRebrowsePeriod > 0)
-            {
-                tasks = tasks.Append(Task.Run(() => RebrowseLoop(token)));
-            }
-
-            if (StateStorage != null && config.StateStorage.Interval > 0)
-            {
-                tasks = tasks.Append(Task.Run(() => StoreStateLoop(token)));
-            }
-
-            tasks = tasks.Append(Task.Run(() => WaitHandle.WaitAny(
-                new[] {triggerHistoryRestart, token.WaitHandle})));
-
-            tasks = tasks.ToList();
-
-            triggerUpdateOperations.Reset();
-            var failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
-            if (failedTask != null)
-            {
-                ExtractorUtils.LogException(failedTask.Exception, "Unexpected error in main task list", "Handled error in main task list");
-            }
-
-            while (tasks.Any() && failedTask == null)
-            {
-
-                try
-                {
-                    var terminated = await Task.WhenAny(tasks);
-                    if (terminated.IsFaulted)
-                    {
-                        ExtractorUtils.LogException(terminated.Exception, 
-                            "Unexpected error in main task list", 
-                            "Handled error in main task list");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    ExtractorUtils.LogException(ex, "Unexpected error in main task list", "Handled error in main task list");
-                }
-                failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
-
-                if (quitAfterMap) return;
-                if (failedTask != null) break;
-                tasks = tasks
-                    .Where(task => !task.IsCompleted && !task.IsFaulted && !task.IsCanceled)
-                    .ToList();
-
-                if (triggerHistoryRestart.WaitOne(0))
-                {
-                    triggerHistoryRestart.Reset();
-                    tasks = tasks.Append(RestartHistory(token)).Append(Task.Run(() => WaitHandle.WaitAny(
-                        new[] { triggerHistoryRestart, token.WaitHandle }))).ToList();
-                }
-            }
-
-            if (token.IsCancellationRequested) throw new TaskCanceledException();
-            if (failedTask != null)
-            {
-                if (failedTask.Exception != null)
-                {
-                    ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
-                }
-
-                throw new ExtractorFailureException("Task failed without exception");
-            }
-            throw new ExtractorFailureException("Processes quit without failing");
         }
         /// <summary>
         /// Restarts the extractor, to some extent, clears known asset ids,
@@ -283,20 +203,49 @@ namespace Cognite.OpcUa
                 state.ResetStreamingState();
             }
 
-            WaitForNextPush().Wait();
+            Looper.WaitForNextPush().Wait();
             foreach (var pusher in pushers)
             {
                 pusher.Reset();
             }
             Starting.Set(1);
-            restart = true;
-            triggerUpdateOperations.Set();
+            Looper.Restart();
+        }
+
+        public async Task FinishExtractorRestart(CancellationToken token)
+        {
+            log.Information("Restarting extractor...");
+            extraNodesToBrowse.Clear();
+            Started = false;
+            await historyReader.Terminate(token, 30);
+            await uaClient.WaitForOperations();
+            ConfigureExtractor(token);
+            uaClient.ResetVisitedNodes();
+            await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
+            var synchTasks = await MapUAToDestinations(token);
+            await Task.WhenAll(synchTasks);
+            Started = true;
+            log.Information("Successfully restarted extractor");
+        }
+
+        public async Task PushExtraNodes(CancellationToken token)
+        {
+            if (extraNodesToBrowse.Any())
+            {
+                var nodesToBrowse = new List<NodeId>();
+                while (extraNodesToBrowse.TryDequeue(out NodeId id))
+                {
+                    nodesToBrowse.Add(id);
+                }
+                await uaClient.BrowseNodeHierarchy(nodesToBrowse.Distinct(), HandleNode, token);
+                var historyTasks = await MapUAToDestinations(token);
+                await Task.WhenAll(historyTasks);
+            }
         }
 
         public void QuitExtractorInternally()
         {
-            quit = true;
-            triggerUpdateOperations.Set();
+            Looper.Quit();
         }
 
         public Task<bool> TerminateHistory(int timeout, CancellationToken token)
@@ -398,25 +347,8 @@ namespace Cognite.OpcUa
 
             return false;
         }
-        /// <summary>
-        /// Wait for the next push of data to CDF
-        /// </summary>
-        /// <param name="timeout">Timeout in 1/10th of a second</param>
-        public async Task WaitForNextPush(int timeout = 100)
-        {
-            nextPushFlag = false;
-            int time = 0;
-            while (!nextPushFlag && time++ < timeout) await Task.Delay(100);
-            if (time >= timeout && !nextPushFlag)
-            {
-                throw new TimeoutException("Waiting for push timed out");
-            }
-            log.Debug("Waited {s} milliseconds for push", time * 100);
-        }
-        #endregion
-        #region Loops
 
-        private async Task RestartHistory(CancellationToken token)
+        public async Task RestartHistory(CancellationToken token)
         {
             await Task.WhenAll(Task.Run(async () =>
             {
@@ -440,144 +372,41 @@ namespace Cognite.OpcUa
             }));
         }
 
-        private async Task PushersLoop(CancellationToken token)
+        public async Task Rebrowse(CancellationToken token)
         {
-            var failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
-            var passingPushers = pushers.Except(failingPushers).ToList();
-            while (!token.IsCancellationRequested)
-            {
-                if (failingPushers.Any())
-                {
-                    var result = await Task.WhenAll(failingPushers.Select(pusher => pusher.TestConnection(config, token)));
-                    var recovered = result.Select((res, idx) => (result: res, pusher: failingPushers.ElementAt(idx)))
-                        .Where(x => x.result == true).ToList();
-
-                    if (recovered.Any(pair => !pair.pusher.Initialized))
-                    {
-                        var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);
-                        var (nodes, timeseries) = SortNodes(activeNodes.Values);
-                        await Task.WhenAll(toInit.Select(pusher => PushNodes(nodes, timeseries, pusher, true, token)));
-                    }
-                    foreach (var pair in recovered)
-                    {
-                        if (pair.pusher.Initialized)
-                        {
-                            failingPushers.Remove(pair.pusher);
-                            passingPushers.Add(pair.pusher);
-                        }
-                    }
-                }
-
-
-                var waitTask = Task.Delay(config.Extraction.DataPushDelay, token);
-                var results = await Task.WhenAll(Task.Run(async () =>
-                        await Streamer.PushDataPoints(passingPushers, failingPushers, token), token),
-                    Task.Run(async () => await Streamer.PushEvents(passingPushers, failingPushers, token), token));
-
-                if (results.Any(res => res))
-                {
-                    triggerHistoryRestart.Set();
-                }
-
-                foreach (var pusher in passingPushers.Where(pusher =>
-                    pusher.DataFailing && Streamer.AllowData || pusher.EventsFailing && Streamer.AllowEvents || !pusher.Initialized).ToList())
-                {
-                    failingPushers.Add(pusher);
-                    passingPushers.Remove(pusher);
-                }
-
-                await waitTask;
-                nextPushFlag = true;
-
-            }
-        }
-
-        private async Task StoreStateLoop(CancellationToken token)
-        {
-            var delay = TimeSpan.FromSeconds(config.StateStorage.Interval);
-            while (!token.IsCancellationRequested)
-            {
-                await Task.WhenAll(
-                    Task.Delay(delay, token),
-                    StateStorage.StoreExtractionState(State.NodeStates.Where(state => state.Historizing), StateStorage.VariableStates, token),
-                    StateStorage.StoreExtractionState(State.EmitterStates.Where(state => state.Historizing), StateStorage.EmitterStates, token)
-                );
-            }
-        }
-
-        private async Task RebrowseLoop(CancellationToken token)
-        {
-            var delay = TimeSpan.FromMinutes(config.Extraction.AutoRebrowsePeriod);
-            while (!token.IsCancellationRequested)
-            {
-                try
-                {
-                    await Task.Delay(delay, token);
-                }
-                catch (TaskCanceledException)
-                {
-                    return;
-                }
-
-                await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
-                var historyTasks = await MapUAToDestinations(token);
-                await Task.WhenAll(historyTasks);
-            }
-        }
-        /// <summary>
-        /// Waits for triggerUpdateOperations to fire, then executes all the tasks in the queue.
-        /// </summary>
-        private async Task ExtraTaskLoop(CancellationToken token)
-        {
-            while (!token.IsCancellationRequested)
-            {
-                WaitHandle.WaitAny(new[] { triggerUpdateOperations, token.WaitHandle });
-                if (token.IsCancellationRequested) break;
-                var tasks = new List<Task>();
-                if (quit)
-                {
-                    log.Warning("Manually quitting extractor due to error in subsystem");
-                    throw new ExtractorFailureException("Manual exit due to error in subsystem");
-                }
-                if (restart)
-                {
-                    log.Information("Restarting extractor...");
-                    extraNodesToBrowse.Clear();
-                    tasks.Add(Task.Run(async () =>
-                    {
-                        Started = false;
-                        await historyReader.Terminate(token, 30);
-                        await uaClient.WaitForOperations();
-                        ConfigureExtractor(token);
-                        uaClient.ResetVisitedNodes();
-                        await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
-                        var synchTasks = await MapUAToDestinations(token);
-                        await Task.WhenAll(synchTasks);
-                        Started = true;
-                        log.Information("Successfully restarted extractor");
-                    }));
-                    restart = false;
-                } 
-                else if (extraNodesToBrowse.Any())
-                {
-                    var nodesToBrowse = new List<NodeId>();
-                    while (extraNodesToBrowse.TryDequeue(out NodeId id))
-                    {
-                        nodesToBrowse.Add(id);
-                    }
-
-                    tasks.Add(Task.Run(async () =>
-                    {
-                        await uaClient.BrowseNodeHierarchy(nodesToBrowse.Distinct(), HandleNode, token);
-                        var historyTasks = await MapUAToDestinations(token);
-                        await Task.WhenAll(historyTasks);
-                    }));
-                }
-                await Task.WhenAll(tasks);
-            }
+            await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
+            var historyTasks = await MapUAToDestinations(token);
+            await Task.WhenAll(historyTasks);
         }
         #endregion
+
         #region Mapping
+        /// <summary>
+        /// Empties the node queue, pushing nodes to each destination, and starting subscriptions and history.
+        /// </summary>
+        private async Task<IEnumerable<Task>> MapUAToDestinations(CancellationToken token)
+        {
+            GetNodesFromQueue(token, out var objects, out var timeseries, out var variables);
+
+            if (!objects.Any() && !timeseries.Any() && !variables.Any())
+            {
+                log.Information("Mapping resulted in no new nodes");
+                return Array.Empty<Task>();
+            }
+
+            Streamer.AllowData = State.NodeStates.Any();
+
+            await PushNodes(objects, timeseries, token);
+
+            foreach (var node in variables.Concat(objects).Select(node => node.Id))
+            {
+                State.AddManagedNode(node);
+            }
+
+            var historyTasks = Synchronize(variables, objects, token);
+            Starting.Set(0);
+            return historyTasks;
+        }
         /// <summary>
         /// Set up extractor once UAClient is started
         /// </summary>
@@ -689,7 +518,7 @@ namespace Cognite.OpcUa
             foreach (var node in objects)
             {
                 log.Debug(node.ToDebugDescription());
-                activeNodes[(node.Id, -1)] = node;
+                State.AddActiveNode(node);
             }
 
             foreach (var node in rawVariables)
@@ -699,14 +528,14 @@ namespace Cognite.OpcUa
                 {
                     variables.Add(node);
                     var state = new NodeExtractionState(node);
-                    activeNodes[(node.Id, node.Index)] = node;
+                    State.AddActiveNode(node);
                     if (node.ArrayDimensions != null && node.ArrayDimensions.Count > 0 && node.ArrayDimensions[0] > 0)
                     {
                         for (int i = 0; i < node.ArrayDimensions[0]; i++)
                         {
                             var ts = new BufferedVariable(node, i);
                             timeseries.Add(ts);
-                            activeNodes[(ts.Id, ts.Index)] = ts;
+                            State.AddActiveNode(ts);
                             var uniqueId = GetUniqueId(node.Id, i);
                             State.SetNodeState(state, uniqueId);
                             State.RegisterNode(node.Id, uniqueId);
@@ -722,35 +551,10 @@ namespace Cognite.OpcUa
             }
         }
 
-        private static (IEnumerable<BufferedNode>, IEnumerable<BufferedVariable>) SortNodes(IEnumerable<BufferedNode> nodes)
-        {
-            var timeseries = new List<BufferedVariable>();
-            var objects = new List<BufferedNode>();
-            foreach (var node in nodes)
-            {
-                if (node.IsVariable && node is BufferedVariable variable)
-                {
-                    if (variable.ArrayDimensions != null && variable.ArrayDimensions.Count > 0 &&
-                        variable.ArrayDimensions[0] > 0 && variable.Index == -1)
-                    {
-                        objects.Add(variable);
-                    }
-                    else
-                    {
-                        timeseries.Add(variable);
-                    }
-                }
-                else
-                {
-                    objects.Add(node);
-                }
-            }
-
-            return (objects, timeseries);
-        }
-        private async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries,
+        public async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries,
             IPusher pusher, bool initial, CancellationToken token)
         {
+            if (pusher == null) throw new ArgumentNullException(nameof(pusher));
             if (pusher.NoInit)
             {
                 log.Warning("Skipping pushing on pusher with index {idx}", pusher.Index);
@@ -804,7 +608,7 @@ namespace Cognite.OpcUa
                 .Distinct()
                 .Select(id => State.GetNodeState(id));
 
-            bool initial = objects.Count() + timeseries.Count() == activeNodes.Count;
+            bool initial = objects.Count() + timeseries.Count() == State.ActiveNodes.Count();
 
             var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, pusher, initial, token));
 
@@ -903,32 +707,7 @@ namespace Cognite.OpcUa
             }
             return tasks;
         }
-        /// <summary>
-        /// Empties the node queue, pushing nodes to each destination, and starting subscriptions and history.
-        /// </summary>
-        private async Task<IEnumerable<Task>> MapUAToDestinations(CancellationToken token)
-        {
-            GetNodesFromQueue(token, out var objects, out var timeseries, out var variables);
 
-            if (!objects.Any() && !timeseries.Any() && !variables.Any())
-            {
-                log.Information("Mapping resulted in no new nodes");
-                return Array.Empty<Task>();
-            }
-
-            Streamer.AllowData = State.NodeStates.Any();
-
-            await PushNodes(objects, timeseries, token);
-
-            foreach (var node in variables.Concat(objects).Select(node => node.Id))
-            {
-                State.AddManagedNode(node);
-            }
-
-            var historyTasks = Synchronize(variables, objects, token);
-            Starting.Set(0);
-            return historyTasks;
-        }
         #endregion
 
         #region Handlers
@@ -1021,7 +800,7 @@ namespace Cognite.OpcUa
                 {
                     extraNodesToBrowse.Enqueue(id);
                 }
-                triggerUpdateOperations.Set();
+                Looper.ScheduleUpdate();
                 return;
             }
 
@@ -1049,7 +828,7 @@ namespace Cognite.OpcUa
             {
                 extraNodesToBrowse.Enqueue(id);
             }
-            triggerUpdateOperations.Set();
+            Looper.ScheduleUpdate();
         }
         #endregion
 
@@ -1062,9 +841,8 @@ namespace Cognite.OpcUa
         protected virtual void Dispose(bool disposing)
         {
             Starting.Set(0);
-            triggerUpdateOperations?.Dispose();
             StateStorage?.Dispose();
-            triggerHistoryRestart?.Dispose();
+            Looper?.Dispose();
         }
     }
 }

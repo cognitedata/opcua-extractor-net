@@ -184,11 +184,11 @@ namespace Test
             tester.Config.Extraction.AllowStringVariables = true;
             tester.StartExtractor();
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             tester.Handler.AllowPush = false;
             tester.Handler.AllowConnectionTest = false;
@@ -336,7 +336,7 @@ namespace Test
                     !state.Historizing || state.BackfillDone && state.IsStreaming),
                 60, "Expected backfill of events to terminate");
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));

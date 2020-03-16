@@ -103,7 +103,7 @@ namespace Test
                     && tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
                 40, "Expected history read to finish");
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             int lastCount = tester.Handler.events.Count;
             Assert.Equal(0, (int)CommonTestUtils.GetMetricValue("opcua_event_push_failures"));
@@ -275,7 +275,7 @@ namespace Test
                     && tester.Extractor.State.EmitterStates.All(state => state.BackfillDone),
                 40, "Expected backfill to finish");
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             var events = tester.Handler.events.Values.ToList();
             Assert.True(events.Any());
@@ -356,8 +356,8 @@ namespace Test
                        && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture));
             }, 20, "Expected remaining event subscriptions to trigger");
 
-            await tester.Extractor.WaitForNextPush();
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);

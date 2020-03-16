@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using Opc.Ua;
 
 namespace Cognite.OpcUa
@@ -29,10 +28,15 @@ namespace Cognite.OpcUa
         public ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> ActiveEvents { get; }
             = new ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>>();
 
+        private readonly ConcurrentDictionary<(NodeId, int), BufferedNode> activeNodes =
+            new ConcurrentDictionary<(NodeId, int), BufferedNode>();
+
         public IEnumerable<NodeExtractionState> NodeStates => nodeStates.Values;
         public IEnumerable<EventExtractionState> EmitterStates => emitterStates.Values;
         public IEnumerable<NodeId> AllActiveIds => managedNodes.Keys;
         public IEnumerable<string> AllActiveExternalIds => managedNodes.Values;
+
+        public IEnumerable<BufferedNode> ActiveNodes => activeNodes.Values;
 
         private readonly Extractor extractor;
 
@@ -60,8 +64,6 @@ namespace Cognite.OpcUa
         {
             return emitterStates.GetValueOrDefault(id);
         }
-
-
 
         public void SetNodeState(NodeExtractionState state, string uniqueId = null)
         {
@@ -100,6 +102,18 @@ namespace Cognite.OpcUa
         public string GetUniqueId(NodeId id)
         {
             return managedNodes.GetValueOrDefault(id);
+        }
+
+        public void AddActiveNode(BufferedNode node)
+        {
+            if (node == null) throw new ArgumentNullException(nameof(node));
+            activeNodes[(node.Id, -1)] = node;
+        }
+
+        public void AddActiveNode(BufferedVariable node)
+        {
+            if (node == null) throw new ArgumentNullException(nameof(node));
+            activeNodes[(node.Id, node.Index)] = node;
         }
     }
 }

@@ -35,11 +35,11 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             tester.Handler.AllowPush = false;
             tester.Handler.AllowConnectionTest = false;
@@ -55,7 +55,7 @@ namespace Test
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.TerminateRunTask();
 
@@ -87,11 +87,11 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             // In theory it will work as expected if only pushes to events fail, so long as the connection test also fails,
             // but there is no real reason to test this on an unrealistic scenario.
@@ -118,7 +118,7 @@ namespace Test
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.TerminateRunTask();
 
@@ -166,11 +166,11 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             var oldHost = tester.InfluxConfig.Host;
             tester.InfluxConfig.Host = "testWrong";
@@ -187,7 +187,7 @@ namespace Test
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.TerminateRunTask();
 
@@ -230,7 +230,7 @@ namespace Test
                         !state.Historizing || state.StatePersisted),
                     20, "Expected states to become clean again");
 
-                await tester.Extractor.WaitForNextPush();
+                await tester.Extractor.Looper.WaitForNextPush();
 
                 await tester.TerminateRunTask();
 
@@ -266,7 +266,7 @@ namespace Test
             await tester2.WaitForCondition(() => tester2.Extractor.State.NodeStates.All(state => !state.Historizing
                     || state.BackfillDone && state.IsStreaming),
                 20, "Expected history to complete");
-            await tester2.Extractor.WaitForNextPush();
+            await tester2.Extractor.Looper.WaitForNextPush();
 
             // 0 backfill despite backfill being enabled is strong proof that it works.
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 0));
@@ -305,7 +305,7 @@ namespace Test
                     !state.Historizing || state.StatePersisted),
                 20, "Expected states to be persisted");
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.TerminateRunTask();
 
@@ -340,7 +340,7 @@ namespace Test
             await tester2.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => !state.Historizing
                     || state.BackfillDone && state.IsStreaming),
                 20, "Expected history to complete");
-            await tester2.Extractor.WaitForNextPush();
+            await tester2.Extractor.Looper.WaitForNextPush();
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 0));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
@@ -370,8 +370,8 @@ namespace Test
 
                 tester.StartExtractor();
 
-                await tester.Extractor.WaitForNextPush();
-                await tester.Extractor.WaitForNextPush();
+                await tester.Extractor.Looper.WaitForNextPush();
+                await tester.Extractor.Looper.WaitForNextPush();
 
                 tester.Handler.AllowPush = false;
                 tester.Handler.AllowConnectionTest = false;
@@ -379,7 +379,7 @@ namespace Test
                 await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
                     20, "Failurebuffer must receive some data");
 
-                await tester.Extractor.WaitForNextPush();
+                await tester.Extractor.Looper.WaitForNextPush();
 
                 await tester.TerminateRunTask();
 
@@ -414,7 +414,7 @@ namespace Test
             tester2.Config.Extraction.AllowStringVariables = true;
             tester2.Config.History.Enabled = false;
 
-            await tester2.Extractor.WaitForNextPush();
+            await tester2.Extractor.Looper.WaitForNextPush();
 
             await tester2.TerminateRunTask();
 
@@ -455,8 +455,8 @@ namespace Test
 
                 tester.StartExtractor();
 
-                await tester.Extractor.WaitForNextPush();
-                await tester.Extractor.WaitForNextPush();
+                await tester.Extractor.Looper.WaitForNextPush();
+                await tester.Extractor.Looper.WaitForNextPush();
 
                 tester.Handler.AllowPush = false;
                 tester.Handler.AllowEvents = false;
@@ -465,7 +465,7 @@ namespace Test
                 await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
                 20, "Failurebuffer must receive some data");
 
-                await tester.Extractor.WaitForNextPush();
+                await tester.Extractor.Looper.WaitForNextPush();
 
                 await tester.TerminateRunTask();
 
@@ -498,7 +498,7 @@ namespace Test
 
             tester2.StartExtractor();
 
-            await tester2.Extractor.WaitForNextPush();
+            await tester2.Extractor.Looper.WaitForNextPush();
 
             await tester2.TerminateRunTask();
 
@@ -762,11 +762,11 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             tester.Handler.AllowPush = false;
             tester.Handler.AllowConnectionTest = false;
@@ -782,7 +782,7 @@ namespace Test
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.TerminateRunTask();
 
@@ -813,11 +813,11 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             // In theory it will work as expected if only pushes to events fail, so long as the connection test also fails,
             // but there is no real reason to test this on an unrealistic scenario.
@@ -844,7 +844,7 @@ namespace Test
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.TerminateRunTask();
 
