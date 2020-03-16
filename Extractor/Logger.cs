@@ -10,15 +10,15 @@ namespace Cognite.OpcUa
 {
     public static class Logger
     {
-        private static ILogger logger;
+        private static ILogger _logger;
 
         public static ILogger Current()
         {
-            if (logger == null)
+            if (_logger == null)
             {
                 throw new InvalidOperationException("Logger has not been configured.");
             }
-            return logger;
+            return _logger;
         }
 
         public static ILogger Configure(LoggerConfig config)
@@ -74,9 +74,9 @@ namespace Cognite.OpcUa
                 logConfig.WriteTo.GoogleCloudLogging(gcConfig);
             }
 
-            logger = logConfig.CreateLogger();
-            Log.Logger = logger;
-            return logger;
+            _logger = logConfig.CreateLogger();
+            Log.Logger = _logger;
+            return _logger;
 
         }
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1812:Uninstantiated internal class",

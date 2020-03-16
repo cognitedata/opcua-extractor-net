@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.ExceptionServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Opc.Ua;
 using Serilog;
 
 namespace Cognite.OpcUa
@@ -235,7 +232,7 @@ namespace Cognite.OpcUa
             {
                 WaitHandle.WaitAny(new[] { triggerUpdateOperations, token.WaitHandle });
                 if (token.IsCancellationRequested) break;
-                var tasks = new List<Task>();
+                var newTasks = new List<Task>();
                 if (quit)
                 {
                     log.Warning("Manually quitting extractor due to error in subsystem");
@@ -247,13 +244,13 @@ namespace Cognite.OpcUa
                 if (restart)
                 {
                     restarted = true;
-                    tasks.Add(extractor.FinishExtractorRestart(token));
+                    newTasks.Add(extractor.FinishExtractorRestart(token));
                 }
                 else
                 {
-                    tasks.Add(extractor.PushExtraNodes(token));
+                    newTasks.Add(extractor.PushExtraNodes(token));
                 }
-                await Task.WhenAll(tasks);
+                await Task.WhenAll(newTasks);
                 if (restarted)
                 {
                     restart = false;

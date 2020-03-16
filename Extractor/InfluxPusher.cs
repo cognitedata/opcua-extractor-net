@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
@@ -67,9 +66,9 @@ namespace Cognite.OpcUa
             var dataPointList = new List<BufferedDataPoint>();
 
             int count = 0;
-            foreach (var _buffer in points)
+            foreach (var lBuffer in points)
             {
-                var buffer = _buffer;
+                var buffer = lBuffer;
                 if (buffer.Timestamp <= DateTime.UnixEpoch)
                 {
                     skippedDatapoints.Inc();
@@ -492,8 +491,6 @@ namespace Cognite.OpcUa
             var results = await Task.WhenAll(fetchTasks);
             token.ThrowIfCancellationRequested();
             var finalEvents = new List<BufferedEvent>();
-
-            var removeArrayRegex = new Regex("\\[[0-9]+\\]$");
 
             foreach (var series in results.SelectMany(res => res).DistinctBy(series => series.SeriesName))
             {

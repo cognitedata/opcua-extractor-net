@@ -616,7 +616,7 @@ namespace Cognite.OpcUa
             var dps = new List<BufferedDataPoint>();
             int count = 0;
             long pos;
-            bool final = false;
+            bool final;
             using (FileStream fs = new FileStream(file, FileMode.OpenOrCreate, FileAccess.Read, FileShare.None))
             {
                 byte[] sizeBytes = new byte[sizeof(ushort)];

@@ -253,7 +253,6 @@ namespace Test
             {
                 CommonTestUtils.TestEvent(ev, tester.Handler);
             }
-            Assert.True(false);
         }
 
         [Fact]
