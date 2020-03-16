@@ -148,7 +148,7 @@ namespace Cognite.OpcUa
             }
             else
             {
-                Appconfig.ApplicationUri = Opc.Ua.Utils.GetApplicationUriFromCertificate(
+                Appconfig.ApplicationUri = Utils.GetApplicationUriFromCertificate(
                     Appconfig.SecurityConfiguration.ApplicationCertificate.Certificate);
                 config.AutoAccept |= Appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 Appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
@@ -912,7 +912,7 @@ namespace Cognite.OpcUa
                             monitor.Notification += subscriptionHandler;
                             count++;
                             return monitor;
-                        })
+                        }).ToList()
                     );
 
                     log.Information("Add subscriptions for {numnodes} nodes", chunk.Count());
@@ -1327,6 +1327,11 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Utils
+
+        public NamespaceTable GetNamespaceTable()
+        {
+            return Session.NamespaceUris;
+        }
         /// <summary>
         /// Converts an ExpandedNodeId into a NodeId using the Session
         /// </summary>
@@ -1429,10 +1434,9 @@ namespace Cognite.OpcUa
         /// <returns>Unique string representation</returns>
         public string GetUniqueId(ExpandedNodeId rNodeid, int index = -1)
         {
-            NodeId nodeId = (NodeId)rNodeid;
+            var nodeId = ToNodeId(rNodeid);
             if (nodeId == null)
             {
-                nodeId = NodeId.Null;
                 log.Warning("Null converted to ExternalId");
                 throw new Exception("Null converted to ExternalId");
             }

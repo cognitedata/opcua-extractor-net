@@ -16,7 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -107,16 +106,15 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Dequeues up to 100000 points from the BufferedDPQueue, then pushes them to CDF. On failure, writes to file if enabled.
         /// </summary>
-
         public async Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
         {
             if (points == null) return null;
             int count = 0;
             var dataPointList = new Dictionary<string, List<BufferedDataPoint>>();
 
-            foreach (var _buffer in points)
+            foreach (var lBuffer in points)
             {
-                var buffer = _buffer;
+                var buffer = lBuffer;
                 if (buffer.Timestamp < minDateTime || mismatchedTimeseries.Contains(buffer.Id))
                 {
                     skippedDatapoints.Inc();
@@ -481,13 +479,6 @@ namespace Cognite.OpcUa
             catch (ResponseException ex)
             {
                 log.Information("Ex: {msg}", ex.Message);
-                foreach (var missing in ex.Missing)
-                {
-                    foreach (var kvp in missing)
-                    {
-                        log.Information("{k}: {v}", kvp.Key, (kvp.Value as MultiValue.Long).Value);
-                    }
-                }
                 throw;
             }
 
@@ -576,7 +567,7 @@ namespace Cognite.OpcUa
 
             foreach (var id in ids)
             {
-                var state = Extractor.GetNodeState(id);
+                var state = Extractor.State.GetNodeState(id);
                 state.InitExtractedRange(ranges[id].Start, ranges[id].End);
             }
 
@@ -748,7 +739,7 @@ namespace Cognite.OpcUa
                 log.Information("Found {NumRetrievedTimeseries} timeseries", readResults.Count());
                 foreach (var res in readResults)
                 {
-                    var state = Extractor.GetNodeState(res.ExternalId);
+                    var state = Extractor.State.GetNodeState(res.ExternalId);
                     if (state.DataType.IsString != res.IsString)
                     {
                         mismatchedTimeseries.Add(res.ExternalId);
@@ -789,7 +780,7 @@ namespace Cognite.OpcUa
 
             foreach (var res in remainingResults)
             {
-                var state = Extractor.GetNodeState(res.ExternalId);
+                var state = Extractor.State.GetNodeState(res.ExternalId);
                 if (state.DataType.IsString != res.IsString)
                 {
                     log.Warning("Mismatched timeseries: {id}. "

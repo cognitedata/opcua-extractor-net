@@ -161,6 +161,33 @@ namespace Cognite.OpcUa
             if (string.IsNullOrEmpty(str) || str.Length <= maxLength) return str;
             return str.Substring(0, maxLength);
         }
+        public static (IEnumerable<BufferedNode>, IEnumerable<BufferedVariable>) SortNodes(IEnumerable<BufferedNode> nodes)
+        {
+            if (nodes == null) throw new ArgumentNullException(nameof(nodes));
+            var timeseries = new List<BufferedVariable>();
+            var objects = new List<BufferedNode>();
+            foreach (var node in nodes)
+            {
+                if (node.IsVariable && node is BufferedVariable variable)
+                {
+                    if (variable.ArrayDimensions != null && variable.ArrayDimensions.Count > 0 &&
+                        variable.ArrayDimensions[0] > 0 && variable.Index == -1)
+                    {
+                        objects.Add(variable);
+                    }
+                    else
+                    {
+                        timeseries.Add(variable);
+                    }
+                }
+                else
+                {
+                    objects.Add(node);
+                }
+            }
+
+            return (objects, timeseries);
+        }
 
         public static IEnumerable<IEnumerable<T>> GroupByTimeGranularity<T>(IEnumerable<(T, DateTime)> input, TimeSpan granularity, int maxLength)
         {

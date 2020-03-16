@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -307,7 +306,7 @@ namespace Cognite.OpcUa
 
                     foreach (var kvp in ranges)
                     {
-                        var state = extractor.GetNodeState(kvp.Key);
+                        var state = extractor.State.GetNodeState(kvp.Key);
                         state.UpdateDestinationRange(kvp.Value);
                     }
 
@@ -398,7 +397,7 @@ namespace Cognite.OpcUa
 
                     foreach (var kvp in ranges)
                     {
-                        var state = extractor.GetEmitterState(kvp.Key);
+                        var state = extractor.State.GetEmitterState(kvp.Key);
                         state.UpdateDestinationRange(kvp.Value);
                     }
                     numEventsInQueue.Dec(events.Count);
@@ -501,9 +500,9 @@ namespace Cognite.OpcUa
                 var evt = new BufferedEvent
                 {
                     EventId = Id,
-                    EmittingNode = extractor.GetEmitterState(Emitter).Id,
+                    EmittingNode = extractor.State.GetEmitterState(Emitter).Id,
                     Time = Time,
-                    SourceNode = extractor.ExternalToNodeId[SourceNode],
+                    SourceNode = extractor.State.GetNodeId(SourceNode),
                     Message = Message,
                     ReceivedTime = DateTime.UtcNow,
                     MetaData = MetaData == null ? new Dictionary<string, object>()

@@ -21,7 +21,6 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
-using Opc.Ua;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -50,7 +49,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Count > 20 &&
-                    tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming),
+                    tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
                 40, "Expected history read to finish");
 
 
@@ -100,10 +99,10 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming),
+                    && tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
                 40, "Expected history read to finish");
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             int lastCount = tester.Handler.events.Count;
             Assert.Equal(0, (int)CommonTestUtils.GetMetricValue("opcua_event_push_failures"));
@@ -112,7 +111,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EmitterStates.All(state => state.Value.IsStreaming)
+                    && tester.Extractor.State.EmitterStates.All(state => state.IsStreaming)
                     && tester.Handler.events.Count > lastCount,
                 40, "Expected number of events to be increasing");
 
@@ -213,8 +212,10 @@ namespace Test
             tester.Handler.AllowConnectionTest = false;
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
+            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents
+                && tester.Pusher.EventsFailing,
                 20, "Expected failurebuffer to contain some events");
+            await tester.Extractor.Looper.WaitForNextPush();
 
             tester.Handler.AllowEvents = true;
             tester.Handler.AllowPush = true;
@@ -229,18 +230,18 @@ namespace Test
 
             await tester.WaitForCondition(() =>
             {
-                var events = tester.Handler.events.Values.ToList();
-                return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description == "prop 0")
-                       && events.Any(ev => ev.description == "basicPass 0")
-                       && events.Any(ev => ev.description == "basicPassSource 0")
-                       && events.Any(ev => ev.description == "basicVarSource 0")
-                       && events.Any(ev => ev.description == "mappedType 0");
+                var evts = tester.Handler.events.Values.ToList();
+                return evts.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description == "prop 0")
+                       && evts.Any(ev => ev.description == "basicPass 0")
+                       && evts.Any(ev => ev.description == "basicPassSource 0")
+                       && evts.Any(ev => ev.description == "basicVarSource 0")
+                       && evts.Any(ev => ev.description == "mappedType 0");
             }, 20, "Expected to receive the remaining events");
 
             await tester.TerminateRunTask();
@@ -272,10 +273,10 @@ namespace Test
             tester.StartExtractor();
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Any()
-                    && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
+                    && tester.Extractor.State.EmitterStates.All(state => state.BackfillDone),
                 40, "Expected backfill to finish");
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             var events = tester.Handler.events.Values.ToList();
             Assert.True(events.Any());
@@ -342,7 +343,7 @@ namespace Test
             tester.StartExtractor();
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
+                    && tester.Extractor.State.EmitterStates.All(state => state.BackfillDone),
                 40, "Expected backfill to finish");
 
             await tester.WaitForCondition(() =>
@@ -356,8 +357,8 @@ namespace Test
                        && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture));
             }, 20, "Expected remaining event subscriptions to trigger");
 
-            await tester.Extractor.WaitForNextPush();
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
@@ -372,8 +373,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.events.Values.Any()
-                    && tester.Extractor.EmitterStates.Values.All(state => state.BackfillDone),
-                20, "Expected backfill to finish"); 
+                    && tester.Extractor.State.EmitterStates.All(state => state.BackfillDone),
+                20, "Expected backfill to finish");
             
             await tester.TerminateRunTask();
 

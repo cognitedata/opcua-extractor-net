@@ -514,7 +514,7 @@ namespace Test
             if (RunTask == null) throw new FatalException("Run task is not started");
             if (!testParams.QuitAfterMap)
             {
-                await Extractor.WaitForNextPush();
+                await Extractor.Looper.WaitForNextPush();
                 await Task.Delay(100);
                 Source.Cancel();
             }

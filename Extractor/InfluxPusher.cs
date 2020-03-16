@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
@@ -67,9 +66,9 @@ namespace Cognite.OpcUa
             var dataPointList = new List<BufferedDataPoint>();
 
             int count = 0;
-            foreach (var _buffer in points)
+            foreach (var lBuffer in points)
             {
-                var buffer = _buffer;
+                var buffer = lBuffer;
                 if (buffer.Timestamp <= DateTime.UnixEpoch)
                 {
                     skippedDatapoints.Inc();
@@ -106,7 +105,7 @@ namespace Cognite.OpcUa
 
             foreach (var group in groups)
             {
-                var ts = Extractor.GetNodeState(group.Key);
+                var ts = Extractor.State.GetNodeState(group.Key);
                 if (ts == null) continue;
                 dataPointsCounter.Inc(group.Count());
                 ipoints.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
@@ -483,10 +482,6 @@ namespace Cognite.OpcUa
         {
             token.ThrowIfCancellationRequested();
 
-            log.Information($"SELECT * FROM \"events.{states.Last().Key}\"" +
-                            $" WHERE time >= {(states.Last().Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks * 100}" +
-                            $" AND time <= {(states.Last().Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks * 100}");
-
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
                 $"SELECT * FROM /events.{state.Key}*/" +
                 $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks * 100}" +
@@ -497,28 +492,24 @@ namespace Cognite.OpcUa
             token.ThrowIfCancellationRequested();
             var finalEvents = new List<BufferedEvent>();
 
-            var removeArrayRegex = new Regex("\\[[0-9]+\\]$");
-
             foreach (var series in results.SelectMany(res => res).DistinctBy(series => series.SeriesName))
             {
                 if (!series.Entries.Any()) continue;
 
                 var name = series.SeriesName.Substring(7);
 
-                var baseKey = Extractor.ExternalToNodeId.Keys.FirstOrDefault(key =>
+                var baseKey = Extractor.State.AllActiveExternalIds.FirstOrDefault(key =>
                     name.StartsWith(key, StringComparison.InvariantCulture));
 
                 if (baseKey == null) continue;
 
-                baseKey = removeArrayRegex.Replace(baseKey, "");
-
-                var sourceNode = Extractor.ExternalToNodeId[baseKey];
+                var sourceNode = Extractor.State.GetNodeId(baseKey);
                 if (sourceNode == null) continue;
                 finalEvents.AddRange(series.Entries.Select(res =>
                 {
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
                     if (!(res is IDictionary<string, object> values)) return null;
-                    var emitter = Extractor.GetEmitterState((string)values["Emitter"]);
+                    var emitter = Extractor.State.GetEmitterState((string)values["Emitter"]);
                     if (emitter == null) return null;
                     var evt = new BufferedEvent
                     {

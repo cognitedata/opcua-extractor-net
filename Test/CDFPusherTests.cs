@@ -17,7 +17,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -551,9 +550,9 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Extractor.GetNodeState("gp.efg:i=10") != null
-                    && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone
-                    && tester.Extractor.GetNodeState("gp.efg:i=10").IsStreaming
+                    tester.Extractor.State.GetNodeState("gp.efg:i=10") != null
+                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").BackfillDone
+                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").IsStreaming
                     && tester.Handler.datapoints.ContainsKey("gp.efg:i=10")
                     && tester.Handler.datapoints["gp.efg:i=10"].Item1.Any(pt => pt.Timestamp < startTime), 20,
                 "Expected integer datapoint to finish backfill and frontfill");
@@ -586,9 +585,9 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Extractor.GetNodeState("gp.efg:i=10") != null
-                    && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone
-                    && tester.Extractor.GetNodeState("gp.efg:i=10").IsStreaming
+                    tester.Extractor.State.GetNodeState("gp.efg:i=10") != null
+                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").BackfillDone
+                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").IsStreaming
                     && tester.Handler.datapoints.ContainsKey("gp.efg:i=10")
                     && tester.Handler.datapoints["gp.efg:i=10"].Item1.Any(pt => pt.Timestamp < startTime), 20,
                 "Expected integer datapoint to finish backfill and frontfill");
@@ -598,16 +597,16 @@ namespace Test
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Contains(tester.Handler.datapoints["gp.efg:i=10"].Item1, pt => pt.Timestamp < startTime);
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
             CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor();
 
             await Task.Delay(500);
 
             await tester.WaitForCondition(() =>
-                    tester.Extractor.GetNodeState("gp.efg:i=10") != null
-                    && tester.Extractor.GetNodeState("gp.efg:i=10").BackfillDone
-                    && tester.Extractor.GetNodeState("gp.efg:i=10").IsStreaming, 20,
+                    tester.Extractor.State.GetNodeState("gp.efg:i=10") != null
+                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").BackfillDone
+                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").IsStreaming, 20,
                 "Expected integer datapoint to finish backfill and frontfill");
 
             await tester.TerminateRunTask();
@@ -635,19 +634,19 @@ namespace Test
             tester.Handler.BlockAllConnections = true;
             tester.StartExtractor();
 
-            await tester.Extractor.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
             // Since no pusher is available, expect history to not have been started
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 0));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 0));
 
-            Assert.True(tester.Extractor.NodeStates.Values.All(state => state.Historizing && !state.IsStreaming || state.IsStreaming));
+            Assert.True(tester.Extractor.State.NodeStates.All(state => state.Historizing && !state.IsStreaming || state.IsStreaming));
 
             Assert.Empty(tester.Handler.assets);
             Assert.Empty(tester.Handler.timeseries);
 
             tester.Handler.BlockAllConnections = false;
 
-            await tester.WaitForCondition(() => tester.Extractor.NodeStates.Values.All(state => state.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 5));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));

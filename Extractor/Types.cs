@@ -472,14 +472,14 @@ namespace Cognite.OpcUa
             (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
             evt.EventId = txt;
             (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
-            evt.SourceNode = extractor.ExternalToNodeId[txt];
+            evt.SourceNode = extractor.State.GetNodeId(txt);
             long dt = BitConverter.ToInt64(bytes, next);
             next += sizeof(long);
             evt.Time = DateTime.FromBinary(dt);
             string eventType;
             (eventType, next) = ExtractorUtils.StringFromStorable(bytes, next);
             (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
-            evt.EmittingNode = extractor.GetEmitterState(txt).Id;
+            evt.EmittingNode = extractor.State.GetEmitterState(txt).Id;
             
             ushort count = BitConverter.ToUInt16(bytes, next);
             next += sizeof(ushort);
