@@ -125,7 +125,7 @@ namespace Cognite.OpcUa
         #region Interface
 
         /// <summary>
-        /// Run the extractor, this starts the main MapUAToCDF task, then maintains the data/event push loop.
+        /// Run the extractor, this starts the main MapUAToDestinations task, then waits for the looper main task.
         /// </summary>
         /// <param name="quitAfterMap">If true, terminate the extractor after first map iteration</param>
         public async Task RunExtractor(CancellationToken token, bool quitAfterMap = false)
@@ -187,9 +187,7 @@ namespace Cognite.OpcUa
 
         }
         /// <summary>
-        /// Restarts the extractor, to some extent, clears known asset ids,
-        /// allows data to be pushed to CDF, and begins mapping the opcua
-        /// directory again
+        /// Initializes restart of the extractor. Reset states, then schedule restart on the looper.
         /// </summary>
         public void RestartExtractor()
         {
@@ -211,7 +209,10 @@ namespace Cognite.OpcUa
             Starting.Set(1);
             Looper.Restart();
         }
-
+        /// <summary>
+        /// Task for the actual extractor restart, performing it directly.
+        /// Stops history, waits for UAClient to terminate, resets the extractor, rebrowses, then schedule history.
+        /// </summary>
         public async Task FinishExtractorRestart(CancellationToken token)
         {
             log.Information("Restarting extractor...");
@@ -223,7 +224,7 @@ namespace Cognite.OpcUa
             uaClient.ResetVisitedNodes();
             await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
             var synchTasks = await MapUAToDestinations(token);
-            await Task.WhenAll(synchTasks);
+            Looper.ScheduleTasks(synchTasks);
             Started = true;
             log.Information("Successfully restarted extractor");
         }
@@ -239,15 +240,21 @@ namespace Cognite.OpcUa
                 }
                 await uaClient.BrowseNodeHierarchy(nodesToBrowse.Distinct(), HandleNode, token);
                 var historyTasks = await MapUAToDestinations(token);
-                await Task.WhenAll(historyTasks);
+                Looper.ScheduleTasks(historyTasks);
             }
         }
-
+        /// <summary>
+        /// Terminate the extractor hard, causing a failure.
+        /// </summary>
         public void QuitExtractorInternally()
         {
             Looper.Quit();
         }
-
+        /// <summary>
+        /// Terminate history, waiting for timeout seconds
+        /// </summary>
+        /// <param name="timeout">Seconds to wait before returning failure</param>
+        /// <returns>True if history was terminated successfully</returns>
         public Task<bool> TerminateHistory(int timeout, CancellationToken token)
         {
             return historyReader.Terminate(token, timeout);
@@ -269,7 +276,12 @@ namespace Cognite.OpcUa
             uaClient.WaitForOperations().Wait(10000);
             log.Information("Extractor closed");
         }
-
+        /// <summary>
+        /// Get uniqueId either from the uaClient or from the state
+        /// </summary>
+        /// <param name="id">NodeId to convert</param>
+        /// <param name="index">Index to use for uniqueId</param>
+        /// <returns>Converted uniqueId</returns>
         public string GetUniqueId(NodeId id, int index = -1)
         {
             if (index == -1)
@@ -279,14 +291,20 @@ namespace Cognite.OpcUa
 
             return uaClient.GetUniqueId(id, index);
         }
-
+        /// <summary>
+        /// Calls the ConvertToString method on UAClient. This uses the namespaceTable, so it cannot be static.
+        /// </summary>
+        /// <param name="value">Value to convert</param>
+        /// <returns>Converted value</returns>
         public string ConvertToString(object value)
         {
             return uaClient.ConvertToString(value);
         }
         /// <summary>
-        /// Read properties for the given list of BufferedNode. This is intelligent, and keeps track of which properties are in the process of being read,
-        /// to prevent multiple pushers from starting PropertyRead operations at the same time. If this is called on a given node twice in short time, the second call
+        /// Read properties for the given list of BufferedNode. This is intelligent,
+        /// and keeps track of which properties are in the process of being read,
+        /// to prevent multiple pushers from starting PropertyRead operations at the same time.
+        /// If this is called on a given node twice in short time, the second call
         /// waits on the first.
         /// </summary>
         /// <param name="nodes">Nodes to get properties for</param>
@@ -347,7 +365,9 @@ namespace Cognite.OpcUa
 
             return false;
         }
-
+        /// <summary>
+        /// Returns a task running history for both data and events.
+        /// </summary>
         public async Task RestartHistory(CancellationToken token)
         {
             await Task.WhenAll(Task.Run(async () =>
@@ -371,19 +391,23 @@ namespace Cognite.OpcUa
                 }
             }));
         }
-
+        /// <summary>
+        /// Redo browse, then schedule history on the looper.
+        /// </summary>
         public async Task Rebrowse(CancellationToken token)
         {
             await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
             var historyTasks = await MapUAToDestinations(token);
-            await Task.WhenAll(historyTasks);
+            Looper.ScheduleTasks(historyTasks);
         }
         #endregion
 
         #region Mapping
         /// <summary>
         /// Empties the node queue, pushing nodes to each destination, and starting subscriptions and history.
+        /// This is the entry point for mapping on the extractor.
         /// </summary>
+        /// <returns>A list of history tasks</returns>
         private async Task<IEnumerable<Task>> MapUAToDestinations(CancellationToken token)
         {
             GetNodesFromQueue(token, out var objects, out var timeseries, out var variables);
@@ -479,7 +503,8 @@ namespace Cognite.OpcUa
         /// <param name="objects">List of destination context objects</param>
         /// <param name="timeseries">List of destination timeseries</param>
         /// <param name="variables">List of source variables</param>
-        private void GetNodesFromQueue(CancellationToken token, out List<BufferedNode> objects, out List<BufferedVariable> timeseries, out List<BufferedVariable> variables)
+        private void GetNodesFromQueue(CancellationToken token, out List<BufferedNode> objects,
+            out List<BufferedVariable> timeseries, out List<BufferedVariable> variables)
         {
             objects = new List<BufferedNode>();
             timeseries = new List<BufferedVariable>();
@@ -550,7 +575,13 @@ namespace Cognite.OpcUa
                 }
             }
         }
-
+        /// <summary>
+        /// Push nodes to given pusher
+        /// </summary>
+        /// <param name="objects">Object type nodes to push</param>
+        /// <param name="timeseries">Variable type nodes to push</param>
+        /// <param name="pusher">Destination to push to</param>
+        /// <param name="initial">True if this counts as initialization of the pusher</param>
         public async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries,
             IPusher pusher, bool initial, CancellationToken token)
         {
@@ -652,7 +683,10 @@ namespace Cognite.OpcUa
                 state.FinalizeRangeInit(config.History.Backfill);
             }
         }
-
+        /// <summary>
+        /// Subscribe to event changes, then run history.
+        /// </summary>
+        /// <param name="nodes">Nodes to subscribe to events for</param>
         private async Task SynchronizeEvents(IEnumerable<NodeId> nodes, CancellationToken token)
         {
             await Task.Run(() => uaClient.SubscribeToEvents(State.EmitterStates.Select(state => state.Id), 
@@ -666,7 +700,10 @@ namespace Cognite.OpcUa
                 }
             }
         }
-
+        /// <summary>
+        /// Subscribe to data changes, then run history.
+        /// </summary>
+        /// <param name="states">States to subscribe to</param>
         private async Task SynchronizeNodes(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             await Task.Run(() => uaClient.SubscribeToNodes(states, Streamer.DataSubscriptionHandler, token));
@@ -741,8 +778,6 @@ namespace Cognite.OpcUa
                 commonQueue.Enqueue(bufferedNode);
             }
         }
-        
-
         /// <summary>
         /// Handle subscription callback for audit events (AddReferences/AddNodes). Triggers partial re-browse when necessary
         /// </summary>

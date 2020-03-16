@@ -33,7 +33,12 @@ namespace Cognite.OpcUa
             this.extractor = extractor;
             this.config = config;
         }
-
+        /// <summary>
+        /// Push data points to destinations
+        /// </summary>
+        /// <param name="passingPushers">Succeeding pushers, data will be pushed to these.</param>
+        /// <param name="failingPushers">Failing pushers, data will not be pushed to these.</param>
+        /// <returns>True if history should be restarted after this</returns>
         public async Task<bool> PushDataPoints(IEnumerable<IPusher> passingPushers,
             IEnumerable<IPusher> failingPushers, CancellationToken token)
         {
@@ -129,7 +134,12 @@ namespace Cognite.OpcUa
             }
             return restartHistory;
         }
-
+        /// <summary>
+        /// Push events to destinations
+        /// </summary>
+        /// <param name="passingPushers">Succeeding pushers, events will be pushed to these.</param>
+        /// <param name="failingPushers">Failing pushers, events will not be pushed to these.</param>
+        /// <returns>True if history should be restarted after this</returns>
         public async Task<bool> PushEvents(IEnumerable<IPusher> passingPushers,
             IEnumerable<IPusher> failingPushers, CancellationToken token)
         {

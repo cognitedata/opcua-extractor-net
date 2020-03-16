@@ -25,6 +25,7 @@ namespace Cognite.OpcUa
         private readonly ILogger log = Log.ForContext(typeof(Looper));
         private readonly AutoResetEvent triggerUpdateOperations = new AutoResetEvent(false);
         private readonly ManualResetEvent triggerHistoryRestart = new ManualResetEvent(false);
+        private readonly ManualResetEvent triggerGrowTaskList = new ManualResetEvent(false);
 
         public Looper(Extractor extractor, FullConfig config, IEnumerable<IPusher> pushers)
         {
@@ -47,7 +48,10 @@ namespace Cognite.OpcUa
             }
             log.Debug("Waited {s} milliseconds for push", time * 100);
         }
-
+        /// <summary>
+        /// Main task loop, terminates on any task failure or if all tasks are finished.
+        /// </summary>
+        /// <param name="synchTasks">Initial history tasks</param>
         public async Task InitTaskLoop(IEnumerable<Task> synchTasks, CancellationToken token)
         {
             tasks = new List<Task>
@@ -68,6 +72,8 @@ namespace Cognite.OpcUa
 
             tasks = tasks.Append(Task.Run(() => WaitHandle.WaitAny(
                 new[] { triggerHistoryRestart, token.WaitHandle })));
+            tasks = tasks.Append(Task.Run(() => WaitHandle.WaitAny(
+                new[] { triggerGrowTaskList, token.WaitHandle })));
 
             tasks = tasks.ToList();
 
@@ -108,6 +114,13 @@ namespace Cognite.OpcUa
                     tasks = tasks.Append(extractor.RestartHistory(token)).Append(Task.Run(() => WaitHandle.WaitAny(
                         new[] { triggerHistoryRestart, token.WaitHandle }))).ToList();
                 }
+
+                if (triggerGrowTaskList.WaitOne(0))
+                {
+                    triggerGrowTaskList.Reset();
+                    tasks = tasks.Append(Task.Run(() => WaitHandle.WaitAny(
+                        new[] { triggerGrowTaskList, token.WaitHandle }))).ToList();
+                }
             }
 
             if (token.IsCancellationRequested) throw new TaskCanceledException();
@@ -122,6 +135,9 @@ namespace Cognite.OpcUa
             }
             throw new ExtractorFailureException("Processes quit without failing");
         }
+        /// <summary>
+        /// Main loop for pushing data and events to destinations.
+        /// </summary>
         private async Task PushersLoop(CancellationToken token)
         {
             var failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
@@ -173,7 +189,9 @@ namespace Cognite.OpcUa
                 nextPushFlag = true;
             }
         }
-
+        /// <summary>
+        /// Loop for periodically storing extraction states to litedb.
+        /// </summary>
         private async Task StoreStateLoop(CancellationToken token)
         {
             var delay = TimeSpan.FromSeconds(config.StateStorage.Interval);
@@ -188,7 +206,9 @@ namespace Cognite.OpcUa
                 );
             }
         }
-
+        /// <summary>
+        /// Loop for periodically browsing the UA hierarchy and adding subscriptions to any new nodes.
+        /// </summary>
         private async Task RebrowseLoop(CancellationToken token)
         {
             var delay = TimeSpan.FromMinutes(config.Extraction.AutoRebrowsePeriod);
@@ -246,22 +266,36 @@ namespace Cognite.OpcUa
             triggerUpdateOperations?.Dispose();
             triggerHistoryRestart?.Dispose();
         }
-
+        /// <summary>
+        /// Schedule quitting the extractor.
+        /// </summary>
         public void Quit()
         {
             quit = true;
             triggerUpdateOperations.Set();
         }
-
+        /// <summary>
+        /// Schedule a restart of the extractor.
+        /// </summary>
         public void Restart()
         {
             restart = true;
             triggerUpdateOperations.Set();
         }
-
+        /// <summary>
+        /// Schedule update in the update loop.
+        /// </summary>
         public void ScheduleUpdate()
         {
             triggerUpdateOperations.Set();
+        }
+        /// <summary>
+        /// Schedule a list of tasks in the main task loop.
+        /// </summary>
+        public void ScheduleTasks(IEnumerable<Task> newTasks)
+        {
+            tasks = tasks.Concat(newTasks);
+            triggerGrowTaskList.Set();
         }
     }
 }
