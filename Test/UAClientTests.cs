@@ -159,13 +159,13 @@ namespace Test
                 ex is ExtractorFailureException || ex is AggregateException aex && aex.InnerException is ExtractorFailureException);
         }
 
-        private void TestOPCUAId(ExtractorTester tester, InternalId id, NodeId rawId)
+        private void TestOPCUAId(ExtractorTester tester, InternalId id, string expected, NodeId rawId)
         {
-            Log.Information($"\"{id.ToExternalId()}\"");
-            Assert.Equal(rawId.Identifier, id.Identifier);
-            Assert.Equal(rawId.IdType, id.IdType);
+            Log.Information($"\"{id.ToExternalId()}\", {rawId.ToString()}, {id.Index}");
             Assert.Equal(rawId, id.ToNodeId(tester.UAClient));
             Assert.Equal(id, new InternalId(id.ToExternalId(), tester.Config.Extraction));
+            Assert.Equal(rawId, new InternalId(id.ToExternalId(), tester.Config.Extraction).ToNodeId(tester.UAClient));
+            Assert.Equal(expected, id.ToExternalId());
         }
         [Fact]
         [Trait("Server", "basic")]
@@ -182,27 +182,29 @@ namespace Test
             tester.StartExtractor();
             await tester.TerminateRunTask();
 
-            var identifiers = new List<object>()
+            var identifiers = new List<(object, string)>
             {
-                "identifier",
-                123U,
-                new byte[] {1, 2, 3, 4},
-                "identifier[123]",
-                new Guid(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+                ("identifier", "gp.efg:s=identifier"),
+                (123U, "gp.efg:i=123"),
+                (new byte[] {1, 2, 3, 4}, "gp.efg:b=AQIDBA=="),
+                ("identifier[123]", "gp.efg:s=identifier\\[123]"),
+                (new Guid(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1), "gp.efg:g=00000001-0001-0001-0101-010101010101"),
+                ("identifier\n\n\r\nbleh", "gp.efg:s=identifier\\n\\n\\r\\nbleh"),
+                ("identifier     ", "gp.efg:s=identifier\\ \\ \\ \\ \\ ")
             };
 
             foreach (var identifier in identifiers)
             {
-                var rawId = NodeId.Create(identifier, "http://examples.freeopcua.github.io", tester.UAClient.GetNamespaceTable());
+                var rawId = NodeId.Create(identifier.Item1, "http://examples.freeopcua.github.io", tester.UAClient.GetNamespaceTable());
                 var id = new InternalId(rawId, tester.UAClient, tester.Config.Extraction);
-                TestOPCUAId(tester, id, rawId);
+                TestOPCUAId(tester, id, identifier.Item2, rawId);
             }
 
             foreach (var identifier in identifiers)
             {
-                var rawId = NodeId.Create(identifier, "urn:freeopcua:python:server", tester.UAClient.GetNamespaceTable());
+                var rawId = NodeId.Create(identifier.Item1, "http://examples.freeopcua.github.io", tester.UAClient.GetNamespaceTable());
                 var id = new InternalId(rawId, tester.UAClient, tester.Config.Extraction, 0);
-                TestOPCUAId(tester, id, rawId);
+                TestOPCUAId(tester, id, identifier.Item2 + "[0]", rawId);
             }
         }
     }

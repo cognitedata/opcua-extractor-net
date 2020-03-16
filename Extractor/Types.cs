@@ -506,21 +506,24 @@ namespace Cognite.OpcUa
     {
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:Uri properties should not be strings",
             Justification = "NamespaceUris are arbitrary")]
-        public string NamespaceUri { get; }
-        public object Identifier { get; }
-        public IdType IdType { get; }
+        private string namespaceUri;
+
+        private object identifier;
+        private IdType idType;
 
         private string externalId;
         private NodeId nodeId;
 
-        public int Index { get; } = -1;
+        public int Index { get; private set; } = -1;
 
         private readonly ExtractionConfig config;
 
         private static readonly Regex idTypeRegex = new Regex(@"([g|i|b|s])=", RegexOptions.Singleline);
-        private static readonly Regex indexRegex = new Regex(@"\[([0-9]+)\]$");
+        private static readonly Regex indexRegex = new Regex(@"[^\\]\[([0-9]+)\]$");
 
-        public bool Invalid { get; }
+        public bool Invalid { get; private set; }
+
+        private bool parsed;
 
         public InternalId(NodeId id, UAClient uaClient, ExtractionConfig config, int index = -1)
         {
@@ -531,11 +534,12 @@ namespace Cognite.OpcUa
             }
             if (uaClient == null) throw new ArgumentNullException(nameof(uaClient));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
-            NamespaceUri = uaClient.GetNamespaceTable().GetString(id.NamespaceIndex);
-            Identifier = id.Identifier;
-            IdType = id.IdType;
+            namespaceUri = uaClient.GetNamespaceTable().GetString(id.NamespaceIndex);
+            identifier = id.Identifier;
+            idType = id.IdType;
             Index = index;
             nodeId = id;
+            parsed = true;
         }
 
         public InternalId(string id, ExtractionConfig config)
@@ -549,14 +553,21 @@ namespace Cognite.OpcUa
             this.config = config ?? throw new ArgumentNullException(nameof(config));
 
             externalId = id;
+            if (externalId.EndsWith(']'))
+            {
+                ParseExternalId();
+            }
+        }
 
+        private void ParseExternalId()
+        {
             int skip = config.IdPrefix.Length;
-            if (!id.StartsWith(config.IdPrefix, StringComparison.InvariantCulture))
+            if (!externalId.StartsWith(config.IdPrefix, StringComparison.InvariantCulture))
             {
                 skip += 7;
             }
 
-            id = id.Substring(skip);
+            string id = externalId.Substring(skip);
 
             var idMatch = idTypeRegex.Match(id);
             if (!idMatch.Success)
@@ -566,25 +577,40 @@ namespace Cognite.OpcUa
                 return;
             }
 
-            IdType = FromSymbol(idMatch.Groups[1].Captures[0].Value.First());
+            idType = FromSymbol(idMatch.Groups[1].Captures[0].Value.First());
 
             var namespaceStr = id.Substring(0, idMatch.Index);
             var map = config.NamespaceMap.FirstOrDefault(kvp => kvp.Value == namespaceStr);
-            NamespaceUri = map.Key ?? namespaceStr[..^1];
+            namespaceUri = map.Key ?? namespaceStr[..^1];
 
             var idtStr = id.Substring(idMatch.Index + 2);
-            var idxMatch = indexRegex.Match(idtStr);
-            if (idxMatch.Success)
+
+
+
+            if (idtStr.EndsWith(']'))
             {
-                Index = Convert.ToInt32(idxMatch.Groups[1].Captures[0].Value, CultureInfo.InvariantCulture);
-                Identifier = idtStr.Substring(0, idtStr.Length - idxMatch.Length);
+                var idxMatch = indexRegex.Match(idtStr);
+                if (idxMatch.Success)
+                {
+                    Index = Convert.ToInt32(idxMatch.Groups[1].Captures[0].Value, CultureInfo.InvariantCulture);
+                    identifier = idtStr.Substring(0, idtStr.Length - idxMatch.Length + 1);
+                }
+                else
+                {
+                    Index = -1;
+                    identifier = idtStr;
+                }
             }
             else
             {
                 Index = -1;
-                Identifier = idtStr;
+                identifier = idtStr;
             }
 
+            identifier = Regex.Unescape((string)identifier);
+
+
+            parsed = true;
         }
 
         private static IdType FromSymbol(char symbol)
@@ -598,26 +624,10 @@ namespace Cognite.OpcUa
                 _ => IdType.String
             };
         }
-        private static char IdSymbol(IdType type)
-        {
-            return type switch
-            {
-                IdType.Guid => 'g',
-                IdType.Numeric => 'i',
-                IdType.Opaque => 'b',
-                IdType.String => 's',
-                _ => 's'
-            };
-        }
 
         private static string SanitizeIdentifier(object idtf, IdType idType)
         {
-            string id = IdentifierToString(idtf, idType).Replace("\n", "", StringComparison.InvariantCulture);
-            var idxMatch = indexRegex.Match(id);
-            if (idxMatch.Success)
-            {
-                id = id.Substring(0, id.Length - idxMatch.Length) + $"\\[{idxMatch.Groups[1].Captures[0].Value}\\]";
-            }
+            string id = Regex.Escape(IdentifierToString(idtf, idType));
 
             return id;
         }
@@ -625,9 +635,9 @@ namespace Cognite.OpcUa
         public string ToExternalId()
         {
             if (externalId != null) return externalId;
-            string prefix = config.NamespaceMap.TryGetValue(NamespaceUri, out string prefixNode) ? prefixNode : (NamespaceUri + ":");
+            string prefix = config.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
 
-            string id = $"{config.IdPrefix}{prefix}{SanitizeIdentifier(Identifier, IdType)}";
+            string id = $"{config.IdPrefix}{prefix}{SanitizeIdentifier(identifier, idType)}";
 
 
             if (Index > -1)
@@ -635,22 +645,43 @@ namespace Cognite.OpcUa
                 string idxString = $"[{Index}]";
                 if (id.Length > 255 - idxString.Length)
                 {
-                    id = id.Substring(0, 255 - idxString.Length) + idxString;
+                    id = id.Substring(0, 255 - idxString.Length);
                 }
-            } else if (id.Length > 255)
+
+                id += idxString;
+            }
+            else if (id.Length > 255)
             {
                 id = id.Substring(0, 255);
             }
 
             externalId = id;
-            return id;
+            return externalId;
         }
 
         public NodeId ToNodeId(UAClient uaClient)
         {
             if (uaClient == null) throw new ArgumentNullException(nameof(uaClient));
             if (nodeId != null) return nodeId;
-            return Invalid ? NodeId.Null : NodeId.Create(Identifier, NamespaceUri, uaClient.GetNamespaceTable());
+            if (!parsed)
+            {
+                ParseExternalId();
+            }
+            if (Invalid) return NodeId.Null;
+            object transformedIdentifier = identifier;
+            if (identifier is string strIdentifier && idType != IdType.String)
+            {
+                transformedIdentifier = idType switch
+                {
+                    IdType.Guid => Guid.Parse(strIdentifier),
+                    IdType.Numeric => Convert.ToUInt32(strIdentifier, CultureInfo.InvariantCulture),
+                    IdType.Opaque => Convert.FromBase64String(strIdentifier),
+                    _ => transformedIdentifier
+                };
+            }
+
+            nodeId = Invalid ? NodeId.Null : NodeId.Create(transformedIdentifier, namespaceUri, uaClient.GetNamespaceTable());
+            return nodeId;
         }
 
         public override string ToString()
