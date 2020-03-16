@@ -213,8 +213,10 @@ namespace Test
             tester.Handler.AllowConnectionTest = false;
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
+            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents
+                && tester.Pusher.EventsFailing,
                 20, "Expected failurebuffer to contain some events");
+            await tester.Extractor.Looper.WaitForNextPush();
 
             tester.Handler.AllowEvents = true;
             tester.Handler.AllowPush = true;
@@ -229,18 +231,18 @@ namespace Test
 
             await tester.WaitForCondition(() =>
             {
-                var events = tester.Handler.events.Values.ToList();
-                return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description == "prop 0")
-                       && events.Any(ev => ev.description == "basicPass 0")
-                       && events.Any(ev => ev.description == "basicPassSource 0")
-                       && events.Any(ev => ev.description == "basicVarSource 0")
-                       && events.Any(ev => ev.description == "mappedType 0");
+                var evts = tester.Handler.events.Values.ToList();
+                return evts.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture))
+                       && evts.Any(ev => ev.description == "prop 0")
+                       && evts.Any(ev => ev.description == "basicPass 0")
+                       && evts.Any(ev => ev.description == "basicPassSource 0")
+                       && evts.Any(ev => ev.description == "basicVarSource 0")
+                       && evts.Any(ev => ev.description == "mappedType 0");
             }, 20, "Expected to receive the remaining events");
 
             await tester.TerminateRunTask();
@@ -251,6 +253,7 @@ namespace Test
             {
                 CommonTestUtils.TestEvent(ev, tester.Handler);
             }
+            Assert.True(false);
         }
 
         [Fact]

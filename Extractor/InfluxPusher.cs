@@ -483,10 +483,6 @@ namespace Cognite.OpcUa
         {
             token.ThrowIfCancellationRequested();
 
-            log.Information($"SELECT * FROM \"events.{states.Last().Key}\"" +
-                            $" WHERE time >= {(states.Last().Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks * 100}" +
-                            $" AND time <= {(states.Last().Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks * 100}");
-
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
                 $"SELECT * FROM /events.{state.Key}*/" +
                 $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks * 100}" +

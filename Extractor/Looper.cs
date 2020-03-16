@@ -265,6 +265,7 @@ namespace Cognite.OpcUa
         {
             triggerUpdateOperations?.Dispose();
             triggerHistoryRestart?.Dispose();
+            triggerGrowTaskList?.Dispose();
         }
         /// <summary>
         /// Schedule quitting the extractor.
