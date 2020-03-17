@@ -113,7 +113,7 @@ podTemplate(
             }
 
             stage('Build') {
-                sh('dotnet build')
+                sh('dotnet build Extractor/')
             }
             timeout(10) {
                 stage('Run tests') {
