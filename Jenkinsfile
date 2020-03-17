@@ -175,13 +175,27 @@ podTemplate(
         }
 
         try {
+            if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
                 stage ('Build MSI') {
                     powershell('dotnet build --configuration Release')
+                    powershell(".\\MsiVersionUpdate.ps1 .\\OpcUaExtractorSetup\\OpcUaExtractor.wxs ${version}")
                     buildStatus = bat(returnStatus: true, script: "${msbuild} /t:rebuild /p:Configuration=Release .\\OpcUaExtractorSetup\\OpcUaExtractorSetup.wixproj")
                     if (buildStatus != 0) {
                         error("Build MSI failed.")
                     }
                 }
+                stage ('Deploy to github') {
+                    powershell("mv OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi .\\OpcUaExtractorSetup-${version}.msi")
+                    withCredentials([usernamePassword(credentialsId: 'jenkins-cognite', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
+                        powershell("py deploy.py cognitedata opcua-extractor-net $ghpassword $version OpcUaExtractorSetup-${version}.msi")
+                    }
+                }
+            }
+        }
+        catch (e)
+        {
+            currentBuild.result = "FAILURE"
+            throw e
         }
         finally {
             stage('Cleanup') {
