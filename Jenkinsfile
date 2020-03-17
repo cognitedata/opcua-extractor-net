@@ -1,5 +1,7 @@
 @Library('jenkins-helpers@v0.1.10')
 
+msbuild = '"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\MSBuild\\Current\\Bin\\msbuild.exe"'
+
 def label = "opcua-extractor-net-${UUID.randomUUID().toString()}"
 
 podTemplate(
@@ -56,6 +58,9 @@ podTemplate(
         configMapVolume(configMapName: 'codecov-script-configmap', mountPath: '/codecov-script'),
         hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock')]
 ) {
+    def version
+    def lastTag
+
     properties([buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '20'))])
     node(label) {
         container('jnlp') {
@@ -108,7 +113,7 @@ podTemplate(
             }
 
             stage('Build') {
-                sh('dotnet build')
+                sh('dotnet build ExtractorLauncher/')
             }
             timeout(10) {
                 stage('Run tests') {
@@ -156,6 +161,50 @@ podTemplate(
             }
         }
     }
+
+    node('windows-static-001') {
+        stage('Building MSI on windows node') {
+            powershell('echo $env:Path')
+        }
+
+        stage('Checkout') {
+            checkout(scm)
+            echo "$version"
+            echo "$lastTag"
+            echo "${env.BRANCH_NAME}"
+        }
+
+        try {
+            if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
+                stage ('Build MSI') {
+                    powershell('dotnet build --configuration Release')
+                    powershell(".\\MsiVersionUpdate.ps1 .\\OpcUaExtractorSetup\\OpcUaExtractor.wxs ${version}")
+                    buildStatus = bat(returnStatus: true, script: "${msbuild} /t:rebuild /p:Configuration=Release .\\OpcUaExtractorSetup\\OpcUaExtractorSetup.wixproj")
+                    if (buildStatus != 0) {
+                        error("Build MSI failed.")
+                    }
+                }
+                stage ('Deploy to github') {
+                    powershell("mv OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi .\\OpcUaExtractorSetup-${version}.msi")
+                    withCredentials([usernamePassword(credentialsId: 'jenkins-cognite', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
+                        powershell("py deploy.py cognitedata opcua-extractor-net $ghpassword $version OpcUaExtractorSetup-${version}.msi")
+                    }
+                }
+            }
+        }
+        catch (e)
+        {
+            currentBuild.result = "FAILURE"
+            throw e
+        }
+        finally {
+            stage('Cleanup') {
+                deleteDir()
+            }
+        }
+ 
+    }
+
 }
 
 void packProject(String configuration, String version, boolean linux) {
