@@ -108,9 +108,6 @@
       <Component Id="OpcUaService_dll" Guid="08E73D25-7416-4934-87A4-C824A5866912" Directory="OpcUaExtractorFolder">
         <File Id="OpcUaService.dll" Name="OpcUaService.dll" Source="$(var.OpcUaExtractor_TargetDir)OpcUaService.dll" />
       </Component>
-      <Component Id="LICENSE_md" Guid="263C79F7-B6CA-441B-B544-CD23FA54A3CA" Directory="OpcUaExtractorFolder">
-        <File Id="LICENSE.md" Name="LICENSE.md" Source="$(var.OpcUaExtractor_TargetDir)LICENSE.md" />
-      </Component>
     </ComponentGroup>
     <ComponentGroup Id="OpcUaExtractorConfigFilesComponentGroup">
       <!--OpcUaExtractor config file-->
