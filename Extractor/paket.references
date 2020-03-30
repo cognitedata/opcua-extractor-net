@@ -19,3 +19,4 @@ Serilog.Sinks.File
 Microsoft.CodeAnalysis.FxCopAnalyzers
 LiteDB
 LiteQueue
+MQTTnet

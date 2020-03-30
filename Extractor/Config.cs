@@ -1,6 +1,7 @@
 ﻿using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using Cognite.OpcUa.Pushers;
 
 namespace Cognite.OpcUa
 {
@@ -84,6 +85,28 @@ namespace Cognite.OpcUa
         public override IPusher ToPusher(int index, IServiceProvider _)
         {
             return new InfluxPusher(this) { Index = index };
+        }
+    }
+
+    public class MqttPusherConfig : PusherConfig
+    {
+        public string Host { get; set; }
+        public int? Port { get; set; }
+        public string Username { get; set; }
+        public string Password { get; set; }
+        public bool UseTls { get; set; }
+        public string ClientId { get; set; }
+        public long? DataSetId { get; set; }
+        public string AssetTopic { get; set; } = "opcua-assets";
+        public string TSTopic { get; set; } = "opcua-timeseries";
+        public string EventTopic { get; set; } = "opcua-events";
+        public string DatapointTopic { get; set; } = "opcua-datapoints";
+        public string LocalState { get; set; }
+        public long InvalidateBefore { get; set; }
+
+        public override IPusher ToPusher(int index, IServiceProvider _)
+        {
+            return new MqttPusher(this) { Index = index };
         }
     }
 
