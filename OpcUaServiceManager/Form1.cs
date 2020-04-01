@@ -58,7 +58,7 @@ namespace OpcUaServiceManager
         }
 
         /// <summary>
-        /// Creates a new PI extractor service
+        /// Creates a new OpcUa extractor service
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
@@ -159,11 +159,11 @@ namespace OpcUaServiceManager
         }
 
         /// <summary>
-        /// Finds and updates list of all pi extractor services this tool can control 
+        /// Finds and updates list of all opcua extractor services this tool can control 
         /// </summary>
         private void GetOpcUaExtractorServices()
         {
-            // Get all windows services, and create a list of our custom pi extractor services.
+            // Get all windows services, and create a list of our custom opcua extractor services.
             _winServices = ServiceController.GetServices();
             _cogniteServices = new List<ServiceController>();
             _nextServiceNumber = 1;
