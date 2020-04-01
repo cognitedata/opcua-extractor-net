@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <?define OpcUaExtractor_TargetDir=$(var.OpcUaService.TargetDir)?>
+  <?define OpcUaServiceManager_TargetDir=$(var.OpcUaServiceManager.TargetDir)?>
   <!-- Important to update ProductVersion for new releases so it gets upgraded -->
   <?define ProductVersion="1.0.0"?>
   <?define ProductId="*" ?>
@@ -44,6 +45,7 @@
     <Feature Id="OpcUaExtractorFeature" Title="OpcUa Extractor" Level="1">
       <ComponentGroupRef Id="OpcUaExtractorServiceComponentGroup" />
       <ComponentGroupRef Id="OpcUaExtractorConfigFilesComponentGroup"/>
+      <ComponentGroupRef Id="OpcUaServiceManagerFilesComponentGroup"/>
     </Feature>
 
   </Product>
@@ -55,6 +57,7 @@
           <Directory Id="OpcUaExtractorFolder" Name="OpcUaExtractor">
             <Directory Id="ConfigFolder" Name="config" />
             <Directory Id="LogsFolder" Name="logs" />
+            <Directory Id="OpcUaServiceManagerFolder" Name="OpcUaServiceManager" />
           </Directory>
         </Directory>
       </Directory>
@@ -116,6 +119,18 @@
       </Component>
       <Component Id="opc_ua_net_extractor_Config" Guid="C1F2FD46-1E38-4C1F-B4CF-58BFD589618C" Directory="ConfigFolder">
         <File Id="opc.ua.net.extractor.Config.xml" Name="opc.ua.net.extractor.Config.xml" Source="$(var.OpcUaExtractor_TargetDir)config\opc.ua.net.extractor.Config.xml" />
+      </Component>
+    </ComponentGroup>
+    <!-- Service Manager -->
+    <ComponentGroup Id="OpcUaServiceManagerFilesComponentGroup">
+      <Component Id="OpcUaServiceManager_exe" Guid="451FDBD1-073E-4F89-AA3E-2B477E09A547" Directory="OpcUaServiceManagerFolder">
+        <File Id="OpcUaServiceManager.exe" Name="OpcUaServiceManager.exe" Source="$(var.OpcUaServiceManager_TargetDir)OpcUaServiceManager.exe" />
+      </Component>
+      <Component Id="OpcUaServiceManager_exe_config" Guid="DC11E72E-ABE8-4021-B165-0DD07F295580" Directory="OpcUaServiceManagerFolder">
+        <File Id="OpcUaServiceManager.exe.config" Name="OpcUaServiceManager.exe.config" Source="$(var.OpcUaServiceManager_TargetDir)OpcUaServiceManager.exe.config" />
+      </Component>
+      <Component Id="README_txt" Guid="C6FD919D-2A91-49FD-BAB1-C6CF4F508AEE" Directory="OpcUaServiceManagerFolder">
+        <File Id="README.txt" Name="README.txt" Source="$(var.OpcUaServiceManager_TargetDir)README.txt" />
       </Component>
     </ComponentGroup>
   </Fragment>

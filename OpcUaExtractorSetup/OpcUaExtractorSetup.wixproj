@@ -23,6 +23,14 @@
     <Compile Include="ProductInstallFiles.wxs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\OpcUaServiceManager\OpcUaServiceManager.csproj">
+      <Name>OpcUaServiceManager</Name>
+      <Project>{fecdd1d7-db45-4d16-ace4-910b42929268}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
     <ProjectReference Include="..\OpcUaService\OpcUaService.csproj">
       <Name>OpcUaService</Name>
       <Project>{eb4ee67d-1395-469b-b1d2-ddf71fd59af3}</Project>
