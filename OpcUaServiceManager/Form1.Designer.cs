@@ -66,6 +66,7 @@
             this.listBoxOpcUaServices.Name = "listBoxOpcUaServices";
             this.listBoxOpcUaServices.Size = new System.Drawing.Size(190, 204);
             this.listBoxOpcUaServices.TabIndex = 1;
+            this.listBoxOpcUaServices.SelectedIndexChanged += new System.EventHandler(this.ListBoxOpcUaServices_SelectedIndexChanged);
             // 
             // lblOpcUaExtractorFound
             // 

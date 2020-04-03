@@ -10,6 +10,7 @@ using System.Windows.Forms;
 using System.ServiceProcess;
 using Microsoft.Win32;
 using System.IO;
+using System.Management;
 
 namespace OpcUaServiceManager
 {
@@ -21,6 +22,7 @@ namespace OpcUaServiceManager
         private const string _serviceBaseName = "opcuaext";
         private ServiceController[] _winServices;
         private List<ServiceController> _cogniteServices;
+        private List<string> _serviceNamesInUse;
         private string _opcuaExtractorDir;
         private string _opcuaExtractorExe = @"OpcUaExtractor\OpcUaService.exe";
         private bool _piextractorCanCreateServices = false;
@@ -79,6 +81,13 @@ namespace OpcUaServiceManager
             if (string.IsNullOrWhiteSpace(txtSvcName.Text))
             {
                 MessageBox.Show("You need to provide a name for the service.");
+                return;
+            }
+
+            var duplicateCheck = _serviceNamesInUse.FirstOrDefault(x => x.Contains(txtSvcName.Text.ToLower()));
+            if (duplicateCheck != null)
+            {
+                MessageBox.Show("The name specified is already in use.");
                 return;
             }
 
@@ -166,12 +175,15 @@ namespace OpcUaServiceManager
             // Get all windows services, and create a list of our custom opcua extractor services.
             _winServices = ServiceController.GetServices();
             _cogniteServices = new List<ServiceController>();
+            _serviceNamesInUse = new List<string>();
             _nextServiceNumber = 1;
 
             List<int> serviceNumbersUsed = new List<int>();
 
             foreach (ServiceController sc in _winServices)
             {
+                _serviceNamesInUse.Add(sc.DisplayName.ToLower());
+
                 if (sc.ServiceName.StartsWith(_serviceBaseName))
                 {
                     _cogniteServices.Add(sc);
@@ -195,6 +207,24 @@ namespace OpcUaServiceManager
 
         }
 
-    }
+        private void ListBoxOpcUaServices_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            ServiceController service = (ServiceController)listBoxOpcUaServices.SelectedItem;
 
+            var serviceObject = new ManagementObject(new ManagementPath(string.Format("Win32_Service.Name='{0}'", service.ServiceName)));
+            var path = serviceObject["PathName"]?.ToString();
+            var description = serviceObject["Description"]?.ToString();
+
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                var pathItems = path.Split(' ');
+                path = (!string.IsNullOrWhiteSpace(pathItems[1])) ? pathItems[1].Replace(@"""", "") : "";
+            }
+
+            txtSvcName.Text = service.DisplayName;
+            txtSvcDescription.Text = (!string.IsNullOrWhiteSpace(description)) ? description : "";
+            txtSvcFolder.Text = path;
+        }
+
+    }
 }
