@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -18,7 +17,7 @@ using Serilog;
 
 namespace Cognite.OpcUa.Pushers
 {
-    public sealed class MqttPusher : IPusher
+    public sealed class MQTTPusher : IPusher
     {
         public int Index { get; set; }
         public bool DataFailing { get; set; }
@@ -27,20 +26,18 @@ namespace Cognite.OpcUa.Pushers
         public bool NoInit { get; set; }
         public Extractor Extractor { get; set; }
         public PusherConfig BaseConfig => config;
-        private readonly MqttPusherConfig config;
+        private readonly MQTTPusherConfig config;
         private readonly IMqttClient client;
         private readonly IMqttClientOptions options;
 
-        private readonly ILogger log = Log.ForContext(typeof(MqttPusher));
+        private readonly ILogger log = Log.ForContext(typeof(MQTTPusher));
 
-        private MqttApplicationMessageBuilder baseBuilder;
+        private readonly MqttApplicationMessageBuilder baseBuilder;
 
         private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
         private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
 
         private HashSet<string> existingNodes;
-
-        private bool connected;
 
         private static readonly Counter skippedDatapoints = Metrics
             .CreateCounter("opcua_skipped_datapoints_mqtt", "Number of datapoints skipped by MQTT pusher");
@@ -54,7 +51,7 @@ namespace Cognite.OpcUa.Pushers
             .CreateCounter("opcua_events_pushed_mqtt", "Number of events pushed to MQTT");
         private static readonly Counter eventPushCounter = Metrics
             .CreateCounter("opcua_event_pushes_mqtt", "Number of times events have been pushed to MQTT");
-        public MqttPusher(MqttPusherConfig config)
+        public MQTTPusher(MQTTPusherConfig config)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             var builder = new MqttClientOptionsBuilder()
@@ -72,30 +69,6 @@ namespace Cognite.OpcUa.Pushers
 
             options = builder.Build();
             client = new MqttFactory().CreateMqttClient();
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await client.ConnectAsync(options, CancellationToken.None);
-                    connected = true;
-                }
-                catch (Exception e)
-                {
-                    log.Warning("Failed to connect to MQTT server: {msg}", e.Message);
-                }
-            });
-            client.UseDisconnectedHandler(_ =>
-            {
-                connected = false;
-                Log.Warning("MQTT client disconnected");
-                return Task.CompletedTask;
-            });
-            client.UseConnectedHandler(_ =>
-            {
-                connected = true;
-                Log.Information("MQTT client connected");
-                return Task.CompletedTask;
-            });
             baseBuilder = new MqttApplicationMessageBuilder()
                 .WithAtLeastOnceQoS();
         }
@@ -103,7 +76,7 @@ namespace Cognite.OpcUa.Pushers
         public async Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
         {
             if (points == null) return null;
-            if (!connected) return false;
+            if (!client.IsConnected) return false;
             int count = 0;
             var dataPointList = new Dictionary<string, List<BufferedDataPoint>>();
 
@@ -185,24 +158,22 @@ namespace Cognite.OpcUa.Pushers
         }
         public async Task<bool?> TestConnection(FullConfig _, CancellationToken token)
         {
-            if (connected) return true;
+            if (client.IsConnected) return true;
             try
             {
                 await client.ConnectAsync(options, token);
-                connected = true;
             }
             catch (Exception e)
             {
                 log.Warning("Failed to connect to MQTT server: {msg}", e.Message);
-                connected = false;
             }
 
-            return connected;
+            return client.IsConnected;
         }
 
         public async Task<bool> PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
-            if (!connected) return false;
+            if (!client.IsConnected) return false;
             if (!string.IsNullOrEmpty(config.LocalState))
             {
                 if (existingNodes == null)
@@ -286,7 +257,7 @@ namespace Cognite.OpcUa.Pushers
         private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<BufferedDataPoint>> dataPointList, CancellationToken token)
         {
             if (config.Debug) return true;
-            if (!connected) return false;
+            if (!client.IsConnected) return false;
             int count = 0;
             var inserts = dataPointList.Select(kvp =>
             {
@@ -324,27 +295,25 @@ namespace Cognite.OpcUa.Pushers
             req.Items.AddRange(inserts);
             if (!req.Items.Any()) return true;
 
-            await using (var outStream = new MemoryStream())
+
+            var data = req.ToByteArray();
+            var msg = baseBuilder
+                .WithPayload(data)
+                .WithTopic(config.DatapointTopic)
+                .Build();
+
+            try
             {
-                req.WriteTo(outStream);
-                var msg = baseBuilder
-                    .WithPayload(outStream)
-                    .WithTopic(config.DatapointTopic)
-                    .Build();
-
-                try
-                {
-                    await client.PublishAsync(msg, token);
-                }
-                catch (Exception e)
-                {
-                    log.Error("Failed to write to MQTT: {msg}", e.Message);
-                    return false;
-                }
-
-                dataPointPushes.Inc();
-                dataPointsCounter.Inc(count);
+                await client.PublishAsync(msg, token);
             }
+            catch (Exception e)
+            {
+                log.Error("Failed to write to MQTT: {msg}", e.Message);
+                return false;
+            }
+
+            dataPointPushes.Inc();
+            dataPointsCounter.Inc(count);
 
             return true;
         }
@@ -352,23 +321,22 @@ namespace Cognite.OpcUa.Pushers
         private async Task<bool> PushAssets(IEnumerable<BufferedNode> objects, CancellationToken token)
         {
             var assets = objects.Select(NodeToAsset);
-            await using (var outStream = new MemoryStream())
-            {
-                await JsonSerializer.SerializeAsync(outStream, assets, null, token);
-                var msg = baseBuilder
-                    .WithPayload(outStream)
-                    .WithTopic(config.AssetTopic)
-                    .Build();
+            var data = JsonSerializer.SerializeToUtf8Bytes(assets, null);
+            
+            var msg = baseBuilder
+                .WithTopic(config.AssetTopic)
+                .WithPayload(data)
+                .Build();
 
-                try
-                {
-                    await client.PublishAsync(msg, token);
-                }
-                catch (Exception e)
-                {
-                    log.Error("Failed to write assets to MQTT: {msg}", e.Message);
-                    return false;
-                }
+            log.Information("Asset message: {msg}", msg.Payload.Length);
+            try
+            {
+                await client.PublishAsync(msg, token);
+            }
+            catch (Exception e)
+            {
+                log.Error("Failed to write assets to MQTT: {msg}", e.Message);
+                return false;
             }
 
             return true;
@@ -377,23 +345,21 @@ namespace Cognite.OpcUa.Pushers
         private async Task<bool> PushTimeseries(IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
             var timeseries = variables.Select(VariableToTimeseries);
-            await using (var outStream = new MemoryStream())
-            {
-                await JsonSerializer.SerializeAsync(outStream, timeseries, null, token);
-                var msg = baseBuilder
-                    .WithPayload(outStream)
-                    .WithTopic(config.TSTopic)
-                    .Build();
 
-                try
-                {
-                    await client.PublishAsync(msg, token);
-                }
-                catch (Exception e)
-                {
-                    log.Error("Failed to write timeseries to MQTT: {msg}", e.Message);
-                    return false;
-                }
+            var data = JsonSerializer.SerializeToUtf8Bytes(timeseries, null);
+            var msg = baseBuilder
+                .WithPayload(data)
+                .WithTopic(config.TSTopic)
+                .Build();
+
+            try
+            {
+                await client.PublishAsync(msg, token);
+            }
+            catch (Exception e)
+            {
+                log.Error("Failed to write timeseries to MQTT: {msg}", e.Message);
+                return false;
             }
 
             return true;
@@ -401,24 +367,23 @@ namespace Cognite.OpcUa.Pushers
 
         public async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> evts, CancellationToken token)
         {
-            var events = evts.Select(EventToCDFEvent);
-            await using (var outStream = new MemoryStream())
-            {
-                await JsonSerializer.SerializeAsync(outStream, events, null, token);
-                var msg = baseBuilder
-                    .WithPayload(outStream)
-                    .WithTopic(config.EventTopic)
-                    .Build();
+            var events = evts.Select(EventToCDFEvent).Where(evt => evt != null);
 
-                try
-                {
-                    await client.PublishAsync(msg, token);
-                }
-                catch (Exception e)
-                {
-                    log.Error("Failed to write events to MQTT: {msg}", e.Message);
-                    return false;
-                }
+            var data = JsonSerializer.SerializeToUtf8Bytes(events, null);
+
+            var msg = baseBuilder
+                .WithPayload(data)
+                .WithTopic(config.EventTopic)
+                .Build();
+
+            try
+            {
+                await client.PublishAsync(msg, token);
+            }
+            catch (Exception e)
+            {
+                log.Error("Failed to write events to MQTT: {msg}", e.Message);
+                return false;
             }
             eventCounter.Inc(evts.Count());
             eventPushCounter.Inc();
@@ -482,6 +447,8 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>Final EventEntity object</returns>
         private StatelessEventCreate EventToCDFEvent(BufferedEvent evt)
         {
+            var parent = Extractor.State.GetActiveNode(evt.SourceNode);
+            if (parent == null) return null;
             var entity = new StatelessEventCreate
             {
                 Description = ExtractorUtils.Truncate(evt.Message, 500),
@@ -491,7 +458,7 @@ namespace Cognite.OpcUa.Pushers
                 EndTime = evt.MetaData.ContainsKey("EndTime")
                     ? GetTimestampValue(evt.MetaData["EndTime"])
                     : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                AssetExternalIds = new List<string> { Extractor.GetUniqueId(evt.SourceNode) },
+                AssetExternalIds = new List<string> { Extractor.GetUniqueId(parent.IsVariable ? parent.ParentId : parent.Id) },
                 ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
                 Type = ExtractorUtils.Truncate(evt.MetaData.ContainsKey("Type")
                     ? Extractor.ConvertToString(evt.MetaData["Type"])
@@ -567,6 +534,10 @@ namespace Cognite.OpcUa.Pushers
             public string AssetExternalId { get; set; }
         }
         #endregion
-        public void Dispose() { }
+
+        public void Dispose()
+        {
+            client.Dispose();
+        }
     }
 }

@@ -122,7 +122,7 @@ namespace Cognite.OpcUa
                 var deserializer = new DeserializerBuilder()
                     .WithTagMapping("!cdf", typeof(CogniteClientConfig))
                     .WithTagMapping("!influx", typeof(InfluxClientConfig))
-                    .WithTagMapping("!mqtt", typeof(MqttPusherConfig))
+                    .WithTagMapping("!mqtt", typeof(MQTTPusherConfig))
                     .Build();
                 fullConfig = deserializer.Deserialize<FullConfig>(rawConfig);
             }

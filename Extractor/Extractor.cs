@@ -699,6 +699,10 @@ namespace Cognite.OpcUa
                     await historyReader.BackfillEvents(State.EmitterStates.Where(state => state.Historizing), nodes, token);
                 }
             }
+            else
+            {
+                log.Information("Skipping event history due to no initialized pushers");
+            }
         }
         /// <summary>
         /// Subscribe to data changes, then run history.
@@ -714,6 +718,10 @@ namespace Cognite.OpcUa
                 {
                     await historyReader.BackfillData(states.Where(state => state.Historizing), token);
                 }
+            }
+            else
+            {
+                log.Information("Skipping datapoints history due to no initialized pushers");
             }
         }
         /// <summary>

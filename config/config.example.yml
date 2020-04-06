@@ -108,13 +108,13 @@ Pushers:
         PointChunkSize: 100000
 
     - !mqtt
-        # TCP Server URL
+        # TCP Broker URL
         Host:
-        # TCP Server port
+        # TCP Broker port
         Port:
-        # MQTT server username
+        # MQTT broker username
         Username:
-        # MQTT server password
+        # MQTT broker password
         Password:
         # True to enable TLS
         UseTls:
@@ -123,13 +123,13 @@ Pushers:
         # Data set to use for new objects. Existing objects will not be updated
         DataSetId:
         # Assets topic
-        AssetTopic: opcua-assets
+        AssetTopic: cognite/opcua/assets
         # Timeseries topic
-        TSTopic: opcua-timeseries
+        TSTopic: cognite/opcua/timeseries
         # Events topic
-        EventTopic: opcua-events
+        EventTopic: cognite/opcua/events
         # Datapoints topic
-        DatapointTopic: opcua-datapoints
+        DatapointTopic: cognite/opcua/datapoints
         # Set to enable storing a list of created assets/timeseries to local litedb.
         # Requires the StateStorage.Location property to be set.
         # If this is left empty, metadata will have to be read each time the extractor restarts.

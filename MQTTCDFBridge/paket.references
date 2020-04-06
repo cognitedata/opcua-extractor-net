@@ -1,14 +1,9 @@
-Microsoft.CSharp
+﻿Microsoft.CSharp
 Microsoft.Extensions.Http
-OPCFoundation.NetStandard.Opc.Ua
-Prometheus.Client.MetricPusher
-Prometheus.Client.MetricServer
-YamlDotNet
 Microsoft.Extensions.Http.Polly
 Polly
 Polly.Extensions.Http
-CogniteSdk
-AdysTech.InfluxDB.Client.Net.Core
+MQTTnet
 Serilog
 Serilog.Sinks.GoogleCloudLogging
 Serilog.Formatting.Compact
@@ -16,6 +11,5 @@ Serilog.Sinks.Console
 Serilog.Sinks.Async
 Serilog.Sinks.File
 Microsoft.CodeAnalysis.FxCopAnalyzers
-LiteDB
-LiteQueue
-MQTTnet
+YamlDotNet
+CogniteSdk

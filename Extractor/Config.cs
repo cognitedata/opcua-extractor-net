@@ -88,25 +88,25 @@ namespace Cognite.OpcUa
         }
     }
 
-    public class MqttPusherConfig : PusherConfig
+    public class MQTTPusherConfig : PusherConfig
     {
         public string Host { get; set; }
         public int? Port { get; set; }
         public string Username { get; set; }
         public string Password { get; set; }
         public bool UseTls { get; set; }
-        public string ClientId { get; set; }
+        public string ClientId { get; set; } = "cognite-opcua-extractor";
         public long? DataSetId { get; set; }
-        public string AssetTopic { get; set; } = "opcua-assets";
-        public string TSTopic { get; set; } = "opcua-timeseries";
-        public string EventTopic { get; set; } = "opcua-events";
-        public string DatapointTopic { get; set; } = "opcua-datapoints";
+        public string AssetTopic { get; set; } = "cognite/opcua/assets";
+        public string TSTopic { get; set; } = "cognite/opcua/timeseries";
+        public string EventTopic { get; set; } = "cognite/opcua/events";
+        public string DatapointTopic { get; set; } = "cognite/opcua/datapoints";
         public string LocalState { get; set; }
         public long InvalidateBefore { get; set; }
 
         public override IPusher ToPusher(int index, IServiceProvider _)
         {
-            return new MqttPusher(this) { Index = index };
+            return new MQTTPusher(this) { Index = index };
         }
     }
 
