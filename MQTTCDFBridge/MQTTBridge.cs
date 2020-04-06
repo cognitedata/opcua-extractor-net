@@ -18,6 +18,7 @@ namespace Cognite.Bridge
         private readonly ILogger log = Log.ForContext(typeof(MQTTBridge));
 
         private readonly Destination destination;
+        private bool recFlag = false;
         public MQTTBridge(Destination destination, BridgeConfig config)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
@@ -40,6 +41,17 @@ namespace Cognite.Bridge
             client = new MqttFactory().CreateMqttClient();
         }
 
+        public async Task WaitForNextMessage(int timeout = 10)
+        {
+            recFlag = false;
+            for (int i = 0; i < timeout * 10; i++)
+            {
+                if (recFlag) return;
+                await Task.Delay(100);
+            }
+
+            throw new TimeoutException("Waiting for next message timed out");
+        }
         public async Task<bool> StartBridge(CancellationToken token)
         {
             client.UseDisconnectedHandler(async e =>
@@ -127,6 +139,7 @@ namespace Cognite.Bridge
                 }
 
                 msg.ProcessingFailed = !success;
+                recFlag = true;
             });
             if (!client.IsConnected)
             {

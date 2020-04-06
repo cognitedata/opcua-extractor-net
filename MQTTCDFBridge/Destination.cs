@@ -86,7 +86,7 @@ namespace Cognite.Bridge
                 else
                 {
                     log.Warning("Failed to retrieve assets from CDF: {msg}", ex.Message);
-                    return false;
+                    return ex.Code < 500;
                 }
             }
 
@@ -106,7 +106,7 @@ namespace Cognite.Bridge
             catch (ResponseException ex)
             {
                 log.Warning("Failed to create assets in CDF: {msg}", ex.Message);
-                return false;
+                return ex.Code < 500;
             }
 
             var lastIds = assets
@@ -128,7 +128,7 @@ namespace Cognite.Bridge
             catch (ResponseException ex)
             {
                 log.Warning("Failed to create assets in CDF: {msg}", ex.Message);
-                return false;
+                return ex.Code < 500;
             }
 
             return true;
@@ -169,7 +169,7 @@ namespace Cognite.Bridge
                 else
                 {
                     log.Warning("Failed to retrieve missing assets: {msg}", ex.Message);
-                    return false;
+                    return ex.Code < 500;
                 }
             }
 
@@ -188,7 +188,7 @@ namespace Cognite.Bridge
                 catch (ResponseException ex)
                 {
                     log.Warning("Failed to retrieve missing assets: {msg}", ex.Message);
-                    return false;
+                    return ex.Code < 500;
                 }
             }
 
@@ -230,7 +230,7 @@ namespace Cognite.Bridge
                 else
                 {
                     log.Warning("Failed to retrieve missing timeseries: {msg}", ex.Message);
-                    return false;
+                    return ex.Code < 500;
                 }
             }
 
@@ -249,7 +249,7 @@ namespace Cognite.Bridge
                 catch (ResponseException ex)
                 {
                     log.Warning("Failed to retrieve missing timeseries: {msg}", ex.Message);
-                    return false;
+                    return ex.Code < 500;
                 }
             }
 
@@ -265,13 +265,13 @@ namespace Cognite.Bridge
             }
             var timeseries = JsonSerializer.Deserialize<IEnumerable<StatelessTimeSeriesCreate>>(Encoding.UTF8.GetString(msg.Payload));
 
-            var assetExternalIds = timeseries.Select(ts => ts.AssetExternalId).ToHashSet();
+            var assetExternalIds = timeseries.Select(ts => ts.AssetExternalId).Where(id => id != null).ToHashSet();
 
             var missingAssetIds = assetExternalIds.Except(assetIds.Keys);
 
             var client = GetClient();
 
-            if (!missingAssetIds.Any())
+            if (missingAssetIds.Any())
             {
                 if (!await RetrieveMissingAssetIds(missingAssetIds, token))
                 {
@@ -283,7 +283,11 @@ namespace Cognite.Bridge
 
             foreach (var ts in timeseries)
             {
-                if (assetIds.ContainsKey(ts.AssetExternalId))
+                if (ts.AssetExternalId == null)
+                {
+                    testSeries.Add(ts);
+                }
+                else if (assetIds.ContainsKey(ts.AssetExternalId))
                 {
                     var id = assetIds[ts.AssetExternalId];
                     if (id != null)
@@ -325,7 +329,7 @@ namespace Cognite.Bridge
                 else
                 {
                     log.Warning("Failed to retrieve missing timeseries: {msg}", ex.Message);
-                    return false;
+                    return ex.Code < 500;
                 }
             }
 
@@ -345,13 +349,15 @@ namespace Cognite.Bridge
             catch (ResponseException ex)
             {
                 log.Warning("Failed to create missing timeseries: {msg}", ex.Message);
-                return false;
+                return ex.Code < 500;
             }
 
             var lastIds = testSeries
                 .Where(ts => !missingIds.Contains(ts.ExternalId))
                 .Select(ts => Identity.Create(ts.ExternalId))
                 .ToList();
+
+            if (!lastIds.Any()) return true;
 
             try
             {
@@ -365,7 +371,7 @@ namespace Cognite.Bridge
             catch (ResponseException ex)
             {
                 log.Warning("Failed to retrieve final missing timeseries: {msg}", ex.Message);
-                return false;
+                return ex.Code < 500;
             }
 
             return true;
@@ -461,14 +467,15 @@ namespace Cognite.Bridge
                 log.Warning("Null payload in events");
                 return true;
             }
+            log.Information("Events push");
             var events = JsonSerializer.Deserialize<IEnumerable<StatelessEventCreate>>(Encoding.UTF8.GetString(msg.Payload));
 
-            var assetExternalIds = events.SelectMany(evt => evt.AssetExternalIds);
+            var assetExternalIds = events.SelectMany(evt => evt.AssetExternalIds).Where(id => id != null);
             var missingAssetIds = assetExternalIds.Except(assetIds.Keys);
 
             var client = GetClient();
 
-            if (!missingAssetIds.Any())
+            if (missingAssetIds.Any())
             {
                 if (!await RetrieveMissingAssetIds(missingAssetIds, token))
                 {
@@ -480,13 +487,15 @@ namespace Cognite.Bridge
             {
                 evt.AssetIds = evt.AssetExternalIds.Where(id => assetIds.ContainsKey(id) && assetIds[id] != null)
                     .Select(id => assetIds[id] ?? 0);
-                if (!evt.AssetIds.Any())
+                if (!evt.AssetIds.Any() && evt.AssetExternalIds.Any())
                 {
-                    log.Debug("Ignoring event with assetIds: {ids}", evt.AssetExternalIds.Aggregate((id, cr) => id + ", " + cr));
+                    log.Verbose("Ignoring event with assetIds: {ids}", evt.AssetExternalIds.Aggregate((id, cr) => id + ", " + cr));
                 }
             }
 
-            events = events.Where(evt => evt.AssetIds.Any());
+            events = events.Where(evt => evt.AssetIds.Any() || !evt.AssetExternalIds.Any());
+
+            if (!events.Any()) return true;
 
             try
             {
@@ -506,18 +515,18 @@ namespace Cognite.Bridge
                         await client.Events.CreateAsync(events, token);
                         log.Debug("Push {cnt} events to CDF", events.Count());
                     }
-                    catch (Exception exc)
+                    catch (ResponseException exc)
                     {
                         log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}",
                             events.Count(), exc.Message);
-                        return false;
+                        return exc.Code < 500;
                     }
                 }
                 else
                 {
                     log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}",
                         events.Count(), ex.Message);
-                    return false;
+                    return ex.Code < 500;
                 }
             }
 

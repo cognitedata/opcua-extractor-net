@@ -20,6 +20,9 @@
     <Folder Include="servers\" />
   </ItemGroup>
   <ItemGroup>
+    <None Update="config.bridge.yml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="config.config-tool-test.yml">
 	  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	</None>
