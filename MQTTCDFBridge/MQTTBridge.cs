@@ -9,16 +9,16 @@ using Serilog;
 
 namespace Cognite.Bridge
 {
-    public sealed class Bridge : IDisposable
+    public sealed class MQTTBridge : IDisposable
     {
         private readonly BridgeConfig config;
         private readonly IMqttClientOptions options;
         private readonly IMqttClient client;
 
-        private readonly ILogger log = Log.ForContext(typeof(Bridge));
+        private readonly ILogger log = Log.ForContext(typeof(MQTTBridge));
 
         private readonly Destination destination;
-        public Bridge(Destination destination, BridgeConfig config)
+        public MQTTBridge(Destination destination, BridgeConfig config)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             this.destination = destination;

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using Cognite.Bridge;
 using Newtonsoft.Json;
 using Serilog;
 using Serilog.Events;

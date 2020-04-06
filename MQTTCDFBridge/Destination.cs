@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -9,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Transactions;
 using Com.Cognite.V1.Timeseries.Proto;
 using MQTTnet;
 using Serilog;
@@ -479,7 +479,7 @@ namespace Cognite.Bridge
             foreach (var evt in events)
             {
                 evt.AssetIds = evt.AssetExternalIds.Where(id => assetIds.ContainsKey(id) && assetIds[id] != null)
-                    .Select(id => assetIds[id].Value);
+                    .Select(id => assetIds[id] ?? 0);
                 if (!evt.AssetIds.Any())
                 {
                     log.Debug("Ignoring event with assetIds: {ids}", evt.AssetExternalIds.Aggregate((id, cr) => id + ", " + cr));
@@ -523,11 +523,13 @@ namespace Cognite.Bridge
 
             return true;
         }
-        class StatelessEventCreate : EventCreate
+        [SuppressMessage("Microsoft.Performance", "CA1812")]
+        internal class StatelessEventCreate : EventCreate
         {
             public IEnumerable<string> AssetExternalIds { get; set; }
         }
-        private class StatelessTimeSeriesCreate : TimeSeriesCreate
+        [SuppressMessage("Microsoft.Performance", "CA1812")]
+        internal class StatelessTimeSeriesCreate : TimeSeriesCreate
         {
             public string AssetExternalId { get; set; }
         }

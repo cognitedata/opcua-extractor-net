@@ -79,7 +79,7 @@ namespace Cognite.Bridge
         public static async Task RunBridge(BridgeConfig config, IServiceProvider provider)
         {
             var destination = new Destination(config.CDF, provider);
-            using var bridge = new Bridge(destination, config);
+            using var bridge = new MQTTBridge(destination, config);
 
             using var source = new CancellationTokenSource();
 
