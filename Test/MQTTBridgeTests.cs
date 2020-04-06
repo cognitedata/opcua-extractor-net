@@ -435,7 +435,6 @@ namespace Test
             Assert.Equal(4, tester.Handler.datapoints["test-ts-1"].Item1.Count);
             Assert.Equal(2, tester.Handler.datapoints["test-ts-2"].Item2.Count);
             Assert.Empty(tester.Handler.datapoints["test-ts-2"].Item1);
-
         }
 
         [Fact]

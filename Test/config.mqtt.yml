@@ -1,0 +1,4 @@
+﻿Pushers:
+    - !mqtt
+        Host: "localhost"
+        Port: 4060

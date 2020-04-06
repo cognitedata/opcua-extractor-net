@@ -29,6 +29,9 @@
     <None Update="config.events.yml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="config.mqtt.yml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="config.test.yml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

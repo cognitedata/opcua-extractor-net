@@ -328,7 +328,6 @@ namespace Cognite.OpcUa.Pushers
                 .WithPayload(data)
                 .Build();
 
-            log.Information("Asset message: {msg}", msg.Payload.Length);
             try
             {
                 await client.PublishAsync(msg, token);

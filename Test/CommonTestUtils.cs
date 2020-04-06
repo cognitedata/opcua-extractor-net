@@ -23,6 +23,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
+using Cognite.Bridge;
 using Cognite.OpcUa;
 using LiteDB;
 using Microsoft.Extensions.DependencyInjection;
@@ -296,7 +297,7 @@ namespace Test
         }
     }
     public enum ServerName { Basic, Full, Array, Events, Audit, Proxy }
-    public enum ConfigName { Events, Influx, Test }
+    public enum ConfigName { Events, Influx, Test, Mqtt }
 
     public sealed class ExtractorTester : IDisposable
     {
@@ -314,7 +315,8 @@ namespace Test
         {
             {ConfigName.Test, "config.test.yml"},
             {ConfigName.Events, "config.events.yml"},
-            {ConfigName.Influx, "config.influxtest.yml"}
+            {ConfigName.Influx, "config.influxtest.yml"},
+            {ConfigName.Mqtt, "config.mqtt.yml"}
         };
 
 
@@ -328,6 +330,7 @@ namespace Test
         public CancellationTokenSource Source { get; }
         public InfluxDBClient IfDbClient { get; }
         private readonly bool influx;
+        public MQTTBridge Bridge { get; }
         public Task RunTask { get; private set; }
         private readonly ExtractorTestParameters testParams;
         private static readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorTester));
@@ -414,6 +417,14 @@ namespace Test
                     Pusher = InfluxConfig.ToPusher(0, null);
                     influx = true;
                     IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
+                    break;
+                case MQTTPusherConfig mqttPusherConfig:
+                    var mqttConfig = Cognite.Bridge.Config.GetConfig("config.bridge.yml");
+                    Handler = new CDFMockHandler(mqttConfig.CDF.Project, testParams.MockMode);
+                    Handler.StoreDatapoints = testParams.StoreDatapoints;
+                    Bridge = new MQTTBridge(new Destination(mqttConfig.CDF, CommonTestUtils.GetDummyProvider(Handler)), mqttConfig);
+                    Bridge.StartBridge(CancellationToken.None).Wait();
+                    Pusher = mqttPusherConfig.ToPusher(0, null);
                     break;
             }
 
