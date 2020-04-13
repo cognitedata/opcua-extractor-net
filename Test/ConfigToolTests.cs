@@ -193,5 +193,43 @@ namespace Test
                 if (!CommonTestUtils.TestRunResult(ex)) throw;
             }
         }
+
+        [Fact]
+        [Trait("Server", "none")]
+        [Trait("Target", "ConfigTool")]
+        [Trait("Test", "namespacemapping")]
+        public void TestNamespaceMapping()
+        {
+            var namespaces = new List<string>
+            {
+                "opc.tcp://test.namespace.onet",
+                "test.namespace.twot",
+                "test.namespace.duplicateone",
+                "test.namespace.duplicatetwo",
+                "http://test.namespace.http",
+                "http://opcfoundation.org/UA/",
+                "test.Upper.Case.Duplicate",
+                "test.Upper.Case.Duplicatetwo"
+            };
+
+            var expectedKeys = new []
+            {
+                "tno:",
+                "tnt:",
+                "tnd:",
+                "tnd1:",
+                "tnh:",
+                "base:",
+                "tucd:",
+                "tucd1:"
+            };
+
+            var dict = UAServerExplorer.GenerateNamespaceMap(namespaces);
+            var keys = namespaces.Select(ns => dict[ns]).ToArray();
+            for (int i = 0; i < keys.Length; i++)
+            {
+                Assert.Equal(expectedKeys[i], keys[i]);
+            }
+        }
     }
 }

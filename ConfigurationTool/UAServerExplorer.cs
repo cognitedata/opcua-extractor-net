@@ -1227,27 +1227,19 @@ namespace Cognite.OpcUa.Config
             baseConfig.Events.HistorizingEmitterIds = historizingEmitters.Distinct().Select(NodeIdToProto).ToList();
         }
 
-
-        /// <summary>
-        /// Generate an intelligent namespace-map, with unique values, base for the base opcfoundation namespace (I think that appears in most servers).
-        /// </summary>
-        public void GetNamespaceMap()
+        public static Dictionary<string, string> GenerateNamespaceMap(IEnumerable<string> namespaces)
         {
-            var indices = nodeList.Concat(dataTypes).Concat(eventTypes).Select(node => node.Id.NamespaceIndex).Distinct();
-
-            var namespaces = indices.Select(idx => Session.NamespaceUris.GetString(idx));
-
             var startRegex = new Regex("^.*://");
             var splitRegex = new Regex("[^a-zA-Z\\d]");
 
             var map = namespaces.ToDictionary(ns => ns, ns =>
                 ns == "http://opcfoundation.org/UA/" ? "base" :
-                string.Concat(splitRegex.Split(startRegex.Replace(ns, ""))
-                    .Where(sub => !string.IsNullOrEmpty(sub) && sub.Length > 3)
-                    .Select(sub => sub.First()))
+                    string.Concat(splitRegex.Split(startRegex.Replace(ns, ""))
+                        .Where(sub => !string.IsNullOrEmpty(sub) && sub.Length > 3)
+                        .Select(sub => sub.First()))
             );
 
-            namespaceMap = new Dictionary<string, string>();
+            var namespaceMap = new Dictionary<string, string>();
 
             foreach (var mapped in map)
             {
@@ -1257,13 +1249,13 @@ namespace Cognite.OpcUa.Config
 
                 int index = 1;
 
-                while (namespaceMap.Any(kvp => nextValue == kvp.Value && mapped.Key != kvp.Key))
+#pragma warning disable CA1308 // Normalize strings to uppercase. Lowercase is prettier in externalId.
+                while (namespaceMap.Any(kvp => nextValue.ToLowerInvariant() == kvp.Value && mapped.Key != kvp.Key))
                 {
                     nextValue = baseValue + index;
                     index++;
                 }
 
-#pragma warning disable CA1308 // Normalize strings to uppercase. Lowercase is prettier in externalId.
                 namespaceMap.Add(mapped.Key, nextValue.ToLowerInvariant());
 #pragma warning restore CA1308 // Normalize strings to uppercase
             }
@@ -1272,6 +1264,19 @@ namespace Cognite.OpcUa.Config
             {
                 namespaceMap[key] += ":";
             }
+
+            return namespaceMap;
+        }
+        /// <summary>
+        /// Generate an intelligent namespace-map, with unique values, base for the base opcfoundation namespace (I think that appears in most servers).
+        /// </summary>
+        public void GetNamespaceMap()
+        {
+            var indices = nodeList.Concat(dataTypes).Concat(eventTypes).Select(node => node.Id.NamespaceIndex).Distinct();
+
+            var namespaces = indices.Select(idx => Session.NamespaceUris.GetString(idx));
+
+            namespaceMap = GenerateNamespaceMap(namespaces);
 
             log.Information("Suggested namespaceMap: ");
             foreach (var kvp in namespaceMap)
