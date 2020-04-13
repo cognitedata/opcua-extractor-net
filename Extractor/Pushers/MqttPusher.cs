@@ -39,6 +39,10 @@ namespace Cognite.OpcUa.Pushers
 
         private HashSet<string> existingNodes;
 
+        private static readonly Counter createdAssets = Metrics
+            .CreateCounter("opcua_created_assets_mqtt", "Number of assets pushed over mqtt");
+        private static readonly Counter createdTimeseries = Metrics
+            .CreateCounter("opcua_created_timeseries_mqtt", "Number of timeseries pushed over mqtt");
         private static readonly Counter skippedDatapoints = Metrics
             .CreateCounter("opcua_skipped_datapoints_mqtt", "Number of datapoints skipped by MQTT pusher");
         private static readonly Counter skippedEvents = Metrics
@@ -192,6 +196,8 @@ namespace Cognite.OpcUa.Pushers
             if (!objects.Any() && !variables.Any()) return true;
             await Extractor.ReadProperties(objects.Concat(variables), token);
 
+            log.Information("Pushing {cnt} assets and {cnt2} timeseries over MQTT", objects.Count(), variables.Count());
+
             if (objects.Any())
             {
 
@@ -331,6 +337,7 @@ namespace Cognite.OpcUa.Pushers
             try
             {
                 await client.PublishAsync(msg, token);
+                createdAssets.Inc(assets.Count());
             }
             catch (Exception e)
             {
@@ -354,6 +361,7 @@ namespace Cognite.OpcUa.Pushers
             try
             {
                 await client.PublishAsync(msg, token);
+                createdTimeseries.Inc(timeseries.Count());
             }
             catch (Exception e)
             {

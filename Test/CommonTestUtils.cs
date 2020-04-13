@@ -179,7 +179,9 @@ namespace Test
                 "opcua_datapoint_push_failures_influx",
                 "opcua_event_push_failures",
                 "opcua_event_push_failures_influx",
-                "opcua_duplicated_events"
+                "opcua_duplicated_events",
+                "opcua_created_assets_mqtt",
+                "opcua_created_timeseries_mqtt"
             };
             foreach (var metric in metrics)
             {
@@ -354,7 +356,7 @@ namespace Test
                 pusherConfig = ExtractorUtils.GetConfig(configNames[testParams.PusherConfig.Value]);
             }
 
-            if (testParams.StateStorage || testParams.BufferQueue || testParams.StateInflux)
+            if (testParams.StateStorage || testParams.BufferQueue || testParams.StateInflux || testParams.MqttState)
             {
                 Config.StateStorage.Location = "testbuffer.db";
             }
@@ -424,6 +426,10 @@ namespace Test
                     Handler.StoreDatapoints = testParams.StoreDatapoints;
                     Bridge = new MQTTBridge(new Destination(mqttConfig.CDF, CommonTestUtils.GetDummyProvider(Handler)), mqttConfig);
                     Bridge.StartBridge(CancellationToken.None).Wait();
+                    if (testParams.MqttState)
+                    {
+                        mqttPusherConfig.LocalState = "mqtt_created_states";
+                    }
                     Pusher = mqttPusherConfig.ToPusher(0, null);
                     break;
             }
@@ -619,6 +625,7 @@ namespace Test
         public bool StateStorage { get; set; } = false;
         public bool StateInflux { get; set; } = false;
         public bool BufferQueue { get; set; } = false;
+        public bool MqttState { get; set; } = false;
         public string DataBufferPath { get; set; }
         public string EventBufferPath { get; set; }
     }

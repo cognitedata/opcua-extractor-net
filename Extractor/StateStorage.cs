@@ -425,7 +425,7 @@ namespace Cognite.OpcUa
                     var col = db.GetCollection<MqttStatePoco>(name);
                     return col.FindAll();
                 }, token);
-                return pocos.Where(poco => poco.CreatedAt < invalidateTreshold || invalidateTreshold < new DateTime(1971, 0, 0))
+                return pocos.Where(poco => poco.CreatedAt < invalidateTreshold || invalidateTreshold < new DateTime(1971, 1, 1))
                     .Select(poco => poco.Id);
             }
             catch (LiteException e)
