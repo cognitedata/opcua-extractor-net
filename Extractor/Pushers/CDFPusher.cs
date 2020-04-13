@@ -295,7 +295,7 @@ namespace Cognite.OpcUa
         {
             var client = GetClient("Data");
             IEnumerable<EventCreate> eventEntities = events.Select(EventToCDFEvent).DistinctBy(evt => evt.ExternalId).ToList();
-            var count = events.Count();
+            int count = events.Count();
             try
             {
                 await client.Events.CreateAsync(eventEntities, token);
@@ -613,22 +613,19 @@ namespace Cognite.OpcUa
                 return false;
             }
 
-            if (fullConfig.Events.EventIds != null 
-                && fullConfig.Events.EmitterIds != null
-                && fullConfig.Events.EventIds.Any()
-                && fullConfig.Events.EmitterIds.Any())
+            if (fullConfig.Events.EventIds == null || fullConfig.Events.EmitterIds == null ||
+                !fullConfig.Events.EventIds.Any() || !fullConfig.Events.EmitterIds.Any()) return true;
+
+            try
             {
-                try
-                {
-                    await client.Events.ListAsync(new EventQuery { Limit = 1 }, token);
-                }
-                catch (ResponseException ex)
-                {
-                    log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
-                              "to insufficient acces rights on API key. Project {project} at {host}: {msg}",
-                        config.Project, config.Host, ex.Message);
-                    log.Debug(ex, "Could not access CDF Events");
-                }
+                await client.Events.ListAsync(new EventQuery { Limit = 1 }, token);
+            }
+            catch (ResponseException ex)
+            {
+                log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
+                          "to insufficient acces rights on API key. Project {project} at {host}: {msg}",
+                    config.Project, config.Host, ex.Message);
+                log.Debug(ex, "Could not access CDF Events");
             }
 
             return true;
@@ -856,10 +853,7 @@ namespace Cognite.OpcUa
             {
                 return new DateTimeOffset(dt).ToUnixTimeMilliseconds();
             }
-            else
-            {
-                return Convert.ToInt64(value, CultureInfo.InvariantCulture);
-            }
+            return Convert.ToInt64(value, CultureInfo.InvariantCulture);
         }
         private static readonly HashSet<string> excludeMetaData = new HashSet<string> {
             "StartTime", "EndTime", "Type", "SubType"
