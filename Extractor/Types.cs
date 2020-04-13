@@ -53,6 +53,10 @@ namespace Cognite.OpcUa
         /// Description in OPC-UA
         /// </summary>
         public string Description { get; set; }
+        /// <summary>
+        /// Return a string description, for logging
+        /// </summary>
+        /// <returns>Descriptive string</returns>
         public virtual string ToDebugDescription()
         {
             string propertyString = "properties: {" + (Properties != null && Properties.Any() ? "\n" : "");
@@ -71,6 +75,9 @@ namespace Cognite.OpcUa
                 + propertyString + "\n";
             return ret;
         }
+        /// <summary>
+        /// Properties in OPC-UA
+        /// </summary>
         public IList<BufferedVariable> Properties { get; set; }
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
@@ -146,6 +153,11 @@ namespace Cognite.OpcUa
         /// DataType in opcua
         /// </summary>
         public BufferedDataType DataType { get; private set; }
+        /// <summary>
+        /// Sets the datatype based on OPC-UA nodeId and configured map of numerical types.
+        /// </summary>
+        /// <param name="dataType">Raw nodeid of datatype from OPC-UA</param>
+        /// <param name="numericalTypeMap">Mapping of numerical types</param>
         public void SetDataType(NodeId dataType, Dictionary<NodeId, ProtoDataType> numericalTypeMap)
         {
             if (numericalTypeMap == null) throw new ArgumentNullException(nameof(numericalTypeMap));
@@ -177,6 +189,9 @@ namespace Cognite.OpcUa
         /// Value of variable as string or double
         /// </summary>
         public BufferedDataPoint Value { get; private set; }
+        /// <summary>
+        /// True if attributes have been read from OPC-UA for this variable
+        /// </summary>
         public bool DataRead { get; set; } = false;
         public override string ToDebugDescription()
         {
@@ -198,9 +213,10 @@ namespace Cognite.OpcUa
                 + DataType + "\n";
             return ret;
         }
+        /// <summary>
+        /// Parent if this represents an element of an array.
+        /// </summary>
         public BufferedVariable ArrayParent { get; }
-
-
         /// <summary>
         /// Fixed dimensions of the array-type variable, if any
         /// </summary>
@@ -238,6 +254,11 @@ namespace Cognite.OpcUa
                     UAClient.ConvertToDouble(value));
             }
         }
+        /// <summary>
+        /// Create an array-element variable.
+        /// </summary>
+        /// <param name="other">Parent variable</param>
+        /// <param name="index">Index in the array</param>
         public BufferedVariable(BufferedVariable other, int index)
             : base(OtherNonNull(other).Id, other.DisplayName + $"[{index}]", true, other.Id)
         {
@@ -248,7 +269,10 @@ namespace Cognite.OpcUa
             ValueRank = other.ValueRank;
             ArrayDimensions = other.ArrayDimensions;
         }
-
+        /// <summary>
+        /// Returns given variable if it is not null, otherwise throws an error.
+        /// Used to prevent warnings when calling base constructor.
+        /// </summary>
         private static BufferedVariable OtherNonNull(BufferedVariable other)
         {
             if (other == null) throw new ArgumentNullException(nameof(other));
@@ -285,7 +309,11 @@ namespace Cognite.OpcUa
             StringValue = value;
             IsString = true;
         }
-
+        /// <summary>
+        /// Copy given datapoint with given replacement value
+        /// </summary>
+        /// <param name="other">Datapoint to copy</param>
+        /// <param name="replacement">Replacement value</param>
         public BufferedDataPoint(BufferedDataPoint other, string replacement)
         {
             if (other == null) throw new ArgumentNullException(nameof(other));
@@ -294,6 +322,11 @@ namespace Cognite.OpcUa
             StringValue = replacement;
             IsString = other.IsString;
         }
+        /// <summary>
+        /// Copy given datapoint with given replacement value
+        /// </summary>
+        /// <param name="other">Datapoint to copy</param>
+        /// <param name="replacement">Replacement value</param>
         public BufferedDataPoint(BufferedDataPoint other, double replacement)
         {
             if (other == null) throw new ArgumentNullException(nameof(other));
@@ -436,7 +469,14 @@ namespace Cognite.OpcUa
                 + $"    EventTypeId: {EventType}\n"
                 + $"    MetaData: {metadata}\n";
         }
-
+        /// <summary>
+        /// Converts event into array of bytes which may be written to file.
+        /// The format is [ushort length][string message][string eventId][string sourceNode][long timestamp][string type]
+        /// [string emitter][ushort metadata count][[string key][string value]...]
+        /// Strings are stored on the format [ushort length][string]
+        /// </summary>
+        /// <param name="extractor">Extractor to use for nodeId conversions</param>
+        /// <returns>Array of converted bytes</returns>
         public byte[] ToStorableBytes(Extractor extractor)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
@@ -460,8 +500,14 @@ namespace Cognite.OpcUa
             bytes.InsertRange(0, BitConverter.GetBytes((ushort)bytes.Count));
             return bytes.ToArray();
         }
-
-        public static (BufferedEvent, int) FromStorableBytes(byte[] bytes, Extractor extractor, int next)
+        /// <summary>
+        /// Read event from given array of bytes. See BufferedEvent.ToStorableBytes for details.
+        /// </summary>
+        /// <param name="bytes">Bytes to read from</param>
+        /// <param name="extractor">Extractor to use for nodeId conversions</param>
+        /// <param name="next">Start position</param>
+        /// <returns>Converted event and new position in array</returns>
+        public static (BufferedEvent evt, int pos) FromStorableBytes(byte[] bytes, Extractor extractor, int next)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             if (bytes == null) throw new ArgumentNullException(nameof(bytes));

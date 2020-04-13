@@ -295,7 +295,11 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Browse
-
+        /// <summary>
+        /// Browse node hierarchy for single root node
+        /// </summary>
+        /// <param name="root">Root node to browse for</param>
+        /// <param name="callback">Callback to call for each found node</param>
         public Task BrowseNodeHierarchy(NodeId root, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
         {
             return BrowseNodeHierarchy(new[] {root}, callback, token);
@@ -384,7 +388,7 @@ namespace Cognite.OpcUa
         /// <param name="parents">List of parents to browse</param>
         /// <param name="referenceTypes">Referencetype to browse, defaults to HierarchicalReferences</param>
         /// <param name="nodeClassMask">Mask for node classes, as specified in the OPC-UA specification</param>
-        /// <returns></returns>
+        /// <returns>Dictionary from parent nodeId to collection of children as ReferenceDescriptions</returns>
         private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(
             IEnumerable<NodeId> parents,
             NodeId referenceTypes,
@@ -498,7 +502,9 @@ namespace Cognite.OpcUa
             }
             return finalResults;
         }
-
+        /// <summary>
+        /// Clear internal list of visited nodes, allowing callbacks to be called for visited nodes again.
+        /// </summary>
         public void ResetVisitedNodes()
         {
             lock (visitedNodesLock)
@@ -791,14 +797,12 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Synchronization
-
-
         /// <summary>
         /// Modifies passed HistoryReadParams while doing a single config-limited iteration of history read.
         /// </summary>
         /// <param name="readParams"></param>
         /// <returns>Pairs of NodeId and history read results as IEncodable</returns>
-        public IEnumerable<(NodeId, IEncodeable)> DoHistoryRead(HistoryReadParams readParams)
+        public IEnumerable<(NodeId id, IEncodeable rawData)> DoHistoryRead(HistoryReadParams readParams)
         {
             if (readParams == null) throw new ArgumentNullException(nameof(readParams));
             IncOperations();
@@ -1065,12 +1069,15 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Events
-
+        /// <summary>
+        /// Return systemContext. Can be used by SDK-tools for converting events.
+        /// </summary>
+        /// <returns>ISystemContext for given session, or null if no session exists</returns>
         public ISystemContext GetSystemContext()
         {
             return Session?.SystemContext;
         }
-        public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventFields(IEnumerable<NodeId> eventIds, CancellationToken token)
+        public Dictionary<NodeId, IEnumerable<(NodeId root, QualifiedName browseName)>> GetEventFields(IEnumerable<NodeId> eventIds, CancellationToken token)
         {
             if (eventFields != null) return eventFields;
             var collector = new EventFieldCollector(this, eventIds);
@@ -1121,8 +1128,8 @@ namespace Cognite.OpcUa
             whereClause.Push(FilterOperator.And, elem1, elem2);
 
             var fieldList = eventFields
-                .Aggregate((IEnumerable<(NodeId, QualifiedName)>)new List<(NodeId, QualifiedName)>(), (agg, kvp) => agg.Concat(kvp.Value))
-                .GroupBy(variable => variable.Item2)
+                .Aggregate((IEnumerable<(NodeId Root, QualifiedName BrowseName)>)new List<(NodeId, QualifiedName)>(), (agg, kvp) => agg.Concat(kvp.Value))
+                .GroupBy(variable => variable.BrowseName)
                 .Select(items => items.FirstOrDefault());
 
             if (!fieldList.Any())
@@ -1130,18 +1137,18 @@ namespace Cognite.OpcUa
                 log.Warning("Missing valid event fields, no results will be returned");
             }
             var selectClauses = new SimpleAttributeOperandCollection();
-            foreach (var field in fieldList)
+            foreach (var (root, browseName) in fieldList)
             {
-                if (eventConfig.ExcludeProperties.Contains(field.Item2.Name)
-                    || eventConfig.BaseExcludeProperties.Contains(field.Item2.Name) && field.Item1 == ObjectTypeIds.BaseEventType) continue;
+                if (eventConfig.ExcludeProperties.Contains(browseName.Name)
+                    || eventConfig.BaseExcludeProperties.Contains(browseName.Name) && root == ObjectTypeIds.BaseEventType) continue;
                 var operand = new SimpleAttributeOperand
                 {
                     AttributeId = Attributes.Value,
-                    TypeDefinitionId = field.Item1
+                    TypeDefinitionId = root
                 };
-                operand.BrowsePath.Add(field.Item2);
+                operand.BrowsePath.Add(browseName);
                 selectClauses.Add(operand);
-                log.Debug("Select event attribute {id}: {name}", field.Item1, field.Item2);
+                log.Debug("Select event attribute {id}: {name}", root, browseName);
             }
             return new EventFilter
             {
@@ -1149,7 +1156,10 @@ namespace Cognite.OpcUa
                 SelectClauses = selectClauses
             };
         }
-
+        /// <summary>
+        /// Build ContentFilter to be used when subscribing to audit events.
+        /// </summary>
+        /// <returns>Final EventFilter</returns>
         private static EventFilter BuildAuditFilter()
         {
             var whereClause = new ContentFilter();
@@ -1193,6 +1203,10 @@ namespace Cognite.OpcUa
                 SelectClauses = selectClauses
             };
         }
+        /// <summary>
+        /// Subscribe to audit events on the server node
+        /// </summary>
+        /// <param name="callback">Callback to use for subscriptions</param>
         public void SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback)
         {
             var filter = BuildAuditFilter();
@@ -1484,9 +1498,11 @@ namespace Cognite.OpcUa
             reconnectHandler?.Dispose();
 
         }
-
         #endregion
     }
+    /// <summary>
+    /// Parameter class containing the state of a single history read operation.
+    /// </summary>
     public class HistoryReadParams
     {
         public HistoryReadDetails Details { get; }

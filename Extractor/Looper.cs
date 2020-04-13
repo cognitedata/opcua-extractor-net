@@ -8,6 +8,9 @@ using Serilog;
 
 namespace Cognite.OpcUa
 {
+    /// <summary>
+    /// Looper used to manage loops in the extractor.
+    /// </summary>
     public sealed class Looper : IDisposable
     {
         private readonly Extractor extractor;

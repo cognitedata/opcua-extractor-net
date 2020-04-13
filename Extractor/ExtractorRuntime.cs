@@ -29,6 +29,10 @@ using Serilog;
 
 namespace Cognite.OpcUa
 {
+    /// <summary>
+    /// Container for the Extractor process. Use this when running the extractor to properly handle errors and
+    /// reduce overhead on restart.
+    /// </summary>
     public class ExtractorRuntime
     {
         private readonly FullConfig config;
@@ -36,18 +40,22 @@ namespace Cognite.OpcUa
 
         private static readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorRuntime));
 
+        /// <summary>
+        /// Constructor, takes fully configured FullConfig
+        /// </summary>
+        /// <param name="config"></param>
         public ExtractorRuntime(FullConfig config)
         {
             this.config = config;
         }
-
+        /// <summary>
+        /// Creates the IServiceProvider instance to be used with this extractorRuntime
+        /// </summary>
         public void Configure()
         {
             var services = new ServiceCollection();
             Configure(services);
             provider = services.BuildServiceProvider();
-            var factory = provider.GetRequiredService<IHttpClientFactory>();
-            factory.CreateClient("Context");
         }
 
         /// <summary>
@@ -63,6 +71,10 @@ namespace Cognite.OpcUa
                 .AddPolicyHandler(GetDataRetryPolicy())
                 .AddPolicyHandler(GetTimeoutPolicy());
         }
+        /// <summary>
+        /// Returns a retry policy to be used with requests to CDF for assets and timeseries.
+        /// </summary>
+        /// <returns>Retry policy with a high number of retries</returns>
         private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
         {
             return Policy
@@ -74,6 +86,10 @@ namespace Cognite.OpcUa
                 .Or<TimeoutRejectedException>()
                 .WaitAndRetryAsync(8, retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
         }
+        /// <summary>
+        /// Returns a retry policy to be used with requests to CDF for datapoints and events
+        /// </summary>
+        /// <returns>Retry policy with lower number of retries</returns>
         private static IAsyncPolicy<HttpResponseMessage> GetDataRetryPolicy()
         {
             return Policy
@@ -85,16 +101,18 @@ namespace Cognite.OpcUa
                 .Or<TimeoutRejectedException>()
                 .WaitAndRetryAsync(4, retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
         }
+        /// <summary>
+        /// Return a 20 second timeout policy
+        /// </summary>
+        /// <returns>20 second timeout policy</returns>
         private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
         {
             return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(20));
         }
 
         /// <summary>
-        /// Start the extractor.
+        /// Start the extractor. This creates pushers and tests their connection
         /// </summary>
-        /// <param name="config">Full config object</param>
-        /// <param name="provider">ServiceProvider with any required service for the pushers.</param>
         /// <param name="source">CancellationTokenSource used to create tokens and terminate the run-task on failure</param>
         public async Task Run(CancellationTokenSource source)
         {

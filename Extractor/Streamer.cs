@@ -126,10 +126,10 @@ namespace Cognite.OpcUa
             {
                 await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
             }
-            foreach (var kvp in pointRanges)
+            foreach ((string id, var range) in pointRanges)
             {
-                var state = extractor.State.GetNodeState(kvp.Key);
-                state.UpdateDestinationRange(kvp.Value);
+                var state = extractor.State.GetNodeState(id);
+                state.UpdateDestinationRange(range);
             }
             return restartHistory;
         }
@@ -225,10 +225,10 @@ namespace Cognite.OpcUa
             {
                 await extractor.FailureBuffer.ReadEvents(passingPushers, token);
             }
-            foreach (var kvp in eventRanges)
+            foreach (var (id, range) in eventRanges)
             {
-                var state = extractor.State.GetEmitterState(kvp.Key);
-                state.UpdateDestinationRange(kvp.Value);
+                var state = extractor.State.GetEmitterState(id);
+                state.UpdateDestinationRange(range);
             }
 
 
@@ -374,8 +374,8 @@ namespace Cognite.OpcUa
             {
                 var clause = filter.SelectClauses[i];
                 if (!targetEventFields.Any(field =>
-                    field.Item1 == clause.TypeDefinitionId
-                    && field.Item2 == clause.BrowsePath[0]
+                    field.Root == clause.TypeDefinitionId
+                    && field.BrowseName == clause.BrowsePath[0]
                     && clause.BrowsePath.Count == 1)) continue;
 
                 string name = clause.BrowsePath[0].Name;
@@ -396,7 +396,7 @@ namespace Cognite.OpcUa
                 return null;
             }
 
-            var eventId = Convert.ToBase64String(rawEventId);
+            string eventId = Convert.ToBase64String(rawEventId);
             var sourceNode = extractedProperties.GetValueOrDefault("SourceNode");
             if (sourceNode == null || !extractor.State.IsMappedNode(sourceNode as NodeId))
             {
