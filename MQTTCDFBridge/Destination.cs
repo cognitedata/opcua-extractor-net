@@ -495,7 +495,6 @@ namespace Cognite.Bridge
                 log.Warning("Null payload in events");
                 return true;
             }
-            log.Information("Events push");
             var events = JsonSerializer.Deserialize<IEnumerable<StatelessEventCreate>>(Encoding.UTF8.GetString(msg.Payload));
 
             var assetExternalIds = events.SelectMany(evt => evt.AssetExternalIds).Where(id => id != null);
@@ -511,14 +510,20 @@ namespace Cognite.Bridge
                 }
             }
 
+            int ignoreCount = 0;
             foreach (var evt in events)
             {
                 evt.AssetIds = evt.AssetExternalIds.Where(id => assetIds.ContainsKey(id) && assetIds[id] != null)
                     .Select(id => assetIds[id] ?? 0);
                 if (!evt.AssetIds.Any() && evt.AssetExternalIds.Any())
                 {
-                    log.Verbose("Ignoring event with assetIds: {ids}", evt.AssetExternalIds.Aggregate((id, cr) => id + ", " + cr));
+                    ignoreCount++;
                 }
+            }
+
+            if (ignoreCount > 0)
+            {
+                log.Warning("Ignoring {cnt} events due to missing assetIds", ignoreCount);
             }
 
             events = events.Where(evt => evt.AssetIds.Any() || !evt.AssetExternalIds.Any());

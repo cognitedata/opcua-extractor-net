@@ -426,6 +426,16 @@ namespace Test
                     Handler.StoreDatapoints = testParams.StoreDatapoints;
                     Bridge = new MQTTBridge(new Destination(mqttConfig.CDF, CommonTestUtils.GetDummyProvider(Handler)), mqttConfig);
                     Bridge.StartBridge(CancellationToken.None).Wait();
+                    for (int i = 0; i < 30; i++)
+                    {
+                        if (Bridge.IsConnected()) break;
+                        Task.Delay(100).Wait();
+                    }
+
+                    if (!Bridge.IsConnected())
+                    {
+                        log.Warning("Bridge did not connect within 30 seconds");
+                    }
                     if (testParams.MqttState)
                     {
                         mqttPusherConfig.LocalState = "mqtt_created_states";
@@ -549,6 +559,10 @@ namespace Test
                 if (testResult == null && !CommonTestUtils.TestRunResult(e)) throw;
             }
             Extractor.Close();
+            if (Bridge != null)
+            {
+                await Bridge.Disconnect();
+            }
         }
 
         public void TestContinuity(string id)
@@ -601,6 +615,7 @@ namespace Test
         }
         public void Dispose()
         {
+            Bridge?.Dispose();
             Source?.Cancel();
             Source?.Dispose();
             IfDbClient?.Dispose();

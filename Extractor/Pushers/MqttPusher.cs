@@ -61,7 +61,10 @@ namespace Cognite.OpcUa.Pushers
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.ClientId)
                 .WithTcpServer(config.Host, config.Port)
+                .WithKeepAlivePeriod(TimeSpan.FromSeconds(1))
+                .WithCommunicationTimeout(TimeSpan.FromSeconds(10))
                 .WithCleanSession();
+
             if (config.UseTls)
             {
                 builder = builder.WithTls();

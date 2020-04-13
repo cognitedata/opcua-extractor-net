@@ -5,6 +5,7 @@ using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
 using MQTTnet.Client.Subscribing;
+using Polly;
 using Serilog;
 
 namespace Cognite.Bridge
@@ -18,13 +19,17 @@ namespace Cognite.Bridge
         private readonly ILogger log = Log.ForContext(typeof(MQTTBridge));
 
         private readonly Destination destination;
-        private bool recFlag = false;
+        private bool recFlag;
+
+        private bool disconnected;
         public MQTTBridge(Destination destination, BridgeConfig config)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             this.destination = destination;
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.MQTT.ClientId)
+                .WithKeepAlivePeriod(TimeSpan.FromSeconds(10))
+                .WithKeepAliveSendInterval(TimeSpan.FromSeconds(1))
                 .WithTcpServer(config.MQTT.Host, config.MQTT.Port)
                 .WithCleanSession();
 
@@ -63,7 +68,9 @@ namespace Cognite.Bridge
         {
             client.UseDisconnectedHandler(async e =>
             {
-                await Task.Delay(TimeSpan.FromSeconds(5));
+                log.Warning("MQTT Client disconnected");
+                log.Debug(e.Exception, "MQTT client disconnected");
+                if (disconnected) return;
                 try
                 {
                     await client.ConnectAsync(options, token);
@@ -160,13 +167,23 @@ namespace Cognite.Bridge
                     return false;
                 }
             }
-
-
             log.Information("Successfully started MQTT bridge");
             return true;
         }
+
+        public bool IsConnected()
+        {
+            return client.IsConnected;
+        }
+
+        public async Task Disconnect()
+        {
+            disconnected = true;
+            await client.DisconnectAsync();
+        }
         public void Dispose()
         {
+            disconnected = true;
             client.Dispose();
         }
     }
