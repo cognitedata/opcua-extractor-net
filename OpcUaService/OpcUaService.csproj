@@ -26,8 +26,8 @@ git describe --tags --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommi
 git log -1  --format="%25%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
 </PreBuildEvent>
   </PropertyGroup>
-  <Import Project="..\.paket\Paket.Restore.targets" />
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
     <Exec Command="xcopy $(ProjectDir)..\LICENSE.md $(TargetDir) /y&#xD;&#xA;xcopy $(ProjectDir)..\config\config.example.yml $(TargetDir)Config\ /y&#xD;&#xA;xcopy $(ProjectDir)..\config\opc.ua.net.extractor.Config.xml $(TargetDir)Config\ /y" />
   </Target>
+  <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

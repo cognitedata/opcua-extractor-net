@@ -639,6 +639,7 @@ namespace Test
         public long createdTime { get; set; }
         public long lastUpdatedTime { get; set; }
         public long rootId { get; set; }
+        public string parentExternalId { get; set; }
     }
     public class AssetReadWrapper
     {
@@ -702,6 +703,7 @@ namespace Test
         public string externalId { get; set; }
         public IEnumerable<DataPoint> datapoints { get; set; }
         public string name { get; set; }
+        public long assetId { get; set; }
     }
 
     public class LoginInfo

@@ -97,9 +97,9 @@ podTemplate(
         container('dotnet-mono') {
             stage('Install dependencies') {
 				sh('curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -')
-                sh('apt-get update && apt-get install -y python3-pip nmap ncat')
+                sh('apt-get update && apt-get install -y python3-pip nmap ncat mosquitto')
                 sh('pip3 install pipenv')
-                sh('pipenv install -d --system')           
+                sh('pipenv install -d --system')
                 sh('mono .paket/paket.exe restore')
                 sh('git clone https://github.com/cognitedata/python-opcua.git ../python-opcua')
             }
@@ -117,6 +117,7 @@ podTemplate(
             }
             timeout(10) {
                 stage('Run tests') {
+				    sh('mosquitto -p 4060 &')
                     sh('./test.sh')
                     archiveArtifacts artifacts: 'coverage.lcov', fingerprint: true
                 }

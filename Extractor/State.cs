@@ -115,5 +115,10 @@ namespace Cognite.OpcUa
             if (node == null) throw new ArgumentNullException(nameof(node));
             activeNodes[(node.Id, node.Index)] = node;
         }
+
+        public BufferedNode GetActiveNode(NodeId id, int index = -1)
+        {
+            return activeNodes.GetValueOrDefault((id, index));
+        }
     }
 }

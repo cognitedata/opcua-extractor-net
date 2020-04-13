@@ -414,9 +414,60 @@ namespace Cognite.OpcUa
 
             return failed;
         }
+
+        public async Task<IEnumerable<string>> ReadMqttStates(string name, DateTime 
+            invalidateTreshold, CancellationToken token)
+        {
+            try
+            {
+                var pocos = await Task.Run(() =>
+                {
+                    var col = db.GetCollection<MqttStatePoco>(name);
+                    return col.FindAll();
+                }, token);
+                return pocos.Where(poco => poco.CreatedAt < invalidateTreshold || invalidateTreshold < new DateTime(1971, 1, 1))
+                    .Select(poco => poco.Id);
+            }
+            catch (LiteException e)
+            {
+                log.Warning(e, "Failed to read mqtt states: {Message}", e.Message);
+                return Array.Empty<string>();
+            }
+        }
+
+        public async Task StoreMqttStates(string name, IEnumerable<string> ids, CancellationToken token)
+        {
+            var time = DateTime.UtcNow;
+            var pocos = ids.Select(id => new MqttStatePoco {Id = id, CreatedAt = time}).ToList();
+            if (!ids.Any()) return;
+            try
+            {
+                foreach (var chunk in ExtractorUtils.ChunkBy(pocos, 100))
+                {
+                    await Task.Run(() =>
+                    {
+                        var col = db.GetCollection<MqttStatePoco>(name);
+                        col.Upsert(chunk);
+                    }, token);
+                    statesStoredCounter.Inc(chunk.Count());
+                }
+
+                log.Debug("Saved {Stored} MQTT states to {name}", pocos.Count, name);
+            }
+            catch (LiteException e)
+            {
+                log.Warning(e, "Failed to store extraction state: {Message}", e.Message);
+            }
+        }
         public void Dispose()
         {
             db?.Dispose();
+        }
+
+        private class MqttStatePoco
+        {
+            [BsonId] public string Id { get; set; }
+            [BsonField("created")] public DateTime CreatedAt { get; set; }
         }
         private class ExtractionStatePoco
         {
