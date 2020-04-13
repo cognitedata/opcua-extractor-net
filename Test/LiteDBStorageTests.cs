@@ -122,7 +122,7 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            var events = tester.Handler.events.Values.ToList();
+            var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
 
             Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
@@ -610,16 +610,16 @@ namespace Test
             var dp2conv = BufferedDataPoint.FromStorableBytes(dp2c, sizeof(ushort));
 
             Assert.Equal(dpc.Length, BitConverter.ToUInt16(dpc) + sizeof(ushort));
-            Assert.Equal(dp.Timestamp, dpconv.Item1.Timestamp);
-            Assert.Equal(dp.DoubleValue, dpconv.Item1.DoubleValue);
-            Assert.Equal(dp.Id, dpconv.Item1.Id);
-            Assert.Equal(dp.IsString, dpconv.Item1.IsString);
+            Assert.Equal(dp.Timestamp, dpconv.DataPoint.Timestamp);
+            Assert.Equal(dp.DoubleValue, dpconv.DataPoint.DoubleValue);
+            Assert.Equal(dp.Id, dpconv.DataPoint.Id);
+            Assert.Equal(dp.IsString, dpconv.DataPoint.IsString);
 
             Assert.Equal(dp2c.Length, BitConverter.ToUInt16(dp2c) + sizeof(ushort));
-            Assert.Equal(dp2.Timestamp, dp2conv.Item1.Timestamp);
-            Assert.Equal(dp2.DoubleValue, dp2conv.Item1.DoubleValue);
-            Assert.Equal(dp2.Id, dp2conv.Item1.Id);
-            Assert.Equal(dp2.IsString, dp2conv.Item1.IsString);
+            Assert.Equal(dp2.Timestamp, dp2conv.DataPoint.Timestamp);
+            Assert.Equal(dp2.DoubleValue, dp2conv.DataPoint.DoubleValue);
+            Assert.Equal(dp2.Id, dp2conv.DataPoint.Id);
+            Assert.Equal(dp2.IsString, dp2conv.DataPoint.IsString);
         }
 
         [Fact]
@@ -848,7 +848,7 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            var events = tester.Handler.events.Values.ToList();
+            var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
 
             Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));

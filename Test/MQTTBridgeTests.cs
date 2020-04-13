@@ -181,22 +181,22 @@ namespace Test
                 }
             };
             await tester.PublishAssets(roundOne);
-            Assert.Equal(2, tester.Handler.assets.Count);
-            Assert.True(tester.Handler.assets.ContainsKey("test-asset-1"));
-            Assert.True(tester.Handler.assets.ContainsKey("test-asset-2"));
+            Assert.Equal(2, tester.Handler.Assets.Count);
+            Assert.True(tester.Handler.Assets.ContainsKey("test-asset-1"));
+            Assert.True(tester.Handler.Assets.ContainsKey("test-asset-2"));
             await tester.PublishAssets(roundOne);
-            Assert.Equal(2, tester.Handler.assets.Count);
+            Assert.Equal(2, tester.Handler.Assets.Count);
             await tester.PublishAssets(roundTwo);
-            Assert.Equal(3, tester.Handler.assets.Count);
-            Assert.True(tester.Handler.assets.ContainsKey("test-asset-1"));
-            Assert.True(tester.Handler.assets.ContainsKey("test-asset-2"));
-            Assert.True(tester.Handler.assets.ContainsKey("test-asset-3"));
-            var asset3 = tester.Handler.assets["test-asset-3"];
+            Assert.Equal(3, tester.Handler.Assets.Count);
+            Assert.True(tester.Handler.Assets.ContainsKey("test-asset-1"));
+            Assert.True(tester.Handler.Assets.ContainsKey("test-asset-2"));
+            Assert.True(tester.Handler.Assets.ContainsKey("test-asset-3"));
+            var asset3 = tester.Handler.Assets["test-asset-3"];
             Assert.Equal("test-asset-1", asset3.parentExternalId);
             await tester.RecreateBridge();
             await tester.PublishAssets(roundThree);
-            Assert.Equal(4, tester.Handler.assets.Count);
-            Assert.True(tester.Handler.assets.ContainsKey("test-asset-4"));
+            Assert.Equal(4, tester.Handler.Assets.Count);
+            Assert.True(tester.Handler.Assets.ContainsKey("test-asset-4"));
         }
         [Fact]
         [Trait("Server", "none")]
@@ -277,24 +277,24 @@ namespace Test
                 }
             };
             await tester.PublishAssets(assets);
-            Assert.Equal(2, tester.Handler.assets.Count);
-            Assert.Contains(tester.Handler.assets.Values, asset => asset.name == "test-asset-1");
-            Assert.Contains(tester.Handler.assets.Values, asset => asset.name == "test-asset-2");
+            Assert.Equal(2, tester.Handler.Assets.Count);
+            Assert.Contains(tester.Handler.Assets.Values, asset => asset.name == "test-asset-1");
+            Assert.Contains(tester.Handler.Assets.Values, asset => asset.name == "test-asset-2");
             await tester.PublishTimeseries(roundOne);
-            Assert.Equal(2, tester.Handler.timeseries.Count);
-            Assert.Contains(tester.Handler.timeseries.Values, ts => ts.name == "test-ts-1");
-            Assert.Contains(tester.Handler.timeseries.Values, ts => ts.name == "test-ts-2");
+            Assert.Equal(2, tester.Handler.Timeseries.Count);
+            Assert.Contains(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-1");
+            Assert.Contains(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-2");
             await tester.PublishTimeseries(roundOne);
-            Assert.Equal(2, tester.Handler.timeseries.Count);
+            Assert.Equal(2, tester.Handler.Timeseries.Count);
             await tester.PublishTimeseries(roundTwo);
-            Assert.Equal(3, tester.Handler.timeseries.Count);
-            Assert.DoesNotContain(tester.Handler.timeseries.Values, ts => ts.name == "test-ts-3");
-            Assert.Contains(tester.Handler.timeseries.Values, ts => ts.name == "test-ts-4");
+            Assert.Equal(3, tester.Handler.Timeseries.Count);
+            Assert.DoesNotContain(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-3");
+            Assert.Contains(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-4");
             await tester.RecreateBridge();
             await tester.PublishTimeseries(roundThree);
-            Assert.Equal(4, tester.Handler.timeseries.Count);
-            Assert.Contains(tester.Handler.timeseries.Values, ts => ts.name == "test-ts-5");
-            Assert.DoesNotContain(tester.Handler.timeseries.Values, ts => ts.name == "test-ts-6");
+            Assert.Equal(4, tester.Handler.Timeseries.Count);
+            Assert.Contains(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-5");
+            Assert.DoesNotContain(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-6");
         }
         [Fact]
         [Trait("Server", "none")]
@@ -416,25 +416,25 @@ namespace Test
 
 
             await tester.PublishTimeseries(timeseries);
-            Assert.Equal(2, tester.Handler.timeseries.Count);
+            Assert.Equal(2, tester.Handler.Timeseries.Count);
             await tester.PublishDatapoints(roundOne);
-            Assert.True(tester.Handler.datapoints.ContainsKey("test-ts-1"));
-            Assert.True(tester.Handler.datapoints.ContainsKey("test-ts-2"));
-            Assert.Equal(2, tester.Handler.datapoints.Count);
-            Assert.Equal(2, tester.Handler.datapoints["test-ts-1"].Item1.Count);
-            Assert.Equal(2, tester.Handler.datapoints["test-ts-2"].Item2.Count);
+            Assert.True(tester.Handler.Datapoints.ContainsKey("test-ts-1"));
+            Assert.True(tester.Handler.Datapoints.ContainsKey("test-ts-2"));
+            Assert.Equal(2, tester.Handler.Datapoints.Count);
+            Assert.Equal(2, tester.Handler.Datapoints["test-ts-1"].NumericDatapoints.Count);
+            Assert.Equal(2, tester.Handler.Datapoints["test-ts-2"].StringDatapoints.Count);
             await tester.PublishDatapoints(roundTwo);
-            Assert.False(tester.Handler.datapoints.ContainsKey("test-ts-5"));
-            Assert.Equal(2, tester.Handler.datapoints.Count);
-            Assert.Equal(3, tester.Handler.datapoints["test-ts-1"].Item1.Count);
-            Assert.Equal(2, tester.Handler.datapoints["test-ts-2"].Item2.Count);
-            Assert.Empty(tester.Handler.datapoints["test-ts-2"].Item1);
+            Assert.False(tester.Handler.Datapoints.ContainsKey("test-ts-5"));
+            Assert.Equal(2, tester.Handler.Datapoints.Count);
+            Assert.Equal(3, tester.Handler.Datapoints["test-ts-1"].NumericDatapoints.Count);
+            Assert.Equal(2, tester.Handler.Datapoints["test-ts-2"].StringDatapoints.Count);
+            Assert.Empty(tester.Handler.Datapoints["test-ts-2"].NumericDatapoints);
             await tester.RecreateBridge();
             await tester.PublishDatapoints(roundThree);
-            Assert.Equal(2, tester.Handler.datapoints.Count);
-            Assert.Equal(4, tester.Handler.datapoints["test-ts-1"].Item1.Count);
-            Assert.Equal(2, tester.Handler.datapoints["test-ts-2"].Item2.Count);
-            Assert.Empty(tester.Handler.datapoints["test-ts-2"].Item1);
+            Assert.Equal(2, tester.Handler.Datapoints.Count);
+            Assert.Equal(4, tester.Handler.Datapoints["test-ts-1"].NumericDatapoints.Count);
+            Assert.Equal(2, tester.Handler.Datapoints["test-ts-2"].StringDatapoints.Count);
+            Assert.Empty(tester.Handler.Datapoints["test-ts-2"].NumericDatapoints);
         }
 
         [Fact]
@@ -523,34 +523,34 @@ namespace Test
                 }
             };
             await tester.PublishAssets(assets);
-            Assert.Equal(2, tester.Handler.assets.Count);
+            Assert.Equal(2, tester.Handler.Assets.Count);
             await tester.PublishEvents(roundOne);
-            Assert.Equal(3, tester.Handler.events.Count);
-            Assert.True(tester.Handler.events.ContainsKey("test-event-1"));
-            Assert.True(tester.Handler.events.ContainsKey("test-event-2"));
-            Assert.True(tester.Handler.events.ContainsKey("test-event-3"));
+            Assert.Equal(3, tester.Handler.Events.Count);
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-1"));
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-2"));
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-3"));
             await tester.PublishEvents(roundOne);
-            Assert.Equal(3, tester.Handler.events.Count);
+            Assert.Equal(3, tester.Handler.Events.Count);
             await tester.PublishEvents(roundTwo);
-            Assert.Equal(5, tester.Handler.events.Count);
-            Assert.True(tester.Handler.events.ContainsKey("test-event-1"));
-            Assert.True(tester.Handler.events.ContainsKey("test-event-2"));
-            Assert.True(tester.Handler.events.ContainsKey("test-event-3"));
-            Assert.True(tester.Handler.events.ContainsKey("test-event-4"));
-            Assert.False(tester.Handler.events.ContainsKey("test-event-5"));
-            Assert.True(tester.Handler.events.ContainsKey("test-event-6"));
-            Assert.Empty(tester.Handler.events["test-event-4"].assetIds);
-            Assert.Equal(2, tester.Handler.events["test-event-1"].assetIds.Count());
-            Assert.Single(tester.Handler.events["test-event-2"].assetIds);
-            Assert.Single(tester.Handler.events["test-event-6"].assetIds);
+            Assert.Equal(5, tester.Handler.Events.Count);
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-1"));
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-2"));
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-3"));
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-4"));
+            Assert.False(tester.Handler.Events.ContainsKey("test-event-5"));
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-6"));
+            Assert.Empty(tester.Handler.Events["test-event-4"].assetIds);
+            Assert.Equal(2, tester.Handler.Events["test-event-1"].assetIds.Count());
+            Assert.Single(tester.Handler.Events["test-event-2"].assetIds);
+            Assert.Single(tester.Handler.Events["test-event-6"].assetIds);
             await tester.RecreateBridge();
             await tester.PublishEvents(roundThree);
-            Assert.Equal(7, tester.Handler.events.Count);
-            Assert.True(tester.Handler.events.ContainsKey("test-event-7"));
-            Assert.True(tester.Handler.events.ContainsKey("test-event-8"));
-            Assert.False(tester.Handler.events.ContainsKey("test-event-9"));
-            Assert.Equal(2, tester.Handler.events["test-event-7"].assetIds.Count());
-            Assert.Single(tester.Handler.events["test-event-8"].assetIds);
+            Assert.Equal(7, tester.Handler.Events.Count);
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-7"));
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-8"));
+            Assert.False(tester.Handler.Events.ContainsKey("test-event-9"));
+            Assert.Equal(2, tester.Handler.Events["test-event-7"].assetIds.Count());
+            Assert.Single(tester.Handler.Events["test-event-8"].assetIds);
         }
         class StatelessEventCreate : EventCreate
         {

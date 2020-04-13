@@ -38,7 +38,7 @@ namespace Cognite.OpcUa.Config
         private List<NodeId> historizingEmitters;
         private List<BufferedNode> eventTypes;
         private Dictionary<string, string> namespaceMap;
-        private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> activeEventFields;
+        private Dictionary<NodeId, IEnumerable<(NodeId Root, QualifiedName BrowseName)>> activeEventFields;
         private bool history;
         private bool useServer;
 
@@ -767,10 +767,10 @@ namespace Cognite.OpcUa.Config
 
                         foreach (var res in result)
                         {
-                            var data = ToolUtil.ReadResultToDataPoints(res.Item2, stateMap[res.Item1], this);
+                            var data = ToolUtil.ReadResultToDataPoints(res.RawData, stateMap[res.Id], this);
                             if (data.Length > 10 && nodeWithData == null)
                             {
-                                nodeWithData = res.Item1;
+                                nodeWithData = res.Id;
                             }
 
 
@@ -779,12 +779,12 @@ namespace Cognite.OpcUa.Config
                             long avgTicks = (data.Last().Timestamp.Ticks - data.First().Timestamp.Ticks) / (data.Length - 1);
                             sumDistance += avgTicks;
 
-                            if (historyParams.Completed[res.Item1]) continue;
+                            if (historyParams.Completed[res.Id]) continue;
                             if (avgTicks == 0) continue;
                             long estimate = (DateTime.UtcNow.Ticks - data.First().Timestamp.Ticks) / avgTicks;
                             if (estimate > largestEstimate)
                             {
-                                nodeWithData = res.Item1;
+                                nodeWithData = res.Id;
                                 largestEstimate = estimate;
                             }
                         }
@@ -860,7 +860,7 @@ namespace Cognite.OpcUa.Config
             {
                 var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(backfillParams), 10);
 
-                var data = ToolUtil.ReadResultToDataPoints(result.First().Item2, stateMap[result.First().Item1], this);
+                var data = ToolUtil.ReadResultToDataPoints(result.First().RawData, stateMap[result.First().Id], this);
 
                 log.Information("Last ts: {ts}, {now}", data.First().Timestamp, DateTime.UtcNow);
 
@@ -927,8 +927,8 @@ namespace Cognite.OpcUa.Config
             {
                 var clause = filter.SelectClauses[i];
                 if (!targetEventFields.Any(field =>
-                    field.Item1 == clause.TypeDefinitionId
-                    && field.Item2 == clause.BrowsePath[0]
+                    field.Root == clause.TypeDefinitionId
+                    && field.BrowseName == clause.BrowsePath[0]
                     && clause.BrowsePath.Count == 1)) continue;
 
                 string name = clause.BrowsePath[0].Name;
@@ -1205,7 +1205,7 @@ namespace Cognite.OpcUa.Config
                 {
                     var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
 
-                    var eventResult = ReadResultToEvents(result.First().Item2, emitter, details);
+                    var eventResult = ReadResultToEvents(result.First().RawData, emitter, details);
 
                     if (eventResult.Any())
                     {

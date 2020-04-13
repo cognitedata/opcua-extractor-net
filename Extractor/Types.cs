@@ -385,7 +385,7 @@ namespace Cognite.OpcUa
         /// to read at a time.
         /// </summary>
         /// <param name="bytes">Bytes to convert</param>
-        public static (BufferedDataPoint, int) FromStorableBytes(byte[] bytes, int next)
+        public static (BufferedDataPoint DataPoint, int Position) FromStorableBytes(byte[] bytes, int next)
         {
             if (bytes == null || bytes.Length < sizeof(long) + sizeof(double) + sizeof(bool)) return (null, next);
             string txt;
@@ -507,7 +507,7 @@ namespace Cognite.OpcUa
         /// <param name="extractor">Extractor to use for nodeId conversions</param>
         /// <param name="next">Start position</param>
         /// <returns>Converted event and new position in array</returns>
-        public static (BufferedEvent evt, int pos) FromStorableBytes(byte[] bytes, Extractor extractor, int next)
+        public static (BufferedEvent Event, int Position) FromStorableBytes(byte[] bytes, Extractor extractor, int next)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             if (bytes == null) throw new ArgumentNullException(nameof(bytes));

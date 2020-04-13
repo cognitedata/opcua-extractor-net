@@ -67,12 +67,12 @@ namespace Test
 
             if (mode == CDFMockHandler.MockMode.None)
             {
-                Assert.DoesNotContain(tester.Handler.timeseries.Values, ts => ts.name == "MyString");
-                Assert.Contains(tester.Handler.assets.Values, asset =>
+                Assert.DoesNotContain(tester.Handler.Timeseries.Values, ts => ts.name == "MyString");
+                Assert.Contains(tester.Handler.Assets.Values, asset =>
                     asset.name == "MyObject" && asset.metadata != null
                     && asset.metadata["Asset prop 1"] == "test"
                     && asset.metadata["Asset prop 2"] == "123.21");
-                Assert.Contains(tester.Handler.timeseries.Values, ts =>
+                Assert.Contains(tester.Handler.Timeseries.Values, ts =>
                     ts.name == "MyVariable" && ts.metadata != null
                     && ts.metadata["TS property 1"] == "test"
                     && ts.metadata["TS property 2"] == "123.2");
@@ -80,8 +80,8 @@ namespace Test
 
             if (mode != CDFMockHandler.MockMode.FailAsset)
             {
-                Assert.Equal(serverType == ServerName.Basic ? 2 : 154, tester.Handler.assets.Count);
-                Assert.Equal(serverType == ServerName.Basic ? 4 : 2002, tester.Handler.timeseries.Count);
+                Assert.Equal(serverType == ServerName.Basic ? 2 : 154, tester.Handler.Assets.Count);
+                Assert.Equal(serverType == ServerName.Basic ? 4 : 2002, tester.Handler.Timeseries.Count);
             }
         }
         [Trait("Server", "basic")]
@@ -124,16 +124,16 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                tester.Handler.assets.Count == 5
-                && tester.Handler.timeseries.Count == 10
-                && tester.Handler.datapoints.ContainsKey("gp.efg:i=2[2]"), 20, 
-                () => $"Expected to get 5 assets and got {tester.Handler.assets.Count}"
-                      + $", 10 timeseries and got {tester.Handler.timeseries.Count}");
+                tester.Handler.Assets.Count == 5
+                && tester.Handler.Timeseries.Count == 10
+                && tester.Handler.Datapoints.ContainsKey("gp.efg:i=2[2]"), 20, 
+                () => $"Expected to get 5 assets and got {tester.Handler.Assets.Count}"
+                      + $", 10 timeseries and got {tester.Handler.Timeseries.Count}");
 
-            int lastData = tester.Handler.datapoints["gp.efg:i=2[2]"].Item1.Count;
+            int lastData = tester.Handler.Datapoints["gp.efg:i=2[2]"].NumericDatapoints.Count;
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.datapoints["gp.efg:i=2[2]"].Item1.Count > lastData, 20,
+                    tester.Handler.Datapoints["gp.efg:i=2[2]"].NumericDatapoints.Count > lastData, 20,
                 "Expected data to be increasing");
 
             await tester.TerminateRunTask();
@@ -164,37 +164,37 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.assets.Count == 5
-                    && tester.Handler.timeseries.Count == 10
-                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=2[2]"), 20,
-                () => $"Expected to get 5 assets and got {tester.Handler.assets.Count}"
-                      + $", 10 timeseries and got {tester.Handler.timeseries.Count}");
+                    tester.Handler.Assets.Count == 5
+                    && tester.Handler.Timeseries.Count == 10
+                    && tester.Handler.Datapoints.ContainsKey("gp.efg:i=2[2]"), 20,
+                () => $"Expected to get 5 assets and got {tester.Handler.Assets.Count}"
+                      + $", 10 timeseries and got {tester.Handler.Timeseries.Count}");
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.datapoints.ContainsKey("gp.efg:i=16")
-                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=17")
-                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=14")
-                    && tester.Handler.datapoints["gp.efg:i=16"].Item1.Any()
-                    && tester.Handler.datapoints["gp.efg:i=17"].Item1.Any()
-                    && tester.Handler.datapoints["gp.efg:i=14"].Item2.Any(), 20,
+                    tester.Handler.Datapoints.ContainsKey("gp.efg:i=16")
+                    && tester.Handler.Datapoints.ContainsKey("gp.efg:i=17")
+                    && tester.Handler.Datapoints.ContainsKey("gp.efg:i=14")
+                    && tester.Handler.Datapoints["gp.efg:i=16"].NumericDatapoints.Any()
+                    && tester.Handler.Datapoints["gp.efg:i=17"].NumericDatapoints.Any()
+                    && tester.Handler.Datapoints["gp.efg:i=14"].StringDatapoints.Any(), 20,
                 "Expected to get some data");
 
             await tester.TerminateRunTask();
 
-            var numericTypeVar = tester.Handler.timeseries.Values.First(ts => ts.name == "NumericTypeVar");
+            var numericTypeVar = tester.Handler.Timeseries.Values.First(ts => ts.name == "NumericTypeVar");
             Assert.False(numericTypeVar.isString);
             Assert.True(numericTypeVar.metadata.ContainsKey("EngineeringUnits"));
             Assert.Equal("°C: degree Celsius", numericTypeVar.metadata["EngineeringUnits"]);
             Assert.True(numericTypeVar.metadata.ContainsKey("EURange"));
             Assert.Equal("(0, 100)", numericTypeVar.metadata["EURange"]);
 
-            var numericTypeVar2 = tester.Handler.timeseries.Values.First(ts => ts.name == "NumericTypeVar2");
+            var numericTypeVar2 = tester.Handler.Timeseries.Values.First(ts => ts.name == "NumericTypeVar2");
             Assert.False(numericTypeVar2.isString);
 
-            var stringyVar = tester.Handler.timeseries.Values.First(ts => ts.name == "StringyVar");
+            var stringyVar = tester.Handler.Timeseries.Values.First(ts => ts.name == "StringyVar");
             Assert.True(stringyVar.isString);
 
-            Assert.DoesNotContain(tester.Handler.timeseries.Values, ts => ts.name == "IgnoreTypeVar");
+            Assert.DoesNotContain(tester.Handler.Timeseries.Values, ts => ts.name == "IgnoreTypeVar");
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Equal(5, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
@@ -299,8 +299,8 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.datapoints.ContainsKey("gp.efg:i=10")
-                    && tester.Handler.datapoints["gp.efg:i=10"].Item1.Count > 100, 20,
+                    tester.Handler.Datapoints.ContainsKey("gp.efg:i=10")
+                    && tester.Handler.Datapoints["gp.efg:i=10"].NumericDatapoints.Count > 100, 20,
                 "Expected integer datapoint to get some values");
 
             // We want some extra subscriptions as well
@@ -344,24 +344,24 @@ namespace Test
                 if (!CommonTestUtils.TestRunResult(e)) throw;
             }
             extractor.Close();
-            Assert.DoesNotContain(handler1.timeseries.Values, ts => ts.name == "MyString");
-            Assert.Contains(handler1.assets.Values, asset =>
+            Assert.DoesNotContain(handler1.Timeseries.Values, ts => ts.name == "MyString");
+            Assert.Contains(handler1.Assets.Values, asset =>
                 asset.name == "MyObject"
                 && asset.metadata != null 
                 && asset.metadata["Asset prop 1"] == "test" 
                 && asset.metadata["Asset prop 2"] == "123.21");
-            Assert.Contains(handler1.timeseries.Values, ts =>
+            Assert.Contains(handler1.Timeseries.Values, ts =>
                 ts.name == "MyVariable" 
                 && ts.metadata != null 
                 && ts.metadata["TS property 1"] == "test" 
                 && ts.metadata["TS property 2"] == "123.2");
-            Assert.DoesNotContain(handler2.timeseries.Values, ts => ts.name == "MyString");
-            Assert.Contains(handler2.assets.Values, asset =>
+            Assert.DoesNotContain(handler2.Timeseries.Values, ts => ts.name == "MyString");
+            Assert.Contains(handler2.Assets.Values, asset =>
                 asset.name == "MyObject"
                 && asset.metadata != null
                 && asset.metadata["Asset prop 1"] == "test"
                 && asset.metadata["Asset prop 2"] == "123.21");
-            Assert.Contains(handler2.timeseries.Values, ts =>
+            Assert.Contains(handler2.Timeseries.Values, ts =>
                 ts.name == "MyVariable"
                 && ts.metadata != null
                 && ts.metadata["TS property 1"] == "test"
@@ -391,14 +391,14 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => tester.Handler.datapoints.ContainsKey("Map1"), 20,
+            await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("Map1"), 20,
                 "Expected the overriden timeseries to create data");
 
             await tester.TerminateRunTask();
 
-            Assert.True(tester.Handler.datapoints.ContainsKey("Map1"));
-            Assert.True(tester.Handler.timeseries.ContainsKey("Map1"));
-            Assert.Equal("MyVariable int", tester.Handler.timeseries["Map1"].name);
+            Assert.True(tester.Handler.Datapoints.ContainsKey("Map1"));
+            Assert.True(tester.Handler.Timeseries.ContainsKey("Map1"));
+            Assert.Equal("MyVariable int", tester.Handler.Timeseries["Map1"].name);
         }
         [Fact]
         [Trait("Server", "basic")]
@@ -433,17 +433,17 @@ namespace Test
                 new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MinValue)
             };
 
-            Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
             tester.Handler.StoreDatapoints = true;
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
-            Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
             tester.CogniteConfig.NonFiniteReplacement = -1;
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
-            Assert.True(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
-            Assert.Equal(9, tester.Handler.datapoints["gp.efg:i=2"].Item1.Count);
-            Assert.True(tester.Handler.datapoints["gp.efg:i=2"].Item1.TrueForAll(item => Math.Abs(item.Value + 1) < 0.01));
+            Assert.True(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.Equal(9, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
+            Assert.True(tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.TrueForAll(item => Math.Abs(item.Value + 1) < 0.01));
 
             var badPoints2 = new List<BufferedDataPoint>
             {
@@ -451,7 +451,7 @@ namespace Test
                 new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E99)
             };
             await pusher.PushDataPoints(badPoints2, CancellationToken.None);
-            Assert.Equal(11, tester.Handler.datapoints["gp.efg:i=2"].Item1.Count);
+            Assert.Equal(11, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
         }
 
         [Fact]
@@ -469,7 +469,7 @@ namespace Test
             tester.Config.History.Enabled = false;
             tester.Config.Extraction.AllowStringVariables = true;
 
-            tester.Handler.timeseries.Add("gp.efg:i=2", new TimeseriesDummy
+            tester.Handler.Timeseries.Add("gp.efg:i=2", new TimeseriesDummy
             {
                 id = -1,
                 datapoints = new List<DataPoint>(),
@@ -477,7 +477,7 @@ namespace Test
                 isString = true,
                 name = "MyVariable"
             });
-            tester.Handler.timeseries.Add("gp.efg:i=4", new TimeseriesDummy
+            tester.Handler.Timeseries.Add("gp.efg:i=4", new TimeseriesDummy
             {
                 id = -2,
                 datapoints = new List<DataPoint>(),
@@ -490,7 +490,7 @@ namespace Test
             await tester.TerminateRunTask();
 
             var pusher = tester.Pusher;
-            Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
             // The extractor does not actually close completely if quitAfterMap is specified,
             // but leaves connections open, including subscriptions
             tester.Handler.StoreDatapoints = true;
@@ -511,9 +511,9 @@ namespace Test
             };
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
-            Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
-            Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=4"));
-            Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=3"));
+            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=4"));
+            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=3"));
 
             var badPoints2 = new List<BufferedDataPoint>
             {
@@ -525,10 +525,10 @@ namespace Test
 
             await pusher.PushDataPoints(badPoints2, CancellationToken.None);
 
-            Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=2"));
-            Assert.False(tester.Handler.datapoints.ContainsKey("gp.efg:i=4"));
-            Assert.True(tester.Handler.datapoints.ContainsKey("gp.efg:i=3"));
-            Assert.Equal(3, tester.Handler.datapoints["gp.efg:i=3"].Item1.Count);
+            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=4"));
+            Assert.True(tester.Handler.Datapoints.ContainsKey("gp.efg:i=3"));
+            Assert.Equal(3, tester.Handler.Datapoints["gp.efg:i=3"].NumericDatapoints.Count);
         }
         [Fact]
         [Trait("Server", "basic")]
@@ -553,8 +553,8 @@ namespace Test
                     tester.Extractor.State.GetNodeState("gp.efg:i=10") != null
                     && tester.Extractor.State.GetNodeState("gp.efg:i=10").BackfillDone
                     && tester.Extractor.State.GetNodeState("gp.efg:i=10").IsStreaming
-                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=10")
-                    && tester.Handler.datapoints["gp.efg:i=10"].Item1.Any(pt => pt.Timestamp < startTime), 20,
+                    && tester.Handler.Datapoints.ContainsKey("gp.efg:i=10")
+                    && tester.Handler.Datapoints["gp.efg:i=10"].NumericDatapoints.Any(pt => pt.Timestamp < startTime), 20,
                 "Expected integer datapoint to finish backfill and frontfill");
 
             await tester.TerminateRunTask();
@@ -563,7 +563,7 @@ namespace Test
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Contains(tester.Handler.datapoints["gp.efg:i=10"].Item1,pt => pt.Timestamp < startTime);
+            Assert.Contains(tester.Handler.Datapoints["gp.efg:i=10"].NumericDatapoints,pt => pt.Timestamp < startTime);
         }
         [Fact]
         [Trait("Server", "basic")]
@@ -588,15 +588,15 @@ namespace Test
                     tester.Extractor.State.GetNodeState("gp.efg:i=10") != null
                     && tester.Extractor.State.GetNodeState("gp.efg:i=10").BackfillDone
                     && tester.Extractor.State.GetNodeState("gp.efg:i=10").IsStreaming
-                    && tester.Handler.datapoints.ContainsKey("gp.efg:i=10")
-                    && tester.Handler.datapoints["gp.efg:i=10"].Item1.Any(pt => pt.Timestamp < startTime), 20,
+                    && tester.Handler.Datapoints.ContainsKey("gp.efg:i=10")
+                    && tester.Handler.Datapoints["gp.efg:i=10"].NumericDatapoints.Any(pt => pt.Timestamp < startTime), 20,
                 "Expected integer datapoint to finish backfill and frontfill");
 
             tester.TestContinuity("gp.efg:i=10");
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Contains(tester.Handler.datapoints["gp.efg:i=10"].Item1, pt => pt.Timestamp < startTime);
+            Assert.Contains(tester.Handler.Datapoints["gp.efg:i=10"].NumericDatapoints, pt => pt.Timestamp < startTime);
             await tester.Extractor.Looper.WaitForNextPush();
             CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor();
@@ -641,8 +641,8 @@ namespace Test
 
             Assert.True(tester.Extractor.State.NodeStates.All(state => state.Historizing && !state.IsStreaming || state.IsStreaming));
 
-            Assert.Empty(tester.Handler.assets);
-            Assert.Empty(tester.Handler.timeseries);
+            Assert.Empty(tester.Handler.Assets);
+            Assert.Empty(tester.Handler.Timeseries);
 
             tester.Handler.BlockAllConnections = false;
 

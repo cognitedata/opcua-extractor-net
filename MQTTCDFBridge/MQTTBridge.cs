@@ -40,7 +40,10 @@ namespace Cognite.Bridge
             options = builder.Build();
             client = new MqttFactory().CreateMqttClient();
         }
-
+        /// <summary>
+        /// Wait for up to timeout seconds for a message to arrive over MQTT. Throws an exception if waiting timed out.
+        /// </summary>
+        /// <param name="timeout">Timeout in seconds</param>
         public async Task WaitForNextMessage(int timeout = 10)
         {
             recFlag = false;
@@ -52,6 +55,10 @@ namespace Cognite.Bridge
 
             throw new TimeoutException("Waiting for next message timed out");
         }
+        /// <summary>
+        /// Start the bridge, adding handlers then connecting to the broker.
+        /// </summary>
+        /// <returns>True on success</returns>
         public async Task<bool> StartBridge(CancellationToken token)
         {
             client.UseDisconnectedHandler(async e =>

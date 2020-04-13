@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
@@ -72,7 +73,7 @@ namespace Cognite.OpcUa
 
             string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
 
-            FullConfig config = new FullConfig();
+            var config = new FullConfig();
             FullConfig baseConfig = null;
             if (!setup.NoConfig)
             {
@@ -132,7 +133,10 @@ namespace Cognite.OpcUa
 
             return 0;
         }
-
+        /// <summary>
+        /// Start the extractor and keep it running until canceled, restarting on crashes
+        /// </summary>
+        /// <param name="config"></param>
         private static void RunExtractor(FullConfig config)
         {
             var runTime = new ExtractorRuntime(config);
@@ -215,7 +219,7 @@ namespace Cognite.OpcUa
 
                         try
                         {
-                            TimeSpan sleepTime = TimeSpan.FromSeconds(Math.Pow(2, Math.Min(waitRepeats, 9)));
+                            var sleepTime = TimeSpan.FromSeconds(Math.Pow(2, Math.Min(waitRepeats, 9)));
                             log.Information("Sleeping for {time}", sleepTime);
                             Task.Delay(sleepTime, manualSource.Token).Wait();
                         }
@@ -229,17 +233,26 @@ namespace Cognite.OpcUa
             }
             Log.CloseAndFlush();
         }
-
+        /// <summary>
+        /// Run the config tool
+        /// </summary>
+        /// <param name="config">Basic configuration for the config tool</param>
+        /// <param name="baseConfig">Configuration that will be modified and returned by the config tool</param>
+        /// <param name="output">Path to output config file</param>
         private static void RunConfigTool(FullConfig config, FullConfig baseConfig, string output)
         {
             var runTime = new ConfigToolRuntime(config, baseConfig, output);
             runTime.Run().Wait();
         }
-
-        private static ExtractorParams ParseCommandLineArguments(string[] args)
+        /// <summary>
+        /// Parse list of command line arguments to produce parameter object
+        /// </summary>
+        /// <param name="args">Raw parameter list</param>
+        /// <returns>Final ExtractorParams struct</returns>
+        private static ExtractorParams ParseCommandLineArguments(IReadOnlyList<string> args)
         {
             var result = new ExtractorParams();
-            for (int i = 0; i < args.Length; i++)
+            for (int i = 0; i < args.Count; i++)
             {
                 switch (args[i])
                 {

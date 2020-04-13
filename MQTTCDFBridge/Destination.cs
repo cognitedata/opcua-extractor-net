@@ -41,7 +41,11 @@ namespace Cognite.Bridge
                 .SetBaseUrl(new Uri(config.Host, UriKind.Absolute))
                 .Build();
         }
-
+        /// <summary>
+        /// Retrieve assets from CDF, push any that do not exist.
+        /// </summary>
+        /// <param name="msg">Raw message from MQTT</param>
+        /// <returns>True on success</returns>
         public async Task<bool> PushAssets(MqttApplicationMessage msg, CancellationToken token)
         {
             if (msg == null) return true;
@@ -133,7 +137,12 @@ namespace Cognite.Bridge
 
             return true;
         }
-
+        /// <summary>
+        /// Retrieve given list of assets, registering them in the state.
+        /// If any are missing, remove them and try again.
+        /// </summary>
+        /// <param name="ids">Ids to fetch</param>
+        /// <returns>True on success</returns>
         private async Task<bool> RetrieveMissingAssetIds(IEnumerable<string> ids, CancellationToken token)
         {
             if (!ids.Any()) return true;
@@ -194,7 +203,12 @@ namespace Cognite.Bridge
 
             return true;
         }
-
+        /// <summary>
+        /// Retrieve given list of timeseries, registering them with their type in the state.
+        /// If any are missing, remove them and try again.
+        /// </summary>
+        /// <param name="ids">Ids to fetch</param>
+        /// <returns>True on success</returns>
         private async Task<bool> RetrieveMissingTimeseries(IEnumerable<string> ids, CancellationToken token)
         {
             if (!ids.Any()) return true;
@@ -255,6 +269,12 @@ namespace Cognite.Bridge
 
             return true;
         }
+        /// <summary>
+        /// Retrieve list of timeseries from mqtt message, pushing any that are not found and registering
+        /// all in the state, whether they existed before or not.
+        /// </summary>
+        /// <param name="msg">Raw message from MQTT with timeseries payload</param>
+        /// <returns>True on success</returns>
         public async Task<bool> PushTimeseries(MqttApplicationMessage msg, CancellationToken token)
         {
             if (msg == null) return true;
@@ -376,7 +396,11 @@ namespace Cognite.Bridge
 
             return true;
         }
-
+        /// <summary>
+        /// Find unknown timeseries, then push datapoints with matching, existing, timeseries to CDF.
+        /// </summary>
+        /// <param name="msg">Raw message with protobuf datapoint payload</param>
+        /// <returns>True on success</returns>
         public async Task<bool> PushDatapoints(MqttApplicationMessage msg, CancellationToken token)
         {
             if (msg == null) return true;
@@ -458,7 +482,11 @@ namespace Cognite.Bridge
 
             return true;
         }
-
+        /// <summary>
+        /// Find unknown assets, then push events with any assetIds remaining (or none to begin with) to CDF.
+        /// </summary>
+        /// <param name="msg">Raw message with event payload</param>
+        /// <returns>True on success</returns>
         public async Task<bool> PushEvents(MqttApplicationMessage msg, CancellationToken token)
         {
             if (msg == null) throw new ArgumentNullException(nameof(msg));

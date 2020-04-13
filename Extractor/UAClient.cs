@@ -802,7 +802,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="readParams"></param>
         /// <returns>Pairs of NodeId and history read results as IEncodable</returns>
-        public IEnumerable<(NodeId id, IEncodeable rawData)> DoHistoryRead(HistoryReadParams readParams)
+        public IEnumerable<(NodeId Id, IEncodeable RawData)> DoHistoryRead(HistoryReadParams readParams)
         {
             if (readParams == null) throw new ArgumentNullException(nameof(readParams));
             IncOperations();

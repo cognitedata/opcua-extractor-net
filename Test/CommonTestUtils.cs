@@ -290,8 +290,8 @@ namespace Test
 
         private static bool EventSourceIs(EventDummy ev, CDFMockHandler handler, string name, bool rawSource)
         {
-            var asset = handler.assets.Values.FirstOrDefault(ast => ast.name == name);
-            var timeseries = handler.timeseries.Values.FirstOrDefault(ts => ts.name == name);
+            var asset = handler.Assets.Values.FirstOrDefault(ast => ast.name == name);
+            var timeseries = handler.Timeseries.Values.FirstOrDefault(ts => ts.name == name);
             if (asset == null && timeseries == null) return false;
             return rawSource
                 ? asset != null && asset.externalId == ev.metadata["SourceNode"] || timeseries != null && timeseries.externalId == ev.metadata["SourceNode"]
@@ -553,7 +553,7 @@ namespace Test
 
         public void TestContinuity(string id)
         {
-            var dps = Handler.datapoints[id].Item1;
+            var dps = Handler.Datapoints[id].NumericDatapoints;
             var intdps = dps.GroupBy(dp => dp.Timestamp).Select(dp => (int)Math.Round(dp.First().Value)).ToList();
             TestContinuity(intdps);
         }
@@ -587,7 +587,7 @@ namespace Test
         /// <param name="delta">Allowed deviation. For OPC-UA above 100ms has been observed.</param>
         public void TestConstantRate(int ms, string id, int delta = 200)
         {
-            var dps = Handler.datapoints[id].Item1;
+            var dps = Handler.Datapoints[id].NumericDatapoints;
             var tss = dps.Select(dp => dp.Timestamp).Distinct().ToList();
             tss.Sort();
             long last = 0;

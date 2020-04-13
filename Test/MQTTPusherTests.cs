@@ -44,12 +44,12 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.Equal(5, tester.Handler.assets.Count);
-            Assert.Equal(10, tester.Handler.timeseries.Count);
-            Assert.True(tester.Handler.datapoints.ContainsKey("gp.efg:i=2[0]"));
-            Assert.True(tester.Handler.datapoints["gp.efg:i=2[0]"].Item1.Count > 0);
-            Assert.True(tester.Handler.datapoints.ContainsKey("gp.efg:i=3[0]"));
-            Assert.True(tester.Handler.datapoints["gp.efg:i=3[0]"].Item2.Count > 0);
+            Assert.Equal(5, tester.Handler.Assets.Count);
+            Assert.Equal(10, tester.Handler.Timeseries.Count);
+            Assert.True(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2[0]"));
+            Assert.True(tester.Handler.Datapoints["gp.efg:i=2[0]"].NumericDatapoints.Count > 0);
+            Assert.True(tester.Handler.Datapoints.ContainsKey("gp.efg:i=3[0]"));
+            Assert.True(tester.Handler.Datapoints["gp.efg:i=3[0]"].StringDatapoints.Count > 0);
         }
         [Fact]
         [Trait("Server", "events")]
@@ -78,11 +78,11 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            var eventTypes = tester.Handler.events.Select(evt => evt.Value.type).Distinct();
+            var eventTypes = tester.Handler.Events.Select(evt => evt.Value.type).Distinct();
             Assert.Equal(3, eventTypes.Count());
-            var eventAssets = tester.Handler.events.SelectMany(evt => evt.Value.assetIds).Distinct();
+            var eventAssets = tester.Handler.Events.SelectMany(evt => evt.Value.assetIds).Distinct();
             Assert.Equal(2, eventAssets.Count());
-            Assert.True(tester.Handler.events.Values.All(evt => evt.assetIds.Any()));
+            Assert.True(tester.Handler.Events.Values.All(evt => evt.assetIds.Any()));
         }
 
         [Fact]
@@ -131,8 +131,8 @@ namespace Test
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 0));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 0));
-            Assert.Equal(5, tester.Handler.assets.Count);
-            Assert.Equal(10, tester.Handler.timeseries.Count);
+            Assert.Equal(5, tester.Handler.Assets.Count);
+            Assert.Equal(10, tester.Handler.Timeseries.Count);
         }
     }
 }

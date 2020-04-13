@@ -225,11 +225,11 @@ namespace Cognite.OpcUa
                 if (aborting) break;
                 foreach (var res in results)
                 {
-                    int cnt = handler(res.rawData, readParams.Completed[res.id], frontfill, res.id, details);
+                    int cnt = handler(res.RawData, readParams.Completed[res.Id], frontfill, res.Id, details);
 
                     total += cnt;
                     log.Debug("{mode} {cnt} {type} for node {nodeId}", 
-                        frontfill ? "Frontfill" : "Backfill", cnt, data ? "datapoints" : "events", res.id);
+                        frontfill ? "Frontfill" : "Backfill", cnt, data ? "datapoints" : "events", res.Id);
                 }
                 log.Information("{mode}ed {cnt} {type} for {nodeCount} states",
                     frontfill ? "Frontfill" : "Backfill", total, data ? "datapoints" : "events", count);
