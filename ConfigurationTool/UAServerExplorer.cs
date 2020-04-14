@@ -38,7 +38,7 @@ namespace Cognite.OpcUa.Config
         private List<NodeId> historizingEmitters;
         private List<BufferedNode> eventTypes;
         private Dictionary<string, string> namespaceMap;
-        private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> activeEventFields;
+        private Dictionary<NodeId, IEnumerable<(NodeId Root, QualifiedName BrowseName)>> activeEventFields;
         private bool history;
         private bool useServer;
 
@@ -113,8 +113,6 @@ namespace Cognite.OpcUa.Config
         }
 
         private Summary summary;
-
-
 
         public UAServerExplorer(FullConfig config, FullConfig baseConfig) : base(config)
         {
@@ -212,8 +210,8 @@ namespace Cognite.OpcUa.Config
 
                 VisitedNodes.Clear();
 
-                var browseNodesChunk = Math.Min(lbrowseNodesChunk, baseConfig.Source.BrowseNodesChunk);
-                var browseChunk = Math.Min(lbrowseChunk, baseConfig.Source.BrowseChunk);
+                int browseNodesChunk = Math.Min(lbrowseNodesChunk, baseConfig.Source.BrowseNodesChunk);
+                int browseChunk = Math.Min(lbrowseChunk, baseConfig.Source.BrowseChunk);
 
                 if (results.Any(res => res.BrowseNodesChunk == browseNodesChunk && res.BrowseChunk == browseChunk))
                 {
@@ -414,7 +412,7 @@ namespace Cognite.OpcUa.Config
             }
 
             int oldArraySize = config.Extraction.MaxArraySize;
-            var expectedAttributeReads = nodeList.Aggregate(0, (acc, node) => acc + (node.IsVariable ? 5 : 1));
+            int expectedAttributeReads = nodeList.Aggregate(0, (acc, node) => acc + (node.IsVariable ? 5 : 1));
             config.Extraction.MaxArraySize = 10;
 
             var testChunks = testAttributeChunkSizes.Where(chunkSize =>
@@ -429,7 +427,7 @@ namespace Cognite.OpcUa.Config
 
             bool succeeded = false;
 
-            foreach (var chunkSize in testChunks)
+            foreach (int chunkSize in testChunks)
             {
                 log.Information("Attempting to read attributes with ChunkSize {chunkSize}", chunkSize);
                 config.Source.AttributesChunk = chunkSize;
@@ -554,7 +552,7 @@ namespace Cognite.OpcUa.Config
 
             foreach (var dataType in identifiedTypes)
             {
-                var identifier = dataType.Id.IdType == IdType.String ? (string)dataType.Id.Identifier : null;
+                string identifier = dataType.Id.IdType == IdType.String ? (string)dataType.Id.Identifier : null;
                 if (dataType.DisplayName != null
                     && !dataType.DisplayName.Contains("picture", StringComparison.InvariantCultureIgnoreCase)
                     && !dataType.DisplayName.Contains("image", StringComparison.InvariantCultureIgnoreCase)
@@ -612,13 +610,12 @@ namespace Cognite.OpcUa.Config
 
             if (node.ValueRank == ValueRanks.Scalar) return true;
 
-            if (node.ArrayDimensions != null && node.ArrayDimensions.Count == 1)
-            {
-                int length = node.ArrayDimensions.First();
-                return config.Extraction.MaxArraySize < 0 || length > 0 && length <= config.Extraction.MaxArraySize;
-            }
+            if (node.ArrayDimensions == null || node.ArrayDimensions.Count != 1) return false;
 
-            return false;
+            int length = node.ArrayDimensions.First();
+
+            return config.Extraction.MaxArraySize < 0 || length > 0 && length <= config.Extraction.MaxArraySize;
+
         }
         /// <summary>
         /// Attempts different chunk sizes for subscriptions. (number of created monitored items per attempt, most servers should support at least one subscription).
@@ -648,7 +645,7 @@ namespace Cognite.OpcUa.Config
 
             var dps = new List<BufferedDataPoint>();
 
-            foreach (var chunkSize in testSubscriptionChunkSizes)
+            foreach (int chunkSize in testSubscriptionChunkSizes)
             {
                 config.Source.SubscriptionChunk = chunkSize;
                 try
@@ -756,7 +753,7 @@ namespace Cognite.OpcUa.Config
             bool failed = true;
             bool done = false;
 
-            foreach (var chunkSize in testHistoryChunkSizes)
+            foreach (int chunkSize in testHistoryChunkSizes)
             {
                 foreach (var chunk in ExtractorUtils.ChunkBy(historizingStates, chunkSize))
                 {
@@ -765,12 +762,12 @@ namespace Cognite.OpcUa.Config
                     {
                         var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
 
-                        foreach (var res in result)
+                        foreach (var (id, rawData) in result)
                         {
-                            var data = ToolUtil.ReadResultToDataPoints(res.Item2, stateMap[res.Item1], this);
+                            var data = ToolUtil.ReadResultToDataPoints(rawData, stateMap[id], this);
                             if (data.Length > 10 && nodeWithData == null)
                             {
-                                nodeWithData = res.Item1;
+                                nodeWithData = id;
                             }
 
 
@@ -779,12 +776,12 @@ namespace Cognite.OpcUa.Config
                             long avgTicks = (data.Last().Timestamp.Ticks - data.First().Timestamp.Ticks) / (data.Length - 1);
                             sumDistance += avgTicks;
 
-                            if (historyParams.Completed[res.Item1]) continue;
+                            if (historyParams.Completed[id]) continue;
                             if (avgTicks == 0) continue;
                             long estimate = (DateTime.UtcNow.Ticks - data.First().Timestamp.Ticks) / avgTicks;
                             if (estimate > largestEstimate)
                             {
-                                nodeWithData = res.Item1;
+                                nodeWithData = id;
                                 largestEstimate = estimate;
                             }
                         }
@@ -835,7 +832,7 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            var totalAvgDistance = sumDistance / count;
+            long totalAvgDistance = sumDistance / count;
 
             log.Information("Average distance between timestamps across all nodes with history: {dist}",
                 TimeSpan.FromTicks(totalAvgDistance));
@@ -860,7 +857,7 @@ namespace Cognite.OpcUa.Config
             {
                 var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(backfillParams), 10);
 
-                var data = ToolUtil.ReadResultToDataPoints(result.First().Item2, stateMap[result.First().Item1], this);
+                var data = ToolUtil.ReadResultToDataPoints(result.First().RawData, stateMap[result.First().Id], this);
 
                 log.Information("Last ts: {ts}, {now}", data.First().Timestamp, DateTime.UtcNow);
 
@@ -927,8 +924,8 @@ namespace Cognite.OpcUa.Config
             {
                 var clause = filter.SelectClauses[i];
                 if (!targetEventFields.Any(field =>
-                    field.Item1 == clause.TypeDefinitionId
-                    && field.Item2 == clause.BrowsePath[0]
+                    field.Root == clause.TypeDefinitionId
+                    && field.BrowseName == clause.BrowsePath[0]
                     && clause.BrowsePath.Count == 1)) continue;
 
                 string name = clause.BrowsePath[0].Name;
@@ -967,7 +964,7 @@ namespace Cognite.OpcUa.Config
             }
         }
 
-        private BufferedEvent[] ReadResultToEvents(IEncodeable rawEvts, NodeId emitterId, ReadEventDetails details)
+        private IEnumerable<BufferedEvent> ReadResultToEvents(IEncodeable rawEvts, NodeId emitterId, ReadEventDetails details)
         {
             if (rawEvts == null) return Array.Empty<BufferedEvent>();
             if (!(rawEvts is HistoryEvent evts))
@@ -1205,7 +1202,7 @@ namespace Cognite.OpcUa.Config
                 {
                     var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
 
-                    var eventResult = ReadResultToEvents(result.First().Item2, emitter, details);
+                    var eventResult = ReadResultToEvents(result.First().RawData, emitter, details);
 
                     if (eventResult.Any())
                     {
@@ -1227,27 +1224,19 @@ namespace Cognite.OpcUa.Config
             baseConfig.Events.HistorizingEmitterIds = historizingEmitters.Distinct().Select(NodeIdToProto).ToList();
         }
 
-
-        /// <summary>
-        /// Generate an intelligent namespace-map, with unique values, base for the base opcfoundation namespace (I think that appears in most servers).
-        /// </summary>
-        public void GetNamespaceMap()
+        public static Dictionary<string, string> GenerateNamespaceMap(IEnumerable<string> namespaces)
         {
-            var indices = nodeList.Concat(dataTypes).Concat(eventTypes).Select(node => node.Id.NamespaceIndex).Distinct();
-
-            var namespaces = indices.Select(idx => Session.NamespaceUris.GetString(idx));
-
             var startRegex = new Regex("^.*://");
             var splitRegex = new Regex("[^a-zA-Z\\d]");
 
             var map = namespaces.ToDictionary(ns => ns, ns =>
                 ns == "http://opcfoundation.org/UA/" ? "base" :
-                string.Concat(splitRegex.Split(startRegex.Replace(ns, ""))
-                    .Where(sub => !string.IsNullOrEmpty(sub) && sub.Length > 3)
-                    .Select(sub => sub.First()))
+                    string.Concat(splitRegex.Split(startRegex.Replace(ns, ""))
+                        .Where(sub => !string.IsNullOrEmpty(sub) && sub.Length > 3)
+                        .Select(sub => sub.First()))
             );
 
-            namespaceMap = new Dictionary<string, string>();
+            var namespaceMap = new Dictionary<string, string>();
 
             foreach (var mapped in map)
             {
@@ -1257,21 +1246,34 @@ namespace Cognite.OpcUa.Config
 
                 int index = 1;
 
-                while (namespaceMap.Any(kvp => nextValue == kvp.Value && mapped.Key != kvp.Key))
+#pragma warning disable CA1308 // Normalize strings to uppercase. Lowercase is prettier in externalId.
+                while (namespaceMap.Any(kvp => nextValue.ToLowerInvariant() == kvp.Value && mapped.Key != kvp.Key))
                 {
                     nextValue = baseValue + index;
                     index++;
                 }
 
-#pragma warning disable CA1308 // Normalize strings to uppercase. Lowercase is prettier in externalId.
                 namespaceMap.Add(mapped.Key, nextValue.ToLowerInvariant());
 #pragma warning restore CA1308 // Normalize strings to uppercase
             }
 
-            foreach (var key in namespaceMap.Keys.ToList())
+            foreach (string key in namespaceMap.Keys.ToList())
             {
                 namespaceMap[key] += ":";
             }
+
+            return namespaceMap;
+        }
+        /// <summary>
+        /// Generate an intelligent namespace-map, with unique values, base for the base opcfoundation namespace (I think that appears in most servers).
+        /// </summary>
+        public void GetNamespaceMap()
+        {
+            var indices = nodeList.Concat(dataTypes).Concat(eventTypes).Select(node => node.Id.NamespaceIndex).Distinct();
+
+            var namespaces = indices.Select(idx => Session.NamespaceUris.GetString(idx));
+
+            namespaceMap = GenerateNamespaceMap(namespaces);
 
             log.Information("Suggested namespaceMap: ");
             foreach (var kvp in namespaceMap)
@@ -1301,14 +1303,9 @@ namespace Cognite.OpcUa.Config
                     log.Information("    {ep}", endpoint);
                 }
 
-                if (summary.Secure)
-                {
-                    log.Information("At least one of these are secure, meaning that the Secure config option can and should be enabled");
-                }
-                else
-                {
-                    log.Information("None of these are secure, so enabling the Secure config option will probably not work.");
-                }
+                log.Information(summary.Secure
+                    ? "At least one of these are secure, meaning that the Secure config option can and should be enabled"
+                    : "None of these are secure, so enabling the Secure config option will probably not work.");
             }
             else
             {

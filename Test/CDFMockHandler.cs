@@ -38,11 +38,11 @@ namespace Test
     {
         readonly object handlerLock = new object();
         readonly string project;
-        public Dictionary<string, AssetDummy> assets { get; } = new Dictionary<string, AssetDummy>();
-        public Dictionary<string, TimeseriesDummy> timeseries { get; } = new Dictionary<string, TimeseriesDummy>();
-        public Dictionary<string, EventDummy> events { get; } = new Dictionary<string, EventDummy>();
-        public Dictionary<string, (List<NumericDatapoint>, List<StringDatapoint>)> datapoints { get; } =
-            new Dictionary<string, (List<NumericDatapoint>, List<StringDatapoint>)>();
+        public Dictionary<string, AssetDummy> Assets { get; } = new Dictionary<string, AssetDummy>();
+        public Dictionary<string, TimeseriesDummy> Timeseries { get; } = new Dictionary<string, TimeseriesDummy>();
+        public Dictionary<string, EventDummy> Events { get; } = new Dictionary<string, EventDummy>();
+        public Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)> Datapoints { get; } =
+            new Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)>();
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
         long eventIdCounter = 1;
@@ -180,7 +180,7 @@ namespace Test
             var missing = new List<string>();
             foreach (var id in ids.items)
             {
-                if (assets.ContainsKey(id.externalId))
+                if (Assets.ContainsKey(id.externalId))
                 {
                     found.Add(id.externalId);
                 }
@@ -200,7 +200,7 @@ namespace Test
                     }
                     string res = JsonConvert.SerializeObject(new AssetReadWrapper
                     {
-                        items = found.Concat(missing).Select(aid => assets[aid])
+                        items = found.Concat(missing).Select(aid => Assets[aid])
                     });
                     return new HttpResponseMessage(HttpStatusCode.OK)
                     {
@@ -260,7 +260,7 @@ namespace Test
             {
                 string result = JsonConvert.SerializeObject(new AssetReadWrapper
                 {
-                    items = found.Select(id => assets[id])
+                    items = found.Select(id => Assets[id])
                 });
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
@@ -278,7 +278,7 @@ namespace Test
                 asset.createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
                 asset.lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
                 asset.rootId = 123;
-                assets.Add(asset.externalId, asset);
+                Assets.Add(asset.externalId, asset);
             }
             string result = JsonConvert.SerializeObject(newAssets);
             return new HttpResponseMessage(HttpStatusCode.OK)
@@ -318,7 +318,7 @@ namespace Test
             var missing = new List<string>();
             foreach (var id in ids.items)
             {
-                if (timeseries.ContainsKey(id.externalId))
+                if (Timeseries.ContainsKey(id.externalId))
                 {
                     found.Add(id.externalId);
                 }
@@ -338,7 +338,7 @@ namespace Test
                     }
                     string res = JsonConvert.SerializeObject(new TimeseriesReadWrapper
                     {
-                        items = found.Concat(missing).Select(tid => timeseries[tid])
+                        items = found.Concat(missing).Select(tid => Timeseries[tid])
                     });
                     return new HttpResponseMessage(HttpStatusCode.OK)
                     {
@@ -383,7 +383,7 @@ namespace Test
             {
                 string result = JsonConvert.SerializeObject(new TimeseriesReadWrapper
                 {
-                    items = found.Select(id => timeseries[id])
+                    items = found.Select(id => Timeseries[id])
                 });
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
@@ -400,7 +400,7 @@ namespace Test
                 ts.id = timeseriesIdCounter++;
                 ts.createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
                 ts.lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
-                timeseries.Add(ts.externalId, ts);
+                Timeseries.Add(ts.externalId, ts);
             }
             string result = JsonConvert.SerializeObject(newTimeseries);
             return new HttpResponseMessage(HttpStatusCode.OK)
@@ -436,17 +436,17 @@ namespace Test
 
             foreach (var item in req.Items)
             {
-                if (!datapoints.ContainsKey(item.ExternalId))
+                if (!Datapoints.ContainsKey(item.ExternalId))
                 {
-                    datapoints[item.ExternalId] = (new List<NumericDatapoint>(), new List<StringDatapoint>());
+                    Datapoints[item.ExternalId] = (new List<NumericDatapoint>(), new List<StringDatapoint>());
                 }
                 if (item.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.NumericDatapoints)
                 {
-                    datapoints[item.ExternalId].Item1.AddRange(item.NumericDatapoints.Datapoints);
+                    Datapoints[item.ExternalId].NumericDatapoints.AddRange(item.NumericDatapoints.Datapoints);
                 }
                 else
                 {
-                    datapoints[item.ExternalId].Item2.AddRange(item.StringDatapoints.Datapoints);
+                    Datapoints[item.ExternalId].StringDatapoints.AddRange(item.StringDatapoints.Datapoints);
                 }
 
             }
@@ -475,10 +475,10 @@ namespace Test
             }
             var newEvents = JsonConvert.DeserializeObject<EventWrapper>(content);
             var duplicated = new List<Identity>();
-            var created = new List<(string, EventDummy)>();
+            var created = new List<(string Id, EventDummy Event)>();
             foreach (var ev in newEvents.items)
             {
-                if (events.ContainsKey(ev.externalId) || created.Any(ct => ct.Item1 == ev.externalId))
+                if (Events.ContainsKey(ev.externalId) || created.Any(ct => ct.Id == ev.externalId))
                 {
                     duplicated.Add(new Identity { externalId = ev.externalId });
                     continue;
@@ -506,9 +506,9 @@ namespace Test
                     Content = new StringContent(errResult)
                 };
             }
-            foreach (var evt in created)
+            foreach ((string id, var eventDummy) in created)
             {
-                events.Add(evt.Item1, evt.Item2);
+                Events.Add(id, eventDummy);
             }
             string result = JsonConvert.SerializeObject(newEvents);
             return new HttpResponseMessage(HttpStatusCode.Created)
@@ -560,7 +560,7 @@ namespace Test
             var missing = new List<Identity>();
             foreach (var id in ids.items)
             {
-                if (!timeseries.ContainsKey(id.externalId))
+                if (!Timeseries.ContainsKey(id.externalId))
                 {
                     missing.Add(id);
                     continue;
@@ -568,20 +568,20 @@ namespace Test
                 var item = new DataPointListItem
                 {
                     ExternalId = id.externalId,
-                    Id = timeseries[id.externalId].id
+                    Id = Timeseries[id.externalId].id
                 };
-                if (datapoints.ContainsKey(id.externalId))
+                if (Datapoints.ContainsKey(id.externalId))
                 {
-                    if (timeseries[id.externalId].isString)
+                    if (Timeseries[id.externalId].isString)
                     {
                         item.StringDatapoints = new StringDatapoints();
-                        item.StringDatapoints.Datapoints.Add(datapoints[id.externalId].Item2.Aggregate((curMin, x) =>
+                        item.StringDatapoints.Datapoints.Add(Datapoints[id.externalId].StringDatapoints.Aggregate((curMin, x) =>
                             curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
                     }
                     else
                     {
                         item.NumericDatapoints = new NumericDatapoints();
-                        item.NumericDatapoints.Datapoints.Add(datapoints[id.externalId].Item1.Aggregate((curMin, x) =>
+                        item.NumericDatapoints.Datapoints.Add(Datapoints[id.externalId].NumericDatapoints.Aggregate((curMin, x) =>
                             curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
                     }
                 }
@@ -611,7 +611,7 @@ namespace Test
                 lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds(),
                 rootId = 123
             };
-            assets.Add(externalId, asset);
+            Assets.Add(externalId, asset);
             return asset;
         }
 
@@ -625,7 +625,7 @@ namespace Test
                 createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds(),
                 externalId = externalId
             };
-            timeseries.Add(externalId, ts);
+            Timeseries.Add(externalId, ts);
             return ts;
         }
     }

@@ -11,6 +11,9 @@ using Prometheus.Client;
 
 namespace Cognite.OpcUa
 {
+    /// <summary>
+    /// Manages a litedb database for persisting state and buffer.
+    /// </summary>
     public sealed class StateStorage : IDisposable
     {
         public const string StringDPQueue = "string_dp_queue";
@@ -51,6 +54,11 @@ namespace Cognite.OpcUa
         private static readonly Gauge numEventsInQueue = Metrics.CreateGauge(
             "opcua_queue_num_events", "The number of events in the local buffer queue");
 
+        /// <summary>
+        /// Constructor, initializes queues if necessary, and tests whether they contain any points.
+        /// </summary>
+        /// <param name="extractor">Extractor parent</param>
+        /// <param name="config">Active configuration</param>
         public StateStorage(Extractor extractor, FullConfig config)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
@@ -60,20 +68,19 @@ namespace Cognite.OpcUa
 
             db = new LiteDatabase(connection);
 
-            if (config.FailureBuffer.Enabled && config.FailureBuffer.LocalQueue)
-            {
-                stringDataQueue = new LiteQueue<StringDataPointPoco>(db, StringDPQueue);
-                stringDataQueue.ResetOrphans();
-                doubleDataQueue = new LiteQueue<DoubleDataPointPoco>(db, DoubleDPQueue);
-                doubleDataQueue.ResetOrphans();
-                AnyPoints = QueueAny(stringDataQueue).Result || QueueAny(doubleDataQueue).Result;
-                eventQueue = new LiteQueue<EventPoco>(db, EventQueue);
-                eventQueue.ResetOrphans();
-                AnyEvents = QueueAny(eventQueue).Result;
-                numDoublePointsInQueue.Set(doubleDataQueue.Count());
-                numStringPointsInQueue.Set(stringDataQueue.Count());
-                numEventsInQueue.Set(eventQueue.Count());
-            }
+            if (!config.FailureBuffer.Enabled || !config.FailureBuffer.LocalQueue) return;
+
+            stringDataQueue = new LiteQueue<StringDataPointPoco>(db, StringDPQueue);
+            stringDataQueue.ResetOrphans();
+            doubleDataQueue = new LiteQueue<DoubleDataPointPoco>(db, DoubleDPQueue);
+            doubleDataQueue.ResetOrphans();
+            AnyPoints = QueueAny(stringDataQueue).Result || QueueAny(doubleDataQueue).Result;
+            eventQueue = new LiteQueue<EventPoco>(db, EventQueue);
+            eventQueue.ResetOrphans();
+            AnyEvents = QueueAny(eventQueue).Result;
+            numDoublePointsInQueue.Set(doubleDataQueue.Count());
+            numStringPointsInQueue.Set(stringDataQueue.Count());
+            numEventsInQueue.Set(eventQueue.Count());
         }
 
         static StateStorage()
@@ -206,8 +213,12 @@ namespace Cognite.OpcUa
 
             return true;
         }
-
-        private Task<bool> QueueAny<T>(LiteQueue<T> queue)
+        /// <summary>
+        /// Return true if given queue contains any elements
+        /// </summary>
+        /// <param name="queue">Queue to test</param>
+        /// <returns>True if queue contains any elements</returns>
+        private static Task<bool> QueueAny<T>(LiteQueue<T> queue)
         {
             return Task.Run(() =>
             {
@@ -217,7 +228,11 @@ namespace Cognite.OpcUa
                 return true;
             });
         }
-
+        /// <summary>
+        /// Write given list of datapoints to buffer queue
+        /// </summary>
+        /// <param name="points">Points to write</param>
+        /// <returns>True on success</returns>
         public async Task<bool> WritePointsToQueue(IEnumerable<BufferedDataPoint> points, CancellationToken token)
         {
             if (points == null) return true;
@@ -254,6 +269,11 @@ namespace Cognite.OpcUa
             AnyPoints = true;
             return true;
         }
+        /// <summary>
+        /// Read datapoints from buffer queue
+        /// </summary>
+        /// <param name="pushers">Pushers to write to</param>
+        /// <returns>True on success</returns>
         public async Task<bool> ReadPointsFromQueue(IEnumerable<IPusher> pushers, CancellationToken token)
         {
             if (pushers == null) return true;
@@ -329,7 +349,11 @@ namespace Cognite.OpcUa
 
             return failed;
         }
-
+        /// <summary>
+        /// Write given list of events to buffer queue
+        /// </summary>
+        /// <param name="events">Events to write</param>
+        /// <returns>True on success</returns>
         public async Task<bool> WriteEventsToQueue(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
             if (events == null) return true;
@@ -351,7 +375,11 @@ namespace Cognite.OpcUa
             AnyEvents = true;
             return true;
         }
-
+        /// <summary>
+        /// Read events from buffer queue
+        /// </summary>
+        /// <param name="pushers">Pushers to write to</param>
+        /// <returns>True on success</returns>
         public async Task<bool> ReadEventsFromQueue(IEnumerable<IPusher> pushers, CancellationToken token)
         {
             if (pushers == null) return true;
@@ -414,7 +442,12 @@ namespace Cognite.OpcUa
 
             return failed;
         }
-
+        /// <summary>
+        /// Read MQTT states from buffer.
+        /// </summary>
+        /// <param name="name">Name of collection in litedb</param>
+        /// <param name="invalidateTreshold">Only return states created after this</param>
+        /// <returns>List of states</returns>
         public async Task<IEnumerable<string>> ReadMqttStates(string name, DateTime 
             invalidateTreshold, CancellationToken token)
         {
@@ -434,7 +467,11 @@ namespace Cognite.OpcUa
                 return Array.Empty<string>();
             }
         }
-
+        /// <summary>
+        /// Write MQTT states to buffer
+        /// </summary>
+        /// <param name="name">Name of collection in litedb</param>
+        /// <param name="ids">Ids to write</param>
         public async Task StoreMqttStates(string name, IEnumerable<string> ids, CancellationToken token)
         {
             var time = DateTime.UtcNow;

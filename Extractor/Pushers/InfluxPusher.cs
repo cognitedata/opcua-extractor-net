@@ -131,6 +131,12 @@ namespace Cognite.OpcUa
             dataPointPushes.Inc();
             return true;
         }
+        /// <summary>
+        /// Push events to influxdb. Events are stored such that each event type on a given node has its own measurement,
+        /// on the form "events.[SourceNode uniqueId]:[Type uniqueId]"
+        /// </summary>
+        /// <param name="events">Events to push</param>
+        /// <returns>True on success, null if none were pushed</returns>
 
         public async Task<bool?> PushEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
@@ -229,6 +235,15 @@ namespace Cognite.OpcUa
             }
             return true;
         }
+        /// <summary>
+        /// Read range of events for the given emitter, and the given nodes, for the given list of series.
+        /// The actual series to be read will be constructed from the series with any matching node in the given
+        /// list of nodes.
+        /// </summary>
+        /// <param name="state">State to read range for</param>
+        /// <param name="nodes">SourceNodes to use</param>
+        /// <param name="backfillEnabled">True to also read start</param>
+        /// <param name="seriesNames">List of all series to read for</param>
         private async Task InitExtractedEventRange(EventExtractionState state,
             IEnumerable<NodeId> nodes,
             bool backfillEnabled,
@@ -331,7 +346,10 @@ namespace Cognite.OpcUa
             }
             return true;
         }
-
+        /// <summary>
+        /// Test if the database is available
+        /// </summary>
+        /// <returns>True on success</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
             IEnumerable<string> dbs;
@@ -421,7 +439,11 @@ namespace Cognite.OpcUa
 
             return idp;
         }
-
+        /// <summary>
+        /// Read datapoints from influxdb for the given list of influxBufferStates
+        /// </summary>
+        /// <param name="states">InfluxBufferStates to read from</param>
+        /// <returns>List of datapoints</returns>
         public async Task<IEnumerable<BufferedDataPoint>> ReadDataPoints(
             IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
@@ -535,10 +557,12 @@ namespace Cognite.OpcUa
 
             return finalEvents;
         }
-
+        /// <summary>
+        /// Recreate the influxdbclient with new configuration.
+        /// </summary>
         public void Reconfigure()
         {
-            log.Information(config.Host);
+            log.Information("Reconfiguring influxPusher with: {host}", config.Host);
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
         }
 

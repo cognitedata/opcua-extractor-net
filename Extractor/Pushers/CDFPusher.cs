@@ -295,7 +295,7 @@ namespace Cognite.OpcUa
         {
             var client = GetClient("Data");
             IEnumerable<EventCreate> eventEntities = events.Select(EventToCDFEvent).DistinctBy(evt => evt.ExternalId).ToList();
-            var count = events.Count();
+            int count = events.Count();
             try
             {
                 await client.Events.CreateAsync(eventEntities, token);
@@ -424,7 +424,7 @@ namespace Cognite.OpcUa
             nodeToAssetIds.Clear();
             ranges.Clear();
         }
-        private async Task<IEnumerable<(string, DateTime)>> GetEarliestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
+        private async Task<IEnumerable<(string Id, DateTime Timestamp)>> GetEarliestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
         {
             var client = GetClient();
             var dps = await client.DataPoints.ListAsync(new DataPointsQuery
@@ -459,13 +459,13 @@ namespace Cognite.OpcUa
 
             return res;
         }
-        private async Task<IEnumerable<(string, DateTime)>> GetEarliestTimestamp(IEnumerable<string> ids, CancellationToken token)
+        private async Task<IEnumerable<(string Id, DateTime Timestamp)>> GetEarliestTimestamp(IEnumerable<string> ids, CancellationToken token)
         {
             var tasks = ExtractorUtils.ChunkBy(ids, config.EarliestChunk).Select(chunk => GetEarliestTimestampChunk(chunk, token)).ToList();
             await Task.WhenAll(tasks);
             return tasks.SelectMany(task => task.Result);
         }
-        private async Task<IEnumerable<(string, DateTime)>> GetLatestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
+        private async Task<IEnumerable<(string Id, DateTime Timestamp)>> GetLatestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
         {
             var client = GetClient();
             IEnumerable<DataPointsItem<DataPoint>> dps;
@@ -498,8 +498,7 @@ namespace Cognite.OpcUa
 
             return res;
         }
-        private async Task<IEnumerable<(string, DateTime)>> GetLatestTimestamp(IEnumerable<string> ids,
-            CancellationToken token)
+        private async Task<IEnumerable<(string Id, DateTime Timestamp)>> GetLatestTimestamp(IEnumerable<string> ids, CancellationToken token)
         {
             var tasks = ExtractorUtils.ChunkBy(ids, config.LatestChunk).Select(chunk => GetLatestTimestampChunk(chunk, token)).ToList();
             await Task.WhenAll(tasks);
@@ -527,7 +526,7 @@ namespace Cognite.OpcUa
             var tasks = new List<Task>();
             var latestTask = GetLatestTimestamp(ids, token);
             tasks.Add(latestTask);
-            Task<IEnumerable<(string, DateTime)>> earliestTask = null;
+            Task<IEnumerable<(string Id, DateTime Timestamp)>> earliestTask = null;
             if (backfillEnabled)
             {
                 earliestTask = GetEarliestTimestamp(ids, token);
@@ -544,28 +543,28 @@ namespace Cognite.OpcUa
                 return false;
             }
 
-            foreach (var dp in latestTask.Result)
+            foreach ((string id, var timestamp) in latestTask.Result)
             {
-                if (backfillEnabled && dp.Item2 == DateTime.MinValue)
+                if (backfillEnabled && timestamp == DateTime.MinValue)
                 {
                     // No value found, so the timeseries is empty. If backfill is enabled this means that we start the range now, otherwise it means
                     // that we start at time zero.
-                    ranges[dp.Item1] = new TimeRange(DateTime.UtcNow, DateTime.UtcNow);
+                    ranges[id] = new TimeRange(DateTime.UtcNow, DateTime.UtcNow);
                     continue;
                 }
-                ranges[dp.Item1] = new TimeRange(dp.Item2, dp.Item2);
+                ranges[id] = new TimeRange(timestamp, timestamp);
             }
 
             if (backfillEnabled)
             {
-                foreach (var dp in earliestTask.Result)
+                foreach ((string id, var timestamp) in earliestTask.Result)
                 {
-                    if (dp.Item2 == DateTime.MinValue) continue;
-                    ranges[dp.Item1].Start = dp.Item2;
+                    if (timestamp == DateTime.MinValue) continue;
+                    ranges[id].Start = timestamp;
                 }
             }
 
-            foreach (var id in ids)
+            foreach (string id in ids)
             {
                 var state = Extractor.State.GetNodeState(id);
                 state.InitExtractedRange(ranges[id].Start, ranges[id].End);
@@ -614,22 +613,19 @@ namespace Cognite.OpcUa
                 return false;
             }
 
-            if (fullConfig.Events.EventIds != null 
-                && fullConfig.Events.EmitterIds != null
-                && fullConfig.Events.EventIds.Any()
-                && fullConfig.Events.EmitterIds.Any())
+            if (fullConfig.Events.EventIds == null || fullConfig.Events.EmitterIds == null ||
+                !fullConfig.Events.EventIds.Any() || !fullConfig.Events.EmitterIds.Any()) return true;
+
+            try
             {
-                try
-                {
-                    await client.Events.ListAsync(new EventQuery { Limit = 1 }, token);
-                }
-                catch (ResponseException ex)
-                {
-                    log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
-                              "to insufficient acces rights on API key. Project {project} at {host}: {msg}",
-                        config.Project, config.Host, ex.Message);
-                    log.Debug(ex, "Could not access CDF Events");
-                }
+                await client.Events.ListAsync(new EventQuery { Limit = 1 }, token);
+            }
+            catch (ResponseException ex)
+            {
+                log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
+                          "to insufficient acces rights on API key. Project {project} at {host}: {msg}",
+                    config.Project, config.Host, ex.Message);
+                log.Debug(ex, "Could not access CDF Events");
             }
 
             return true;
@@ -857,10 +853,7 @@ namespace Cognite.OpcUa
             {
                 return new DateTimeOffset(dt).ToUnixTimeMilliseconds();
             }
-            else
-            {
-                return Convert.ToInt64(value, CultureInfo.InvariantCulture);
-            }
+            return Convert.ToInt64(value, CultureInfo.InvariantCulture);
         }
         private static readonly HashSet<string> excludeMetaData = new HashSet<string> {
             "StartTime", "EndTime", "Type", "SubType"

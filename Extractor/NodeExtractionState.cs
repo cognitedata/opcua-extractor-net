@@ -12,19 +12,39 @@ namespace Cognite.OpcUa
         /// Id of the corresponding node in OPC-UA
         /// </summary>
         public NodeId Id { get; }
+        /// <summary>
+        /// True if the state has been modified since last time it was written to influxdb.
+        /// </summary>
         public bool IsDirty { get; set; }
+        /// <summary>
+        /// Start- and endpoint of extracted range as known to be the case locally
+        /// </summary>
         public TimeRange SourceExtractedRange { get; }
+        /// <summary>
+        /// Most conservative common extracted range for all destinations
+        /// </summary>
         public TimeRange DestinationExtractedRange { get; }
         protected object RangeMutex { get; } = new object();
+        /// <summary>
+        /// True if backfill has been finished for this state
+        /// </summary>
         public bool BackfillDone { get; set; }
+        /// <summary>
+        /// True if this state has ever been persisted to the influxdb state-storage.
+        /// </summary>
         public bool StatePersisted { get; set; }
-
+        /// <summary>
+        /// True if state represents a historizing node.
+        /// </summary>
         public virtual bool Historizing { get; set; }
         /// <summary>
         /// True if the node is currently passing live data from subscriptions into the pushers.
         /// </summary>
         public bool IsStreaming { get; protected set; }
-
+        /// <summary>
+        /// Construct from nodeId, initializes ranges to default values.
+        /// </summary>
+        /// <param name="id">NodeId of associated variable</param>
         protected BaseExtractionState(NodeId id)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
@@ -33,7 +53,12 @@ namespace Cognite.OpcUa
             DestinationExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
             BackfillDone = false;
         }
-
+        /// <summary>
+        /// Called when initializing extracted range from destinations and state storage.
+        /// This will always shrink the believed range.
+        /// </summary>
+        /// <param name="first"></param>
+        /// <param name="last"></param>
         public void InitExtractedRange(DateTime first, DateTime last)
         {
             lock (RangeMutex)
@@ -51,7 +76,11 @@ namespace Cognite.OpcUa
                 }
             }
         }
-
+        /// <summary>
+        /// Called after range initialization to set uninitialized ranges to proper default values depending on whether
+        /// backfill is enabled or not.
+        /// </summary>
+        /// <param name="backfill">True if backfill is enabled</param>
         public void FinalizeRangeInit(bool backfill)
         {
             lock (RangeMutex)
@@ -74,7 +103,11 @@ namespace Cognite.OpcUa
                 }
             }
         }
-
+        /// <summary>
+        /// Update start of source range directly from history backfill.
+        /// </summary>
+        /// <param name="first">Earliest timestamp in backfill chunk</param>
+        /// <param name="final">True if this is the end of history</param>
         public void UpdateFromBackfill(DateTime first, bool final)
         {
             lock (RangeMutex)
@@ -91,8 +124,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Use results of push to destinations to update the record of newest/latest points pushed to destinations.
         /// </summary>
-        /// <param name="first"></param>
-        /// <param name="last"></param>
+        /// <param name="update">New range, will only be used to grow the destination range in the state</param>
         public void UpdateDestinationRange(TimeRange update)
         {
             if (update == null) return;
@@ -124,13 +156,15 @@ namespace Cognite.OpcUa
                 }
             }
         }
-
+        /// <summary>
+        /// Reset the state based on a restart of history. This sets backfillDone to false, disables streaming
+        /// and resets the source ranges to destination ranges.
+        /// </summary>
         public void RestartHistory()
         {
-
             lock (RangeMutex)
             {
-                IsStreaming = false;
+                IsStreaming = !Historizing;
                 BackfillDone = false;
                 SourceExtractedRange.Start = new DateTime(DestinationExtractedRange.Start.Ticks);
                 SourceExtractedRange.End = new DateTime(DestinationExtractedRange.End.Ticks);
@@ -247,7 +281,9 @@ namespace Cognite.OpcUa
             }
         }
 
-
+        /// <summary>
+        /// Resets the state by disabling streaming for historizing timeseries and clearing the buffer.
+        /// </summary>
         public void ResetStreamingState()
         {
             IsStreaming = !Historizing;
@@ -347,7 +383,9 @@ namespace Cognite.OpcUa
                 return result;
             }
         }
-
+        /// <summary>
+        /// Resets the state by disabling streaming for historizing emitters and clearing the buffer.
+        /// </summary>
         public void ResetStreamingState()
         {
             IsStreaming = !Historizing;
@@ -360,7 +398,9 @@ namespace Cognite.OpcUa
     {
         StringType, DoubleType, EventType
     }
-
+    /// <summary>
+    /// Represents the state of a variable in the influxdb failureBuffer.
+    /// </summary>
     public sealed class InfluxBufferState : BaseExtractionState
     {
         public InfluxBufferType Type { get; }
@@ -388,7 +428,9 @@ namespace Cognite.OpcUa
             DestinationExtractedRange.Start = DateTime.MaxValue;
             DestinationExtractedRange.End = DateTime.MinValue;
         }
-
+        /// <summary>
+        /// Completely clear the ranges, after data has been written to all destinations.
+        /// </summary>
         public void ClearRanges()
         {
             lock (RangeMutex)

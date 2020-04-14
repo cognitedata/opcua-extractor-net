@@ -9,6 +9,9 @@ using Serilog;
 
 namespace Cognite.OpcUa
 {
+    /// <summary>
+    /// Tool to read history from OPC-UA. Manages backfill and frontfill of datapoints and events.
+    /// </summary>
     class HistoryReader
     {
         private static readonly Counter numFrontfillPoints = Metrics
@@ -38,6 +41,12 @@ namespace Cognite.OpcUa
         private int running;
 
         private static readonly ILogger log = Log.Logger.ForContext(typeof(HistoryReader));
+        /// <summary>
+        /// Constructor, initialize from config
+        /// </summary>
+        /// <param name="uaClient">UAClient to use for history read</param>
+        /// <param name="extractor">Parent extractor to enqueue points and events in</param>
+        /// <param name="config">Configuration to use</param>
         public HistoryReader(UAClient uaClient, Extractor extractor, HistoryConfig config)
         {
             this.config = config;
@@ -55,7 +64,7 @@ namespace Cognite.OpcUa
         /// <param name="frontfill">True if this is frontfill, false for backfill</param>
         /// <param name="nodeid">NodeId being read</param>
         /// <param name="details">The HistoryReadDetails used</param>
-        /// <returns></returns>
+        /// <returns>Number of points read</returns>
         private int HistoryDataHandler(IEncodeable rawData, bool final, bool frontfill, NodeId nodeid, HistoryReadDetails details)
         {
             if (rawData == null) return 0;
@@ -128,6 +137,7 @@ namespace Cognite.OpcUa
         /// <param name="frontfill">True if frontfill, false for backfill</param>
         /// <param name="nodeid">Id of the emitter in question.</param>
         /// <param name="details">History read details used to generate this HistoryRead result</param>
+        /// <returns>Number of events read</returns>
         private int HistoryEventHandler(IEncodeable rawEvts, bool final, bool frontfill, NodeId nodeid, HistoryReadDetails details)
         {
             if (rawEvts == null) return 0;
@@ -215,11 +225,11 @@ namespace Cognite.OpcUa
                 if (aborting) break;
                 foreach (var res in results)
                 {
-                    int cnt = handler(res.Item2, readParams.Completed[res.Item1], frontfill, res.Item1, details);
+                    int cnt = handler(res.RawData, readParams.Completed[res.Id], frontfill, res.Id, details);
 
                     total += cnt;
                     log.Debug("{mode} {cnt} {type} for node {nodeId}", 
-                        frontfill ? "Frontfill" : "Backfill", cnt, data ? "datapoints" : "events", res.Item1);
+                        frontfill ? "Frontfill" : "Backfill", cnt, data ? "datapoints" : "events", res.Id);
                 }
                 log.Information("{mode}ed {cnt} {type} for {nodeCount} states",
                     frontfill ? "Frontfill" : "Backfill", total, data ? "datapoints" : "events", count);
@@ -441,7 +451,11 @@ namespace Cognite.OpcUa
                 Interlocked.Decrement(ref running);
             }
         }
-
+        /// <summary>
+        /// Request the history read terminate, then wait for all operations to finish before quitting.
+        /// </summary>
+        /// <param name="timeoutsec">Timeout in seconds</param>
+        /// <returns>True if successfully aborted, false if waiting timed out</returns>
         public async Task<bool> Terminate(CancellationToken token, int timeoutsec = 30)
         {
             if (running == 0) return true;

@@ -5,6 +5,7 @@ using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
 using MQTTnet.Client.Subscribing;
+using Polly;
 using Serilog;
 
 namespace Cognite.Bridge
@@ -18,13 +19,17 @@ namespace Cognite.Bridge
         private readonly ILogger log = Log.ForContext(typeof(MQTTBridge));
 
         private readonly Destination destination;
-        private bool recFlag = false;
+        private bool recFlag;
+
+        private bool disconnected;
         public MQTTBridge(Destination destination, BridgeConfig config)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             this.destination = destination;
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.MQTT.ClientId)
+                .WithKeepAlivePeriod(TimeSpan.FromSeconds(10))
+                .WithKeepAliveSendInterval(TimeSpan.FromSeconds(1))
                 .WithTcpServer(config.MQTT.Host, config.MQTT.Port)
                 .WithCleanSession();
 
@@ -40,7 +45,10 @@ namespace Cognite.Bridge
             options = builder.Build();
             client = new MqttFactory().CreateMqttClient();
         }
-
+        /// <summary>
+        /// Wait for up to timeout seconds for a message to arrive over MQTT. Throws an exception if waiting timed out.
+        /// </summary>
+        /// <param name="timeout">Timeout in seconds</param>
         public async Task WaitForNextMessage(int timeout = 10)
         {
             recFlag = false;
@@ -52,11 +60,17 @@ namespace Cognite.Bridge
 
             throw new TimeoutException("Waiting for next message timed out");
         }
+        /// <summary>
+        /// Start the bridge, adding handlers then connecting to the broker.
+        /// </summary>
+        /// <returns>True on success</returns>
         public async Task<bool> StartBridge(CancellationToken token)
         {
             client.UseDisconnectedHandler(async e =>
             {
-                await Task.Delay(TimeSpan.FromSeconds(5));
+                log.Warning("MQTT Client disconnected");
+                log.Debug(e.Exception, "MQTT client disconnected");
+                if (disconnected) return;
                 try
                 {
                     await client.ConnectAsync(options, token);
@@ -153,13 +167,23 @@ namespace Cognite.Bridge
                     return false;
                 }
             }
-
-
             log.Information("Successfully started MQTT bridge");
             return true;
         }
+
+        public bool IsConnected()
+        {
+            return client.IsConnected;
+        }
+
+        public async Task Disconnect()
+        {
+            disconnected = true;
+            await client.DisconnectAsync();
+        }
         public void Dispose()
         {
+            disconnected = true;
             client.Dispose();
         }
     }

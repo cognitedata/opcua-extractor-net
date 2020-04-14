@@ -28,6 +28,11 @@ namespace Cognite.OpcUa
     public static class ExtractorUtils
     {
         private static readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorUtils));
+        /// <summary>
+        /// Returns elements of the source enumerable, where all elments have distinct results of the selector function.
+        /// </summary>
+        /// <param name="selector">Function to generate keys</param>
+        /// <returns></returns>
         public static IEnumerable<TSource> DistinctBy<TSource, TKey>(this IEnumerable<TSource> source,
             Func<TSource, TKey> selector)
         {
@@ -41,7 +46,14 @@ namespace Cognite.OpcUa
                 }
             }
         }
-
+        /// <summary>
+        /// Returns a list of dictionaries chunked so that each dictionary has at most
+        /// maxKeys entries, and each list has at most maxPerList elements.
+        /// </summary>
+        /// <param name="points">Dictionary of lists to be chunked</param>
+        /// <param name="maxPerList">Maximum number of elements in each returned list</param>
+        /// <param name="maxKeys">Maximum number of keys in each returned dictionary</param>
+        /// <returns></returns>
         public static IEnumerable<IDictionary<TKey, IEnumerable<TVal>>> ChunkDictOfLists<TKey, TVal>(
             IDictionary<TKey, List<TVal>> points, int maxPerList, int maxKeys)
         {
@@ -136,7 +148,6 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Divide input into a number of size limited chunks
         /// </summary>
-        /// <typeparam name="T">Type in input enumerable</typeparam>
         /// <param name="input">Input enumerable of any size</param>
         /// <param name="maxSize">Maximum size of return enumerables</param>
         /// <returns>A number of enumerables smaller or equal to maxSize</returns>
@@ -162,7 +173,13 @@ namespace Cognite.OpcUa
             if (string.IsNullOrEmpty(str) || str.Length <= maxLength) return str;
             return str.Substring(0, maxLength);
         }
-        public static (IEnumerable<BufferedNode>, IEnumerable<BufferedVariable>) SortNodes(IEnumerable<BufferedNode> nodes)
+        /// <summary>
+        /// Divide a list of BufferedNodes into lists of nodes mapped to destination context objects and
+        /// data variables respectively.
+        /// </summary>
+        /// <param name="nodes">Nodes to sort</param>
+        /// <returns>Tuple of sorted objects and variables</returns>
+        public static (IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> variables) SortNodes(IEnumerable<BufferedNode> nodes)
         {
             if (nodes == null) throw new ArgumentNullException(nameof(nodes));
             var timeseries = new List<BufferedVariable>();
@@ -189,13 +206,20 @@ namespace Cognite.OpcUa
 
             return (objects, timeseries);
         }
-
-        public static IEnumerable<IEnumerable<T>> GroupByTimeGranularity<T>(IEnumerable<(T, DateTime)> input, TimeSpan granularity, int maxLength)
+        /// <summary>
+        /// Group list of items paired with time by some given time granularity.
+        /// Effectively divides time into even chunks with length given by granularity, starting from DateTime.MinValue.
+        /// </summary>
+        /// <param name="input">List of arbitrary objects paired with a timestamp</param>
+        /// <param name="granularity">Length of time chunks</param>
+        /// <param name="maxLength">Maximum length of each chunk after grouping</param>
+        /// <returns>List of lists grouped by given granularity, where each list has given maximum length</returns>
+        public static IEnumerable<IEnumerable<T>> GroupByTimeGranularity<T>(IEnumerable<(T item, DateTime time)> input, TimeSpan granularity, int maxLength)
         {
             return granularity == TimeSpan.Zero
-                ? input.Select(item => new [] {item.Item1})
-                : input.GroupBy(pair => pair.Item2.Ticks / granularity.Ticks)
-                    .SelectMany(group => ChunkBy(group.ToList().Select(pair => pair.Item1), maxLength));
+                ? input.Select(item => new [] {item.item})
+                : input.GroupBy(pair => pair.time.Ticks / granularity.Ticks)
+                    .SelectMany(group => ChunkBy(group.ToList().Select(pair => pair.item), maxLength));
         }
 
         public enum SourceOp
@@ -204,7 +228,12 @@ namespace Cognite.OpcUa
             CreateSubscription, CreateMonitoredItems, ReadAttributes, HistoryRead,
             HistoryReadEvents, ReadRootNode, DefaultOperation
         }
-
+        /// <summary>
+        /// Recursively browse through aggregateException to find a root exception of given type.
+        /// </summary>
+        /// <typeparam name="T">Type of exception to find</typeparam>
+        /// <param name="aex">AggregateException to look through</param>
+        /// <returns>Null or a root exception</returns>
         public static T GetRootExceptionOfType<T>(AggregateException aex) where T : Exception
         {
             if (aex == null) throw new ArgumentNullException(nameof(aex));
@@ -219,6 +248,12 @@ namespace Cognite.OpcUa
 
             return null;
         }
+        /// <summary>
+        /// Log exception, silencing SilentServiceExceptions and formatting results properly.
+        /// </summary>
+        /// <param name="e">Exception to log</param>
+        /// <param name="message">Message to give with normal exceptions</param>
+        /// <param name="silentMessage">Message to give with silent exceptions</param>
         public static void LogException(Exception e, string message, string silentMessage)
         {
             if (e is AggregateException aex)
@@ -240,16 +275,22 @@ namespace Cognite.OpcUa
             else if (e is SilentServiceException silent)
             {
                 log.Debug(silent, silentMessage);
-                return;
             }
             else if (e is ExtractorFailureException failure)
             {
                 log.Error(message + " - {msg}", failure.Message);
                 log.Debug(failure, message);
             }
-            log.Error(e, message);
+            else
+            {
+                log.Error(e, message);
+            }
         }
-
+        /// <summary>
+        /// Turn string into an array of bytes on the format [unsigned short length][string].
+        /// </summary>
+        /// <param name="str">String to transform</param>
+        /// <returns>Storable bytes</returns>
         public static byte[] StringToStorable(string str)
         {
             ushort size = (ushort)((str?.Length ?? 0) * sizeof(char));
@@ -260,8 +301,14 @@ namespace Cognite.OpcUa
                 size);
             return bytes;
         }
-
-        public static (string, int) StringFromStorable(byte[] bytes, int pos)
+        /// <summary>
+        /// Read a string from given array of bytes, starting from given position.
+        /// String being read is assumed to be on the format [unsigned short length][string]
+        /// </summary>
+        /// <param name="bytes">Bytes to read</param>
+        /// <param name="pos">Position to start reading from</param>
+        /// <returns>Resulting parsed string and new position in the byte array.</returns>
+        public static (string result, int pos) StringFromStorable(byte[] bytes, int pos)
         {
             ushort size = BitConverter.ToUInt16(bytes, pos);
             if (size == 0) return (null, pos + sizeof(ushort));
@@ -269,6 +316,13 @@ namespace Cognite.OpcUa
             Buffer.BlockCopy(bytes, pos + sizeof(ushort), chars, 0, size);
             return (new string(chars), pos + size + sizeof(ushort));
         }
+        /// <summary>
+        /// Parse ServiceResult from OPC-UA and log then transform it into a
+        /// SilentServiceException if it is recognized, or just return it if not.
+        /// </summary>
+        /// <param name="ex">Exception to transform</param>
+        /// <param name="op">Source operation, for logging</param>
+        /// <returns>Transformed exception if recognized, otherwise the given exception</returns>
         public static Exception HandleServiceResult(ServiceResultException ex, SourceOp op)
         {
             if (ex == null) throw new ArgumentNullException(nameof(ex));
@@ -499,7 +553,9 @@ namespace Cognite.OpcUa
             }
         }
     }
-
+    /// <summary>
+    /// Used to indicate a serviceException that has been recognized and properly logged.
+    /// </summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1032:Implement standard exception constructors",
         Justification = "Not a standard exception, throwing with default exception parameters would be incorrect usage")]
     public class SilentServiceException : Exception
@@ -546,7 +602,9 @@ namespace Cognite.OpcUa
         public FatalException() { }
     }
 
-
+    /// <summary>
+    /// Represents a range of time with a start- and endpoint.
+    /// </summary>
     public class TimeRange
     {
         public DateTime Start { get; set; }

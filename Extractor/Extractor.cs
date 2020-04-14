@@ -76,7 +76,7 @@ namespace Cognite.OpcUa
         private static readonly ILogger log = Log.Logger.ForContext(typeof(Extractor));
 
         /// <summary>
-        /// Constructor
+        /// Construct extractor with list of pushers
         /// </summary>
         /// <param name="config">Full config object</param>
         /// <param name="pushers">List of pushers to be used</param>
@@ -114,18 +114,16 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Constructor
+        /// Construct extractor with single pusher.
         /// </summary>
         /// <param name="config">Full config object</param>
         /// <param name="pusher">Pusher to be used</param>
         /// <param name="UAClient">UAClient to use</param>
-        public Extractor(FullConfig config, IPusher pusher, UAClient uaClient) : this(config, new List<IPusher> { pusher }, uaClient)
-        {
-        }
+        public Extractor(FullConfig config, IPusher pusher, UAClient uaClient) : this(config, new List<IPusher> { pusher }, uaClient) { }
         #region Interface
 
         /// <summary>
-        /// Run the extractor, this starts the main MapUAToDestinations task, then waits for the looper main task.
+        /// Run the extractor, this browses, starts mapping, then waits for the looper main task and any history.
         /// </summary>
         /// <param name="quitAfterMap">If true, terminate the extractor after first map iteration</param>
         public async Task RunExtractor(CancellationToken token, bool quitAfterMap = false)
@@ -187,7 +185,7 @@ namespace Cognite.OpcUa
 
         }
         /// <summary>
-        /// Initializes restart of the extractor. Reset states, then schedule restart on the looper.
+        /// Initializes restart of the extractor. Waits for history, reset states, then schedule restart on the looper.
         /// </summary>
         public void RestartExtractor()
         {
@@ -211,7 +209,7 @@ namespace Cognite.OpcUa
         }
         /// <summary>
         /// Task for the actual extractor restart, performing it directly.
-        /// Stops history, waits for UAClient to terminate, resets the extractor, rebrowses, then schedule history.
+        /// Stops history, waits for UAClient to terminate, resets the extractor, rebrowses, then schedules history.
         /// </summary>
         public async Task FinishExtractorRestart(CancellationToken token)
         {
@@ -228,7 +226,9 @@ namespace Cognite.OpcUa
             Started = true;
             log.Information("Successfully restarted extractor");
         }
-
+        /// <summary>
+        /// Push nodes from the extraNodesToBrowse queue.
+        /// </summary>
         public async Task PushExtraNodes(CancellationToken token)
         {
             if (extraNodesToBrowse.Any())
@@ -260,7 +260,7 @@ namespace Cognite.OpcUa
             return historyReader.Terminate(token, timeout);
         }
         /// <summary>
-        /// Closes the extractor, mainly just shutting down the opcua client.
+        /// Closes the extractor, mainly just shutting down the opcua client and waiting for a clean loss of connection.
         /// </summary>
         public void Close()
         {
@@ -345,7 +345,7 @@ namespace Cognite.OpcUa
             }
         }
         /// <summary>
-        /// Is the variable allowed to be mapped to a timeseries?
+        /// Returns true if the timeseries may be mapped based on rules of array size and datatypes.
         /// </summary>
         /// <param name="node">Variable to be tested</param>
         /// <returns>True if variable may be mapped to a timeseries</returns>
@@ -432,7 +432,7 @@ namespace Cognite.OpcUa
             return historyTasks;
         }
         /// <summary>
-        /// Set up extractor once UAClient is started
+        /// Set up extractor once UAClient is started. This resets the internal state of the extractor.
         /// </summary>
         private void ConfigureExtractor(CancellationToken token)
         {

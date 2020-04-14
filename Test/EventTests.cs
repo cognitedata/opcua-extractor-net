@@ -48,12 +48,12 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.events.Values.Count > 20 &&
+                    tester.Handler.Events.Values.Count > 20 &&
                     tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
                 40, "Expected history read to finish");
 
 
-            var events = tester.Handler.events.Values.ToList();
+            var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
             Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
             Assert.Contains(events, ev => ev.description == "prop 0");
@@ -64,7 +64,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
             {
-                events = tester.Handler.events.Values.ToList();
+                events = tester.Handler.Events.Values.ToList();
                 return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
@@ -75,7 +75,7 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            events = tester.Handler.events.Values.ToList();
+            events = tester.Handler.Events.Values.ToList();
 
             foreach (var ev in events)
             {
@@ -98,24 +98,24 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.events.Values.Any()
+                    tester.Handler.Events.Values.Any()
                     && tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
                 40, "Expected history read to finish");
 
             await tester.Extractor.Looper.WaitForNextPush();
 
-            int lastCount = tester.Handler.events.Count;
+            int lastCount = tester.Handler.Events.Count;
             Assert.Equal(0, (int)CommonTestUtils.GetMetricValue("opcua_event_push_failures"));
             tester.Extractor.RestartExtractor();
             await Task.Delay(500);
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.events.Values.Any()
+                    tester.Handler.Events.Values.Any()
                     && tester.Extractor.State.EmitterStates.All(state => state.IsStreaming)
-                    && tester.Handler.events.Count > lastCount,
+                    && tester.Handler.Events.Count > lastCount,
                 40, "Expected number of events to be increasing");
 
-            var events = tester.Handler.events.Values.ToList();
+            var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
             Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
             Assert.Contains(events, ev => ev.description == "prop 0");
@@ -126,7 +126,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
             {
-                events = tester.Handler.events.Values.ToList();
+                events = tester.Handler.Events.Values.ToList();
                 return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
@@ -137,7 +137,7 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            events = tester.Handler.events.Values.ToList();
+            events = tester.Handler.Events.Values.ToList();
 
             foreach (var ev in events)
             {
@@ -162,35 +162,35 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.assets.Count > 0 && tester.Handler.timeseries.Count > 0,
+                    tester.Handler.Assets.Count > 0 && tester.Handler.Timeseries.Count > 0,
                 20, "Expected some assets and timeseries to be discovered");
 
-            int lastAssetBefore = tester.Handler.assets.Values
+            int lastAssetBefore = tester.Handler.Assets.Values
                 .Where(asset => asset.name.StartsWith("Add", StringComparison.InvariantCulture))
                 .Select(asset => int.Parse(asset.name.Split(' ')[1], CultureInfo.InvariantCulture)).Max();
 
-            int lastTimeseriesBefore = tester.Handler.timeseries.Values
+            int lastTimeseriesBefore = tester.Handler.Timeseries.Values
                 .Where(timeseries => timeseries.name.StartsWith("Add", StringComparison.InvariantCulture))
                 .Select(timeseries => int.Parse(timeseries.name.Split(' ')[1], CultureInfo.InvariantCulture)).Max();
 
-            int assetCount = tester.Handler.assets.Count;
-            int tsCount = tester.Handler.timeseries.Count;
+            int assetCount = tester.Handler.Assets.Count;
+            int tsCount = tester.Handler.Timeseries.Count;
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.assets.Count > assetCount && tester.Handler.timeseries.Count > tsCount,
+                    tester.Handler.Assets.Count > assetCount && tester.Handler.Timeseries.Count > tsCount,
                 20, "Expected timeseries and asset count to be increasing");
 
             await Task.Delay(1000);
 
             await tester.TerminateRunTask();
 
-            Assert.Contains(tester.Handler.assets.Values, asset => asset.name == "AddObject 0");
-            Assert.Contains(tester.Handler.timeseries.Values, timeseries => timeseries.name == "AddVariable 0");
-            Assert.Contains(tester.Handler.timeseries.Values, timeseries => timeseries.name == "AddExtraVariable 0");
+            Assert.Contains(tester.Handler.Assets.Values, asset => asset.name == "AddObject 0");
+            Assert.Contains(tester.Handler.Timeseries.Values, timeseries => timeseries.name == "AddVariable 0");
+            Assert.Contains(tester.Handler.Timeseries.Values, timeseries => timeseries.name == "AddExtraVariable 0");
 
-            Assert.Contains(tester.Handler.assets.Values, asset => asset.name == "AddObject " + (lastAssetBefore + 1));
-            Assert.Contains(tester.Handler.timeseries.Values, timeseries => timeseries.name == "AddVariable " + (lastTimeseriesBefore + 1));
-            Assert.Contains(tester.Handler.timeseries.Values, timeseries => timeseries.name == "AddExtraVariable " + (lastTimeseriesBefore + 1));
+            Assert.Contains(tester.Handler.Assets.Values, asset => asset.name == "AddObject " + (lastAssetBefore + 1));
+            Assert.Contains(tester.Handler.Timeseries.Values, timeseries => timeseries.name == "AddVariable " + (lastTimeseriesBefore + 1));
+            Assert.Contains(tester.Handler.Timeseries.Values, timeseries => timeseries.name == "AddExtraVariable " + (lastTimeseriesBefore + 1));
         }
         [Fact]
         [Trait("Server", "events")]
@@ -225,12 +225,12 @@ namespace Test
 
             Assert.False(tester.Extractor.FailureBuffer.AnyEvents);
 
-            await tester.WaitForCondition(() => tester.Handler.events.Count > 20, 20,
+            await tester.WaitForCondition(() => tester.Handler.Events.Count > 20, 20,
                 "Expected to receive some events");
 
             await tester.WaitForCondition(() =>
             {
-                var evts = tester.Handler.events.Values.ToList();
+                var evts = tester.Handler.Events.Values.ToList();
                 return evts.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
                        && evts.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
                        && evts.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
@@ -246,7 +246,7 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            var events = tester.Handler.events.Values.ToList();
+            var events = tester.Handler.Events.Values.ToList();
 
             foreach (var ev in events)
             {
@@ -272,13 +272,13 @@ namespace Test
 
             tester.StartExtractor();
             await tester.WaitForCondition(() =>
-                    tester.Handler.events.Any()
+                    tester.Handler.Events.Any()
                     && tester.Extractor.State.EmitterStates.All(state => state.BackfillDone),
                 40, "Expected backfill to finish");
 
             await tester.Extractor.Looper.WaitForNextPush();
 
-            var events = tester.Handler.events.Values.ToList();
+            var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
 
             Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
@@ -290,7 +290,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
             {
-                events = tester.Handler.events.Values.ToList();
+                events = tester.Handler.Events.Values.ToList();
                 return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
@@ -301,7 +301,7 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            events = tester.Handler.events.Values.ToList();
+            events = tester.Handler.Events.Values.ToList();
 
             foreach (var ev in events)
             {
@@ -342,13 +342,13 @@ namespace Test
 
             tester.StartExtractor();
             await tester.WaitForCondition(() =>
-                    tester.Handler.events.Values.Any()
+                    tester.Handler.Events.Values.Any()
                     && tester.Extractor.State.EmitterStates.All(state => state.BackfillDone),
                 40, "Expected backfill to finish");
 
             await tester.WaitForCondition(() =>
             {
-                var events = tester.Handler.events.Values.ToList();
+                var events = tester.Handler.Events.Values.ToList();
                 return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
@@ -372,7 +372,7 @@ namespace Test
                 "Expected restart to begin");
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.events.Values.Any()
+                    tester.Handler.Events.Values.Any()
                     && tester.Extractor.State.EmitterStates.All(state => state.BackfillDone),
                 20, "Expected backfill to finish");
             
