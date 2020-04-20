@@ -87,6 +87,10 @@ namespace Cognite.OpcUa
                     }
                     log.Warning("Pushers with indices {idx} failed while pushing datapoints",
                         failed.Select(pair => pair.Index.ToString(CultureInfo.InvariantCulture)).Aggregate((src, val) => src + ", " + val));
+                    foreach (var state in extractor.State.NodeStates)
+                    {
+                        state.ResetStreamingState();
+                    }
                 }
                 if (config.FailureBuffer.Enabled)
                 {
@@ -189,12 +193,18 @@ namespace Cognite.OpcUa
                     }
                     log.Warning("Pushers with indices {idx} failed while pushing events", 
                         failed.Select(pair => pair.Index.ToString(CultureInfo.InvariantCulture)).Aggregate((src, val) => src + ", " + val));
+                    foreach (var state in extractor.State.EmitterStates)
+                    {
+                        state.ResetStreamingState();
+                    }
                 }
 
                 if (config.FailureBuffer.Enabled)
                 {
                     await extractor.FailureBuffer.WriteEvents(eventList, failedPushers.Concat(failingPushers), token);
                 }
+
+
 
                 return false;
             }

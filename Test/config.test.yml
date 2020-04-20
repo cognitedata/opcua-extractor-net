@@ -12,7 +12,7 @@ Pushers:
 Logging:
     # Writes log events at this level to the Console. 
     # If not present, or if the level is invalid, Console is not used. 
-    ConsoleLevel: "information"
+    ConsoleLevel: "debug"
 
 History:
     Enabled: true

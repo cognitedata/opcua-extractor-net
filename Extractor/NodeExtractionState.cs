@@ -169,7 +169,14 @@ namespace Cognite.OpcUa
                 SourceExtractedRange.Start = new DateTime(Math.Min(DestinationExtractedRange.Start.Ticks + 1000, DateTime.MaxValue.Ticks));
                 SourceExtractedRange.End = new DateTime(Math.Max(DestinationExtractedRange.End.Ticks - 1000, DateTime.MinValue.Ticks));
             }
-
+        }
+        /// <summary>
+        /// Resets the state by disabling streaming for historizing states and setting backfillDone to false
+        /// </summary>
+        public void ResetStreamingState()
+        {
+            IsStreaming = !Historizing;
+            BackfillDone = false;
         }
     }
     /// <summary>
@@ -280,16 +287,6 @@ namespace Cognite.OpcUa
                 return result;
             }
         }
-
-        /// <summary>
-        /// Resets the state by disabling streaming for historizing timeseries and clearing the buffer.
-        /// </summary>
-        public void ResetStreamingState()
-        {
-            IsStreaming = !Historizing;
-            BackfillDone = false;
-            buffer?.Clear();
-        }
     }
     /// <summary>
     /// State of a node currently being extracted for events. Contains information about the data,
@@ -383,15 +380,7 @@ namespace Cognite.OpcUa
                 return result;
             }
         }
-        /// <summary>
-        /// Resets the state by disabling streaming for historizing emitters and clearing the buffer.
-        /// </summary>
-        public void ResetStreamingState()
-        {
-            IsStreaming = !Historizing;
-            BackfillDone = false;
-            buffer?.Clear();
-        }
+
     }
 
     public enum InfluxBufferType
