@@ -166,8 +166,8 @@ namespace Cognite.OpcUa
             {
                 IsStreaming = !Historizing;
                 BackfillDone = false;
-                SourceExtractedRange.Start = new DateTime(DestinationExtractedRange.Start.Ticks);
-                SourceExtractedRange.End = new DateTime(DestinationExtractedRange.End.Ticks);
+                SourceExtractedRange.Start = new DateTime(Math.Min(DestinationExtractedRange.Start.Ticks + 1000, DateTime.MaxValue.Ticks));
+                SourceExtractedRange.End = new DateTime(Math.Max(DestinationExtractedRange.End.Ticks - 1000, DateTime.MinValue.Ticks));
             }
 
         }

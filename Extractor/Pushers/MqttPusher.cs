@@ -78,6 +78,7 @@ namespace Cognite.OpcUa.Pushers
             client = new MqttFactory().CreateMqttClient();
             baseBuilder = new MqttApplicationMessageBuilder()
                 .WithAtLeastOnceQoS();
+            client.ConnectAsync(options, CancellationToken.None).Wait();
         }
         #region interface
         public async Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
@@ -172,9 +173,9 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Warning("Failed to connect to MQTT server: {msg}", e.Message);
+                log.Warning("Failed to connect to MQTT broker: {msg}", e.Message);
             }
-
+            log.Information("Connected to MQTT broker");
             return client.IsConnected;
         }
 
@@ -203,7 +204,6 @@ namespace Cognite.OpcUa.Pushers
 
             if (objects.Any())
             {
-
                 var results = await Task.WhenAll(ExtractorUtils.ChunkBy(objects, 1000).Select(chunk => PushAssets(chunk, token)));
                 if (!results.All(res => res)) return false;
             }

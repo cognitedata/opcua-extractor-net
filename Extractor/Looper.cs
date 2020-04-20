@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
@@ -152,6 +153,10 @@ namespace Cognite.OpcUa
 
                     if (recovered.Any(pair => !pair.pusher.Initialized))
                     {
+                        log.Information("Pushers with indices {idx} recovered",
+                            recovered.Select(val => val.pusher.Index.ToString(CultureInfo.InvariantCulture))
+                                .Aggregate((src, val) => src + ", " + val));
+
                         var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);
                         var (nodes, timeseries) = ExtractorUtils.SortNodes(extractor.State.ActiveNodes);
                         await Task.WhenAll(toInit.Select(pusher => extractor.PushNodes(nodes, timeseries, pusher, true, token)));
@@ -160,15 +165,17 @@ namespace Cognite.OpcUa
                     {
                         if (pair.pusher.Initialized)
                         {
+                            pair.pusher.DataFailing = true;
+                            pair.pusher.EventsFailing = true;
                             failingPushers.Remove(pair.pusher);
                             passingPushers.Add(pair.pusher);
                         }
                     }
                 }
 
-
                 var waitTask = Task.Delay(config.Extraction.DataPushDelay, token);
-                var results = await Task.WhenAll(Task.Run(async () =>
+                var results = await Task.WhenAll(
+                    Task.Run(async () =>
                         await extractor.Streamer.PushDataPoints(passingPushers, failingPushers, token), token),
                     Task.Run(async () => await extractor.Streamer.PushEvents(passingPushers, failingPushers, token), token));
 
@@ -189,6 +196,16 @@ namespace Cognite.OpcUa
                 nextPushFlag = true;
             }
         }
+
+        public async Task StoreState(CancellationToken token)
+        {
+            await Task.WhenAll(
+                extractor.StateStorage.StoreExtractionState(extractor.State.NodeStates
+                    .Where(state => state.Historizing), StateStorage.VariableStates, token),
+                extractor.StateStorage.StoreExtractionState(extractor.State.EmitterStates
+                    .Where(state => state.Historizing), StateStorage.EmitterStates, token)
+            );
+        }
         /// <summary>
         /// Loop for periodically storing extraction states to litedb.
         /// </summary>
@@ -199,11 +216,7 @@ namespace Cognite.OpcUa
             {
                 await Task.WhenAll(
                     Task.Delay(delay, token),
-                    extractor.StateStorage.StoreExtractionState(extractor.State.NodeStates
-                        .Where(state => state.Historizing), StateStorage.VariableStates, token),
-                    extractor.StateStorage.StoreExtractionState(extractor.State.EmitterStates
-                        .Where(state => state.Historizing), StateStorage.EmitterStates, token)
-                );
+                    StoreState(token));
             }
         }
         /// <summary>

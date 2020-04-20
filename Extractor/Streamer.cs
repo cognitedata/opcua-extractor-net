@@ -70,7 +70,7 @@ namespace Cognite.OpcUa
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
 
-            var anyFailed = results.Any(status => status == false);
+            bool anyFailed = results.Any(status => status == false);
 
             if (anyFailed || failingPushers.Any())
             {
@@ -95,6 +95,7 @@ namespace Cognite.OpcUa
             var reconnectedPushers = passingPushers.Where(pusher => pusher.DataFailing).ToList();
             if (reconnectedPushers.Any())
             {
+                log.Information("{cnt} failing pushers were able to push data, reconnecting", reconnectedPushers.Count);
                 // Try to push any non-historizing points
                 var nonHistorizing = pointRanges.Keys.Where(key => !extractor.State.GetNodeState(key).Historizing).ToHashSet();
                 var pointsToPush = dataPointList.Where(point => nonHistorizing.Contains(point.Id)).ToList();
