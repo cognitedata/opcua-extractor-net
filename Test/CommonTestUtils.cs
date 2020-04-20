@@ -482,7 +482,6 @@ namespace Test
                 File.Create(Config.FailureBuffer.EventPath).Close();
             }
 
-            log.Information("FailureBuffer: {st}", Config.FailureBuffer.Enabled);
             if (Config.StateStorage.Location != null)
             {
                 using var db = new LiteDatabase(Config.StateStorage.Location);
@@ -492,7 +491,6 @@ namespace Test
                     db.DropCollection(collection);
                 }
             }
-
         }
 
         public void StartExtractor()
@@ -502,7 +500,8 @@ namespace Test
         public async Task WaitForCondition(Func<Task<bool>> condition, int seconds, Func<string> assertion)
         {
             bool triggered = false;
-            for (int i = 0; i < seconds * 5; i++)
+            int i;
+            for (i = 0; i < seconds * 5; i++)
             {
                 if (await condition())
                 {
@@ -518,6 +517,12 @@ namespace Test
 
                 await Task.Delay(200);
             }
+
+            if (!triggered)
+            {
+                log.Error("Condition failed to appear within {sec} seconds", seconds);
+            }
+            log.Information("Waited for {cnt} seconds", i/5.0);
             Assert.True(triggered, assertion());
         }
         public async Task WaitForCondition(Func<bool> condition, int seconds,
@@ -615,10 +620,15 @@ namespace Test
         }
         public void Dispose()
         {
+            if (Bridge != null && Bridge.IsConnected())
+            {
+                Bridge.Disconnect().Wait();
+            }
             Bridge?.Dispose();
             Source?.Cancel();
             Source?.Dispose();
             IfDbClient?.Dispose();
+            Extractor?.Close();
             Extractor?.Dispose();
             Pusher?.Dispose();
         }
@@ -629,7 +639,7 @@ namespace Test
         public ConfigName ConfigName { get; set; } = ConfigName.Test;
         public ConfigName? PusherConfig { get; set; } = null;
         public CDFMockHandler.MockMode MockMode { get; set; } = CDFMockHandler.MockMode.None;
-        public string LogLevel { get; set; } = "information";
+        public string LogLevel { get; set; } = "debug";
         public bool QuitAfterMap { get; set; } = false;
         public bool StoreDatapoints { get; set; } = false;
         public int? HistoryGranularity { get; set; } = null;

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -70,7 +71,7 @@ namespace Cognite.OpcUa
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
 
-            var anyFailed = results.Any(status => status == false);
+            bool anyFailed = results.Any(status => status == false);
 
             if (anyFailed || failingPushers.Any())
             {
@@ -84,6 +85,8 @@ namespace Cognite.OpcUa
                         pusher.DataFailing = true;
                         failedPushers.Add(pusher);
                     }
+                    log.Warning("Pushers with indices {idx} failed while pushing datapoints",
+                        failed.Select(pair => pair.Index.ToString(CultureInfo.InvariantCulture)).Aggregate((src, val) => src + ", " + val));
                 }
                 if (config.FailureBuffer.Enabled)
                 {
@@ -95,6 +98,7 @@ namespace Cognite.OpcUa
             var reconnectedPushers = passingPushers.Where(pusher => pusher.DataFailing).ToList();
             if (reconnectedPushers.Any())
             {
+                log.Information("{cnt} failing pushers were able to push data, reconnecting", reconnectedPushers.Count);
                 // Try to push any non-historizing points
                 var nonHistorizing = pointRanges.Keys.Where(key => !extractor.State.GetNodeState(key).Historizing).ToHashSet();
                 var pointsToPush = dataPointList.Where(point => nonHistorizing.Contains(point.Id)).ToList();
@@ -183,6 +187,8 @@ namespace Cognite.OpcUa
                         pusher.EventsFailing = true;
                         failedPushers.Add(pusher);
                     }
+                    log.Warning("Pushers with indices {idx} failed while pushing events", 
+                        failed.Select(pair => pair.Index.ToString(CultureInfo.InvariantCulture)).Aggregate((src, val) => src + ", " + val));
                 }
 
                 if (config.FailureBuffer.Enabled)

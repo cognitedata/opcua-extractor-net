@@ -249,6 +249,7 @@ namespace Cognite.OpcUa
                 catch
                 {
                     log.Warning("Client failed to close");
+                    Extractor?.QuitExtractorInternally();
                 }
             }
         }

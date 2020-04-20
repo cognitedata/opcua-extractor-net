@@ -19,6 +19,7 @@ namespace Test
     /// <summary>
     /// Tests for the MQTT bridge as a standalone tool.
     /// </summary>
+    [CollectionDefinition("MQTTBridge_Tests", DisableParallelization = true)]
     public class MQTTBridgeTests : MakeConsoleWork
     {
         public MQTTBridgeTests(ITestOutputHelper output) : base(output) { }
