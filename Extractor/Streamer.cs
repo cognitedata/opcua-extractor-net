@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -84,6 +85,8 @@ namespace Cognite.OpcUa
                         pusher.DataFailing = true;
                         failedPushers.Add(pusher);
                     }
+                    log.Warning("Pushers with indices {idx} failed while pushing datapoints",
+                        failed.Select(pair => pair.Index.ToString(CultureInfo.InvariantCulture)).Aggregate((src, val) => src + ", " + val));
                 }
                 if (config.FailureBuffer.Enabled)
                 {
@@ -184,6 +187,8 @@ namespace Cognite.OpcUa
                         pusher.EventsFailing = true;
                         failedPushers.Add(pusher);
                     }
+                    log.Warning("Pushers with indices {idx} failed while pushing events", 
+                        failed.Select(pair => pair.Index.ToString(CultureInfo.InvariantCulture)).Aggregate((src, val) => src + ", " + val));
                 }
 
                 if (config.FailureBuffer.Enabled)

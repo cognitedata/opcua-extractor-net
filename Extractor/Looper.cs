@@ -188,6 +188,8 @@ namespace Cognite.OpcUa
                     pusher.DataFailing && extractor.Streamer.AllowData || pusher.EventsFailing && extractor.Streamer.AllowEvents
                                                                        || !pusher.Initialized).ToList())
                 {
+                    pusher.DataFailing = extractor.Streamer.AllowData;
+                    pusher.EventsFailing = extractor.Streamer.AllowEvents;
                     failingPushers.Add(pusher);
                     passingPushers.Remove(pusher);
                 }

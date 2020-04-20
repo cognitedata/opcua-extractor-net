@@ -17,10 +17,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Serilog;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -263,8 +265,7 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
-                ConfigName = ConfigName.Events,
-                LogLevel = "debug"
+                ConfigName = ConfigName.Events
             });
             tester.Config.History.EventChunk = 1000;
             tester.Config.History.Backfill = true;
@@ -277,9 +278,20 @@ namespace Test
                 40, "Expected backfill to finish");
 
             await tester.Extractor.Looper.WaitForNextPush();
+            await tester.Extractor.Looper.WaitForNextPush();
 
             var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
+
+            var suffixes = events
+                .Where(ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture))
+                .Select(ev => ev.description.Substring(5))
+                .Select(sfx => int.Parse(sfx, CultureInfo.InvariantCulture));
+
+            ExtractorTester.TestContinuity(suffixes.ToList());
+
+            Log.Information("Suffixes: {sfx}", 
+                suffixes.Select(src => src.ToString(CultureInfo.InvariantCulture)).Aggregate((src, val) => src + ", " + val));
 
             Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
             Assert.Contains(events, ev => ev.description == "prop 0");
