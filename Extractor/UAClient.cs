@@ -444,7 +444,7 @@ namespace Cognite.OpcUa
                 foreach (var result in results)
                 {
                     var nodeId = parents.ElementAt(bindex++);
-                    log.Debug("GetNodeChildren Browse result {nodeId}", nodeId);
+                    log.Verbose("GetNodeChildren Browse result {nodeId}", nodeId);
                     finalResults[nodeId] = result.References;
                     if (result.ContinuationPoint != null)
                     {
@@ -482,7 +482,7 @@ namespace Cognite.OpcUa
                     foreach (var result in results)
                     {
                         var nodeId = indexMap[pindex++];
-                        log.Debug("GetNodeChildren BrowseNext result {nodeId}", nodeId);
+                        log.Verbose("GetNodeChildren BrowseNext result {nodeId}", nodeId);
                         finalResults[nodeId].AddRange(result.References);
                         if (result.ContinuationPoint == null) continue;
                         indexMap[nindex++] = nodeId;
@@ -572,7 +572,7 @@ namespace Cognite.OpcUa
                         }
                         if (docb)
                         {
-                            log.Debug("Discovered new node {nodeid}", nodeId);
+                            log.Verbose("Discovered new node {nodeid}", nodeId);
                             callback(rd, parentId);
                         }
                         if (rd.NodeClass == NodeClass.Variable) continue;

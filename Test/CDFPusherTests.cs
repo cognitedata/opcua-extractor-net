@@ -153,8 +153,7 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Array,
-                StoreDatapoints = true,
-                LogLevel = "debug"
+                StoreDatapoints = true
             });
             await tester.ClearPersistentData();
 
@@ -291,8 +290,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                StoreDatapoints = true,
-                LogLevel = "debug"
+                StoreDatapoints = true
             });
             await tester.ClearPersistentData();
 
@@ -539,7 +537,6 @@ namespace Test
             long startTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                LogLevel = "debug",
                 QuitAfterMap = false,
                 StoreDatapoints = true
             });
@@ -574,7 +571,6 @@ namespace Test
             long startTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                LogLevel = "debug",
                 QuitAfterMap = false,
                 StoreDatapoints = true
             });
@@ -622,7 +618,6 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                LogLevel = "debug",
                 QuitAfterMap = false,
                 StoreDatapoints = true,
                 ServerName = ServerName.Array

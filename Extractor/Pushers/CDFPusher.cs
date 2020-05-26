@@ -294,7 +294,7 @@ namespace Cognite.OpcUa
         private async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
             var client = GetClient("Data");
-            IEnumerable<EventCreate> eventEntities = events.Select(EventToCDFEvent).DistinctBy(evt => evt.ExternalId).ToList();
+            IEnumerable<EventCreate> eventEntities = events.Select(EventToCDFEvent).Where(evt => evt != null).DistinctBy(evt => evt.ExternalId).ToList();
             int count = events.Count();
             try
             {
@@ -421,7 +421,6 @@ namespace Cognite.OpcUa
         /// </summary>
         public void Reset()
         {
-            nodeToAssetIds.Clear();
             ranges.Clear();
         }
         private async Task<IEnumerable<(string Id, DateTime Timestamp)>> GetEarliestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
@@ -681,7 +680,7 @@ namespace Cognite.OpcUa
             var getMetaData = missingAssetIds.Select(id => assetIds[id]);
             await Extractor.ReadProperties(getMetaData, token);
             
-            var createAssets = missingAssetIds.Select(id => NodeToAsset(assetIds[id]));
+            var createAssets = missingAssetIds.Select(id => NodeToAsset(assetIds[id])).Where(asset => asset != null);
 
             var writeResults = await client.Assets.CreateAsync(createAssets, token);
             foreach (var resultItem in writeResults)
@@ -767,7 +766,7 @@ namespace Cognite.OpcUa
 
             await Extractor.ReadProperties(getMetaData, token);
 
-            var createTimeseries = getMetaData.Select(VariableToTimeseries);
+            var createTimeseries = getMetaData.Select(VariableToTimeseries).Where(ts => ts != null);
             await client.TimeSeries.CreateAsync(createTimeseries, token);
 
             var remaining = tsIds.Keys.Except(missingTSIds);
@@ -794,17 +793,26 @@ namespace Cognite.OpcUa
         private TimeSeriesCreate VariableToTimeseries(BufferedVariable variable)
         {
             string externalId = Extractor.GetUniqueId(variable.Id, variable.Index);
-            var writePoco = new TimeSeriesCreate
+            TimeSeriesCreate writePoco;
+            try
             {
-                Description = ExtractorUtils.Truncate(variable.Description, 1000),
-                ExternalId = externalId,
-                AssetId = nodeToAssetIds[variable.ParentId],
-                Name = ExtractorUtils.Truncate(variable.DisplayName, 255),
-                LegacyName = externalId,
-                IsString = variable.DataType.IsString,
-                IsStep = variable.DataType.IsStep,
-                DataSetId = config.DataSetId
-            };
+                writePoco = new TimeSeriesCreate
+                {
+                    Description = ExtractorUtils.Truncate(variable.Description, 1000),
+                    ExternalId = externalId,
+                    AssetId = nodeToAssetIds[variable.ParentId],
+                    Name = ExtractorUtils.Truncate(variable.DisplayName, 255),
+                    LegacyName = externalId,
+                    IsString = variable.DataType.IsString,
+                    IsStep = variable.DataType.IsStep,
+                    DataSetId = config.DataSetId
+                };
+            }
+            catch (Exception ex)
+            {
+                log.Warning("Failed to create timeseries object: {msg}", ex.Message);
+                return null;
+            }
             if (variable.Properties != null && variable.Properties.Any())
             {
                 writePoco.Metadata = variable.Properties
@@ -821,14 +829,25 @@ namespace Cognite.OpcUa
         /// <returns>Full asset write poco</returns>
         private AssetCreate NodeToAsset(BufferedNode node)
         {
-            var writePoco = new AssetCreate
+            AssetCreate writePoco;
+            try
             {
-                Description = ExtractorUtils.Truncate(node.Description, 500),
-                ExternalId = Extractor.GetUniqueId(node.Id),
-                Name = string.IsNullOrEmpty(node.DisplayName)
-                    ? ExtractorUtils.Truncate(Extractor.GetUniqueId(node.Id), 140) : ExtractorUtils.Truncate(node.DisplayName, 140),
-                DataSetId = config.DataSetId
-            };
+                writePoco = new AssetCreate
+                {
+                    Description = ExtractorUtils.Truncate(node.Description, 500),
+                    ExternalId = Extractor.GetUniqueId(node.Id),
+                    Name = string.IsNullOrEmpty(node.DisplayName)
+                        ? ExtractorUtils.Truncate(Extractor.GetUniqueId(node.Id), 140)
+                        : ExtractorUtils.Truncate(node.DisplayName, 140),
+                    DataSetId = config.DataSetId
+                };
+            }
+            catch (Exception ex)
+            {
+                log.Warning("Failed to create assets object: {msg}", ex.Message);
+                return null;
+            }
+
             if (node.ParentId != null && !node.ParentId.IsNullNodeId)
             {
                 writePoco.ParentExternalId = Extractor.GetUniqueId(node.ParentId);
@@ -865,22 +884,32 @@ namespace Cognite.OpcUa
         /// <returns>Final EventEntity object</returns>
         private EventCreate EventToCDFEvent(BufferedEvent evt)
         {
-            var entity = new EventCreate
+            EventCreate entity;
+            try
             {
-                Description = ExtractorUtils.Truncate(evt.Message, 500),
-                StartTime = evt.MetaData.ContainsKey("StartTime")
-                    ? GetTimestampValue(evt.MetaData["StartTime"])
-                    : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                EndTime = evt.MetaData.ContainsKey("EndTime")
-                    ? GetTimestampValue(evt.MetaData["EndTime"])
-                    : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                AssetIds = new List<long> { nodeToAssetIds[evt.SourceNode] },
-                ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
-                Type = ExtractorUtils.Truncate(evt.MetaData.ContainsKey("Type")
-                    ? Extractor.ConvertToString(evt.MetaData["Type"])
-                    : Extractor.GetUniqueId(evt.EventType), 64),
-                DataSetId = config.DataSetId
-            };
+                entity = new EventCreate
+                {
+                    Description = ExtractorUtils.Truncate(evt.Message, 500),
+                    StartTime = evt.MetaData.ContainsKey("StartTime")
+                        ? GetTimestampValue(evt.MetaData["StartTime"])
+                        : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
+                    EndTime = evt.MetaData.ContainsKey("EndTime")
+                        ? GetTimestampValue(evt.MetaData["EndTime"])
+                        : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
+                    AssetIds = new List<long> {nodeToAssetIds[evt.SourceNode]},
+                    ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
+                    Type = ExtractorUtils.Truncate(evt.MetaData.ContainsKey("Type")
+                        ? Extractor.ConvertToString(evt.MetaData["Type"])
+                        : Extractor.GetUniqueId(evt.EventType), 64),
+                    DataSetId = config.DataSetId
+                };
+            }
+            catch (Exception ex)
+            {
+                log.Warning("Failed to create event object: {msg}", ex.Message);
+                return null;
+            }
+
             var finalMetaData = new Dictionary<string, string>();
             int len = 1;
             finalMetaData["Emitter"] = Extractor.GetUniqueId(evt.EmittingNode);

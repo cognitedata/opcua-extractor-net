@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
 using Opc.Ua;
+using Serilog;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -217,10 +218,10 @@ namespace Test
 
                 tester.StartExtractor();
 
-                await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state =>
-                        !state.Historizing
-                        || state.BackfillDone
-                        && state.IsStreaming),
+                await tester.WaitForCondition(() => 
+                        tester.Extractor.State.NodeStates.Any()
+                        && tester.Extractor.State.NodeStates.All(state =>
+                            !state.Historizing || state.BackfillDone && state.IsStreaming),
                     20, "Expected history to complete");
 
                 await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.Any(state => state.IsDirty),
@@ -230,6 +231,7 @@ namespace Test
                         !state.Historizing || state.StatePersisted),
                     20, "Expected states to become clean again");
 
+                await tester.Extractor.Looper.WaitForNextPush();
                 await tester.Extractor.Looper.WaitForNextPush();
                 await tester.Extractor.Looper.StoreState(tester.Source.Token);
 
@@ -295,8 +297,10 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => !state.Historizing
-                    || state.BackfillDone && state.IsStreaming),
+            await tester.WaitForCondition(() =>
+                    tester.Extractor.State.EmitterStates.Any()
+                    && tester.Extractor.State.EmitterStates.All(state =>
+                        !state.Historizing || state.BackfillDone && state.IsStreaming),
                 20, "Expected history to complete");
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.Any(state => state.IsDirty),
@@ -306,6 +310,7 @@ namespace Test
                     !state.Historizing || state.StatePersisted),
                 20, "Expected states to be persisted");
 
+            await tester.Extractor.Looper.WaitForNextPush();
             await tester.Extractor.Looper.WaitForNextPush();
             await tester.Extractor.Looper.StoreState(tester.Source.Token);
 

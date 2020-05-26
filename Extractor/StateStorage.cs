@@ -132,6 +132,11 @@ namespace Cognite.OpcUa
                         col.Upsert(chunk);
                     }, token);
                     statesStoredCounter.Inc(chunk.Count());
+                    foreach (var poco in chunk)
+                    {
+                        log.Debug("Saved {name}: ({start}, {end})",
+                            poco.Id, poco.FirstTimestamp, poco.LastTimestamp);
+                    }
                 }
 
                 log.Debug("Saved {Stored} out of {TotalNumber} historizing extraction states to store {name}", 
@@ -197,6 +202,8 @@ namespace Cognite.OpcUa
                     if (stateMap.ContainsKey(poco.Id))
                     {
                         count++;
+                        log.Debug("Initialized {name} to ({start}, {end})",
+                            poco.Id, poco.FirstTimestamp, poco.LastTimestamp);
                         stateMap[poco.Id].InitExtractedRange(poco.FirstTimestamp,
                             poco.LastTimestamp);
                         stateMap[poco.Id].StatePersisted = true;

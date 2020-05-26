@@ -205,8 +205,7 @@ namespace Test
                 ConfigName = ConfigName.Events,
                 ServerName = ServerName.Events,
                 FailureInflux = ConfigName.Influx,
-                FailureInfluxWrite = true,
-                LogLevel = "debug"
+                FailureInfluxWrite = true
             });
             await tester.ClearPersistentData();
             tester.Handler.AllowEvents = false;
@@ -335,7 +334,6 @@ namespace Test
             {
                 ServerName = ServerName.Events,
                 ConfigName = ConfigName.Events,
-                LogLevel = "debug",
                 InfluxOverride = (InfluxClientConfig)influxCfg.Pushers.First(),
                 Builder = (cfg, pusher, client) =>
                 {

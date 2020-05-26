@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -580,21 +581,22 @@ namespace Test
         public static void TestContinuity(List<int> intdps)
         {
             if (intdps == null) throw new ArgumentNullException(nameof(intdps));
+            intdps = intdps.Distinct().ToList();
             intdps.Sort();
             int min = intdps.Min();
-            var check = new int[intdps.Count];
-
+            int max = intdps.Max();
             int last = min - 1;
+            string msg = "";
             foreach (int dp in intdps)
             {
                 if (last != dp - 1)
                 {
-                    log.Information("Out of order points at {dp}, {last}", dp, last);
+                    msg += $"\nOut of order points at {dp}, {last}";
                 }
                 last = dp;
-                check[dp - min]++;
             }
-            Assert.All(check, val => Assert.Equal(1, val));
+            
+            Assert.True(max - min == intdps.Count - 1, $"Continuity impossible, min is {min}, max is {max}, count is {intdps.Count}: {msg}");
         }
         /// <summary>
         /// Test that the points given by the id is within ms +/- 200ms of eachother.
