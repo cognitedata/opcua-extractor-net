@@ -232,6 +232,7 @@ namespace Test
                     20, "Expected states to become clean again");
 
                 await tester.Extractor.Looper.WaitForNextPush();
+                await tester.Extractor.Looper.WaitForNextPush();
                 await tester.Extractor.Looper.StoreState(tester.Source.Token);
 
                 await tester.TerminateRunTask();
@@ -310,9 +311,8 @@ namespace Test
                 20, "Expected states to be persisted");
 
             await tester.Extractor.Looper.WaitForNextPush();
-            Log.Information("Begin storing state");
-                await tester.Extractor.Looper.StoreState(tester.Source.Token);
-            Log.Information("Finish storing state");
+            await tester.Extractor.Looper.WaitForNextPush();
+            await tester.Extractor.Looper.StoreState(tester.Source.Token);
 
             await tester.TerminateRunTask();
 

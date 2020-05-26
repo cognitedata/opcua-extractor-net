@@ -204,8 +204,6 @@ namespace Cognite.OpcUa
                     await extractor.FailureBuffer.WriteEvents(eventList, failedPushers.Concat(failingPushers), token);
                 }
 
-
-
                 return false;
             }
             var reconnectedPushers = passingPushers.Where(pusher => pusher.EventsFailing).ToList();
