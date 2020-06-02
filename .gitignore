@@ -13,6 +13,7 @@ build/
 
 # Temp data
 certificates/
+servercertificates/
 Logs/
 *.sql
 *.sql-journal
