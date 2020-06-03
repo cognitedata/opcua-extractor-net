@@ -550,9 +550,9 @@ namespace Cognite.OpcUa
 
             foreach (var node in rawVariables)
             {
-                log.Debug(node.ToDebugDescription());
                 if (AllowTSMap(node))
                 {
+                    log.Debug(node.ToDebugDescription());
                     variables.Add(node);
                     var state = new NodeExtractionState(node);
                     State.AddActiveNode(node);

@@ -11,7 +11,9 @@ namespace Cognite.OpcUa
         public string ConfigRoot { get; set; } = "config";
         public string EndpointURL { get; set; }
         public bool AutoAccept { get; set; } = true;
-        public int PollingInterval { get; set; } = 500;
+        public int PublishingInterval { get; set; } = 500;
+        public int SamplingInterval { get; set; } = 100;
+        public int QueueLength { get; set; } = 10;
         public string Username { get; set; }
         public string Password { get; set; }
         public bool Secure { get; set; } = false;

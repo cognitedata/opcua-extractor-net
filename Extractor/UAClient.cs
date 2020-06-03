@@ -199,6 +199,10 @@ namespace Cognite.OpcUa
             if (extractionConfig.CustomNumericTypes != null)
             {
                 numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
+                foreach (var kvp in numericDataTypes)
+                {
+                    log.Information("Numeric type: {id}", kvp.Key);
+                }
             }
         }
         /// <summary>
@@ -899,7 +903,7 @@ namespace Cognite.OpcUa
 #pragma warning disable CA2000 // Dispose objects before losing scope. The subscription is disposed properly or added to the client.
                                    ?? new Subscription(Session.DefaultSubscription)
                                    {
-                                       PublishingInterval = config.PollingInterval,
+                                       PublishingInterval = config.PublishingInterval,
                                        DisplayName = "DataChangeListener"
                                    };
 #pragma warning restore CA2000 // Dispose objects before losing scope
@@ -919,7 +923,8 @@ namespace Cognite.OpcUa
                             {
                                 StartNodeId = node.Id,
                                 DisplayName = "Value: " + node.DisplayName,
-                                SamplingInterval = config.PollingInterval
+                                SamplingInterval = config.SamplingInterval,
+                                QueueSize = (uint)Math.Max(0, config.QueueLength)
                             };
                             monitor.Notification += subscriptionHandler;
                             count++;
@@ -1001,7 +1006,7 @@ namespace Cognite.OpcUa
 #pragma warning disable CA2000 // Dispose objects before losing scope
                     subscription = new Subscription(Session.DefaultSubscription)
                     {
-                        PublishingInterval = config.PollingInterval,
+                        PublishingInterval = config.PublishingInterval,
                         DisplayName = "EventListener"
                     };
 #pragma warning restore CA2000 // Dispose objects before losing scope
@@ -1024,7 +1029,9 @@ namespace Cognite.OpcUa
                         {
                             StartNodeId = emitter,
                             Filter = filter,
-                            AttributeId = Attributes.EventNotifier
+                            AttributeId = Attributes.EventNotifier,
+                            SamplingInterval = config.SamplingInterval,
+                            QueueSize = (uint)Math.Max(0, config.QueueLength)
                         };
                         count++;
                         item.Notification += subscriptionHandler;
@@ -1224,7 +1231,7 @@ namespace Cognite.OpcUa
 #pragma warning disable CA2000 // Dispose objects before losing scope
                                ?? new Subscription(Session.DefaultSubscription)
                 {
-                    PublishingInterval = config.PollingInterval,
+                    PublishingInterval = config.PublishingInterval,
                     DisplayName = "AuditListener"
                 };
 #pragma warning restore CA2000 // Dispose objects before losing scope
@@ -1233,7 +1240,9 @@ namespace Cognite.OpcUa
                 {
                     StartNodeId = ObjectIds.Server,
                     Filter = filter,
-                    AttributeId = Attributes.EventNotifier
+                    AttributeId = Attributes.EventNotifier,
+                    SamplingInterval = config.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, config.QueueLength)
                 };
                 item.Notification += callback;
                 subscription.AddItem(item);

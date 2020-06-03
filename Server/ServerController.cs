@@ -49,15 +49,28 @@ namespace Server
 
         public void PopulateArrayHistory()
         {
-            Server.PopulateHistory(Server.Ids.Custom.Array, 999, "custom", 10, (i => new int[] { i, i, i, i }));
-            Server.PopulateHistory(Server.Ids.Custom.MysteryVar, 999, "int");
-            Server.UpdateNode(Server.Ids.Custom.Array, new int[] { 999, 999, 999, 999 });
-            Server.UpdateNode(Server.Ids.Custom.MysteryVar, 999);
+            Server.PopulateHistory(Server.Ids.Custom.Array, 1000, "custom", 10, (i => new int[] { i, i, i, i }));
+            Server.PopulateHistory(Server.Ids.Custom.MysteryVar, 1000, "int");
+        }
+        public void PopulateBaseHistory()
+        {
+            Server.PopulateHistory(Server.Ids.Base.DoubleVar1, 1000, "double");
+            Server.PopulateHistory(Server.Ids.Base.StringVar, 1000, "string");
+            Server.PopulateHistory(Server.Ids.Base.IntVar, 1000, "int");
         }
 
         public void UpdateNode(NodeId id, object value)
         {
             Server.UpdateNode(id, value);
+        }
+
+        public async Task UpdateNodeMultiple(NodeId id, int count, Func<int, object> generator, int delayms = 50)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                Server.UpdateNode(id, generator(i));
+                await Task.Delay(delayms);
+            }
         }
     }
 }

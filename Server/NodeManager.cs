@@ -95,10 +95,17 @@ namespace Server
                         dv.Value = valueBuilder(i);
                         break;
                 }
-                dv.SourceTimestamp = start;
-                dv.ServerTimestamp = start;
-                dv.StatusCode = StatusCodes.Good;
-                store.HistorizeDataValue(id, dv);
+                if (i == count - 1)
+                {
+                    UpdateNode(id, dv.Value);
+                }
+                else
+                {
+                    dv.SourceTimestamp = start;
+                    dv.ServerTimestamp = start;
+                    dv.StatusCode = StatusCodes.Good;
+                    store.HistorizeDataValue(id, dv);
+                }
                 start = start.AddMilliseconds(msdiff);
             }
         }

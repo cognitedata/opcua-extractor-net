@@ -33,6 +33,7 @@ using Serilog;
 using Xunit.Abstractions;
 using Xunit;
 using Server;
+using Opc.Ua;
 
 namespace Test
 {
@@ -75,6 +76,7 @@ namespace Test
             fullConfig.Source.EndpointURL = "opc.tcp://localhost:62546";
             return fullConfig;
         }
+
         public static bool TestRunResult(Exception e)
         {
             if (!(e is TaskCanceledException || e is AggregateException && e.InnerException is TaskCanceledException))
@@ -311,7 +313,7 @@ namespace Test
         public ServerController Server { get; private set; }
         public FullConfig Config { get; }
         public CDFMockHandler Handler { get; }
-        public Extractor Extractor { get; }
+        public Extractor Extractor { get; private set; }
         public UAClient UAClient { get; }
         public IPusher Pusher { get; }
         public InfluxClientConfig InfluxConfig { get; }
@@ -449,6 +451,38 @@ namespace Test
             }
 
             Server = new ServerController(new[] { SetupMap[testParams.ServerName] });
+        }
+
+        public void ReInitExtractor()
+        {
+            Extractor?.Dispose();
+            if (testParams.Builder != null)
+            {
+                Extractor = testParams.Builder(Config, Pusher, UAClient);
+            }
+            else
+            {
+                Extractor = new Extractor(Config, Pusher, UAClient);
+            }
+        }
+
+        public ProtoNodeId IdToProto(NodeId id)
+        {
+            if (id == null) throw new ArgumentNullException(nameof(id));
+            return new ProtoNodeId
+            {
+                NamespaceUri = Server.Server.GetNamespace(id.NamespaceIndex),
+                NodeId = id.ToString().Substring($"ns={id.NamespaceIndex};".Length)
+            };
+        }
+
+        public ProtoDataType IdToProtoDataType(NodeId id, bool step = false)
+        {
+            return new ProtoDataType
+            {
+                IsStep = step,
+                NodeId = IdToProto(id)
+            };
         }
 
         public async Task ClearPersistentData()

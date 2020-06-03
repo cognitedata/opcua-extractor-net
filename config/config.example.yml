@@ -12,9 +12,16 @@ Source:
     # There is not yet a feature to accept new certificates, but you can manually move rejected certificates to accepted.
     # Paths are defined in opc.ua.net.extractor.Config.xml
     AutoAccept: false
-    # Polling interval in ms between each test of changes to a subscribed variable
+    # How often the client requests updates to subscribed variables.
     # 0 updates at maximum rate set by server
-    PollingInterval: 500
+    # This decides the maximum rate points are pushed to CDF. Higher reduces network and server load.
+    PublishingInterval: 500
+    # How often the server requests updates from the source system (the source system is often the server itself)
+    # 0 uses maximum rate set by server
+    # Lower increases server load. This should be set to below the maximum update frequency of the source system.
+    SamplingInterval: 100
+    # Length of internal server queue for each subscribed item. < 2 means that any updates occuring between publish requests are lost.
+    QueueLength: 10
     # OPC-UA username, leave blank for anonymous user. (no authentication)
     Username:
     # OPC-UA password

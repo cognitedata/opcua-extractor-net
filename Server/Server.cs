@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using Opc.Ua;
 using Opc.Ua.Server;
+using Serilog;
 
 namespace Server
 {
@@ -23,7 +24,6 @@ namespace Server
         {
             custom = new TestNodeManager(server, configuration, setups);
             var nodeManagers = new List<INodeManager> { custom };
-
             // create the custom node managers.
 
             // create master node manager.
@@ -46,6 +46,11 @@ namespace Server
         public void UpdateNode(NodeId id, object value)
         {
             custom.UpdateNode(id, value);
+        }
+
+        public string GetNamespace(uint index)
+        {
+            return ServerInternal.NamespaceUris.GetString(index);
         }
 
         public IEnumerable<DataValue> GetHistory(NodeId id)
