@@ -53,8 +53,8 @@ namespace Test
             var baseConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.HostNames[server];
-            baseConfig.Source.EndpointURL = ExtractorTester.HostNames[server];
+            fullConfig.Source.EndpointURL = ExtractorTester.HostName;
+            baseConfig.Source.EndpointURL = ExtractorTester.HostName;
 
             var explorer = new UAServerExplorer(fullConfig, baseConfig);
 
@@ -141,7 +141,7 @@ namespace Test
             var fullConfig = ExtractorUtils.GetConfig("config.influxtest.yml");
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.HostNames[ServerName.Basic];
+            fullConfig.Source.EndpointURL = ExtractorTester.HostName;
             fullConfig.Pushers = new List<PusherConfig>();
 
             var runTime = new ExtractorRuntime(fullConfig);
@@ -177,8 +177,8 @@ namespace Test
 
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.HostNames[ServerName.Basic];
-            baseConfig.Source.EndpointURL = ExtractorTester.HostNames[ServerName.Basic];
+            fullConfig.Source.EndpointURL = ExtractorTester.HostName;
+            baseConfig.Source.EndpointURL = ExtractorTester.HostName;
 
             var runTime = new ConfigToolRuntime(fullConfig, baseConfig, "config.config-tool-output.yml");
 

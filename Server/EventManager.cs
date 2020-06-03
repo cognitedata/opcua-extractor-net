@@ -7,19 +7,22 @@ using Serilog;
 
 namespace Server
 {
-    class TestEventManager
+    public class TestEventManager
     {
-        protected readonly ServerSystemContext context;
-        public readonly BaseObjectTypeState EventType;
-        public readonly string NamespaceUri;
+        protected ServerSystemContext Context { get; }
+        public BaseObjectTypeState EventType { get; }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:Uri properties should not be strings",
+            Justification = "NamespaceUris are not necessarily Uris")]
+        public string NamespaceUri { get;}
         public TestEventManager(ServerSystemContext systemContext, BaseObjectTypeState eventType, string namespaceUri)
         {
-            context = systemContext;
+            Context = systemContext;
             NamespaceUri = namespaceUri;
             EventType = eventType;
         }
     }
-    class TestEventManager<T> : TestEventManager where T : ManagedEvent 
+    public class TestEventManager<T> : TestEventManager where T : ManagedEvent 
     {
         public TestEventManager(ServerSystemContext systemContext, BaseObjectTypeState eventType, string namespaceUri) :
             base(systemContext, eventType, namespaceUri)
@@ -28,14 +31,14 @@ namespace Server
         public T CreateEvent(NodeState emitter, NodeState source, string message = "", EventSeverity severity = EventSeverity.Low)
         {
             var evt = (T)Activator.CreateInstance(typeof(T), emitter, this);
-            evt.Initialize(context, source, severity, new LocalizedText(message));
+            evt.Initialize(Context, source, severity, new LocalizedText(message));
             return evt;
         }
     }
 
-    abstract class ManagedEvent : BaseEventState
+    public abstract class ManagedEvent : BaseEventState
     {
-        protected TestEventManager manager;
+        private TestEventManager manager;
 
         public ManagedEvent(NodeState parent, TestEventManager manager) : base(parent)
         {
@@ -61,6 +64,11 @@ namespace Server
             ISystemContext context,
             IList<BaseInstanceState> children)
         {
+            if (children == null)
+            {
+                base.GetChildren(context, children);
+                return;
+            }
             foreach (var prop in GetType().GetProperties().Where(prop =>
                 typeof(BaseInstanceState).IsAssignableFrom(prop.PropertyType)))
             {
@@ -110,7 +118,7 @@ namespace Server
             return base.FindChild(context, browseName, createOrReplace, replacement);
         }
     }
-    class PropertyEvent : ManagedEvent
+    public class PropertyEvent : ManagedEvent
     {
         public PropertyEvent(NodeState parent, TestEventManager manager) : base(parent, manager)
         {
@@ -173,15 +181,15 @@ namespace Server
 
 
     }
-    class BasicEvent1 : ManagedEvent
+    public class BasicEvent1 : ManagedEvent
     {
         public BasicEvent1(NodeState parent, TestEventManager manager) : base(parent, manager) { }
     }
-    class BasicEvent2 : ManagedEvent
+    public class BasicEvent2 : ManagedEvent
     {
         public BasicEvent2(NodeState parent, TestEventManager manager) : base(parent, manager) { }
     }
-    class CustomEvent : ManagedEvent
+    public class CustomEvent : ManagedEvent
     {
         public CustomEvent(NodeState parent, TestEventManager manager) : base(parent, manager)
         {

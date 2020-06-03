@@ -103,9 +103,12 @@ namespace Cognite.OpcUa
         /// </summary>
         public void Close()
         {
-            if (!Session.Disposed)
+            reconnectHandler?.Dispose();
+            reconnectHandler = null;
+            if (Session != null && !Session.Disposed)
             {
-                Session.CloseSession(null, true);
+                Session.Close(1000);
+                Session = null;
             }
             connected.Set(0);
         }
@@ -701,7 +704,11 @@ namespace Cognite.OpcUa
                     if (extractionConfig.MaxArraySize > 0)
                     {
                         enumerator.MoveNext();
-                        vnode.ArrayDimensions = new Collection<int>((int[])enumerator.Current.GetValue(typeof(int[])));
+                        var dimVal = enumerator.Current.GetValue(typeof(int[])) as int[];
+                        if (dimVal != null)
+                        {
+                            vnode.ArrayDimensions = new Collection<int>((int[])enumerator.Current.GetValue(typeof(int[])));
+                        }
                     }
                 }
             }

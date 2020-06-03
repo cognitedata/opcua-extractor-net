@@ -17,11 +17,18 @@ namespace Server
             state.AccessLevel |= AccessLevels.HistoryRead;
             state.UserAccessLevel |= AccessLevels.HistoryRead;
             historyStorage[state.NodeId] = new List<DataValue>();
+            Log.Information("Historizing node: {id}", state.NodeId);
         }
 
         public void AddEventHistorizingEmitter(NodeId emitter)
         {
+            Log.Information("Historizing emitter: {id}", emitter);
             eventHistoryStorage[emitter] = new List<BaseEventState>();
+        }
+
+        public void HistorizeDataValue(NodeId id, DataValue value)
+        {
+            historyStorage[id].Add(value);
         }
 
         public void UpdateNode(BaseVariableState state)
@@ -34,6 +41,16 @@ namespace Server
                 StatusCode = state.StatusCode
             };
             historyStorage[state.NodeId].Add(extractedValue);
+        }
+
+        public IEnumerable<DataValue> GetFullHistory(NodeId id)
+        {
+            return historyStorage[id];
+        }
+
+        public IEnumerable<BaseEventState> GetFullEventHistory(NodeId id)
+        {
+            return eventHistoryStorage[id];
         }
 
         public void HistorizeEvent(NodeId emitter, BaseEventState evt)

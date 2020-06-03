@@ -418,6 +418,8 @@ namespace Cognite.OpcUa
                 return Array.Empty<Task>();
             }
 
+            log.Information("Map {obj} objects, {var} variables to destinations", objects.Count, variables.Count);
+
             Streamer.AllowData = State.NodeStates.Any();
 
             await PushNodes(objects, timeseries, token);

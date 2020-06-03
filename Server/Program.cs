@@ -22,7 +22,8 @@ namespace Server
             {
                 app.LoadApplicationConfiguration("config/Server.Test.Config.xml", false).Wait();
                 app.CheckApplicationInstanceCertificate(false, 0).Wait();
-                using var server = new Server();
+                using var server = new Server(new[] {PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Custom,
+                    PredefinedSetup.Events, PredefinedSetup.Auditing });
                 app.Start(server).Wait();
                 Log.Information("Server started");
 

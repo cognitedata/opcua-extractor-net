@@ -14,6 +14,7 @@ namespace Server
         private readonly HistoryMemoryStore store;
         private uint nextId;
         private IEnumerable<PredefinedSetup> predefinedNodes;
+        public NodeIdReference Ids { get; }
 
         public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration)
             : base(server, configuration, "opc.tcp://test.localhost")
@@ -21,6 +22,7 @@ namespace Server
             SystemContext.NodeIdFactory = this;
             config = configuration;
             store = new HistoryMemoryStore();
+            Ids = new NodeIdReference();
         }
 
         public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration, IEnumerable<PredefinedSetup> predefinedNodes) :
@@ -28,7 +30,7 @@ namespace Server
         {
             this.predefinedNodes = predefinedNodes;
         }
-
+        #region access
         public void UpdateNode(NodeId id, object value)
         {
             PredefinedNodes.TryGetValue(id, out var pstate);
@@ -43,20 +45,186 @@ namespace Server
             state.ClearChangeMasks(SystemContext, false);
         }
 
-        public override NodeId New(ISystemContext context, NodeState node)
+        public IEnumerable<DataValue> FetchHistory(NodeId id)
         {
-            if (node is BaseInstanceState instance && instance.Parent != null)
-            {
-                return GenerateNodeId();
-            }
-
-            return node.NodeId;
+            return store.GetFullHistory(id);
         }
+
+        public IEnumerable<BaseEventState> FetchEventHistory(NodeId id)
+        {
+            return store.GetFullEventHistory(id);
+        }
+
+        public void TriggerEvent<T>(NodeId eventId, NodeId emitter, NodeId source, string message, Action<ManagedEvent> builder = null)
+            where T : ManagedEvent
+        {
+            var eventState = (BaseObjectTypeState)PredefinedNodes[eventId];
+            var emitterState = PredefinedNodes[emitter];
+            var sourceState = PredefinedNodes[source];
+
+            var manager = new TestEventManager<T>(SystemContext, eventState, NamespaceUris.First());
+
+            var evt = manager.CreateEvent(emitterState, sourceState, message);
+            builder(evt);
+            if (emitter == Ids.Event.Obj1 || emitter == ObjectIds.Server)
+            {
+                store.HistorizeEvent(emitter, evt);
+            }
+            emitterState.ReportEvent(SystemContext, evt);
+        }
+
+        public void PopulateHistory(NodeId id, int count, string type = "int", int msdiff = 10, Func<int, object> valueBuilder = null)
+        {
+            var diff = TimeSpan.FromMilliseconds(msdiff);
+            var start = DateTime.Now.Subtract(diff * count);
+            for (int i = 0; i < count; i++)
+            {
+                var dv = new DataValue();
+                switch (type)
+                {
+                    case "int":
+                        dv.Value = i;
+                        break;
+                    case "double":
+                        dv.Value = ((double)i) / 10;
+                        break;
+                    case "string":
+                        dv.Value = $"str: {i}";
+                        break;
+                    case "custom":
+                        dv.Value = valueBuilder(i);
+                        break;
+                }
+                dv.SourceTimestamp = start;
+                dv.ServerTimestamp = start;
+                dv.StatusCode = StatusCodes.Good;
+                store.HistorizeDataValue(id, dv);
+                start = start.AddMilliseconds(msdiff);
+            }
+        }
+
+        public void PopulateEventHistory<T>(NodeId eventId,
+            NodeId emitter,
+            NodeId source,
+            string message,
+            int count,
+            int msdiff = 10,
+            Action<ManagedEvent> builder = null)
+            where T : ManagedEvent
+        {
+            var diff = TimeSpan.FromMilliseconds(msdiff);
+            var start = DateTime.Now.Subtract(diff * count);
+
+            var eventState = (BaseObjectTypeState)PredefinedNodes[eventId];
+            var emitterState = PredefinedNodes[emitter];
+            var sourceState = PredefinedNodes[source];
+
+            var manager = new TestEventManager<T>(SystemContext, eventState, NamespaceUris.First());
+
+            for (int i = 0; i < count; i++)
+            {
+                var evt = manager.CreateEvent(emitterState, sourceState, message + " " + i);
+                builder(evt);
+                store.HistorizeEvent(emitter, evt);
+                start = start.AddMilliseconds(msdiff);
+            }
+        }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
+            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
+        public void AddObject(NodeId parentId, string name, bool audit = false)
+        {
+            var parent = PredefinedNodes[parentId];
+            var obj = CreateObject(name);
+            AddNodeRelation(obj, parent, ReferenceTypeIds.Organizes);
+            
+            if (audit)
+            {
+                var evtAdd = new AddNodesItem
+                {
+                    ParentNodeId = obj.NodeId,
+                    NodeClass = NodeClass.Object,
+                    TypeDefinition = ObjectTypeIds.BaseObjectType
+                };
+                var evt = new AuditAddNodesEventState(null);
+                evt.NodesToAdd = new PropertyState<AddNodesItem[]>(evt);
+                evt.NodesToAdd.Value = new[] { evtAdd };
+                evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add: {name}"));
+                AddPredefinedNode(SystemContext, obj);
+                Server.ReportEvent(evt);
+            }
+            else
+            {
+                AddPredefinedNode(SystemContext, obj);
+            }
+        }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
+            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
+        public void AddVariable(NodeId parentId, string name, NodeId dataType, bool audit = false)
+        {
+            var parent = PredefinedNodes[parentId];
+            var obj = CreateVariable(name, dataType);
+            AddNodeRelation(obj, parent, ReferenceTypeIds.HasComponent);
+
+            if (audit)
+            {
+                var evtAdd = new AddNodesItem
+                {
+                    ParentNodeId = obj.NodeId,
+                    NodeClass = NodeClass.Variable,
+                    TypeDefinition = VariableTypeIds.BaseDataVariableType
+                };
+                var evt = new AuditAddNodesEventState(null);
+                evt.NodesToAdd = new PropertyState<AddNodesItem[]>(evt)
+                {
+                    Value = new[] { evtAdd }
+                };
+                evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add: {name}"));
+                AddPredefinedNode(SystemContext, obj);
+                Server.ReportEvent(evt);
+            }
+            else
+            {
+                AddPredefinedNode(SystemContext, obj);
+            }
+        }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
+            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
+        public void AddReference(NodeId sourceId, NodeId targetId, NodeId type, bool audit = false)
+        {
+            var source = PredefinedNodes[sourceId];
+            var target = PredefinedNodes[targetId];
+            if (audit)
+            {
+                var evtRef = new AddReferencesItem
+                {
+                    IsForward = true,
+                    SourceNodeId = sourceId,
+                    TargetNodeId = targetId,
+                    ReferenceTypeId = type
+                };
+                var evt = new AuditAddReferencesEventState(null);
+                evt.ReferencesToAdd = new PropertyState<AddReferencesItem[]>(evt)
+                {
+                    Value = new[] { evtRef }
+                };
+                evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add reference"));
+                AddNodeRelation(source, target, type);
+                Server.ReportEvent(evt);
+            }
+            else
+            {
+                AddNodeRelation(source, target, type);
+            }
+        }
+        #endregion
+
 
         private NodeId GenerateNodeId()
         {
             return new NodeId(++nextId, NamespaceIndex);
         }
+
+        #region address_space
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
             Justification =
@@ -67,6 +235,7 @@ namespace Server
             try
             {
                 LoadPredefinedNodes(SystemContext, externalReferences);
+
                 // This is completely undocumented, but it is also the only way I found to change properties on the server object
                 // Supposedly the "DiagnosticNodeManager" should handle this sort of stuff. But it doesn't, there exists a weird
                 // GetDefaultHistoryCapability, but that seems to create a /new/ duplicate node on the server. This changes the existing one
@@ -92,17 +261,37 @@ namespace Server
                     server.EventNotifier |= EventNotifiers.HistoryRead;
                 }
                 
-                CreateBaseSpace(externalReferences);
-                CreateFullAddressSpace(externalReferences);
-                CreateCustomAddressSpace(externalReferences);
-                CreateEventAddressSpace(externalReferences);
-                CreateAuditAddressSpace(externalReferences);
+                if (predefinedNodes != null)
+                {
+                    foreach (var set in predefinedNodes)
+                    {
+                        switch (set)
+                        {
+                            case PredefinedSetup.Base:
+                                CreateBaseSpace(externalReferences);
+                                break;
+                            case PredefinedSetup.Full:
+                                CreateFullAddressSpace(externalReferences);
+                                break;
+                            case PredefinedSetup.Custom:
+                                CreateCustomAddressSpace(externalReferences);
+                                break;
+                            case PredefinedSetup.Events:
+                                CreateEventAddressSpace(externalReferences);
+                                break;
+                            case PredefinedSetup.Auditing:
+                                CreateAuditAddressSpace(externalReferences);
+                                break;
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to create address space");
             }
         }
+        
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateBaseSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -112,13 +301,13 @@ namespace Server
                 var myobj = CreateObject("BaseRoot");
                 AddNodeToExt(myobj, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
 
-                var myvar = CreateVariable("MyVariable", DataTypes.Double);
+                var myvar = CreateVariable("Variable 1", DataTypes.Double);
                 AddNodeRelation(myvar, myobj, ReferenceTypeIds.HasComponent);
 
-                var myvar2 = CreateVariable("MyVariable 2", DataTypes.Double);
+                var myvar2 = CreateVariable("Variable 2", DataTypes.Double);
                 AddNodeRelation(myvar2, myobj, ReferenceTypeIds.HasComponent);
 
-                var mystring = CreateVariable("MyString", DataTypes.String);
+                var mystring = CreateVariable("Variable string", DataTypes.String);
                 AddNodeRelation(mystring, myobj, ReferenceTypeIds.HasComponent);
 
                 var tsprop1 = myvar.AddProperty<string>("TS Property 1", DataTypes.String, -1);
@@ -137,10 +326,10 @@ namespace Server
                 asprop2.Value = 123.21;
                 asprop2.NodeId = GenerateNodeId();
 
-                var mybool = CreateVariable("MyVariable bool", DataTypes.Boolean);
+                var mybool = CreateVariable("Variable bool", DataTypes.Boolean);
                 AddNodeRelation(mybool, myobj, ReferenceTypeIds.HasComponent);
 
-                var myint = CreateVariable("MyVariable int", DataTypes.Int64);
+                var myint = CreateVariable("Variable int", DataTypes.Int64);
                 AddNodeRelation(myint, myobj, ReferenceTypeIds.HasComponent);
 
                 store.AddHistorizingNode(myvar);
@@ -148,8 +337,15 @@ namespace Server
                 store.AddHistorizingNode(myint);
 
                 AddPredefinedNodes(SystemContext, myobj, myvar, myvar2, mystring, tsprop1, tsprop2, asprop1, asprop2, mybool, myint);
+                Ids.Base.Root = myobj.NodeId;
+                Ids.Base.DoubleVar1 = myvar.NodeId;
+                Ids.Base.DoubleVar2 = myvar2.NodeId;
+                Ids.Base.StringVar = mystring.NodeId;
+                Ids.Base.BoolVar = mybool.NodeId;
+                Ids.Base.IntVar = myint.NodeId;
             }
         }
+        
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateFullAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -160,7 +356,7 @@ namespace Server
                 AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
                 AddPredefinedNode(SystemContext, root);
 
-                var myobj2 = CreateObject("MyObject 2");
+                var myobj2 = CreateObject("Object 1");
                 AddNodeRelation(myobj2, root, ReferenceTypeIds.Organizes);
                 AddPredefinedNode(SystemContext, myobj2);
 
@@ -171,7 +367,7 @@ namespace Server
                     AddPredefinedNode(SystemContext, varch);
                 }
 
-                var myobj3 = CreateObject("MyObject 3");
+                var myobj3 = CreateObject("Object 2");
                 AddNodeRelation(myobj3, root, ReferenceTypeIds.Organizes);
                 AddPredefinedNode(SystemContext, myobj3);
 
@@ -180,12 +376,15 @@ namespace Server
                     var lastdeepobj = myobj3;
                     for (int j = 0; j < 30; j++)
                     {
-                        var deepobj = CreateObject($"MyDeepObject {i}, {j}");
+                        var deepobj = CreateObject($"DeepObject {i}, {j}");
                         AddNodeRelation(deepobj, lastdeepobj, ReferenceTypeIds.Organizes);
                         AddPredefinedNode(SystemContext, deepobj);
                         lastdeepobj = deepobj;
                     }
                 }
+                Ids.Full.Root = root.NodeId;
+                Ids.Full.WideRoot = myobj2.NodeId;
+                Ids.Full.DeepRoot = myobj3.NodeId;
             }
         }
         
@@ -198,11 +397,11 @@ namespace Server
                 var root = CreateObject("CustomRoot");
                 AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
 
-                var myarray = CreateVariable("MyArray", DataTypes.Double, 4);
+                var myarray = CreateVariable("Variable Array", DataTypes.Double, 4);
                 myarray.Value = new double[] { 0, 0, 0, 0 };
                 AddNodeRelation(myarray, root, ReferenceTypeIds.HasComponent);
 
-                var mystrarray = CreateVariable("MyStringArray", DataTypes.String, 2);
+                var mystrarray = CreateVariable("Variable StringArray", DataTypes.String, 2);
                 mystrarray.Value = new[] { "test1", "test2" };
                 AddNodeRelation(mystrarray, root, ReferenceTypeIds.HasComponent);
 
@@ -214,7 +413,7 @@ namespace Server
                 // Numeric type situated at number node
                 var numberType = CreateDataType("MysteryType", DataTypes.Number, externalReferences);
                 // Numeric type outside number node
-                var numberType2 = CreateDataType("NumberType 2", DataTypes.BaseDataType, externalReferences);
+                var numberType2 = CreateDataType("NumberType", DataTypes.BaseDataType, externalReferences);
 
                 // Create instances
                 var stringyVar = CreateVariable("StringyVar", stringyType.NodeId);
@@ -248,8 +447,21 @@ namespace Server
 
                 AddPredefinedNodes(SystemContext, root, myarray, mystrarray, stringyType, ignoreType, numberType, numberType2, stringyVar,
                     ignoreVar, numberVar, numberVar2, euprop, rangeprop);
+
+                Ids.Custom.Root = root.NodeId;
+                Ids.Custom.Array = myarray.NodeId;
+                Ids.Custom.StringArray = mystrarray.NodeId;
+                Ids.Custom.StringyType = stringyType.NodeId;
+                Ids.Custom.IgnoreType = ignoreType.NodeId;
+                Ids.Custom.MysteryType = numberType.NodeId;
+                Ids.Custom.NumberType = numberType2.NodeId;
+                Ids.Custom.StringyVar = stringyVar.NodeId;
+                Ids.Custom.IgnoreVar = ignoreVar.NodeId;
+                Ids.Custom.MysteryVar = numberVar.NodeId;
+                Ids.Custom.NumberVar = numberVar2.NodeId;
             }
         }
+        
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateEventAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -305,6 +517,7 @@ namespace Server
                 var testEmitter = new TestEventManager<PropertyEvent>(SystemContext, propType, NamespaceUris.First());
 
                 store.AddEventHistorizingEmitter(obj1.NodeId);
+                store.AddEventHistorizingEmitter(ObjectIds.Server);
                 obj1.EventNotifier = EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead;
                 obj2.EventNotifier = EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead;
 
@@ -329,8 +542,19 @@ namespace Server
                         }
                     }
                 });
+                Ids.Event.Root = root.NodeId;
+                Ids.Event.Obj1 = obj1.NodeId;
+                Ids.Event.Obj2 = obj2.NodeId;
+                Ids.Event.ObjExclude = objexclude.NodeId;
+                Ids.Event.Var1 = var1.NodeId;
+                Ids.Event.Var2 = var2.NodeId;
+                Ids.Event.PropType = propType.NodeId;
+                Ids.Event.BasicType1 = basicType1.NodeId;
+                Ids.Event.BasicType2 = basicType2.NodeId;
+                Ids.Event.CustomType = customType.NodeId;
             }
         }
+        
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateAuditAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -383,6 +607,10 @@ namespace Server
                         cnt++;
                     }
                 });
+                Ids.Audit.Root = root.NodeId;
+                Ids.Audit.DirectAdd = addDirect.NodeId;
+                Ids.Audit.RefAdd = addRef.NodeId;
+                Ids.Audit.ExcludeObj = exclude.NodeId;
             }
         }
         private static void AddNodeToExt(NodeState state, NodeId id, NodeId typeId,
@@ -396,7 +624,6 @@ namespace Server
             state.AddReference(typeId, true, id);
             references.Add(new NodeStateReference(typeId, false, state.NodeId));
         }
-
         private static void AddNodeRelation(NodeState state, NodeState parent, NodeId typeId)
         {
             state.AddReference(typeId, true, parent.NodeId);
@@ -423,6 +650,7 @@ namespace Server
             state.DisplayName = state.BrowseName.Name;
             state.TypeDefinitionId = VariableTypeIds.BaseDataVariableType;
             state.DataType = dataType;
+            state.ValueRank = ValueRanks.Scalar;
             if (dim > -1)
             {
                 state.ValueRank = ValueRanks.OneDimension;
@@ -479,6 +707,9 @@ namespace Server
             }
         }
 
+        #endregion
+
+        #region overrides
         protected override NodeHandle GetManagerHandle(ServerSystemContext context, NodeId nodeId,
             IDictionary<NodeId, NodeState> cache)
         {
@@ -557,6 +788,18 @@ namespace Server
             return handle.Node;
         }
 
+        public override NodeId New(ISystemContext context, NodeState node)
+        {
+            if (node is BaseInstanceState instance && instance.Parent != null)
+            {
+                return GenerateNodeId();
+            }
+
+            return node.NodeId;
+        }
+        #endregion
+
+        #region history
         protected override void HistoryReadRawModified(
             ServerSystemContext context,
             ReadRawModifiedDetails details,
@@ -783,6 +1026,7 @@ namespace Server
 
             return fields;
         }
+        #endregion
     }
 
     class InternalHistoryRequest
@@ -809,4 +1053,77 @@ namespace Server
         Events,
         Auditing
     }
+
+    #region nodeid_reference
+    public class NodeIdReference
+    {
+        public NodeIdReference()
+        {
+            Base = new BaseNodeReference();
+            Full = new FullNodeReference();
+            Custom = new CustomNodeReference();
+            Event = new EventNodeReference();
+            Audit = new AuditNodeReference();
+        }
+        public BaseNodeReference Base { get; set; }
+        public FullNodeReference Full { get; set; }
+        public CustomNodeReference Custom { get; set; }
+        public EventNodeReference Event { get; set; }
+        public AuditNodeReference Audit { get; set; }
+    }
+
+    public class BaseNodeReference
+    {
+        public NodeId Root { get; set; }
+        public NodeId DoubleVar1 { get; set; }
+        public NodeId DoubleVar2 { get; set; }
+        public NodeId IntVar { get; set; }
+        public NodeId BoolVar { get; set; }
+        public NodeId StringVar { get; set; }
+    }
+
+    public class FullNodeReference
+    {
+        public NodeId Root { get; set; }
+        public NodeId WideRoot { get; set; }
+        public NodeId DeepRoot { get; set; }
+    }
+
+    public class CustomNodeReference
+    {
+        public NodeId Root { get; set; }
+        public NodeId Array { get; set; }
+        public NodeId StringArray { get; set; }
+        public NodeId StringyType { get; set; }
+        public NodeId IgnoreType { get; set; }
+        public NodeId MysteryType { get; set; }
+        public NodeId NumberType { get; set; }
+        public NodeId StringyVar { get; set; }
+        public NodeId IgnoreVar { get; set; }
+        public NodeId MysteryVar { get; set; }
+        public NodeId NumberVar { get; set; }
+    }
+
+    public class EventNodeReference
+    {
+        public NodeId Root { get; set; }
+        public NodeId Obj1 { get; set; }
+        public NodeId Obj2 { get; set; }
+        public NodeId ObjExclude { get; set; }
+        public NodeId Var1 { get; set; }
+        public NodeId Var2 { get; set; }
+        public NodeId PropType { get; set; }
+        public NodeId BasicType1 { get; set; }
+        public NodeId BasicType2 { get; set; }
+        public NodeId CustomType { get; set; }
+    }
+
+    public class AuditNodeReference
+    {
+        public NodeId Root { get; set; }
+        public NodeId DirectAdd { get; set; }
+        public NodeId RefAdd { get; set; }
+        public NodeId ExcludeObj { get; set; }
+    }
+    #endregion
 }

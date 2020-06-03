@@ -51,7 +51,8 @@ namespace Test
             {
                 ServerName = serverType,
                 QuitAfterMap = true,
-                MockMode = mode
+                MockMode = mode,
+                LogLevel = "information"
             });
             tester.Config.Extraction.AllowStringVariables = false;
 
@@ -59,29 +60,30 @@ namespace Test
             await tester.ClearPersistentData();
 
             log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
+            await tester.StartServer();
             tester.StartExtractor();
             await tester.TerminateRunTask(ex => mode == CDFMockHandler.MockMode.FailAsset || CommonTestUtils.TestRunResult(ex));
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Equal(mode == CDFMockHandler.MockMode.FailAsset ? 1 : 0, (int)CommonTestUtils.GetMetricValue("opcua_node_ensure_failures"));
 
-            if (mode == CDFMockHandler.MockMode.None)
+            if (mode == CDFMockHandler.MockMode.None && serverType == ServerName.Basic)
             {
                 Assert.DoesNotContain(tester.Handler.Timeseries.Values, ts => ts.name == "MyString");
                 Assert.Contains(tester.Handler.Assets.Values, asset =>
-                    asset.name == "MyObject" && asset.metadata != null
-                    && asset.metadata["Asset prop 1"] == "test"
-                    && asset.metadata["Asset prop 2"] == "123.21");
+                    asset.name == "BaseRoot" && asset.metadata != null
+                    && asset.metadata["Asset Property 1"] == "test"
+                    && asset.metadata["Asset Property 2"] == "123.21");
                 Assert.Contains(tester.Handler.Timeseries.Values, ts =>
-                    ts.name == "MyVariable" && ts.metadata != null
-                    && ts.metadata["TS property 1"] == "test"
-                    && ts.metadata["TS property 2"] == "123.2");
+                    ts.name == "Variable 1" && ts.metadata != null
+                    && ts.metadata["TS Property 1"] == "test"
+                    && ts.metadata["TS Property 2"] == "123.2");
             }
 
             if (mode != CDFMockHandler.MockMode.FailAsset)
             {
                 Assert.Equal(serverType == ServerName.Basic ? 2 : 154, tester.Handler.Assets.Count);
-                Assert.Equal(serverType == ServerName.Basic ? 4 : 2002, tester.Handler.Timeseries.Count);
+                Assert.Equal(serverType == ServerName.Basic ? 4 : 2000, tester.Handler.Timeseries.Count);
             }
         }
         [Trait("Server", "basic")]
@@ -96,6 +98,7 @@ namespace Test
             tester.CogniteConfig.Debug = true;
             tester.CogniteConfig.ApiKey = null;
 
+            await tester.StartServer();
             tester.StartExtractor();
 
             await tester.WaitForCondition(() => tester.Extractor.Pushing, 10, "Expected extractor to start pushing");
@@ -121,27 +124,36 @@ namespace Test
             tester.Config.Extraction.AllowStringVariables = true;
             tester.Config.Extraction.MaxArraySize = 4;
 
+            await tester.StartServer();
+            tester.Server.PopulateArrayHistory();
+
             tester.StartExtractor();
 
+            var arrId = tester.UAClient.GetUniqueId(tester.Server.Ids.Custom.Array, 2);
+
             await tester.WaitForCondition(() =>
-                tester.Handler.Assets.Count == 5
+                tester.Handler.Assets.Count == 4
                 && tester.Handler.Timeseries.Count == 10
-                && tester.Handler.Datapoints.ContainsKey("gp.efg:i=2[2]"), 20, 
-                () => $"Expected to get 5 assets and got {tester.Handler.Assets.Count}"
+                && tester.Handler.Datapoints.ContainsKey(arrId), 20,
+                () => $"Expected to get 4 assets and got {tester.Handler.Assets.Count}"
                       + $", 10 timeseries and got {tester.Handler.Timeseries.Count}");
 
-            int lastData = tester.Handler.Datapoints["gp.efg:i=2[2]"].NumericDatapoints.Count;
+
+            int lastData = tester.Handler.Datapoints[arrId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count();
+            Assert.Equal(1000, lastData);
+
+            tester.Server.UpdateNode(tester.Server.Ids.Custom.Array, new int[] { 1000, 1000, 1000, 1000 });
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.Datapoints["gp.efg:i=2[2]"].NumericDatapoints.Count > lastData, 20,
-                "Expected data to be increasing");
+                    tester.Handler.Datapoints[arrId].NumericDatapoints.Count > lastData, 20,
+                "Expected data to increase");
 
             await tester.TerminateRunTask();
             
-            tester.TestContinuity("gp.efg:i=2[2]");
+            tester.TestContinuity(arrId);
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Equal(5, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
             Assert.Equal(10, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
         }
         [Trait("Server", "array")]

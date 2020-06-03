@@ -32,6 +32,7 @@ using Prometheus.Client;
 using Serilog;
 using Xunit.Abstractions;
 using Xunit;
+using Server;
 
 namespace Test
 {
@@ -71,24 +72,7 @@ namespace Test
         {
             var fullConfig = ExtractorUtils.GetConfig(configname);
             if (fullConfig == null) throw new ConfigurationException("Failed to load config file");
-            switch (serverType)
-            {
-                case "basic":
-                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4840";
-                    break;
-                case "full":
-                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4841";
-                    break;
-                case "array":
-                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4842";
-                    break;
-                case "events":
-                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4843";
-                    break;
-                case "audit":
-                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4844";
-                    break;
-            }
+            fullConfig.Source.EndpointURL = "opc.tcp://localhost:62546";
             return fullConfig;
         }
         public static bool TestRunResult(Exception e)
@@ -304,14 +288,14 @@ namespace Test
 
     public sealed class ExtractorTester : IDisposable
     {
-        public static readonly Dictionary<ServerName, string> HostNames = new Dictionary<ServerName, string>
+        public static readonly Dictionary<ServerName, PredefinedSetup> SetupMap = new Dictionary<ServerName, PredefinedSetup>
         {
-            {ServerName.Basic, "opc.tcp://localhost:4840"},
-            {ServerName.Full, "opc.tcp://localhost:4841"},
-            {ServerName.Array, "opc.tcp://localhost:4842"},
-            {ServerName.Events, "opc.tcp://localhost:4843"},
-            {ServerName.Audit, "opc.tcp://localhost:4844"},
-            {ServerName.Proxy, "opc.tcp://localhost:4839"}
+            {ServerName.Basic, PredefinedSetup.Base},
+            {ServerName.Full, PredefinedSetup.Full},
+            {ServerName.Array, PredefinedSetup.Custom},
+            {ServerName.Events, PredefinedSetup.Events},
+            {ServerName.Audit, PredefinedSetup.Auditing},
+            {ServerName.Proxy, PredefinedSetup.Base}
         };
 
         private static readonly Dictionary<ConfigName, string> configNames = new Dictionary<ConfigName, string>
@@ -322,7 +306,9 @@ namespace Test
             {ConfigName.Mqtt, "config.mqtt.yml"}
         };
 
+        public static readonly string HostName = "opc.tcp://localhost:62546";
 
+        public ServerController Server { get; private set; }
         public FullConfig Config { get; }
         public CDFMockHandler Handler { get; }
         public Extractor Extractor { get; }
@@ -349,7 +335,7 @@ namespace Test
             }
             Config.Logging.ConsoleLevel = testParams.LogLevel;
             Cognite.OpcUa.Logger.Configure(Config.Logging);
-            Config.Source.EndpointURL = HostNames[testParams.ServerName];
+            Config.Source.EndpointURL = testParams.ServerName == ServerName.Proxy ? "opc.tcp://localhost:4839" : "opc.tcp://localhost:62546";
 
             FullConfig pusherConfig = null;
             if (testParams.PusherConfig != null)
@@ -461,6 +447,8 @@ namespace Test
             {
                 Extractor = new Extractor(Config, Pusher, UAClient);
             }
+
+            Server = new ServerController(new[] { SetupMap[testParams.ServerName] });
         }
 
         public async Task ClearPersistentData()
@@ -494,6 +482,14 @@ namespace Test
             }
         }
 
+        public async Task StartServer()
+        {
+            if (Server == null)
+            {
+                Server = new ServerController(new[] { SetupMap[testParams.ServerName] });
+            }
+            await Server.Start();
+        }
         public void StartExtractor()
         {
             RunTask = Extractor.RunExtractor(Source.Token, testParams.QuitAfterMap);
@@ -571,6 +567,13 @@ namespace Test
             }
         }
 
+        public void CloseServer()
+        {
+            Server?.Stop();
+            Server?.Dispose();
+            Server = null;
+        }
+
         public void TestContinuity(string id)
         {
             var dps = Handler.Datapoints[id].NumericDatapoints;
@@ -633,6 +636,7 @@ namespace Test
             Extractor?.Close();
             Extractor?.Dispose();
             Pusher?.Dispose();
+            Server?.Dispose();
         }
     }
     public class ExtractorTestParameters
