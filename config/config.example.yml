@@ -321,7 +321,7 @@ Events:
     # it is generated from Event NodeId in the same way ExternalIds are generated for normal nodes.
     DestinationNameMap:
         #Property1: SubType
-    # Emitters that should be read for historical events. Leave empty to disable history read of events.
+    # Emitters that should be read for historical events. Leave empty to disable history read of events. Requires History.Enabled to be true.
     HistorizingEmitterIds:
         #-   NamespaceUri:
         #    NodeId:

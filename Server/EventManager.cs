@@ -31,6 +31,7 @@ namespace Server
         public T CreateEvent(NodeState emitter, NodeState source, string message = "", EventSeverity severity = EventSeverity.Low)
         {
             var evt = (T)Activator.CreateInstance(typeof(T), emitter, this);
+            evt.EventType = new PropertyState<NodeId>(evt) { Value = EventType.NodeId };
             evt.Initialize(Context, source, severity, new LocalizedText(message));
             return evt;
         }

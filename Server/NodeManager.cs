@@ -59,24 +59,31 @@ namespace Server
             where T : ManagedEvent
         {
             var eventState = (BaseObjectTypeState)PredefinedNodes[eventId];
-            var emitterState = PredefinedNodes[emitter];
-            var sourceState = PredefinedNodes[source];
+            var emitterState = emitter == null || emitter.NamespaceIndex == 0 ? null : PredefinedNodes[emitter];
+            var sourceState = source == null ? null : PredefinedNodes[source];
 
             var manager = new TestEventManager<T>(SystemContext, eventState, NamespaceUris.First());
 
             var evt = manager.CreateEvent(emitterState, sourceState, message);
-            builder(evt);
+            builder?.Invoke(evt);
             if (emitter == Ids.Event.Obj1 || emitter == ObjectIds.Server)
             {
                 store.HistorizeEvent(emitter, evt);
             }
-            emitterState.ReportEvent(SystemContext, evt);
+            if (emitterState == null)
+            {
+                Server.ReportEvent(SystemContext, evt);
+            }
+            else
+            {
+                emitterState.ReportEvent(SystemContext, evt);
+            }
         }
 
         public void PopulateHistory(NodeId id, int count, string type = "int", int msdiff = 10, Func<int, object> valueBuilder = null)
         {
             var diff = TimeSpan.FromMilliseconds(msdiff);
-            var start = DateTime.Now.Subtract(diff * count);
+            var start = DateTime.UtcNow.Subtract(diff * count);
             for (int i = 0; i < count; i++)
             {
                 var dv = new DataValue();
@@ -116,22 +123,23 @@ namespace Server
             string message,
             int count,
             int msdiff = 10,
-            Action<ManagedEvent> builder = null)
+            Action<ManagedEvent, int> builder = null)
             where T : ManagedEvent
         {
             var diff = TimeSpan.FromMilliseconds(msdiff);
-            var start = DateTime.Now.Subtract(diff * count);
+            var start = DateTime.UtcNow.Subtract(diff * count);
 
             var eventState = (BaseObjectTypeState)PredefinedNodes[eventId];
-            var emitterState = PredefinedNodes[emitter];
-            var sourceState = PredefinedNodes[source];
+            var emitterState = emitter == null || emitter.NamespaceIndex == 0 ? null : PredefinedNodes[emitter];
+            var sourceState = source == null ? null : PredefinedNodes[source];
 
             var manager = new TestEventManager<T>(SystemContext, eventState, NamespaceUris.First());
 
             for (int i = 0; i < count; i++)
             {
                 var evt = manager.CreateEvent(emitterState, sourceState, message + " " + i);
-                builder(evt);
+                builder?.Invoke(evt, i);
+                evt.Time.Value = start;
                 store.HistorizeEvent(emitter, evt);
                 start = start.AddMilliseconds(msdiff);
             }
@@ -526,29 +534,8 @@ namespace Server
                 store.AddEventHistorizingEmitter(obj1.NodeId);
                 store.AddEventHistorizingEmitter(ObjectIds.Server);
                 obj1.EventNotifier = EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead;
-                obj2.EventNotifier = EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead;
+                obj2.EventNotifier = EventNotifiers.SubscribeToEvents;
 
-                Task.Run(async () =>
-                {
-                    while (true)
-                    {
-                        try
-                        {
-                            var evt = testEmitter.CreateEvent(obj1, obj1, "Test Event");
-                            evt.PropertyNum.Value = 123;
-                            evt.PropertyString.Value = "TestTest";
-                            evt.SubType.Value = "TestSubType";
-                            store.HistorizeEvent(obj1.NodeId, evt);
-                            obj1.ReportEvent(SystemContext, evt);
-                            //Server.ReportEvent(SystemContext, evt);
-                            await Task.Delay(1000);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex, "Failed to emmit");
-                        }
-                    }
-                });
                 Ids.Event.Root = root.NodeId;
                 Ids.Event.Obj1 = obj1.NodeId;
                 Ids.Event.Obj2 = obj2.NodeId;
@@ -582,38 +569,6 @@ namespace Server
 
                 AddPredefinedNodes(SystemContext, root, addDirect, addRef, exclude);
 
-                Task.Run(async () => {
-                    int cnt = 0;
-                    while (true)
-                    {
-                        try
-                        {
-                            var addObj = CreateObject($"AddObject {cnt}");
-                            AddNodeRelation(addObj, addDirect, ReferenceTypeIds.HasComponent);
-
-                            var evtAdd = new AddNodesItem
-                            {
-                                ParentNodeId = addObj.NodeId,
-                                NodeClass = NodeClass.Object,
-                                TypeDefinition = ObjectTypeIds.BaseObjectType
-                            };
-                            var evt = new AuditAddNodesEventState(null);
-                            evt.NodesToAdd = new PropertyState<AddNodesItem[]>(evt);
-                            evt.NodesToAdd.Value = new[] { evtAdd };
-                            evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add: {cnt}"));
-                            AddPredefinedNode(SystemContext, addObj);
-
-                            Server.ReportEvent(evt);
-
-                            await Task.Delay(1000);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(ex, "Failure during growing");
-                        }
-                        cnt++;
-                    }
-                });
                 Ids.Audit.Root = root.NodeId;
                 Ids.Audit.DirectAdd = addDirect.NodeId;
                 Ids.Audit.RefAdd = addRef.NodeId;
@@ -868,6 +823,69 @@ namespace Server
             }
         }
 
+        public override void HistoryRead(
+            OperationContext context, 
+            HistoryReadDetails details,
+            TimestampsToReturn timestampsToReturn,
+            bool releaseContinuationPoints,
+            IList<HistoryReadValueId> nodesToRead,
+            IList<HistoryReadResult> results,
+            IList<ServiceResult> errors)
+        {
+            Log.Information("History read f");
+            if (details is ReadEventDetails edetails)
+            {
+                for (int i = 0; i < nodesToRead.Count; i++)
+                {
+                    var nodeToRead = nodesToRead[i];
+                    if (nodeToRead.NodeId == ObjectIds.Server)
+                    {
+                        NodeHandle serverHandle;
+                        var cfnm = (ConfigurationNodeManager)Server.NodeManager.NodeManagers.First(nm => nm.GetType() == typeof(ConfigurationNodeManager));
+                        lock (cfnm.Lock)
+                        {
+                            var server = (BaseObjectState)cfnm.Find(ObjectIds.Server);
+                            serverHandle = new NodeHandle(ObjectIds.Server, server);
+                        }
+                        if (serverHandle == null) continue;
+                        nodeToRead.Processed = true;
+
+                        results[i] = new HistoryReadResult();
+                        results[i].HistoryData = null;
+                        results[i].ContinuationPoint = null;
+                        results[i].StatusCode = StatusCodes.Good;
+                        if (edetails.NumValuesPerNode == 0)
+                        {
+                            if (edetails.StartTime == DateTime.MinValue || edetails.EndTime == DateTime.MinValue)
+                            {
+                                throw new ServiceResultException(StatusCodes.BadInvalidTimestampArgument);
+                            }
+                        }
+                        else
+                        {
+                            if (edetails.StartTime == DateTime.MinValue && edetails.EndTime == DateTime.MinValue)
+                            {
+                                throw new ServiceResultException(StatusCodes.BadInvalidTimestampArgument);
+                            }
+                        }
+
+                        HistoryReadEvents(
+                            SystemContext,
+                            edetails,
+                            timestampsToReturn,
+                            nodesToRead,
+                            results,
+                            errors,
+                            new List<NodeHandle> { serverHandle },
+                            new NodeIdDictionary<NodeState>()
+                            );
+                    }
+                }
+            }
+
+            base.HistoryRead(context, details, timestampsToReturn, releaseContinuationPoints, nodesToRead, results, errors);
+        }
+
         protected override void HistoryReadEvents(
             ServerSystemContext context,
             ReadEventDetails details,
@@ -878,6 +896,7 @@ namespace Server
             List<NodeHandle> nodesToProcess,
             IDictionary<NodeId, NodeState> cache)
         {
+            Log.Information("Read history events");
             foreach (var handle in nodesToProcess)
             {
                 var nodeToRead = nodesToRead[handle.Index];
@@ -971,12 +990,12 @@ namespace Server
             return new InternalHistoryRequest
             {
                 ContinuationPoint = null,
-                EndTime = details.EndTime.ToLocalTime(),
+                EndTime = details.EndTime,
                 Id = nodeToRead.NodeId,
                 IsReverse = timeFlowsBackward,
                 MemoryIndex = -1,
                 NumValuesPerNode = details.NumValuesPerNode,
-                StartTime = details.StartTime.ToLocalTime()
+                StartTime = details.StartTime
             };
         }
         private InternalEventHistoryRequest CreateEventHistoryRequest(
@@ -991,12 +1010,12 @@ namespace Server
             return new InternalEventHistoryRequest
             {
                 ContinuationPoint = null,
-                EndTime = details.EndTime.ToLocalTime(),
+                EndTime = details.EndTime,
                 Id = nodeToRead.NodeId,
                 IsReverse = timeFlowsBackward,
                 MemoryIndex = -1,
                 NumValuesPerNode = details.NumValuesPerNode,
-                StartTime = details.StartTime.ToLocalTime(),
+                StartTime = details.StartTime,
                 Filter = details.Filter,
                 FilterContext = filterContext
             };

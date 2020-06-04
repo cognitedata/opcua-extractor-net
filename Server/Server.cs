@@ -81,7 +81,7 @@ namespace Server
             string message,
             int count,
             int msdiff = 10,
-            Action<ManagedEvent> builder = null)
+            Action<ManagedEvent, int> builder = null)
             where T : ManagedEvent
         {
             custom.PopulateEventHistory<T>(eventId, emitter, source, message, count, msdiff, builder);

@@ -370,6 +370,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public async Task RestartHistory(CancellationToken token)
         {
+            if (!config.History.Enabled) return;
             await Task.WhenAll(Task.Run(async () =>
             {
                 await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.Historizing),
@@ -481,7 +482,7 @@ namespace Cognite.OpcUa
                 {
                     State.SetEmitterState(new EventExtractionState(id));
                 }
-                if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
+                if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any() && config.History.Enabled)
                 {
                     var histEmitters = config.Events.HistorizingEmitterIds.Select(proto =>
                         proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
@@ -693,6 +694,7 @@ namespace Cognite.OpcUa
         {
             await Task.Run(() => uaClient.SubscribeToEvents(State.EmitterStates.Select(state => state.Id), 
                 nodes, Streamer.EventSubscriptionHandler, token));
+            if (!config.History.Enabled) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
                 await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.Historizing), nodes, token);
@@ -713,6 +715,7 @@ namespace Cognite.OpcUa
         private async Task SynchronizeNodes(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             await Task.Run(() => uaClient.SubscribeToNodes(states, Streamer.DataSubscriptionHandler, token));
+            if (!config.History.Enabled) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
                 await historyReader.FrontfillData(states.Where(state => state.Historizing), token);

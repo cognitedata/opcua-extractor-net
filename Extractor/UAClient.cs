@@ -414,7 +414,7 @@ namespace Cognite.OpcUa
                     NodeClassMask = nodeClassMask,
                     BrowseDirection = BrowseDirection.Forward,
                     ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
-                        | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition
+                        | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition | (uint)BrowseResultMask.BrowseName
                 }
             ));
             if (!parents.Any())
@@ -1018,7 +1018,7 @@ namespace Cognite.OpcUa
                     .ToHashSet();
 
                 if (eventFields == null) throw new ExtractorFailureException("EventFields not defined");
-
+                
                 var filter = BuildEventFilter(nodeIds);
                 foreach (var emitter in emitters)
                 {
@@ -1097,6 +1097,14 @@ namespace Cognite.OpcUa
             if (eventFields != null) return eventFields;
             var collector = new EventFieldCollector(this, eventIds);
             eventFields = collector.GetEventIdFields(token);
+            foreach (var pair in eventFields)
+            {
+                log.Verbose("Field: {id}", pair.Key);
+                foreach (var fields in pair.Value)
+                {
+                    log.Verbose("{root}: {browse}", fields.Item1, fields.Item2);
+                }
+            }
             return eventFields;
         }
         /// <summary>

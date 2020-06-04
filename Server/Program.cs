@@ -16,29 +16,15 @@ namespace Server
             logConfig.WriteTo.Console();
             Log.Logger = logConfig.CreateLogger();
 
-            ApplicationInstance app = new ApplicationInstance();
-            app.ConfigSectionName = "Server.Test";
-            try
-            {
-                app.LoadApplicationConfiguration("config/Server.Test.Config.xml", false).Wait();
-                app.CheckApplicationInstanceCertificate(false, 0).Wait();
-                using var server = new Server(new[] {PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Custom,
+            using var server = new ServerController(new[] {PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Custom,
                     PredefinedSetup.Events, PredefinedSetup.Auditing });
-                app.Start(server).Wait();
-                Log.Information("Server started");
+            server.Start().Wait();
+            server.PopulateEvents();
 
-                var baseNodeId = new NodeId(2, 2);
-
-                var random = new Random();
-                while (true)
-                {
-                    server.UpdateNode(baseNodeId, random.NextDouble());
-                    Task.Delay(500).Wait();
-                }
-            }
-            catch (Exception e)
+            while(true)
             {
-                Log.Error(e, "Failed to start server");
+                //server.TriggerEvents(0);
+                Task.Delay(1000).Wait();
             }
         }
     }
