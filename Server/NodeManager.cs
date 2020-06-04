@@ -146,7 +146,7 @@ namespace Server
         }
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
-        public void AddObject(NodeId parentId, string name, bool audit = false)
+        public NodeId AddObject(NodeId parentId, string name, bool audit = false)
         {
             var parent = PredefinedNodes[parentId];
             var obj = CreateObject(name);
@@ -156,7 +156,7 @@ namespace Server
             {
                 var evtAdd = new AddNodesItem
                 {
-                    ParentNodeId = obj.NodeId,
+                    ParentNodeId = parentId,
                     NodeClass = NodeClass.Object,
                     TypeDefinition = ObjectTypeIds.BaseObjectType
                 };
@@ -171,10 +171,11 @@ namespace Server
             {
                 AddPredefinedNode(SystemContext, obj);
             }
+            return obj.NodeId;
         }
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
-        public void AddVariable(NodeId parentId, string name, NodeId dataType, bool audit = false)
+        public NodeId AddVariable(NodeId parentId, string name, NodeId dataType, bool audit = false)
         {
             var parent = PredefinedNodes[parentId];
             var obj = CreateVariable(name, dataType);
@@ -184,7 +185,7 @@ namespace Server
             {
                 var evtAdd = new AddNodesItem
                 {
-                    ParentNodeId = obj.NodeId,
+                    ParentNodeId = parentId,
                     NodeClass = NodeClass.Variable,
                     TypeDefinition = VariableTypeIds.BaseDataVariableType
                 };
@@ -201,19 +202,20 @@ namespace Server
             {
                 AddPredefinedNode(SystemContext, obj);
             }
+            return obj.NodeId;
         }
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
-        public void AddReference(NodeId sourceId, NodeId targetId, NodeId type, bool audit = false)
+        public void AddReference(NodeId targetId, NodeId parentId, NodeId type, bool audit = false)
         {
-            var source = PredefinedNodes[sourceId];
             var target = PredefinedNodes[targetId];
+            var parent = PredefinedNodes[parentId];
             if (audit)
             {
                 var evtRef = new AddReferencesItem
                 {
                     IsForward = true,
-                    SourceNodeId = sourceId,
+                    SourceNodeId = parentId,
                     TargetNodeId = targetId,
                     ReferenceTypeId = type
                 };
@@ -223,12 +225,12 @@ namespace Server
                     Value = new[] { evtRef }
                 };
                 evt.Initialize(SystemContext, null, EventSeverity.Medium, new LocalizedText($"Audit add reference"));
-                AddNodeRelation(source, target, type);
+                AddNodeRelation(target, parent, type);
                 Server.ReportEvent(evt);
             }
             else
             {
-                AddNodeRelation(source, target, type);
+                AddNodeRelation(target, parent, type);
             }
         }
         #endregion

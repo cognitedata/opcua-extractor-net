@@ -841,7 +841,11 @@ namespace Cognite.OpcUa
                     && (State.IsMappedNode(uaClient.ToNodeId(added.ParentNodeId))))
                     .Select(added => uaClient.ToNodeId(added.ParentNodeId))
                     .Distinct();
-                if (!relevantIds.Any()) return;
+                if (!relevantIds.Any())
+                {
+                    log.Debug("No relevant nodes in addNodes audit event");
+                    return;
+                }
                 log.Information("Trigger rebrowse on {numnodes} node ids due to addNodes event", relevantIds.Count());
 
                 foreach (var id in relevantIds)
@@ -868,7 +872,11 @@ namespace Cognite.OpcUa
                 .Select(added => uaClient.ToNodeId(added.SourceNodeId))
                 .Distinct();
 
-            if (!relevantRefIds.Any()) return;
+            if (!relevantRefIds.Any())
+            {
+                log.Debug("No relevant nodes in addReferences audit event");
+                return;
+            }
 
             log.Information("Trigger rebrowse on {numnodes} node ids due to addReference event", relevantRefIds.Count());
 

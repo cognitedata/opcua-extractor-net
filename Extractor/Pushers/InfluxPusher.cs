@@ -505,7 +505,7 @@ namespace Cognite.OpcUa
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
-                $"SELECT * FROM /events.{state.Key}*/" +
+                $"SELECT * FROM /events.{state.Key}:.*/" +
                 $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks * 100}" +
                 $" AND time <= {(state.Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks * 100}")
             ).ToList();

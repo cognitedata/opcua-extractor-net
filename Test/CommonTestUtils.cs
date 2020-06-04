@@ -202,7 +202,7 @@ namespace Test
 
         public static Process GetProxyProcess()
         {
-            return Bash("ncat -lk 4839 -c \"ncat localhost 4840\"");
+            return Bash("ncat -lk 4839 -c \"ncat localhost 62546\"");
         }
 
         public static void StopProxyProcess()
@@ -215,63 +215,63 @@ namespace Test
         /// Test that the event contains the appropriate data for the event server test
         /// </summary>
         /// <param name="ev"></param>
-        public static void TestEvent(EventDummy ev, CDFMockHandler factory)
+        public static void TestEvent(EventDummy ev, CDFMockHandler handler)
         {
             if (ev == null) throw new ArgumentNullException(nameof(ev));
-            if (factory == null) throw new ArgumentNullException(nameof(factory));
-            Assert.False(ev.description.StartsWith("propOther2 ", StringComparison.InvariantCulture));
-            Assert.False(ev.description.StartsWith("basicBlock ", StringComparison.InvariantCulture));
-            Assert.False(ev.description.StartsWith("basicNoVarSource ", StringComparison.InvariantCulture));
-            Assert.False(ev.description.StartsWith("basicExcludeSource ", StringComparison.InvariantCulture));
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            Assert.False(ev.description.StartsWith("prop-e3 ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basic-block ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basic-nosource ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basic-excludeobj ", StringComparison.InvariantCulture));
             if (ev.description.StartsWith("prop ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata.ContainsKey("PropertyString") && !string.IsNullOrEmpty(ev.metadata["PropertyString"]));
                 Assert.False(ev.metadata.ContainsKey("PropertyNum"));
-                Assert.Equal("TestSubType", ev.subtype);
-                Assert.Equal("gp.efg:i=12", ev.type);
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
+                Assert.Equal("sub-type", ev.subtype);
+                Assert.Equal("gp.tl:i=7", ev.type);
+                Assert.True(EventSourceIs(ev, handler, "Object 1", false));
             }
-            else if (ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+            else if (ev.description.StartsWith("prop-e2 ", StringComparison.InvariantCulture))
             {
                 // This node is not historizing, so the first event should be lost
-                Assert.NotEqual("propOther 0", ev.description);
-                Assert.True(ev.metadata.ContainsKey("PropertyString") && !String.IsNullOrEmpty(ev.metadata["PropertyString"]));
+                Assert.NotEqual("prop-e2 0", ev.description);
+                Assert.True(ev.metadata.ContainsKey("PropertyString") && !string.IsNullOrEmpty(ev.metadata["PropertyString"]));
                 Assert.False(ev.metadata.ContainsKey("PropertyNum"));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
+                Assert.True(EventSourceIs(ev, handler, "Object 1", false));
             }
-            else if (ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
+            else if (ev.description.StartsWith("basic-pass ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
-                Assert.True(String.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
+                Assert.True(string.IsNullOrEmpty(ev.subtype));
+                Assert.True(EventSourceIs(ev, handler, "Object 1", false));
             }
             // both source1 and 2
-            else if (ev.description.StartsWith("basicPassSource", StringComparison.InvariantCulture))
+            else if (ev.description.StartsWith("basic-pass-", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject2", false));
-                if (ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
+                Assert.True(EventSourceIs(ev, handler, "Object 2", false));
+                if (ev.description.StartsWith("basic-pass-3 ", StringComparison.InvariantCulture))
                 {
-                    Assert.NotEqual("basicPassSource2 0", ev.description);
+                    Assert.NotEqual("basic-pass-3 0", ev.description);
                 }
             }
-            else if (ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
+            else if (ev.description.StartsWith("basic-varsource ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
-                Assert.True(EventSourceIs(ev, factory, "MyVariable", true));
+                Assert.True(EventSourceIs(ev, handler, "Object 1", false));
+                Assert.True(EventSourceIs(ev, handler, "Variable 1", true));
             }
-            else if (ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture))
+            else if (ev.description.StartsWith("mapped ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("TypeProp"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
-                Assert.Equal("MySpecialType", ev.type);
+                Assert.True(EventSourceIs(ev, handler, "Object 1", false));
+                Assert.Equal("CustomType", ev.type);
             }
             else
             {

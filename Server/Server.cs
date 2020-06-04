@@ -87,18 +87,18 @@ namespace Server
             custom.PopulateEventHistory<T>(eventId, emitter, source, message, count, msdiff, builder);
         }
 
-        public void AddObject(NodeId parentId, string name, bool audit = false)
+        public NodeId AddObject(NodeId parentId, string name, bool audit = false)
         {
-            custom.AddObject(parentId, name, audit);
+            return custom.AddObject(parentId, name, audit);
         }
 
-        public void AddVariable(NodeId parentId, string name, NodeId dataType, bool audit = false)
+        public NodeId AddVariable(NodeId parentId, string name, NodeId dataType, bool audit = false)
         {
-            custom.AddVariable(parentId, name, dataType, audit);
+            return custom.AddVariable(parentId, name, dataType, audit);
         }
-        public void AddReference(NodeId sourceId, NodeId targetId, NodeId type, bool audit = false)
+        public void AddReference(NodeId sourceId, NodeId parentId, NodeId type, bool audit = false)
         {
-            custom.AddReference(sourceId, targetId, type, audit);
+            custom.AddReference(sourceId, parentId, type, audit);
         }
     }
 }

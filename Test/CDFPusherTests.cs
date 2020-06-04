@@ -370,8 +370,8 @@ namespace Test
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             var handler1 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
             var handler2 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            var pusher1 = new CDFPusher(CommonTestUtils.GetDummyProvider(handler1), config);
-            var pusher2 = new CDFPusher(CommonTestUtils.GetDummyProvider(handler2), config);
+            using var pusher1 = new CDFPusher(CommonTestUtils.GetDummyProvider(handler1), config);
+            using var pusher2 = new CDFPusher(CommonTestUtils.GetDummyProvider(handler2), config);
 
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {

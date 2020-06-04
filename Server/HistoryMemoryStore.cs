@@ -102,11 +102,6 @@ namespace Server
             if (idx < 0)
             {
                 idx = data.FindIndex(vl => vl.SourceTimestamp > request.StartTime) - 1;
-                if (idx < 0)
-                {
-                    final = true;
-                    return (result, final);
-                }
             }
 
             while (true)
@@ -181,11 +176,6 @@ namespace Server
                 Log.Information("Read events from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
                 var evt = data[0];
                 Log.Information("Time: {t}", evt.Time.Value);
-                if (idx < 0)
-                {
-                    final = true;
-                    return (result, final);
-                }
             }
 
             while (true)

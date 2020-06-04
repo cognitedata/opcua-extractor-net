@@ -146,5 +146,18 @@ namespace Server
             Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, null, "basic-nosource", 100, 100);
             Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, Ids.Event.ObjExclude, "basic-excludeobj", 100, 100);
         }
+
+        public void DirectGrowth(int idx = 0)
+        {
+            Server.AddObject(Ids.Audit.DirectAdd, "AddObj " + idx, true);
+            Server.AddVariable(Ids.Audit.DirectAdd, "AddVar " + idx, DataTypes.Double, true);
+        }
+        public void ReferenceGrowth(int idx = 0)
+        {
+            var objId = Server.AddObject(Ids.Audit.ExcludeObj, "AddObj " + idx, true);
+            var varId = Server.AddVariable(Ids.Audit.ExcludeObj, "AddVar " + idx, DataTypes.Double, true);
+            Server.AddReference(objId, Ids.Audit.RefAdd, ReferenceTypeIds.HasComponent, true);
+            Server.AddReference(varId, Ids.Audit.RefAdd, ReferenceTypeIds.HasComponent, true);
+        }
     }
 }

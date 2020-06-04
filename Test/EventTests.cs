@@ -47,33 +47,42 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
+            tester.Config.History.Enabled = true;
+
+            await tester.StartServer();
+            tester.Server.PopulateEvents();
+
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
                     tester.Handler.Events.Values.Count > 20 &&
                     tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
-                40, "Expected history read to finish");
+                20, "Expected history read to finish");
 
 
             var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
-            Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
+            // Test that history has worked for the five relevant types historized on the server node.
             Assert.Contains(events, ev => ev.description == "prop 0");
-            Assert.Contains(events, ev => ev.description == "basicPass 0");
-            Assert.Contains(events, ev => ev.description == "basicPassSource 0");
-            Assert.Contains(events, ev => ev.description == "basicVarSource 0");
-            Assert.Contains(events, ev => ev.description == "mappedType 0");
+            Assert.Contains(events, ev => ev.description == "basic-pass 0");
+            Assert.Contains(events, ev => ev.description == "basic-pass-2 0");
+            Assert.Contains(events, ev => ev.description == "mapped 0");
+            Assert.Contains(events, ev => ev.description == "basic-varsource 0");
+            Assert.Contains(events, ev => ev.description == "prop 99");
+            Assert.Contains(events, ev => ev.description == "basic-pass 99");
+            Assert.Contains(events, ev => ev.description == "basic-pass-2 99");
+            Assert.Contains(events, ev => ev.description == "mapped 99");
+            Assert.Contains(events, ev => ev.description == "basic-varsource 99");
+            Assert.Equal(500, events.Count);
 
+            tester.Server.TriggerEvents(100);
             await tester.WaitForCondition(() =>
             {
                 events = tester.Handler.Events.Values.ToList();
-                return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture));
-            }, 40, "Expected remaining event subscriptions to trigger");
+                return events.Any(ev => ev.description.StartsWith("prop-e2 ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basic-pass-3 ", StringComparison.InvariantCulture))
+                       && events.Count == 507;
+            }, 20, "Expected remaining event subscriptions to trigger");
 
             await tester.TerminateRunTask();
 
@@ -97,6 +106,11 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
+            tester.Config.History.Enabled = true;
+
+            await tester.StartServer();
+            tester.Server.PopulateEvents();
+
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
@@ -111,35 +125,30 @@ namespace Test
             tester.Extractor.RestartExtractor();
             await Task.Delay(500);
 
+            await tester.Extractor.Looper.WaitForNextPush();
+
+            tester.Server.TriggerEvents(100);
             await tester.WaitForCondition(() =>
                     tester.Handler.Events.Values.Any()
                     && tester.Extractor.State.EmitterStates.All(state => state.IsStreaming)
-                    && tester.Handler.Events.Count > lastCount,
+                    && tester.Handler.Events.Count == 507,
                 40, "Expected number of events to be increasing");
 
             var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
-            Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
             Assert.Contains(events, ev => ev.description == "prop 0");
-            Assert.Contains(events, ev => ev.description == "basicPass 0");
-            Assert.Contains(events, ev => ev.description == "basicPassSource 0");
-            Assert.Contains(events, ev => ev.description == "basicVarSource 0");
-            Assert.Contains(events, ev => ev.description == "mappedType 0");
-
-            await tester.WaitForCondition(() =>
-            {
-                events = tester.Handler.Events.Values.ToList();
-                return events.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture));
-            }, 40, "Expected remaining event subscriptions to trigger");
+            Assert.Contains(events, ev => ev.description == "basic-pass 0");
+            Assert.Contains(events, ev => ev.description == "basic-pass-2 0");
+            Assert.Contains(events, ev => ev.description == "mapped 0");
+            Assert.Contains(events, ev => ev.description == "basic-varsource 0");
+            Assert.Contains(events, ev => ev.description == "prop 99");
+            Assert.Contains(events, ev => ev.description == "basic-pass 99");
+            Assert.Contains(events, ev => ev.description == "basic-pass-2 99");
+            Assert.Contains(events, ev => ev.description == "mapped 99");
+            Assert.Contains(events, ev => ev.description == "basic-varsource 99");
+            Assert.Equal(507, events.Count);
 
             await tester.TerminateRunTask();
-
-            events = tester.Handler.Events.Values.ToList();
 
             foreach (var ev in events)
             {
@@ -161,38 +170,48 @@ namespace Test
 
             tester.Config.Extraction.EnableAuditDiscovery = true;
 
+            await tester.StartServer();
+
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() =>
-                    tester.Handler.Assets.Count > 0 && tester.Handler.Timeseries.Count > 0,
-                20, "Expected some assets and timeseries to be discovered");
-
-            int lastAssetBefore = tester.Handler.Assets.Values
-                .Where(asset => asset.name.StartsWith("Add", StringComparison.InvariantCulture))
-                .Select(asset => int.Parse(asset.name.Split(' ')[1], CultureInfo.InvariantCulture)).Max();
-
-            int lastTimeseriesBefore = tester.Handler.Timeseries.Values
-                .Where(timeseries => timeseries.name.StartsWith("Add", StringComparison.InvariantCulture))
-                .Select(timeseries => int.Parse(timeseries.name.Split(' ')[1], CultureInfo.InvariantCulture)).Max();
+            await tester.Extractor.Looper.WaitForNextPush();
+            Assert.Equal(4, tester.Handler.Assets.Count);
+            Assert.Empty(tester.Handler.Timeseries);
 
             int assetCount = tester.Handler.Assets.Count;
             int tsCount = tester.Handler.Timeseries.Count;
 
+            tester.Server.DirectGrowth();
             await tester.WaitForCondition(() =>
-                    tester.Handler.Assets.Count > assetCount && tester.Handler.Timeseries.Count > tsCount,
-                20, "Expected timeseries and asset count to be increasing");
+                    tester.Handler.Assets.Count == 5 && tester.Handler.Timeseries.Count == 1,
+                20, "Expected directly added timeseries and assets to be discovered");
 
-            await Task.Delay(1000);
+            var directRoot = tester.Handler.Assets.Values.FirstOrDefault(asset => asset.name == "AddDirect");
+
+            var directAsset = tester.Handler.Assets.Values.FirstOrDefault(asset => asset.name == "AddObj 0");
+            var directTs = tester.Handler.Timeseries.Values.FirstOrDefault(ts => ts.name == "AddVar 0");
+
+            Assert.NotNull(directAsset);
+            Assert.NotNull(directTs);
+            Assert.Equal(directRoot.id, directTs.assetId);
+            Assert.Equal(directRoot.externalId, directAsset.parentExternalId);
+
+            tester.Server.ReferenceGrowth(1);
+            await tester.WaitForCondition(() =>
+                tester.Handler.Assets.Count == 6 && tester.Handler.Timeseries.Count == 2,
+                20, "Expected reference added timeseries and assets to be discovered");
+
+            var refRoot = tester.Handler.Assets.Values.FirstOrDefault(asset => asset.name == "AddRef");
+
+            var refAsset = tester.Handler.Assets.Values.FirstOrDefault(asset => asset.name == "AddObj 1");
+            var refTs = tester.Handler.Timeseries.Values.FirstOrDefault(ts => ts.name == "AddVar 1");
+
+            Assert.NotNull(refAsset);
+            Assert.NotNull(refTs);
+            Assert.Equal(refRoot.id, refTs.assetId);
+            Assert.Equal(refRoot.externalId, refAsset.parentExternalId);
 
             await tester.TerminateRunTask();
-
-            Assert.Contains(tester.Handler.Assets.Values, asset => asset.name == "AddObject 0");
-            Assert.Contains(tester.Handler.Timeseries.Values, timeseries => timeseries.name == "AddVariable 0");
-            Assert.Contains(tester.Handler.Timeseries.Values, timeseries => timeseries.name == "AddExtraVariable 0");
-
-            Assert.Contains(tester.Handler.Assets.Values, asset => asset.name == "AddObject " + (lastAssetBefore + 1));
-            Assert.Contains(tester.Handler.Timeseries.Values, timeseries => timeseries.name == "AddVariable " + (lastTimeseriesBefore + 1));
-            Assert.Contains(tester.Handler.Timeseries.Values, timeseries => timeseries.name == "AddExtraVariable " + (lastTimeseriesBefore + 1));
         }
         [Fact]
         [Trait("Server", "events")]
@@ -208,10 +227,21 @@ namespace Test
                 FailureInfluxWrite = true
             });
             await tester.ClearPersistentData();
+
+            tester.Config.History.Enabled = true;
+
             tester.Handler.AllowEvents = false;
             tester.Handler.AllowPush = false;
             tester.Handler.AllowConnectionTest = false;
+
+            await tester.StartServer();
+            tester.Server.PopulateEvents();
+
             tester.StartExtractor();
+            await tester.WaitForCondition(() => tester.Pusher.EventsFailing, 20, "Expect pusher to start failing");
+
+            tester.Server.TriggerEvents(100);
+            tester.Server.TriggerEvents(101);
 
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents
                 && tester.Pusher.EventsFailing,
@@ -226,24 +256,8 @@ namespace Test
 
             Assert.False(tester.Extractor.FailureBuffer.AnyEvents);
 
-            await tester.WaitForCondition(() => tester.Handler.Events.Count > 20, 20,
+            await tester.WaitForCondition(() => tester.Handler.Events.Count == 514, 10,
                 "Expected to receive some events");
-
-            await tester.WaitForCondition(() =>
-            {
-                var evts = tester.Handler.Events.Values.ToList();
-                return evts.Any(ev => ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
-                       && evts.Any(ev => ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
-                       && evts.Any(ev => ev.description.StartsWith("basicPassSource ", StringComparison.InvariantCulture))
-                       && evts.Any(ev => ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
-                       && evts.Any(ev => ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
-                       && evts.Any(ev => ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture))
-                       && evts.Any(ev => ev.description == "prop 0")
-                       && evts.Any(ev => ev.description == "basicPass 0")
-                       && evts.Any(ev => ev.description == "basicPassSource 0")
-                       && evts.Any(ev => ev.description == "basicVarSource 0")
-                       && evts.Any(ev => ev.description == "mappedType 0");
-            }, 20, "Expected to receive the remaining events");
 
             await tester.TerminateRunTask();
 

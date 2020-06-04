@@ -316,6 +316,11 @@ namespace Cognite.OpcUa
 
             bool success = true;
 
+            foreach (var evt in events)
+            {
+                log.Debug(evt.ToDebugDescription());
+            }
+
             if (config.Influx != null && influxPusher != null)
             {
                 try
@@ -420,6 +425,10 @@ namespace Cognite.OpcUa
                     try
                     {
                         var events = await influxPusher.ReadEvents(activeStates, token);
+                        foreach (var evt in events)
+                        {
+                            log.Debug(evt.ToDebugDescription());
+                        }
                         log.Information("Read {cnt} events from influxdb failure buffer", events.Count());
                         await Task.WhenAll(pushers
                             .Where(pusher =>
