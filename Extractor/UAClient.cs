@@ -702,7 +702,7 @@ namespace Cognite.OpcUa
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
                     vnode.SetDataType(dataType, numericDataTypes);
                     enumerator.MoveNext();
-                    vnode.Historizing = historyConfig.Enabled && enumerator.Current.GetValue(false);
+                    vnode.Historizing = historyConfig.Enabled && historyConfig.Data && enumerator.Current.GetValue(false);
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
                     if (extractionConfig.MaxArraySize > 0)

@@ -139,8 +139,6 @@ namespace Server
                 {
                     idx = request.StartTime == DateTime.MinValue ? data.Count : data.FindLastIndex(vl => vl.Time.Value < request.StartTime);
                     Log.Information("Read events backwards from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
-                    var evt = data[0];
-                    Log.Information("Time: {t}", evt.Time.Value);
                     if (idx < 0)
                     {
                         final = true;
@@ -174,8 +172,6 @@ namespace Server
             {
                 idx = data.FindIndex(vl => vl.Time.Value > request.StartTime) - 1;
                 Log.Information("Read events from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
-                var evt = data[0];
-                Log.Information("Time: {t}", evt.Time.Value);
             }
 
             while (true)

@@ -1219,6 +1219,7 @@ namespace Cognite.OpcUa.Config
             log.Information("Detected {cnt} historizing emitters", historizingEmitters.Count);
             summary.NumHistorizingEmitters = historizingEmitters.Count;
 
+            baseConfig.History.Enabled = true;
             baseConfig.Events.EventIds = emittedEvents.Distinct().Select(NodeIdToProto).ToList();
             baseConfig.Events.EmitterIds = emitterIds.Distinct().Select(NodeIdToProto).ToList();
             baseConfig.Events.HistorizingEmitterIds = historizingEmitters.Distinct().Select(NodeIdToProto).ToList();

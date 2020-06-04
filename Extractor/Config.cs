@@ -198,6 +198,7 @@ namespace Cognite.OpcUa
     public class HistoryConfig
     {
         public bool Enabled { get; set; } = false;
+        public bool Data { get; set; } = true;
         public bool Backfill { get; set; } = false;
         public int DataChunk { get => dataChunk; set => dataChunk = Math.Max(0, value); }
         private int dataChunk = 1000;

@@ -571,6 +571,24 @@ namespace Server
 
                 AddPredefinedNodes(SystemContext, root, addDirect, addRef, exclude);
 
+                if (!externalReferences.TryGetValue(ObjectIds.Server, out var references))
+                {
+                    externalReferences[ObjectIds.Server] = references = new List<IReference>();
+                }
+                if (!externalReferences.TryGetValue(ObjectTypeIds.AuditAddNodesEventType, out var addreferences))
+                {
+                    externalReferences[ObjectTypeIds.AuditAddNodesEventType] = addreferences = new List<IReference>();
+                }
+                if (!externalReferences.TryGetValue(ObjectTypeIds.AuditAddReferencesEventType, out var refreferences))
+                {
+                    externalReferences[ObjectTypeIds.AuditAddReferencesEventType] = refreferences = new List<IReference>();
+                }
+
+                references.Add(new NodeStateReference(ReferenceTypeIds.GeneratesEvent, false, ObjectTypeIds.AuditAddNodesEventType));
+                addreferences.Add(new NodeStateReference(ReferenceTypeIds.GeneratesEvent, true, ObjectTypeIds.AuditAddNodesEventType));
+                references.Add(new NodeStateReference(ReferenceTypeIds.GeneratesEvent, false, ObjectIds.Server));
+                refreferences.Add(new NodeStateReference(ReferenceTypeIds.GeneratesEvent, true, ObjectIds.Server));
+
                 Ids.Audit.Root = root.NodeId;
                 Ids.Audit.DirectAdd = addDirect.NodeId;
                 Ids.Audit.RefAdd = addRef.NodeId;
