@@ -16,7 +16,7 @@ namespace Server
             logConfig.WriteTo.Console();
             Log.Logger = logConfig.CreateLogger();
 
-            using var server = new ServerController(new[] {PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Custom,
+            using var server = new ServerController(new[] {PredefinedSetup.Base, /* PredefinedSetup.Full, */ PredefinedSetup.Custom,
                     PredefinedSetup.Events, PredefinedSetup.Auditing });
             server.Start().Wait();
             server.PopulateEvents();

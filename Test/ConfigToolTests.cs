@@ -47,8 +47,6 @@ namespace Test
         [Theory]
         public async Task DoConfigToolTest(ServerName server)
         {
-            log.Information("Loading config from config.config - tool - test.yml");
-
             var fullConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
             var baseConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
             Logger.Configure(fullConfig.Logging);
@@ -78,8 +76,8 @@ namespace Test
             {
                 Assert.Equal(4, baseConfig.Extraction.MaxArraySize);
                 Assert.Equal(2, baseConfig.Extraction.CustomNumericTypes.Count());
-                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=11");
-                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=12");
+                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=6");
+                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=7");
             }
             else
             {
@@ -92,7 +90,7 @@ namespace Test
 
             await explorer.GetHistoryReadConfig();
             Assert.Equal(100, baseConfig.History.DataNodesChunk);
-            if (server == ServerName.Audit || server == ServerName.Events)
+            if (server == ServerName.Audit)
             {
                 Assert.False(baseConfig.History.Enabled);
             }

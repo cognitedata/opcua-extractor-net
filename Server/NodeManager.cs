@@ -872,7 +872,7 @@ namespace Server
                         }
 
                         HistoryReadEvents(
-                            SystemContext,
+                            SystemContext.Copy(context),
                             edetails,
                             timestampsToReturn,
                             nodesToRead,
