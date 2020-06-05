@@ -97,19 +97,8 @@ podTemplate(
         container('dotnet-mono') {
             stage('Install dependencies') {
 				sh('curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -')
-                sh('apt-get update && apt-get install -y python3-pip nmap ncat mosquitto')
-                sh('pip3 install pipenv')
-                sh('pipenv install -d --system')
+                sh('apt-get update && apt-get install -y nmap ncat mosquitto')
                 sh('mono .paket/paket.exe restore')
-                sh('git clone https://github.com/cognitedata/python-opcua.git ../python-opcua')
-            }
-            dir('../python-opcua') {
-                stage('Build opcua') {
-                    sh('python3 setup.py build')
-                }
-            }
-            stage('Start servers') {
-                sh('./startservers.sh')
             }
 
             stage('Build') {
@@ -132,6 +121,10 @@ podTemplate(
                     packProject('win81-x64', "$version", false)
                     packProject('linux-x64', "$version", true)
                 }
+                stage('Install release dependencies') {
+                    sh('apt-get install -y python3-pip')
+                    sh('pip3 install PyGithub')
+				}
                 stage('Deploy to github release') {
                     withCredentials([usernamePassword(credentialsId: 'jenkins-cognite', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
                         sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version opcua-extractor.win-x64.${version}.zip opcua-extractor.win81-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip")
