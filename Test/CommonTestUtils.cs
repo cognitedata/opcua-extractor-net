@@ -69,7 +69,7 @@ namespace Test
     {
         private static readonly ILogger log = Log.Logger.ForContext(typeof(CommonTestUtils));
 
-        public static FullConfig BuildConfig(string serverType, string configname = "config.test.yml")
+        public static FullConfig BuildConfig(string configname = "config.test.yml")
         {
             var fullConfig = ExtractorUtils.GetConfig(configname);
             if (fullConfig == null) throw new ConfigurationException("Failed to load config file");
@@ -328,7 +328,7 @@ namespace Test
         public MQTTBridge Bridge { get; }
         public Task RunTask { get; private set; }
         private readonly ExtractorTestParameters testParams;
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorTester));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorTester));
 
         public ExtractorTester(ExtractorTestParameters testParams)
         {

@@ -30,7 +30,7 @@ namespace Cognite.OpcUa.Pushers
         private readonly IMqttClient client;
         private readonly IMqttClientOptions options;
 
-        private readonly ILogger log = Log.ForContext(typeof(MQTTPusher));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(MQTTPusher));
 
         private readonly MqttApplicationMessageBuilder baseBuilder;
 
@@ -84,9 +84,9 @@ namespace Cognite.OpcUa.Pushers
             client.UseDisconnectedHandler(async e =>
             {
                 log.Warning("MQTT Client disconnected");
+                log.Debug(e.Exception, "MQTT client disconnected");
                 await Task.Delay(1000);
                 if (closed) return;
-                log.Debug(e.Exception, "MQTT client disconnected");
                 try
                 {
                     await client.ConnectAsync(options, CancellationToken.None);

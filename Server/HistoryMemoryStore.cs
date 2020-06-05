@@ -11,18 +11,19 @@ namespace Server
         private const int maxHistoryEvents = 10000;
         private readonly Dictionary<NodeId, List<DataValue>> historyStorage = new Dictionary<NodeId, List<DataValue>>();
         private readonly Dictionary<NodeId, List<BaseEventState>> eventHistoryStorage = new Dictionary<NodeId, List<BaseEventState>>();
+        private readonly ILogger log = Log.Logger.ForContext(typeof(HistoryMemoryStore));
         public void AddHistorizingNode(BaseVariableState state)
         {
             state.Historizing = true;
             state.AccessLevel |= AccessLevels.HistoryRead;
             state.UserAccessLevel |= AccessLevels.HistoryRead;
             historyStorage[state.NodeId] = new List<DataValue>();
-            Log.Information("Historizing node: {id}", state.NodeId);
+            log.Information("Historizing node: {id}", state.NodeId);
         }
 
         public void AddEventHistorizingEmitter(NodeId emitter)
         {
-            Log.Information("Historizing emitter: {id}", emitter);
+            log.Information("Historizing emitter: {id}", emitter);
             eventHistoryStorage[emitter] = new List<BaseEventState>();
         }
 
@@ -70,7 +71,7 @@ namespace Server
                 if (idx < 0)
                 {
                     idx = request.StartTime == DateTime.MinValue ? data.Count : data.FindLastIndex(vl => vl.SourceTimestamp <= request.StartTime);
-                    Log.Information("Read data backwards from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
+                    log.Information("Read data backwards from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
                 }
                 else
                 {
@@ -102,7 +103,7 @@ namespace Server
             if (idx < 0)
             {
                 idx = data.FindIndex(vl => vl.SourceTimestamp >= request.StartTime);
-                Log.Information("Read data from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
+                log.Information("Read data from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
             }
             else
             {
@@ -143,7 +144,7 @@ namespace Server
                 if (idx < 0)
                 {
                     idx = request.StartTime == DateTime.MinValue ? data.Count : data.FindLastIndex(vl => vl.Time.Value <= request.StartTime);
-                    Log.Information("Read events backwards from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
+                    log.Information("Read events backwards from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
                 }
                 else
                 {
@@ -175,7 +176,7 @@ namespace Server
             if (idx < 0)
             {
                 idx = data.FindIndex(vl => vl.Time.Value >= request.StartTime);
-                Log.Information("Read events from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
+                log.Information("Read events from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
             }
             else
             {

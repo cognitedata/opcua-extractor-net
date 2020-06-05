@@ -55,7 +55,7 @@ namespace Test
         public bool StoreDatapoints { get; set; } = false;
         public MockMode mode { get; set; }
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(CDFMockHandler));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(CDFMockHandler));
 
         public enum MockMode
         {

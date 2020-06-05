@@ -10,7 +10,8 @@ namespace Server
     sealed public class ServerController : IDisposable
     {
         public NodeIdReference Ids => Server.Ids;
-        public Server Server { get; private set; }
+        private readonly ILogger log = Log.Logger.ForContext(typeof(ServerController));
+        public TestServer Server { get; private set; }
         private IEnumerable<PredefinedSetup> setups;
 
         public ServerController(IEnumerable<PredefinedSetup> setups)
@@ -33,7 +34,7 @@ namespace Server
             {
                 app.LoadApplicationConfiguration("config/Server.Test.Config.xml", false).Wait();
                 app.CheckApplicationInstanceCertificate(false, 0).Wait();
-                Server = new Server(setups);
+                Server = new TestServer(setups);
                 await app.Start(Server);
                 Log.Information("Server started");
             }
@@ -61,7 +62,7 @@ namespace Server
 
         public void UpdateNode(NodeId id, object value)
         {
-            Log.Information("Update node {id}", id);
+            log.Information("Update node {id}", id);
             Server.UpdateNode(id, value);
         }
 

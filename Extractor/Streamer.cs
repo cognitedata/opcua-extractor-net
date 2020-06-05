@@ -22,7 +22,7 @@ namespace Cognite.OpcUa
         public ConcurrentQueue<BufferedEvent> EventQueue { get; }
             = new ConcurrentQueue<BufferedEvent>();
 
-        private readonly ILogger log = Log.ForContext(typeof(Streamer));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(Streamer));
 
 
         public bool AllowEvents { get; set; }
@@ -68,7 +68,6 @@ namespace Cognite.OpcUa
                     range.End = dp.Timestamp;
                 }
             }
-            log.Information("Push {cnt} datapoints to destinations", dataPointList.Count);
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
 

@@ -75,7 +75,7 @@ namespace Cognite.OpcUa
         private static readonly Counter browseFailures = Metrics
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
 
         /// <summary>
         /// Constructor, does not start the client.
@@ -199,10 +199,6 @@ namespace Cognite.OpcUa
             if (extractionConfig.CustomNumericTypes != null)
             {
                 numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
-                foreach (var kvp in numericDataTypes)
-                {
-                    log.Information("Numeric type: {id}", kvp.Key);
-                }
             }
         }
         /// <summary>
@@ -1099,10 +1095,10 @@ namespace Cognite.OpcUa
             eventFields = collector.GetEventIdFields(token);
             foreach (var pair in eventFields)
             {
-                log.Verbose("Field: {id}", pair.Key);
+                log.Verbose("Collected event field: {id}", pair.Key);
                 foreach (var fields in pair.Value)
                 {
-                    log.Verbose("{root}: {browse}", fields.Item1, fields.Item2);
+                    log.Verbose("    {root}: {browse}", fields.Item1, fields.Item2);
                 }
             }
             return eventFields;

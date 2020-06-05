@@ -73,7 +73,7 @@ namespace Cognite.OpcUa
         private static readonly Gauge trackedTimeseres = Metrics
             .CreateGauge("opcua_tracked_timeseries", "Number of variables on the opcua server mapped to timeseries");
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(Extractor));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(Extractor));
 
         /// <summary>
         /// Construct extractor with list of pushers

@@ -45,7 +45,7 @@ namespace Cognite.OpcUa.Config
         private const int ServerSizeBase = 125;
         private const int ServerWidest = 47;
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(UAServerExplorer));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(UAServerExplorer));
 
         private readonly List<(int, int)> testBrowseChunkSizes = new List<(int, int)>
         {

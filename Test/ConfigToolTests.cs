@@ -32,7 +32,7 @@ namespace Test
     [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
     public class ConfigToolTests : MakeConsoleWork
     {
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolTests));
+        // private readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolTests));
 
         public ConfigToolTests(ITestOutputHelper output) : base(output) { }
 

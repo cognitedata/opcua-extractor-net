@@ -1,21 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Threading;
 using Opc.Ua;
 using Opc.Ua.Server;
-using Serilog;
 
 namespace Server
 {
-    public sealed class Server : StandardServer
+    public sealed class TestServer : StandardServer
     {
         private TestNodeManager custom;
         public NodeIdReference Ids => custom.Ids;
 
         private IEnumerable<PredefinedSetup> setups;
 
-        public Server(IEnumerable<PredefinedSetup> setups)
+        public TestServer(IEnumerable<PredefinedSetup> setups)
         {
             this.setups = setups;
         }

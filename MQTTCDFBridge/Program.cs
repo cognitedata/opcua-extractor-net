@@ -12,7 +12,7 @@ namespace Cognite.Bridge
 {
     class Program
     {
-        private static readonly ILogger log = Log.ForContext<Program>();
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(Program));
 
         static void Main(string[] args)
         {

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
@@ -15,6 +14,7 @@ namespace Server
         private uint nextId;
         private IEnumerable<PredefinedSetup> predefinedNodes;
         public NodeIdReference Ids { get; }
+        private readonly ILogger log = Log.Logger.ForContext(typeof(TestNodeManager));
 
         public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration)
             : base(server, configuration, "opc.tcp://test.localhost")
@@ -248,7 +248,7 @@ namespace Server
                 "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public override void CreateAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
-            Log.Information("Create address space");
+            log.Information("Create address space");
             try
             {
                 LoadPredefinedNodes(SystemContext, externalReferences);
@@ -305,7 +305,7 @@ namespace Server
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Failed to create address space");
+                log.Error(ex, "Failed to create address space");
             }
         }
         
@@ -684,7 +684,7 @@ namespace Server
         {
             foreach (var node in nodes)
             {
-                Log.Debug("Adding node: {name}, {id}", node.DisplayName, node.NodeId);
+                log.Debug("Adding node: {name}, {id}", node.DisplayName, node.NodeId);
                 AddPredefinedNode(context, node);
             }
         }
@@ -823,7 +823,7 @@ namespace Server
 
                     data.DataValues.AddRange(rawData);
 
-                    Log.Information("Read raw modified: {cnt}", rawData.Count());
+                    log.Information("Read raw modified: {cnt}", rawData.Count());
 
                     errors[handle.Index] = ServiceResult.Good;
 
@@ -836,7 +836,7 @@ namespace Server
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "Failed to read history");
+                    log.Error(ex, "Failed to read history");
                     errors[handle.Index] = ServiceResult.Create(ex, StatusCodes.BadUnexpectedError,
                         "Unexpected error processing request.");
                 }
@@ -852,7 +852,6 @@ namespace Server
             IList<HistoryReadResult> results,
             IList<ServiceResult> errors)
         {
-            Log.Information("History read f");
             if (details is ReadEventDetails edetails)
             {
                 for (int i = 0; i < nodesToRead.Count; i++)
@@ -916,7 +915,6 @@ namespace Server
             List<NodeHandle> nodesToProcess,
             IDictionary<NodeId, NodeState> cache)
         {
-            Log.Information("Read history events");
             foreach (var handle in nodesToProcess)
             {
                 var nodeToRead = nodesToRead[handle.Index];
@@ -948,7 +946,7 @@ namespace Server
 
                     events.Events.AddRange(rawData.Select(evt => GetEventFields(request, evt)));
 
-                    Log.Information("Read events: {cnt}", rawData.Count());
+                    log.Information("Read events: {cnt}", rawData.Count());
 
                     errors[handle.Index] = ServiceResult.Good;
 
@@ -961,14 +959,14 @@ namespace Server
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "Failed to read history");
+                    log.Error(ex, "Failed to read history");
                     errors[handle.Index] = ServiceResult.Create(ex, StatusCodes.BadUnexpectedError,
                         "Unexpected error processing request.");
                 }
             }
         }
 
-        private InternalHistoryRequest LoadContinuationPoint(
+        private static InternalHistoryRequest LoadContinuationPoint(
             ServerSystemContext context,
             byte[] continuationPoint)
         {
@@ -983,7 +981,7 @@ namespace Server
         /// <summary>
         /// Saves a history continuation point.
         /// </summary>
-        private byte[] SaveContinuationPoint(
+        private static byte[] SaveContinuationPoint(
             ServerSystemContext context,
             InternalHistoryRequest request)
         {
@@ -1000,7 +998,7 @@ namespace Server
             return request.ContinuationPoint;
         }
 
-        private InternalHistoryRequest CreateHistoryReadRequest(
+        private static InternalHistoryRequest CreateHistoryReadRequest(
             ReadRawModifiedDetails details,
             HistoryReadValueId nodeToRead)
         {
@@ -1018,7 +1016,7 @@ namespace Server
                 StartTime = details.StartTime
             };
         }
-        private InternalEventHistoryRequest CreateEventHistoryRequest(
+        private static InternalEventHistoryRequest CreateEventHistoryRequest(
             ServerSystemContext context,
             ReadEventDetails details,
             HistoryReadValueId nodeToRead)

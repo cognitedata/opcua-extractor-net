@@ -30,7 +30,7 @@ namespace Test
     [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
     public class CDFPusherTests : MakeConsoleWork
     {
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusherTests));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusherTests));
 
         public CDFPusherTests(ITestOutputHelper output) : base(output) { }
         [Trait("Server", "basic+full")]
@@ -308,7 +308,7 @@ namespace Test
         [Trait("Test", "connectiontest")]
         public async Task TestConnectionTest()
         {
-            var fullConfig = CommonTestUtils.BuildConfig("basic", "config.events.yml");
+            var fullConfig = CommonTestUtils.BuildConfig("config.events.yml");
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             Logger.Configure(fullConfig.Logging);
 

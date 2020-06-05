@@ -100,7 +100,7 @@ namespace Cognite.OpcUa
         private static readonly Counter skippedEvents = Metrics
             .CreateCounter("opcua_skipped_events_cdf", "Number of events skipped by CDF pusher");
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusher));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusher));
         #region Interface
 
         /// <summary>
