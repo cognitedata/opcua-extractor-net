@@ -25,8 +25,8 @@ namespace Server
             while(true)
             {
                 //server.TriggerEvents(0);
-                server.DirectGrowth(idx++);
-                server.ReferenceGrowth(idx++);
+                //server.DirectGrowth(idx++);
+                //server.ReferenceGrowth(idx++);
                 Task.Delay(1000).Wait();
             }
         }

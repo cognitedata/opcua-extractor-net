@@ -288,13 +288,6 @@ namespace Cognite.OpcUa.Config
             baseConfig.Source.BrowseChunk = best.BrowseChunk;
             summary.BrowseNodesChunk = best.BrowseNodesChunk;
             summary.BrowseChunk = best.BrowseChunk;
-
-            if (useServer && best.NumNodes < ServerSizeBase)
-            {
-                log.Warning("The server is smaller than the known number of nodes in the specification defined base hierarchy. " +
-                            "This may cause issues later, depending on what parts are missing.");
-                summary.ServerSizeWarning = true;
-            }
         }
         /// <summary>
         /// Transform a NodeId to a ProtoNodeId, for writing to yml config file.
@@ -1007,9 +1000,52 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            var emitterReferences = new List<BufferedNode>();
+
+            var notifierPairs = new List<(NodeId id, byte notifier)>();
+
+            log.Information("Read EventNotifier property for each node");
+
+            try
+            {
+                var readValueIds = nodeList.Select(node => new ReadValueId
+                {
+                    AttributeId = Attributes.EventNotifier,
+                    NodeId = node.Id
+                }).Append(new ReadValueId { AttributeId = Attributes.EventNotifier, NodeId = ObjectIds.Server });
+                foreach (var chunk in ExtractorUtils.ChunkBy(readValueIds, baseConfig.Source.AttributesChunk))
+                {
+                    Session.Read(
+                        null,
+                        0,
+                        TimestampsToReturn.Neither,
+                        new ReadValueIdCollection(chunk),
+                        out var results,
+                        out var _
+                        );
+                    var chunkEnum = chunk.GetEnumerator();
+                    foreach (var result in results)
+                    {
+                        chunkEnum.MoveNext();
+                        notifierPairs.Add((chunkEnum.Current.NodeId, result.GetValue((byte)0)));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Warning(ex, "Failed to read EventNotifier property, this tool will not be able to identify non-server emitters this way");
+            }
+
+            var emitters = notifierPairs.Where(pair => (pair.notifier & EventNotifiers.SubscribeToEvents) != 0);
+            var historizingEmitters = emitters.Where(pair => (pair.notifier & EventNotifiers.HistoryRead) != 0);
+
+            if (emitters.Any())
+            {
+                log.Information("Discovered {cnt} emitters, of which {cnt2} are historizing", emitters.Count(), historizingEmitters.Count());
+            }
 
             log.Information("Scan hierarchy for GeneratesEvent references");
+
+            var emitterReferences = new List<BufferedNode>();
 
             try
             {
@@ -1021,31 +1057,57 @@ namespace Cognite.OpcUa.Config
             }
             catch (Exception ex)
             {
-                log.Warning(ex, "Failed to look for GeneratesEvent references, this tool will not be able to identify non-server emitters");
+                log.Warning(ex, "Failed to look for GeneratesEvent references, this tool will not be able to identify non-server emitters this way");
             }
 
             VisitedNodes.Clear();
 
             var referencedEvents = emitterReferences.Select(evt => evt.Id)
                 .Distinct()
-                .Where(id => IsCustomObject(id)
-                              || id == ObjectTypeIds.BaseEventType).ToHashSet();
-
+                .Where(id => IsCustomObject(id) || id == ObjectTypeIds.BaseEventType).ToHashSet();
 
             emittedEvents = referencedEvents.ToList();
 
-            emitterIds = emitterReferences
-                .Where(evt => referencedEvents.Contains(evt.Id))
-                .Select(evt => evt.ParentId).Distinct().ToList();
 
-            log.Information("Identified {cnt} emitters and {cnt2} events by looking at GeneratesEvent references", 
-                emitterIds.Count, emittedEvents.Count);
+            log.Information("Identified {cnt} emitters and {cnt2} events by looking at GeneratesEvent references",
+                emitterReferences.DistinctBy(reference => reference.ParentId).Count(), emittedEvents.Count);
+
+            if (emitterReferences.Any() && emitters.Any())
+            {
+                emitterIds = emitters.Select(pair => pair.id).Append(ObjectIds.Server)
+                    .Intersect(emitterReferences.Where(evt => referencedEvents.Contains(evt.Id)).Select(evt => evt.ParentId))
+                    .Distinct()
+                    .ToList();
+                log.Information("{cnt} emitters were detected that generate relevant events and can be subscribed to", emitterIds.Count);
+            }
+            else if (emitterReferences.Any() && !emitters.Any())
+            {
+                emitterIds = emitterReferences
+                    .Where(evt => referencedEvents.Contains(evt.Id))
+                    .Select(evt => evt.ParentId)
+                    .Distinct()
+                    .ToList();
+
+                log.Information("{cnt} emitters were detected that generate relevant events", emitterIds.Count);
+            }
+            else if (!emitterReferences.Any() && emitters.Any())
+            {
+                emitterIds = emitters.Select(pair => pair.id).Distinct().ToList();
+
+                log.Information("{cnt} subscribable emitters were detected", emitterIds.Count);
+            }
+            else
+            {
+                emitterIds = new List<NodeId>();
+                log.Information("No emitters were found");
+            }
 
             bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server && (
                     evt.Id == ObjectTypeIds.AuditAddNodesEventType || evt.Id == ObjectTypeIds.AuditAddReferencesEventType));
 
             baseConfig.Extraction.EnableAuditDiscovery |= auditReferences;
             summary.Auditing = auditReferences;
+
             if (auditReferences)
             {
                 log.Information("Audit events on the server node detected, auditing can be enabled");
@@ -1174,55 +1236,45 @@ namespace Cognite.OpcUa.Config
             log.Information("Detected a total of {cnt} event emitters and {cnt2} event types",
                 emitterIds.Count, emittedEvents.Count);
 
+            try
+            {
+                Session.Read(
+                    null,
+                    0,
+                    TimestampsToReturn.Neither,
+                    new ReadValueIdCollection(new[] { new ReadValueId { NodeId = VariableIds.Server_Auditing, AttributeId = Attributes.Value } }),
+                    out var results,
+                    out var _
+                    );
+                var result = (bool)results.First().GetValue(typeof(bool));
+                if (result)
+                {
+                    log.Information("Server capabilities indicate that auditing is enabled");
+                    summary.Auditing = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Warning(ex, "Failed to read auditing server configuration");
+            }
+
+
+
+
             summary.NumEmitters = emitterIds.Count;
             summary.NumEventTypes = emittedEvents.Count;
 
             if (!emitterIds.Any()) return;
 
-            log.Information("Attempt to read historical events for each emitter. Chunk size analysis is not performed here, " +
-                            "the results from normal history read is used if available.");
+            historizingEmitters = emitters.Where(emitter => emitterIds.Contains(emitter.id));
 
-            var earliestTime = DateTimeOffset.FromUnixTimeMilliseconds(config.History.StartTime).DateTime;
-
-            var details = new ReadEventDetails
-            {
-                EndTime = DateTime.UtcNow.AddDays(10),
-                StartTime = earliestTime,
-                NumValuesPerNode = 100,
-                Filter = BuildEventFilter(nodeList.Select(node => node.Id).ToList())
-            };
-
-            historizingEmitters = new List<NodeId>();
-
-            foreach (var emitter in emitterIds)
-            {
-                var historyParams = new HistoryReadParams(new[] {emitter}, details);
-
-                try
-                {
-                    var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
-
-                    var eventResult = ReadResultToEvents(result.First().RawData, emitter, details);
-
-                    if (eventResult.Any())
-                    {
-                        historizingEmitters.Add(emitter);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    log.Information("Unable to read history for {id}", emitter);
-                    log.Debug(ex, "Failed to read history for {id}", emitter);
-                }
-            }
-
-            log.Information("Detected {cnt} historizing emitters", historizingEmitters.Count);
-            summary.NumHistorizingEmitters = historizingEmitters.Count;
+            log.Information("Detected {cnt} historizing emitters", historizingEmitters.Count());
+            summary.NumHistorizingEmitters = historizingEmitters.Count();
 
             baseConfig.History.Enabled = true;
             baseConfig.Events.EventIds = emittedEvents.Distinct().Select(NodeIdToProto).ToList();
             baseConfig.Events.EmitterIds = emitterIds.Distinct().Select(NodeIdToProto).ToList();
-            baseConfig.Events.HistorizingEmitterIds = historizingEmitters.Distinct().Select(NodeIdToProto).ToList();
+            baseConfig.Events.HistorizingEmitterIds = historizingEmitters.Distinct().Select(pair => NodeIdToProto(pair.id)).ToList();
         }
 
         public static Dictionary<string, string> GenerateNamespaceMap(IEnumerable<string> namespaces)
@@ -1329,11 +1381,6 @@ namespace Cognite.OpcUa.Config
             {
                 log.Information("This is not a completely safe option, as the actual number of nodes is lower than the limit, so if " +
                                 "the number of nodes increases in the future, it may fail.");
-            }
-            if (summary.ServerSizeWarning)
-            {
-                log.Information("During browse, it was discovered that the server is smaller than the OPC-UA base server hierarchy, " +
-                                "depending on the parts that are missing, this may cause issues for the extractor");
             }
             log.Information("");
 

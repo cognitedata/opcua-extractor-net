@@ -260,22 +260,27 @@ namespace Server
                 var cfnm = (ConfigurationNodeManager)Server.NodeManager.NodeManagers.First(nm => nm.GetType() == typeof(ConfigurationNodeManager));
                 lock (cfnm.Lock)
                 {
-                    var node = cfnm.Find(ObjectIds.HistoryServerCapabilities);
-                    if (node.FindChildBySymbolicName(SystemContext, "AccessHistoryDataCapability") is PropertyState variable)
-                    {
-                        variable.Value = true;
-                    }
+                    var accessDataCap = (PropertyState)cfnm.Find(VariableIds.HistoryServerCapabilities_AccessHistoryDataCapability);
+                    var accessEventsCap = (PropertyState)cfnm.Find(VariableIds.HistoryServerCapabilities_AccessHistoryEventsCapability);
 
-                    if (node.FindChildBySymbolicName(SystemContext, "AccessHistoryEventsCapability") is PropertyState variable2)
-                    {
-                        variable2.Value = true;
-                    }
+                    accessDataCap.Value = true;
+                    accessEventsCap.Value = true;
 
                     // Seems like this node manager manages the entire server node, and so is very relevant when it comes to presenting
                     // information about the server to the client. I suspect that this may be configurable in xml (hence "configuration"),
                     // but I can't find any documentation.
                     var server = (BaseObjectState)cfnm.Find(ObjectIds.Server);
-                    server.EventNotifier |= EventNotifiers.HistoryRead;
+                    if (predefinedNodes.Contains(PredefinedSetup.Events))
+                    {
+                        server.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
+                    }
+
+                    if (predefinedNodes.Contains(PredefinedSetup.Auditing))
+                    {
+                        var auditing = (PropertyState)cfnm.Find(VariableIds.Server_Auditing);
+                        auditing.Value = true;
+                    }
+
                 }
                 
                 if (predefinedNodes != null)
