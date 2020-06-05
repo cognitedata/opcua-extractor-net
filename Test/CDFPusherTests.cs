@@ -65,7 +65,7 @@ namespace Test
             await tester.TerminateRunTask(ex => mode == CDFMockHandler.MockMode.FailAsset || CommonTestUtils.TestRunResult(ex));
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Equal(mode == CDFMockHandler.MockMode.FailAsset ? 1 : 0, (int)CommonTestUtils.GetMetricValue("opcua_node_ensure_failures"));
+            Assert.Equal(mode == CDFMockHandler.MockMode.FailAsset ? 1 : 0, (int)CommonTestUtils.GetMetricValue("opcua_node_ensure_failures_cdf"));
 
             if (mode == CDFMockHandler.MockMode.None && serverType == ServerName.Basic)
             {

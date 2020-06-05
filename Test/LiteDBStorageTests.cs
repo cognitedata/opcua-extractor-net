@@ -390,6 +390,8 @@ namespace Test
             tester2.Server.PopulateEvents();
 
             tester2.StartExtractor();
+
+            await tester2.Extractor.Looper.WaitForNextPush();
             await tester2.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => !state.Historizing
                     || state.BackfillDone && state.IsStreaming),
                 20, "Expected history to complete");
@@ -598,7 +600,7 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.TerminateRunTask();
+            await tester.RunTask;
 
             var evt = new BufferedEvent
             {
@@ -660,6 +662,7 @@ namespace Test
             Assert.Equal(evt2.SourceNode, converted2.SourceNode);
             Assert.Equal(evt2.Time, converted2.Time);
 
+            await tester.TerminateRunTask();
         }
         [Fact]
         [Trait("Target", "OldBuffer")]
@@ -749,7 +752,7 @@ namespace Test
             await tester.StartServer();
             tester.StartExtractor();
 
-            await tester.TerminateRunTask();
+            await tester.RunTask;
 
             var evts = new List<BufferedEvent>();
 
@@ -809,6 +812,8 @@ namespace Test
                 Assert.Equal(evt.SourceNode, converted.SourceNode);
                 Assert.Equal(evt.Time, converted.Time);
             }
+
+            await tester.TerminateRunTask();
         }
         [Trait("Server", "basic")]
         [Trait("Target", "OldBuffer")]

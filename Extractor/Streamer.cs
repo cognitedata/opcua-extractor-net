@@ -68,6 +68,7 @@ namespace Cognite.OpcUa
                     range.End = dp.Timestamp;
                 }
             }
+            log.Information("Push {cnt} datapoints to destinations", dataPointList.Count);
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
 

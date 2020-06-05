@@ -166,6 +166,7 @@ namespace Test
             tester.StartExtractor();
 
             await tester.Extractor.Looper.WaitForNextPush();
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
 
             tester.Server.TriggerEvents(0);
 
@@ -396,8 +397,8 @@ namespace Test
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
 
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 0));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 0));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 1));
 
             await tester.TerminateRunTask();
         }

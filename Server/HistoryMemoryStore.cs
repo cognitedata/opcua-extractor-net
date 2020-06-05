@@ -69,17 +69,16 @@ namespace Server
             {
                 if (idx < 0)
                 {
-                    idx = request.StartTime == DateTime.MinValue ? data.Count : data.FindLastIndex(vl => vl.SourceTimestamp < request.StartTime);
-                    if (idx < 0)
-                    {
-                        final = true;
-                        return (result, final);
-                    }
+                    idx = request.StartTime == DateTime.MinValue ? data.Count : data.FindLastIndex(vl => vl.SourceTimestamp <= request.StartTime);
+                    Log.Information("Read data backwards from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
+                }
+                else
+                {
+                    idx++;
                 }
 
                 while (true)
                 {
-                    idx--;
                     if (idx < 0 || idx >= data.Count || data[idx].SourceTimestamp < request.EndTime)
                     {
                         final = true;
@@ -94,6 +93,7 @@ namespace Server
 
                     result.Add(data[idx]);
                     count++;
+                    idx--;
                 }
 
                 return (result, final);
@@ -101,12 +101,16 @@ namespace Server
 
             if (idx < 0)
             {
-                idx = data.FindIndex(vl => vl.SourceTimestamp > request.StartTime) - 1;
+                idx = data.FindIndex(vl => vl.SourceTimestamp >= request.StartTime);
+                Log.Information("Read data from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
+            }
+            else
+            {
+                idx--;
             }
 
             while (true)
             {
-                idx++;
                 if (idx >= data.Count || idx < 0 || data[idx].SourceTimestamp > request.EndTime)
                 {
                     final = true;
@@ -120,6 +124,7 @@ namespace Server
                 }
 
                 result.Add(data[idx]);
+                idx++;
                 count++;
             }
 
@@ -137,18 +142,16 @@ namespace Server
             {
                 if (idx < 0)
                 {
-                    idx = request.StartTime == DateTime.MinValue ? data.Count : data.FindLastIndex(vl => vl.Time.Value < request.StartTime);
+                    idx = request.StartTime == DateTime.MinValue ? data.Count : data.FindLastIndex(vl => vl.Time.Value <= request.StartTime);
                     Log.Information("Read events backwards from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
-                    if (idx < 0)
-                    {
-                        final = true;
-                        return (result, final);
-                    }
+                }
+                else
+                {
+                    idx--;
                 }
 
                 while (true)
                 {
-                    idx--;
                     if (idx < 0 || idx >= data.Count || data[idx].Time.Value < request.EndTime)
                     {
                         final = true;
@@ -162,6 +165,7 @@ namespace Server
                     }
 
                     result.Add(data[idx]);
+                    idx--;
                     count++;
                 }
 
@@ -170,13 +174,16 @@ namespace Server
 
             if (idx < 0)
             {
-                idx = data.FindIndex(vl => vl.Time.Value > request.StartTime) - 1;
+                idx = data.FindIndex(vl => vl.Time.Value >= request.StartTime);
                 Log.Information("Read events from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
+            }
+            else
+            {
+                idx++;
             }
 
             while (true)
             {
-                idx++;
                 if (idx >= data.Count || idx < 0 || data[idx].Time.Value > request.EndTime)
                 {
                     final = true;
@@ -190,6 +197,7 @@ namespace Server
                 }
 
                 result.Add(data[idx]);
+                idx++;
                 count++;
             }
 

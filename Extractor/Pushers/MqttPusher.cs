@@ -37,6 +37,8 @@ namespace Cognite.OpcUa.Pushers
         private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
         private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
 
+        private bool closed = false;
+
         private HashSet<string> existingNodes;
 
         private static readonly Counter createdAssets = Metrics
@@ -61,7 +63,7 @@ namespace Cognite.OpcUa.Pushers
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.ClientId)
                 .WithTcpServer(config.Host, config.Port)
-                .WithKeepAlivePeriod(TimeSpan.FromSeconds(1))
+                .WithKeepAlivePeriod(TimeSpan.FromSeconds(15))
                 .WithCommunicationTimeout(TimeSpan.FromSeconds(10))
                 .WithCleanSession();
 
@@ -78,13 +80,37 @@ namespace Cognite.OpcUa.Pushers
             client = new MqttFactory().CreateMqttClient();
             baseBuilder = new MqttApplicationMessageBuilder()
                 .WithAtLeastOnceQoS();
+
+            client.UseDisconnectedHandler(async e =>
+            {
+                log.Warning("MQTT Client disconnected");
+                await Task.Delay(1000);
+                if (closed) return;
+                log.Debug(e.Exception, "MQTT client disconnected");
+                try
+                {
+                    await client.ConnectAsync(options, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    log.Warning("Failed to reconnect to broker: {msg}", ex.Message);
+                }
+            });
+            client.UseConnectedHandler(_ =>
+            {
+                log.Information("MQTT client connected");
+            });
             client.ConnectAsync(options, CancellationToken.None).Wait();
         }
         #region interface
         public async Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
         {
             if (points == null) return null;
-            if (!client.IsConnected) return false;
+            if (!client.IsConnected)
+            {
+                log.Warning("Client is not connected");
+                return false;
+            }
             int count = 0;
             var dataPointList = new Dictionary<string, List<BufferedDataPoint>>();
 
@@ -547,6 +573,8 @@ namespace Cognite.OpcUa.Pushers
 
         public void Dispose()
         {
+            closed = true;
+            client.DisconnectAsync().Wait();
             client.Dispose();
         }
     }

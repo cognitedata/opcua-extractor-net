@@ -184,6 +184,7 @@ namespace Cognite.Bridge
         public void Dispose()
         {
             disconnected = true;
+            client.DisconnectAsync().Wait();
             client.Dispose();
         }
     }

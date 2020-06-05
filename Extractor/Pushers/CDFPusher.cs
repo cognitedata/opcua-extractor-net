@@ -91,7 +91,7 @@ namespace Cognite.OpcUa
         private static readonly Counter eventPushFailures = Metrics
             .CreateCounter("opcua_event_push_failures_cdf", "Number of times events have been pushed to CDF");
         private static readonly Counter nodeEnsuringFailures = Metrics
-            .CreateCounter("opcua_node_ensure_failures",
+            .CreateCounter("opcua_node_ensure_failures_cdf",
             "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
         private static readonly Counter duplicatedEvents = Metrics
             .CreateCounter("opcua_duplicated_events_cdf", "Number of events that failed to push to CDF due to already existing in CDF");

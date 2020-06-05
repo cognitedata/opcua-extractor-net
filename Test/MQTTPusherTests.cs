@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
+using Cognite.OpcUa;
 
 namespace Test
 {
@@ -22,20 +23,24 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                LogLevel = "debug",
                 PusherConfig = ConfigName.Mqtt,
                 ServerName = ServerName.Array,
                 StoreDatapoints = true
             });
             await tester.ClearPersistentData();
+            
+            await tester.StartServer();
+            tester.Server.PopulateArrayHistory();
+            
             tester.StartExtractor();
-
+            
             tester.Config.Extraction.AllowStringVariables = true;
             tester.Config.Extraction.MaxArraySize = 4;
 
             await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
+            tester.Server.UpdateNode(tester.Server.Ids.Custom.StringArray, new[] { "test 1", "test 1" });
 
             var waitTask = tester.Bridge.WaitForNextMessage();
             await tester.Extractor.Looper.WaitForNextPush();
@@ -43,12 +48,12 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.Equal(5, tester.Handler.Assets.Count);
+            Assert.Equal(4, tester.Handler.Assets.Count);
             Assert.Equal(10, tester.Handler.Timeseries.Count);
-            Assert.True(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2[0]"));
-            Assert.True(tester.Handler.Datapoints["gp.efg:i=2[0]"].NumericDatapoints.Count > 0);
-            Assert.True(tester.Handler.Datapoints.ContainsKey("gp.efg:i=3[0]"));
-            Assert.True(tester.Handler.Datapoints["gp.efg:i=3[0]"].StringDatapoints.Count > 0);
+            Assert.True(tester.Handler.Datapoints.ContainsKey("gp.tl:i=2[0]"));
+            Assert.Equal(1000, tester.Handler.Datapoints["gp.tl:i=2[0]"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count());
+            Assert.True(tester.Handler.Datapoints.ContainsKey("gp.tl:i=3[0]"));
+            Assert.Equal(2, tester.Handler.Datapoints["gp.tl:i=3[0]"].StringDatapoints.DistinctBy(dp => dp.Timestamp).Count());
         }
         [Fact]
         [Trait("Server", "events")]
@@ -65,13 +70,17 @@ namespace Test
                 StoreDatapoints = true
             });
             await tester.ClearPersistentData();
+
+            await tester.StartServer();
+            tester.Server.PopulateEvents();
+
             tester.StartExtractor();
 
             await tester.Extractor.Looper.WaitForNextPush();
-
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
 
             var waitTask = tester.Bridge.WaitForNextMessage();
+            tester.Server.TriggerEvents(100);
             await tester.Extractor.Looper.WaitForNextPush();
             await waitTask;
 
@@ -92,7 +101,6 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                LogLevel = "debug",
                 PusherConfig = ConfigName.Mqtt,
                 ServerName = ServerName.Array,
                 StoreDatapoints = true,
@@ -101,6 +109,8 @@ namespace Test
             tester.Config.Extraction.AllowStringVariables = true;
             tester.Config.Extraction.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
+
+            await tester.StartServer();
 
             await tester.ClearPersistentData();
             tester.StartExtractor();
@@ -111,10 +121,11 @@ namespace Test
             tester.Config.Extraction.MaxArraySize = 4;
 
             var waitTask = tester.Bridge.WaitForNextMessage();
+            tester.Server.UpdateNode(tester.Server.Ids.Custom.Array, new[] { 1000, 1000, 1000, 1000 });
             await tester.Extractor.Looper.WaitForNextPush();
             await waitTask;
 
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 5));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 4));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 10));
             CommonTestUtils.ResetTestMetrics();
 
@@ -123,6 +134,7 @@ namespace Test
             await tester.Extractor.Looper.WaitForNextPush();
 
             waitTask = tester.Bridge.WaitForNextMessage();
+            tester.Server.UpdateNode(tester.Server.Ids.Custom.Array, new[] { 1001, 1001, 1001, 1001 });
             await tester.Extractor.Looper.WaitForNextPush();
             await waitTask;
 
@@ -130,7 +142,7 @@ namespace Test
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 0));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 0));
-            Assert.Equal(5, tester.Handler.Assets.Count);
+            Assert.Equal(4, tester.Handler.Assets.Count);
             Assert.Equal(10, tester.Handler.Timeseries.Count);
         }
     }
