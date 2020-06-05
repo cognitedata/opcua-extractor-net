@@ -55,7 +55,6 @@ podTemplate(
             secretName: 'jenkins-docker-builder',
             mountPath: '/jenkins-docker-builder',
             readOnly: true),
-        configMapVolume(configMapName: 'codecov-script-configmap', mountPath: '/codecov-script'),
         hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock')]
 ) {
     def version
@@ -112,7 +111,7 @@ podTemplate(
                 }
             }
             stage("Upload report to codecov.io") {
-                sh('bash </codecov-script/upload-report.sh')
+			    jenkinsHelpersUtil.uploadCodecovReport()
             }
             if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
                 stage('Build release versions') {

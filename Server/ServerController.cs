@@ -3,6 +3,7 @@ using Opc.Ua.Configuration;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace Server
@@ -21,7 +22,7 @@ namespace Server
 
         public void Dispose()
         {
-            Log.Information("Closing server");
+            log.Information("Closing server");
             Server?.Stop();
             Server?.Dispose();
         }
@@ -32,15 +33,15 @@ namespace Server
             app.ConfigSectionName = "Server.Test";
             try
             {
-                app.LoadApplicationConfiguration("config/Server.Test.Config.xml", false).Wait();
-                app.CheckApplicationInstanceCertificate(false, 0).Wait();
+                await app.LoadApplicationConfiguration(Path.Join("config", "Server.Test.Config.xml"), false);
+                await app.CheckApplicationInstanceCertificate(false, 0);
                 Server = new TestServer(setups);
                 await app.Start(Server);
-                Log.Information("Server started");
+                log.Information("Server started");
             }
             catch (Exception e)
             {
-                Log.Error(e, "Failed to start server");
+                log.Error(e, "Failed to start server");
             }
         }
         public void Stop()
