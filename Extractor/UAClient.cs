@@ -634,7 +634,7 @@ namespace Cognite.OpcUa
                     );
                     attributeRequests.Inc();
                     values = values.Concat(lvalues);
-                    log.Information("Read {NumAttributesRead} attributes", lvalues.Count);
+                    log.Debug("Read {NumAttributesRead} attributes", lvalues.Count);
                 }
                 log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
                     readValueIds.Count, count, nodes.Count());

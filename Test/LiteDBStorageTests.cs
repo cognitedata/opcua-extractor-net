@@ -305,6 +305,9 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
 
             tester2.StartExtractor();
+
+            await tester2.Extractor.WaitForSubscriptions();
+
             await tester2.WaitForCondition(() => tester2.Extractor.State.NodeStates.All(state => !state.Historizing
                     || state.BackfillDone && state.IsStreaming),
                 20, "Expected history to complete");
@@ -391,8 +394,11 @@ namespace Test
 
             tester2.StartExtractor();
 
+            await tester2.Extractor.WaitForSubscriptions();
+
             await tester2.Extractor.Looper.WaitForNextPush();
-            await tester2.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => !state.Historizing
+            await tester2.WaitForCondition(() => tester2.Extractor.State.EmitterStates.Any() 
+                && tester2.Extractor.State.EmitterStates.All(state => !state.Historizing
                     || state.BackfillDone && state.IsStreaming),
                 20, "Expected history to complete");
             await tester2.Extractor.Looper.WaitForNextPush();
@@ -476,7 +482,7 @@ namespace Test
             tester2.Config.Extraction.AllowStringVariables = true;
             tester2.Config.History.Enabled = false;
 
-            await tester2.Extractor.Looper.WaitForNextPush();
+            await tester2.Extractor.WaitForSubscriptions();
 
             foreach (var state in states)
             {

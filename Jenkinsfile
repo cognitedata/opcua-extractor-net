@@ -1,8 +1,9 @@
-@Library('jenkins-helpers@v0.1.10')
+@Library('jenkins-helpers')
 
 msbuild = '"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\MSBuild\\Current\\Bin\\msbuild.exe"'
 
 def label = "opcua-extractor-net-${UUID.randomUUID().toString()}"
+
 
 podTemplate(
     label: label,
@@ -115,7 +116,7 @@ podTemplate(
             }
             if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
                 stage('Build release versions') {
-                    sh('apt-get update && apt-get install -y zip')
+                    sh('apt-get install -y zip')
                     packProject('win-x64', "$version", false)
                     packProject('win81-x64', "$version", false)
                     packProject('linux-x64', "$version", true)
@@ -125,7 +126,7 @@ podTemplate(
                     sh('pip3 install PyGithub')
 				}
                 stage('Deploy to github release') {
-                    withCredentials([usernamePassword(credentialsId: 'jenkins-cognite', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
+                    withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
                         sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version opcua-extractor.win-x64.${version}.zip opcua-extractor.win81-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip")
                     }               
                 }
@@ -155,7 +156,7 @@ podTemplate(
         }
     }
 
-    node('windows-static-001') {
+    node('windows') {
         stage('Building MSI on windows node') {
             powershell('echo $env:Path')
         }
@@ -179,7 +180,7 @@ podTemplate(
                 }
                 stage ('Deploy to github') {
                     powershell("mv OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi .\\OpcUaExtractorSetup-${version}.msi")
-                    withCredentials([usernamePassword(credentialsId: 'jenkins-cognite', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
+                    withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
                         powershell("py deploy.py cognitedata opcua-extractor-net $ghpassword $version OpcUaExtractorSetup-${version}.msi")
                     }
                 }
@@ -195,9 +196,7 @@ podTemplate(
                 deleteDir()
             }
         }
- 
     }
-
 }
 
 void packProject(String configuration, String version, boolean linux) {

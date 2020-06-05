@@ -139,6 +139,9 @@ namespace Test
             {
                 ServerName = ServerName.Proxy
             });
+
+            await tester.StartServer();
+
             using var process = CommonTestUtils.GetProxyProcess();
             process.Start();
             tester.Config.Source.ForceRestart = true;

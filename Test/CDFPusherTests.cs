@@ -366,7 +366,7 @@ namespace Test
         // Multiple pushers that fetch properties does some magic to avoid fetching data twice
         public async Task TestMultipleCDFPushers()
         {
-            var fullConfig = CommonTestUtils.BuildConfig("basic");
+            var fullConfig = CommonTestUtils.BuildConfig();
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             var handler1 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
             var handler2 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);

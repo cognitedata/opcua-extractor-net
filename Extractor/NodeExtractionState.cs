@@ -278,7 +278,7 @@ namespace Cognite.OpcUa
         /// <returns>The contents of the buffer once called.</returns>
         public IEnumerable<IEnumerable<BufferedDataPoint>> FlushBuffer()
         {
-            if (!IsStreaming) throw new InvalidOperationException("Flush non-streaming buffer");
+            if (!IsStreaming) return Array.Empty<IEnumerable<BufferedDataPoint>>();
             if (buffer == null || !buffer.Any()) return new List<BufferedDataPoint[]>();
             lock (RangeMutex)
             {
@@ -371,7 +371,7 @@ namespace Cognite.OpcUa
         /// <returns>The contents of the buffer</returns>
         public IEnumerable<BufferedEvent> FlushBuffer()
         {
-            if (!IsStreaming) throw new InvalidOperationException("Flush non-streaming buffer");
+            if (!IsStreaming) return Array.Empty<BufferedEvent>();
             if (buffer == null || !buffer.Any()) return new List<BufferedEvent>();
             lock (RangeMutex)
             {
@@ -380,7 +380,6 @@ namespace Cognite.OpcUa
                 return result;
             }
         }
-
     }
 
     public enum InfluxBufferType

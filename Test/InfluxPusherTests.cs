@@ -239,7 +239,9 @@ namespace Test
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1001);
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
-
+            
+            await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=10")
+                && tester.Handler.Datapoints["gp.tl:i=10"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count() == 1002, 20);
             await tester.TerminateRunTask();
             
             tester.TestContinuity("gp.tl:i=10");
