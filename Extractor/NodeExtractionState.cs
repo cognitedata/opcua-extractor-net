@@ -392,7 +392,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public sealed class InfluxBufferState : BaseExtractionState
     {
-        public InfluxBufferType Type { get; }
+        public InfluxBufferType Type { get; set;  }
         public override bool Historizing { get; set; }
 
         public InfluxBufferState(NodeExtractionState other, bool events) : base(other?.Id)

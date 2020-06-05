@@ -2,6 +2,8 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
@@ -505,7 +507,7 @@ namespace Cognite.OpcUa
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
-                $"SELECT * FROM /events.{state.Key}:.*/" +
+                $"SELECT * FROM /events.{state.Key.Replace("/", "\\/", StringComparison.InvariantCulture)}:.*/" +
                 $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks * 100}" +
                 $" AND time <= {(state.Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks * 100}")
             ).ToList();

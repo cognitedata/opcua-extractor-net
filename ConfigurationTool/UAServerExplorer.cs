@@ -35,7 +35,6 @@ namespace Cognite.OpcUa.Config
         private List<BufferedNode> nodeList;
         private List<NodeId> emitterIds;
         private List<NodeId> emittedEvents;
-        private List<NodeId> historizingEmitters;
         private List<BufferedNode> eventTypes;
         private Dictionary<string, string> namespaceMap;
         private Dictionary<NodeId, IEnumerable<(NodeId Root, QualifiedName BrowseName)>> activeEventFields;
@@ -88,7 +87,6 @@ namespace Cognite.OpcUa.Config
             public int BrowseNodesChunk;
             public int BrowseChunk;
             public bool BrowseLimitWarning;
-            public bool ServerSizeWarning;
             public int CustomNumTypesCount;
             public int MaxArraySize;
             public bool StringVariables;

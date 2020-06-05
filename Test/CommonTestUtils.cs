@@ -457,6 +457,28 @@ namespace Test
             Server = new ServerController(new[] { SetupMap[testParams.ServerName] });
         }
 
+        public Task<IEnumerable<BufferedDataPoint>> GetAllInfluxPoints(NodeId node, bool isString = false, int index = -1)
+        {
+            var dummy = new InfluxBufferState(node);
+            dummy.DestinationExtractedRange.Start = DateTime.MinValue;
+            dummy.DestinationExtractedRange.End = DateTime.Now.AddDays(100);
+            dummy.Type = isString ? InfluxBufferType.StringType : InfluxBufferType.DoubleType;
+            return ((InfluxPusher)Pusher).ReadDataPoints(
+                new Dictionary<string, InfluxBufferState> { { UAClient.GetUniqueId(node, index), dummy } },
+                CancellationToken.None);
+        }
+
+        public Task<IEnumerable<BufferedEvent>> GetAllInfluxEvents(NodeId node)
+        {
+            var dummy = new InfluxBufferState(node);
+            dummy.DestinationExtractedRange.Start = DateTime.MinValue;
+            dummy.DestinationExtractedRange.End = DateTime.Now.AddDays(100);
+            dummy.Type = InfluxBufferType.EventType;
+            return ((InfluxPusher)Pusher).ReadEvents(
+                new Dictionary<string, InfluxBufferState> { { UAClient.GetUniqueId(node), dummy } },
+                CancellationToken.None);
+        }
+
         public void ReInitExtractor()
         {
             Extractor?.Dispose();

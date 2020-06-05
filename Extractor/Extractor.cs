@@ -57,6 +57,9 @@ namespace Cognite.OpcUa
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
 
+        private int subscribed;
+        private bool subscribeFlag = false;
+
 
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
@@ -189,6 +192,8 @@ namespace Cognite.OpcUa
         /// </summary>
         public void RestartExtractor()
         {
+            subscribed = 0;
+            subscribeFlag = false;
             historyReader.Terminate(CancellationToken.None, 30).Wait();
             foreach (var state in State.NodeStates) {
                 state.ResetStreamingState();
@@ -400,6 +405,17 @@ namespace Cognite.OpcUa
             await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
             var historyTasks = await MapUAToDestinations(token);
             Looper.ScheduleTasks(historyTasks);
+        }
+
+        public async Task WaitForSubscriptions(int timeout = 100)
+        {
+            int time = 0;
+            while (!subscribeFlag && subscribed < 2 && time++ < timeout) await Task.Delay(100);
+            if (time >= timeout && !subscribeFlag && subscribed < 2)
+            {
+                throw new TimeoutException("Waiting for push timed out");
+            }
+            log.Debug("Waited {s} milliseconds for subscriptions", time * 100);
         }
         #endregion
 
@@ -694,6 +710,8 @@ namespace Cognite.OpcUa
         {
             await Task.Run(() => uaClient.SubscribeToEvents(State.EmitterStates.Select(state => state.Id), 
                 nodes, Streamer.EventSubscriptionHandler, token));
+            Interlocked.Increment(ref subscribed);
+            if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!config.History.Enabled) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
@@ -715,6 +733,8 @@ namespace Cognite.OpcUa
         private async Task SynchronizeNodes(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             await Task.Run(() => uaClient.SubscribeToNodes(states, Streamer.DataSubscriptionHandler, token));
+            Interlocked.Increment(ref subscribed);
+            if (!State.EmitterStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!config.History.Enabled) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
