@@ -22,7 +22,6 @@ namespace Cognite.Bridge
         public string Password { get; set; }
         public bool UseTls { get; set; }
         public string ClientId { get; set; } = "cognite-cdf-bridge";
-        public long? DataSetId { get; set; }
         public string AssetTopic { get; set; } = "cognite/opcua/assets";
         public string TSTopic { get; set; } = "cognite/opcua/timeseries";
         public string EventTopic { get; set; } = "cognite/opcua/events";

@@ -17,10 +17,9 @@ namespace Cognite.Bridge
         static void Main(string[] args)
         {
             var provider = Configure();
-            var configPath = args.Length > 0 ? args[0] : "config/config.yml";
+            var configPath = args.Length > 0 ? args[0] : "config/config.bridge.yml";
             var config = Config.GetConfig(configPath);
             Logger.Configure(config.Logging);
-            log.Information(config.ToString());
             RunBridge(config, provider).Wait();
         }
         public static IServiceProvider Configure()
