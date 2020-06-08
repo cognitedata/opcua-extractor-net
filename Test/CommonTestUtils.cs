@@ -34,9 +34,24 @@ using Xunit.Abstractions;
 using Xunit;
 using Server;
 using Opc.Ua;
+using Cognite.Extractor.Configuration;
 
 namespace Test
 {
+    public class ConfigInitFixture
+    {
+        public ConfigInitFixture()
+        {
+            ConfigurationUtils.AddTagMapping<CogniteClientConfig>("!cdf");
+            ConfigurationUtils.AddTagMapping<InfluxClientConfig>("!influx");
+            ConfigurationUtils.AddTagMapping<MQTTPusherConfig>("!mqtt");
+        }
+    }
+
+    [CollectionDefinition("Extractor tests")]
+    public class ExtractorCollection : ICollectionFixture<ConfigInitFixture> { }
+
+
     public class MakeConsoleWork : IDisposable
     {
         private readonly ITestOutputHelper _output;
@@ -68,14 +83,6 @@ namespace Test
     public static class CommonTestUtils
     {
         private static readonly ILogger log = Log.Logger.ForContext(typeof(CommonTestUtils));
-
-        public static FullConfig BuildConfig(string configname = "config.test.yml")
-        {
-            var fullConfig = ExtractorUtils.GetConfig(configname);
-            if (fullConfig == null) throw new ConfigurationException("Failed to load config file");
-            fullConfig.Source.EndpointURL = "opc.tcp://localhost:62546";
-            return fullConfig;
-        }
 
         public static bool TestRunResult(Exception e)
         {
@@ -333,7 +340,8 @@ namespace Test
         public ExtractorTester(ExtractorTestParameters testParams)
         {
             this.testParams = testParams ?? throw new ArgumentNullException(nameof(testParams));
-            Config = ExtractorUtils.GetConfig(configNames[testParams.ConfigName]);
+            Config = ConfigurationUtils.Read<FullConfig>(configNames[testParams.ConfigName]);
+            Config.GenerateDefaults();
 
             if (testParams.HistoryGranularity != null)
             {
@@ -341,12 +349,12 @@ namespace Test
             }
             Config.Logging.ConsoleLevel = testParams.LogLevel;
             Cognite.OpcUa.Logger.Configure(Config.Logging);
-            Config.Source.EndpointURL = testParams.ServerName == ServerName.Proxy ? "opc.tcp://localhost:4839" : "opc.tcp://localhost:62546";
+            Config.Source.EndpointUrl = testParams.ServerName == ServerName.Proxy ? "opc.tcp://localhost:4839" : "opc.tcp://localhost:62546";
 
             FullConfig pusherConfig = null;
             if (testParams.PusherConfig != null)
             {
-                pusherConfig = ExtractorUtils.GetConfig(configNames[testParams.PusherConfig.Value]);
+                pusherConfig = ConfigurationUtils.Read<FullConfig>(configNames[testParams.PusherConfig.Value]);
             }
 
             if (testParams.StateStorage || testParams.BufferQueue || testParams.StateInflux || testParams.MqttState)
@@ -380,7 +388,7 @@ namespace Test
             if (testParams.FailureInflux != null)
             {
                 Config.FailureBuffer.Enabled = true;
-                var failureInflux = ExtractorUtils.GetConfig(configNames[testParams.FailureInflux.Value]);
+                var failureInflux = ConfigurationUtils.Read<FullConfig>(configNames[testParams.FailureInflux.Value]);
                 if (failureInflux.Pushers.First() is InfluxClientConfig influxConfig)
                 {
                     influx = true;
@@ -414,10 +422,11 @@ namespace Test
                     IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
                     break;
                 case MQTTPusherConfig mqttPusherConfig:
-                    var mqttConfig = Cognite.Bridge.Config.GetConfig("config.bridge.yml");
-                    Handler = new CDFMockHandler(mqttConfig.CDF.Project, testParams.MockMode);
+                    var mqttConfig = ConfigurationUtils.Read<BridgeConfig>("config.bridge.yml");
+                    mqttConfig.GenerateDefaults();
+                    Handler = new CDFMockHandler(mqttConfig.Cognite.Project, testParams.MockMode);
                     Handler.StoreDatapoints = testParams.StoreDatapoints;
-                    Bridge = new MQTTBridge(new Destination(mqttConfig.CDF, CommonTestUtils.GetDummyProvider(Handler)), mqttConfig);
+                    Bridge = new MQTTBridge(new Destination(mqttConfig.Cognite, CommonTestUtils.GetDummyProvider(Handler)), mqttConfig);
                     Bridge.StartBridge(CancellationToken.None).Wait();
                     for (int i = 0; i < 30; i++)
                     {

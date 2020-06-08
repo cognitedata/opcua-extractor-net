@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Configuration;
 using Cognite.OpcUa;
 using Serilog;
 using Xunit;
@@ -27,7 +28,7 @@ using Xunit.Abstractions;
 
 namespace Test
 {
-    [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
+    [Collection("Extractor tests")]
     public class CDFPusherTests : MakeConsoleWork
     {
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusherTests));
@@ -308,7 +309,8 @@ namespace Test
         [Trait("Test", "connectiontest")]
         public async Task TestConnectionTest()
         {
-            var fullConfig = CommonTestUtils.BuildConfig("config.events.yml");
+            var fullConfig = ConfigurationUtils.Read<FullConfig>("config.events.yml");
+            fullConfig.GenerateDefaults();
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             Logger.Configure(fullConfig.Logging);
 
@@ -366,7 +368,8 @@ namespace Test
         // Multiple pushers that fetch properties does some magic to avoid fetching data twice
         public async Task TestMultipleCDFPushers()
         {
-            var fullConfig = CommonTestUtils.BuildConfig();
+            var fullConfig = ConfigurationUtils.Read<FullConfig>("config.test.yml");
+            fullConfig.GenerateDefaults();
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
             var handler1 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
             var handler2 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);

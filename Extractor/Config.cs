@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using Cognite.OpcUa.Pushers;
+using Cognite.Extractor.Configuration;
 
 namespace Cognite.OpcUa
 {
@@ -9,7 +10,7 @@ namespace Cognite.OpcUa
     public class UAClientConfig
     {
         public string ConfigRoot { get; set; } = "config";
-        public string EndpointURL { get; set; }
+        public string EndpointUrl { get; set; }
         public bool AutoAccept { get; set; } = true;
         public int PublishingInterval { get; set; } = 500;
         public int SamplingInterval { get; set; } = 100;
@@ -100,7 +101,7 @@ namespace Cognite.OpcUa
         public string ClientId { get; set; } = "cognite-opcua-extractor";
         public long? DataSetId { get; set; }
         public string AssetTopic { get; set; } = "cognite/opcua/assets";
-        public string TSTopic { get; set; } = "cognite/opcua/timeseries";
+        public string TsTopic { get; set; } = "cognite/opcua/timeseries";
         public string EventTopic { get; set; } = "cognite/opcua/events";
         public string DatapointTopic { get; set; } = "cognite/opcua/datapoints";
         public string LocalState { get; set; }
@@ -131,26 +132,29 @@ namespace Cognite.OpcUa
         public int PointChunkSize { get; set; } = 100000;
         public bool StateStorage { get; set; }
     }
-    public class FullConfig
+    public class FullConfig : VersionedConfig
     {
-        public UAClientConfig Source { get => uaConfig; set => uaConfig = value ?? uaConfig; }
-        private UAClientConfig uaConfig = new UAClientConfig();
-        public LoggerConfig Logging { get => loggerConfig; set => loggerConfig = value ?? loggerConfig; }
-        private LoggerConfig loggerConfig = new LoggerConfig();
-        public MetricsConfig Metrics { get => metricsConfig; set => metricsConfig = value ?? metricsConfig; }
-        private MetricsConfig metricsConfig = new MetricsConfig();
-        public List<PusherConfig> Pushers { get => pushers; set => pushers = value ?? pushers; }
-        private List<PusherConfig> pushers = new List<PusherConfig>();
-        public ExtractionConfig Extraction { get => extractionConfig; set => extractionConfig = value ?? extractionConfig; }
-        private ExtractionConfig extractionConfig = new ExtractionConfig();
-        public EventConfig Events { get => eventConfig; set => eventConfig = value ?? eventConfig; }
-        private EventConfig eventConfig = new EventConfig();
-        public FailureBufferConfig FailureBuffer { get => failureBufferConfig; set => failureBufferConfig = value ?? failureBufferConfig; }
-        private FailureBufferConfig failureBufferConfig = new FailureBufferConfig();
-        public HistoryConfig History { get => historyConfig; set => historyConfig = value ?? historyConfig; }
-        private HistoryConfig historyConfig = new HistoryConfig();
-        public StateStorageConfig StateStorage { get => stateStorage; set => stateStorage = value ?? stateStorage; }
-        private StateStorageConfig stateStorage = new StateStorageConfig();
+        public UAClientConfig Source { get; set; }
+        public LoggerConfig Logging { get; set; }
+        public MetricsConfig Metrics { get; set; }
+        public List<PusherConfig> Pushers { get; set; }
+        public ExtractionConfig Extraction { get; set; }
+        public EventConfig Events { get; set; }
+        public FailureBufferConfig FailureBuffer { get; set; }
+        public HistoryConfig History { get; set; }
+        public StateStorageConfig StateStorage { get; set; }
+        public override void GenerateDefaults()
+        {
+            if (Source == null) Source = new UAClientConfig();
+            if (Logging == null) Logging = new LoggerConfig();
+            if (Metrics == null) Metrics = new MetricsConfig();
+            if (Pushers == null) Pushers = new List<PusherConfig>();
+            if (Extraction == null) Extraction = new ExtractionConfig();
+            if (Events == null) Events = new EventConfig();
+            if (FailureBuffer == null) FailureBuffer = new FailureBufferConfig();
+            if (History == null) History = new HistoryConfig();
+            if (StateStorage == null) StateStorage = new StateStorageConfig();
+        }
     }
     public class LoggerConfig
     {

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Cognite.Extractor.Configuration;
+using System;
 using System.IO;
 using YamlDotNet.Serialization;
 
@@ -35,37 +36,17 @@ namespace Cognite.Bridge
         public string Host { get; set; } = "https://api.cognitedata.com";
     }
 
-    public class BridgeConfig
+    public class BridgeConfig : VersionedConfig
     {
-        public LoggerConfig Logging { get => logging; set => logging = value ?? logging; }
-        private LoggerConfig logging = new LoggerConfig();
-        public CDFConfig CDF { get; set; }
-        public MQTTConfig MQTT { get; set; }
-    }
+        public LoggerConfig Logging { get; set; }
+        public CDFConfig Cognite { get; set; }
+        public MQTTConfig Mqtt { get; set; }
 
-    public static class Config
-    {
-        /// <summary>
-        /// Map yaml config to the FullConfig object
-        /// </summary>
-        /// <param name="configPath">Path to config file</param>
-        /// <returns>A <see cref="BridgeConfig"/> object representing the entire config file</returns>
-        public static BridgeConfig GetConfig(string configPath)
+        public override void GenerateDefaults()
         {
-            BridgeConfig bridgeConfig;
-            using (var rawConfig = new StringReader(File.ReadAllText(configPath)))
-            {
-                var deserializer = new DeserializerBuilder()
-                    .Build();
-                bridgeConfig = deserializer.Deserialize<BridgeConfig>(rawConfig);
-            }
-            string envLogdir = Environment.GetEnvironmentVariable("BRIDGE_LOGGER_DIR");
-            if (!string.IsNullOrWhiteSpace(envLogdir))
-            {
-                bridgeConfig.Logging.LogFolder = envLogdir;
-            }
-            return bridgeConfig;
+            if (Logging == null) Logging = new LoggerConfig();
+            if (Cognite == null) Cognite = new CDFConfig();
+            if (Mqtt == null) Mqtt = new MQTTConfig();
         }
     }
-
 }

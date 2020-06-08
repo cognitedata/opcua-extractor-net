@@ -1,9 +1,10 @@
 ﻿using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Configuration;
 using Prometheus.Client;
 using Serilog;
+using Cognite.OpcUa;
 
 namespace OpcUaService
 {
@@ -14,7 +15,7 @@ namespace OpcUaService
     {
         private static CancellationTokenSource _sourceProgram;
         private static bool _isRunning = false;
-        private static Cognite.OpcUa.FullConfig _config;
+        private static FullConfig _config;
 
         private static ILogger _log;
         private static readonly Gauge version = Metrics.CreateGauge("opcua_version", $"version: {Version.GetVersion()}, status: {Version.Status()}");
@@ -33,12 +34,12 @@ namespace OpcUaService
             _isRunning = true;
 
             // Validation has already been done so no need for try catch here now
-            _config = Cognite.OpcUa.ExtractorUtils.GetConfig(configFile);
+            _config = ConfigurationUtils.Read<FullConfig>(configFile);
 
             _config.Source.ConfigRoot = "config/";
 
             _config.Logging.ConsoleLevel = "NoConsoleLogging";
-            Cognite.OpcUa.Logger.Configure(_config.Logging);
+            Logger.Configure(_config.Logging);
             _log = Log.Logger.ForContext(typeof(ExtractorServiceStarter));
 
             _log.Information($"Using configuration file: {configFile}");
@@ -65,9 +66,9 @@ namespace OpcUaService
         /// Own function used when starting up from the windows service layer.
         /// </summary>
         /// <param name="config"></param>
-        private static void RunExtractorService(Cognite.OpcUa.FullConfig config)
+        private static void RunExtractorService(FullConfig config)
         {
-            var runTime = new Cognite.OpcUa.ExtractorRuntime(config);
+            var runTime = new ExtractorRuntime(config);
             runTime.Configure();
 
             try
@@ -81,11 +82,11 @@ namespace OpcUaService
             }
             catch (AggregateException aex)
             {
-                if (Cognite.OpcUa.ExtractorUtils.GetRootExceptionOfType<Cognite.OpcUa.ConfigurationException>(aex) != null)
+                if (ExtractorUtils.GetRootExceptionOfType<Cognite.OpcUa.ConfigurationException>(aex) != null)
                 {
                     _log.Error("Invalid configuration, stopping");
                 }
-                if (Cognite.OpcUa.ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) != null)
+                if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) != null)
                 {
                     _log.Warning("Extractor stopped manually");
                 }
@@ -126,11 +127,11 @@ namespace OpcUaService
         public static string ValidateConfigurationFile(string configFile)
         {
             string result = "OK";
-            Cognite.OpcUa.FullConfig testConfig;
+            FullConfig testConfig;
 
             try
             {
-                testConfig = Cognite.OpcUa.ExtractorUtils.GetConfig(configFile);
+                testConfig = ConfigurationUtils.Read<FullConfig>(configFile);
                 // More checks can be added here on user provided values, for example url validation numeric and string tests etc.
             }
             catch (System.IO.FileNotFoundException)

@@ -19,3 +19,4 @@ Microsoft.CodeAnalysis.FxCopAnalyzers
 LiteDB
 LiteQueue
 MQTTnet
+Cognite.Extractor.Configuration

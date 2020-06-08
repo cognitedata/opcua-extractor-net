@@ -13,3 +13,4 @@ Serilog.Sinks.File
 Microsoft.CodeAnalysis.FxCopAnalyzers
 YamlDotNet
 CogniteSdk
+Cognite.Extractor.Configuration

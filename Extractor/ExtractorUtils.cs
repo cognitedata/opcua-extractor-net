@@ -122,30 +122,6 @@ namespace Cognite.OpcUa
             return ret;
         }
         /// <summary>
-        /// Map yaml config to the FullConfig object
-        /// </summary>
-        /// <param name="configPath">Path to config file</param>
-        /// <returns>A <see cref="FullConfig"/> object representing the entire config file</returns>
-        public static FullConfig GetConfig(string configPath)
-        {
-            FullConfig fullConfig;
-            using (var rawConfig = new StringReader(File.ReadAllText(configPath)))
-            {
-                var deserializer = new DeserializerBuilder()
-                    .WithTagMapping("!cdf", typeof(CogniteClientConfig))
-                    .WithTagMapping("!influx", typeof(InfluxClientConfig))
-                    .WithTagMapping("!mqtt", typeof(MQTTPusherConfig))
-                    .Build();
-                fullConfig = deserializer.Deserialize<FullConfig>(rawConfig);
-            }
-			string envLogdir = Environment.GetEnvironmentVariable("OPCUA_LOGGER_DIR");
-            if (!string.IsNullOrWhiteSpace(envLogdir))
-			{
-				fullConfig.Logging.LogFolder = envLogdir;
-			}
-            return fullConfig;
-        }
-        /// <summary>
         /// Divide input into a number of size limited chunks
         /// </summary>
         /// <param name="input">Input enumerable of any size</param>

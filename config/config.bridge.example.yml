@@ -4,53 +4,53 @@
 # Your config file can contain only a subset of these config options. Any extra options will
 # cause the bridge to fail.
 
-MQTT:
+mqtt:
     # TCP Broker URL
-    Host:
+    host:
     # TCP Broker port
-    Port:
+    port:
     # MQTT broker username
-    Username:
+    username:
     # MQTT broker password
-    Password:
+    password:
     # True to enable TLS
-    UseTls:
+    use-tls:
     # Mqtt client id. Should be unique for a given broker.
-    ClientId: cognite-cdf-bridge
+    client-id: cognite-cdf-bridge
     # Data set to use for new objects. Existing objects will not be updated
-    DataSetId:
+    data-set-id:
     # Assets topic
-    AssetTopic: cognite/opcua/assets
+    asset-topic: cognite/opcua/assets
     # Timeseries topic
-    TSTopic: cognite/opcua/timeseries
+    ts-topic: cognite/opcua/timeseries
     # Events topic
-    EventTopic: cognite/opcua/events
+    event-topic: cognite/opcua/events
     # Datapoints topic
-    DatapointTopic: cognite/opcua/datapoints
+    datapoint-topic: cognite/opcua/datapoints
 
-CDF:
+cognite:
     # The project to connect to in the API
-    Project:
+    project:
     # Cognite api key
-    ApiKey:
+    api-key:
     # Cognite service url
-    Host: "https://api.cognitedata.com"
+    host: "https://api.cognitedata.com"
 
-Logging:
+logging:
     # Log levels: 'verbose', 'debug', 'information', 'warning', 'error', 'fatal'.
     # Writes log events at this level to the Console. 
     # If not present, or if the level is invalid, Console is not used. 
-    ConsoleLevel: information
+    console-level: information
     # Writes log events at this level to a file. Logs will roll over to new files daily.
     # If not present, or if the level is invalid, logging to file is disabled.
-    FileLevel:
+    file-level:
     # Folder for logging output. If not present, logging to file is disabled.
-    LogFolder:
+    log-folder:
     # Maximum number of logs files that are kept in the log folder.
-    RetentionLimit: 31
+    retention-limit: 31
     # File containing the credentials used for authentication with GCP.
     # If present, sends log events Stackdriver.
     # Events at all levels are sent.
-    StackdriverCredentials:
+    stackdriver-credentials:
     # Name to be assigned to the Stackdriver log.
-    StackdriverLogName:
+    stackdriver-log-name:

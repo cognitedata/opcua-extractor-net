@@ -10,6 +10,8 @@ using System.Text;
 using System.Threading;
 using System.Timers;
 using System.Globalization;
+using Cognite.Extractor.Configuration;
+using Cognite.OpcUa;
 
 namespace OpcUaService
 {
@@ -73,6 +75,9 @@ namespace OpcUaService
             _configFile = $@"{_path}\{_configFileName}";
 
             // Validates the config file, and that it can be loaded and used. 
+            ConfigurationUtils.AddTagMapping<CogniteClientConfig>("!cdf");
+            ConfigurationUtils.AddTagMapping<InfluxClientConfig>("!influx");
+            ConfigurationUtils.AddTagMapping<MQTTPusherConfig>("!mqtt");
             string configFileTest = ExtractorServiceStarter.ValidateConfigurationFile(_configFile);
 
             if (configFileTest != "OK")
@@ -190,7 +195,7 @@ namespace OpcUaService
         /// <summary>
         /// Wait X amount of time based on number of failures
         /// </summary>
-        private void SleepOnError()
+        private static void SleepOnError()
         {
             switch (_numberOfFailures)
             {

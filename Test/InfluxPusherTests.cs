@@ -27,7 +27,7 @@ using Xunit.Abstractions;
 
 namespace Test
 {
-    [CollectionDefinition("Influx_tests", DisableParallelization = true)]
+    [Collection("Extractor tests")]
     public class InfluxPusherTests : MakeConsoleWork
     {
         // private static readonly ILogger log = Log.Logger.ForContext(typeof(InfluxPusherTests));

@@ -1,7 +1,7 @@
-﻿MQTT:
-    Host: localhost
-    Port: 4060
+﻿mqtt:
+    host: localhost
+    port: 4060
 
-CDF:
-    Project: project
-    ApiKey: key
+cognite:
+    project: project
+    api-key: key
