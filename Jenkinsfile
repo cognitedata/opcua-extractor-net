@@ -1,8 +1,9 @@
-@Library('jenkins-helpers@v0.1.10')
+@Library('jenkins-helpers')
 
 msbuild = '"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\MSBuild\\Current\\Bin\\msbuild.exe"'
 
 def label = "opcua-extractor-net-${UUID.randomUUID().toString()}"
+
 
 podTemplate(
     label: label,
@@ -55,7 +56,6 @@ podTemplate(
             secretName: 'jenkins-docker-builder',
             mountPath: '/jenkins-docker-builder',
             readOnly: true),
-        configMapVolume(configMapName: 'codecov-script-configmap', mountPath: '/codecov-script'),
         hostPathVolume(hostPath: '/var/run/docker.sock', mountPath: '/var/run/docker.sock')]
 ) {
     def version
@@ -97,19 +97,8 @@ podTemplate(
         container('dotnet-mono') {
             stage('Install dependencies') {
 				sh('curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -')
-                sh('apt-get update && apt-get install -y python3-pip nmap ncat mosquitto')
-                sh('pip3 install pipenv')
-                sh('pipenv install -d --system')
+                sh('apt-get update && apt-get install -y nmap ncat mosquitto')
                 sh('mono .paket/paket.exe restore')
-                sh('git clone https://github.com/cognitedata/python-opcua.git ../python-opcua')
-            }
-            dir('../python-opcua') {
-                stage('Build opcua') {
-                    sh('python3 setup.py build')
-                }
-            }
-            stage('Start servers') {
-                sh('./startservers.sh')
             }
 
             stage('Build') {
@@ -123,17 +112,21 @@ podTemplate(
                 }
             }
             stage("Upload report to codecov.io") {
-                sh('bash </codecov-script/upload-report.sh')
+			    jenkinsHelpersUtil.uploadCodecovReport()
             }
             if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
                 stage('Build release versions') {
-                    sh('apt-get update && apt-get install -y zip')
+                    sh('apt-get install -y zip')
                     packProject('win-x64', "$version", false)
                     packProject('win81-x64', "$version", false)
                     packProject('linux-x64', "$version", true)
                 }
+                stage('Install release dependencies') {
+                    sh('apt-get install -y python3-pip')
+                    sh('pip3 install PyGithub')
+				}
                 stage('Deploy to github release') {
-                    withCredentials([usernamePassword(credentialsId: 'jenkins-cognite', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
+                    withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
                         sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version opcua-extractor.win-x64.${version}.zip opcua-extractor.win81-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip")
                     }               
                 }
@@ -163,7 +156,7 @@ podTemplate(
         }
     }
 
-    node('windows-static-001') {
+    node('windows') {
         stage('Building MSI on windows node') {
             powershell('echo $env:Path')
         }
@@ -187,7 +180,7 @@ podTemplate(
                 }
                 stage ('Deploy to github') {
                     powershell("mv OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi .\\OpcUaExtractorSetup-${version}.msi")
-                    withCredentials([usernamePassword(credentialsId: 'jenkins-cognite', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
+                    withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
                         powershell("py deploy.py cognitedata opcua-extractor-net $ghpassword $version OpcUaExtractorSetup-${version}.msi")
                     }
                 }
@@ -203,9 +196,7 @@ podTemplate(
                 deleteDir()
             }
         }
- 
     }
-
 }
 
 void packProject(String configuration, String version, boolean linux) {

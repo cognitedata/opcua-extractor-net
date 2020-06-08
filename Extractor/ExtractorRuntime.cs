@@ -38,7 +38,7 @@ namespace Cognite.OpcUa
         private readonly FullConfig config;
         private IServiceProvider provider;
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorRuntime));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorRuntime));
 
         /// <summary>
         /// Constructor, takes fully configured FullConfig

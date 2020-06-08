@@ -25,7 +25,7 @@ namespace Cognite.OpcUa.Config
 {
     public class ConfigToolRuntime
     {
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolRuntime));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolRuntime));
 
         private readonly string output;
         private readonly FullConfig config;

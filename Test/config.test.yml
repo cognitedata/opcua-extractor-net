@@ -30,17 +30,16 @@ Extraction:
         # Ex: "urn:cognite:net:server": cns
         # Saves space compared to using the full URL. Using the ns index is not safe
         # If not specified, the full URI is used instead.
-        "urn:freeopcua:python:server": "fps:"
-        "http://examples.freeopcua.github.io": "efg:"
+        "opc.tcp://test.localhost": "tl:"
 
-    IgnoreDataTypes:
-        - NamespaceUri: http://examples.freeopcua.github.io
-          NodeId: i=10
+    #IgnoreDataTypes:
+    #    - NamespaceUri: http://examples.freeopcua.github.io
+    #      NodeId: i=10
 
-    CustomNumericTypes:
-      - NodeId:
-            NamespaceUri: http://examples.freeopcua.github.io
-            NodeId: i=12
-      - NodeId:
-            NamespaceUri: http://examples.freeopcua.github.io
-            NodeId: i=11
+    #CustomNumericTypes:
+    #  - NodeId:
+    #        NamespaceUri: http://examples.freeopcua.github.io
+    #        NodeId: i=12
+    #  - NodeId:
+    #        NamespaceUri: http://examples.freeopcua.github.io
+    #        NodeId: i=11

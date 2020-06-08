@@ -23,7 +23,7 @@ namespace Cognite.OpcUa
 
         private IEnumerable<Task> tasks;
         private readonly IEnumerable<IPusher> pushers;
-        private readonly ILogger log = Log.ForContext(typeof(Looper));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(Looper));
         private readonly AutoResetEvent triggerUpdateOperations = new AutoResetEvent(false);
         private readonly ManualResetEvent triggerHistoryRestart = new ManualResetEvent(false);
         private readonly ManualResetEvent triggerGrowTaskList = new ManualResetEvent(false);

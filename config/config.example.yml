@@ -12,9 +12,16 @@ Source:
     # There is not yet a feature to accept new certificates, but you can manually move rejected certificates to accepted.
     # Paths are defined in opc.ua.net.extractor.Config.xml
     AutoAccept: false
-    # Polling interval in ms between each test of changes to a subscribed variable
+    # How often the client requests updates to subscribed variables.
     # 0 updates at maximum rate set by server
-    PollingInterval: 500
+    # This decides the maximum rate points are pushed to CDF. Higher reduces network and server load.
+    PublishingInterval: 500
+    # How often the server requests updates from the source system (the source system is often the server itself)
+    # 0 uses maximum rate set by server
+    # Lower increases server load. This should be set to below the maximum update frequency of the source system.
+    SamplingInterval: 100
+    # Length of internal server queue for each subscribed item. < 2 means that any updates occuring between publish requests are lost.
+    QueueLength: 10
     # OPC-UA username, leave blank for anonymous user. (no authentication)
     Username:
     # OPC-UA password
@@ -37,8 +44,10 @@ Source:
 # Config for reading of history from the server
 History:
     # Enable/disable history synchronization from the OPC-UA server to CDF.
-    # Note that historizing event emitters are not affected by this option
+    # This is a master switch covering both events and data
     Enabled: false
+    # Enable or disable data history on historizing nodes. "Enabled" must be true.
+    Data: true
     # Enable/disable backfill behavior. If this is false, data is read using frontfill only. (Pre 1.1 behavior)
     # This applied to both datapoints and events.
     Backfill: false
@@ -314,7 +323,7 @@ Events:
     # it is generated from Event NodeId in the same way ExternalIds are generated for normal nodes.
     DestinationNameMap:
         #Property1: SubType
-    # Emitters that should be read for historical events. Leave empty to disable history read of events.
+    # Emitters that should be read for historical events. Leave empty to disable history read of events. Requires History.Enabled to be true.
     HistorizingEmitterIds:
         #-   NamespaceUri:
         #    NodeId:

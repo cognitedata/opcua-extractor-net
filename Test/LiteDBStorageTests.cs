@@ -34,16 +34,19 @@ namespace Test
 
             tester.Config.Extraction.AllowStringVariables = true;
 
+            await tester.StartServer();
+            tester.Server.PopulateBaseHistory();
+
             tester.StartExtractor();
 
-            await tester.Extractor.Looper.WaitForNextPush();
-
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
-
             await tester.Extractor.Looper.WaitForNextPush();
 
             tester.Handler.AllowPush = false;
             tester.Handler.AllowConnectionTest = false;
+
+            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1.0);
+            tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1000);
 
             await tester.WaitForCondition(() => tester.Extractor.StateStorage.AnyPoints,
                 20, "Failurebuffer must receive some data");
@@ -54,14 +57,19 @@ namespace Test
             await tester.WaitForCondition(() => !tester.Extractor.StateStorage.AnyPoints,
                 20, "FailureBuffer should be emptied");
 
+            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 2.0);
+            tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1001);
+
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
             await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.TerminateRunTask();
 
-            tester.TestContinuity("gp.efg:i=10");
-            tester.TestConstantRate(1000, "gp.efg:i=9");
+            tester.TestContinuity("gp.tl:i=10");
+
+            Assert.Equal(1002, tester.Handler.Datapoints["gp.tl:i=10"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(3, tester.Handler.Datapoints["gp.tl:i=3"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count());
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
@@ -84,14 +92,17 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
+            await tester.StartServer();
+            tester.Server.PopulateEvents();
+
             tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.History.Enabled = true;
 
             tester.StartExtractor();
 
             await tester.Extractor.Looper.WaitForNextPush();
-
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
-
+            tester.Server.TriggerEvents(100);
             await tester.Extractor.Looper.WaitForNextPush();
 
             // In theory it will work as expected if only pushes to events fail, so long as the connection test also fails,
@@ -107,12 +118,16 @@ namespace Test
             tester.Handler.AllowEvents = false;
             tester.Handler.AllowConnectionTest = false;
 
+            tester.Server.TriggerEvents(101);
+
             await tester.WaitForCondition(() => tester.Extractor.StateStorage.AnyEvents,
                 20, "Failurebuffer must receive some events");
 
             tester.Handler.AllowPush = true;
             tester.Handler.AllowEvents = true;
             tester.Handler.AllowConnectionTest = true;
+
+            tester.Server.TriggerEvents(102);
 
             await tester.WaitForCondition(() => !tester.Extractor.StateStorage.AnyEvents,
                 20, "FailureBuffer should be emptied");
@@ -125,13 +140,25 @@ namespace Test
 
             var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
-
-            Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
+            // Test that history has worked for the five relevant types historized on the server node.
             Assert.Contains(events, ev => ev.description == "prop 0");
-            Assert.Contains(events, ev => ev.description == "basicPass 0");
-            Assert.Contains(events, ev => ev.description == "basicPassSource 0");
-            Assert.Contains(events, ev => ev.description == "basicVarSource 0");
-            Assert.Contains(events, ev => ev.description == "mappedType 0");
+            Assert.Contains(events, ev => ev.description == "basic-pass 0");
+            Assert.Contains(events, ev => ev.description == "basic-pass-2 0");
+            Assert.Contains(events, ev => ev.description == "mapped 0");
+            Assert.Contains(events, ev => ev.description == "basic-varsource 0");
+            Assert.Contains(events, ev => ev.description == "prop 99");
+            Assert.Contains(events, ev => ev.description == "basic-pass 99");
+            Assert.Contains(events, ev => ev.description == "basic-pass-2 99");
+            Assert.Contains(events, ev => ev.description == "mapped 99");
+            Assert.Contains(events, ev => ev.description == "basic-varsource 99");
+
+            await tester.WaitForCondition(() =>
+            {
+                events = tester.Handler.Events.Values.ToList();
+                return events.Any(ev => ev.description.StartsWith("prop-e2 ", StringComparison.InvariantCulture))
+                       && events.Any(ev => ev.description.StartsWith("basic-pass-3 ", StringComparison.InvariantCulture))
+                       && events.Count == 521;
+            }, 20, "Expected remaining event subscriptions to trigger");
 
             var countregex = new Regex("\\d+$");
             var propNumbers = events
@@ -141,13 +168,13 @@ namespace Test
             ExtractorTester.TestContinuity(propNumbers);
 
             var nonHistNumbers = events
-                .Where(evt => evt.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+                .Where(evt => evt.description.StartsWith("prop-e2 ", StringComparison.InvariantCulture))
                 .Select(evt => Convert.ToInt32(countregex.Match(evt.description).Value, CultureInfo.InvariantCulture))
                 .ToList();
             ExtractorTester.TestContinuity(nonHistNumbers);
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_cdf"));
+            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_event_push_failures_cdf"));
         }
 
         [Trait("Server", "basic")]
@@ -165,23 +192,29 @@ namespace Test
 
             tester.Config.Extraction.AllowStringVariables = true;
 
+            await tester.StartServer();
+            tester.Server.PopulateBaseHistory();
+
             tester.StartExtractor();
 
             await tester.Extractor.Looper.WaitForNextPush();
-
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
-
             await tester.Extractor.Looper.WaitForNextPush();
 
             var oldHost = tester.InfluxConfig.Host;
             tester.InfluxConfig.Host = "testWrong";
             ((InfluxPusher)tester.Pusher).Reconfigure();
+            tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1000);
+            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1.0);
 
             await tester.WaitForCondition(() => tester.Extractor.StateStorage.AnyPoints,
                 20, "Failurebuffer must receive some data");
 
             tester.InfluxConfig.Host = oldHost;
             ((InfluxPusher)tester.Pusher).Reconfigure();
+
+            tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1001);
+            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 2.0);
 
             await tester.WaitForCondition(() => !tester.Extractor.StateStorage.AnyPoints,
                 20, "FailureBuffer should be emptied");
@@ -205,11 +238,13 @@ namespace Test
             using (var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 BufferQueue = true,
-                StateStorage = true,
-                LogLevel = "debug"
+                StateStorage = true
             }))
             {
                 await tester.ClearPersistentData();
+
+                await tester.StartServer();
+                tester.Server.PopulateBaseHistory();
 
                 tester.CogniteConfig.ReadExtractedRanges = false;
 
@@ -260,12 +295,19 @@ namespace Test
                 BufferQueue = true,
                 StateStorage = true
             });
+
+            await tester2.StartServer();
+            tester2.Server.PopulateBaseHistory();
+
             tester2.CogniteConfig.ReadExtractedRanges = false;
             tester2.Config.Extraction.AllowStringVariables = true;
             tester2.Config.History.Backfill = true;
             CommonTestUtils.ResetTestMetrics();
 
             tester2.StartExtractor();
+
+            await tester2.Extractor.WaitForSubscriptions();
+
             await tester2.WaitForCondition(() => tester2.Extractor.State.NodeStates.All(state => !state.Historizing
                     || state.BackfillDone && state.IsStreaming),
                 20, "Expected history to complete");
@@ -287,11 +329,13 @@ namespace Test
                 BufferQueue = true,
                 StateStorage = true,
                 ConfigName = ConfigName.Events,
-                ServerName = ServerName.Events,
-                LogLevel = "debug"
+                ServerName = ServerName.Events
             });
             await tester.ClearPersistentData();
 
+            await tester.StartServer();
+            tester.Server.PopulateEvents();
+            tester.Config.History.Enabled = true;
             tester.CogniteConfig.ReadExtractedRanges = false;
             tester.Config.History.Backfill = true;
 
@@ -314,8 +358,6 @@ namespace Test
             await tester.Extractor.Looper.WaitForNextPush();
             await tester.Extractor.Looper.StoreState(tester.Source.Token);
 
-            await tester.TerminateRunTask();
-
             var dummyStates = tester.Extractor.State.EmitterStates.Select(state => new InfluxBufferState(state.Id)).ToList();
 
             foreach (var state in dummyStates)
@@ -326,6 +368,9 @@ namespace Test
 
             await tester.Extractor.StateStorage.ReadExtractionStates(dummyStates, StateStorage.EmitterStates, false,
                 CancellationToken.None);
+
+            await tester.TerminateRunTask();
+
 
             Assert.True(dummyStates.All(state => !state.Historizing
                 || state.StatePersisted && state.DestinationExtractedRange.Start < state.DestinationExtractedRange.End
@@ -339,12 +384,21 @@ namespace Test
                 ConfigName = ConfigName.Events,
                 ServerName = ServerName.Events
             });
+            tester2.Config.History.Enabled = true;
             tester2.CogniteConfig.ReadExtractedRanges = false;
             tester2.Config.History.Backfill = true;
             CommonTestUtils.ResetTestMetrics();
 
+            await tester2.StartServer();
+            tester2.Server.PopulateEvents();
+
             tester2.StartExtractor();
-            await tester2.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => !state.Historizing
+
+            await tester2.Extractor.WaitForSubscriptions();
+
+            await tester2.Extractor.Looper.WaitForNextPush();
+            await tester2.WaitForCondition(() => tester2.Extractor.State.EmitterStates.Any() 
+                && tester2.Extractor.State.EmitterStates.All(state => !state.Historizing
                     || state.BackfillDone && state.IsStreaming),
                 20, "Expected history to complete");
             await tester2.Extractor.Looper.WaitForNextPush();
@@ -366,14 +420,15 @@ namespace Test
                 FailureInflux = ConfigName.Influx,
                 StoreDatapoints = true,
                 FailureInfluxWrite = true,
-                StateInflux = true,
-                LogLevel = "debug"
+                StateInflux = true
             }))
             {
                 await tester.ClearPersistentData();
 
                 tester.Config.Extraction.AllowStringVariables = true;
                 tester.Config.History.Enabled = false;
+
+                await tester.StartServer();
 
                 tester.StartExtractor();
 
@@ -383,12 +438,16 @@ namespace Test
                 tester.Handler.AllowPush = false;
                 tester.Handler.AllowConnectionTest = false;
 
+                tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1);
+                tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar1, 1);
+                tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1);
+                tester.Server.UpdateNode(tester.Server.Ids.Base.BoolVar, true);
+                tester.Server.UpdateNode(tester.Server.Ids.Base.StringVar, "test 1");
+
                 await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
                     20, "Failurebuffer must receive some data");
 
                 await tester.Extractor.Looper.WaitForNextPush();
-
-                await tester.TerminateRunTask();
 
                 states = tester.Extractor.State.NodeStates.Where(state => !state.Historizing)
                     .Select(state => new InfluxBufferState(state, false)).ToList();
@@ -404,9 +463,9 @@ namespace Test
                 Assert.True(states.All(state =>
                     state.DestinationExtractedRange.Start <= state.DestinationExtractedRange.End
                     && state.DestinationExtractedRange.End != DateTime.MaxValue));
-            }
 
-            
+                await tester.TerminateRunTask();
+            }
 
             using var tester2 = new ExtractorTester(new ExtractorTestParameters
             {
@@ -417,13 +476,13 @@ namespace Test
                 StateInflux = true
             });
 
+            await tester2.StartServer();
+
             tester2.StartExtractor();
             tester2.Config.Extraction.AllowStringVariables = true;
             tester2.Config.History.Enabled = false;
 
-            await tester2.Extractor.Looper.WaitForNextPush();
-
-            await tester2.TerminateRunTask();
+            await tester2.Extractor.WaitForSubscriptions();
 
             foreach (var state in states)
             {
@@ -437,6 +496,8 @@ namespace Test
             Assert.True(states.All(state =>
                 state.DestinationExtractedRange.Start == DateTime.MaxValue
                 && state.DestinationExtractedRange.End == DateTime.MinValue));
+
+            await tester2.TerminateRunTask();
         }
         [Trait("Server", "basic")]
         [Trait("Target", "StateStorage")]
@@ -460,6 +521,8 @@ namespace Test
 
                 tester.Config.Events.HistorizingEmitterIds = new List<ProtoNodeId>();
 
+                await tester.StartServer();
+
                 tester.StartExtractor();
 
                 await tester.Extractor.Looper.WaitForNextPush();
@@ -469,12 +532,12 @@ namespace Test
                 tester.Handler.AllowEvents = false;
                 tester.Handler.AllowConnectionTest = false;
 
+                tester.Server.TriggerEvents(1);
+
                 await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
                 20, "Failurebuffer must receive some data");
 
                 await tester.Extractor.Looper.WaitForNextPush();
-
-                await tester.TerminateRunTask();
 
                 states = tester.Extractor.State.AllActiveIds.Select(state => new InfluxBufferState(state)).ToList();
                 foreach (var state in states)
@@ -489,6 +552,8 @@ namespace Test
                 Assert.True(states.All(state => !state.StatePersisted
                                                 || state.DestinationExtractedRange.Start <= state.DestinationExtractedRange.End
                                                 && state.DestinationExtractedRange.End != DateTime.MaxValue));
+
+                await tester.TerminateRunTask();
             }
 
             using var tester2 = new ExtractorTester(new ExtractorTestParameters
@@ -503,11 +568,11 @@ namespace Test
             });
             tester2.Config.Events.HistorizingEmitterIds = new List<ProtoNodeId>();
 
+            await tester2.StartServer();
+
             tester2.StartExtractor();
 
             await tester2.Extractor.Looper.WaitForNextPush();
-
-            await tester2.TerminateRunTask();
 
             foreach (var state in states)
             {
@@ -521,6 +586,8 @@ namespace Test
             Assert.True(states.All(state => !state.StatePersisted
                 || state.DestinationExtractedRange.Start == DateTime.MaxValue
                 && state.DestinationExtractedRange.End == DateTime.MinValue));
+
+            await tester2.TerminateRunTask();
         }
         [Fact]
         [Trait("Server", "events")]
@@ -535,10 +602,11 @@ namespace Test
                 QuitAfterMap = true
             });
             await tester.ClearPersistentData();
+            await tester.StartServer();
 
             tester.StartExtractor();
 
-            await tester.TerminateRunTask();
+            await tester.RunTask;
 
             var evt = new BufferedEvent
             {
@@ -600,6 +668,7 @@ namespace Test
             Assert.Equal(evt2.SourceNode, converted2.SourceNode);
             Assert.Equal(evt2.Time, converted2.Time);
 
+            await tester.TerminateRunTask();
         }
         [Fact]
         [Trait("Target", "OldBuffer")]
@@ -683,14 +752,13 @@ namespace Test
             {
                 ServerName = ServerName.Events,
                 ConfigName = ConfigName.Events,
-                LogLevel = "information",
                 QuitAfterMap = true
             });
             await tester.ClearPersistentData();
-
+            await tester.StartServer();
             tester.StartExtractor();
 
-            await tester.TerminateRunTask();
+            await tester.RunTask;
 
             var evts = new List<BufferedEvent>();
 
@@ -750,6 +818,8 @@ namespace Test
                 Assert.Equal(evt.SourceNode, converted.SourceNode);
                 Assert.Equal(evt.Time, converted.Time);
             }
+
+            await tester.TerminateRunTask();
         }
         [Trait("Server", "basic")]
         [Trait("Target", "OldBuffer")]
@@ -763,19 +833,21 @@ namespace Test
                 DataBufferPath = "datapoints.bin"
             });
             await tester.ClearPersistentData();
+            await tester.StartServer();
 
             tester.Config.Extraction.AllowStringVariables = true;
 
             tester.StartExtractor();
 
             await tester.Extractor.Looper.WaitForNextPush();
-
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
-
             await tester.Extractor.Looper.WaitForNextPush();
 
             tester.Handler.AllowPush = false;
             tester.Handler.AllowConnectionTest = false;
+
+            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1.0);
+            tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1);
 
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
                 20, "Failurebuffer must receive some data");
@@ -783,17 +855,19 @@ namespace Test
             tester.Handler.AllowPush = true;
             tester.Handler.AllowConnectionTest = true;
 
+            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 2.0);
+            tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 2);
+
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.Any,
                 20, "FailureBuffer should be emptied");
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
-
             await tester.Extractor.Looper.WaitForNextPush();
 
             await tester.TerminateRunTask();
 
-            tester.TestContinuity("gp.efg:i=10");
-            tester.TestConstantRate(1000, "gp.efg:i=9");
+            tester.TestContinuity("gp.tl:i=10");
+            tester.TestContinuity("gp.tl:i=3");
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
@@ -815,28 +889,21 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
+            await tester.StartServer();
+
             tester.Config.Extraction.AllowStringVariables = true;
 
             tester.StartExtractor();
 
             await tester.Extractor.Looper.WaitForNextPush();
-
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
-
             await tester.Extractor.Looper.WaitForNextPush();
 
-            // In theory it will work as expected if only pushes to events fail, so long as the connection test also fails,
-            // but there is no real reason to test this on an unrealistic scenario.
-            // In this case, history will still restart in its entirity once connection is re-established.
-            // In theory we could have separated the two, but it is an edge case. Perhaps in the future.
-            // The behavior if only the push fails but not the connection test is less clear,
-            // what we would expect is that if there are events in the given push, then we end up with double pushes as expected.
-            // If not, the pushers will end up getting set to succeeding, but then the read from failurebuffer will fail,
-            // so we will continue to read from there.
-            // The same conditions still hold: If state storage is enabled on influx, or the queue is used, points will not be lost.
             tester.Handler.AllowPush = false;
             tester.Handler.AllowEvents = false;
             tester.Handler.AllowConnectionTest = false;
+
+            tester.Server.TriggerEvents(0);
 
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
                 20, "Failurebuffer must receive some events");
@@ -845,8 +912,12 @@ namespace Test
             tester.Handler.AllowEvents = true;
             tester.Handler.AllowConnectionTest = true;
 
+            tester.Server.TriggerEvents(1);
+
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.AnyEvents,
                 20, "FailureBuffer should be emptied");
+
+            tester.Server.TriggerEvents(2);
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
 
@@ -857,12 +928,7 @@ namespace Test
             var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
 
-            Assert.Contains(events, ev => ev.description.StartsWith("prop ", StringComparison.InvariantCulture));
-            Assert.Contains(events, ev => ev.description == "prop 0");
-            Assert.Contains(events, ev => ev.description == "basicPass 0");
-            Assert.Contains(events, ev => ev.description == "basicPassSource 0");
-            Assert.Contains(events, ev => ev.description == "basicVarSource 0");
-            Assert.Contains(events, ev => ev.description == "mappedType 0");
+            Assert.Equal(21, events.Count);
 
             var countregex = new Regex("\\d+$");
             var propNumbers = events
@@ -873,14 +939,14 @@ namespace Test
             ExtractorTester.TestContinuity(propNumbers);
 
             var nonHistNumbers = events
-                .Where(evt => evt.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+                .Where(evt => evt.description.StartsWith("prop-e2 ", StringComparison.InvariantCulture))
                 .Select(evt => Convert.ToInt32(countregex.Match(evt.description).Value, CultureInfo.InvariantCulture))
                 .Distinct()
                 .ToList();
             ExtractorTester.TestContinuity(nonHistNumbers);
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_event_push_failures"));
+            Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_event_push_failures_cdf"));
         }
     }
 }

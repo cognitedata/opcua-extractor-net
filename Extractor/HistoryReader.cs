@@ -40,7 +40,7 @@ namespace Cognite.OpcUa
         private bool aborting;
         private int running;
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(HistoryReader));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(HistoryReader));
         /// <summary>
         /// Constructor, initialize from config
         /// </summary>

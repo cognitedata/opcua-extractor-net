@@ -24,7 +24,7 @@ namespace Cognite.Bridge
         private readonly ConcurrentDictionary<string, long?> assetIds = new ConcurrentDictionary<string, long?>();
         private readonly ConcurrentDictionary<string, bool?> tsIsString = new ConcurrentDictionary<string, bool?>();
 
-        private readonly ILogger log = Log.ForContext(typeof(Destination));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(Destination));
         public Destination(CDFConfig config, IServiceProvider provider)
         {
             this.config = config;

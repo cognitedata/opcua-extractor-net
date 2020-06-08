@@ -209,6 +209,8 @@ namespace Cognite.OpcUa
                 + $"ParentId: {ParentId?.ToString()}\n"
                 + $"Id: {Id.ToString()}\n"
                 + $"Historizing: {Historizing}\n"
+                + $"ValueRank: {ValueRank}\n"
+                + $"Dimension: {(ArrayDimensions != null && ArrayDimensions.Count == 1 ? ArrayDimensions[0] : -1)}\n"
                 + propertyString + "\n"
                 + DataType + "\n";
             return ret;

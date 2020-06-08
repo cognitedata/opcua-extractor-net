@@ -85,22 +85,22 @@ namespace Cognite.OpcUa
         private static readonly Counter dataPointPushFailures = Metrics
             .CreateCounter("opcua_datapoint_push_failures_cdf", "Number of completely failed pushes of datapoints to CDF");
         private static readonly Counter eventCounter = Metrics
-            .CreateCounter("opcua_events_pushed", "Number of events pushed to CDF");
+            .CreateCounter("opcua_events_pushed_cdf", "Number of events pushed to CDF");
         private static readonly Counter eventPushCounter = Metrics
-            .CreateCounter("opcua_event_pushes", "Number of times events have been pushed to CDF");
+            .CreateCounter("opcua_event_pushes_cdf", "Number of times events have been pushed to CDF");
         private static readonly Counter eventPushFailures = Metrics
-            .CreateCounter("opcua_event_push_failures", "Number of times events have been pushed to CDF");
+            .CreateCounter("opcua_event_push_failures_cdf", "Number of times events have been pushed to CDF");
         private static readonly Counter nodeEnsuringFailures = Metrics
-            .CreateCounter("opcua_node_ensure_failures",
+            .CreateCounter("opcua_node_ensure_failures_cdf",
             "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
         private static readonly Counter duplicatedEvents = Metrics
-            .CreateCounter("opcua_duplicated_events", "Number of events that failed to push to CDF due to already existing in CDF");
+            .CreateCounter("opcua_duplicated_events_cdf", "Number of events that failed to push to CDF due to already existing in CDF");
         private static readonly Counter skippedDatapoints = Metrics
             .CreateCounter("opcua_skipped_datapoints_cdf", "Number of datapoints skipped by CDF pusher");
         private static readonly Counter skippedEvents = Metrics
             .CreateCounter("opcua_skipped_events_cdf", "Number of events skipped by CDF pusher");
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusher));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusher));
         #region Interface
 
         /// <summary>

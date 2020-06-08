@@ -22,7 +22,7 @@ namespace Cognite.OpcUa
         public ConcurrentQueue<BufferedEvent> EventQueue { get; }
             = new ConcurrentQueue<BufferedEvent>();
 
-        private readonly ILogger log = Log.ForContext(typeof(Streamer));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(Streamer));
 
 
         public bool AllowEvents { get; set; }

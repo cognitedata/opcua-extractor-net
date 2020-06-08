@@ -74,7 +74,10 @@ namespace Test
                 HistoryGranularity = granularity
             });
             await tester.ClearPersistentData();
+            await tester.StartServer();
+            tester.Server.PopulateBaseHistory();
 
+            tester.Config.Extraction.AllowStringVariables = true;
             tester.Config.History.DataChunk = 10000;
 
             tester.StartExtractor();
@@ -96,6 +99,9 @@ namespace Test
                 ServerName = ServerName.Proxy
             });
             tester.Config.History.Enabled = false;
+
+            await tester.StartServer();
+
             using var process = CommonTestUtils.GetProxyProcess();
             process.Start();
             await tester.ClearPersistentData();
@@ -133,6 +139,9 @@ namespace Test
             {
                 ServerName = ServerName.Proxy
             });
+
+            await tester.StartServer();
+
             using var process = CommonTestUtils.GetProxyProcess();
             process.Start();
             tester.Config.Source.ForceRestart = true;

@@ -27,23 +27,22 @@ Extraction:
         # Ex: "urn:cognite:net:server": cns
         # Saves space compared to using the full URL. Using the ns index is not safe
         # If not specified, the full URI is used instead.
-        "urn:freeopcua:python:server": "fps:"
-        "http://examples.freeopcua.github.io": "efg:"
+        "opc.tcp://test.localhost": "tl:"
 
 Events:
     # Event ids to map, with full namespace-uri, and node identifier on the form "i=123"
     # Custom events must be subtypes of the BaseEventType.
     EventIds:
-        -   NamespaceUri: "http://examples.freeopcua.github.io"
-            NodeId: "i=12"
-        -   NamespaceUri: "http://examples.freeopcua.github.io"
-            NodeId: "i=16"
-        -   NamespaceUri: "http://examples.freeopcua.github.io"
-            NodeId: "i=18"
+        -   NamespaceUri: "opc.tcp://test.localhost"
+            NodeId: "i=7"
+        -   NamespaceUri: "opc.tcp://test.localhost"
+            NodeId: "i=11"
+        -   NamespaceUri: "opc.tcp://test.localhost"
+            NodeId: "i=13"
     # Id of nodes to be observed as event emitters. Empty Namespace/NodeId defaults to the server node.
     EmitterIds:
-        -   NamespaceUri: "http://examples.freeopcua.github.io"
-            NodeId: "i=1"
+        -   NamespaceUri: "opc.tcp://test.localhost"
+            NodeId: "i=2"
         -   NamespaceUri:
             NodeId:
     # List of BrowseName for properties to be excluded from automatic mapping to destination metadata.

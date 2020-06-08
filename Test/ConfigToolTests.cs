@@ -25,13 +25,14 @@ using Xunit;
 using Xunit.Abstractions;
 using Cognite.OpcUa.Config;
 using Serilog;
+using Server;
 
 namespace Test
 {
     [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
     public class ConfigToolTests : MakeConsoleWork
     {
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolTests));
+        // private readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolTests));
 
         public ConfigToolTests(ITestOutputHelper output) : base(output) { }
 
@@ -45,16 +46,32 @@ namespace Test
         [InlineData(ServerName.Events)]
         [InlineData(ServerName.Audit)]
         [Theory]
-        public async Task DoConfigToolTest(ServerName server)
+        public async Task DoConfigToolTest(ServerName serverName)
         {
-            log.Information("Loading config from config.config - tool - test.yml");
-
             var fullConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
             var baseConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.HostNames[server];
-            baseConfig.Source.EndpointURL = ExtractorTester.HostNames[server];
+            fullConfig.Source.EndpointURL = ExtractorTester.HostName;
+            baseConfig.Source.EndpointURL = ExtractorTester.HostName;
+
+            using var server = new ServerController(new[] { ExtractorTester.SetupMap[serverName] });
+            await server.Start();
+
+            if (serverName == ServerName.Events)
+            {
+                server.PopulateEvents();
+            }
+
+            if (serverName == ServerName.Array)
+            {
+                server.PopulateArrayHistory();
+            }
+
+            if (serverName == ServerName.Basic)
+            {
+                server.PopulateBaseHistory();
+            }
 
             var explorer = new UAServerExplorer(fullConfig, baseConfig);
 
@@ -73,13 +90,17 @@ namespace Test
             explorer.ReadCustomTypes(source.Token);
 
             await explorer.IdentifyDataTypeSettings(source.Token);
-            Assert.True(baseConfig.Extraction.AllowStringVariables);
-            if (server == ServerName.Array)
+            if (serverName != ServerName.Audit)
+            {
+                Assert.True(baseConfig.Extraction.AllowStringVariables);
+            }
+
+            if (serverName == ServerName.Array)
             {
                 Assert.Equal(4, baseConfig.Extraction.MaxArraySize);
                 Assert.Equal(2, baseConfig.Extraction.CustomNumericTypes.Count());
-                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=11");
-                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=12");
+                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=6");
+                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=7");
             }
             else
             {
@@ -92,7 +113,7 @@ namespace Test
 
             await explorer.GetHistoryReadConfig();
             Assert.Equal(100, baseConfig.History.DataNodesChunk);
-            if (server == ServerName.Audit || server == ServerName.Events)
+            if (serverName == ServerName.Audit || serverName == ServerName.Full || serverName == ServerName.Events)
             {
                 Assert.False(baseConfig.History.Enabled);
             }
@@ -102,18 +123,20 @@ namespace Test
             }
 
             await explorer.GetEventConfig(source.Token);
-            if (server == ServerName.Events)
+            if (serverName == ServerName.Events)
             {
+                Assert.Contains(baseConfig.Events.EventIds, proto => proto.NodeId == "i=7");
+                Assert.Contains(baseConfig.Events.EventIds, proto => proto.NodeId == "i=11");
                 Assert.Contains(baseConfig.Events.EventIds, proto => proto.NodeId == "i=12");
-                Assert.Contains(baseConfig.Events.EventIds, proto => proto.NodeId == "i=16");
-                Assert.Contains(baseConfig.Events.EventIds, proto => proto.NodeId == "i=17");
-                Assert.Contains(baseConfig.Events.EventIds, proto => proto.NodeId == "i=18");
+                Assert.Contains(baseConfig.Events.EventIds, proto => proto.NodeId == "i=13");
                 Assert.Contains(baseConfig.Events.EmitterIds, proto => proto.NodeId == "i=2253");
-                Assert.Contains(baseConfig.Events.EmitterIds, proto => proto.NodeId == "i=1");
                 Assert.Contains(baseConfig.Events.EmitterIds, proto => proto.NodeId == "i=2");
+                Assert.Contains(baseConfig.Events.EmitterIds, proto => proto.NodeId == "i=3");
                 Assert.Contains(baseConfig.Events.HistorizingEmitterIds, proto => proto.NodeId == "i=2253");
+                Assert.Contains(baseConfig.Events.HistorizingEmitterIds, proto => proto.NodeId == "i=2");
+                Assert.True(baseConfig.History.Enabled);
             }
-            else if (server == ServerName.Audit)
+            else if (serverName == ServerName.Audit)
             {
                 Assert.True(baseConfig.Extraction.EnableAuditDiscovery);
             }
@@ -122,8 +145,8 @@ namespace Test
 
             Assert.True(baseConfig.Extraction.NamespaceMap.ContainsKey("http://opcfoundation.org/UA/")
                 && baseConfig.Extraction.NamespaceMap["http://opcfoundation.org/UA/"] == "base:");
-            Assert.True(baseConfig.Extraction.NamespaceMap.ContainsKey("http://examples.freeopcua.github.io")
-                && baseConfig.Extraction.NamespaceMap["http://examples.freeopcua.github.io"] == "efg:");
+            Assert.True(baseConfig.Extraction.NamespaceMap.ContainsKey("opc.tcp://test.localhost")
+                && baseConfig.Extraction.NamespaceMap["opc.tcp://test.localhost"] == "tl:");
 
             explorer.LogSummary();
 
@@ -141,8 +164,11 @@ namespace Test
             var fullConfig = ExtractorUtils.GetConfig("config.influxtest.yml");
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.HostNames[ServerName.Basic];
+            fullConfig.Source.EndpointURL = ExtractorTester.HostName;
             fullConfig.Pushers = new List<PusherConfig>();
+
+            using var server = new ServerController(new[] { PredefinedSetup.Base });
+            await server.Start();
 
             var runTime = new ExtractorRuntime(fullConfig);
 
@@ -177,8 +203,11 @@ namespace Test
 
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.HostNames[ServerName.Basic];
-            baseConfig.Source.EndpointURL = ExtractorTester.HostNames[ServerName.Basic];
+            using var server = new ServerController(new[] { PredefinedSetup.Base });
+            await server.Start();
+
+            fullConfig.Source.EndpointURL = ExtractorTester.HostName;
+            baseConfig.Source.EndpointURL = ExtractorTester.HostName;
 
             var runTime = new ConfigToolRuntime(fullConfig, baseConfig, "config.config-tool-output.yml");
 

@@ -4,6 +4,7 @@
     <TargetFramework>netcoreapp3.0</TargetFramework>
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
+    <LangVersion>8.0</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <None Remove=".editorconfig" />
@@ -15,9 +16,13 @@
     <ProjectReference Include="..\ConfigurationTool\ConfigurationTool.csproj" />
     <ProjectReference Include="..\Extractor\Extractor.csproj" />
     <ProjectReference Include="..\MQTTCDFBridge\MQTTCDFBridge.csproj" />
+    <ProjectReference Include="..\Server\Server.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="servers\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
   </ItemGroup>
   <ItemGroup>
     <None Update="config.bridge.yml">

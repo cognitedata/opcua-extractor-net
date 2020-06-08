@@ -2,6 +2,8 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
@@ -48,7 +50,7 @@ namespace Cognite.OpcUa
         private static readonly Counter skippedEvents = Metrics
             .CreateCounter("opcua_skipped_events_influx", "Number of events skipped by influxdb pusher");
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(InfluxPusher));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(InfluxPusher));
 
         public InfluxPusher(InfluxClientConfig config)
         {
@@ -372,7 +374,7 @@ namespace Cognite.OpcUa
             return true;
         }
 
-        private IInfluxDatapoint BufferedDPToInflux(NodeExtractionState state, BufferedDataPoint dp)
+        private static IInfluxDatapoint BufferedDPToInflux(NodeExtractionState state, BufferedDataPoint dp)
         {
 
             if (state.DataType.IsString)
@@ -505,7 +507,7 @@ namespace Cognite.OpcUa
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
-                $"SELECT * FROM /events.{state.Key}*/" +
+                $"SELECT * FROM /events.{state.Key.Replace("/", "\\/", StringComparison.InvariantCulture)}:.*/" +
                 $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks * 100}" +
                 $" AND time <= {(state.Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks * 100}")
             ).ToList();

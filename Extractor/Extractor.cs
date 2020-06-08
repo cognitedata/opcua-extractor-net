@@ -57,6 +57,9 @@ namespace Cognite.OpcUa
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
 
+        private int subscribed;
+        private bool subscribeFlag = false;
+
 
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
@@ -73,7 +76,7 @@ namespace Cognite.OpcUa
         private static readonly Gauge trackedTimeseres = Metrics
             .CreateGauge("opcua_tracked_timeseries", "Number of variables on the opcua server mapped to timeseries");
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(Extractor));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(Extractor));
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -189,6 +192,8 @@ namespace Cognite.OpcUa
         /// </summary>
         public void RestartExtractor()
         {
+            subscribed = 0;
+            subscribeFlag = false;
             historyReader.Terminate(CancellationToken.None, 30).Wait();
             foreach (var state in State.NodeStates) {
                 state.ResetStreamingState();
@@ -370,6 +375,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public async Task RestartHistory(CancellationToken token)
         {
+            if (!config.History.Enabled) return;
             await Task.WhenAll(Task.Run(async () =>
             {
                 await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.Historizing),
@@ -400,6 +406,17 @@ namespace Cognite.OpcUa
             var historyTasks = await MapUAToDestinations(token);
             Looper.ScheduleTasks(historyTasks);
         }
+
+        public async Task WaitForSubscriptions(int timeout = 100)
+        {
+            int time = 0;
+            while (!subscribeFlag && subscribed < 2 && time++ < timeout) await Task.Delay(100);
+            if (time >= timeout && !subscribeFlag && subscribed < 2)
+            {
+                throw new TimeoutException("Waiting for push timed out");
+            }
+            log.Debug("Waited {s} milliseconds for subscriptions", time * 100);
+        }
         #endregion
 
         #region Mapping
@@ -417,6 +434,8 @@ namespace Cognite.OpcUa
                 log.Information("Mapping resulted in no new nodes");
                 return Array.Empty<Task>();
             }
+
+            log.Information("Map {obj} objects, {var} variables to destinations", objects.Count, variables.Count);
 
             Streamer.AllowData = State.NodeStates.Any();
 
@@ -479,7 +498,7 @@ namespace Cognite.OpcUa
                 {
                     State.SetEmitterState(new EventExtractionState(id));
                 }
-                if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
+                if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any() && config.History.Enabled)
                 {
                     var histEmitters = config.Events.HistorizingEmitterIds.Select(proto =>
                         proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
@@ -548,9 +567,9 @@ namespace Cognite.OpcUa
 
             foreach (var node in rawVariables)
             {
-                log.Debug(node.ToDebugDescription());
                 if (AllowTSMap(node))
                 {
+                    log.Debug(node.ToDebugDescription());
                     variables.Add(node);
                     var state = new NodeExtractionState(node);
                     State.AddActiveNode(node);
@@ -691,6 +710,9 @@ namespace Cognite.OpcUa
         {
             await Task.Run(() => uaClient.SubscribeToEvents(State.EmitterStates.Select(state => state.Id), 
                 nodes, Streamer.EventSubscriptionHandler, token));
+            Interlocked.Increment(ref subscribed);
+            if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
+            if (!config.History.Enabled) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
                 await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.Historizing), nodes, token);
@@ -711,6 +733,9 @@ namespace Cognite.OpcUa
         private async Task SynchronizeNodes(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
             await Task.Run(() => uaClient.SubscribeToNodes(states, Streamer.DataSubscriptionHandler, token));
+            Interlocked.Increment(ref subscribed);
+            if (!State.EmitterStates.Any() || subscribed > 1) subscribeFlag = true;
+            if (!config.History.Enabled) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
                 await historyReader.FrontfillData(states.Where(state => state.Historizing), token);
@@ -836,7 +861,11 @@ namespace Cognite.OpcUa
                     && (State.IsMappedNode(uaClient.ToNodeId(added.ParentNodeId))))
                     .Select(added => uaClient.ToNodeId(added.ParentNodeId))
                     .Distinct();
-                if (!relevantIds.Any()) return;
+                if (!relevantIds.Any())
+                {
+                    log.Debug("No relevant nodes in addNodes audit event");
+                    return;
+                }
                 log.Information("Trigger rebrowse on {numnodes} node ids due to addNodes event", relevantIds.Count());
 
                 foreach (var id in relevantIds)
@@ -863,7 +892,11 @@ namespace Cognite.OpcUa
                 .Select(added => uaClient.ToNodeId(added.SourceNodeId))
                 .Distinct();
 
-            if (!relevantRefIds.Any()) return;
+            if (!relevantRefIds.Any())
+            {
+                log.Debug("No relevant nodes in addReferences audit event");
+                return;
+            }
 
             log.Information("Trigger rebrowse on {numnodes} node ids due to addReference event", relevantRefIds.Count());
 

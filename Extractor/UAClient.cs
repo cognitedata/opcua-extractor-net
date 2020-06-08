@@ -75,7 +75,7 @@ namespace Cognite.OpcUa
         private static readonly Counter browseFailures = Metrics
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
 
         /// <summary>
         /// Constructor, does not start the client.
@@ -103,9 +103,12 @@ namespace Cognite.OpcUa
         /// </summary>
         public void Close()
         {
-            if (!Session.Disposed)
+            reconnectHandler?.Dispose();
+            reconnectHandler = null;
+            if (Session != null && !Session.Disposed)
             {
-                Session.CloseSession(null, true);
+                Session.Close(1000);
+                Session = null;
             }
             connected.Set(0);
         }
@@ -407,7 +410,7 @@ namespace Cognite.OpcUa
                     NodeClassMask = nodeClassMask,
                     BrowseDirection = BrowseDirection.Forward,
                     ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
-                        | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition
+                        | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition | (uint)BrowseResultMask.BrowseName
                 }
             ));
             if (!parents.Any())
@@ -631,7 +634,7 @@ namespace Cognite.OpcUa
                     );
                     attributeRequests.Inc();
                     values = values.Concat(lvalues);
-                    log.Information("Read {NumAttributesRead} attributes", lvalues.Count);
+                    log.Debug("Read {NumAttributesRead} attributes", lvalues.Count);
                 }
                 log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
                     readValueIds.Count, count, nodes.Count());
@@ -695,13 +698,17 @@ namespace Cognite.OpcUa
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
                     vnode.SetDataType(dataType, numericDataTypes);
                     enumerator.MoveNext();
-                    vnode.Historizing = historyConfig.Enabled && enumerator.Current.GetValue(false);
+                    vnode.Historizing = historyConfig.Enabled && historyConfig.Data && enumerator.Current.GetValue(false);
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
                     if (extractionConfig.MaxArraySize > 0)
                     {
                         enumerator.MoveNext();
-                        vnode.ArrayDimensions = new Collection<int>((int[])enumerator.Current.GetValue(typeof(int[])));
+                        var dimVal = enumerator.Current.GetValue(typeof(int[])) as int[];
+                        if (dimVal != null)
+                        {
+                            vnode.ArrayDimensions = new Collection<int>((int[])enumerator.Current.GetValue(typeof(int[])));
+                        }
                     }
                 }
             }
@@ -892,7 +899,7 @@ namespace Cognite.OpcUa
 #pragma warning disable CA2000 // Dispose objects before losing scope. The subscription is disposed properly or added to the client.
                                    ?? new Subscription(Session.DefaultSubscription)
                                    {
-                                       PublishingInterval = config.PollingInterval,
+                                       PublishingInterval = config.PublishingInterval,
                                        DisplayName = "DataChangeListener"
                                    };
 #pragma warning restore CA2000 // Dispose objects before losing scope
@@ -912,7 +919,8 @@ namespace Cognite.OpcUa
                             {
                                 StartNodeId = node.Id,
                                 DisplayName = "Value: " + node.DisplayName,
-                                SamplingInterval = config.PollingInterval
+                                SamplingInterval = config.SamplingInterval,
+                                QueueSize = (uint)Math.Max(0, config.QueueLength)
                             };
                             monitor.Notification += subscriptionHandler;
                             count++;
@@ -994,7 +1002,7 @@ namespace Cognite.OpcUa
 #pragma warning disable CA2000 // Dispose objects before losing scope
                     subscription = new Subscription(Session.DefaultSubscription)
                     {
-                        PublishingInterval = config.PollingInterval,
+                        PublishingInterval = config.PublishingInterval,
                         DisplayName = "EventListener"
                     };
 #pragma warning restore CA2000 // Dispose objects before losing scope
@@ -1006,7 +1014,7 @@ namespace Cognite.OpcUa
                     .ToHashSet();
 
                 if (eventFields == null) throw new ExtractorFailureException("EventFields not defined");
-
+                
                 var filter = BuildEventFilter(nodeIds);
                 foreach (var emitter in emitters)
                 {
@@ -1017,7 +1025,9 @@ namespace Cognite.OpcUa
                         {
                             StartNodeId = emitter,
                             Filter = filter,
-                            AttributeId = Attributes.EventNotifier
+                            AttributeId = Attributes.EventNotifier,
+                            SamplingInterval = config.SamplingInterval,
+                            QueueSize = (uint)Math.Max(0, config.QueueLength)
                         };
                         count++;
                         item.Notification += subscriptionHandler;
@@ -1083,6 +1093,14 @@ namespace Cognite.OpcUa
             if (eventFields != null) return eventFields;
             var collector = new EventFieldCollector(this, eventIds);
             eventFields = collector.GetEventIdFields(token);
+            foreach (var pair in eventFields)
+            {
+                log.Verbose("Collected event field: {id}", pair.Key);
+                foreach (var fields in pair.Value)
+                {
+                    log.Verbose("    {root}: {browse}", fields.Item1, fields.Item2);
+                }
+            }
             return eventFields;
         }
         /// <summary>
@@ -1217,7 +1235,7 @@ namespace Cognite.OpcUa
 #pragma warning disable CA2000 // Dispose objects before losing scope
                                ?? new Subscription(Session.DefaultSubscription)
                 {
-                    PublishingInterval = config.PollingInterval,
+                    PublishingInterval = config.PublishingInterval,
                     DisplayName = "AuditListener"
                 };
 #pragma warning restore CA2000 // Dispose objects before losing scope
@@ -1226,7 +1244,9 @@ namespace Cognite.OpcUa
                 {
                     StartNodeId = ObjectIds.Server,
                     Filter = filter,
-                    AttributeId = Attributes.EventNotifier
+                    AttributeId = Attributes.EventNotifier,
+                    SamplingInterval = config.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, config.QueueLength)
                 };
                 item.Notification += callback;
                 subscription.AddItem(item);

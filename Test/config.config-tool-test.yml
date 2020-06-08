@@ -10,7 +10,7 @@ Source:
     # Auto accept connections from unknown servers.
     # There is not yet a feature to accept new certificates, but you can manually move rejected certificates to accepted.
     # Paths are defined in opc.ua.net.extractor.Config.xml
-    AutoAccept: false
+    AutoAccept: true
     # OPC-UA username, leave blank for anonymous user. (no authentication)
     Username:
     # OPC-UA password

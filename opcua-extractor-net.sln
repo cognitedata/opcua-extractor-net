@@ -34,7 +34,9 @@ Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "OpcUaExtractorSetup", "OpcU
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpcUaServiceManager", "OpcUaServiceManager\OpcUaServiceManager.csproj", "{FECDD1D7-DB45-4D16-ACE4-910B42929268}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MQTTCDFBridge", "MQTTCDFBridge\MQTTCDFBridge.csproj", "{55AE37FE-FD6E-499F-B3B1-C1DF1BE054FB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MQTTCDFBridge", "MQTTCDFBridge\MQTTCDFBridge.csproj", "{55AE37FE-FD6E-499F-B3B1-C1DF1BE054FB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Server", "Server\Server.csproj", "{D09006EE-E2D3-4C0B-8699-693E6F4F4A8B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -106,6 +108,14 @@ Global
 		{55AE37FE-FD6E-499F-B3B1-C1DF1BE054FB}.Release|Any CPU.Build.0 = Release|Any CPU
 		{55AE37FE-FD6E-499F-B3B1-C1DF1BE054FB}.Release|x86.ActiveCfg = Release|Any CPU
 		{55AE37FE-FD6E-499F-B3B1-C1DF1BE054FB}.Release|x86.Build.0 = Release|Any CPU
+		{D09006EE-E2D3-4C0B-8699-693E6F4F4A8B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D09006EE-E2D3-4C0B-8699-693E6F4F4A8B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D09006EE-E2D3-4C0B-8699-693E6F4F4A8B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D09006EE-E2D3-4C0B-8699-693E6F4F4A8B}.Debug|x86.Build.0 = Debug|Any CPU
+		{D09006EE-E2D3-4C0B-8699-693E6F4F4A8B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D09006EE-E2D3-4C0B-8699-693E6F4F4A8B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D09006EE-E2D3-4C0B-8699-693E6F4F4A8B}.Release|x86.ActiveCfg = Release|Any CPU
+		{D09006EE-E2D3-4C0B-8699-693E6F4F4A8B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

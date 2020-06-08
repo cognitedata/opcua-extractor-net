@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa;
+using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,7 +35,7 @@ namespace Test
         public InfluxPusherTests(ITestOutputHelper output) : base(output) { }
         [Trait("Server", "basic")]
         [Trait("Target", "InfluxPusher")]
-        [Trait("Test", "pusher")]
+        [Trait("Test", "influxpusher")]
         [Fact]
         public async Task TestInfluxPusher()
         {
@@ -42,45 +43,63 @@ namespace Test
             {
                 ConfigName = ConfigName.Influx
             });
+            tester.Config.History.Enabled = false;
             await tester.ClearPersistentData();
-
             Assert.True(await tester.Pusher.TestConnection(tester.Config, tester.Source.Token));
+            await tester.StartServer();
 
             tester.StartExtractor();
 
+            await tester.Extractor.WaitForSubscriptions();
+            await tester.Extractor.Looper.WaitForNextPush();
+
+            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar1, 1);
+
             await tester.WaitForCondition(async () =>
             {
-                var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database,
-                    "SELECT * FROM \"gp.efg:i=2\"");
-                return read.Count > 0 && read.First().HasEntries;
-            }, 20, "Expected to find some data in influxdb");
+                var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Base.DoubleVar1, false);
+                return dps.Count() == 2;
+            }, 20, "Expected to get some data");
+
+            var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Base.DoubleVar1);
+            Assert.Equal(2, dps.Count());
 
             await tester.TerminateRunTask();
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 0));
         }
         [Trait("Server", "array")]
         [Trait("Target", "InfluxPusher")]
-        [Trait("Test", "arraydata")]
+        [Trait("Test", "influxarraydata")]
         [Fact]
         public async Task TestArrayData()
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Influx,
-                ServerName = ServerName.Array
+                ServerName = ServerName.Array,
+                LogLevel = "verbose"
             });
             await tester.ClearPersistentData();
             tester.Config.Extraction.MaxArraySize = 4;
             tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.History.Enabled = false;
 
+            await tester.StartServer();
             tester.StartExtractor();
+
+            await tester.Extractor.WaitForSubscriptions();
+            await tester.Extractor.Looper.WaitForNextPush();
+
+            tester.Server.UpdateNode(tester.Server.Ids.Custom.Array, new int[] { 1, 1, 1, 1 });
 
             await tester.WaitForCondition(async () =>
             {
-                var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database,
-                    "SELECT * FROM \"gp.efg:i=2[3]\"");
-                return read.Count > 0 && read.First().HasEntries;
+                var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Custom.Array, false, 3);
+                return dps.Count() == 2;
             }, 20, "Expected to get some data");
+
+            var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Custom.Array, false, 3);
+            Assert.Equal(2, dps.Count());
 
             await tester.TerminateRunTask();
 
@@ -101,6 +120,8 @@ namespace Test
             await tester.ClearPersistentData();
             tester.Config.History.Enabled = false;
 
+            await tester.StartServer();
+
             tester.StartExtractor();
 
             await tester.TerminateRunTask();
@@ -120,12 +141,13 @@ namespace Test
 
             var pusher = tester.Pusher;
 
-            var badPoints = values.Select(value => new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", value)).ToList();
+            var badPoints = values.Select(value => new BufferedDataPoint(DateTime.Now, "gp.tl:i=2", value)).ToList();
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
 
             var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database, 
-                "SELECT * FROM \"gp.efg:i=2\"");
+                "SELECT * FROM \"gp.tl:i=2\"");
+
             Assert.True(read.Count > 0);
             var readValues = read.First();
 
@@ -146,22 +168,26 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
-                LogLevel = "debug",
                 PusherConfig = ConfigName.Influx,
                 ConfigName = ConfigName.Events
             });
             await tester.ClearPersistentData();
             tester.Config.History.Enabled = false;
 
+            await tester.StartServer();
+
             tester.StartExtractor();
+
+            await tester.Extractor.WaitForSubscriptions();
+
+            tester.Server.TriggerEvents(0);
 
             await tester.WaitForCondition(async () =>
             {
-                var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database, 
-                    "SELECT * FROM /events.gp.efg:i=1*/");
-                return read.Count > 0 && read.First().HasEntries &&
-                       tester.Extractor.State.EmitterStates.All(state => state.IsStreaming);
-            }, 20, "Expected to get some events in influxdb");
+                var evts = await tester.GetAllInfluxEvents(tester.Server.Ids.Event.Obj1);
+                var evts2 = await tester.GetAllInfluxEvents(tester.Server.Ids.Event.Obj2);
+                return evts.Count() == 4 && evts2.Count() == 2;
+            }, 5, "Expected to get some events in influxdb");
 
             await tester.TerminateRunTask();
         }
@@ -177,14 +203,17 @@ namespace Test
                 ConfigName = ConfigName.Test,
                 FailureInflux = ConfigName.Influx,
                 StoreDatapoints = true,
-                FailureInfluxWrite = true,
-                LogLevel = "debug"
+                FailureInfluxWrite = true
             });
             await tester.ClearPersistentData();
             tester.Config.Extraction.AllowStringVariables = true;
+
+            await tester.StartServer();
+            tester.Server.PopulateBaseHistory();
+
             tester.StartExtractor();
 
-            await tester.Extractor.Looper.WaitForNextPush();
+            await tester.Extractor.WaitForSubscriptions();
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
 
@@ -192,6 +221,9 @@ namespace Test
 
             tester.Handler.AllowPush = false;
             tester.Handler.AllowConnectionTest = false;
+
+            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1000);
+            tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1000);
 
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
                 20, "Failurebuffer must receive some data");
@@ -203,20 +235,27 @@ namespace Test
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.Any,
                 20, "FailureBuffer should be emptied");
 
-            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
+            tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1001);
+            tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1001);
 
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
+            
+            await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=10")
+                && tester.Handler.Datapoints["gp.tl:i=10"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count() == 1002, 20);
             await tester.TerminateRunTask();
             
-            tester.TestContinuity("gp.efg:i=10");
-            tester.TestConstantRate(1000, "gp.efg:i=9");
+            tester.TestContinuity("gp.tl:i=10");
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
+            Assert.Equal(1002, tester.Handler.Datapoints["gp.tl:i=10"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(3, tester.Handler.Datapoints["gp.tl:i=3"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count());
+
             Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
             Assert.Equal(5, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
             Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_cdf"));
         }
 
-        [Trait("Server", "events")]
+        [Trait("Server", "basic")]
         [Trait("Target", "InfluxPusher")]
         [Trait("Test", "influxbackfill")]
         [Fact]
@@ -231,13 +270,26 @@ namespace Test
 
             tester.Config.History.Backfill = true;
 
+            await tester.StartServer();
+            tester.Server.PopulateBaseHistory();
+
             tester.StartExtractor();
 
+            tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1000);
+
             await tester.WaitForCondition(() =>
-                    tester.Extractor.State.GetNodeState("gp.efg:i=10") != null
-                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").BackfillDone
-                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").IsStreaming,
+                    tester.Extractor.State.GetNodeState("gp.tl:i=10") != null
+                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").BackfillDone
+                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").IsStreaming,
                 20, "Expected backfill to terminate");
+
+            await tester.Extractor.Looper.WaitForNextPush();
+
+            await tester.WaitForCondition(async () =>
+            {
+                var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Base.IntVar);
+                return dps.Count() == 1001;
+            }, 20, "Expected points to arrive in influxdb");
 
             await tester.TerminateRunTask();
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
@@ -251,21 +303,28 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                ConfigName = ConfigName.Influx,
-                LogLevel = "debug"
+                ConfigName = ConfigName.Influx
             });
             await tester.ClearPersistentData();
 
             tester.Config.History.Backfill = true;
 
+            await tester.StartServer();
+            tester.Server.PopulateBaseHistory();
+
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Extractor.State.GetNodeState("gp.efg:i=10") != null
-                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").BackfillDone,
+                    tester.Extractor.State.GetNodeState("gp.tl:i=10") != null
+                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").BackfillDone
+                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").IsStreaming,
                 20, "Expected backfill to terminate");
 
-            await Task.Delay(2000);
+            await tester.WaitForCondition(async () =>
+            {
+                var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Base.IntVar);
+                return dps.Count() == 1000;
+            }, 20, "Expected points to arrive in influxdb");
 
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
@@ -273,12 +332,17 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor();
 
-            await Task.Delay(500);
+            await tester.Extractor.WaitForSubscriptions();
 
             await tester.WaitForCondition(() =>
-                    tester.Extractor.State.GetNodeState("gp.efg:i=10") != null
-                    && tester.Extractor.State.GetNodeState("gp.efg:i=10").BackfillDone,
+                    tester.Extractor.State.GetNodeState("gp.tl:i=10") != null
+                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").BackfillDone
+                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").IsStreaming,
                 20, "Expected backfill to terminate");
+
+            var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Base.IntVar);
+
+            Assert.Equal(1000, dps.Count());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
@@ -294,24 +358,35 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
-                LogLevel = "debug",
                 PusherConfig = ConfigName.Influx,
                 ConfigName = ConfigName.Events,
             });
             await tester.ClearPersistentData();
 
             tester.Config.History.Backfill = true;
+            tester.Config.History.Enabled = true;
+
+            await tester.StartServer();
+            tester.Server.PopulateEvents();
 
             tester.StartExtractor();
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
                     !state.Historizing || state.BackfillDone && state.IsStreaming),
-                60, "Expected backfill of events to terminate");
+                20, "Expected backfill of events to terminate");
+
+            await tester.WaitForCondition(async () =>
+            {
+                var evts = await tester.GetAllInfluxEvents(tester.Server.Ids.Event.Obj1);
+                return evts.Count() == 300;
+            }, 5, "Expected to get some events in influxdb");
 
             await tester.TerminateRunTask();
 
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 0));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 500));
         }
         [Trait("Server", "events")]
         [Trait("Target", "InfluxPusher")]
@@ -329,31 +404,53 @@ namespace Test
             await tester.ClearPersistentData();
 
             tester.Config.History.Backfill = true;
+            tester.Config.History.Enabled = true;
+
+            await tester.StartServer();
+            tester.Server.PopulateEvents();
 
             tester.StartExtractor();
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
                     !state.Historizing || state.BackfillDone && state.IsStreaming),
-                60, "Expected backfill of events to terminate");
+                20, "Expected backfill of events to terminate");
 
-            await tester.Extractor.Looper.WaitForNextPush();
+            await tester.WaitForCondition(async () =>
+            {
+                var evts = await tester.GetAllInfluxEvents(tester.Server.Ids.Event.Obj1);
+                return evts.Count() == 300;
+            }, 5, "Expected to get some events in influxdb");
 
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 0));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 500));
 
             CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor();
 
-            await Task.Delay(500);
+            await tester.Extractor.WaitForSubscriptions();
+
+            tester.Server.TriggerEvents(100);
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
                     !state.Historizing || state.BackfillDone && state.IsStreaming),
-                60, "Expected backfill of events to terminate");
+                20, "Expected backfill of events to terminate");
+
+            await tester.WaitForCondition(async () =>
+            {
+                var evts = await tester.GetAllInfluxEvents(tester.Server.Ids.Event.Obj1);
+                return evts.Count() == 304;
+            }, 5, "Expected to get some events in influxdb");
+
+            await tester.TerminateRunTask();
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
 
-            await tester.TerminateRunTask();
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 1));
+
         }
     }
 }

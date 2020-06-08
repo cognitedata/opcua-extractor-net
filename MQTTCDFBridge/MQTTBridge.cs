@@ -16,7 +16,7 @@ namespace Cognite.Bridge
         private readonly IMqttClientOptions options;
         private readonly IMqttClient client;
 
-        private readonly ILogger log = Log.ForContext(typeof(MQTTBridge));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(MQTTBridge));
 
         private readonly Destination destination;
         private bool recFlag;
@@ -29,7 +29,6 @@ namespace Cognite.Bridge
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.MQTT.ClientId)
                 .WithKeepAlivePeriod(TimeSpan.FromSeconds(10))
-                .WithKeepAliveSendInterval(TimeSpan.FromSeconds(1))
                 .WithTcpServer(config.MQTT.Host, config.MQTT.Port)
                 .WithCleanSession();
 
@@ -184,6 +183,7 @@ namespace Cognite.Bridge
         public void Dispose()
         {
             disconnected = true;
+            client.DisconnectAsync().Wait();
             client.Dispose();
         }
     }

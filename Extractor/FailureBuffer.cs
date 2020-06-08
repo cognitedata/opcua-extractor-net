@@ -227,7 +227,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "Failed to write datapoints to file");
+                    log.Error(ex, "Failed to write datapoints to file");
                     success = false;
                 }
             }
@@ -420,6 +420,7 @@ namespace Cognite.OpcUa
                     try
                     {
                         var events = await influxPusher.ReadEvents(activeStates, token);
+
                         log.Information("Read {cnt} events from influxdb failure buffer", events.Count());
                         await Task.WhenAll(pushers
                             .Where(pusher =>

@@ -32,6 +32,8 @@ using Prometheus.Client;
 using Serilog;
 using Xunit.Abstractions;
 using Xunit;
+using Server;
+using Opc.Ua;
 
 namespace Test
 {
@@ -67,30 +69,14 @@ namespace Test
     {
         private static readonly ILogger log = Log.Logger.ForContext(typeof(CommonTestUtils));
 
-        public static FullConfig BuildConfig(string serverType, string configname = "config.test.yml")
+        public static FullConfig BuildConfig(string configname = "config.test.yml")
         {
             var fullConfig = ExtractorUtils.GetConfig(configname);
             if (fullConfig == null) throw new ConfigurationException("Failed to load config file");
-            switch (serverType)
-            {
-                case "basic":
-                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4840";
-                    break;
-                case "full":
-                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4841";
-                    break;
-                case "array":
-                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4842";
-                    break;
-                case "events":
-                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4843";
-                    break;
-                case "audit":
-                    fullConfig.Source.EndpointURL = "opc.tcp://localhost:4844";
-                    break;
-            }
+            fullConfig.Source.EndpointURL = "opc.tcp://localhost:62546";
             return fullConfig;
         }
+
         public static bool TestRunResult(Exception e)
         {
             if (!(e is TaskCanceledException || e is AggregateException && e.InnerException is TaskCanceledException))
@@ -170,17 +156,21 @@ namespace Test
                 "opcua_history_reads",
                 "opcua_tracked_timeseries",
                 "opcua_tracked_assets",
-                "opcua_node_ensure_failures",
-                "opcua_datapoint_pushes",
-                "opcua_datapoint_push_failures",
+                "opcua_node_ensure_failures_cdf",
+                "opcua_datapoint_pushes_cdf",
+                "opcua_datapoint_push_failures_cdf",
+                "opcua_frontfill_events",
+                "opcua_backfill_events",
+                "opcua_frontfill_data",
+                "opcua_backfill_data",
                 "opcua_backfill_data_count",
                 "opcua_frontfill_data_count",
                 "opcua_backfill_events_count",
                 "opcua_frontfill_events_count",
                 "opcua_datapoint_push_failures_influx",
-                "opcua_event_push_failures",
+                "opcua_event_push_failures_cdf",
                 "opcua_event_push_failures_influx",
-                "opcua_duplicated_events",
+                "opcua_duplicated_events_cdf",
                 "opcua_created_assets_mqtt",
                 "opcua_created_timeseries_mqtt"
             };
@@ -212,7 +202,7 @@ namespace Test
 
         public static Process GetProxyProcess()
         {
-            return Bash("ncat -lk 4839 -c \"ncat localhost 4840\"");
+            return Bash("ncat -lk 4839 -c \"ncat localhost 62546\"");
         }
 
         public static void StopProxyProcess()
@@ -225,63 +215,63 @@ namespace Test
         /// Test that the event contains the appropriate data for the event server test
         /// </summary>
         /// <param name="ev"></param>
-        public static void TestEvent(EventDummy ev, CDFMockHandler factory)
+        public static void TestEvent(EventDummy ev, CDFMockHandler handler)
         {
             if (ev == null) throw new ArgumentNullException(nameof(ev));
-            if (factory == null) throw new ArgumentNullException(nameof(factory));
-            Assert.False(ev.description.StartsWith("propOther2 ", StringComparison.InvariantCulture));
-            Assert.False(ev.description.StartsWith("basicBlock ", StringComparison.InvariantCulture));
-            Assert.False(ev.description.StartsWith("basicNoVarSource ", StringComparison.InvariantCulture));
-            Assert.False(ev.description.StartsWith("basicExcludeSource ", StringComparison.InvariantCulture));
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            Assert.False(ev.description.StartsWith("prop-e3 ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basic-block ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basic-nosource ", StringComparison.InvariantCulture));
+            Assert.False(ev.description.StartsWith("basic-excludeobj ", StringComparison.InvariantCulture));
             if (ev.description.StartsWith("prop ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata.ContainsKey("PropertyString") && !string.IsNullOrEmpty(ev.metadata["PropertyString"]));
                 Assert.False(ev.metadata.ContainsKey("PropertyNum"));
-                Assert.Equal("TestSubType", ev.subtype);
-                Assert.Equal("gp.efg:i=12", ev.type);
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
+                Assert.Equal("sub-type", ev.subtype);
+                Assert.Equal("gp.tl:i=7", ev.type);
+                Assert.True(EventSourceIs(ev, handler, "Object 1", false));
             }
-            else if (ev.description.StartsWith("propOther ", StringComparison.InvariantCulture))
+            else if (ev.description.StartsWith("prop-e2 ", StringComparison.InvariantCulture))
             {
                 // This node is not historizing, so the first event should be lost
-                Assert.NotEqual("propOther 0", ev.description);
-                Assert.True(ev.metadata.ContainsKey("PropertyString") && !String.IsNullOrEmpty(ev.metadata["PropertyString"]));
+                Assert.NotEqual("prop-e2 0", ev.description);
+                Assert.True(ev.metadata.ContainsKey("PropertyString") && !string.IsNullOrEmpty(ev.metadata["PropertyString"]));
                 Assert.False(ev.metadata.ContainsKey("PropertyNum"));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
+                Assert.True(EventSourceIs(ev, handler, "Object 1", false));
             }
-            else if (ev.description.StartsWith("basicPass ", StringComparison.InvariantCulture))
+            else if (ev.description.StartsWith("basic-pass ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
-                Assert.True(String.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
+                Assert.True(string.IsNullOrEmpty(ev.subtype));
+                Assert.True(EventSourceIs(ev, handler, "Object 1", false));
             }
             // both source1 and 2
-            else if (ev.description.StartsWith("basicPassSource", StringComparison.InvariantCulture))
+            else if (ev.description.StartsWith("basic-pass-", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject2", false));
-                if (ev.description.StartsWith("basicPassSource2 ", StringComparison.InvariantCulture))
+                Assert.True(EventSourceIs(ev, handler, "Object 2", false));
+                if (ev.description.StartsWith("basic-pass-3 ", StringComparison.InvariantCulture))
                 {
-                    Assert.NotEqual("basicPassSource2 0", ev.description);
+                    Assert.NotEqual("basic-pass-3 0", ev.description);
                 }
             }
-            else if (ev.description.StartsWith("basicVarSource ", StringComparison.InvariantCulture))
+            else if (ev.description.StartsWith("basic-varsource ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
-                Assert.True(EventSourceIs(ev, factory, "MyVariable", true));
+                Assert.True(EventSourceIs(ev, handler, "Object 1", false));
+                Assert.True(EventSourceIs(ev, handler, "Variable 1", true));
             }
-            else if (ev.description.StartsWith("mappedType ", StringComparison.InvariantCulture))
+            else if (ev.description.StartsWith("mapped ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("TypeProp"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));
-                Assert.True(EventSourceIs(ev, factory, "MyObject", false));
-                Assert.Equal("MySpecialType", ev.type);
+                Assert.True(EventSourceIs(ev, handler, "Object 1", false));
+                Assert.Equal("CustomType", ev.type);
             }
             else
             {
@@ -304,14 +294,14 @@ namespace Test
 
     public sealed class ExtractorTester : IDisposable
     {
-        public static readonly Dictionary<ServerName, string> HostNames = new Dictionary<ServerName, string>
+        public static readonly Dictionary<ServerName, PredefinedSetup> SetupMap = new Dictionary<ServerName, PredefinedSetup>
         {
-            {ServerName.Basic, "opc.tcp://localhost:4840"},
-            {ServerName.Full, "opc.tcp://localhost:4841"},
-            {ServerName.Array, "opc.tcp://localhost:4842"},
-            {ServerName.Events, "opc.tcp://localhost:4843"},
-            {ServerName.Audit, "opc.tcp://localhost:4844"},
-            {ServerName.Proxy, "opc.tcp://localhost:4839"}
+            {ServerName.Basic, PredefinedSetup.Base},
+            {ServerName.Full, PredefinedSetup.Full},
+            {ServerName.Array, PredefinedSetup.Custom},
+            {ServerName.Events, PredefinedSetup.Events},
+            {ServerName.Audit, PredefinedSetup.Auditing},
+            {ServerName.Proxy, PredefinedSetup.Base}
         };
 
         private static readonly Dictionary<ConfigName, string> configNames = new Dictionary<ConfigName, string>
@@ -322,10 +312,12 @@ namespace Test
             {ConfigName.Mqtt, "config.mqtt.yml"}
         };
 
+        public static readonly string HostName = "opc.tcp://localhost:62546";
 
+        public ServerController Server { get; private set; }
         public FullConfig Config { get; }
         public CDFMockHandler Handler { get; }
-        public Extractor Extractor { get; }
+        public Extractor Extractor { get; private set; }
         public UAClient UAClient { get; }
         public IPusher Pusher { get; }
         public InfluxClientConfig InfluxConfig { get; }
@@ -336,7 +328,7 @@ namespace Test
         public MQTTBridge Bridge { get; }
         public Task RunTask { get; private set; }
         private readonly ExtractorTestParameters testParams;
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorTester));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorTester));
 
         public ExtractorTester(ExtractorTestParameters testParams)
         {
@@ -349,7 +341,7 @@ namespace Test
             }
             Config.Logging.ConsoleLevel = testParams.LogLevel;
             Cognite.OpcUa.Logger.Configure(Config.Logging);
-            Config.Source.EndpointURL = HostNames[testParams.ServerName];
+            Config.Source.EndpointURL = testParams.ServerName == ServerName.Proxy ? "opc.tcp://localhost:4839" : "opc.tcp://localhost:62546";
 
             FullConfig pusherConfig = null;
             if (testParams.PusherConfig != null)
@@ -461,6 +453,62 @@ namespace Test
             {
                 Extractor = new Extractor(Config, Pusher, UAClient);
             }
+
+            Server = new ServerController(new[] { SetupMap[testParams.ServerName] });
+        }
+
+        public Task<IEnumerable<BufferedDataPoint>> GetAllInfluxPoints(NodeId node, bool isString = false, int index = -1)
+        {
+            var dummy = new InfluxBufferState(node);
+            dummy.DestinationExtractedRange.Start = DateTime.MinValue;
+            dummy.DestinationExtractedRange.End = DateTime.Now.AddDays(100);
+            dummy.Type = isString ? InfluxBufferType.StringType : InfluxBufferType.DoubleType;
+            return ((InfluxPusher)Pusher).ReadDataPoints(
+                new Dictionary<string, InfluxBufferState> { { UAClient.GetUniqueId(node, index), dummy } },
+                CancellationToken.None);
+        }
+
+        public Task<IEnumerable<BufferedEvent>> GetAllInfluxEvents(NodeId node)
+        {
+            var dummy = new InfluxBufferState(node);
+            dummy.DestinationExtractedRange.Start = DateTime.MinValue;
+            dummy.DestinationExtractedRange.End = DateTime.Now.AddDays(100);
+            dummy.Type = InfluxBufferType.EventType;
+            return ((InfluxPusher)Pusher).ReadEvents(
+                new Dictionary<string, InfluxBufferState> { { UAClient.GetUniqueId(node), dummy } },
+                CancellationToken.None);
+        }
+
+        public void ReInitExtractor()
+        {
+            Extractor?.Dispose();
+            if (testParams.Builder != null)
+            {
+                Extractor = testParams.Builder(Config, Pusher, UAClient);
+            }
+            else
+            {
+                Extractor = new Extractor(Config, Pusher, UAClient);
+            }
+        }
+
+        public ProtoNodeId IdToProto(NodeId id)
+        {
+            if (id == null) throw new ArgumentNullException(nameof(id));
+            return new ProtoNodeId
+            {
+                NamespaceUri = Server.Server.GetNamespace(id.NamespaceIndex),
+                NodeId = id.ToString().Substring($"ns={id.NamespaceIndex};".Length)
+            };
+        }
+
+        public ProtoDataType IdToProtoDataType(NodeId id, bool step = false)
+        {
+            return new ProtoDataType
+            {
+                IsStep = step,
+                NodeId = IdToProto(id)
+            };
         }
 
         public async Task ClearPersistentData()
@@ -494,6 +542,14 @@ namespace Test
             }
         }
 
+        public async Task StartServer()
+        {
+            if (Server == null)
+            {
+                Server = new ServerController(new[] { SetupMap[testParams.ServerName] });
+            }
+            await Server.Start();
+        }
         public void StartExtractor()
         {
             RunTask = Extractor.RunExtractor(Source.Token, testParams.QuitAfterMap);
@@ -571,6 +627,13 @@ namespace Test
             }
         }
 
+        public void CloseServer()
+        {
+            Server?.Stop();
+            Server?.Dispose();
+            Server = null;
+        }
+
         public void TestContinuity(string id)
         {
             var dps = Handler.Datapoints[id].NumericDatapoints;
@@ -633,6 +696,7 @@ namespace Test
             Extractor?.Close();
             Extractor?.Dispose();
             Pusher?.Dispose();
+            Server?.Dispose();
         }
     }
     public class ExtractorTestParameters

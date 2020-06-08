@@ -13,6 +13,7 @@ build/
 
 # Temp data
 certificates/
+servercertificates/
 Logs/
 *.sql
 *.sql-journal
@@ -29,6 +30,7 @@ OpcUaService/Properties
 config/*
 !config.example.yml
 !opc.ua.net.extractor.Config.xml
+!Server.Test.Config.xml
 
 # MSI Setup
 OpcUaExtractorSetup/ProductInstallFiles.wxs
