@@ -120,6 +120,9 @@ podTemplate(
                     packProject('win-x64', "$version", false)
                     packProject('win81-x64', "$version", false)
                     packProject('linux-x64', "$version", true)
+                    packBridge('win-x64', "$version", false)
+                    packBridge('win81-x64', "$version", false)
+                    packBridge('linux-x64', "$version", true)
                 }
                 stage('Install release dependencies') {
                     sh('apt-get install -y python3-pip')
@@ -127,7 +130,9 @@ podTemplate(
 				}
                 stage('Deploy to github release') {
                     withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
-                        sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version opcua-extractor.win-x64.${version}.zip opcua-extractor.win81-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip")
+                        sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version "
+                            + "opcua-extractor.win-x64.${version}.zip opcua-extractor.win81-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip "
+                            + "mqtt-cdf-bridge.win-x64.${version}.zip mqtt-cdf-bridge.win81-x64.${version}.zip mqtt-cdf-bridge.linux-x64.${version}.zip")
                     }               
                 }
             }
@@ -197,6 +202,22 @@ podTemplate(
             }
         }
     }
+}
+
+void packBridge(String configuration, String version, boolean linux) {
+    sh("dotnet publish -c Release -r $configuration --self-contained true /p:PublishSingleFile=\"true\" MQTTCDFBridge/")
+    sh("mkdir -p ./${configuration}")
+    sh("mv MQTTCDFBridge/bin/Release/netcoreapp3.0/${configuration}/publish/* ./${configuration}/")
+    sh("mkdir -p ./${configuration}/config")
+    sh("cp ./config/config.bridge.example.yml ./${configuration}/config/")
+    sh("cp ./LICENSE.md ./${configuration}/")
+    if (linux) {
+        sh("chmod +x ./${configuration}/MQTTCDFBridge")
+    }
+    dir("$configuration") {
+        sh("zip -r ../mqtt-cdf-bridge.${configuration}.${version}.zip *")
+    }
+    sh("rm -r ./${configuration}")
 }
 
 void packProject(String configuration, String version, boolean linux) {

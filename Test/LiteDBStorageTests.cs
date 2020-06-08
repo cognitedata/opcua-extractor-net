@@ -484,6 +484,9 @@ namespace Test
 
             await tester2.Extractor.WaitForSubscriptions();
 
+            await tester2.Extractor.Looper.WaitForNextPush();
+            await tester2.Extractor.Looper.WaitForNextPush();
+
             foreach (var state in states)
             {
                 state.DestinationExtractedRange.Start = DateTime.MinValue;
@@ -525,7 +528,7 @@ namespace Test
 
                 tester.StartExtractor();
 
-                await tester.Extractor.Looper.WaitForNextPush();
+                await tester.Extractor.WaitForSubscriptions();
                 await tester.Extractor.Looper.WaitForNextPush();
 
                 tester.Handler.AllowPush = false;
