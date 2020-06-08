@@ -1,45 +1,28 @@
-﻿Source:
+﻿source:
     # The URL of the OPC-UA server to connect to
-    EndpointURL: "opc.tcp://localhost:4840"
+    endpoint-url: "opc.tcp://localhost:4840"
 
-Pushers:
+pushers:
     - !cdf
         # The project to connect to in the API
-        Project: test
+        project: test
         # Cognite api key
-        ApiKey: test
+        api-key: test
 
-Logging:
-    # Writes log events at this level to the Console. 
-    # If not present, or if the level is invalid, Console is not used. 
-    ConsoleLevel: "debug"
+history:
+    enabled: true
 
-History:
-    Enabled: true
-
-Extraction:
+extraction:
     # Global prefix for externalId. Should be unique to prevent name conflicts.
-    IdPrefix: "gp."
+    id-prefix: "gp."
   
     # Specify specific DisplayNames to ignore.
-    IgnoreNamePrefix:
+    ignore-name-prefix:
         - EXCLUDE
 
-    NamespaceMap:
+    namespace-map:
         # Map OPC-UA namespaces to prefixes in CDF. 
         # Ex: "urn:cognite:net:server": cns
         # Saves space compared to using the full URL. Using the ns index is not safe
         # If not specified, the full URI is used instead.
         "opc.tcp://test.localhost": "tl:"
-
-    #IgnoreDataTypes:
-    #    - NamespaceUri: http://examples.freeopcua.github.io
-    #      NodeId: i=10
-
-    #CustomNumericTypes:
-    #  - NodeId:
-    #        NamespaceUri: http://examples.freeopcua.github.io
-    #        NodeId: i=12
-    #  - NodeId:
-    #        NamespaceUri: http://examples.freeopcua.github.io
-    #        NodeId: i=11

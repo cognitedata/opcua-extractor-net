@@ -156,11 +156,11 @@ namespace Cognite.OpcUa
                 config.AutoAccept |= Appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 Appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
-            log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointURL);
+            log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointUrl);
             EndpointDescription selectedEndpoint;
             try
             {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointURL, config.Secure);
+                selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointUrl, config.Secure);
             }
             catch (ServiceResultException ex)
             {
@@ -194,7 +194,7 @@ namespace Cognite.OpcUa
             Started = true;
             connects.Inc();
             connected.Set(1);
-            log.Information("Successfully connected to server at {EndpointURL}", config.EndpointURL);
+            log.Information("Successfully connected to server at {EndpointURL}", config.EndpointUrl);
 
             if (extractionConfig.CustomNumericTypes != null)
             {

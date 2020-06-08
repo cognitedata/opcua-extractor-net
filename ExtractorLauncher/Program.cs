@@ -22,6 +22,7 @@ using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
 using Prometheus.Client;
 using Serilog;
+using Cognite.Extractor.Configuration;
 
 namespace Cognite.OpcUa
 {
@@ -73,6 +74,10 @@ namespace Cognite.OpcUa
 
             string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
 
+            ConfigurationUtils.AddTagMapping<CogniteClientConfig>("!cdf");
+            ConfigurationUtils.AddTagMapping<InfluxClientConfig>("!influx");
+            ConfigurationUtils.AddTagMapping<MQTTPusherConfig>("!mqtt");
+
             var config = new FullConfig();
             FullConfig baseConfig = null;
             if (!setup.NoConfig)
@@ -80,22 +85,23 @@ namespace Cognite.OpcUa
                 try
                 {
                     string configFile = setup.ConfigFile ?? System.IO.Path.Combine(configDir, setup.ConfigTool ? "config.config-tool.yml" : "config.yml");
-                    log.Information($"Loading config from {configFile}");
-                    config = ExtractorUtils.GetConfig(configFile);
+                    config = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
+                    config.GenerateDefaults();
                     if (setup.ConfigTool)
                     {
-                        baseConfig = ExtractorUtils.GetConfig(configFile);
+                        baseConfig = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
+                        baseConfig.GenerateDefaults();
                     }
                 }
-                catch (YamlDotNet.Core.YamlException e)
+                catch (Cognite.Extractor.Configuration.ConfigurationException e)
                 {
-                    log.Error("Failed to load config at {start}: {msg}", e.Start, e.InnerException?.Message ?? e.Message);
+                    log.Error("Failed to load configuration: {msg}", e.Message);
                     throw;
                 }
                 config.Source.ConfigRoot = configDir;
             }
 
-            if (!string.IsNullOrEmpty(setup.Host)) config.Source.EndpointURL = setup.Host;
+            if (!string.IsNullOrEmpty(setup.Host)) config.Source.EndpointUrl = setup.Host;
             if (!string.IsNullOrEmpty(setup.Username)) config.Source.Username = setup.Username;
             if (!string.IsNullOrEmpty(setup.Password)) config.Source.Password = setup.Password;
             config.Source.Secure |= setup.Secure;
@@ -109,8 +115,6 @@ namespace Cognite.OpcUa
             log.Information("Revision information: {status}", Version.Status());
 
             version.Set(0);
-
-
 
             try
             {

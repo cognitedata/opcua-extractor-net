@@ -27,18 +27,18 @@ namespace Cognite.Bridge
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             this.destination = destination;
             var builder = new MqttClientOptionsBuilder()
-                .WithClientId(config.MQTT.ClientId)
+                .WithClientId(config.Mqtt.ClientId)
                 .WithKeepAlivePeriod(TimeSpan.FromSeconds(10))
-                .WithTcpServer(config.MQTT.Host, config.MQTT.Port)
+                .WithTcpServer(config.Mqtt.Host, config.Mqtt.Port)
                 .WithCleanSession();
 
-            if (config.MQTT.UseTls)
+            if (config.Mqtt.UseTls)
             {
                 builder = builder.WithTls();
             }
-            if (!string.IsNullOrEmpty(config.MQTT.Username) && !string.IsNullOrEmpty(config.MQTT.Host))
+            if (!string.IsNullOrEmpty(config.Mqtt.Username) && !string.IsNullOrEmpty(config.Mqtt.Host))
             {
-                builder = builder.WithCredentials(config.MQTT.Username, config.MQTT.Password);
+                builder = builder.WithCredentials(config.Mqtt.Username, config.Mqtt.Password);
             }
 
             options = builder.Build();
@@ -83,17 +83,17 @@ namespace Cognite.Bridge
             {
                 log.Information("MQTT client connected");
                 await client.SubscribeAsync(new MqttClientSubscribeOptionsBuilder()
-                    .WithTopicFilter(config.MQTT.AssetTopic)
-                    .WithTopicFilter(config.MQTT.TSTopic)
-                    .WithTopicFilter(config.MQTT.DatapointTopic)
-                    .WithTopicFilter(config.MQTT.EventTopic)
+                    .WithTopicFilter(config.Mqtt.AssetTopic)
+                    .WithTopicFilter(config.Mqtt.TSTopic)
+                    .WithTopicFilter(config.Mqtt.DatapointTopic)
+                    .WithTopicFilter(config.Mqtt.EventTopic)
                     .Build());
                 log.Information("Subscribed to topics");
             });
             client.UseApplicationMessageReceivedHandler(async msg =>
             {
                 bool success;
-                if (msg.ApplicationMessage.Topic == config.MQTT.DatapointTopic)
+                if (msg.ApplicationMessage.Topic == config.Mqtt.DatapointTopic)
                 {
                     log.Verbose("Datapoints message from: {src}", msg.ClientId);
                     try
@@ -106,7 +106,7 @@ namespace Cognite.Bridge
                         success = false;
                     }
                 }
-                else if (msg.ApplicationMessage.Topic == config.MQTT.EventTopic)
+                else if (msg.ApplicationMessage.Topic == config.Mqtt.EventTopic)
                 {
                     log.Verbose("Events message from: {src}", msg.ClientId);
                     try
@@ -119,7 +119,7 @@ namespace Cognite.Bridge
                         success = false;
                     }
                 }
-                else if (msg.ApplicationMessage.Topic == config.MQTT.AssetTopic)
+                else if (msg.ApplicationMessage.Topic == config.Mqtt.AssetTopic)
                 {
                     log.Verbose("Assets message from: {src}", msg.ClientId);
                     try
@@ -132,7 +132,7 @@ namespace Cognite.Bridge
                         success = false;
                     }
                 }
-                else if (msg.ApplicationMessage.Topic == config.MQTT.TSTopic)
+                else if (msg.ApplicationMessage.Topic == config.Mqtt.TSTopic)
                 {
                     log.Verbose("Timeseries message from: {src}", msg.ClientId);
                     try

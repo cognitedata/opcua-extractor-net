@@ -24,7 +24,7 @@ using Xunit.Abstractions;
 
 namespace Test
 {
-    [CollectionDefinition("UAClient_Tests", DisableParallelization = true)]
+    [Collection("Extractor tests")]
     public class UAClientTests : MakeConsoleWork 
     {
         public UAClientTests(ITestOutputHelper output) : base(output) { }
@@ -40,7 +40,7 @@ namespace Test
                 QuitAfterMap = true
             });
             await tester.ClearPersistentData();
-            tester.Config.Source.EndpointURL = "opc.tcp://localhost:4000";
+            tester.Config.Source.EndpointUrl = "opc.tcp://localhost:4000";
 
             tester.StartExtractor();
 

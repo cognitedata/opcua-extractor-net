@@ -17,18 +17,17 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using Cognite.Extractor.Configuration;
 using Cognite.OpcUa;
-using Serilog;
 using Xunit;
 using Xunit.Abstractions;
 
 namespace Test
 {
-    [CollectionDefinition("Event_tests", DisableParallelization = true)]
+    [Collection("Extractor tests")]
     public class EventTests : MakeConsoleWork
     {
         // private static readonly ILogger log = Log.Logger.ForContext(typeof(EventTests));
@@ -346,7 +345,7 @@ namespace Test
         [Trait("Test", "multipushereventbackfill")]
         public async Task TestMultiPusherBackfillRestart()
         {
-            var influxCfg = ExtractorUtils.GetConfig("config.influxtest.yml");
+            var influxCfg = ConfigurationUtils.Read<FullConfig>("config.influxtest.yml");
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,

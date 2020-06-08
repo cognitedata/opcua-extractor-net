@@ -4,13 +4,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Bridge;
+using Cognite.Extractor.Configuration;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
-using Newtonsoft.Json;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -19,7 +19,7 @@ namespace Test
     /// <summary>
     /// Tests for the MQTT bridge as a standalone tool.
     /// </summary>
-    [CollectionDefinition("MQTTBridge_Tests", DisableParallelization = true)]
+    [Collection("Bridge tests")]
     public class MQTTBridgeTests : MakeConsoleWork
     {
         public MQTTBridgeTests(ITestOutputHelper output) : base(output) { }
@@ -37,14 +37,15 @@ namespace Test
                 {
                     StoreDatapoints = true
                 };
-                config = Config.GetConfig("config.bridge.yml");
+                config = ConfigurationUtils.Read<BridgeConfig>("config.bridge.yml");
+                config.GenerateDefaults();
                 config.Logging.ConsoleLevel = "verbose";
                 Logger.Configure(config.Logging);
-                bridge = new MQTTBridge(new Destination(config.CDF, CommonTestUtils.GetDummyProvider(Handler)), config);
+                bridge = new MQTTBridge(new Destination(config.Cognite, CommonTestUtils.GetDummyProvider(Handler)), config);
                 bridge.StartBridge(CancellationToken.None).Wait();
                 var options = new MqttClientOptionsBuilder()
                     .WithClientId("test-mqtt-publisher")
-                    .WithTcpServer(config.MQTT.Host, config.MQTT.Port)
+                    .WithTcpServer(config.Mqtt.Host, config.Mqtt.Port)
                     .WithCleanSession()
                     .Build();
                 client = new MqttFactory().CreateMqttClient();
@@ -56,7 +57,7 @@ namespace Test
             public async Task RecreateBridge()
             {
                 bridge.Dispose();
-                bridge = new MQTTBridge(new Destination(config.CDF, CommonTestUtils.GetDummyProvider(Handler)), config);
+                bridge = new MQTTBridge(new Destination(config.Cognite, CommonTestUtils.GetDummyProvider(Handler)), config);
                 bool success = await bridge.StartBridge(CancellationToken.None);
                 if (!success) throw new Exception("Unable to start bridge");
             }
@@ -68,7 +69,7 @@ namespace Test
 
                 var msg = baseBuilder
                     .WithPayload(data)
-                    .WithTopic(config.MQTT.AssetTopic)
+                    .WithTopic(config.Mqtt.AssetTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();
@@ -83,7 +84,7 @@ namespace Test
 
                 var msg = baseBuilder
                     .WithPayload(data)
-                    .WithTopic(config.MQTT.TSTopic)
+                    .WithTopic(config.Mqtt.TSTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();
@@ -98,7 +99,7 @@ namespace Test
 
                 var msg = baseBuilder
                     .WithPayload(data)
-                    .WithTopic(config.MQTT.EventTopic)
+                    .WithTopic(config.Mqtt.EventTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();
@@ -113,7 +114,7 @@ namespace Test
 
                 var msg = baseBuilder
                     .WithPayload(data)
-                    .WithTopic(config.MQTT.DatapointTopic)
+                    .WithTopic(config.Mqtt.DatapointTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();

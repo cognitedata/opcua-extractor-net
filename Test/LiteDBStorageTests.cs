@@ -14,7 +14,7 @@ using Xunit.Abstractions;
 
 namespace Test
 {
-    [CollectionDefinition("State_tests", DisableParallelization = true)]
+    [Collection("Extractor tests")]
     public class LiteDbStorageTests : MakeConsoleWork
     {
         public LiteDbStorageTests(ITestOutputHelper output) : base(output) { }

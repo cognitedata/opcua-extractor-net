@@ -10,7 +10,7 @@ namespace Test
     /// <summary>
     /// Tests for the full MQTT pipeline to CDF mocker.
     /// </summary>
-    [CollectionDefinition("MQTTPusher_Tests", DisableParallelization = true)]
+    [Collection("Extractor tests")]
     public class MQTTPusherTests : MakeConsoleWork
     {
         public MQTTPusherTests(ITestOutputHelper output) : base(output) { }

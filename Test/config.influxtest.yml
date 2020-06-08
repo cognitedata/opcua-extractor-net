@@ -1,26 +1,21 @@
-﻿Source:
+﻿source:
     # The URL of the OPC-UA server to connect to
-    EndpointURL: opc.tcp://localhost:4840
+    endpoint-url: "opc.tcp://localhost:4840"
 
-Pushers:
+pushers:
     - !influx
         # Host URI, ex localhost:8086
-        Host: "http://localhost:8086"
+        host: "http://localhost:8086"
         # Database to connect to, will not be created automatically
-        Database: "testdb"
+        database: "testdb"
 
-Logging:
-    # Writes log events at this level to the Console. 
-    # If not present, or if the level is invalid, Console is not used. 
-    ConsoleLevel: "information"
-   
-History:
-    Enabled: true
+history:
+    enabled: true
 
-Extraction:
+extraction:
     # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations .
-    IdPrefix: "gp."
-    NamespaceMap:
+    id-prefix: "gp."
+    namespace-map:
         # Map OPC-UA namespaces to prefixes in CDF. 
         # Ex: "urn:cognite:net:server": cns
         # Saves space compared to using the full URL. Using the ns index is not safe

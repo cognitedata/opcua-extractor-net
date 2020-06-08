@@ -384,7 +384,7 @@ namespace Cognite.OpcUa.Pushers
             var data = JsonSerializer.SerializeToUtf8Bytes(timeseries, null);
             var msg = baseBuilder
                 .WithPayload(data)
-                .WithTopic(config.TSTopic)
+                .WithTopic(config.TsTopic)
                 .Build();
 
             try

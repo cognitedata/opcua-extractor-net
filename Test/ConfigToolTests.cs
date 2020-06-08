@@ -24,12 +24,12 @@ using Cognite.OpcUa;
 using Xunit;
 using Xunit.Abstractions;
 using Cognite.OpcUa.Config;
-using Serilog;
+using Cognite.Extractor.Configuration;
 using Server;
 
 namespace Test
 {
-    [CollectionDefinition("Pusher_tests", DisableParallelization = true)]
+    [Collection("Extractor tests")]
     public class ConfigToolTests : MakeConsoleWork
     {
         // private readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolTests));
@@ -48,12 +48,14 @@ namespace Test
         [Theory]
         public async Task DoConfigToolTest(ServerName serverName)
         {
-            var fullConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
-            var baseConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
+            var fullConfig = ConfigurationUtils.Read<FullConfig>("config.config-tool-test.yml");
+            var baseConfig = ConfigurationUtils.Read<FullConfig>("config.config-tool-test.yml");
+            fullConfig.GenerateDefaults();
+            baseConfig.GenerateDefaults();
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.HostName;
-            baseConfig.Source.EndpointURL = ExtractorTester.HostName;
+            fullConfig.Source.EndpointUrl = ExtractorTester.HostName;
+            baseConfig.Source.EndpointUrl = ExtractorTester.HostName;
 
             using var server = new ServerController(new[] { ExtractorTester.SetupMap[serverName] });
             await server.Start();
@@ -161,10 +163,11 @@ namespace Test
         [Fact]
         public async Task TestExtractorRuntime()
         {
-            var fullConfig = ExtractorUtils.GetConfig("config.influxtest.yml");
+            var fullConfig = ConfigurationUtils.Read<FullConfig>("config.influxtest.yml");
+            fullConfig.GenerateDefaults();
             Logger.Configure(fullConfig.Logging);
 
-            fullConfig.Source.EndpointURL = ExtractorTester.HostName;
+            fullConfig.Source.EndpointUrl = ExtractorTester.HostName;
             fullConfig.Pushers = new List<PusherConfig>();
 
             using var server = new ServerController(new[] { PredefinedSetup.Base });
@@ -198,16 +201,18 @@ namespace Test
         [Fact]
         public async Task TestConfigToolRuntime()
         {
-            var fullConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
-            var baseConfig = ExtractorUtils.GetConfig("config.config-tool-test.yml");
+            var fullConfig = ConfigurationUtils.Read<FullConfig>("config.config-tool-test.yml");
+            fullConfig.GenerateDefaults();
+            var baseConfig = ConfigurationUtils.Read<FullConfig>("config.config-tool-test.yml");
+            baseConfig.GenerateDefaults();
 
             Logger.Configure(fullConfig.Logging);
 
             using var server = new ServerController(new[] { PredefinedSetup.Base });
             await server.Start();
 
-            fullConfig.Source.EndpointURL = ExtractorTester.HostName;
-            baseConfig.Source.EndpointURL = ExtractorTester.HostName;
+            fullConfig.Source.EndpointUrl = ExtractorTester.HostName;
+            baseConfig.Source.EndpointUrl = ExtractorTester.HostName;
 
             var runTime = new ConfigToolRuntime(fullConfig, baseConfig, "config.config-tool-output.yml");
 

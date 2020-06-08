@@ -5,66 +5,70 @@
 # The values here are generally the default values, except for the contents of lists etc.
 # Your config file can contain only a subset of these config options. Any extra options will
 # cause the extractor to fail.
-Source:
+
+# Version of the config schema
+version: 1
+
+source:
     # The URL of the OPC-UA server to connect to
-    EndpointURL: opc.tcp://localhost:4840
+    endpoint-url: "opc.tcp://localhost:4840"
     # Auto accept connections from unknown servers.
     # There is not yet a feature to accept new certificates, but you can manually move rejected certificates to accepted.
     # Paths are defined in opc.ua.net.extractor.Config.xml
-    AutoAccept: false
+    auto-accept: false
     # How often the client requests updates to subscribed variables.
     # 0 updates at maximum rate set by server
     # This decides the maximum rate points are pushed to CDF. Higher reduces network and server load.
-    PublishingInterval: 500
+    publishing-interval: 500
     # How often the server requests updates from the source system (the source system is often the server itself)
     # 0 uses maximum rate set by server
     # Lower increases server load. This should be set to below the maximum update frequency of the source system.
-    SamplingInterval: 100
+    sampling-interval: 100
     # Length of internal server queue for each subscribed item. < 2 means that any updates occuring between publish requests are lost.
-    QueueLength: 10
+    queue-length: 10
     # OPC-UA username, leave blank for anonymous user. (no authentication)
-    Username:
+    username:
     # OPC-UA password
-    Password:
+    password:
     # Use secured connection
-    Secure: false
+    secure: false
     # If true, force restart the extractor on disconnect. Required for some servers
-    ForceRestart: false
+    force-restart: false
     # Completely exit the extractor on failure, instead of doing an internal restart. Internal reset should re-initialize everything relevant,
     # but this can be set to do restart with some external tool instead.
-    ExitOnFailure: false
+    exit-on-failure: false
     # Max sizes of various requests to OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
     # Maximum number of results per browse or browseNext operation
-    BrowseChunk: 1000
+    browse-chunk: 1000
     #Max number of nodes to browse at the same time. Higher is much faster, but may be restricted by the server.
-    BrowseNodesChunk: 1000
-    AttributesChunk: 1000
-    SubscriptionChunk: 1000
+    browse-nodes-chunk: 1000
+    attributes-chunk: 1000
+    subscription-chunk: 1000
 
 # Config for reading of history from the server
-History:
+history:
     # Enable/disable history synchronization from the OPC-UA server to CDF.
     # This is a master switch covering both events and data
-    Enabled: false
+    enabled: false
     # Enable or disable data history on historizing nodes. "Enabled" must be true.
-    Data: true
+    data: true
     # Enable/disable backfill behavior. If this is false, data is read using frontfill only. (Pre 1.1 behavior)
     # This applied to both datapoints and events.
-    Backfill: false
+    backfill: false
     # Max number of datapoints per history read request, 0 for server specified
-    DataChunk: 1000
+    data-chunk: 1000
     # Max number of simultaneous nodes per historyRead request for data
-    DataNodesChunk: 100
+    data-nodes-chunk: 100
     # Max number of events per history read request, 0 for server specified
-    EventChunk: 1000
+    event-chunk: 1000
     # Max number of simultaneous nodes per historyRead request for events
-    EventNodesChunk: 100
+    event-nodes-chunk: 100
     # The earliest timestamp to be read from history on the OPC-UA server, in milliseconds since 1/1/1970.
-    StartTime: 0
+    start-time: 0
     # Granularity to use when doing historyRead, in seconds. Nodes with last known timestamp within this range of eachother will
     # be read together. Should not be smaller than usual average update rate
     # Leave at 0 to always read a single node each time.
-    Granularity: 600
+    granularity: 600
 
 # List of pushers, the type must be identified using a Yaml tag. Each element results in a pusher, so it is possible
 # to push multiple times to the same system, for example in order to push to multiple projects in CDF.
@@ -72,203 +76,205 @@ History:
 # - !cdf, A pusher for CDF.
 # - !influx, Pusher for InfluxDB
 # - !mqtt, pusher for CDF through a one-way MQTT connection.
-Pushers:
+pushers:
     - !cdf
         # The project to connect to in the API
-        Project:
-	    # Cognite api key
-        ApiKey:
+        project:
+        # Cognite api key
+        api-key:
         # Cognite service url
-        Host: "https://api.cognitedata.com"
+        host: "https://api.cognitedata.com"
         # Debug mode, if true, Extractor will not push to target
-        Debug: false
+        debug: false
         # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
-        NonFiniteReplacement:
+        non-finite-replacement:
         # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
         # otherwise back/frontfill will run for the entire history every restart.
         # The CDF pusher is not able to read start/end points for events, so if reading historical events is enabled, one other pusher
         # able to do this should be enabled.
-        ReadExtractedRanges: true
+        read-extracted-ranges: true
         # Data set to use for new objects. Existing objects will not be updated
-        DataSetId:
+        data-set-id:
         # Chunk sizes in CDF requests
-        LatestChunk: 100
-        EarliestChunk: 1000
-        TimeSeriesChunk: 1000
-        AssetChunk: 1000
+        latest-chunk: 100
+        earliest-chunk: 1000
+        time-series-chunk: 1000
+        asset-chunk: 1000
 
     - !influx
         # Host URI, ex localhost:8086
-        Host:
+        host:
         # Influx username
-        Username:
+        username:
         # Influx password
-        Password:
+        password:
         # Database to connect to, will not be created automatically
-        Database:
+        database:
         # Debug mode, if true, Extractor will not push to target
-        Debug:
+        debug:
         # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
-        NonFiniteReplacement:
+        non-finite-replacement:
         # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
         # otherwise back/frontfill will run for the entire history every restart.
-        ReadExtractedRanges: true
+        read-extracted-ranges: true
         # Max number of points to send in each request to influx
-        PointChunkSize: 100000
+        point-chunk-size: 100000
 
     - !mqtt
         # TCP Broker URL
-        Host:
+        host:
         # TCP Broker port
-        Port:
+        port:
         # MQTT broker username
-        Username:
+        username:
         # MQTT broker password
-        Password:
+        password:
         # True to enable TLS
-        UseTls:
+        use-tls:
         # Mqtt client id. Should be unique for a given broker.
-        ClientId: cognite-opcua-extractor
+        client-id: cognite-opcua-extractor
         # Data set to use for new objects. Existing objects will not be updated
-        DataSetId:
+        data-set-id:
         # Assets topic
-        AssetTopic: cognite/opcua/assets
+        asset-topic: cognite/opcua/assets
         # Timeseries topic
-        TSTopic: cognite/opcua/timeseries
+        ts-topic: cognite/opcua/timeseries
         # Events topic
-        EventTopic: cognite/opcua/events
+        event-topic: cognite/opcua/events
         # Datapoints topic
-        DatapointTopic: cognite/opcua/datapoints
+        datapoint-topic: cognite/opcua/datapoints
         # Set to enable storing a list of created assets/timeseries to local litedb.
         # Requires the StateStorage.Location property to be set.
         # If this is left empty, metadata will have to be read each time the extractor restarts.
         # Default is empty
-        LocalState: mqtt_create_states
+        local-state: mqtt_create_states
         # Timestamp in ms since epoch to invalidate stored mqtt states.
         # On extractor restart, assets/timeseries created before this will be attempted re-created in CDF.
         # They will not be deleted or updated.
-        InvalidateBefore: 0
+        invalidate-before: 0
         # If true, pusher will not push to target
-        Debug: false
+        debug: false
         # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
-        NonFiniteReplacement:
+        non-finite-replacement:
         
 
 # If a pusher fails to push data for some reason, the failure buffer will automatically store the data,
 # then add it back into the queue once a push succeeds.
-FailureBuffer:
+failure-buffer:
     # If false, buffering is disabled
-    Enabled: false
+    enabled: false
     # Use influxdb as buffer
-    # Points will be written to influxdb on failure unless Write is false, and read once pushing succeeds again.
-    # They will not be deleted, even once pushed to CDF. If you want a local storage, it is better to use the LocalQueue LiteDB solution.
+    # Points will be written to influxdb on failure unless "write" is false, and read once pushing succeeds again.
+    # They will not be deleted, even once pushed to CDF.
     # This, however, allows a remote buffer, and it allows using an existing influxdb pusher as a buffer, with write set to false.
-    Influx:
-        Host:
-        Username:
-        Password:
-        Database:
+    influx:
+        host:
+        username:
+        password:
+        database:
         # If true, write failed datapoints to influx, otherwise, only read.
         # This should be false if there is a pusher targeting the influxdb database.
-        Write: true
+        write: true
         # Max number of points to send in each request to influx
-        PointChunkSize: 100000
+        point-chunk-size: 100000
         # Store the state of which points/ranges are persisted to influxdb to local state storage. Requires the
         # StateStorage.Location option to be set
-        StateStorage: false
+        state-storage: false
     # There are two possible solutions for local storage. The queue is ACID, and is more reliable if the amount of data is low,
     # expected breaks are short, and is more reliable. The binary buffers are much faster, but potentially less reliable.
     # If true, store failed points in a queue in the state storage. The StateStorage.Location option must be set for this to work.
-    LocalQueue: false
+    local-queue: false
+    # The alternative is a simple binary file containing the points. There is no safety, and a bad write can corrupt the file,
+    # but it is very fast.
     # Path to a local binary buffer file for datapoints.
-    DatapointPath:
+    datapoint-path:
     # Path to a local binary buffer file for events.
     # The two buffer file paths must be different.
-    EventPath:
+    event-path:
 
 # Periodically store state in a local database to speed up starting, by not having to read state from destinations
-# This allows you to set the ReadExtractedRanges option to false on the pushers without having to read all of history on startup.
+# This allows you to set the read-extracted-ranges option to false on the pushers without having to read all of history on startup.
 # If the OPC-UA server does not support history this does nothing.
-StateStorage:
+state-storage:
     # Path to .db file used by the state storage
-    Location: "buffer.db"
+    location: "buffer.db"
     # Interval between each write to the buffer file, in seconds. 0 or less disables the state storage.
-    Interval: 10
+    interval: 10
 
 
-Logging:
+logging:
     # Log levels: 'verbose', 'debug', 'information', 'warning', 'error', 'fatal'.
     # Writes log events at this level to the Console. 
     # If not present, or if the level is invalid, Console is not used. 
-    ConsoleLevel: information
+    console-level: information
     # Writes log events at this level to a file. Logs will roll over to new files daily.
     # If not present, or if the level is invalid, logging to file is disabled.
-    FileLevel:
+    file-level:
     # Folder for logging output. If not present, logging to file is disabled.
-    LogFolder:
+    log-folder:
     # Maximum number of logs files that are kept in the log folder.
-    RetentionLimit: 31
+    retention-limit: 31
     # File containing the credentials used for authentication with GCP.
     # If present, sends log events Stackdriver.
     # Events at all levels are sent.
-    StackdriverCredentials:
+    stackdriver-credentials:
     # Name to be assigned to the Stackdriver log.
-    StackdriverLogName:
+    stackdriver-log-name:
     
-Metrics:
+metrics:
     # Start a metrics server in the extractor for Prometheus scrape
-    Server:
-        Host:
-        Port:
+    server:
+        host:
+        port: 0
     # Multiple Prometheus PushGateway destinations:
-    PushGateways:
-        - Host:
-          Job:
-          Username:
-          Password: 
+    push-gateways:
+        - host:
+          job:
+          username:
+          password: 
 
-Extraction:
+extraction:
     # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.
     # The externalId is: IdPrefix + NamespaceMap[nodeId.NamespaceUri] + nodeId.Identifier
-    IdPrefix: "gp:"
+    id-prefix: "gp:"
     
     # Specify prefixes on DisplayName to ignore.
-    IgnoreNamePrefix:
+    ignore-name-prefix:
         # -prefix1
     
     # Specify specific DisplayNames to ignore.
-    IgnoreName:
+    ignore-name:
         # -name1
     
     # List of NodeIds corresponding to DataTypes that should be ignored.
-    IgnoreDataTypes:
+    ignore-data-types:
         # - NamespaceUri:
         #	NodeId:
 
     # Delay in ms between each push of data points to targets
-    DataPushDelay: 1000
+    data-push-delay: 1000
     
     # Maximum size of array variables. Only arrays with the ArrayDimensions property in opc-ua specified will be used,
     # leave at 0 to only allow scalar values.
     # Note that some server implementations have issues with the ArrayDimensions property, so it is not fetched at all if MaxArraySize is 0
     # -1 indicates that there is no limit to array lenght, though only 1-dimensional structures will be read either way.
-    MaxArraySize: 0
+    max-array-size: 0
     
     # Set to true to allow fetching string variables. This means that all variables with non-numeric type is converted to string in some way.
-    AllowStringVariables: false
+    allow-string-variables: false
     
     # Source node in the OPC-UA server. Leave empty to use the top level Objects node.
-    RootNode:
+    root-node:
         # Full name of the namespace of the root node.
-        NamespaceUri:
+        namespace-uri:
         # Id of the root node, on the form "i=123" or "s=stringid" etc.
-        NodeId:
+        node-id:
 
     # Override mappings between OPC UA node id and externalId, allowing e.g. the RootNode to be mapped to
     # a particular asset in CDF. Applies to both assets and time series.
     # NodeMap:
     #   "externalId": { NamespaceUri: "uri", NodeId: "i=123" }
-    NodeMap:
+    node-map:
   
     # Map OPC-UA namespaces to prefixes in CDF. If not mapped, the full namespace URI is used.
     # Saves space compared to using the full URL. Using the ns index is not safe as the order can change on the server.
@@ -277,39 +283,39 @@ Extraction:
     #   "urn:cognite:net:server": cns
     #   "urn:freeopcua:python:server": fps
     #   "http://examples.freeopcua.github.io": efg
-    NamespaceMap:
+    namespace-map:
 
     # Add custom numeric types using their nodeId. IsStep indicates whether the datatype is discrete.
     # This also overwrite default behavior, so it is possible to make Integer discrete, etc.
     # Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type or similar, 
     # in which case each element needs a conversion
-    CustomNumericTypes:
-    #    - NodeId: 
-    #          NamespaceUri:
-    #          NodeId:
-    #      IsStep: false
+    custom-numeric-types:
+    #    - node-id: 
+    #          namespace-uri:
+    #          node-id:
+    #      is-step: false
     # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
     # Note that this is a heavy operation, so this number should not be set too low.
-    AutoRebrowsePeriod: 0
+    auto-rebrowse-period: 0
     # Enable using audit events to discover new nodes. If this is set to true, the client will expect AuditAddNodes/AuditAddReferences
     # events on the server node. These will be used to add new nodes automatically, by recursively browsing from each given ParentId.
-    EnableAuditDiscovery:
+    enable-audit-discovery:
 
 
-Events:
+events:
     # Event ids to map, with full namespace-uri, and node identifier on the form "i=123"
     # Custom events must be subtypes of the BaseEventType.
-    EventIds:
-        #-   NamespaceUri:
-        #    NodeId:
+    event-ids:
+        #-   namespace-uri:
+        #    node-id:
     # Id of nodes to be observed as event emitters. Empty Namespace/NodeId defaults to the server node.
-    EmitterIds:
-        #-   NamespaceUri:
-        #    NodeId:
+    emitter-ids:
+        #-   namespace-uri:
+        #    node-id:
     # List of BrowseName for properties to be excluded from automatic mapping to destination metadata.
     # All event properties are read, by default only "Time" and "Severity" are used from the base event.
     # Be aware that a maximum of 16 metadata entries are allowed in CDF.
-    ExcludeProperties:
+    exclude-properties:
         #- Property1
         #- Property2
     # Map source browse names to other values in the destination. For CDF, internal properties may be overwritten, by default
@@ -321,9 +327,9 @@ Events:
     # If no StartTime or EndTime are specified, both are set to the "Time" property of BaseEventType.
     # "Type" may be overriden case-by-case using "NameOverrides" in Extraction configuration, or in a dynamic way here. If no "Type" is specified,
     # it is generated from Event NodeId in the same way ExternalIds are generated for normal nodes.
-    DestinationNameMap:
+    destination-name-map:
         #Property1: SubType
     # Emitters that should be read for historical events. Leave empty to disable history read of events. Requires History.Enabled to be true.
-    HistorizingEmitterIds:
+    historizing-emitter-ids:
         #-   NamespaceUri:
         #    NodeId:

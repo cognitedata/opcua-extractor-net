@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Polly;
 using Polly.Timeout;
 using Serilog;
+using Cognite.Extractor.Configuration;
 
 namespace Cognite.Bridge
 {
@@ -17,8 +18,11 @@ namespace Cognite.Bridge
         static void Main(string[] args)
         {
             var provider = Configure();
+
             var configPath = args.Length > 0 ? args[0] : "config/config.bridge.yml";
-            var config = Config.GetConfig(configPath);
+            var config = ConfigurationUtils.TryReadConfigFromFile<BridgeConfig>(configPath, 1);
+            config.GenerateDefaults();
+
             Logger.Configure(config.Logging);
             RunBridge(config, provider).Wait();
         }
@@ -77,7 +81,7 @@ namespace Cognite.Bridge
         /// <returns></returns>
         public static async Task RunBridge(BridgeConfig config, IServiceProvider provider)
         {
-            var destination = new Destination(config.CDF, provider);
+            var destination = new Destination(config.Cognite, provider);
             using var bridge = new MQTTBridge(destination, config);
 
             using var source = new CancellationTokenSource();

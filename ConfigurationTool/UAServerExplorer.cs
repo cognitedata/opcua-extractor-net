@@ -139,7 +139,7 @@ namespace Cognite.OpcUa.Config
 
             var context = Appconfig.CreateMessageContext();
             var endpointConfig = EndpointConfiguration.Create(Appconfig);
-            using var channel = DiscoveryChannel.Create(new Uri(config.Source.EndpointURL), endpointConfig, context);
+            using var channel = DiscoveryChannel.Create(new Uri(config.Source.EndpointUrl), endpointConfig, context);
             using var disc = new DiscoveryClient(channel);
             var endpoints = new EndpointDescriptionCollection();
             try
