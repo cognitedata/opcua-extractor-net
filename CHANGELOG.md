@@ -1,5 +1,17 @@
 # OPC-UA Extractor Changelog
 
+1.2.0 2020-06-08
+------------------
+* Add new MQTT Pusher
+* Add MQTT Bridge application
+* Add Windows service with MSI installer
+* Add support for late initialization if a destination is unavailable on restart
+* Add state-storage to persist state between restarts
+* Add LiteQueue as alternative to buffering to binary files
+* Add buffering on failure for events
+* Add persisting of influx-buffer state
+* Improvements to reliability and stability
+
 1.1.0 2020-02-18
 ------------------
 * Add support for events to influxdb pusher
