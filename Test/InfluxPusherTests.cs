@@ -447,10 +447,6 @@ namespace Test
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
-
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 1));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 1));
-
         }
     }
 }
