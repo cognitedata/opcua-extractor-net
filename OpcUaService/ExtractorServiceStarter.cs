@@ -5,6 +5,7 @@ using Cognite.Extractor.Configuration;
 using Prometheus.Client;
 using Serilog;
 using Cognite.OpcUa;
+using Cognite.Extractor.Logging;
 
 namespace OpcUaService
 {
@@ -38,8 +39,8 @@ namespace OpcUaService
 
             _config.Source.ConfigRoot = "config/";
 
-            _config.Logging.ConsoleLevel = "NoConsoleLogging";
-            Logger.Configure(_config.Logging);
+            _config.Logger.Console.Level = "NoConsoleLogging";
+            LoggingUtils.Configure(_config.Logger);
             _log = Log.Logger.ForContext(typeof(ExtractorServiceStarter));
 
             _log.Information($"Using configuration file: {configFile}");

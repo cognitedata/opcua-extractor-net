@@ -4,13 +4,7 @@ Microsoft.Extensions.Http.Polly
 Polly
 Polly.Extensions.Http
 MQTTnet
-Serilog
-Serilog.Sinks.GoogleCloudLogging
-Serilog.Formatting.Compact
-Serilog.Sinks.Console
-Serilog.Sinks.Async
-Serilog.Sinks.File
 Microsoft.CodeAnalysis.FxCopAnalyzers
-YamlDotNet
 CogniteSdk
 Cognite.Extractor.Configuration
+Cognite.Extractor.Logging

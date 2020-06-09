@@ -84,7 +84,7 @@ namespace Cognite.Bridge
                 log.Information("MQTT client connected");
                 await client.SubscribeAsync(new MqttClientSubscribeOptionsBuilder()
                     .WithTopicFilter(config.Mqtt.AssetTopic)
-                    .WithTopicFilter(config.Mqtt.TSTopic)
+                    .WithTopicFilter(config.Mqtt.TsTopic)
                     .WithTopicFilter(config.Mqtt.DatapointTopic)
                     .WithTopicFilter(config.Mqtt.EventTopic)
                     .Build());
@@ -132,7 +132,7 @@ namespace Cognite.Bridge
                         success = false;
                     }
                 }
-                else if (msg.ApplicationMessage.Topic == config.Mqtt.TSTopic)
+                else if (msg.ApplicationMessage.Topic == config.Mqtt.TsTopic)
                 {
                     log.Verbose("Timeseries message from: {src}", msg.ClientId);
                     try

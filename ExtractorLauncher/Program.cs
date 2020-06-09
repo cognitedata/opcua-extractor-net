@@ -23,6 +23,7 @@ using Cognite.OpcUa.Config;
 using Prometheus.Client;
 using Serilog;
 using Cognite.Extractor.Configuration;
+using Cognite.Extractor.Logging;
 
 namespace Cognite.OpcUa
 {
@@ -38,7 +39,7 @@ namespace Cognite.OpcUa
         static int Main(string[] args)
         {
             // Temporary logger config for capturing logs during configuration.
-            Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
+            Log.Logger = LoggingUtils.GetSerilogDefault();
 
             ExtractorParams setup;
 
@@ -105,11 +106,11 @@ namespace Cognite.OpcUa
             if (!string.IsNullOrEmpty(setup.Username)) config.Source.Username = setup.Username;
             if (!string.IsNullOrEmpty(setup.Password)) config.Source.Password = setup.Password;
             config.Source.Secure |= setup.Secure;
-            if (!string.IsNullOrEmpty(setup.LogLevel)) config.Logging.ConsoleLevel = setup.LogLevel;
+            if (!string.IsNullOrEmpty(setup.LogLevel)) config.Logger.Console = new LogConfig() { Level = setup.LogLevel };
             config.Source.AutoAccept |= setup.AutoAccept;
             config.Source.ExitOnFailure |= setup.ExitOnFailure;
 
-            Logger.Configure(config.Logging);
+            LoggingUtils.Configure(config.Logger);
 
             log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
             log.Information("Revision information: {status}", Version.Status());

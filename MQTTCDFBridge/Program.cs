@@ -8,6 +8,7 @@ using Polly;
 using Polly.Timeout;
 using Serilog;
 using Cognite.Extractor.Configuration;
+using Cognite.Extractor.Logging;
 
 namespace Cognite.Bridge
 {
@@ -23,7 +24,8 @@ namespace Cognite.Bridge
             var config = ConfigurationUtils.TryReadConfigFromFile<BridgeConfig>(configPath, 1);
             config.GenerateDefaults();
 
-            Logger.Configure(config.Logging);
+            LoggingUtils.Configure(config.Logger);
+            log.Information(config.ToString());
             RunBridge(config, provider).Wait();
         }
         public static IServiceProvider Configure()

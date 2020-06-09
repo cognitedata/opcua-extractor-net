@@ -35,6 +35,7 @@ using Xunit;
 using Server;
 using Opc.Ua;
 using Cognite.Extractor.Configuration;
+using Cognite.Extractor.Logging;
 
 namespace Test
 {
@@ -45,6 +46,9 @@ namespace Test
             ConfigurationUtils.AddTagMapping<CogniteClientConfig>("!cdf");
             ConfigurationUtils.AddTagMapping<InfluxClientConfig>("!influx");
             ConfigurationUtils.AddTagMapping<MQTTPusherConfig>("!mqtt");
+            var defaultConfig = new LoggerConfig();
+            defaultConfig.Console = new LogConfig() { Level = "debug" };
+            LoggingUtils.Configure(defaultConfig);
         }
     }
 
@@ -347,8 +351,6 @@ namespace Test
             {
                 Config.History.Granularity = testParams.HistoryGranularity.Value;
             }
-            Config.Logging.ConsoleLevel = testParams.LogLevel;
-            Cognite.OpcUa.Logger.Configure(Config.Logging);
             Config.Source.EndpointUrl = testParams.ServerName == ServerName.Proxy ? "opc.tcp://localhost:4839" : "opc.tcp://localhost:62546";
 
             FullConfig pusherConfig = null;
@@ -714,7 +716,6 @@ namespace Test
         public ConfigName ConfigName { get; set; } = ConfigName.Test;
         public ConfigName? PusherConfig { get; set; } = null;
         public CDFMockHandler.MockMode MockMode { get; set; } = CDFMockHandler.MockMode.None;
-        public string LogLevel { get; set; } = "debug";
         public bool QuitAfterMap { get; set; } = false;
         public bool StoreDatapoints { get; set; } = false;
         public int? HistoryGranularity { get; set; } = null;

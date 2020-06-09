@@ -76,8 +76,7 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Influx,
-                ServerName = ServerName.Array,
-                LogLevel = "verbose"
+                ServerName = ServerName.Array
             });
             await tester.ClearPersistentData();
             tester.Config.Extraction.MaxArraySize = 4;
@@ -263,8 +262,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                ConfigName = ConfigName.Influx,
-                LogLevel = "debug"
+                ConfigName = ConfigName.Influx
             });
             await tester.ClearPersistentData();
 
@@ -397,7 +395,6 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
-                LogLevel = "debug",
                 PusherConfig = ConfigName.Influx,
                 ConfigName = ConfigName.Events,
             });

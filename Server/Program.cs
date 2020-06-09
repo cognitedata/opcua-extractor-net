@@ -1,8 +1,4 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Opc.Ua;
-using Opc.Ua.Configuration;
+﻿using System.Threading.Tasks;
 using Serilog;
 
 namespace Server
@@ -21,7 +17,7 @@ namespace Server
             server.Start().Wait();
             server.PopulateEvents();
 
-            int idx = 0;
+            // int idx = 0;
             while(true)
             {
                 //server.TriggerEvents(0);

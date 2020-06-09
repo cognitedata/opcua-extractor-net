@@ -516,8 +516,7 @@ namespace Test
                 FailureInflux = ConfigName.Influx,
                 StoreDatapoints = true,
                 FailureInfluxWrite = true,
-                StateInflux = true,
-                LogLevel = "debug"
+                StateInflux = true
             }))
             {
                 await tester.ClearPersistentData();
@@ -566,8 +565,7 @@ namespace Test
                 FailureInflux = ConfigName.Influx,
                 StoreDatapoints = true,
                 FailureInfluxWrite = true,
-                StateInflux = true,
-                LogLevel = "debug"
+                StateInflux = true
             });
             tester2.Config.Events.HistorizingEmitterIds = new List<ProtoNodeId>();
 
