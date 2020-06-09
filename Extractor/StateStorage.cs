@@ -7,7 +7,7 @@ using Serilog;
 using LiteDB;
 using LiteQueue;
 using Opc.Ua;
-using Prometheus.Client;
+using Prometheus;
 
 namespace Cognite.OpcUa
 {

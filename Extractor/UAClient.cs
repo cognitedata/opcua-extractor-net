@@ -24,7 +24,7 @@ using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using System.Linq;
-using Prometheus.Client;
+using Prometheus;
 using System.Threading;
 using Serilog;
 

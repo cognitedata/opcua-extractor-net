@@ -2,13 +2,11 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Opc.Ua;
-using Prometheus.Client;
+using Prometheus;
 using Serilog;
 
 namespace Cognite.OpcUa

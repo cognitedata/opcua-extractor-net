@@ -12,7 +12,7 @@ using Google.Protobuf;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
-using Prometheus.Client;
+using Prometheus;
 using Serilog;
 
 namespace Cognite.OpcUa.Pushers

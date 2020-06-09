@@ -20,10 +20,12 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.OpcUa.Config;
-using Prometheus.Client;
+using Prometheus;
 using Serilog;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Cognite.Extractor.Metrics;
 
 namespace Cognite.OpcUa
 {
@@ -117,14 +119,15 @@ namespace Cognite.OpcUa
 
             version.Set(0);
 
-            try
-            {
-                MetricsManager.Setup(config.Metrics);
-            }
-            catch (Exception e)
-            {
-                log.Error(e, "Failed to start metrics pusher");
-            }
+            var services = new ServiceCollection();
+            services.AddSingleton(config.Logger);
+            services.AddLogger();
+
+            services.AddSingleton(config.Metrics);
+            services.AddMetrics();
+
+            var metrics = services.BuildServiceProvider().GetRequiredService<MetricsService>();
+            metrics.Start();
 
             if (setup.ConfigTool)
             {

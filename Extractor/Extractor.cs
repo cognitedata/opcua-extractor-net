@@ -23,7 +23,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
 using Opc.Ua.Client;
-using Prometheus.Client;
+using Prometheus;
 using Serilog;
 
 namespace Cognite.OpcUa

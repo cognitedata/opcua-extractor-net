@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -28,7 +27,7 @@ using Cognite.Bridge;
 using Cognite.OpcUa;
 using LiteDB;
 using Microsoft.Extensions.DependencyInjection;
-using Prometheus.Client;
+using Prometheus;
 using Serilog;
 using Xunit.Abstractions;
 using Xunit;
@@ -36,6 +35,8 @@ using Server;
 using Opc.Ua;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
+using System.Reflection;
+using System.Collections.Concurrent;
 
 namespace Test
 {
@@ -107,9 +108,16 @@ namespace Test
             return services.BuildServiceProvider();
         }
 
+        private static Collector GetCollector(string name)
+        {
+            var prop = Metrics.DefaultRegistry.GetType().GetField("_collectors", BindingFlags.NonPublic | BindingFlags.Instance);
+            var dict = (ConcurrentDictionary<string, Collector>)prop.GetValue(Metrics.DefaultRegistry);
+            return dict.GetValueOrDefault(name);
+        }
+
         public static double GetMetricValue(string name)
         {
-            Metrics.DefaultCollectorRegistry.TryGet(name, out var collector);
+            var collector = GetCollector(name);
             return collector switch
             {
                 Gauge gauge => gauge.Value,
@@ -119,7 +127,7 @@ namespace Test
         }
         public static bool TestMetricValue(string name, double value)
         {
-            Metrics.DefaultCollectorRegistry.TryGet(name, out var collector);
+            var collector = GetCollector(name);
             double val = collector switch
             {
                 Gauge gauge => gauge.Value,
@@ -145,14 +153,36 @@ namespace Test
 
         private static void ResetMetricValue(string name)
         {
-            Metrics.DefaultCollectorRegistry.TryGet(name, out var collector);
+            var collector = GetCollector(name);
             switch (collector)
             {
                 case Gauge gauge:
                     gauge.Set(0);
                     break;
                 case Counter counter:
-                    counter.Reset();
+                    // See the prometheus-net source code. Since they refuse to make it possible to do anything
+                    // not in the basic use case, this crazy dynamic hacking is necessary.
+                    // This is not the best way to do things, and it might
+                    // randomly break due to internal changes in prometheus-net.
+                    // It does get the job done, however.
+
+                    // Get the internal counter child (Counter.Child)
+                    var internalChild = counter
+                        .GetType()
+                        .GetProperty("Unlabelled", BindingFlags.NonPublic | BindingFlags.Instance)
+                        .GetValue(counter);
+                    // Get the internal _value. The exposed Value property is read-only
+                    var internalValue = internalChild
+                        .GetType()
+                        .GetField("_value", BindingFlags.NonPublic | BindingFlags.Instance)
+                        .GetValue(internalChild);
+                    // _value is a ThreadSafeDouble internal struct, so it cannot be modified easily
+                    // for some reason modifying structs using reflection tends to just give you a new instance.
+                    // We can, however, just create a new one.
+                    var newSafeDouble = Activator.CreateInstance(internalValue.GetType(), 0.0);
+                    internalChild.GetType()
+                        .GetField("_value", BindingFlags.NonPublic | BindingFlags.Instance)
+                        .SetValue(internalChild, newSafeDouble);
                     break;
             }
         }
