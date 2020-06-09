@@ -28,7 +28,7 @@ using CogniteSdk.Login;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 using Opc.Ua;
-using Prometheus.Client;
+using Prometheus;
 using Serilog;
 
 namespace Cognite.OpcUa

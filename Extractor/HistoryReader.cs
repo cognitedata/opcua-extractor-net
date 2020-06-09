@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Opc.Ua;
-using Prometheus.Client;
+using Prometheus;
 using Serilog;
 
 namespace Cognite.OpcUa

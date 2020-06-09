@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Cognite.OpcUa.Pushers;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
+using Cognite.Extractor.Metrics;
 
 namespace Cognite.OpcUa
 {
@@ -156,29 +157,6 @@ namespace Cognite.OpcUa
             if (History == null) History = new HistoryConfig();
             if (StateStorage == null) StateStorage = new StateStorageConfig();
         }
-    }
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:Uri properties should not be strings", Justification = "Yaml Deserialization")]
-    public class MetricsConfig
-    {
-        public MetricsServerConfig Server { get; set; }
-#pragma warning disable CA2227 // Collection properties should be read only
-        public List<PushGatewayConfig> PushGateways { get; set; }
-#pragma warning restore CA2227 // Collection properties should be read only
-
-    }
-
-    public class MetricsServerConfig
-    {
-        public string Host { get; set; }
-        public int Port { get; set; }
-    }
-
-    public class PushGatewayConfig
-    {
-        public string Host { get; set; }
-        public string Job { get; set; }
-        public string Username { get; set; }
-        public string Password { get; set; }
     }
     public class EventConfig
     {

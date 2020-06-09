@@ -1,8 +1,6 @@
 Microsoft.CSharp
 Microsoft.Extensions.Http
 OPCFoundation.NetStandard.Opc.Ua
-Prometheus.Client.MetricPusher
-Prometheus.Client.MetricServer
 Microsoft.Extensions.Http.Polly
 Polly
 Polly.Extensions.Http
@@ -14,3 +12,4 @@ LiteQueue
 MQTTnet
 Cognite.Extractor.Configuration
 Cognite.Extractor.Logging
+Cognite.Extractor.Metrics
