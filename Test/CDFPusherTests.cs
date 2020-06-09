@@ -52,8 +52,7 @@ namespace Test
             {
                 ServerName = serverType,
                 QuitAfterMap = true,
-                MockMode = mode,
-                LogLevel = "information"
+                MockMode = mode
             });
             tester.Config.Extraction.AllowStringVariables = false;
 
@@ -312,7 +311,6 @@ namespace Test
             var fullConfig = ConfigurationUtils.Read<FullConfig>("config.events.yml");
             fullConfig.GenerateDefaults();
             var config = (CogniteClientConfig)fullConfig.Pushers.First();
-            Logger.Configure(fullConfig.Logging);
 
             var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
             using var pusher = new CDFPusher(CommonTestUtils.GetDummyProvider(handler), config);
@@ -327,8 +325,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                StoreDatapoints = true,
-                LogLevel = "verbose"
+                StoreDatapoints = true
             });
             await tester.ClearPersistentData();
 

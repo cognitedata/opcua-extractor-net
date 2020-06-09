@@ -63,7 +63,6 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                LogLevel = "debug",
                 ConfigName = ConfigName.Events,
                 PusherConfig = ConfigName.Mqtt,
                 ServerName = ServerName.Events,

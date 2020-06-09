@@ -19,7 +19,7 @@ namespace Test
     /// <summary>
     /// Tests for the MQTT bridge as a standalone tool.
     /// </summary>
-    [Collection("Bridge tests")]
+    [Collection("Extractor tests")]
     public class MQTTBridgeTests : MakeConsoleWork
     {
         public MQTTBridgeTests(ITestOutputHelper output) : base(output) { }
@@ -39,8 +39,6 @@ namespace Test
                 };
                 config = ConfigurationUtils.Read<BridgeConfig>("config.bridge.yml");
                 config.GenerateDefaults();
-                config.Logging.ConsoleLevel = "verbose";
-                Logger.Configure(config.Logging);
                 bridge = new MQTTBridge(new Destination(config.Cognite, CommonTestUtils.GetDummyProvider(Handler)), config);
                 bridge.StartBridge(CancellationToken.None).Wait();
                 var options = new MqttClientOptionsBuilder()
@@ -84,7 +82,7 @@ namespace Test
 
                 var msg = baseBuilder
                     .WithPayload(data)
-                    .WithTopic(config.Mqtt.TSTopic)
+                    .WithTopic(config.Mqtt.TsTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();

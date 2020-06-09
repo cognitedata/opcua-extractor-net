@@ -12,12 +12,6 @@ source:
     # Paths are defined in opc.ua.net.extractor.Config.xml
     auto-accept: true
 
-logging:
-    # Log levels: 'verbose', 'debug', 'information', 'warning', 'error', 'fatal'.
-    # Writes log events at this level to the Console. 
-    # If not present, or if the level is invalid, Console is not used. 
-    console-level: debug
-
 extraction:
     # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.
     # The externalId is: IdPrefix + NamespaceMap[nodeId.NamespaceUri] + nodeId.Identifier

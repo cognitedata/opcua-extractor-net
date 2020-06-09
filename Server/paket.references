@@ -1,11 +1,6 @@
 Microsoft.CSharp
 OPCFoundation.NetStandard.Opc.Ua
 YamlDotNet
-Serilog
-Serilog.Sinks.GoogleCloudLogging
-Serilog.Formatting.Compact
-Serilog.Sinks.Console
-Serilog.Sinks.Async
-Serilog.Sinks.File
 Microsoft.CodeAnalysis.FxCopAnalyzers
 LiteDB
+Cognite.Extractor.Logging

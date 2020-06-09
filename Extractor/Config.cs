@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Cognite.OpcUa.Pushers;
 using Cognite.Extractor.Configuration;
+using Cognite.Extractor.Logging;
 
 namespace Cognite.OpcUa
 {
@@ -135,7 +136,7 @@ namespace Cognite.OpcUa
     public class FullConfig : VersionedConfig
     {
         public UAClientConfig Source { get; set; }
-        public LoggerConfig Logging { get; set; }
+        public LoggerConfig Logger { get; set; }
         public MetricsConfig Metrics { get; set; }
         public List<PusherConfig> Pushers { get; set; }
         public ExtractionConfig Extraction { get; set; }
@@ -146,7 +147,7 @@ namespace Cognite.OpcUa
         public override void GenerateDefaults()
         {
             if (Source == null) Source = new UAClientConfig();
-            if (Logging == null) Logging = new LoggerConfig();
+            if (Logger == null) Logger = new LoggerConfig();
             if (Metrics == null) Metrics = new MetricsConfig();
             if (Pushers == null) Pushers = new List<PusherConfig>();
             if (Extraction == null) Extraction = new ExtractionConfig();
@@ -155,15 +156,6 @@ namespace Cognite.OpcUa
             if (History == null) History = new HistoryConfig();
             if (StateStorage == null) StateStorage = new StateStorageConfig();
         }
-    }
-    public class LoggerConfig
-    {
-        public string ConsoleLevel { get; set; } = "information";
-        public string FileLevel { get; set; }
-        public string LogFolder { get; set; }
-        public int RetentionLimit { get; set; } = 31;
-        public string StackdriverCredentials { get; set; }
-        public string StackdriverLogName { get; set; }
     }
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:Uri properties should not be strings", Justification = "Yaml Deserialization")]
     public class MetricsConfig

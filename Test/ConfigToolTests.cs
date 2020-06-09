@@ -52,7 +52,6 @@ namespace Test
             var baseConfig = ConfigurationUtils.Read<FullConfig>("config.config-tool-test.yml");
             fullConfig.GenerateDefaults();
             baseConfig.GenerateDefaults();
-            Logger.Configure(fullConfig.Logging);
 
             fullConfig.Source.EndpointUrl = ExtractorTester.HostName;
             baseConfig.Source.EndpointUrl = ExtractorTester.HostName;
@@ -165,7 +164,6 @@ namespace Test
         {
             var fullConfig = ConfigurationUtils.Read<FullConfig>("config.influxtest.yml");
             fullConfig.GenerateDefaults();
-            Logger.Configure(fullConfig.Logging);
 
             fullConfig.Source.EndpointUrl = ExtractorTester.HostName;
             fullConfig.Pushers = new List<PusherConfig>();
@@ -205,8 +203,6 @@ namespace Test
             fullConfig.GenerateDefaults();
             var baseConfig = ConfigurationUtils.Read<FullConfig>("config.config-tool-test.yml");
             baseConfig.GenerateDefaults();
-
-            Logger.Configure(fullConfig.Logging);
 
             using var server = new ServerController(new[] { PredefinedSetup.Base });
             await server.Start();

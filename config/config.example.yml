@@ -202,24 +202,21 @@ state-storage:
     interval: 10
 
 
-logging:
-    # Log levels: 'verbose', 'debug', 'information', 'warning', 'error', 'fatal'.
-    # Writes log events at this level to the Console. 
-    # If not present, or if the level is invalid, Console is not used. 
-    console-level: information
+logger:
+    # Writes log events at this level to the Console. One of verbose, debug, information, warning, error, fatal.
+    # If not present, or if the level is invalid, Console is not used.
+    console:
+        level:
     # Writes log events at this level to a file. Logs will roll over to new files daily.
     # If not present, or if the level is invalid, logging to file is disabled.
-    file-level:
-    # Folder for logging output. If not present, logging to file is disabled.
-    log-folder:
-    # Maximum number of logs files that are kept in the log folder.
-    retention-limit: 31
-    # File containing the credentials used for authentication with GCP.
-    # If present, sends log events Stackdriver.
-    # Events at all levels are sent.
-    stackdriver-credentials:
-    # Name to be assigned to the Stackdriver log.
-    stackdriver-log-name:
+    file:
+        level:
+        # Path for logging output. If not present, logging to file is disabled.
+        path: # "logs/log.txt"
+        # Maximum number of logs files that are kept in the log folder.
+        retention-limit: 31
+        # Rolling interval for log files. Either "day" or "hour".
+        rolling-interval: "day"
     
 metrics:
     # Start a metrics server in the extractor for Prometheus scrape
