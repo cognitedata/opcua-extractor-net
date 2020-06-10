@@ -13,3 +13,4 @@ MQTTnet
 Cognite.Extractor.Configuration
 Cognite.Extractor.Logging
 Cognite.Extractor.Metrics
+Cognite.ExtractorUtils

@@ -8,3 +8,4 @@ Microsoft.CodeAnalysis.FxCopAnalyzers
 CogniteSdk
 Cognite.Extractor.Configuration
 Cognite.Extractor.Logging
+Cognite.ExtractorUtils

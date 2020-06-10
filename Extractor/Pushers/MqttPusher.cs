@@ -25,7 +25,7 @@ namespace Cognite.OpcUa.Pushers
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
         public Extractor Extractor { get; set; }
-        public PusherConfig BaseConfig => config;
+        public IPusherConfig BaseConfig => config;
         private readonly MQTTPusherConfig config;
         private readonly IMqttClient client;
         private readonly IMqttClientOptions options;

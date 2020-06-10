@@ -30,7 +30,7 @@ namespace Cognite.OpcUa
         bool EventsFailing { get; set; }
         bool Initialized { get; set; }
         bool NoInit { get; set; }
-        PusherConfig BaseConfig { get; }
+        IPusherConfig BaseConfig { get; }
 
         /// <summary>
         /// Parent extractor

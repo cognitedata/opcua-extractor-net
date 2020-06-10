@@ -30,6 +30,7 @@ using System.Net.Http;
 using Opc.Ua;
 using Prometheus;
 using Serilog;
+using Cognite.Extractor.Utils;
 
 namespace Cognite.OpcUa
 {
@@ -51,7 +52,7 @@ namespace Cognite.OpcUa
 
 
         public Extractor Extractor { get; set; }
-        public PusherConfig BaseConfig { get; }
+        public IPusherConfig BaseConfig { get; }
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
 
@@ -65,7 +66,7 @@ namespace Cognite.OpcUa
             numCdfPusher.Inc();
         }
 
-        private Client GetClient(string name = "Context")
+        private CogniteDestination GetDestination(string name = "Context")
         {
             return new Client.Builder()
                 .SetHttpClient(factory.CreateClient(name))

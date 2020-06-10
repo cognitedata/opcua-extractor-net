@@ -4,6 +4,7 @@ storage: none
 nuget Cognite.Extractor.Configuration
 nuget Cognite.Extractor.Logging
 nuget Cognite.Extractor.Metrics
+nuget Cognite.ExtractorUtils
 nuget Microsoft.CSharp
 nuget coverlet.msbuild
 nuget Microsoft.NET.Test.Sdk

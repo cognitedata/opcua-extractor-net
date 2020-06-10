@@ -166,7 +166,7 @@ namespace Test
             fullConfig.GenerateDefaults();
 
             fullConfig.Source.EndpointUrl = ExtractorTester.HostName;
-            fullConfig.Pushers = new List<PusherConfig>();
+            fullConfig.Pushers = new List<IPusherConfig>();
 
             using var server = new ServerController(new[] { PredefinedSetup.Base });
             await server.Start();
