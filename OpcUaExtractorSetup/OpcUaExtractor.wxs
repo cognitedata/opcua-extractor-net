@@ -44,7 +44,7 @@
 
     <Feature Id="OpcUaExtractorFeature" Title="OpcUa Extractor" Level="1">
       <ComponentGroupRef Id="OpcUaExtractorServiceComponentGroup" />
-      <ComponentGroupRef Id="OpcUaExtractorConfigFilesComponentGroup"/>
+      <!--ComponentGroupRef Id="OpcUaExtractorConfigFilesComponentGroup"/-->
       <ComponentGroupRef Id="OpcUaServiceManagerFilesComponentGroup"/>
     </Feature>
 
@@ -112,15 +112,15 @@
         <File Id="OpcUaService.dll" Name="OpcUaService.dll" Source="$(var.OpcUaExtractor_TargetDir)OpcUaService.dll" />
       </Component>
     </ComponentGroup>
-    <ComponentGroup Id="OpcUaExtractorConfigFilesComponentGroup">
+    <!--ComponentGroup Id="OpcUaExtractorConfigFilesComponentGroup"-->
       <!--OpcUaExtractor config file-->
-      <Component Id="config_example_yml" Guid="BD4BFAD2-3D5E-4718-BF38-04ADE8209EAF" Directory="ConfigFolder">
+      <!--Component Id="config_example_yml" Guid="BD4BFAD2-3D5E-4718-BF38-04ADE8209EAF" Directory="ConfigFolder">
         <File Id="config.example.yml" Name="config.example.yml" Source="$(var.OpcUaExtractor_TargetDir)config\config.example.yml" />
       </Component>
       <Component Id="opc_ua_net_extractor_Config" Guid="C1F2FD46-1E38-4C1F-B4CF-58BFD589618C" Directory="ConfigFolder">
         <File Id="opc.ua.net.extractor.Config.xml" Name="opc.ua.net.extractor.Config.xml" Source="$(var.OpcUaExtractor_TargetDir)config\opc.ua.net.extractor.Config.xml" />
       </Component>
-    </ComponentGroup>
+    </ComponentGroup-->
     <!-- Service Manager -->
     <ComponentGroup Id="OpcUaServiceManagerFilesComponentGroup">
       <Component Id="OpcUaServiceManager_exe" Guid="451FDBD1-073E-4F89-AA3E-2B477E09A547" Directory="OpcUaServiceManagerFolder">

@@ -62,6 +62,7 @@ podTemplate(
     def lastTag
 
     properties([buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '20'))])
+    if (false) {
     node(label) {
         container('jnlp') {
             stage('Checkout') {
@@ -160,23 +161,24 @@ podTemplate(
             }
         }
     }
+    }
+    // if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
+        node('windows') {
+            stage('Building MSI on windows node') {
+                powershell('echo $env:Path')
+            }
+        
+            stage('Checkout') {
+                checkout(scm)
+                echo "$version"
+                echo "$lastTag"
+                echo "${env.BRANCH_NAME}"
+                version = "1.2.0"
+            }
 
-    node('windows') {
-        stage('Building MSI on windows node') {
-            powershell('echo $env:Path')
-        }
-
-        stage('Checkout') {
-            checkout(scm)
-            echo "$version"
-            echo "$lastTag"
-            echo "${env.BRANCH_NAME}"
-        }
-
-        try {
-            if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
+            try {
                 stage ('Build MSI') {
-                    powershell('dotnet build --configuration Release')
+                    powershell('dotnet build --configuration Release .\\OpcUaService\\')
                     powershell(".\\MsiVersionUpdate.ps1 .\\OpcUaExtractorSetup\\OpcUaExtractor.wxs ${version}")
                     buildStatus = bat(returnStatus: true, script: "${msbuild} /t:rebuild /p:Configuration=Release .\\OpcUaExtractorSetup\\OpcUaExtractorSetup.wixproj")
                     if (buildStatus != 0) {
@@ -190,18 +192,18 @@ podTemplate(
                     }
                 }
             }
-        }
-        catch (e)
-        {
-            currentBuild.result = "FAILURE"
-            throw e
-        }
-        finally {
-            stage('Cleanup') {
-                deleteDir()
+            catch (e)
+            {
+                currentBuild.result = "FAILURE"
+                throw e
+            }
+            finally {
+                stage('Cleanup') {
+                    deleteDir()
+                }
             }
         }
-    }
+    // }
 }
 
 void packBridge(String configuration, String version, boolean linux) {
