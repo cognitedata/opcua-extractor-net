@@ -62,7 +62,6 @@ podTemplate(
     def lastTag
 
     properties([buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '20'))])
-    if (false) {
     node(label) {
         container('jnlp') {
             stage('Checkout') {
@@ -161,8 +160,7 @@ podTemplate(
             }
         }
     }
-    }
-    // if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
+    if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
         node('windows') {
             stage('Building MSI on windows node') {
                 powershell('echo $env:Path')
@@ -173,7 +171,6 @@ podTemplate(
                 echo "$version"
                 echo "$lastTag"
                 echo "${env.BRANCH_NAME}"
-                version = "1.2.0"
             }
 
             try {
@@ -203,7 +200,7 @@ podTemplate(
                 }
             }
         }
-    // }
+    }
 }
 
 void packBridge(String configuration, String version, boolean linux) {
