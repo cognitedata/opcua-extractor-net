@@ -160,7 +160,7 @@ podTemplate(
             }
         }
     }
-    if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
+    //if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
         node('windows') {
             stage('Building MSI on windows node') {
                 powershell('echo $env:Path')
@@ -184,9 +184,9 @@ podTemplate(
                 }
                 stage ('Deploy to github') {
                     powershell("mv OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi .\\OpcUaExtractorSetup-${version}.msi")
-                    withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
-                        powershell("py deploy.py cognitedata opcua-extractor-net $ghpassword $version OpcUaExtractorSetup-${version}.msi")
-                    }
+                    //withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
+                    //    powershell("py deploy.py cognitedata opcua-extractor-net $ghpassword $version OpcUaExtractorSetup-${version}.msi")
+                    //}
                 }
             }
             catch (e)
@@ -200,7 +200,7 @@ podTemplate(
                 }
             }
         }
-    }
+    //}
 }
 
 void packBridge(String configuration, String version, boolean linux) {
