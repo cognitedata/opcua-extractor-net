@@ -176,14 +176,14 @@ podTemplate(
             try {
                 stage ('Build MSI') {
                     powershell('dotnet build --configuration Release .\\OpcUaService\\')
-                    powershell(".\\MsiVersionUpdate.ps1 .\\OpcUaExtractorSetup\\OpcUaExtractor.wxs ${version}")
+                    //powershell(".\\MsiVersionUpdate.ps1 .\\OpcUaExtractorSetup\\OpcUaExtractor.wxs ${version}")
                     buildStatus = bat(returnStatus: true, script: "${msbuild} /t:rebuild /p:Configuration=Release .\\OpcUaExtractorSetup\\OpcUaExtractorSetup.wixproj")
                     if (buildStatus != 0) {
                         error("Build MSI failed.")
                     }
                 }
                 stage ('Deploy to github') {
-                    powershell("mv OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi .\\OpcUaExtractorSetup-${version}.msi")
+                    //powershell("mv OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi .\\OpcUaExtractorSetup-${version}.msi")
                     //withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
                     //    powershell("py deploy.py cognitedata opcua-extractor-net $ghpassword $version OpcUaExtractorSetup-${version}.msi")
                     //}
