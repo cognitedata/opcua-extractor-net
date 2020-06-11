@@ -39,6 +39,11 @@
   <xsl:template match="wix:Component[key('RemoveConfigFolder', @Directory)]" />
   <xsl:template match="wix:ComponentRef[key('RemoveConfigFolder', @Directory)]" />
 
+  <xsl:key name="RemoveConfigFolder" match="wix:Directory[@Name = 'config']" use="@Id" />
+  <xsl:template match="wix:Directory[@Name='config']" />
+  <xsl:template match="wix:Component[key('RemoveConfigFolder', @Directory)]" />
+  <xsl:template match="wix:ComponentRef[key('RemoveConfigFolder', @Directory)]" />
+
   <xsl:key
         name="RemoveFromOutput"
         match="wix:Component[ substring( wix:File/@Source, string-length( wix:File/@Source ) - 15 ) = 'OpcUaService.exe' ]"
