@@ -34,6 +34,11 @@
     -->
 
   <!--Match and remove config folder-->
+  <xsl:key name="RemoveConfigFolder" match="wix:Directory[@Name = 'Config']" use="@Id" />
+  <xsl:template match="wix:Directory[@Name='Config']" />
+  <xsl:template match="wix:Component[key('RemoveConfigFolder', @Directory)]" />
+  <xsl:template match="wix:ComponentRef[key('RemoveConfigFolder', @Directory)]" />
+
   <xsl:key name="RemoveConfigFolder" match="wix:Directory[@Name = 'config']" use="@Id" />
   <xsl:template match="wix:Directory[@Name='config']" />
   <xsl:template match="wix:Component[key('RemoveConfigFolder', @Directory)]" />
