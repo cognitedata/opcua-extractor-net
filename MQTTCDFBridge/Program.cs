@@ -1,14 +1,11 @@
 ﻿using System;
-using System.Net;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Polly;
-using Polly.Timeout;
 using Serilog;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
+using Cognite.Extractor.Utils;
 
 namespace Cognite.Bridge
 {
@@ -18,62 +15,14 @@ namespace Cognite.Bridge
 
         static void Main(string[] args)
         {
-            var provider = Configure();
-
             var configPath = args.Length > 0 ? args[0] : "config/config.bridge.yml";
-            var config = ConfigurationUtils.TryReadConfigFromFile<BridgeConfig>(configPath, 1);
-            config.GenerateDefaults();
-
+            var services = new ServiceCollection();
+            var config = services.AddConfig<BridgeConfig>(configPath, 1);
+            services.AddCogniteClient("MQTT-CDF Bridge");
+            using var provider = services.BuildServiceProvider();
             LoggingUtils.Configure(config.Logger);
             log.Information(config.ToString());
             RunBridge(config, provider).Wait();
-        }
-        public static IServiceProvider Configure()
-        {
-            var services = new ServiceCollection();
-            Configure(services);
-            var provider = services.BuildServiceProvider();
-            return provider;
-        }
-
-        /// <summary>
-        /// Configure two different configurations for the CDF client. One terminates on 410 or after 4 attempts. The other tries forever. Both terminate on 400.
-        /// </summary>
-        /// <param name="services"></param>
-        private static void Configure(IServiceCollection services)
-        {
-            services.AddHttpClient("Context", client => { client.Timeout = TimeSpan.FromSeconds(120); })
-                .AddPolicyHandler(GetRetryPolicy())
-                .AddPolicyHandler(GetTimeoutPolicy());
-            services.AddHttpClient("Data", client => { client.Timeout = TimeSpan.FromSeconds(60); })
-                .AddPolicyHandler(GetDataRetryPolicy())
-                .AddPolicyHandler(GetTimeoutPolicy());
-        }
-        private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
-        {
-            return Policy
-                .HandleResult<HttpResponseMessage>(msg =>
-                    !msg.IsSuccessStatusCode
-                    && ((int)msg.StatusCode >= 500
-                        || msg.StatusCode == HttpStatusCode.Unauthorized
-                        || msg.StatusCode == HttpStatusCode.TooManyRequests))
-                .Or<TimeoutRejectedException>()
-                .WaitAndRetryAsync(8, retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
-        }
-        private static IAsyncPolicy<HttpResponseMessage> GetDataRetryPolicy()
-        {
-            return Policy
-                .HandleResult<HttpResponseMessage>(msg =>
-                    !msg.IsSuccessStatusCode
-                    && ((int)msg.StatusCode >= 500
-                        || msg.StatusCode == HttpStatusCode.Unauthorized
-                        || msg.StatusCode == HttpStatusCode.TooManyRequests))
-                .Or<TimeoutRejectedException>()
-                .WaitAndRetryAsync(4, retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
-        }
-        private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
-        {
-            return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(20));
         }
         /// <summary>
         /// Public to expose for tests, start the bridge with given configuration and HTTP-Client configured serviceprovider.
