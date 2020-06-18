@@ -214,7 +214,7 @@ namespace Test
 
             await tester.Extractor.WaitForSubscriptions();
 
-            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
 
             await tester.Extractor.Looper.WaitForNextPush();
 
@@ -237,7 +237,7 @@ namespace Test
             tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1001);
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1001);
 
-            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
             
             await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=10")
                 && tester.Handler.Datapoints["gp.tl:i=10"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count() == 1002, 20);
@@ -277,8 +277,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState("gp.tl:i=10") != null
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").BackfillDone
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").IsStreaming,
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsBackfilling
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsFrontfilling,
                 20, "Expected backfill to terminate");
 
             await tester.Extractor.Looper.WaitForNextPush();
@@ -314,8 +314,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState("gp.tl:i=10") != null
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").BackfillDone
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").IsStreaming,
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsBackfilling
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsFrontfilling,
                 20, "Expected backfill to terminate");
 
             await tester.WaitForCondition(async () =>
@@ -334,8 +334,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState("gp.tl:i=10") != null
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").BackfillDone
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").IsStreaming,
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsBackfilling
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsFrontfilling,
                 20, "Expected backfill to terminate");
 
             var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Base.IntVar);
@@ -370,7 +370,7 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
-                    !state.Historizing || state.BackfillDone && state.IsStreaming),
+                    !state.FrontfillEnabled || !state.IsBackfilling && !state.IsFrontfilling),
                 20, "Expected backfill of events to terminate");
 
             await tester.WaitForCondition(async () =>
@@ -409,7 +409,7 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
-                    !state.Historizing || state.BackfillDone && state.IsStreaming),
+                    !state.FrontfillEnabled || !state.IsBackfilling && !state.IsFrontfilling),
                 20, "Expected backfill of events to terminate");
 
             await tester.WaitForCondition(async () =>
@@ -431,7 +431,7 @@ namespace Test
             tester.Server.TriggerEvents(100);
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
-                    !state.Historizing || state.BackfillDone && state.IsStreaming),
+                    !state.FrontfillEnabled || !state.IsBackfilling && !state.IsFrontfilling),
                 20, "Expected backfill of events to terminate");
 
             await tester.WaitForCondition(async () =>

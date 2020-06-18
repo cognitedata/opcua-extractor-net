@@ -175,7 +175,6 @@ namespace Test
 
             using var source = new CancellationTokenSource();
 
-            runTime.Configure();
             var runTask = runTime.Run(source);
 
             await Task.Delay(2000);

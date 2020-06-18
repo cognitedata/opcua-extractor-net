@@ -22,6 +22,9 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Utils;
+using Cognite.OpcUa.Pushers;
 using Microsoft.Extensions.DependencyInjection;
 using Polly;
 using Polly.Timeout;
@@ -44,72 +47,11 @@ namespace Cognite.OpcUa
         /// Constructor, takes fully configured FullConfig
         /// </summary>
         /// <param name="config"></param>
-        public ExtractorRuntime(FullConfig config)
+        public ExtractorRuntime(FullConfig config, IServiceProvider provider)
         {
             this.config = config;
+            this.provider = provider;
         }
-        /// <summary>
-        /// Creates the IServiceProvider instance to be used with this extractorRuntime
-        /// </summary>
-        public void Configure()
-        {
-            var services = new ServiceCollection();
-            Configure(services);
-            provider = services.BuildServiceProvider();
-        }
-
-        /// <summary>
-        /// Configure two different configurations for the CDF client. One terminates on 410 or after 4 attempts. The other tries forever. Both terminate on 400.
-        /// </summary>
-        /// <param name="services"></param>
-        private static void Configure(IServiceCollection services)
-        {
-            services.AddHttpClient("Context", client => { client.Timeout = TimeSpan.FromSeconds(120); })
-                .AddPolicyHandler(GetRetryPolicy())
-                .AddPolicyHandler(GetTimeoutPolicy());
-            services.AddHttpClient("Data", client => { client.Timeout = TimeSpan.FromSeconds(60); })
-                .AddPolicyHandler(GetDataRetryPolicy())
-                .AddPolicyHandler(GetTimeoutPolicy());
-        }
-        /// <summary>
-        /// Returns a retry policy to be used with requests to CDF for assets and timeseries.
-        /// </summary>
-        /// <returns>Retry policy with a high number of retries</returns>
-        private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
-        {
-            return Policy
-                .HandleResult<HttpResponseMessage>(msg =>
-                    !msg.IsSuccessStatusCode
-                    && ((int)msg.StatusCode >= 500
-                        || msg.StatusCode == HttpStatusCode.Unauthorized
-                        || msg.StatusCode == HttpStatusCode.TooManyRequests))
-                .Or<TimeoutRejectedException>()
-                .WaitAndRetryAsync(8, retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
-        }
-        /// <summary>
-        /// Returns a retry policy to be used with requests to CDF for datapoints and events
-        /// </summary>
-        /// <returns>Retry policy with lower number of retries</returns>
-        private static IAsyncPolicy<HttpResponseMessage> GetDataRetryPolicy()
-        {
-            return Policy
-                .HandleResult<HttpResponseMessage>(msg =>
-                    !msg.IsSuccessStatusCode
-                    && ((int)msg.StatusCode >= 500
-                        || msg.StatusCode == HttpStatusCode.Unauthorized
-                        || msg.StatusCode == HttpStatusCode.TooManyRequests))
-                .Or<TimeoutRejectedException>()
-                .WaitAndRetryAsync(4, retry => TimeSpan.FromMilliseconds(125 * Math.Pow(2, Math.Min(retry - 1, 9))));
-        }
-        /// <summary>
-        /// Return a 20 second timeout policy
-        /// </summary>
-        /// <returns>20 second timeout policy</returns>
-        private static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy()
-        {
-            return Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(20));
-        }
-
         /// <summary>
         /// Start the extractor. This creates pushers and tests their connection
         /// </summary>
@@ -120,7 +62,21 @@ namespace Cognite.OpcUa
 
             var client = new UAClient(config);
             int index = 0;
-            IEnumerable<IPusher> pushers = config.Pushers.Select(pusher => pusher.ToPusher(index++, provider)).ToList();
+            var pushers = new List<IPusher>();
+
+            if (config.Cognite != null)
+            {
+                pushers.Add(new CDFPusher(provider, config.Cognite) { Index = index++ });
+            }
+            if (config.Mqtt != null)
+            {
+                pushers.Add(new MQTTPusher(config.Mqtt) { Index = index++ });
+            }
+            if (config.Influx != null)
+            {
+                pushers.Add(new InfluxPusher(config.Influx) { Index = index++ });
+            }
+
             await Task.WhenAll(pushers.Select(async pusher =>
             {
                 var res = await pusher.TestConnection(config, source.Token);
@@ -131,7 +87,7 @@ namespace Cognite.OpcUa
             }));
 
             log.Information("Building extractor");
-            using var extractor = new Extractor(config, pushers, client);
+            using var extractor = new Extractor(config, pushers, client, provider.GetService<IExtractionStateStore>());
 
             try
             {

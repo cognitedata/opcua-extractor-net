@@ -21,7 +21,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Configuration;
+using Cognite.Extractor.Logging;
+using Cognite.Extractor.Metrics;
+using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Xunit;
 using Xunit.Abstractions;
@@ -310,10 +314,21 @@ namespace Test
         {
             var fullConfig = ConfigurationUtils.Read<FullConfig>("config.events.yml");
             fullConfig.GenerateDefaults();
-            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            var config = (CognitePusherConfig)fullConfig.Pushers.First();
+            config.Test = true;
 
             var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            using var pusher = new CDFPusher(CommonTestUtils.GetDummyProvider(handler), config);
+            var services = new ServiceCollection();
+            services.AddSingleton(fullConfig.Logger);
+            services.AddSingleton(fullConfig.Metrics);
+            services.AddMetrics();
+            services.AddLogging();
+            CommonTestUtils.AddDummyProvider(handler, services);
+            services.AddSingleton<CogniteConfig>(config);
+            services.AddCogniteClient("OpcUa-Extractor", true, true, false);
+
+            using var provider = services.BuildServiceProvider();
+            using var pusher = new CDFPusher(provider, config);
             var res = await pusher.TestConnection(fullConfig, CancellationToken.None);
             Assert.True(res);
         }
@@ -367,15 +382,32 @@ namespace Test
         {
             var fullConfig = ConfigurationUtils.Read<FullConfig>("config.test.yml");
             fullConfig.GenerateDefaults();
-            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            var config = (CognitePusherConfig)fullConfig.Pushers.First();
+
+            var services = new ServiceCollection();
+            services.AddSingleton(fullConfig.Logger);
+            services.AddSingleton(fullConfig.Metrics);
+            services.AddMetrics();
+            services.AddLogging();
+
             var handler1 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
             var handler2 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            using var pusher1 = new CDFPusher(CommonTestUtils.GetDummyProvider(handler1), config);
-            using var pusher2 = new CDFPusher(CommonTestUtils.GetDummyProvider(handler2), config);
+            services.AddSingleton<CogniteConfig>(config);
+
+            CommonTestUtils.AddDummyProvider(handler1, services);
+            services.AddCogniteClient("OpcUa-Extractor", true, true, false);
+            using var provider1 = services.BuildServiceProvider();
+
+            CommonTestUtils.AddDummyProvider(handler2, services);
+            services.AddCogniteClient("OpcUa-Extractor", true, true, false);
+            using var provider2 = services.BuildServiceProvider();
+
+            using var pusher1 = new CDFPusher(provider1, config);
+            using var pusher2 = new CDFPusher(provider2, config);
 
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                Builder = (config, pusher, client) => new Extractor(config, new[] { pusher1, pusher2 }, client),
+                Builder = (config, pusher, client) => new Extractor(config, new[] { pusher1, pusher2 }, client, null),
                 QuitAfterMap = true
             });
             await tester.ClearPersistentData();
@@ -608,8 +640,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState(intVar) != null
-                    && tester.Extractor.State.GetNodeState(intVar).BackfillDone
-                    && tester.Extractor.State.GetNodeState(intVar).IsStreaming
+                    && !tester.Extractor.State.GetNodeState(intVar).IsBackfilling
+                    && !tester.Extractor.State.GetNodeState(intVar).IsFrontfilling
                     && tester.Handler.Datapoints.ContainsKey(intVar)
                     && tester.Handler.Datapoints[intVar].NumericDatapoints.Any(pt => pt.Timestamp < startTime), 20,
                 "Expected integer datapoint to finish backfill and frontfill");
@@ -647,8 +679,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState(intVar) != null
-                    && tester.Extractor.State.GetNodeState(intVar).BackfillDone
-                    && tester.Extractor.State.GetNodeState(intVar).IsStreaming
+                    && !tester.Extractor.State.GetNodeState(intVar).IsBackfilling
+                    && !tester.Extractor.State.GetNodeState(intVar).IsFrontfilling
                     && tester.Handler.Datapoints.ContainsKey(intVar)
                     && tester.Handler.Datapoints[intVar].NumericDatapoints.Any(pt => pt.Timestamp < startTime), 20,
                 "Expected integer datapoint to finish backfill and frontfill");
@@ -666,8 +698,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState(intVar) != null
-                    && tester.Extractor.State.GetNodeState(intVar).BackfillDone
-                    && tester.Extractor.State.GetNodeState(intVar).IsStreaming, 20,
+                    && !tester.Extractor.State.GetNodeState(intVar).IsBackfilling
+                    && !tester.Extractor.State.GetNodeState(intVar).IsFrontfilling, 20,
                 "Expected integer datapoint to finish backfill and frontfill");
 
             await tester.TerminateRunTask();
@@ -703,14 +735,14 @@ namespace Test
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 0));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 0));
 
-            Assert.True(tester.Extractor.State.NodeStates.All(state => state.Historizing && !state.IsStreaming || state.IsStreaming));
+            Assert.True(tester.Extractor.State.NodeStates.All(state => state.FrontfillEnabled && state.IsFrontfilling || !state.IsFrontfilling));
 
             Assert.Empty(tester.Handler.Assets);
             Assert.Empty(tester.Handler.Timeseries);
 
             tester.Handler.BlockAllConnections = false;
 
-            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 4));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));

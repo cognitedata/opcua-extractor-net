@@ -203,9 +203,9 @@ namespace Cognite.OpcUa
         {
             await Task.WhenAll(
                 extractor.StateStorage.StoreExtractionState(extractor.State.NodeStates
-                    .Where(state => state.Historizing), StateStorage.VariableStates, token),
+                    .Where(state => state.IsFrontfilling), config.StateStorage.VariableStore, token),
                 extractor.StateStorage.StoreExtractionState(extractor.State.EmitterStates
-                    .Where(state => state.Historizing), StateStorage.EmitterStates, token)
+                    .Where(state => state.IsFrontfilling), config.StateStorage.EventStore, token)
             );
         }
         /// <summary>

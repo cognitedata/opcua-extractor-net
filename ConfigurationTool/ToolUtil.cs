@@ -264,8 +264,8 @@ namespace Cognite.OpcUa.Config
         public static string ConfigResultToString(FullConfig config)
         {
             var serializer = new SerializerBuilder()
-                .WithTagMapping("!cdf", typeof(CogniteClientConfig))
-                .WithTagMapping("!influx", typeof(InfluxClientConfig))
+                .WithTagMapping("!cdf", typeof(CognitePusherConfig))
+                .WithTagMapping("!influx", typeof(InfluxPusherConfig))
                 .WithTypeInspector(insp => new DefaultFilterTypeInspector(insp))
                 .Build();
 

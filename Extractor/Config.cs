@@ -8,6 +8,7 @@ using Cognite.Extractor.Metrics;
 using Cognite.Extractor.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using System.Linq;
+using Cognite.Extractor.StateStorage;
 
 namespace Cognite.OpcUa
 {
@@ -58,16 +59,11 @@ namespace Cognite.OpcUa
         bool Debug { get; set; }
         bool ReadExtractedRanges { get; set; }
         public double? NonFiniteReplacement { get; set; }
-        public IPusher ToPusher(int index, ServiceCollection services);
+        public IPusher ToPusher(int index, IServiceProvider provider);
     }
-    public class CogniteClientConfig : CogniteConfig, IPusherConfig
+    public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
-        public IPusher ToPusher(int index, ServiceCollection services)
-        {
-            services.AddSingleton<CogniteConfig>(this);
-            services.AddCogniteClient("OPC-UA Extractor", true, true);
-            return new CDFPusher(services.BuildServiceProvider(), this) {Index = index};
-        }
+        public bool Test { get; set; } = false;
         public long? DataSetId { get; set; }
         public bool Debug { get; set; } = false;
         public bool ReadExtractedRanges { get; set; } = true;
@@ -79,8 +75,12 @@ namespace Cognite.OpcUa
                 && value.Value < CogniteUtils.NumericValueMax ? value : null;
         }
         private double? nonFiniteReplacement;
+        public IPusher ToPusher(int index, IServiceProvider provider)
+        {
+            return new CDFPusher(provider, this) { Index = index };
+        }
     }
-    public class InfluxClientConfig : IPusherConfig
+    public class InfluxPusherConfig : IPusherConfig
     {
         public string Host { get; set; }
         public string Username { get; set; }
@@ -95,13 +95,13 @@ namespace Cognite.OpcUa
             set => nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
         }
         private double? nonFiniteReplacement;
-        public IPusher ToPusher(int index, ServiceCollection _)
+        public IPusher ToPusher(int index, IServiceProvider _)
         {
             return new InfluxPusher(this) { Index = index };
         }
     }
 
-    public class MQTTPusherConfig : IPusherConfig
+    public class MqttPusherConfig : IPusherConfig
     {
         public string Host { get; set; }
         public int? Port { get; set; }
@@ -124,7 +124,7 @@ namespace Cognite.OpcUa
             set => nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
         }
         private double? nonFiniteReplacement;
-        public IPusher ToPusher(int index, ServiceCollection _)
+        public IPusher ToPusher(int index, IServiceProvider _)
         {
             return new MQTTPusher(this) { Index = index };
         }
@@ -134,7 +134,6 @@ namespace Cognite.OpcUa
     {
         public bool Enabled { get; set; } = false;
         public InfluxBufferConfig Influx { get; set; }
-        public bool LocalQueue { get; set; }
         public string DatapointPath { get; set; }
         public string EventPath { get; set; }
     }
@@ -154,7 +153,9 @@ namespace Cognite.OpcUa
         public UAClientConfig Source { get; set; }
         public LoggerConfig Logger { get; set; }
         public MetricsConfig Metrics { get; set; }
-        public List<IPusherConfig> Pushers { get; set; }
+        public CognitePusherConfig Cognite { get; set; }
+        public MqttPusherConfig Mqtt { get; set; }
+        public InfluxPusherConfig Influx { get; set; }
         public ExtractionConfig Extraction { get; set; }
         public EventConfig Events { get; set; }
         public FailureBufferConfig FailureBuffer { get; set; }
@@ -165,15 +166,11 @@ namespace Cognite.OpcUa
             if (Source == null) Source = new UAClientConfig();
             if (Logger == null) Logger = new LoggerConfig();
             if (Metrics == null) Metrics = new MetricsConfig();
-            if (Pushers == null) Pushers = new List<IPusherConfig>();
-            foreach (var pusher in Pushers)
+            if (Cognite != null)
             {
-                if (pusher is CogniteClientConfig cogConf)
-                {
-                    if (cogConf.CdfChunking == null) cogConf.CdfChunking = new ChunkingConfig();
-                    if (cogConf.CdfThrottling == null) cogConf.CdfThrottling = new ThrottlingConfig();
-                    if (cogConf.SdkLogging == null) cogConf.SdkLogging = new SdkLoggingConfig();
-                }
+                if (Cognite.CdfChunking == null) Cognite.CdfChunking = new ChunkingConfig();
+                if (Cognite.CdfThrottling == null) Cognite.CdfThrottling = new ThrottlingConfig();
+                if (Cognite.CdfRetries == null) Cognite.CdfRetries = new RetryConfig();
             }
             if (Extraction == null) Extraction = new ExtractionConfig();
             if (Events == null) Events = new EventConfig();
@@ -231,9 +228,13 @@ namespace Cognite.OpcUa
         public bool IsStep { get; set; } = false;
     }
 
-    public class StateStorageConfig
+    public class StateStorageConfig : StateStoreConfig
     {
-        public string Location { get; set; }
         public int Interval { get; set; }
+        public string VariableStore { get; set; } = "variable-states";
+        public string EventStore { get; set; } = "event-states";
+        public string InfluxVariableStore { get; set; } = "influx-variable-states";
+        public string InfluxEventStore { get; set; } = "influx-event-states";
+
     }
 }

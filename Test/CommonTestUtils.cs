@@ -37,6 +37,10 @@ using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using System.Reflection;
 using System.Collections.Concurrent;
+using CogniteSdk;
+using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Utils;
+using File = System.IO.File;
 
 namespace Test
 {
@@ -44,9 +48,9 @@ namespace Test
     {
         public ConfigInitFixture()
         {
-            ConfigurationUtils.AddTagMapping<CogniteClientConfig>("!cdf");
-            ConfigurationUtils.AddTagMapping<InfluxClientConfig>("!influx");
-            ConfigurationUtils.AddTagMapping<MQTTPusherConfig>("!mqtt");
+            ConfigurationUtils.AddTagMapping<CognitePusherConfig>("!cdf");
+            ConfigurationUtils.AddTagMapping<InfluxPusherConfig>("!influx");
+            ConfigurationUtils.AddTagMapping<MqttPusherConfig>("!mqtt");
             var defaultConfig = new LoggerConfig();
             defaultConfig.Console = new LogConfig() { Level = "debug" };
             LoggingUtils.Configure(defaultConfig);
@@ -97,15 +101,11 @@ namespace Test
             }
             return true;
         }
-        public static IServiceProvider GetDummyProvider(CDFMockHandler handler)
+        public static void AddDummyProvider(CDFMockHandler handler, IServiceCollection services)
         {
             if (handler == null) throw new ArgumentNullException(nameof(handler));
-            var services = new ServiceCollection();
-            services.AddHttpClient("Context")
+            services.AddHttpClient<Client.Builder>()
                 .ConfigurePrimaryHttpMessageHandler(handler.GetHandler);
-            services.AddHttpClient("Data")
-                .ConfigurePrimaryHttpMessageHandler(handler.GetHandler);
-            return services.BuildServiceProvider();
         }
 
         private static Collector GetCollector(string name)
@@ -361,8 +361,8 @@ namespace Test
         public Extractor Extractor { get; private set; }
         public UAClient UAClient { get; }
         public IPusher Pusher { get; }
-        public InfluxClientConfig InfluxConfig { get; }
-        public CogniteClientConfig CogniteConfig { get; }
+        public InfluxPusherConfig InfluxConfig { get; }
+        public CognitePusherConfig CogniteConfig { get; }
         public CancellationTokenSource Source { get; }
         public InfluxDBClient IfDbClient { get; }
         private readonly bool influx;
@@ -370,12 +370,18 @@ namespace Test
         public Task RunTask { get; private set; }
         private readonly ExtractorTestParameters testParams;
         private readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorTester));
+        private IServiceProvider provider;
 
         public ExtractorTester(ExtractorTestParameters testParams)
         {
             this.testParams = testParams ?? throw new ArgumentNullException(nameof(testParams));
+
+            var services = new ServiceCollection();
+
             Config = ConfigurationUtils.Read<FullConfig>(configNames[testParams.ConfigName]);
             Config.GenerateDefaults();
+
+            services.AddSingleton(Config.Logger);
 
             if (testParams.HistoryGranularity != null)
             {
@@ -389,9 +395,10 @@ namespace Test
                 pusherConfig = ConfigurationUtils.Read<FullConfig>(configNames[testParams.PusherConfig.Value]);
             }
 
-            if (testParams.StateStorage || testParams.BufferQueue || testParams.StateInflux || testParams.MqttState)
+            if (testParams.StateStorage || testParams.StateInflux || testParams.MqttState)
             {
                 Config.StateStorage.Location = "testbuffer.db";
+                Config.StateStorage.Database = StateStoreConfig.StorageType.LiteDb;
             }
 
             if (testParams.StateStorage)
@@ -399,11 +406,8 @@ namespace Test
                 Config.StateStorage.Interval = 3;
             }
 
-            if (testParams.BufferQueue)
-            {
-                Config.FailureBuffer.Enabled = true;
-                Config.FailureBuffer.LocalQueue = true;
-            }
+            services.AddSingleton<StateStoreConfig>(Config.StateStorage);
+            services.AddStateStore();
 
             if (testParams.DataBufferPath != null)
             {
@@ -421,7 +425,7 @@ namespace Test
             {
                 Config.FailureBuffer.Enabled = true;
                 var failureInflux = ConfigurationUtils.Read<FullConfig>(configNames[testParams.FailureInflux.Value]);
-                if (failureInflux.Pushers.First() is InfluxClientConfig influxConfig)
+                if (failureInflux.Pushers.First() is InfluxPusherConfig influxConfig)
                 {
                     influx = true;
                     InfluxConfig = influxConfig;
@@ -441,24 +445,27 @@ namespace Test
 
             switch ((pusherConfig ?? Config).Pushers.First())
             {
-                case CogniteClientConfig cogniteClientConfig:
+                case CognitePusherConfig cogniteClientConfig:
                     CogniteConfig = cogniteClientConfig;
+                    CogniteConfig.Test = true;
                     Handler = new CDFMockHandler(CogniteConfig.Project, testParams.MockMode);
                     Handler.StoreDatapoints = testParams.StoreDatapoints;
-                    Pusher = CogniteConfig.ToPusher(0, CommonTestUtils.GetDummyProvider(Handler));
+                    Pusher = CogniteConfig.ToPusher(0, services);
                     break;
-                case InfluxClientConfig influxClientConfig:
+                case InfluxPusherConfig influxClientConfig:
                     InfluxConfig = influxClientConfig;
                     Pusher = InfluxConfig.ToPusher(0, null);
                     influx = true;
                     IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
                     break;
-                case MQTTPusherConfig mqttPusherConfig:
+                case MqttPusherConfig mqttPusherConfig:
                     var mqttConfig = ConfigurationUtils.Read<BridgeConfig>("config.bridge.yml");
                     mqttConfig.GenerateDefaults();
                     Handler = new CDFMockHandler(mqttConfig.Cognite.Project, testParams.MockMode);
                     Handler.StoreDatapoints = testParams.StoreDatapoints;
-                    Bridge = new MQTTBridge(new Destination(mqttConfig.Cognite, CommonTestUtils.GetDummyProvider(Handler)), mqttConfig);
+                    services.AddCogniteClient("MQTT-CDF-Bridge", true, true, false);
+                    var sprovider = services.BuildServiceProvider();
+                    Bridge = new MQTTBridge(new Destination(mqttConfig.Cognite, sprovider), mqttConfig);
                     Bridge.StartBridge(CancellationToken.None).Wait();
                     for (int i = 0; i < 30; i++)
                     {
@@ -484,6 +491,7 @@ namespace Test
                 InfluxConfig = testParams.InfluxOverride;
                 IfDbClient = new InfluxDBClient(InfluxConfig.Host, InfluxConfig.Username, InfluxConfig.Password);
             }
+            provider = services.BuildServiceProvider();
             UAClient = new UAClient(Config);
             Source = new CancellationTokenSource();
             if (testParams.Builder != null)
@@ -492,7 +500,7 @@ namespace Test
             }
             else
             {
-                Extractor = new Extractor(Config, Pusher, UAClient);
+                Extractor = new Extractor(Config, Pusher, UAClient, provider.GetService<IExtractionStateStore>());
             }
 
             Server = new ServerController(new[] { SetupMap[testParams.ServerName] });
@@ -500,9 +508,8 @@ namespace Test
 
         public Task<IEnumerable<BufferedDataPoint>> GetAllInfluxPoints(NodeId node, bool isString = false, int index = -1)
         {
-            var dummy = new InfluxBufferState(node);
-            dummy.DestinationExtractedRange.Start = DateTime.MinValue;
-            dummy.DestinationExtractedRange.End = DateTime.Now.AddDays(100);
+            var dummy = new InfluxBufferState(Extractor, node);
+            dummy.SetComplete();
             dummy.Type = isString ? InfluxBufferType.StringType : InfluxBufferType.DoubleType;
             return ((InfluxPusher)Pusher).ReadDataPoints(
                 new Dictionary<string, InfluxBufferState> { { UAClient.GetUniqueId(node, index), dummy } },
@@ -511,9 +518,8 @@ namespace Test
 
         public Task<IEnumerable<BufferedEvent>> GetAllInfluxEvents(NodeId node)
         {
-            var dummy = new InfluxBufferState(node);
-            dummy.DestinationExtractedRange.Start = DateTime.MinValue;
-            dummy.DestinationExtractedRange.End = DateTime.Now.AddDays(100);
+            var dummy = new InfluxBufferState(Extractor, node);
+            dummy.SetComplete();
             dummy.Type = InfluxBufferType.EventType;
             return ((InfluxPusher)Pusher).ReadEvents(
                 new Dictionary<string, InfluxBufferState> { { UAClient.GetUniqueId(node), dummy } },
@@ -529,7 +535,7 @@ namespace Test
             }
             else
             {
-                Extractor = new Extractor(Config, Pusher, UAClient);
+                Extractor = new Extractor(Config, Pusher, UAClient, provider.GetService<IExtractionStateStore>());
             }
         }
 
@@ -752,10 +758,9 @@ namespace Test
         public ConfigName? FailureInflux { get; set; } = null;
         public bool FailureInfluxWrite { get; set; } = true;
         public Func<FullConfig, IPusher, UAClient, Extractor> Builder { get; set; } = null;
-        public InfluxClientConfig InfluxOverride { get; set; } = null;
+        public InfluxPusherConfig InfluxOverride { get; set; } = null;
         public bool StateStorage { get; set; } = false;
         public bool StateInflux { get; set; } = false;
-        public bool BufferQueue { get; set; } = false;
         public bool MqttState { get; set; } = false;
         public string DataBufferPath { get; set; }
         public string EventBufferPath { get; set; }

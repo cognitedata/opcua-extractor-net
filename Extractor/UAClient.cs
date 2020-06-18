@@ -912,12 +912,12 @@ namespace Cognite.OpcUa
                 {
                     if (token.IsCancellationRequested) break;
                     subscription.AddItems(chunk
-                        .Where(node => !hasSubscription.Contains(node.Id))
+                        .Where(node => !hasSubscription.Contains(node.SourceId))
                         .Select(node =>
                         {
                             var monitor = new MonitoredItem(subscription.DefaultItem)
                             {
-                                StartNodeId = node.Id,
+                                StartNodeId = node.SourceId,
                                 DisplayName = "Value: " + node.DisplayName,
                                 SamplingInterval = config.SamplingInterval,
                                 QueueSize = (uint)Math.Max(0, config.QueueLength)

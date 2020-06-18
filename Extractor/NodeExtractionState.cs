@@ -1,4 +1,6 @@
-﻿using Opc.Ua;
+﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.StateStorage;
+using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -6,191 +8,25 @@ using System.Linq;
 
 namespace Cognite.OpcUa
 {
-    public abstract class BaseExtractionState
+    public class UAHistoryExtractionState : HistoryExtractionState
     {
-        /// <summary>
-        /// Id of the corresponding node in OPC-UA
-        /// </summary>
-        public NodeId Id { get; }
-        /// <summary>
-        /// True if the state has been modified since last time it was written to influxdb.
-        /// </summary>
-        public bool IsDirty { get; set; }
-        /// <summary>
-        /// Start- and endpoint of extracted range as known to be the case locally
-        /// </summary>
-        public TimeRange SourceExtractedRange { get; }
-        /// <summary>
-        /// Most conservative common extracted range for all destinations
-        /// </summary>
-        public TimeRange DestinationExtractedRange { get; }
-        protected object RangeMutex { get; } = new object();
-        /// <summary>
-        /// True if backfill has been finished for this state
-        /// </summary>
-        public bool BackfillDone { get; set; }
-        /// <summary>
-        /// True if this state has ever been persisted to the influxdb state-storage.
-        /// </summary>
-        public bool StatePersisted { get; set; }
-        /// <summary>
-        /// True if state represents a historizing node.
-        /// </summary>
-        public virtual bool Historizing { get; set; }
-        /// <summary>
-        /// True if the node is currently passing live data from subscriptions into the pushers.
-        /// </summary>
-        public bool IsStreaming { get; protected set; }
-        /// <summary>
-        /// Construct from nodeId, initializes ranges to default values.
-        /// </summary>
-        /// <param name="id">NodeId of associated variable</param>
-        protected BaseExtractionState(NodeId id)
+        public NodeId SourceId { get; }
+        public UAHistoryExtractionState(Extractor extractor, NodeId id, bool frontfill, bool backfill)
+            : base(extractor?.GetUniqueId(id), frontfill, backfill)
         {
-            if (id == null) throw new ArgumentNullException(nameof(id));
-            Id = id;
-            SourceExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
-            DestinationExtractedRange = new TimeRange(DateTime.MinValue, DateTime.MaxValue);
-            BackfillDone = false;
-        }
-        /// <summary>
-        /// Called when initializing extracted range from destinations and state storage.
-        /// This will always shrink the believed range.
-        /// </summary>
-        /// <param name="first"></param>
-        /// <param name="last"></param>
-        public void InitExtractedRange(DateTime first, DateTime last)
-        {
-            lock (RangeMutex)
-            {
-                if (last < DestinationExtractedRange.End)
-                {
-                    DestinationExtractedRange.End = last;
-                    SourceExtractedRange.End = last;
-                }
-
-                if (first > DestinationExtractedRange.Start)
-                {
-                    DestinationExtractedRange.Start = first;
-                    SourceExtractedRange.Start = first;
-                }
-            }
-        }
-        /// <summary>
-        /// Called after range initialization to set uninitialized ranges to proper default values depending on whether
-        /// backfill is enabled or not.
-        /// </summary>
-        /// <param name="backfill">True if backfill is enabled</param>
-        public void FinalizeRangeInit(bool backfill)
-        {
-            lock (RangeMutex)
-            {
-                if (SourceExtractedRange.Start == DateTime.MinValue && SourceExtractedRange.End == DateTime.MaxValue)
-                {
-                    if (backfill)
-                    {
-                        SourceExtractedRange.Start = DateTime.UtcNow;
-                        SourceExtractedRange.End = DateTime.UtcNow;
-                        DestinationExtractedRange.Start = DateTime.UtcNow;
-                        DestinationExtractedRange.End = DateTime.UtcNow;
-                    }
-                    else
-                    {
-                        SourceExtractedRange.End = DateTime.MinValue;
-                        DestinationExtractedRange.Start = DateTime.MaxValue;
-                        DestinationExtractedRange.End = DateTime.MinValue;
-                    }
-                }
-            }
-        }
-        /// <summary>
-        /// Update start of source range directly from history backfill.
-        /// </summary>
-        /// <param name="first">Earliest timestamp in backfill chunk</param>
-        /// <param name="final">True if this is the end of history</param>
-        public void UpdateFromBackfill(DateTime first, bool final)
-        {
-            lock (RangeMutex)
-            {
-                if (first < SourceExtractedRange.Start)
-                {
-                    SourceExtractedRange.Start = first;
-                }
-
-                BackfillDone |= final;
-            }
-        }
-
-        /// <summary>
-        /// Use results of push to destinations to update the record of newest/latest points pushed to destinations.
-        /// </summary>
-        /// <param name="update">New range, will only be used to grow the destination range in the state</param>
-        public void UpdateDestinationRange(TimeRange update)
-        {
-            if (update == null) return;
-            lock (RangeMutex)
-            {
-                // Avoid updating destination range outside of the known range if this is a historizing node.
-                // For non-historizing nodes it doesn't matter; we just want as many points as possible.
-                // For historizing nodes this will only happen on extractor restart, in which case
-                // writing outside of the extracted range could cause points to be lost if the extractor went down again before
-                // that point in history was reached. It is an edge case, but it could happen.
-                // There is a question as to what this means if history is sub-optimal and buffering historizing nodes is enabled,
-                // but that is an edge case of an edge case and I think this is sufficient.
-                if (update.End > DestinationExtractedRange.End
-                    && (!Historizing || IsStreaming || update.End <= SourceExtractedRange.End))
-                {
-                    IsDirty = true;
-                    DestinationExtractedRange.End = update.End;
-                }
-
-                if (update.Start < DestinationExtractedRange.Start
-                    && (!Historizing || BackfillDone || update.Start >= SourceExtractedRange.Start))
-                {
-                    IsDirty = true;
-                    DestinationExtractedRange.Start = update.Start;
-                }
-                if (BackfillDone && DestinationExtractedRange.Start == SourceExtractedRange.Start)
-                {
-                    DestinationExtractedRange.Start = DateTime.MinValue;
-                }
-            }
-        }
-        /// <summary>
-        /// Reset the state based on a restart of history. This sets backfillDone to false, disables streaming
-        /// and resets the source ranges to destination ranges.
-        /// </summary>
-        public void RestartHistory()
-        {
-            lock (RangeMutex)
-            {
-                IsStreaming = !Historizing;
-                BackfillDone = false;
-                SourceExtractedRange.Start = new DateTime(Math.Min(DestinationExtractedRange.Start.Ticks + 1000, DateTime.MaxValue.Ticks));
-                SourceExtractedRange.End = new DateTime(Math.Max(DestinationExtractedRange.End.Ticks - 1000, DateTime.MinValue.Ticks));
-            }
-        }
-        /// <summary>
-        /// Resets the state by disabling streaming for historizing states and setting backfillDone to false
-        /// </summary>
-        public void ResetStreamingState()
-        {
-            IsStreaming = !Historizing;
-            BackfillDone = false;
+            SourceId = id;
         }
     }
+
+
     /// <summary>
     /// State of a node currently being extracted for data. Contains information about the data,
     /// a thread-safe last timestamp in destination systems,
     /// and a buffer for subscribed values arriving while HistoryRead is running.
     /// Represents a single OPC-UA variable, not necessarily a destination timeseries.
     /// </summary>
-    public sealed class NodeExtractionState : BaseExtractionState
+    public sealed class NodeExtractionState : UAHistoryExtractionState
     {
-        /// <summary>
-        /// True if there is historical data associated with this node
-        /// </summary>
-        public override bool Historizing { get; set; }
         /// <summary>
         /// Description of the OPC-UA datatype for the node
         /// </summary>
@@ -207,26 +43,17 @@ namespace Cognite.OpcUa
         /// Constructor. Copies relevant data from BufferedVariable, initializes the buffer if Historizing is true.
         /// </summary>
         /// <param name="variable">Variable to be used as base</param>
-        public NodeExtractionState(BufferedVariable variable) : base(variable?.Id)
+        public NodeExtractionState(Extractor extractor, BufferedVariable variable, bool frontfill, bool backfill, bool stateStore)
+            : base(extractor, variable?.Id, frontfill, backfill)
         {
             if (variable == null) throw new ArgumentNullException(nameof(variable));
             DataType = variable.DataType;
             ArrayDimensions = variable.ArrayDimensions;
             DisplayName = variable.DisplayName;
-            BackfillDone = false;
-            if (variable.Historizing)
+            if (stateStore)
             {
-                Historizing = true;
-                IsStreaming = false;
                 buffer = new List<IEnumerable<BufferedDataPoint>>();
             }
-            else
-            {
-                Historizing = false;
-                IsStreaming = true;
-            }
-
-            IsStreaming = !Historizing;
         }
         /// <summary>
         /// Update time range and buffer from stream.
@@ -235,16 +62,12 @@ namespace Cognite.OpcUa
         public void UpdateFromStream(IEnumerable<BufferedDataPoint> points)
         {
             if (!points.Any()) return;
-            var last = points.Max(pt => pt.Timestamp);
-            lock (RangeMutex)
+            UpdateFromStream(DateTime.MaxValue, points.Max(pt => pt.Timestamp));
+            lock (_mutex)
             {
-                if (last > SourceExtractedRange.End && IsStreaming)
+                if (IsFrontfilling)
                 {
-                    SourceExtractedRange.End = last;
-                }
-                else if (!IsStreaming)
-                {
-                    buffer.Add(points);
+                    buffer?.Add(points);
                 }
             }
         }
@@ -253,21 +76,18 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="last">Latest timestamp in received values</param>
         /// <param name="final">True if this is the final iteration of history read</param>
-        public void UpdateFromFrontfill(DateTime last, bool final)
+        public override void UpdateFromFrontfill(DateTime last, bool final)
         {
-            lock (RangeMutex)
+            lock (_mutex)
             {
-                if (last > SourceExtractedRange.End)
-                {
-                    SourceExtractedRange.End = last;
-                }
+                SourceExtractedRange = SourceExtractedRange.Extend(null, last);
                 if (!final)
                 {
-                    buffer.Clear();
+                    buffer?.Clear();
                 }
                 else
                 {
-                    IsStreaming = true;
+                    IsFrontfilling = false;
                 }
             }
         }
@@ -278,11 +98,10 @@ namespace Cognite.OpcUa
         /// <returns>The contents of the buffer once called.</returns>
         public IEnumerable<IEnumerable<BufferedDataPoint>> FlushBuffer()
         {
-            if (!IsStreaming) return Array.Empty<IEnumerable<BufferedDataPoint>>();
-            if (buffer == null || !buffer.Any()) return new List<BufferedDataPoint[]>();
-            lock (RangeMutex)
+            if (IsFrontfilling || buffer == null || !buffer.Any()) return Array.Empty<IEnumerable<BufferedDataPoint>>();
+            lock (_mutex)
             {
-                var result = buffer.Where(arr => arr.Max(pt => pt.Timestamp) > SourceExtractedRange.End);
+                var result = buffer.Where(arr => arr.Max(pt => pt.Timestamp) > SourceExtractedRange.Last);
                 buffer.Clear();
                 return result;
             }
@@ -293,34 +112,20 @@ namespace Cognite.OpcUa
     /// a thread-safe last timestamp in destination systems,
     /// and a buffer for subscribed values arriving while HistoryRead is running.
     /// </summary>
-    public sealed class EventExtractionState : BaseExtractionState
+    public sealed class EventExtractionState : UAHistoryExtractionState
     {
-        private bool historizing;
-        /// <summary>
-        /// True if there are historical events in OPC-UA, and this is configured as a Historizing emitter.
-        /// </summary>
-        public override bool Historizing {
-            get => historizing;
-            set 
-            {
-                IsStreaming = !value;
-                BackfillDone = !value;
-                historizing = value;
-                if (!historizing || buffer != null) return;
-                lock (RangeMutex)
-                {
-                    buffer = new List<BufferedEvent>();
-                }
-            }
-        }
         /// <summary>
         /// Last known timestamp of events from OPC-UA.
         /// </summary>
         private IList<BufferedEvent> buffer;
 
-        public EventExtractionState(NodeId emitterId) : base(emitterId)
+        public EventExtractionState(Extractor extractor, NodeId emitterId, bool frontfill, bool backfill, bool stateStore)
+            : base(extractor, emitterId, frontfill, backfill)
         {
-            Historizing = false;
+            if (stateStore)
+            {
+                buffer = new List<BufferedEvent>();
+            }
         }
 
         /// <summary>
@@ -330,15 +135,12 @@ namespace Cognite.OpcUa
         public void UpdateFromStream(BufferedEvent evt)
         {
             if (evt == null) return;
-            lock (RangeMutex)
+            UpdateFromStream(evt.Time, evt.Time);
+            lock (_mutex)
             {
-                if (evt.Time > SourceExtractedRange.End && evt.Time > SourceExtractedRange.Start && IsStreaming)
+                if (IsFrontfilling)
                 {
-                    SourceExtractedRange.End = evt.ReceivedTime;
-                }
-                else if (!IsStreaming)
-                {
-                    buffer.Add(evt);
+                    buffer?.Add(evt);
                 }
             }
         }
@@ -347,21 +149,18 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="last">Latest timestamp in received values</param>
         /// <param name="final">True if this is the final iteration of history read</param>
-        public void UpdateFromFrontfill(DateTime last, bool final)
+        public override void UpdateFromFrontfill(DateTime last, bool final)
         {
-            lock (RangeMutex)
+            lock (_mutex)
             {
-                if (last > SourceExtractedRange.End)
-                {
-                    SourceExtractedRange.End = last;
-                }
+                SourceExtractedRange = SourceExtractedRange.Extend(null, last);
                 if (!final)
                 {
-                    buffer.Clear();
+                    buffer?.Clear();
                 }
                 else
                 {
-                    IsStreaming = true;
+                    IsFrontfilling = false;
                 }
             }
         }
@@ -371,11 +170,10 @@ namespace Cognite.OpcUa
         /// <returns>The contents of the buffer</returns>
         public IEnumerable<BufferedEvent> FlushBuffer()
         {
-            if (!IsStreaming) return Array.Empty<BufferedEvent>();
-            if (buffer == null || !buffer.Any()) return new List<BufferedEvent>();
-            lock (RangeMutex)
+            if (IsFrontfilling || buffer == null || !buffer.Any()) return Array.Empty<BufferedEvent>();
+            lock (_mutex)
             {
-                var result = buffer.Where(evt => evt.ReceivedTime > SourceExtractedRange.End);
+                var result = buffer.Where(evt => !SourceExtractedRange.Contains(evt.Time));
                 buffer.Clear();
                 return result;
             }
@@ -391,42 +189,42 @@ namespace Cognite.OpcUa
     /// </summary>
     public sealed class InfluxBufferState : BaseExtractionState
     {
-        public InfluxBufferType Type { get; set;  }
-        public override bool Historizing { get; set; }
+        public InfluxBufferType Type { get; set; }
+        public bool Historizing { get; }
 
         public InfluxBufferState(NodeExtractionState other, bool events) : base(other?.Id)
         {
             if (other == null) throw new ArgumentNullException(nameof(other));
-            DestinationExtractedRange.Start = DateTime.MaxValue;
-            DestinationExtractedRange.End = DateTime.MinValue;
+            DestinationExtractedRange = TimeRange.Empty;
             if (events)
             {
                 Type = InfluxBufferType.EventType;
             }
             else
             {
-                Historizing = other.Historizing;
+                Historizing = other.FrontfillEnabled;
                 Type = other.DataType.IsString ? InfluxBufferType.StringType : InfluxBufferType.DoubleType;
             }
         }
 
-        public InfluxBufferState(NodeId objectId) : base(objectId)
+        public InfluxBufferState(Extractor extractor, NodeId objectId) : base(extractor?.GetUniqueId(objectId))
         {
             Type = InfluxBufferType.EventType;
-            DestinationExtractedRange.Start = DateTime.MaxValue;
-            DestinationExtractedRange.End = DateTime.MinValue;
+            DestinationExtractedRange = TimeRange.Empty;
         }
         /// <summary>
         /// Completely clear the ranges, after data has been written to all destinations.
         /// </summary>
         public void ClearRanges()
         {
-            lock (RangeMutex)
+            lock (_mutex)
             {
-                IsDirty = true;
-                DestinationExtractedRange.Start = DateTime.MaxValue;
-                DestinationExtractedRange.End = DateTime.MinValue;
+                DestinationExtractedRange = TimeRange.Empty;
             }
+        }
+        public void SetComplete()
+        {
+            DestinationExtractedRange = TimeRange.Complete;
         }
     }
 }

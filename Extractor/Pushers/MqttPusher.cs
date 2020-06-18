@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.StateStorage;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
@@ -26,7 +27,7 @@ namespace Cognite.OpcUa.Pushers
         public bool NoInit { get; set; }
         public Extractor Extractor { get; set; }
         public IPusherConfig BaseConfig => config;
-        private readonly MQTTPusherConfig config;
+        private readonly MqttPusherConfig config;
         private readonly IMqttClient client;
         private readonly IMqttClientOptions options;
 
@@ -35,7 +36,6 @@ namespace Cognite.OpcUa.Pushers
         private readonly MqttApplicationMessageBuilder baseBuilder;
 
         private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
-        private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
 
         private bool closed = false;
 
@@ -57,7 +57,7 @@ namespace Cognite.OpcUa.Pushers
             .CreateCounter("opcua_events_pushed_mqtt", "Number of events pushed to MQTT");
         private static readonly Counter eventPushCounter = Metrics
             .CreateCounter("opcua_event_pushes_mqtt", "Number of times events have been pushed to MQTT");
-        public MQTTPusher(MQTTPusherConfig config)
+        public MQTTPusher(MqttPusherConfig config)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             var builder = new MqttClientOptionsBuilder()
@@ -122,11 +122,6 @@ namespace Cognite.OpcUa.Pushers
                     skippedDatapoints.Inc();
                     continue;
                 }
-                // We do not subscribe to changes in history, so an update to a point within the known range is due to
-                // something being out of synch.
-                if (ranges.ContainsKey(buffer.Id)
-                    && buffer.Timestamp < ranges[buffer.Id].End
-                    && buffer.Timestamp > ranges[buffer.Id].Start) continue;
 
                 if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
                 {
@@ -167,27 +162,6 @@ namespace Cognite.OpcUa.Pushers
 
             if (!results.All(res => res)) return false;
 
-            foreach ((string key, var value) in dataPointList)
-            {
-                var last = value.Max(dp => dp.Timestamp);
-                var first = value.Min(dp => dp.Timestamp);
-                if (!ranges.ContainsKey(key))
-                {
-                    ranges[key] = new TimeRange(first, last);
-                }
-                else
-                {
-                    if (last < ranges[key].End)
-                    {
-                        ranges[key].End = last;
-                    }
-
-                    if (first > ranges[key].Start)
-                    {
-                        ranges[key].Start = first;
-                    }
-                }
-            }
             return true;
         }
         public async Task<bool?> TestConnection(FullConfig _, CancellationToken token)
@@ -208,14 +182,23 @@ namespace Cognite.OpcUa.Pushers
         public async Task<bool> PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
             if (!client.IsConnected) return false;
+
+
+
             if (!string.IsNullOrEmpty(config.LocalState))
             {
-                if (existingNodes == null)
-                {
-                    var existing = await Extractor.StateStorage.ReadMqttStates(config.LocalState,
-                        DateTimeOffset.FromUnixTimeMilliseconds(config.InvalidateBefore).DateTime, token);
-                    existingNodes = new HashSet<string>(existing);
-                }
+                var states = objects.Concat(variables)
+                    .Select(node => Extractor.GetUniqueId(node.Id))
+                    .Select(id => new ExistingState { Id = id })
+                    .ToDictionary(state => state.Id);
+
+                await Extractor.StateStorage.RestoreExtractionState<MqttState, ExistingState>(
+                    states,
+                    config.LocalState,
+                    (state, poco) => state.Existing = true,
+                    token);
+
+                existingNodes = new HashSet<string>(states.Where(state => state.Value.Existing).Select(state => state.Key));
 
                 if (existingNodes.Any())
                 {
@@ -242,11 +225,15 @@ namespace Cognite.OpcUa.Pushers
 
             if (!string.IsNullOrEmpty(config.LocalState))
             {
-                var newIds = objects
+                var newStates = objects.Concat(variables)
                     .Select(obj => Extractor.GetUniqueId(obj.Id))
-                    .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
+                    .Select(id => new ExistingState { Id = id, Existing = true })
                     .ToList();
-                await Extractor.StateStorage.StoreMqttStates(config.LocalState, newIds, token);
+                await Extractor.StateStorage.StoreExtractionState(
+                    newStates,
+                    config.LocalState,
+                    state => new MqttState { Id = state.Id, CreatedAt = DateTime.UtcNow },
+                    token);
             }
 
             return true;
@@ -284,7 +271,6 @@ namespace Cognite.OpcUa.Pushers
         public void Reset()
         {
             existingNodes = null;
-            ranges.Clear();
         }
 
         #endregion
@@ -568,6 +554,19 @@ namespace Cognite.OpcUa.Pushers
         class StatelessTimeSeriesCreate : TimeSeriesCreate
         {
             public string AssetExternalId { get; set; }
+        }
+
+        class MqttState : BaseStorableState
+        {
+            [StateStoreProperty("created")]
+            public DateTime CreatedAt { get; set; }
+        }
+
+        class ExistingState : IExtractionState
+        {
+            public bool Existing { get; set; }
+            public string Id { get; set; }
+            public DateTime? LastTimeModified => DateTime.MaxValue;
         }
         #endregion
 

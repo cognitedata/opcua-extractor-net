@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
+using Cognite.Extractor.Common;
 using Opc.Ua;
 using Prometheus;
 using Serilog;
@@ -25,8 +26,7 @@ namespace Cognite.OpcUa
         public bool NoInit { get; set; }
 
 
-        private readonly InfluxClientConfig config;
-        private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
+        private readonly InfluxPusherConfig config;
         private InfluxDBClient client;
 
         private static readonly Counter numInfluxPusher = Metrics
@@ -50,7 +50,7 @@ namespace Cognite.OpcUa
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(InfluxPusher));
 
-        public InfluxPusher(InfluxClientConfig config)
+        public InfluxPusher(InfluxPusherConfig config)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             BaseConfig = config;
@@ -74,9 +74,6 @@ namespace Cognite.OpcUa
                     skippedDatapoints.Inc();
                     continue;
                 }
-
-                if (ranges.ContainsKey(buffer.Id) && buffer.Timestamp < ranges[buffer.Id].End
-                    && buffer.Timestamp > ranges[buffer.Id].Start) continue;
 
                 if (!buffer.IsString && !double.IsFinite(buffer.DoubleValue))
                 {
@@ -187,6 +184,7 @@ namespace Cognite.OpcUa
         public async Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
         {
             if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            var ranges = new ConcurrentDictionary<string, TimeRange>();
             var getRangeTasks = states.Select(async state =>
             {
                 var id = Extractor.GetUniqueId(state.Id,
@@ -218,10 +216,10 @@ namespace Cognite.OpcUa
                     if (first.Any() && first.First().HasEntries)
                     {
                         DateTime ts = first.First().Entries[0].Time;
-                        ranges[id].Start = ts;
+                        ranges[id] = new TimeRange(ts, ranges[id].Last);
                     }
                 }
-                state.InitExtractedRange(ranges[id].Start, ranges[id].End);
+                state.InitExtractedRange(ranges[id].First, ranges[id].Last);
 
             });
             try
@@ -252,7 +250,7 @@ namespace Cognite.OpcUa
         {
             token.ThrowIfCancellationRequested();
             var mutex = new object();
-            var bestRange = new TimeRange(DateTime.MaxValue, DateTime.MinValue);
+            var bestRange = TimeRange.Empty;
             string emitterId = Extractor.GetUniqueId(state.Id);
 
             var ids = seriesNames.Where(name => nodes.Any(node =>
@@ -268,10 +266,7 @@ namespace Cognite.OpcUa
                     DateTime ts = last.First().Entries[0].Time;
                     lock (mutex)
                     {
-                        if (ts > bestRange.End)
-                        {
-                            bestRange.End = ts;
-                        }
+                        bestRange = bestRange.Extend(null, ts);
                     }
                 }
 
@@ -285,26 +280,23 @@ namespace Cognite.OpcUa
                         DateTime ts = first.First().Entries[0].Time;
                         lock (mutex)
                         {
-                            if (ts < bestRange.Start)
-                            {
-                                bestRange.Start = ts;
-                            }
+                            bestRange = bestRange.Extend(ts, null);
                         }
                     }
                 }
             });
             await Task.WhenAll(tasks);
             token.ThrowIfCancellationRequested();
-            if (bestRange.End == DateTime.MinValue && backfillEnabled)
+            if (bestRange.Last == CogniteTime.DateTimeEpoch && backfillEnabled)
             {
-                bestRange.End = DateTime.UtcNow;
+                bestRange = new TimeRange(bestRange.First, DateTime.UtcNow);
             }
 
-            if (bestRange.Start == DateTime.MaxValue)
+            if (bestRange.First == DateTime.MaxValue)
             {
-                bestRange.Start = bestRange.End;
+                bestRange = new TimeRange(bestRange.Last, bestRange.Last);
             }
-            state.InitExtractedRange(bestRange.Start, bestRange.End);
+            state.InitExtractedRange(bestRange.First, bestRange.Last);
         }
         /// <summary>
         /// Reads the first and last datapoint from influx for each emitter, sending the timestamps to each passed state
@@ -453,8 +445,8 @@ namespace Cognite.OpcUa
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT * FROM \"{state.Key}\"" +
-                    $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks*100}" +
-                    $" AND time <= {(state.Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks*100}")
+                    $" WHERE time >= {(state.Value.DestinationExtractedRange.First - DateTime.UnixEpoch).Ticks*100}" +
+                    $" AND time <= {(state.Value.DestinationExtractedRange.Last - DateTime.UnixEpoch).Ticks*100}")
             ).ToList();
 
             var results = await Task.WhenAll(fetchTasks);
@@ -506,8 +498,8 @@ namespace Cognite.OpcUa
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
                 $"SELECT * FROM /events.{state.Key.Replace("/", "\\/", StringComparison.InvariantCulture)}:.*/" +
-                $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks * 100}" +
-                $" AND time <= {(state.Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks * 100}")
+                $" WHERE time >= {(state.Value.DestinationExtractedRange.First - DateTime.UnixEpoch).Ticks * 100}" +
+                $" AND time <= {(state.Value.DestinationExtractedRange.Last - DateTime.UnixEpoch).Ticks * 100}")
             ).ToList();
 
             var results = await Task.WhenAll(fetchTasks);
@@ -568,7 +560,6 @@ namespace Cognite.OpcUa
 
         public void Reset()
         {
-            ranges.Clear();
         }
 
         public void Dispose()

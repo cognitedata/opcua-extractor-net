@@ -22,15 +22,13 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Com.Cognite.V1.Timeseries.Proto;
 using CogniteSdk;
-using CogniteSdk.Login;
 using Microsoft.Extensions.DependencyInjection;
-using System.Net.Http;
 using Opc.Ua;
 using Prometheus;
 using Serilog;
 using Cognite.Extractor.Utils;
+using TimeRange = Cognite.Extractor.Common.TimeRange;
 
 namespace Cognite.OpcUa
 {
@@ -39,10 +37,9 @@ namespace Cognite.OpcUa
     /// </summary>
     public sealed class CDFPusher : IPusher
     {
-        private readonly CogniteClientConfig config;
+        private readonly CognitePusherConfig config;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
-        private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
         
         public int Index { get; set; }
         public bool DataFailing { get; set; }
@@ -55,26 +52,20 @@ namespace Cognite.OpcUa
         public IPusherConfig BaseConfig { get; }
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
+        private readonly HashSet<string> missingTimeseries = new HashSet<string>();
+        private readonly IServiceProvider provider;
 
-        private readonly IHttpClientFactory factory;
-
-        public CDFPusher(IServiceProvider clientProvider, CogniteClientConfig config)
+        public CDFPusher(IServiceProvider clientProvider, CognitePusherConfig config)
         {
             this.config = config;
             BaseConfig = config;
-            factory = clientProvider.GetRequiredService<IHttpClientFactory>();
             numCdfPusher.Inc();
+            provider = clientProvider;
         }
 
-        private CogniteDestination GetDestination(string name = "Context")
+        private CogniteDestination GetDestination()
         {
-            return new Client.Builder()
-                .SetHttpClient(factory.CreateClient(name))
-                .AddHeader("api-key", config.ApiKey)
-                .SetAppId("OPC-UA Extractor")
-                .SetProject(config.Project)
-                .SetBaseUrl(new Uri(config.Host, UriKind.Absolute))
-                .Build();
+            return provider.GetRequiredService<CogniteDestination>();
         }
 
         private static readonly Counter numCdfPusher = Metrics
@@ -94,10 +85,6 @@ namespace Cognite.OpcUa
         private static readonly Counter nodeEnsuringFailures = Metrics
             .CreateCounter("opcua_node_ensure_failures_cdf",
             "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
-        private static readonly Counter duplicatedEvents = Metrics
-            .CreateCounter("opcua_duplicated_events_cdf", "Number of events that failed to push to CDF due to already existing in CDF");
-        private static readonly Counter skippedDatapoints = Metrics
-            .CreateCounter("opcua_skipped_datapoints_cdf", "Number of datapoints skipped by CDF pusher");
         private static readonly Counter skippedEvents = Metrics
             .CreateCounter("opcua_skipped_events_cdf", "Number of events skipped by CDF pusher");
 
@@ -110,144 +97,60 @@ namespace Cognite.OpcUa
         public async Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
         {
             if (points == null) return null;
-            int count = 0;
-            var dataPointList = new Dictionary<string, List<BufferedDataPoint>>();
+            var dataPointList = points
+                .GroupBy(dp => dp.Id)
+                .Where(group => !mismatchedTimeseries.Contains(group.Key) && !missingTimeseries.Contains(group.Key))
+                .ToDictionary(group => group.Key, group => group);
 
-            foreach (var lBuffer in points)
-            {
-                var buffer = lBuffer;
-                if (buffer.Timestamp < minDateTime || mismatchedTimeseries.Contains(buffer.Id))
-                {
-                    skippedDatapoints.Inc();
-                    continue;
-                }
-                // We do not subscribe to changes in history, so an update to a point within the known range is due to
-                // something being out of synch.
-                if (ranges.ContainsKey(buffer.Id)
-                    && buffer.Timestamp < ranges[buffer.Id].End 
-                    && buffer.Timestamp > ranges[buffer.Id].Start) continue;
-
-                if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
-                {
-                    if (config.NonFiniteReplacement != null)
-                    {
-                        buffer = new BufferedDataPoint(buffer, config.NonFiniteReplacement.Value);
-                    }
-                    else
-                    {
-                        skippedDatapoints.Inc();
-                        continue;
-                    }
-                }
-
-                if (buffer.IsString && buffer.StringValue == null)
-                {
-                    buffer = new BufferedDataPoint(buffer, "");
-                }
-
-                count++;
-                if (!dataPointList.ContainsKey(buffer.Id))
-                {
-                    dataPointList[buffer.Id] = new List<BufferedDataPoint>();
-                }
-                dataPointList[buffer.Id].Add(buffer);
-            }
+            int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count());
 
             if (count == 0)
             {
                 log.Verbose("Push 0 datapoints to CDF");
                 return null;
             }
-            log.Debug("Push {NumDatapointsToPush} datapoints to CDF", count);
-            var dpChunks = ExtractorUtils.ChunkDictOfLists(dataPointList, 100000, 10000).ToArray();
-            var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk, token)).ToList();
-            var results = await Task.WhenAll(pushTasks);
 
+            var destination = GetDestination();
 
-            if (!results.All(res => res)) return false;
+            var inserts = dataPointList.ToDictionary(kvp =>
+                Identity.Create(kvp.Key),
+                kvp => kvp.Value.Select(
+                    dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue))
+                );
 
-            foreach ((string key, var value) in dataPointList)
-            {
-                var last = value.Max(dp => dp.Timestamp);
-                var first = value.Min(dp => dp.Timestamp);
-                if (!ranges.ContainsKey(key))
-                {
-                    ranges[key] = new TimeRange(first, last);
-                }
-                else
-                {
-                    if (last < ranges[key].End)
-                    {
-                        ranges[key].End = last;
-                    }
-
-                    if (first > ranges[key].Start)
-                    {
-                        ranges[key].Start = first;
-                    }
-                }
-            }
-            return true;
-        }
-        private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<BufferedDataPoint>> dataPointList, CancellationToken token) {
-            if (config.Debug) return true;
-            int count = 0;
-            var inserts = dataPointList.Select(kvp =>
-            {
-                (string externalId, var values) = kvp;
-                var item = new DataPointInsertionItem
-                {
-                    ExternalId = externalId
-                };
-                if (values.First().IsString)
-                {
-                    item.StringDatapoints = new StringDatapoints();
-                    item.StringDatapoints.Datapoints.AddRange(values.Select(ipoint =>
-                        new StringDatapoint
-                        {
-                            Timestamp = new DateTimeOffset(ipoint.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = ipoint.StringValue
-                        }));
-                }
-                else
-                {
-                    item.NumericDatapoints = new NumericDatapoints();
-                    item.NumericDatapoints.Datapoints.AddRange(values.Select(ipoint =>
-                        new NumericDatapoint
-                        {
-                            Timestamp = new DateTimeOffset(ipoint.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = ipoint.DoubleValue
-                        }));
-                }
-
-                count += values.Count();
-                return item;
-            });
-
-            var req = new DataPointInsertionRequest();
-            req.Items.AddRange(inserts);
-            if (!req.Items.Any()) return true;
-
-            var client = GetClient("Data");
             try
             {
-                await client.DataPoints.CreateAsync(req, token);
-            }
-            catch (ResponseException e)
-            {
-                dataPointPushFailures.Inc();
-                log.Error("Failed to push {count} points to CDF: {msg}", count, e.Message);
+                var error = await destination.InsertDataPointsIgnoreErrorsAsync(inserts, token);
+                // No reason to return failure, even if these happen, nothing can be done about it. The log should reflect it,
+                // and perhaps we should handle it better in the future.
+                if (error.IdsNotFound.Any())
+                {
+                    log.Error("Failed to push datapoints to CDF, missing ids: {ids}", error.IdsNotFound);
+                    foreach (var id in error.IdsNotFound)
+                    {
+                        missingTimeseries.Add(id.ExternalId);
+                    }
+                }
+                if (error.IdsWithMismatchedData.Any())
+                {
+                    log.Error("Failed to push datapoints to CDF, mismatched timeseries: {ids}", error.IdsWithMismatchedData);
+                    foreach (var id in error.IdsWithMismatchedData)
+                    {
+                        mismatchedTimeseries.Add(id.ExternalId);
+                    }
+                }
 
-                if (e.Code != 400 || !e.Missing.Any()) return false;
-                var missing = e.Missing
-                    .Select(mis => (mis["externalId"] as MultiValue.String)?.Value)
-                    .Where(id => id != null).ToHashSet();
-
-                if (!missing.Any()) return false;
-                log.Warning("While pushing points to CDF, {cnt} timeseries were missing. " +
-                            "If this happens on startup it may be due to points stored in a local buffer.", missing.Count);
-                var next = dataPointList.Where(kvp => !missing.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                return await PushDataPointsChunk(next, token);
+                int realCount = count;
+                if (error.IdsNotFound.Any() || error.IdsWithMismatchedData.Any())
+                {
+                    foreach (var id in error.IdsNotFound.Concat(error.IdsWithMismatchedData))
+                    {
+                        realCount -= dataPointList[id.ExternalId].Count();
+                    }
+                }
+                log.Debug("Successfully pushed {real} / {total} points to CDF", realCount, count);
+                dataPointPushes.Inc();
+                dataPointsCounter.Inc(realCount);
             }
             catch (Exception e)
             {
@@ -257,8 +160,6 @@ namespace Cognite.OpcUa
                 return false;
             }
 
-            dataPointPushes.Inc();
-            dataPointsCounter.Inc(count);
             return true;
         }
         /// <summary>
@@ -285,62 +186,26 @@ namespace Cognite.OpcUa
                 return null;
             }
             log.Debug("Push {NumEventsToPush} events to CDF", count);
-            var chunks = ExtractorUtils.ChunkBy(eventList, 1000).ToArray();
             if (config.Debug) return null;
 
-            var results = await Task.WhenAll(chunks.Select(chunk => PushEventsChunk(chunk, token)));
-            return results.All(result => result);
-        }
+            var destination = GetDestination();
 
-        private async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> events, CancellationToken token)
-        {
-            var client = GetClient("Data");
-            IEnumerable<EventCreate> eventEntities = events.Select(EventToCDFEvent).Where(evt => evt != null).DistinctBy(evt => evt.ExternalId).ToList();
-            int count = events.Count();
             try
             {
-                await client.Events.CreateAsync(eventEntities, token);
+                await destination.EnsureEventsExistsAsync(eventList.Select(EventToCDFEvent).Where(evt => evt != null), true, token);
+                eventCounter.Inc(count);
+                eventPushCounter.Inc();
             }
-            catch (ResponseException ex)
+            catch (Exception exc)
             {
-                if (ex.Duplicated.Any())
-                {
-                    var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString())
-                        .ToList();
-                    log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count);
-                    duplicatedEvents.Inc(duplicates.Count);
-                    eventEntities = eventEntities.Where(evt => !duplicates.Contains(evt.ExternalId));
-                    try
-                    {
-                        await client.Events.CreateAsync(eventEntities, token);
-                    }
-                    catch (Exception exc)
-                    {
-                        log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", 
-                            eventEntities.Count(), exc.Message);
-                        eventPushFailures.Inc();
-                        return exc is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
-                    }
-                }
-                else
-                {
-                    log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}",
-                        count, ex.Message);
-                    eventPushFailures.Inc();
-                    return ex.Code == 400 || ex.Code == 409;
-                }
-            }
-            catch (Exception ex)
-            {
-                log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", 
-                    count, ex.Message);
+                log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", count, exc.Message);
                 eventPushFailures.Inc();
-                return false;
+                return exc is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
             }
-            eventCounter.Inc(count);
-            eventPushCounter.Inc();
+
             return true;
         }
+
         /// <summary>
         /// Empty queue, fetch info for each relevant node, test results against CDF, then synchronize any variables
         /// </summary>
@@ -384,29 +249,50 @@ namespace Cognite.OpcUa
                 return true;
             }
 
+            var assetIds = new ConcurrentDictionary<string, BufferedNode>(objects.ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
+
+            var destination = GetDestination();
+
             try
             {
-                await Task.WhenAll(ExtractorUtils.ChunkBy(objects, config.AssetChunk).Select(items => EnsureAssets(items, token)).ToList());
+                await destination.GetOrCreateAssetsAsync(assetIds.Keys, async ids =>
+                {
+                    var assets = ids.Select(id => assetIds[id]);
+                    await Extractor.ReadProperties(assets, token);
+                    return assets.Select(NodeToAsset).Where(asset => asset != null);
+                }, token);
             }
             catch (Exception e)
             {
                 log.Error(e, "Failed to ensure assets");
-                nodeEnsuringFailures.Inc(); 
+                nodeEnsuringFailures.Inc();
                 return false;
             }
 
-            // At this point the assets should all be synchronized and mapped
-            // Now: Try get latest TS data, if this fails, then create missing and retry with the remainder. Similar to assets.
-            // This also sets the LastTimestamp property of each BufferedVariable
-            // Synchronize TS with CDF, also get timestamps. Has to be done in three steps:
-            // Get by externalId, create missing, get latest timestamps. All three can be done by externalId.
-            // Eventually the API will probably support linking TS to assets by using externalId, for now we still need the
-            // node to assets map.
-            // We only need timestamps for historizing timeseries, and it is much more expensive to get latest compared to just
-            // fetching the timeseries itself
+            var tsIds = new ConcurrentDictionary<string, BufferedVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
+
             try
             {
-                await Task.WhenAll(ExtractorUtils.ChunkBy(tsList, config.TimeSeriesChunk).Select(items => EnsureTimeseries(items, token)).ToList());
+                var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsIds.Keys, async ids =>
+                {
+                    var tss = ids.Select(id => tsIds[id]);
+                    await Extractor.ReadProperties(tss, token);
+                    return tss.Select(VariableToTimeseries).Where(ts => ts != null);
+                }, token);
+                var foundBadTimeseries = new List<string>();
+                foreach (var ts in timeseries)
+                {
+                    var loc = tsIds[ts.ExternalId];
+                    if (ts.IsString != loc.DataType.IsString)
+                    {
+                        mismatchedTimeseries.Add(ts.ExternalId);
+                        foundBadTimeseries.Add(ts.ExternalId);
+                    }
+                }
+                if (foundBadTimeseries.Any())
+                {
+                    log.Debug("Found mismatched timeseries when ensuring: {tss}", foundBadTimeseries);
+                }
             }
             catch (Exception e)
             {
@@ -422,87 +308,8 @@ namespace Cognite.OpcUa
         /// </summary>
         public void Reset()
         {
-            ranges.Clear();
-        }
-        private async Task<IEnumerable<(string Id, DateTime Timestamp)>> GetEarliestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
-        {
-            var client = GetClient();
-            var dps = await client.DataPoints.ListAsync(new DataPointsQuery
-            {
-                Items = ids.Select(id =>
-                    new DataPointsQueryItem
-                    {
-                        ExternalId = id
-                    }),
-                Start = "0",
-                Limit = 1
-            }, token);
-
-            var res = new List<(string, DateTime)>();
-            foreach (var dp in dps.Items)
-            {
-                if (dp.NumericDatapoints?.Datapoints?.Any() ?? false)
-                {
-                    var ts = DateTimeOffset.FromUnixTimeMilliseconds(dp.NumericDatapoints.Datapoints.First().Timestamp).DateTime;
-                    res.Add((dp.ExternalId, ts));
-                }
-                else if (dp.StringDatapoints?.Datapoints?.Any() ?? false)
-                {
-                    var ts = DateTimeOffset.FromUnixTimeMilliseconds(dp.StringDatapoints.Datapoints.First().Timestamp).DateTime;
-                    res.Add((dp.ExternalId, ts));
-                }
-                else
-                {
-                    res.Add((dp.ExternalId, DateTime.MinValue));
-                }
-            }
-
-            return res;
-        }
-        private async Task<IEnumerable<(string Id, DateTime Timestamp)>> GetEarliestTimestamp(IEnumerable<string> ids, CancellationToken token)
-        {
-            var tasks = ExtractorUtils.ChunkBy(ids, config.EarliestChunk).Select(chunk => GetEarliestTimestampChunk(chunk, token)).ToList();
-            await Task.WhenAll(tasks);
-            return tasks.SelectMany(task => task.Result);
-        }
-        private async Task<IEnumerable<(string Id, DateTime Timestamp)>> GetLatestTimestampChunk(IEnumerable<string> ids, CancellationToken token)
-        {
-            var client = GetClient();
-            IEnumerable<DataPointsItem<DataPoint>> dps;
-            try
-            {
-                dps = await client.DataPoints.LatestAsync(new DataPointsLatestQuery
-                {
-                    Items = ids.Select(IdentityWithBefore.Create)
-                }, token);
-            }
-            catch (ResponseException ex)
-            {
-                log.Information("Ex: {msg}", ex.Message);
-                throw;
-            }
-
-            var res = new List<(string, DateTime)>();
-            foreach (var dp in dps)
-            {
-                if (dp.DataPoints.Any())
-                {
-                    var ts = DateTimeOffset.FromUnixTimeMilliseconds(dp.DataPoints.First().Timestamp).DateTime;
-                    res.Add((dp.ExternalId, ts));
-                }
-                else
-                {
-                    res.Add((dp.ExternalId, DateTime.MinValue));
-                }
-            }
-
-            return res;
-        }
-        private async Task<IEnumerable<(string Id, DateTime Timestamp)>> GetLatestTimestamp(IEnumerable<string> ids, CancellationToken token)
-        {
-            var tasks = ExtractorUtils.ChunkBy(ids, config.LatestChunk).Select(chunk => GetLatestTimestampChunk(chunk, token)).ToList();
-            await Task.WhenAll(tasks);
-            return tasks.SelectMany(task => task.Result);
+            missingTimeseries.Clear();
+            mismatchedTimeseries.Clear();
         }
         public async Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
         {
@@ -523,51 +330,25 @@ namespace Cognite.OpcUa
                     ids.Add(Extractor.GetUniqueId(state.Id));
                 }
             }
-            var tasks = new List<Task>();
-            var latestTask = GetLatestTimestamp(ids, token);
-            tasks.Add(latestTask);
-            Task<IEnumerable<(string Id, DateTime Timestamp)>> earliestTask = null;
-            if (backfillEnabled)
-            {
-                earliestTask = GetEarliestTimestamp(ids, token);
-                tasks.Add(earliestTask);
-            }
 
+            var destination = GetDestination();
+
+            Dictionary<string, TimeRange> ranges;
             try
             {
-                await Task.WhenAll(tasks);
+                var dict = await destination.GetExtractedRanges(ids.Select(Identity.Create).ToList(), token, backfillEnabled);
+                ranges = dict.ToDictionary(kvp => kvp.Key.ExternalId, kvp => kvp.Value);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                log.Error(e, "Failed to get extracted ranges");
+                log.Error(ex, "Failed to get extracted ranges");
                 return false;
             }
 
-            foreach ((string id, var timestamp) in latestTask.Result)
-            {
-                if (backfillEnabled && timestamp == DateTime.MinValue)
-                {
-                    // No value found, so the timeseries is empty. If backfill is enabled this means that we start the range now, otherwise it means
-                    // that we start at time zero.
-                    ranges[id] = new TimeRange(DateTime.UtcNow, DateTime.UtcNow);
-                    continue;
-                }
-                ranges[id] = new TimeRange(timestamp, timestamp);
-            }
-
-            if (backfillEnabled)
-            {
-                foreach ((string id, var timestamp) in earliestTask.Result)
-                {
-                    if (timestamp == DateTime.MinValue) continue;
-                    ranges[id].Start = timestamp;
-                }
-            }
-
-            foreach (string id in ids)
+            foreach (var (id, tr) in ranges)
             {
                 var state = Extractor.State.GetNodeState(id);
-                state.InitExtractedRange(ranges[id].Start, ranges[id].End);
+                state.InitExtractedRange(tr.First, tr.Last);
             }
 
             return true;
@@ -575,12 +356,10 @@ namespace Cognite.OpcUa
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
             if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
-            // Use data client because it gives up after a little while
-            var client = GetClient("Data");
-            LoginStatus loginStatus;
+            var destination = GetDestination();
             try
             {
-                loginStatus = await client.Login.StatusAsync(token);
+                await destination.TestCogniteConfig(token);
             }
             catch (Exception ex)
             {
@@ -589,20 +368,10 @@ namespace Cognite.OpcUa
                     config.Project, config.Host);
                 return false;
             }
-            if (!loginStatus.LoggedIn)
-            {
-                log.Error("API key is invalid. Project {project} at {url}", config.Project, config.Host);
-                return false;
-            }
-            if (!loginStatus.Project.Equals(config.Project, StringComparison.InvariantCulture))
-            {
-                log.Error("API key is not associated with project {project} at {url}", config.Project, config.Host);
-                return false;
-            }
 
             try
             {
-                await client.TimeSeries.ListAsync(new TimeSeriesQuery { Limit = 1 }, token);
+                await destination.CogniteClient.TimeSeries.ListAsync(new TimeSeriesQuery { Limit = 1 }, token);
             }
             catch (ResponseException ex)
             {
@@ -618,7 +387,7 @@ namespace Cognite.OpcUa
 
             try
             {
-                await client.Events.ListAsync(new EventQuery { Limit = 1 }, token);
+                await destination.CogniteClient.Events.ListAsync(new EventQuery { Limit = 1 }, token);
             }
             catch (ResponseException ex)
             {
@@ -634,158 +403,6 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Pushing
-        /// <summary>
-        /// Test if given list of assets exists, then create any that do not, checking for properties.
-        /// </summary>
-        /// <param name="assetList">List of assets to be tested</param>
-        /// <returns>True if no operation failed unexpectedly</returns>
-        private async Task EnsureAssets(IEnumerable<BufferedNode> assetList, CancellationToken token)
-        {
-            if (!assetList.Any()) return;
-            var assetIds = assetList.ToDictionary(node => Extractor.GetUniqueId(node.Id));
-            ISet<string> missingAssetIds = new HashSet<string>();
-
-            log.Information("Test {NumAssetsToTest} assets", assetList.Count());
-            var client = GetClient();
-            var assetIdentities = assetIds.Keys.Select(Identity.Create);
-            try
-            {
-                var readResults = await client.Assets.RetrieveAsync(assetIdentities, token);
-                log.Information("Found {NumRetrievedAssets} assets", readResults.Count());
-                foreach (var resultItem in readResults)
-                {
-                    nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
-                }
-            }
-            catch (ResponseException ex)
-            {
-                if (ex.Code == 400 && ex.Missing != null && ex.Missing.Any())
-                {
-                    foreach (var missing in ex.Missing)
-                    {
-                        if (missing.TryGetValue("externalId", out MultiValue raw))
-                        {
-                            if (!(raw is MultiValue.String value)) continue;
-                            missingAssetIds.Add(value.Value);
-                        }
-                    }
-
-                    log.Information("Found {NumMissingAssets} missing assets", ex.Missing.Count());
-                }
-                else throw;
-            }
-
-            if (!missingAssetIds.Any()) return;
-            log.Information("Create {NumAssetsToCreate} new assets", missingAssetIds.Count);
-
-            var getMetaData = missingAssetIds.Select(id => assetIds[id]);
-            await Extractor.ReadProperties(getMetaData, token);
-            
-            var createAssets = missingAssetIds.Select(id => NodeToAsset(assetIds[id])).Where(asset => asset != null);
-
-            var writeResults = await client.Assets.CreateAsync(createAssets, token);
-            foreach (var resultItem in writeResults)
-            {
-                nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
-            }
-            var idsToMap = assetIds.Keys
-                .Where(id => !missingAssetIds.Contains(id))
-                .Select(Identity.Create);
-
-            if (!idsToMap.Any()) return;
-
-            log.Information("Get remaining {NumFinalIdsToRetrieve} assetids", idsToMap.Count());
-            var remainingResults = await client.Assets.RetrieveAsync(idsToMap, token);
-            foreach (var resultItem in remainingResults)
-            { 
-                nodeToAssetIds.TryAdd(assetIds[resultItem.ExternalId].Id, resultItem.Id);
-            }
-        }
-        /// <summary>
-        /// Test if given list of timeseries exists, then create any that do not, checking for properties.
-        /// </summary>
-        /// <param name="tsList">List of timeseries to be tested</param>
-        /// <returns>True if no operation failed unexpectedly</returns>
-        private async Task EnsureTimeseries(IEnumerable<BufferedVariable> tsList, CancellationToken token)
-        {
-            if (!tsList.Any()) return;
-            var tsIds = new Dictionary<string, BufferedVariable>();
-            foreach (BufferedVariable node in tsList)
-            {
-                string externalId = Extractor.GetUniqueId(node.Id, node.Index);
-                tsIds.Add(externalId, node);
-                if (node.Index == -1)
-                {
-                    if (nodeToAssetIds.ContainsKey(node.ParentId))
-                    {
-                        nodeToAssetIds[node.Id] = nodeToAssetIds[node.ParentId];
-                    }
-                    else
-                    {
-                        log.Warning("Parentless timeseries: {id}", node.Id);
-                    }
-                }
-            }
-            log.Information("Test {NumTimeseriesToTest} timeseries", tsIds.Count);
-            var missingTSIds = new HashSet<string>();
-            var client = GetClient();
-            try
-            {
-                var readResults = await client.TimeSeries.RetrieveAsync(tsIds.Keys.Select(Identity.Create), token);
-                log.Information("Found {NumRetrievedTimeseries} timeseries", readResults.Count());
-                foreach (var res in readResults)
-                {
-                    var state = Extractor.State.GetNodeState(res.ExternalId);
-                    if (state.DataType.IsString != res.IsString)
-                    {
-                        mismatchedTimeseries.Add(res.ExternalId);
-                    }
-                }
-            }
-            catch (ResponseException ex)
-            {
-                if (ex.Code == 400 && ex.Missing.Any())
-                {
-                    foreach (var missing in ex.Missing)
-                    {
-                        if (missing.TryGetValue("externalId", out MultiValue raw))
-                        {
-                            if (!(raw is MultiValue.String value)) continue;
-                            missingTSIds.Add(value.Value);
-                        }
-                    }
-                    log.Information("Found {NumMissingTimeseries} missing timeseries", ex.Missing.Count());
-                }
-                else throw;
-            }
-
-            if (!missingTSIds.Any()) return;
-
-            log.Information("Create {NumTimeseriesToCreate} new timeseries", missingTSIds.Count);
-
-            var getMetaData = missingTSIds.Select(id => tsIds[id]);
-
-            await Extractor.ReadProperties(getMetaData, token);
-
-            var createTimeseries = getMetaData.Select(VariableToTimeseries).Where(ts => ts != null);
-            await client.TimeSeries.CreateAsync(createTimeseries, token);
-
-            var remaining = tsIds.Keys.Except(missingTSIds);
-            if (!remaining.Any()) return;
-            var remainingResults = await client.TimeSeries.RetrieveAsync(remaining.Select(Identity.Create), token);
-
-            foreach (var res in remainingResults)
-            {
-                var state = Extractor.State.GetNodeState(res.ExternalId);
-                if (state.DataType.IsString != res.IsString)
-                {
-                    log.Warning("Mismatched timeseries: {id}. "
-                                + (state.DataType.IsString ? "Expected double but got string" : "Expected string but got double"), 
-                        res.ExternalId);
-                    mismatchedTimeseries.Add(res.ExternalId);
-                }
-            }
-        }
         /// <summary>
         /// Create timeseries poco to create this node in CDF
         /// </summary>
