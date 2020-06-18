@@ -17,7 +17,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public sealed class InfluxPusher : IPusher
     {
-        public Extractor Extractor { set; get; }
+        public UAExtractor Extractor { set; get; }
         public int Index { get; set; }
         public IPusherConfig BaseConfig { get; }
         public bool DataFailing { get; set; }

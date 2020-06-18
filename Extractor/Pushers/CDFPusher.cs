@@ -48,7 +48,7 @@ namespace Cognite.OpcUa
         public bool NoInit { get; set; }
 
 
-        public Extractor Extractor { get; set; }
+        public UAExtractor Extractor { get; set; }
         public IPusherConfig BaseConfig { get; }
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();

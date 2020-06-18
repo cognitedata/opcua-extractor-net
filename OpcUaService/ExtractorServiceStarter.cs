@@ -8,6 +8,7 @@ using Cognite.OpcUa;
 using Cognite.Extractor.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Cognite.Extractor.Metrics;
+using Cognite.Extractor.Utils;
 
 namespace OpcUaService
 {
@@ -37,13 +38,16 @@ namespace OpcUaService
             _isRunning = true;
 
             // Validation has already been done so no need for try catch here now
-            _config = ConfigurationUtils.Read<FullConfig>(configFile);
-
+            var services = new ServiceCollection();
+            _config = services.AddConfig<FullConfig>(configFile, 1);
             _config.Source.ConfigRoot = "config/";
-
             _config.Logger.Console.Level = "NoConsoleLogging";
+
             LoggingUtils.Configure(_config.Logger);
             _log = Log.Logger.ForContext(typeof(ExtractorServiceStarter));
+
+            services.AddLogger();
+            services.AddMetrics();
 
             _log.Information($"Using configuration file: {configFile}");
             _log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
@@ -51,17 +55,18 @@ namespace OpcUaService
 
             version.Set(0);
 
-            var services = new ServiceCollection();
             services.AddSingleton(_config.Logger);
-            services.AddLogger();
 
             services.AddSingleton(_config.Metrics);
-            services.AddMetrics();
 
             var metrics = services.BuildServiceProvider().GetRequiredService<MetricsService>();
             metrics.Start();
-
-            RunExtractorService(_config);
+            if (_config.Cognite != null)
+            {
+                services.AddCogniteClient("OPC-UA Extractor", true, true, true);
+            }
+            var provider = services.BuildServiceProvider();
+            RunExtractorService(_config, provider);
 
             return 0;
         }
@@ -70,10 +75,9 @@ namespace OpcUaService
         /// Own function used when starting up from the windows service layer.
         /// </summary>
         /// <param name="config"></param>
-        private static void RunExtractorService(FullConfig config)
+        private static void RunExtractorService(FullConfig config, IServiceProvider provider)
         {
-            var runTime = new ExtractorRuntime(config);
-            runTime.Configure();
+            var runTime = new ExtractorRuntime(config, provider);
 
             try
             {

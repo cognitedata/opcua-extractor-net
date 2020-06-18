@@ -19,7 +19,7 @@ namespace Cognite.OpcUa
         private readonly InfluxPusher influxPusher;
         private readonly FailureBufferConfig config;
         private readonly FullConfig fullConfig;
-        private readonly Extractor extractor;
+        private readonly UAExtractor extractor;
 
         private readonly Dictionary<string, InfluxBufferState> nodeBufferStates;
         private readonly Dictionary<string, InfluxBufferState> eventBufferStates;
@@ -44,7 +44,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="fullConfig"></param>
         /// <param name="extractor"></param>
-        public FailureBuffer(FullConfig fullConfig, Extractor extractor, InfluxPusher influxPusher)
+        public FailureBuffer(FullConfig fullConfig, UAExtractor extractor, InfluxPusher influxPusher)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
@@ -547,7 +547,7 @@ namespace Cognite.OpcUa
         /// <param name="file">File to write to</param>
         /// <param name="evts">Events to write</param>
         /// <param name="extractor">Extractor, used to map NodeIds</param>
-        public static void WriteEventsToFile(string file, IEnumerable<BufferedEvent> evts, Extractor extractor, CancellationToken token)
+        public static void WriteEventsToFile(string file, IEnumerable<BufferedEvent> evts, UAExtractor extractor, CancellationToken token)
         {
             if (evts == null) throw new ArgumentNullException(nameof(evts));
             if (file == null) throw new ArgumentNullException(nameof(file));
@@ -640,7 +640,7 @@ namespace Cognite.OpcUa
         /// <param name="limit">Maximum number of events to read</param>
         /// <returns>List of events and new position in file</returns>
         public static (IEnumerable<BufferedEvent> events, long pos) ReadEventsFromFile(string file,
-            Extractor extractor, long startPos, int limit, CancellationToken token)
+            UAExtractor extractor, long startPos, int limit, CancellationToken token)
         {
             if (file == null) throw new ArgumentNullException(nameof(file));
             var evts = new List<BufferedEvent>();

@@ -358,7 +358,7 @@ namespace Test
                         pusher, new InfluxPusher((InfluxPusherConfig) influxCfg.Pushers.First())
                     };
 
-                    return new Extractor(cfg, pushers, client, null);
+                    return new UAExtractor(cfg, pushers, client, null);
                 }
             });
             tester.Config.History.EventChunk = 100;

@@ -14,7 +14,7 @@ namespace Cognite.OpcUa
 {
     public class Streamer
     {
-        private readonly Extractor extractor;
+        private readonly UAExtractor extractor;
         private readonly FullConfig config;
 
         public ConcurrentQueue<BufferedDataPoint> DataPointQueue { get; }
@@ -29,7 +29,7 @@ namespace Cognite.OpcUa
         public bool AllowEvents { get; set; }
         public bool AllowData { get; set; }
 
-        public Streamer(Extractor extractor, FullConfig config)
+        public Streamer(UAExtractor extractor, FullConfig config)
         {
             this.extractor = extractor;
             this.config = config;
@@ -246,7 +246,7 @@ namespace Cognite.OpcUa
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Extractor.BadDataPoints.Inc();
+                    UAExtractor.BadDataPoints.Inc();
                     log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                     continue;
                 }
@@ -280,7 +280,7 @@ namespace Cognite.OpcUa
                 var ret = new List<BufferedDataPoint>();
                 if (!(value.Value is Array))
                 {
-                    Extractor.BadDataPoints.Inc();
+                    UAExtractor.BadDataPoints.Inc();
                     log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
                     return Enumerable.Empty<BufferedDataPoint>();
                 }

@@ -32,7 +32,7 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Main extractor class, tying together the <see cref="uaClient"/> and CDF client.
     /// </summary>
-    public class Extractor : IDisposable
+    public class UAExtractor : IDisposable
     {
         private readonly UAClient uaClient;
         private readonly FullConfig config;
@@ -77,7 +77,7 @@ namespace Cognite.OpcUa
         private static readonly Gauge trackedTimeseres = Metrics
             .CreateGauge("opcua_tracked_timeseries", "Number of variables on the opcua server mapped to timeseries");
 
-        private readonly ILogger log = Log.Logger.ForContext(typeof(Extractor));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(UAExtractor));
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -85,7 +85,7 @@ namespace Cognite.OpcUa
         /// <param name="config">Full config object</param>
         /// <param name="pushers">List of pushers to be used</param>
         /// <param name="UAClient">UAClient to be used</param>
-        public Extractor(FullConfig config, IEnumerable<IPusher> pushers, UAClient uaClient, IExtractionStateStore stateStore)
+        public UAExtractor(FullConfig config, IEnumerable<IPusher> pushers, UAClient uaClient, IExtractionStateStore stateStore)
         {
             this.pushers = pushers ?? throw new ArgumentNullException(nameof(pushers));
             this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
@@ -119,7 +119,7 @@ namespace Cognite.OpcUa
         /// <param name="config">Full config object</param>
         /// <param name="pusher">Pusher to be used</param>
         /// <param name="uaClient">UAClient to use</param>
-        public Extractor(FullConfig config, IPusher pusher, UAClient uaClient, IExtractionStateStore stateStore)
+        public UAExtractor(FullConfig config, IPusher pusher, UAClient uaClient, IExtractionStateStore stateStore)
             : this(config, new List<IPusher> { pusher }, uaClient, stateStore) { }
         #region Interface
 

@@ -407,7 +407,7 @@ namespace Test
 
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                Builder = (config, pusher, client) => new Extractor(config, new[] { pusher1, pusher2 }, client, null),
+                Builder = (config, pusher, client) => new UAExtractor(config, new[] { pusher1, pusher2 }, client, null),
                 QuitAfterMap = true
             });
             await tester.ClearPersistentData();

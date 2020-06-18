@@ -35,7 +35,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Parent extractor
         /// </summary>
-        Extractor Extractor { get; set; }
+        UAExtractor Extractor { get; set; }
 
         /// <summary>
         /// Push nodes, emptying the queue

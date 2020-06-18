@@ -11,7 +11,7 @@ namespace Cognite.OpcUa
     public class UAHistoryExtractionState : HistoryExtractionState
     {
         public NodeId SourceId { get; }
-        public UAHistoryExtractionState(Extractor extractor, NodeId id, bool frontfill, bool backfill)
+        public UAHistoryExtractionState(UAExtractor extractor, NodeId id, bool frontfill, bool backfill)
             : base(extractor?.GetUniqueId(id), frontfill, backfill)
         {
             SourceId = id;
@@ -49,7 +49,7 @@ namespace Cognite.OpcUa
         /// Constructor. Copies relevant data from BufferedVariable, initializes the buffer if Historizing is true.
         /// </summary>
         /// <param name="variable">Variable to be used as base</param>
-        public NodeExtractionState(Extractor extractor, BufferedVariable variable, bool frontfill, bool backfill, bool stateStore)
+        public NodeExtractionState(UAExtractor extractor, BufferedVariable variable, bool frontfill, bool backfill, bool stateStore)
             : base(extractor, variable?.Id, frontfill, backfill)
         {
             if (variable == null) throw new ArgumentNullException(nameof(variable));
@@ -138,7 +138,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private IList<BufferedEvent> buffer;
 
-        public EventExtractionState(Extractor extractor, NodeId emitterId, bool frontfill, bool backfill, bool stateStore)
+        public EventExtractionState(UAExtractor extractor, NodeId emitterId, bool frontfill, bool backfill, bool stateStore)
             : base(extractor, emitterId, frontfill, backfill)
         {
             if (stateStore)
@@ -226,7 +226,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        public InfluxBufferState(Extractor extractor, NodeId objectId) : base(extractor?.GetUniqueId(objectId))
+        public InfluxBufferState(UAExtractor extractor, NodeId objectId) : base(extractor?.GetUniqueId(objectId))
         {
             Type = InfluxBufferType.EventType;
             DestinationExtractedRange = TimeRange.Empty;

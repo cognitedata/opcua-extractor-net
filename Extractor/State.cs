@@ -41,9 +41,9 @@ namespace Cognite.OpcUa
 
         public IEnumerable<BufferedNode> ActiveNodes => activeNodes.Values;
 
-        private readonly Extractor extractor;
+        private readonly UAExtractor extractor;
 
-        public State(Extractor extractor)
+        public State(UAExtractor extractor)
         {
             this.extractor = extractor;
         }

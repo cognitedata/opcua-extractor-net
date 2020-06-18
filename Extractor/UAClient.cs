@@ -42,7 +42,7 @@ namespace Cognite.OpcUa
         protected Session Session { get; set; }
         protected ApplicationConfiguration Appconfig { get; set; }
         private SessionReconnectHandler reconnectHandler;
-        public Extractor Extractor { get; set; }
+        public UAExtractor Extractor { get; set; }
         private readonly object visitedNodesLock = new object();
         protected ISet<NodeId> VisitedNodes { get; }= new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();

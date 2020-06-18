@@ -358,7 +358,7 @@ namespace Test
         public ServerController Server { get; private set; }
         public FullConfig Config { get; }
         public CDFMockHandler Handler { get; }
-        public Extractor Extractor { get; private set; }
+        public UAExtractor Extractor { get; private set; }
         public UAClient UAClient { get; }
         public IPusher Pusher { get; }
         public CancellationTokenSource Source { get; }
@@ -498,7 +498,7 @@ namespace Test
             }
             else
             {
-                Extractor = new Extractor(Config, Pusher, UAClient, provider.GetService<IExtractionStateStore>());
+                Extractor = new UAExtractor(Config, Pusher, UAClient, provider.GetService<IExtractionStateStore>());
             }
 
             Server = new ServerController(new[] { SetupMap[testParams.ServerName] });
@@ -533,7 +533,7 @@ namespace Test
             }
             else
             {
-                Extractor = new Extractor(Config, Pusher, UAClient, provider.GetService<IExtractionStateStore>());
+                Extractor = new UAExtractor(Config, Pusher, UAClient, provider.GetService<IExtractionStateStore>());
             }
         }
 
@@ -755,7 +755,7 @@ namespace Test
         public int? HistoryGranularity { get; set; } = null;
         public ConfigName? FailureInflux { get; set; } = null;
         public bool FailureInfluxWrite { get; set; } = true;
-        public Func<FullConfig, IPusher, UAClient, Extractor> Builder { get; set; } = null;
+        public Func<FullConfig, IPusher, UAClient, UAExtractor> Builder { get; set; } = null;
         public InfluxPusherConfig InfluxOverride { get; set; } = null;
         public bool StateStorage { get; set; } = false;
         public bool StateInflux { get; set; } = false;

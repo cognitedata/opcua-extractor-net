@@ -14,7 +14,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public sealed class Looper : IDisposable
     {
-        private readonly Extractor extractor;
+        private readonly UAExtractor extractor;
         private readonly FullConfig config;
 
         private bool nextPushFlag;
@@ -28,7 +28,7 @@ namespace Cognite.OpcUa
         private readonly ManualResetEvent triggerHistoryRestart = new ManualResetEvent(false);
         private readonly ManualResetEvent triggerGrowTaskList = new ManualResetEvent(false);
 
-        public Looper(Extractor extractor, FullConfig config, IEnumerable<IPusher> pushers)
+        public Looper(UAExtractor extractor, FullConfig config, IEnumerable<IPusher> pushers)
         {
             this.extractor = extractor;
             this.config = config;

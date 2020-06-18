@@ -479,7 +479,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="extractor">Extractor to use for nodeId conversions</param>
         /// <returns>Array of converted bytes</returns>
-        public byte[] ToStorableBytes(Extractor extractor)
+        public byte[] ToStorableBytes(UAExtractor extractor)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             var bytes = new List<byte>();
@@ -509,7 +509,7 @@ namespace Cognite.OpcUa
         /// <param name="extractor">Extractor to use for nodeId conversions</param>
         /// <param name="next">Start position</param>
         /// <returns>Converted event and new position in array</returns>
-        public static (BufferedEvent Event, int Position) FromStorableBytes(byte[] bytes, Extractor extractor, int next)
+        public static (BufferedEvent Event, int Position) FromStorableBytes(byte[] bytes, UAExtractor extractor, int next)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             if (bytes == null) throw new ArgumentNullException(nameof(bytes));

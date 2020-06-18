@@ -33,7 +33,7 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_backfill_events_count", "Number of times backfill has been run on events");
 
         private readonly UAClient uaClient;
-        private readonly Extractor extractor;
+        private readonly UAExtractor extractor;
         private readonly HistoryConfig config;
         private readonly DateTime historyStartTime;
         private readonly TimeSpan historyGranularity;
@@ -48,7 +48,7 @@ namespace Cognite.OpcUa
         /// <param name="uaClient">UAClient to use for history read</param>
         /// <param name="extractor">Parent extractor to enqueue points and events in</param>
         /// <param name="config">Configuration to use</param>
-        public HistoryReader(UAClient uaClient, Extractor extractor, HistoryConfig config)
+        public HistoryReader(UAClient uaClient, UAExtractor extractor, HistoryConfig config)
         {
             this.config = config;
             this.uaClient = uaClient;
@@ -98,7 +98,7 @@ namespace Cognite.OpcUa
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Extractor.BadDataPoints.Inc();
+                    UAExtractor.BadDataPoints.Inc();
                     log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
                         datapoint.SourceTimestamp);
                     continue;
