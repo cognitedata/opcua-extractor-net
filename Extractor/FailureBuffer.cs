@@ -44,7 +44,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="fullConfig"></param>
         /// <param name="extractor"></param>
-        public FailureBuffer(FullConfig fullConfig, Extractor extractor)
+        public FailureBuffer(FullConfig fullConfig, Extractor extractor, InfluxPusher influxPusher)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
@@ -73,27 +73,11 @@ namespace Cognite.OpcUa
                 fileAnyEvents |= new FileInfo(config.EventPath).Length > 0;
             }
 
-            if (config.Influx?.Database == null) return;
+            if (!config.Influx) return;
+            this.influxPusher = influxPusher;
 
             nodeBufferStates = new Dictionary<string, InfluxBufferState>();
             eventBufferStates = new Dictionary<string, InfluxBufferState>();
-
-            influxPusher = new InfluxPusher(new InfluxPusherConfig
-            {
-                Database = config.Influx.Database,
-                Host = config.Influx.Host,
-                Password = config.Influx.Password,
-                PointChunkSize = config.Influx.PointChunkSize
-            })
-            {
-                Extractor = extractor
-            };
-            var connTest = influxPusher.TestConnection(fullConfig, CancellationToken.None);
-            connTest.Wait();
-            if (connTest.Result == null || !connTest.Result.Value)
-            {
-                throw new ExtractorFailureException("Failed to connect to buffer influxdb");
-            }
         }
         /// <summary>
         /// Load buffer states from state storage if influxdb buffering and state storage is enabled.
@@ -103,7 +87,7 @@ namespace Cognite.OpcUa
         public async Task InitializeBufferStates(IEnumerable<NodeExtractionState> states,
             IEnumerable<NodeId> nodeIds, CancellationToken token)
         {
-            if (!(config.Influx != null && influxPusher != null && config.Influx.StateStorage)) return;
+            if (!config.Influx || influxPusher == null || !config.InfluxStateStore) return;
             var variableStates = states
                 .Where(state => !state.FrontfillEnabled)
                 .Select(state => new InfluxBufferState(state, false))
@@ -171,19 +155,10 @@ namespace Cognite.OpcUa
 
             bool success = true;
 
-            if (config.Influx != null && influxPusher != null)
+            if (config.Influx && influxPusher != null)
             {
                 try
                 {
-                    if (config.Influx.Write)
-                    {
-                        var result = await influxPusher.PushDataPoints(points, token);
-                        success = result.GetValueOrDefault();
-                        if (success)
-                        {
-                            log.Information("Inserted {cnt} points into influxdb failure buffer", points.Count());
-                        }
-                    }
                     if (success && !influxPusher.DataFailing)
                     {
                         foreach ((string key, var value) in pointRanges)
@@ -196,7 +171,7 @@ namespace Cognite.OpcUa
                             }
                             nodeBufferStates[key].UpdateDestinationRange(value.First, value.Last);
                         }
-                        if (config.Influx.StateStorage)
+                        if (config.InfluxStateStore)
                         {
                             await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
                                 fullConfig.StateStorage.InfluxVariableStore, token).ConfigureAwait(false);
@@ -238,7 +213,7 @@ namespace Cognite.OpcUa
             if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
-            if (config.Influx != null && influxPusher != null)
+            if (config.Influx && influxPusher != null)
             {
                 var activeStates = nodeBufferStates.Where(kvp =>
                         !kvp.Value.Historizing
@@ -252,10 +227,7 @@ namespace Cognite.OpcUa
                         var dps = await influxPusher.ReadDataPoints(activeStates, token);
                         log.Information("Read {cnt} points from influxdb failure buffer", dps.Count());
                         await Task.WhenAll(pushers
-                            .Where(pusher =>
-                                !(pusher.BaseConfig is InfluxPusherConfig ifc)
-                                || ifc.Host != config.Influx.Host
-                                || ifc.Database != config.Influx.Database)
+                            .Where(pusher => !(pusher is InfluxPusher))
                             .Select(pusher => pusher.PushDataPoints(dps, token)));
 
                         foreach (var state in activeStates)
@@ -263,7 +235,7 @@ namespace Cognite.OpcUa
                             state.Value.ClearRanges();
                         }
 
-                        if (config.Influx.StateStorage)
+                        if (config.InfluxStateStore)
                         {
                             await extractor.StateStorage.StoreExtractionState(activeStates.Values,
                                 fullConfig.StateStorage.InfluxVariableStore, token).ConfigureAwait(false);
@@ -305,21 +277,11 @@ namespace Cognite.OpcUa
 
             bool success = true;
 
-            if (config.Influx != null && influxPusher != null)
+            if (config.Influx)
             {
                 try
                 {
-                    if (config.Influx.Write)
-                    {
-                        var result = await influxPusher.PushEvents(events, token);
-                        success = result.GetValueOrDefault();
-                        if (success)
-                        {
-                            log.Information("Inserted {cnt} events into influxdb failure buffer", events.Count());
-                        }
-                    }
-
-                    if (success && !influxPusher.EventsFailing)
+                    if (!influxPusher.EventsFailing)
                     {
                         var eventRanges = new Dictionary<string, TimeRange>();
                         foreach (var evt in events)
@@ -344,7 +306,7 @@ namespace Cognite.OpcUa
                             eventBufferStates[sourceId].UpdateDestinationRange(range.First, range.Last);
                         }
 
-                        if (config.Influx.StateStorage)
+                        if (config.InfluxStateStore)
                         {
                             await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
                                 fullConfig.StateStorage.InfluxEventStore, token).ConfigureAwait(false);
@@ -386,7 +348,7 @@ namespace Cognite.OpcUa
             if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
-            if (config.Influx != null && influxPusher != null)
+            if (config.Influx && influxPusher != null)
             {
                 var activeStates = eventBufferStates.Where(kvp =>
                         !kvp.Value.Historizing
@@ -400,10 +362,7 @@ namespace Cognite.OpcUa
 
                         log.Information("Read {cnt} events from influxdb failure buffer", events.Count());
                         await Task.WhenAll(pushers
-                            .Where(pusher =>
-                                !(pusher.BaseConfig is InfluxPusherConfig ifc)
-                                || ifc.Host != config.Influx.Host
-                                || ifc.Database != config.Influx.Database)
+                            .Where(pusher => !(pusher is InfluxPusher))
                             .Select(pusher => pusher.PushEvents(events, token)));
 
                         foreach (var state in activeStates)
@@ -411,7 +370,7 @@ namespace Cognite.OpcUa
                             state.Value.ClearRanges();
                         }
 
-                        if (config.Influx.StateStorage)
+                        if (config.InfluxStateStore)
                         {
                             await extractor.StateStorage.StoreExtractionState(activeStates.Values,
                                 fullConfig.StateStorage.InfluxEventStore, token).ConfigureAwait(false);

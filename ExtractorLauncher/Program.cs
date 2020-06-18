@@ -26,6 +26,7 @@ using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Cognite.Extractor.Metrics;
+using Cognite.Extractor.Utils;
 
 namespace Cognite.OpcUa
 {
@@ -81,6 +82,8 @@ namespace Cognite.OpcUa
             ConfigurationUtils.AddTagMapping<InfluxPusherConfig>("!influx");
             ConfigurationUtils.AddTagMapping<MqttPusherConfig>("!mqtt");
 
+            var services = new ServiceCollection();
+
             var config = new FullConfig();
             FullConfig baseConfig = null;
             if (!setup.NoConfig)
@@ -88,12 +91,11 @@ namespace Cognite.OpcUa
                 try
                 {
                     string configFile = setup.ConfigFile ?? System.IO.Path.Combine(configDir, setup.ConfigTool ? "config.config-tool.yml" : "config.yml");
-                    config = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
-                    config.GenerateDefaults();
+                    config = services.AddConfig<FullConfig>(
+                        System.IO.Path.Combine(configDir, setup.ConfigTool ? "config.config-tool.yml" : "config.yml"), 1);
                     if (setup.ConfigTool)
                     {
                         baseConfig = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
-                        baseConfig.GenerateDefaults();
                     }
                 }
                 catch (Cognite.Extractor.Configuration.ConfigurationException e)
@@ -112,19 +114,13 @@ namespace Cognite.OpcUa
             config.Source.AutoAccept |= setup.AutoAccept;
             config.Source.ExitOnFailure |= setup.ExitOnFailure;
 
+            services.AddLogger();
             LoggingUtils.Configure(config.Logger);
 
             log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
             log.Information("Revision information: {status}", Version.Status());
 
             version.Set(0);
-
-            var services = new ServiceCollection();
-            services.AddSingleton(config.Logger);
-            services.AddLogger();
-
-            services.AddSingleton(config.Metrics);
-            services.AddMetrics();
 
             var metrics = services.BuildServiceProvider().GetRequiredService<MetricsService>();
             metrics.Start();
@@ -136,7 +132,7 @@ namespace Cognite.OpcUa
             }
             else
             {
-                RunExtractor(config);
+                RunExtractor(config, services);
             }
 
             return 0;
@@ -145,10 +141,18 @@ namespace Cognite.OpcUa
         /// Start the extractor and keep it running until canceled, restarting on crashes
         /// </summary>
         /// <param name="config"></param>
-        private static void RunExtractor(FullConfig config)
+        private static void RunExtractor(FullConfig config, IServiceCollection services)
         {
-            var runTime = new ExtractorRuntime(config);
-            runTime.Configure();
+            services.AddMetrics();
+            if (config.Cognite != null)
+            {
+                services.AddCogniteClient("OPC-UA Extractor", true, true, true);
+            }
+            using var provider = services.BuildServiceProvider();
+            var metrics = provider.GetRequiredService<MetricsService>();
+            metrics.Start();
+
+            var runTime = new ExtractorRuntime(config, provider);
 
             int waitRepeats = 0;
 

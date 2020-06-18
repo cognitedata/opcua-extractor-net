@@ -133,20 +133,10 @@ namespace Cognite.OpcUa
     public class FailureBufferConfig
     {
         public bool Enabled { get; set; } = false;
-        public InfluxBufferConfig Influx { get; set; }
+        public bool InfluxStateStore { get; set; } = false;
+        public bool Influx { get; set; }
         public string DatapointPath { get; set; }
         public string EventPath { get; set; }
-    }
-
-    public class InfluxBufferConfig
-    {
-        public string Host { get; set; }
-        public string Username { get; set; }
-        public string Password { get; set; }
-        public string Database { get; set; }
-        public bool Write { get; set; } = true;
-        public int PointChunkSize { get; set; } = 100000;
-        public bool StateStorage { get; set; }
     }
     public class FullConfig : VersionedConfig
     {

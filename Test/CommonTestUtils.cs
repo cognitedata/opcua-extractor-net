@@ -361,8 +361,6 @@ namespace Test
         public Extractor Extractor { get; private set; }
         public UAClient UAClient { get; }
         public IPusher Pusher { get; }
-        public InfluxPusherConfig InfluxConfig { get; }
-        public CognitePusherConfig CogniteConfig { get; }
         public CancellationTokenSource Source { get; }
         public InfluxDBClient IfDbClient { get; }
         private readonly bool influx;

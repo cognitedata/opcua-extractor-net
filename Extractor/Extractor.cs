@@ -97,7 +97,7 @@ namespace Cognite.OpcUa
 
             if (config.FailureBuffer.Enabled)
             {
-                FailureBuffer = new FailureBuffer(config, this);
+                FailureBuffer = new FailureBuffer(config, this, pushers.FirstOrDefault(pusher => pusher is InfluxPusher) as InfluxPusher);
             }
             this.uaClient.Extractor = this;
             historyReader = new HistoryReader(uaClient, this, config.History);

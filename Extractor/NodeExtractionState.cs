@@ -16,6 +16,11 @@ namespace Cognite.OpcUa
         {
             SourceId = id;
         }
+        public UAHistoryExtractionState(UAClient client, NodeId id, bool frontfill, bool backfill)
+            : base(client?.GetUniqueId(id), frontfill, backfill)
+        {
+            SourceId = id;
+        }
     }
 
 
@@ -39,12 +44,26 @@ namespace Cognite.OpcUa
         public string DisplayName { get; }
 
         private readonly IList<IEnumerable<BufferedDataPoint>> buffer;
+
         /// <summary>
         /// Constructor. Copies relevant data from BufferedVariable, initializes the buffer if Historizing is true.
         /// </summary>
         /// <param name="variable">Variable to be used as base</param>
         public NodeExtractionState(Extractor extractor, BufferedVariable variable, bool frontfill, bool backfill, bool stateStore)
             : base(extractor, variable?.Id, frontfill, backfill)
+        {
+            if (variable == null) throw new ArgumentNullException(nameof(variable));
+            DataType = variable.DataType;
+            ArrayDimensions = variable.ArrayDimensions;
+            DisplayName = variable.DisplayName;
+            if (stateStore)
+            {
+                buffer = new List<IEnumerable<BufferedDataPoint>>();
+            }
+        }
+
+        public NodeExtractionState(UAClient client, BufferedVariable variable, bool frontfill, bool backfill, bool stateStore)
+            : base(client, variable?.Id, frontfill, backfill)
         {
             if (variable == null) throw new ArgumentNullException(nameof(variable));
             DataType = variable.DataType;
