@@ -128,7 +128,7 @@ namespace Cognite.OpcUa
             foreach (var state in eventStates)
             {
                 if (state.DestinationExtractedRange == TimeRange.Complete) continue;
-                eventBufferStates[extractor.GetUniqueId(state.Id)] = state;
+                eventBufferStates[state.Id] = state;
                 if (state.DestinationExtractedRange.First < state.DestinationExtractedRange.Last)
                 {
                     anyEvents = true;
@@ -168,6 +168,7 @@ namespace Cognite.OpcUa
                                 var state = extractor.State.GetNodeState(key);
                                 if (state.FrontfillEnabled) continue;
                                 nodeBufferStates[key] = new InfluxBufferState(state, false);
+                                nodeBufferStates[key].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
                             }
                             nodeBufferStates[key].UpdateDestinationRange(value.First, value.Last);
                         }
@@ -302,6 +303,7 @@ namespace Cognite.OpcUa
                             if (!eventBufferStates.ContainsKey(sourceId))
                             {
                                 eventBufferStates[sourceId] = new InfluxBufferState(extractor, extractor.State.GetNodeId(sourceId));
+                                eventBufferStates[sourceId].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
                             }
                             eventBufferStates[sourceId].UpdateDestinationRange(range.First, range.Last);
                         }
@@ -352,7 +354,7 @@ namespace Cognite.OpcUa
             {
                 var activeStates = eventBufferStates.Where(kvp =>
                         !kvp.Value.Historizing
-                        && kvp.Value.DestinationExtractedRange.First >= kvp.Value.DestinationExtractedRange.Last)
+                        && kvp.Value.DestinationExtractedRange.First <= kvp.Value.DestinationExtractedRange.Last)
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
                 if (activeStates.Any())
                 {

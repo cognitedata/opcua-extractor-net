@@ -193,6 +193,7 @@ namespace Cognite.OpcUa
             var reconnectedPushers = passingPushers.Where(pusher => pusher.EventsFailing).ToList();
             if (reconnectedPushers.Any())
             {
+                log.Information("{cnt} failing pushers were able to push events, reconnecting", reconnectedPushers.Count);
                 // Try to push any non-historizing points
                 var nonHistorizing = eventRanges.Keys.Where(key => !extractor.State.GetEmitterState(key).IsFrontfilling).ToHashSet();
                 var eventsToPush = eventList.Where(point => nonHistorizing.Contains(point.EmittingNode)).ToList();

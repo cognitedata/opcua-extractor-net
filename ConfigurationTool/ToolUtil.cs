@@ -231,7 +231,7 @@ namespace Cognite.OpcUa.Config
             }
 
             if (data.DataValues == null) return Array.Empty<BufferedDataPoint>();
-            string uniqueId = client.GetUniqueId(state.Id);
+            string uniqueId = state.Id;
 
             var result = new List<BufferedDataPoint>();
 

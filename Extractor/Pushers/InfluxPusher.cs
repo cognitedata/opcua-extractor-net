@@ -187,7 +187,7 @@ namespace Cognite.OpcUa
             var ranges = new ConcurrentDictionary<string, TimeRange>();
             var getRangeTasks = states.Select(async state =>
             {
-                var id = Extractor.GetUniqueId(state.Id,
+                var id = Extractor.GetUniqueId(state.SourceId,
                     state.ArrayDimensions != null && state.ArrayDimensions.Count > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1);
                 var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\"");
@@ -197,19 +197,8 @@ namespace Cognite.OpcUa
                     DateTime ts = last.First().Entries[0].Time;
                     ranges[id] = new TimeRange(ts, ts);
                 }
-                else
-                {
-                    if (backfillEnabled)
-                    {
-                        ranges[id] = new TimeRange(DateTime.UtcNow, DateTime.UtcNow);
-                    }
-                    else
-                    {
-                        ranges[id] = new TimeRange(DateTime.MinValue, DateTime.MinValue);
-                    }
-                }
 
-                if (backfillEnabled && last.Any())
+                if (backfillEnabled && last.Any() && last.First().HasEntries)
                 {
                     var first = await client.QueryMultiSeriesAsync(config.Database,
                         $"SELECT first(value) FROM \"{id}\"");
@@ -258,7 +247,7 @@ namespace Cognite.OpcUa
             token.ThrowIfCancellationRequested();
             var mutex = new object();
             var bestRange = TimeRange.Empty;
-            string emitterId = Extractor.GetUniqueId(state.Id);
+            string emitterId = state.Id;
 
             var ids = seriesNames.Where(name => nodes.Any(node =>
                 name.StartsWith("events." + Extractor.GetUniqueId(node), StringComparison.InvariantCulture)));
@@ -303,6 +292,7 @@ namespace Cognite.OpcUa
             {
                 bestRange = new TimeRange(bestRange.Last, bestRange.Last);
             }
+            log.Information("Initializing range {id} to {range}", state.Id, bestRange);
             state.InitExtractedRange(bestRange.First, bestRange.Last);
         }
         /// <summary>

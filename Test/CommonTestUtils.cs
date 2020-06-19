@@ -475,6 +475,12 @@ namespace Test
                 provider = services.BuildServiceProvider();
             }
 
+            if (!influx && testParams.InfluxOverride)
+            {
+                influx = true;
+                IfDbClient = new InfluxDBClient(Config.Influx.Host, Config.Influx.Username, Config.Influx.Password);
+            }
+
             UAClient = new UAClient(Config);
             Source = new CancellationTokenSource();
             if (testParams.Builder != null)
@@ -739,6 +745,7 @@ namespace Test
         public bool StoreDatapoints { get; set; } = false;
         public int? HistoryGranularity { get; set; } = null;
         public bool FailureInflux { get; set; } = false;
+        public bool InfluxOverride { get; set; } = false;
         public Func<FullConfig, IEnumerable<IPusher>, UAClient, UAExtractor> Builder { get; set; } = null;
         public bool StateStorage { get; set; } = false;
         public bool StateInflux { get; set; } = false;

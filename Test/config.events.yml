@@ -16,6 +16,10 @@ influx:
     host: "http://localhost:8086"
     database: "testdb"
 
+logger:
+    console:
+        level: "debug"
+
 extraction:
     # Global prefix for externalId. Should be unique to prevent name conflicts.
     id-prefix: "gp."

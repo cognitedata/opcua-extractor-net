@@ -299,6 +299,10 @@ namespace Cognite.OpcUa
                 foreach (var ts in timeseries)
                 {
                     var loc = tsIds[ts.ExternalId];
+                    if (nodeToAssetIds.ContainsKey(loc.ParentId))
+                    {
+                        nodeToAssetIds[loc.Id] = nodeToAssetIds[loc.ParentId];
+                    }
                     if (ts.IsString != loc.DataType.IsString)
                     {
                         mismatchedTimeseries.Add(ts.ExternalId);

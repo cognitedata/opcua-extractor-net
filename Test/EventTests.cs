@@ -348,6 +348,7 @@ namespace Test
             {
                 ServerName = ServerName.Events,
                 ConfigName = ConfigName.Events,
+                InfluxOverride = true,
                 Builder = (cfg, pusher, client) =>
                 {
                     var pushers = pusher.Append(new InfluxPusher(cfg.Influx));
