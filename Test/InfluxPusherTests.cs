@@ -57,6 +57,7 @@ namespace Test
             await tester.WaitForCondition(async () =>
             {
                 var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Base.DoubleVar1, false);
+                Console.WriteLine("Dps: " + dps.Count());
                 return dps.Count() == 2;
             }, 20, "Expected to get some data");
 

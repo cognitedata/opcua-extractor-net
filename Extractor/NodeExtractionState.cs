@@ -270,7 +270,7 @@ namespace Cognite.OpcUa
         }
         public void SetComplete()
         {
-            DestinationExtractedRange = TimeRange.Complete;
+            InitExtractedRange(TimeRange.Complete.First, TimeRange.Complete.Last);
         }
     }
 }

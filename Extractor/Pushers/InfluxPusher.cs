@@ -441,9 +441,8 @@ namespace Cognite.OpcUa
             if (states == null) throw new ArgumentNullException(nameof(states));
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
-                    $"SELECT * FROM \"{state.Key}\"" +
-                    $" WHERE time >= {(state.Value.DestinationExtractedRange.First - DateTime.UnixEpoch).Ticks*100}" +
-                    $" AND time <= {(state.Value.DestinationExtractedRange.Last - DateTime.UnixEpoch).Ticks*100}")
+                    $"SELECT * FROM \"{state.Key}\""
+                    + GetWhereClause(state.Value))
             ).ToList();
 
             var results = await Task.WhenAll(fetchTasks);
@@ -481,6 +480,26 @@ namespace Cognite.OpcUa
 
             return finalPoints;
         }
+        private static string GetWhereClause(InfluxBufferState state)
+        {
+            if (state.DestinationExtractedRange == TimeRange.Complete) return "";
+            string ret = " WHERE";
+            bool first = false;
+            if (state.DestinationExtractedRange.First > CogniteTime.DateTimeEpoch)
+            {
+                first = true;
+                ret += $" time >= {(state.DestinationExtractedRange.First - CogniteTime.DateTimeEpoch).Ticks * 100}";
+            }
+            if (state.DestinationExtractedRange.Last < DateTime.MaxValue)
+            {
+                if (first) ret += " AND";
+                ret += $" time <= {(state.DestinationExtractedRange.Last - CogniteTime.DateTimeEpoch).Ticks * 100}";
+            }
+
+            return ret;
+        }
+
+
         /// <summary>
         /// Read events from influxdb back into BufferedEvents
         /// </summary>
@@ -494,9 +513,8 @@ namespace Cognite.OpcUa
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
-                $"SELECT * FROM /events.{state.Key.Replace("/", "\\/", StringComparison.InvariantCulture)}:.*/" +
-                $" WHERE time >= {(state.Value.DestinationExtractedRange.First - DateTime.UnixEpoch).Ticks * 100}" +
-                $" AND time <= {(state.Value.DestinationExtractedRange.Last - DateTime.UnixEpoch).Ticks * 100}")
+                $"SELECT * FROM /events.{state.Key.Replace("/", "\\/", StringComparison.InvariantCulture)}:.*/"
+                + GetWhereClause(state.Value))
             ).ToList();
 
             var results = await Task.WhenAll(fetchTasks);
