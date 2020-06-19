@@ -63,7 +63,6 @@ namespace Cognite.OpcUa
     }
     public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
-        public bool Test { get; set; } = false;
         public long? DataSetId { get; set; }
         public bool Debug { get; set; } = false;
         public bool ReadExtractedRanges { get; set; } = true;

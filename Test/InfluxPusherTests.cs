@@ -39,9 +39,8 @@ namespace Test
         [Fact]
         public async Task TestInfluxPusher()
         {
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                ConfigName = ConfigName.Influx
+            using var tester = new ExtractorTester(new ExtractorTestParameters {
+                Pusher = "influx"
             });
             tester.Config.History.Enabled = false;
             await tester.ClearPersistentData();
@@ -75,7 +74,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                ConfigName = ConfigName.Influx,
+                Pusher = "influx",
                 ServerName = ServerName.Array
             });
             await tester.ClearPersistentData();
@@ -113,7 +112,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                ConfigName = ConfigName.Influx,
+                Pusher = "influx",
                 QuitAfterMap = true
             });
             await tester.ClearPersistentData();
@@ -144,7 +143,7 @@ namespace Test
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
 
-            var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database, 
+            var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.Config.Influx.Database, 
                 "SELECT * FROM \"gp.tl:i=2\"");
 
             Assert.True(read.Count > 0);
@@ -167,7 +166,7 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
-                PusherConfig = ConfigName.Influx,
+                Pusher = "influx",
                 ConfigName = ConfigName.Events
             });
             await tester.ClearPersistentData();
@@ -200,9 +199,8 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Test,
-                FailureInflux = ConfigName.Influx,
+                FailureInflux = true,
                 StoreDatapoints = true,
-                FailureInfluxWrite = true
             });
             await tester.ClearPersistentData();
             tester.Config.Extraction.AllowStringVariables = true;
@@ -262,7 +260,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                ConfigName = ConfigName.Influx
+                Pusher = "influx"
             });
             await tester.ClearPersistentData();
 
@@ -301,7 +299,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                ConfigName = ConfigName.Influx
+                Pusher = "influx"
             });
             await tester.ClearPersistentData();
 
@@ -356,7 +354,7 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
-                PusherConfig = ConfigName.Influx,
+                Pusher = "influx",
                 ConfigName = ConfigName.Events,
             });
             await tester.ClearPersistentData();
@@ -395,7 +393,7 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
-                PusherConfig = ConfigName.Influx,
+                Pusher = "influx",
                 ConfigName = ConfigName.Events,
             });
             await tester.ClearPersistentData();

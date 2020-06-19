@@ -222,8 +222,7 @@ namespace Test
             {
                 ConfigName = ConfigName.Events,
                 ServerName = ServerName.Events,
-                FailureInflux = ConfigName.Influx,
-                FailureInfluxWrite = true
+                FailureInflux = true
             });
             await tester.ClearPersistentData();
 
@@ -345,18 +344,13 @@ namespace Test
         [Trait("Test", "multipushereventbackfill")]
         public async Task TestMultiPusherBackfillRestart()
         {
-            var influxCfg = ConfigurationUtils.Read<FullConfig>("config.influxtest.yml");
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
                 ConfigName = ConfigName.Events,
-                InfluxOverride = (InfluxPusherConfig)influxCfg.Pushers.First(),
                 Builder = (cfg, pusher, client) =>
                 {
-                    var pushers = new List<IPusher>
-                    {
-                        pusher, new InfluxPusher((InfluxPusherConfig) influxCfg.Pushers.First())
-                    };
+                    var pushers = pusher.Append(new InfluxPusher(cfg.Influx));
 
                     return new UAExtractor(cfg, pushers, client, null);
                 }

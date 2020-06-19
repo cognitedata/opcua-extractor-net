@@ -99,8 +99,8 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters());
             await tester.ClearPersistentData();
 
-            tester.CogniteConfig.Debug = true;
-            tester.CogniteConfig.ApiKey = null;
+            tester.Config.Cognite.Debug = true;
+            tester.Config.Cognite.ApiKey = null;
 
             await tester.StartServer();
             tester.StartExtractor();
@@ -312,19 +312,15 @@ namespace Test
         [Trait("Test", "connectiontest")]
         public async Task TestConnectionTest()
         {
-            var fullConfig = ConfigurationUtils.Read<FullConfig>("config.events.yml");
+            var services = new ServiceCollection();
+            var fullConfig = services.AddConfig<FullConfig>("config.events.yml");
             fullConfig.GenerateDefaults();
-            var config = (CognitePusherConfig)fullConfig.Pushers.First();
-            config.Test = true;
+            var config = fullConfig.Cognite;
 
             var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            var services = new ServiceCollection();
-            services.AddSingleton(fullConfig.Logger);
-            services.AddSingleton(fullConfig.Metrics);
             services.AddMetrics();
             services.AddLogging();
             CommonTestUtils.AddDummyProvider(handler, services);
-            services.AddSingleton<CogniteConfig>(config);
             services.AddCogniteClient("OpcUa-Extractor", true, true, false);
 
             using var provider = services.BuildServiceProvider();
@@ -373,78 +369,6 @@ namespace Test
             Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
         }
 
-        [Fact]
-        [Trait("Server", "basic")]
-        [Trait("Target", "CDFPusher")]
-        [Trait("Test", "multiplecdf")]
-        // Multiple pushers that fetch properties does some magic to avoid fetching data twice
-        public async Task TestMultipleCDFPushers()
-        {
-            var fullConfig = ConfigurationUtils.Read<FullConfig>("config.test.yml");
-            fullConfig.GenerateDefaults();
-            var config = (CognitePusherConfig)fullConfig.Pushers.First();
-
-            var services = new ServiceCollection();
-            services.AddSingleton(fullConfig.Logger);
-            services.AddSingleton(fullConfig.Metrics);
-            services.AddMetrics();
-            services.AddLogging();
-
-            var handler1 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            var handler2 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            services.AddSingleton<CogniteConfig>(config);
-
-            CommonTestUtils.AddDummyProvider(handler1, services);
-            services.AddCogniteClient("OpcUa-Extractor", true, true, false);
-            using var provider1 = services.BuildServiceProvider();
-
-            CommonTestUtils.AddDummyProvider(handler2, services);
-            services.AddCogniteClient("OpcUa-Extractor", true, true, false);
-            using var provider2 = services.BuildServiceProvider();
-
-            using var pusher1 = new CDFPusher(provider1, config);
-            using var pusher2 = new CDFPusher(provider2, config);
-
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                Builder = (config, pusher, client) => new UAExtractor(config, new[] { pusher1, pusher2 }, client, null),
-                QuitAfterMap = true
-            });
-            await tester.ClearPersistentData();
-
-            await tester.StartServer();
-            tester.StartExtractor();
-
-            await tester.TerminateRunTask();
-
-            Assert.DoesNotContain(handler1.Timeseries.Values, ts => ts.name == "Variable string");
-            Assert.Contains(handler1.Assets.Values, asset =>
-                asset.name == "BaseRoot"
-                && asset.metadata != null 
-                && asset.metadata["Asset Property 1"] == "test" 
-                && asset.metadata["Asset Property 2"] == "123.21");
-            Assert.Contains(handler1.Timeseries.Values, ts =>
-                ts.name == "Variable 1" 
-                && ts.metadata != null 
-                && ts.metadata["TS Property 1"] == "test" 
-                && ts.metadata["TS Property 2"] == "123.2");
-            Assert.DoesNotContain(handler2.Timeseries.Values, ts => ts.name == "Variable string");
-            Assert.Contains(handler2.Assets.Values, asset =>
-                asset.name == "BaseRoot"
-                && asset.metadata != null
-                && asset.metadata["Asset Property 1"] == "test"
-                && asset.metadata["Asset Property 2"] == "123.21");
-            Assert.Contains(handler2.Timeseries.Values, ts =>
-                ts.name == "Variable 1"
-                && ts.metadata != null
-                && ts.metadata["TS Property 1"] == "test"
-                && ts.metadata["TS Property 2"] == "123.2");
-            Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
-            // 1 for objects folder, 1 for root, 1 for variable properties
-            Assert.Equal(3, (int)CommonTestUtils.GetMetricValue("opcua_browse_operations"));
-        }
         [Fact]
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
@@ -517,7 +441,7 @@ namespace Test
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
             Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
-            tester.CogniteConfig.NonFiniteReplacement = -1;
+            tester.Config.Cognite.NonFiniteReplacement = -1;
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
             Assert.True(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));

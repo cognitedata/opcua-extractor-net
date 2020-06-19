@@ -28,7 +28,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                ConfigName = ConfigName.Influx
+                Pusher = "influx"
             });
             await tester.ClearPersistentData();
 
@@ -43,8 +43,8 @@ namespace Test
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
             await tester.Extractor.Looper.WaitForNextPush();
 
-            var oldHost = tester.InfluxConfig.Host;
-            tester.InfluxConfig.Host = "testWrong";
+            var oldHost = tester.Config.Influx.Host;
+            tester.Config.Influx.Host = "testWrong";
             ((InfluxPusher)tester.Pusher).Reconfigure();
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1000);
             tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1.0);
@@ -52,7 +52,7 @@ namespace Test
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
                 20, "Failurebuffer must receive some data");
 
-            tester.InfluxConfig.Host = oldHost;
+            tester.Config.Influx.Host = oldHost;
             ((InfluxPusher)tester.Pusher).Reconfigure();
 
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1001);
@@ -87,7 +87,7 @@ namespace Test
                 await tester.StartServer();
                 tester.Server.PopulateBaseHistory();
 
-                tester.CogniteConfig.ReadExtractedRanges = false;
+                tester.Config.Cognite.ReadExtractedRanges = false;
 
                 tester.Config.Extraction.AllowStringVariables = true;
                 tester.Config.History.Backfill = true;
@@ -138,7 +138,7 @@ namespace Test
             await tester2.StartServer();
             tester2.Server.PopulateBaseHistory();
 
-            tester2.CogniteConfig.ReadExtractedRanges = false;
+            tester2.Config.Cognite.ReadExtractedRanges = false;
             tester2.Config.Extraction.AllowStringVariables = true;
             tester2.Config.History.Backfill = true;
             CommonTestUtils.ResetTestMetrics();
@@ -174,7 +174,7 @@ namespace Test
             await tester.StartServer();
             tester.Server.PopulateEvents();
             tester.Config.History.Enabled = true;
-            tester.CogniteConfig.ReadExtractedRanges = false;
+            tester.Config.Cognite.ReadExtractedRanges = false;
             tester.Config.History.Backfill = true;
 
             var now = DateTime.UtcNow;
@@ -222,7 +222,7 @@ namespace Test
                 ServerName = ServerName.Events
             });
             tester2.Config.History.Enabled = true;
-            tester2.CogniteConfig.ReadExtractedRanges = false;
+            tester2.Config.Cognite.ReadExtractedRanges = false;
             tester2.Config.History.Backfill = true;
             CommonTestUtils.ResetTestMetrics();
 
@@ -254,9 +254,8 @@ namespace Test
             using (var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Test,
-                FailureInflux = ConfigName.Influx,
+                FailureInflux = true,
                 StoreDatapoints = true,
-                FailureInfluxWrite = true,
                 StateInflux = true
             }))
             {
@@ -308,9 +307,8 @@ namespace Test
             using var tester2 = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Test,
-                FailureInflux = ConfigName.Influx,
+                FailureInflux = true,
                 StoreDatapoints = true,
-                FailureInfluxWrite = true,
                 StateInflux = true
             });
 
@@ -351,9 +349,8 @@ namespace Test
             {
                 ConfigName = ConfigName.Events,
                 ServerName = ServerName.Events,
-                FailureInflux = ConfigName.Influx,
+                FailureInflux = true,
                 StoreDatapoints = true,
-                FailureInfluxWrite = true,
                 StateInflux = true
             }))
             {
@@ -400,9 +397,8 @@ namespace Test
             {
                 ConfigName = ConfigName.Events,
                 ServerName = ServerName.Events,
-                FailureInflux = ConfigName.Influx,
+                FailureInflux = true,
                 StoreDatapoints = true,
-                FailureInfluxWrite = true,
                 StateInflux = true
             });
             tester2.Config.Events.HistorizingEmitterIds = new List<ProtoNodeId>();

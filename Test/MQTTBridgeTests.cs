@@ -5,9 +5,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Bridge;
 using Cognite.Extractor.Configuration;
+using Cognite.Extractor.Logging;
+using Cognite.Extractor.Utils;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
+using Microsoft.Extensions.DependencyInjection;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
@@ -31,15 +34,22 @@ namespace Test
             public CDFMockHandler Handler { get; }
             private readonly IMqttClient client;
             private readonly MqttApplicationMessageBuilder baseBuilder;
+            private readonly IServiceProvider provider;
             public BridgeTester(CDFMockHandler.MockMode mode)
             {
+                var services = new ServiceCollection();
+                config = services.AddConfig<BridgeConfig>("config.bridge.yml");
+
                 Handler = new CDFMockHandler("project", mode)
                 {
                     StoreDatapoints = true
                 };
-                config = ConfigurationUtils.Read<BridgeConfig>("config.bridge.yml");
-                config.GenerateDefaults();
-                bridge = new MQTTBridge(new Destination(config.Cognite, CommonTestUtils.GetDummyProvider(Handler)), config);
+                CommonTestUtils.AddDummyProvider(Handler, services);
+                services.AddLogger();
+                services.AddCogniteClient("MQTT-CDF Bridge", true, true, false);
+                provider = services.BuildServiceProvider();
+
+                bridge = new MQTTBridge(new Destination(config.Cognite, provider), config);
                 bridge.StartBridge(CancellationToken.None).Wait();
                 var options = new MqttClientOptionsBuilder()
                     .WithClientId("test-mqtt-publisher")
@@ -55,7 +65,7 @@ namespace Test
             public async Task RecreateBridge()
             {
                 bridge.Dispose();
-                bridge = new MQTTBridge(new Destination(config.Cognite, CommonTestUtils.GetDummyProvider(Handler)), config);
+                bridge = new MQTTBridge(new Destination(config.Cognite, provider), config);
                 bool success = await bridge.StartBridge(CancellationToken.None);
                 if (!success) throw new Exception("Unable to start bridge");
             }
