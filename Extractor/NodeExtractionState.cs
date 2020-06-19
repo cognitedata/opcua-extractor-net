@@ -21,6 +21,33 @@ namespace Cognite.OpcUa
         {
             SourceId = id;
         }
+
+        public override void InitExtractedRange(DateTime first, DateTime last)
+        {
+            lock (_mutex)
+            {
+                DestinationExtractedRange = DestinationExtractedRange.Contract(first, last);
+                if (Initialized)
+                {
+                    SourceExtractedRange = DestinationExtractedRange;
+                }
+            }
+        }
+
+        public void InitToEmpty()
+        {
+            lock (_mutex)
+            {
+                if (!FrontfillEnabled || BackfillEnabled)
+                {
+                    SourceExtractedRange = DestinationExtractedRange = new TimeRange(DateTime.UtcNow, DateTime.UtcNow);
+                }
+                else
+                {
+                    SourceExtractedRange = DestinationExtractedRange = new TimeRange(CogniteTime.DateTimeEpoch, CogniteTime.DateTimeEpoch);
+                }
+            }
+        }
     }
 
 

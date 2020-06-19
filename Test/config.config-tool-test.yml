@@ -1,4 +1,6 @@
-﻿# Template for the config file,
+﻿version: 1
+
+# Template for the config file,
 # Defaults to config.config-tool.yml in ./config.
 # Your config file can contain only a subset of these config options. Any extra options will
 # cause the extractor to fail.

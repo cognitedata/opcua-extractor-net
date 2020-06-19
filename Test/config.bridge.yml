@@ -1,4 +1,6 @@
-﻿mqtt:
+﻿version: 1
+
+mqtt:
     host: localhost
     port: 4060
 

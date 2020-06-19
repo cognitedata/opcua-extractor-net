@@ -100,7 +100,17 @@ namespace Cognite.OpcUa
             var dataPointList = points
                 .GroupBy(dp => dp.Id)
                 .Where(group => !mismatchedTimeseries.Contains(group.Key) && !missingTimeseries.Contains(group.Key))
-                .ToDictionary(group => group.Key, group => group);
+                .ToDictionary(group => group.Key, group =>
+                    group.Select(dp =>
+                    {
+                        if (dp.IsString) return dp;
+                        if (!double.IsFinite(dp.DoubleValue))
+                        {
+                            if (config.NonFiniteReplacement != null) return new BufferedDataPoint(dp, config.NonFiniteReplacement.Value);
+                            return null;
+                        }
+                        return dp;
+                    }).Where(dp => dp != null));
 
             int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count());
 
@@ -117,6 +127,8 @@ namespace Cognite.OpcUa
                 kvp => kvp.Value.Select(
                     dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue))
                 );
+            log.Debug("Push {cnt} datapoints to CDF", count);
+            if (config.Debug) return null;
 
             try
             {
@@ -255,12 +267,16 @@ namespace Cognite.OpcUa
 
             try
             {
-                await destination.GetOrCreateAssetsAsync(assetIds.Keys, async ids =>
+                var assets = await destination.GetOrCreateAssetsAsync(assetIds.Keys, async ids =>
                 {
                     var assets = ids.Select(id => assetIds[id]);
                     await Extractor.ReadProperties(assets, token);
                     return assets.Select(NodeToAsset).Where(asset => asset != null);
                 }, token);
+                foreach (var asset in assets)
+                {
+                    nodeToAssetIds[assetIds[asset.ExternalId].Id] = asset.Id;
+                }
             }
             catch (Exception e)
             {
@@ -322,14 +338,16 @@ namespace Cognite.OpcUa
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        ids.Add(Extractor.GetUniqueId(state.Id, i));
+                        ids.Add(Extractor.GetUniqueId(state.SourceId, i));
                     }
                 }
                 else
                 {
-                    ids.Add(Extractor.GetUniqueId(state.Id));
+                    ids.Add(state.Id);
                 }
             }
+            log.Information("Getting extracted ranges from CDF for {cnt} states", ids.Count);
+            if (config.Debug) return true;
 
             var destination = GetDestination();
 
@@ -345,10 +363,23 @@ namespace Cognite.OpcUa
                 return false;
             }
 
+            var mappedIds = new HashSet<string>();
+
             foreach (var (id, tr) in ranges)
             {
                 var state = Extractor.State.GetNodeState(id);
                 state.InitExtractedRange(tr.First, tr.Last);
+                mappedIds.Add(id);
+            }
+
+            if (states.Any(state => state.Initialized))
+            {
+                var notMapped = ids.Except(mappedIds);
+                foreach (var id in notMapped)
+                {
+                    var state = Extractor.State.GetNodeState(id);
+                    state.InitToEmpty();
+                }
             }
 
             return true;

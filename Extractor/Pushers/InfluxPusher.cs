@@ -219,7 +219,14 @@ namespace Cognite.OpcUa
                         ranges[id] = new TimeRange(ts, ranges[id].Last);
                     }
                 }
-                state.InitExtractedRange(ranges[id].First, ranges[id].Last);
+                if (ranges.ContainsKey(id))
+                {
+                    state.InitExtractedRange(ranges[id].First, ranges[id].Last);
+                }
+                else if (state.Initialized)
+                {
+                    state.InitToEmpty();
+                }
 
             });
             try

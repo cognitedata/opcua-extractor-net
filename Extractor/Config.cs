@@ -6,8 +6,6 @@ using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Metrics;
 using Cognite.Extractor.Utils;
-using Microsoft.Extensions.DependencyInjection;
-using System.Linq;
 using Cognite.Extractor.StateStorage;
 
 namespace Cognite.OpcUa
@@ -160,6 +158,7 @@ namespace Cognite.OpcUa
                 if (Cognite.CdfChunking == null) Cognite.CdfChunking = new ChunkingConfig();
                 if (Cognite.CdfThrottling == null) Cognite.CdfThrottling = new ThrottlingConfig();
                 if (Cognite.CdfRetries == null) Cognite.CdfRetries = new RetryConfig();
+                if (Cognite.SdkLogging == null) Cognite.SdkLogging = new SdkLoggingConfig();
             }
             if (Extraction == null) Extraction = new ExtractionConfig();
             if (Events == null) Events = new EventConfig();

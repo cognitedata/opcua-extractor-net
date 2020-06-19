@@ -189,7 +189,22 @@ namespace Test
                     missing.Add(id.externalId);
                 }
             }
-            if (missing.Any())
+            if (mode == MockMode.FailAsset)
+            {
+                string res = JsonConvert.SerializeObject(new ErrorWrapper
+                {
+                    error = new ErrorContent
+                    {
+                        code = 400,
+                        message = "weird failure"
+                    }
+                });
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                {
+                    Content = new StringContent(res)
+                };
+            }
+            if (missing.Any() && !ids.ignoreUnknownIds)
             {
                 IList<string> finalMissing;
                 if (mode == MockMode.All)
@@ -207,21 +222,7 @@ namespace Test
                         Content = new StringContent(res)
                     };
                 }
-                if (mode == MockMode.FailAsset)
-                {
-                    string res = JsonConvert.SerializeObject(new ErrorWrapper
-                    {
-                        error = new ErrorContent
-                        {
-                            code = 400,
-                            message = "weird failure"
-                        }
-                    });
-                    return new HttpResponseMessage(HttpStatusCode.BadRequest)
-                    {
-                        Content = new StringContent(res)
-                    };
-                }
+
                 if (mode == MockMode.Some)
                 {
                     finalMissing = new List<string>();
@@ -327,7 +328,7 @@ namespace Test
                     missing.Add(id.externalId);
                 }
             }
-            if (missing.Any())
+            if (missing.Any() && !ids.ignoreUnknownIds)
             {
                 IList<string> finalMissing;
                 if (mode == MockMode.All)
@@ -652,6 +653,7 @@ namespace Test
     public class IdentityListWrapper
     {
         public IEnumerable<Identity> items { get; set; }
+        public bool ignoreUnknownIds { get; set; }
     }
     public class ErrorContent
     {

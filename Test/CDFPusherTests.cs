@@ -425,36 +425,38 @@ namespace Test
 
             var badPoints = new List<BufferedDataPoint>
             {
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.PositiveInfinity),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NegativeInfinity),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NaN),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E100),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E100),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E105),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E105),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MaxValue),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MinValue)
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.PositiveInfinity),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.NegativeInfinity),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.NaN),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E100),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E100),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E105),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E105),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.MaxValue),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.MinValue)
             };
 
             Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
             tester.Handler.StoreDatapoints = true;
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
-            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.True(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.Equal(6, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
             tester.Config.Cognite.NonFiniteReplacement = -1;
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
             Assert.True(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
-            Assert.Equal(9, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
-            Assert.True(tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.TrueForAll(item => Math.Abs(item.Value + 1) < 0.01));
+            Assert.Equal(15, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
+            Assert.True(tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.TrueForAll(item => Math.Abs(item.Value + 1) < 0.01
+                || item.Value == CogniteUtils.NumericValueMax || item.Value == CogniteUtils.NumericValueMin));
 
             var badPoints2 = new List<BufferedDataPoint>
             {
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E99),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E99)
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E99),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E99)
             };
             await pusher.PushDataPoints(badPoints2, CancellationToken.None);
-            Assert.Equal(11, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
+            Assert.Equal(17, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
         }
 
         [Fact]
@@ -511,12 +513,12 @@ namespace Test
                 new BufferedDataPoint(new DateTime(1900, 1, 1), numId2, 0),
                 new BufferedDataPoint(DateTime.MinValue, numId2, 0),
                 // Incorrect type
-                new BufferedDataPoint(DateTime.Now, numId, 123),
-                new BufferedDataPoint(DateTime.Now, numId, "123"),
-                new BufferedDataPoint(DateTime.Now, numId, null),
-                new BufferedDataPoint(DateTime.Now, strId, 123),
-                new BufferedDataPoint(DateTime.Now, strId, "123"),
-                new BufferedDataPoint(DateTime.Now, strId, null)
+                new BufferedDataPoint(DateTime.UtcNow, numId, 123),
+                new BufferedDataPoint(DateTime.UtcNow, numId, "123"),
+                new BufferedDataPoint(DateTime.UtcNow, numId, null),
+                new BufferedDataPoint(DateTime.UtcNow, strId, 123),
+                new BufferedDataPoint(DateTime.UtcNow, strId, "123"),
+                new BufferedDataPoint(DateTime.UtcNow, strId, null)
             };
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);

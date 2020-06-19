@@ -89,11 +89,11 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="state">State to add</param>
         /// <param name="uniqueId">ExternalId, leave empty to auto generate</param>
-        public void SetNodeState(NodeExtractionState state)
+        public void SetNodeState(NodeExtractionState state, string uniqueId = null)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
             nodeStates[state.SourceId] = state;
-            nodeStatesByExtId[state.Id] = state;
+            nodeStatesByExtId[uniqueId ?? state.Id] = state;
         }
         /// <summary>
         /// Add event state to storage

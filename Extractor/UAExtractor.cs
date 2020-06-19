@@ -573,7 +573,7 @@ namespace Cognite.OpcUa
                             timeseries.Add(ts);
                             State.AddActiveNode(ts);
                             var uniqueId = GetUniqueId(node.Id, i);
-                            State.SetNodeState(state);
+                            State.SetNodeState(state, uniqueId);
                             State.RegisterNode(node.Id, uniqueId);
                         }
                         objects.Add(node);
