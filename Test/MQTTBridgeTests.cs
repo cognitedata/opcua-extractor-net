@@ -39,11 +39,11 @@ namespace Test
             {
                 var services = new ServiceCollection();
                 config = services.AddConfig<BridgeConfig>("config.bridge.yml");
-
                 Handler = new CDFMockHandler("project", mode)
                 {
                     StoreDatapoints = true
                 };
+                config.Logger.Console.Level = "debug";
                 CommonTestUtils.AddDummyProvider(Handler, services);
                 services.AddLogger();
                 services.AddCogniteClient("MQTT-CDF Bridge", true, true, false);

@@ -28,6 +28,10 @@ namespace Cognite.Bridge
         {
             if (Logger == null) Logger = new LoggerConfig();
             if (Cognite == null) Cognite = new CogniteConfig();
+            if (Cognite.CdfChunking == null) Cognite.CdfChunking = new ChunkingConfig();
+            if (Cognite.CdfRetries == null) Cognite.CdfRetries = new RetryConfig();
+            if (Cognite.CdfThrottling == null) Cognite.CdfThrottling = new ThrottlingConfig();
+            if (Cognite.SdkLogging == null) Cognite.SdkLogging = new SdkLoggingConfig();
             if (Mqtt == null) Mqtt = new MQTTConfig();
         }
     }

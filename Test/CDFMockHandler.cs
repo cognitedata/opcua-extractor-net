@@ -498,7 +498,7 @@ namespace Test
                     error = new ErrorContent
                     {
                         duplicated = duplicated,
-                        code = 400,
+                        code = 409,
                         message = "duplicated"
                     }
                 });

@@ -1,5 +1,9 @@
 ﻿version: 1
 
+logger:
+    console:
+        level: "debug"
+
 mqtt:
     host: localhost
     port: 4060
