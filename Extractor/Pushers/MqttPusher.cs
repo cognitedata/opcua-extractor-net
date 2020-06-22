@@ -183,12 +183,11 @@ namespace Cognite.OpcUa.Pushers
         {
             if (!client.IsConnected) return false;
 
-
-
             if (!string.IsNullOrEmpty(config.LocalState))
             {
-                var states = objects.Concat(variables)
+                var states = objects
                     .Select(node => Extractor.GetUniqueId(node.Id))
+                    .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
                     .Select(id => new ExistingState { Id = id })
                     .ToDictionary(state => state.Id);
 
@@ -202,8 +201,10 @@ namespace Cognite.OpcUa.Pushers
 
                 if (existingNodes.Any())
                 {
-                    objects = objects.Where(obj => !existingNodes.Contains(Extractor.GetUniqueId(obj.Id))).ToList();
-                    variables = variables.Where(variable => !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index))).ToList();
+                    objects = objects
+                        .Where(obj => !existingNodes.Contains(Extractor.GetUniqueId(obj.Id))).ToList();
+                    variables = variables
+                        .Where(variable => !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index))).ToList();
                 }
             }
             if (!objects.Any() && !variables.Any()) return true;
@@ -225,10 +226,12 @@ namespace Cognite.OpcUa.Pushers
 
             if (!string.IsNullOrEmpty(config.LocalState))
             {
-                var newStates = objects.Concat(variables)
-                    .Select(obj => Extractor.GetUniqueId(obj.Id))
-                    .Select(id => new ExistingState { Id = id, Existing = true })
+                var newStates = objects
+                    .Select(node => Extractor.GetUniqueId(node.Id))
+                    .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
+                    .Select(id => new ExistingState { Id = id, Existing = true, LastTimeModified = DateTime.UtcNow })
                     .ToList();
+
                 await Extractor.StateStorage.StoreExtractionState(
                     newStates,
                     config.LocalState,
@@ -566,7 +569,7 @@ namespace Cognite.OpcUa.Pushers
         {
             public bool Existing { get; set; }
             public string Id { get; set; }
-            public DateTime? LastTimeModified => DateTime.MaxValue;
+            public DateTime? LastTimeModified { get; set; }
         }
         #endregion
 
