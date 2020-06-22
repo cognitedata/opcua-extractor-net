@@ -159,7 +159,7 @@ namespace Cognite.OpcUa
 
                         var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);
                         var (nodes, timeseries) = ExtractorUtils.SortNodes(extractor.State.ActiveNodes);
-                        await Task.WhenAll(toInit.Select(pusher => extractor.PushNodes(nodes, timeseries, pusher, true, token)));
+                        await Task.WhenAll(toInit.Select(pusher => extractor.PushNodes(nodes, timeseries, pusher, true, true, token)));
                     }
                     foreach (var pair in recovered)
                     {
@@ -203,9 +203,9 @@ namespace Cognite.OpcUa
         {
             await Task.WhenAll(
                 extractor.StateStorage.StoreExtractionState(extractor.State.NodeStates
-                    .Where(state => state.IsFrontfilling), config.StateStorage.VariableStore, token),
+                    .Where(state => state.FrontfillEnabled), config.StateStorage.VariableStore, token),
                 extractor.StateStorage.StoreExtractionState(extractor.State.EmitterStates
-                    .Where(state => state.IsFrontfilling), config.StateStorage.EventStore, token)
+                    .Where(state => state.FrontfillEnabled), config.StateStorage.EventStore, token)
             );
         }
         /// <summary>

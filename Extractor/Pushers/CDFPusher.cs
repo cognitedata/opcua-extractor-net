@@ -331,7 +331,11 @@ namespace Cognite.OpcUa
             missingTimeseries.Clear();
             mismatchedTimeseries.Clear();
         }
-        public async Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
+        public async Task<bool> InitExtractedRanges(
+            IEnumerable<NodeExtractionState> states,
+            bool backfillEnabled,
+            bool initMissing,
+            CancellationToken token)
         {
             if (states == null) throw new ArgumentNullException(nameof(states));
             if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
@@ -367,21 +371,14 @@ namespace Cognite.OpcUa
                 return false;
             }
 
-            var mappedIds = new HashSet<string>();
-
-            foreach (var (id, tr) in ranges)
+            foreach (var state in states)
             {
-                var state = Extractor.State.GetNodeState(id);
-                state.InitExtractedRange(tr.First, tr.Last);
-                mappedIds.Add(id);
-            }
-
-            if (states.Any(state => state.Initialized))
-            {
-                var notMapped = ids.Except(mappedIds);
-                foreach (var id in notMapped)
+                if (ranges.ContainsKey(state.Id))
                 {
-                    var state = Extractor.State.GetNodeState(id);
+                    state.InitExtractedRange(ranges[state.Id].First, ranges[state.Id].Last);
+                }
+                else if (initMissing)
+                {
                     state.InitToEmpty();
                 }
             }

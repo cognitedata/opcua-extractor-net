@@ -593,8 +593,9 @@ namespace Cognite.OpcUa
         /// <param name="timeseries">Variable type nodes to push</param>
         /// <param name="pusher">Destination to push to</param>
         /// <param name="initial">True if this counts as initialization of the pusher</param>
+        /// <param name="initMissing">Whether or not to initialize nodes with missing ranges to empty</param>
         public async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries,
-            IPusher pusher, bool initial, CancellationToken token)
+            IPusher pusher, bool initial, bool initMissing, CancellationToken token)
         {
             if (pusher == null) throw new ArgumentNullException(nameof(pusher));
             if (pusher.NoInit)
@@ -621,10 +622,11 @@ namespace Cognite.OpcUa
                     .Distinct()
                     .Select(id => State.GetNodeState(id))
                     .Where(state => state.FrontfillEnabled);
-                var results = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, token), 
+                var results = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, initMissing, token), 
                     pusher.InitExtractedEventRanges(State.EmitterStates.Where(state => state.FrontfillEnabled),
                         timeseries.Concat(objects).Select(ts => ts.Id).Distinct(),
                         config.History.Backfill,
+                        initMissing,
                         token));
                 if (!results.All(res => res))
                 {
@@ -652,7 +654,7 @@ namespace Cognite.OpcUa
 
             bool initial = objects.Count() + timeseries.Count() == State.ActiveNodes.Count();
 
-            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, pusher, initial, token));
+            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, pusher, initial, false, token));
 
             if (StateStorage != null && config.StateStorage.Interval > 0)
             {
@@ -661,6 +663,7 @@ namespace Cognite.OpcUa
                     pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
                         State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
                         config.StateStorage.EventStore,
+                        false,
                         token));
                 }
 
@@ -669,6 +672,7 @@ namespace Cognite.OpcUa
                     pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
                         newStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
                         config.StateStorage.VariableStore,
+                        false,
                         token));
                 }
             }

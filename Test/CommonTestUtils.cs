@@ -569,12 +569,8 @@ namespace Test
 
             if (Config.StateStorage.Location != null)
             {
+                File.Delete(Config.StateStorage.Location);
                 using var db = new LiteDatabase(Config.StateStorage.Location);
-                var collections = db.GetCollectionNames();
-                foreach (var collection in collections)
-                {
-                    db.DropCollection(collection);
-                }
             }
         }
 

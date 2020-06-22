@@ -93,19 +93,15 @@ namespace Cognite.OpcUa
                 .Select(state => new InfluxBufferState(state, false))
                 .ToList();
 
-            foreach (var state in variableStates)
-            {
-                state.SetComplete();
-            }
-
             await extractor.StateStorage.RestoreExtractionState(
                 variableStates.ToDictionary(state => state.Id),
                 fullConfig.StateStorage.InfluxVariableStore,
+                false,
                 token);
 
             foreach (var state in variableStates)
             {
-                if (state.DestinationExtractedRange == TimeRange.Complete) continue;
+                if (state.DestinationExtractedRange == TimeRange.Empty) continue;
                 nodeBufferStates[state.Id] = state;
                 if (state.DestinationExtractedRange.First <= state.DestinationExtractedRange.Last)
                 {
@@ -118,16 +114,12 @@ namespace Cognite.OpcUa
             await extractor.StateStorage.RestoreExtractionState(
                 eventStates.ToDictionary(state => state.Id),
                 fullConfig.StateStorage.InfluxEventStore,
+                false,
                 token);
 
             foreach (var state in eventStates)
             {
-                state.SetComplete();
-            }
-
-            foreach (var state in eventStates)
-            {
-                if (state.DestinationExtractedRange == TimeRange.Complete) continue;
+                if (state.DestinationExtractedRange == TimeRange.Empty) continue;
                 eventBufferStates[state.Id] = state;
                 if (state.DestinationExtractedRange.First < state.DestinationExtractedRange.Last)
                 {

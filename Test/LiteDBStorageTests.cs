@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
+using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
 using Opc.Ua;
 using Serilog;
@@ -28,7 +29,8 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                Pusher = "influx"
+                Pusher = "influx",
+                DataBufferPath = "buffer.bin"
             });
             await tester.ClearPersistentData();
 
@@ -115,18 +117,18 @@ namespace Test
                 var dummyStates = tester.Extractor.State.NodeStates.Select(state => new InfluxBufferState(state, false))
                     .ToList();
 
-                foreach (var state in dummyStates)
-                {
-                    state.SetComplete();
-                }
-
                 await tester.Extractor.StateStorage.RestoreExtractionState(
                     dummyStates.ToDictionary(state => state.Id),
                     tester.Config.StateStorage.VariableStore,
+                    false,
                     CancellationToken.None);
 
+                foreach (var state in dummyStates)
+                {
+                    Log.Information("State: {id}, {range}, {hist}", state.Id, state.DestinationExtractedRange, state.Historizing);
+                }
                 Assert.True(dummyStates.All(state => !state.Historizing
-                                                     && state.DestinationExtractedRange.First < state.DestinationExtractedRange.Last
+                                                     || state.DestinationExtractedRange.First < state.DestinationExtractedRange.Last
                                                      && state.DestinationExtractedRange.Last != DateTime.MaxValue));
             }
 
@@ -205,6 +207,7 @@ namespace Test
             await tester.Extractor.StateStorage.RestoreExtractionState(
                 dummyStates.ToDictionary(state => state.Id),
                 tester.Config.StateStorage.EventStore,
+                false,
                 CancellationToken.None);
 
             await tester.TerminateRunTask();
@@ -295,6 +298,7 @@ namespace Test
                 await tester.Extractor.StateStorage.RestoreExtractionState(
                     states.ToDictionary(state => state.Id),
                     tester.Config.StateStorage.InfluxVariableStore,
+                    false,
                     CancellationToken.None);
 
                 Assert.True(states.All(state =>
@@ -331,6 +335,7 @@ namespace Test
             await tester2.Extractor.StateStorage.RestoreExtractionState(
                 states.ToDictionary(state => state.Id),
                 tester2.Config.StateStorage.InfluxVariableStore,
+                false,
                 CancellationToken.None);
 
             Assert.True(states.All(state =>
@@ -385,9 +390,11 @@ namespace Test
                 await tester.Extractor.StateStorage.RestoreExtractionState(
                     states.ToDictionary(state => state.Id),
                     tester.Config.StateStorage.InfluxEventStore,
+                    false,
                     CancellationToken.None);
 
-                Assert.True(states.All(state => state.DestinationExtractedRange.First <= state.DestinationExtractedRange.Last
+                Assert.True(states.All(state => !state.Historizing
+                                                || state.DestinationExtractedRange.First <= state.DestinationExtractedRange.Last
                                                 && state.DestinationExtractedRange.Last != DateTime.MaxValue));
 
                 await tester.TerminateRunTask();
@@ -417,7 +424,13 @@ namespace Test
             await tester2.Extractor.StateStorage.RestoreExtractionState(
                 states.ToDictionary(state => state.Id),
                 tester2.Config.StateStorage.InfluxEventStore,
+                true,
                 CancellationToken.None);
+
+            foreach (var state in states)
+            {
+                Log.Information("State: {id}, {first}, {last}", state.Id, state.DestinationExtractedRange.First, state.DestinationExtractedRange.Last);
+            }
 
             Assert.True(states.All(state => state.DestinationExtractedRange == TimeRange.Empty));
 
@@ -444,7 +457,7 @@ namespace Test
 
             var evt = new BufferedEvent
             {
-                EmittingNode = tester.Extractor.State.EmitterStates.First().Id,
+                EmittingNode = ObjectIds.Server,
                 EventId = "123456789",
                 EventType = new NodeId("test", 1),
                 Message = "msg",
@@ -453,19 +466,19 @@ namespace Test
                     ["dt1"] = "data1",
                     ["dt2"] = "data2"
                 },
-                SourceNode = tester.Extractor.State.AllActiveIds.First(),
+                SourceNode = tester.Server.Ids.Event.Obj2,
                 ReceivedTime = DateTime.Now,
                 Time = DateTime.Now
             };
 
             var evt2 = new BufferedEvent
             {
-                EmittingNode = tester.Extractor.State.EmitterStates.First().Id,
+                EmittingNode = tester.Server.Ids.Event.Obj1,
                 EventId = "123456789",
                 EventType = new NodeId("test", 1),
                 Message = null,
                 MetaData = new Dictionary<string, object>(),
-                SourceNode = tester.Extractor.State.AllActiveIds.First(),
+                SourceNode = tester.Server.Ids.Event.Var1,
                 ReceivedTime = DateTime.Now,
                 Time = DateTime.Now
             };
@@ -600,7 +613,7 @@ namespace Test
             {
                 evts.Add(new BufferedEvent
                 {
-                    EmittingNode = tester.Extractor.State.EmitterStates.First().Id,
+                    EmittingNode = ObjectIds.Server,
                     EventId = "id " + i,
                     EventType = new NodeId("test", 1),
                     Message = "msg " + i,
@@ -609,7 +622,7 @@ namespace Test
                         ["dt1"] = "data1",
                         ["dt2"] = "data2"
                     },
-                    SourceNode = tester.Extractor.State.AllActiveIds.First(),
+                    SourceNode = tester.Server.Ids.Event.Obj1,
                     ReceivedTime = DateTime.Now,
                     Time = DateTime.Now
                 });

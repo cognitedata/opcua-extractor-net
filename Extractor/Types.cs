@@ -527,7 +527,7 @@ namespace Cognite.OpcUa
             string eventType;
             (eventType, next) = ExtractorUtils.StringFromStorable(bytes, next);
             (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
-            evt.EmittingNode = extractor.State.GetEmitterState(txt).Id;
+            evt.EmittingNode = extractor.State.GetEmitterState(txt).SourceId;
             
             ushort count = BitConverter.ToUInt16(bytes, next);
             next += sizeof(ushort);

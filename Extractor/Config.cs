@@ -219,10 +219,10 @@ namespace Cognite.OpcUa
     public class StateStorageConfig : StateStoreConfig
     {
         public int Interval { get; set; }
-        public string VariableStore { get; set; } = "variable-states";
-        public string EventStore { get; set; } = "event-states";
-        public string InfluxVariableStore { get; set; } = "influx-variable-states";
-        public string InfluxEventStore { get; set; } = "influx-event-states";
+        public string VariableStore { get; set; } = "variable_states";
+        public string EventStore { get; set; } = "event_states";
+        public string InfluxVariableStore { get; set; } = "influx_variable_states";
+        public string InfluxEventStore { get; set; } = "influx_event_states";
 
     }
 }

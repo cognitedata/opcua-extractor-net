@@ -22,18 +22,6 @@ namespace Cognite.OpcUa
             SourceId = id;
         }
 
-        public override void InitExtractedRange(DateTime first, DateTime last)
-        {
-            lock (_mutex)
-            {
-                DestinationExtractedRange = DestinationExtractedRange.Contract(first, last);
-                if (Initialized)
-                {
-                    SourceExtractedRange = DestinationExtractedRange;
-                }
-            }
-        }
-
         public void InitToEmpty()
         {
             lock (_mutex)
@@ -271,6 +259,12 @@ namespace Cognite.OpcUa
         public void SetComplete()
         {
             InitExtractedRange(TimeRange.Complete.First, TimeRange.Complete.Last);
+        }
+
+        public override void InitExtractedRange(DateTime first, DateTime last)
+        {
+            Console.WriteLine(Id);
+            base.InitExtractedRange(first, last);
         }
     }
 }
