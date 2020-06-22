@@ -263,7 +263,6 @@ namespace Cognite.OpcUa
 
         public override void InitExtractedRange(DateTime first, DateTime last)
         {
-            Console.WriteLine(Id);
             base.InitExtractedRange(first, last);
         }
     }
