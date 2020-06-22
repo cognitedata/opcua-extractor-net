@@ -70,121 +70,171 @@ history:
     # Leave at 0 to always read a single node each time.
     granularity: 600
 
-# List of pushers, the type must be identified using a Yaml tag. Each element results in a pusher, so it is possible
-# to push multiple times to the same system, for example in order to push to multiple projects in CDF.
-# List of accepted tags:
-# - !cdf, A pusher for CDF.
-# - !influx, Pusher for InfluxDB
-# - !mqtt, pusher for CDF through a one-way MQTT connection.
-pushers:
-    - !cdf
-        # The project to connect to in the API
-        project:
-        # Cognite api key
-        api-key:
-        # Cognite service url
-        host: "https://api.cognitedata.com"
-        # Debug mode, if true, Extractor will not push to target
-        debug: false
-        # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
-        non-finite-replacement:
-        # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
-        # otherwise back/frontfill will run for the entire history every restart.
-        # The CDF pusher is not able to read start/end points for events, so if reading historical events is enabled, one other pusher
-        # able to do this should be enabled.
-        read-extracted-ranges: true
-        # Data set to use for new objects. Existing objects will not be updated
-        data-set-id:
-        # Chunk sizes in CDF requests
-        latest-chunk: 100
-        earliest-chunk: 1000
-        time-series-chunk: 1000
-        asset-chunk: 1000
 
-    - !influx
-        # Host URI, ex localhost:8086
-        host:
-        # Influx username
-        username:
-        # Influx password
-        password:
-        # Database to connect to, will not be created automatically
-        database:
-        # Debug mode, if true, Extractor will not push to target
-        debug:
-        # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
-        non-finite-replacement:
-        # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
-        # otherwise back/frontfill will run for the entire history every restart.
-        read-extracted-ranges: true
-        # Max number of points to send in each request to influx
-        point-chunk-size: 100000
+# Configuration for the pusher to CDF.
+cognite:
+    # The project to connect to in the API
+    project:
+    # Cognite api key
+    api-key:
+    # Cognite service url
+    host: "https://api.cognitedata.com"
+    # Debug mode, if true, Extractor will not push to target
+    debug: false
+    # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
+    non-finite-replacement:
+    # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
+    # otherwise back/frontfill will run for the entire history every restart.
+    # The CDF pusher is not able to read start/end points for events, so if reading historical events is enabled, one other pusher
+    # able to do this should be enabled.
+    # The state-store can do all this, if the state-store is enabled this can still be enabled if timeseries have been deleted from CDF
+    # and need to be re-read from history.
+    read-extracted-ranges: true
+    # Data set to use for new objects. Existing objects will not be updated
+    data-set-id:
+    # Config for authentication if a bearer access token has to be used for authentication.
+    # Leave empty to disable.
+    idp-authentication:
+        # Application Id
+        client-id:
+        # Directory tenant
+        tenant:
+        # Client secret
+        secret:
+        # Resource scope
+        scope:
+        # Minimum time-to-live in seconds for the token (optional)
+        min-ttl: 30
+    # Configure automatic retries on requests to CDF. Can be left out to keep default values.
+    cdf-retries:
+        # Timeout in ms for each individual try
+        timeout: 80000
+        # Maximum number of retries, less than 0 retries forever
+        max-retries: 5
+        # Max delay in ms between each try. Base delay is calculated according to 125*2^retry ms.
+        # If less than 0, there is no maximum. (0 means that there is never any delay)
+        max-delay: 5000
+    # Configure chunking of data on requests to CDF. Note that increasing these may cause requests to fail due to limits in CDF.
+    cdf-chunking:
+        # Maximum number of timeseries per get/create timeseries request
+        time-series: 1000
+        # Maximum number of assets per get/create asset request
+        assets: 1000
+        # Maximum number of timeseries per datapoint create request
+        data-point-time-series: 10000
+        # Maximum number of datapoints per datapoint create request
+        data-points: 100000
+        # Maximum number of timeseries per datapoint read request, used when getting the first point in a timeseries
+        data-point-list: 100
+        # Maximum number of timeseries per datapoint read latest request, used when getting last point in a timeseries
+        data-point-latest: 100
+        # Maximum number of rows per request to cdf raw. Used with raw state-store.
+        raw-rows: 10000
+        # Maximum number of events per get/create events request
+        events: 1000
+    # Configure how requests to CDF should be throttled
+    cdf-throttling:
+        # Maximum number of parallel requests per timeseries operation
+        time-series: 20
+        # Maximum number of parallel requests per assets operation
+        assets: 20
+        # Maximum number of parallel requests per datapoints operation
+        data-points: 10
+        # Maximum number of parallel requests per raw operation
+        raw: 10
+        # Maximum number of parallel requests per get first/last datapoint operation
+        ranges: 20
+        # Maximum number of parallel requests per events operation
+        events: 20
+    # Configure if the SDK should do logging of requests
+    sdk-logging:
+        # True to disable logging from the SDK
+        disable: false
+        # Level of logging, one of fatal, error, warning, information|, debug, verbose.
+        level: debug
+        # Format of the log message
+        format: "CDF ({Message}): {HttpMethod} {Url} - {Elapsed} ms"
 
-    - !mqtt
-        # TCP Broker URL
-        host:
-        # TCP Broker port
-        port:
-        # MQTT broker username
-        username:
-        # MQTT broker password
-        password:
-        # True to enable TLS
-        use-tls:
-        # Mqtt client id. Should be unique for a given broker.
-        client-id: cognite-opcua-extractor
-        # Data set to use for new objects. Existing objects will not be updated
-        data-set-id:
-        # Assets topic
-        asset-topic: cognite/opcua/assets
-        # Timeseries topic
-        ts-topic: cognite/opcua/timeseries
-        # Events topic
-        event-topic: cognite/opcua/events
-        # Datapoints topic
-        datapoint-topic: cognite/opcua/datapoints
-        # Set to enable storing a list of created assets/timeseries to local litedb.
-        # Requires the StateStorage.Location property to be set.
-        # If this is left empty, metadata will have to be read each time the extractor restarts.
-        # Default is empty
-        local-state: mqtt_create_states
-        # Timestamp in ms since epoch to invalidate stored mqtt states.
-        # On extractor restart, assets/timeseries created before this will be attempted re-created in CDF.
-        # They will not be deleted or updated.
-        invalidate-before: 0
-        # If true, pusher will not push to target
-        debug: false
-        # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
-        non-finite-replacement:
+
+# Push to an influx-database. Data-variables are mapped to series with the given id.
+# Events are mapped to series with ids on the form [id].[eventId] where id is given by the source node.
+influx:
+    # Host URI, ex localhost:8086
+    host:
+    # Influx username
+    username:
+    # Influx password
+    password:
+    # Database to connect to, will not be created automatically
+    database:
+    # Debug mode, if true, Extractor will not push to target
+    debug:
+    # Replace all instances of NaN or Infinity with this floating point number. If left empty, ignore instead.
+    non-finite-replacement:
+    # Whether to read start/end-points on startup, where possible. At least one pusher should be able to do this,
+    # otherwise back/frontfill will run for the entire history every restart.
+    read-extracted-ranges: true
+    # Max number of points to send in each request to influx
+    point-chunk-size: 100000
+
+
+# Push to an MQTT broker. Requres a separate application to be running with access to CDF
+# that translates MQTT messages to requests to CDF and handles missing ids etc.
+# This setup allows the extractor to run in secure environments like zone 3.
+mqtt:
+    # TCP Broker URL
+    host:
+    # TCP Broker port
+    port:
+    # MQTT broker username
+    username:
+    # MQTT broker password
+    password:
+    # True to enable TLS
+    use-tls:
+    # Mqtt client id. Should be unique for a given broker.
+    client-id: cognite-opcua-extractor
+    # Data set to use for new objects. Existing objects will not be updated
+    data-set-id:
+    # Assets topic
+    asset-topic: cognite/opcua/assets
+    # Timeseries topic
+    ts-topic: cognite/opcua/timeseries
+    # Events topic
+    event-topic: cognite/opcua/events
+    # Datapoints topic
+    datapoint-topic: cognite/opcua/datapoints
+    # Set to enable storing a list of created assets/timeseries to local litedb.
+    # Requires the StateStorage.Location property to be set.
+    # If this is left empty, metadata will have to be read each time the extractor restarts.
+    # Default is empty
+    local-state: mqtt_create_states
+    # Timestamp in ms since epoch to invalidate stored mqtt states.
+    # On extractor restart, assets/timeseries created before this will be attempted re-created in CDF.
+    # They will not be deleted or updated.
+    invalidate-before: 0
+    # If true, pusher will not push to target
+    debug: false
+    # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
+    non-finite-replacement:
+
         
 
 # If a pusher fails to push data for some reason, the failure buffer will automatically store the data,
 # then add it back into the queue once a push succeeds.
+# If all points/events are historized, this does nothing.
 failure-buffer:
     # If false, buffering is disabled
     enabled: false
-    # Use influxdb as buffer
-    # Points will be written to influxdb on failure unless "write" is false, and read once pushing succeeds again.
-    # They will not be deleted, even once pushed to CDF.
-    # This, however, allows a remote buffer, and it allows using an existing influxdb pusher as a buffer, with write set to false.
-    influx:
-        host:
-        username:
-        password:
-        database:
-        # If true, write failed datapoints to influx, otherwise, only read.
-        # This should be false if there is a pusher targeting the influxdb database.
-        write: true
-        # Max number of points to send in each request to influx
-        point-chunk-size: 100000
-        # Store the state of which points/ranges are persisted to influxdb to local state storage. Requires the
-        # StateStorage.Location option to be set
-        state-storage: false
-    # There are two possible solutions for local storage. The queue is ACID, and is more reliable if the amount of data is low,
-    # expected breaks are short, and is more reliable. The binary buffers are much faster, but potentially less reliable.
-    # If true, store failed points in a queue in the state storage. The StateStorage.Location option must be set for this to work.
-    local-queue: false
-    # The alternative is a simple binary file containing the points. There is no safety, and a bad write can corrupt the file,
+    # Use an influxdb pusher as buffer. Requires an influxdb pusher.
+    # This is intended to be used if there is a local influxdb instance running.
+    # If points are received on non-historical points while the connection to CDF is down,
+    # they are read from influxdb once the connection is restored.
+    influx: false
+    # If state-storage is configured, this can be used to store the ranges of points buffered in influxdb, so that
+    # they can be recovered even if the extractor goes down.
+    influx-state-store: false
+    # Store points to a binary file for datapoints. There is no safety, and a bad write can corrupt the file,
     # but it is very fast.
     # Path to a local binary buffer file for datapoints.
     datapoint-path:
@@ -198,6 +248,13 @@ failure-buffer:
 state-storage:
     # Path to .db file used by the state storage
     location: "buffer.db"
+    # Which type of database to use. One of "None", "Raw", "LiteDb"
+    database: "Raw"
+    # Names of the stores to use for each type of range
+    variable-store: variable_states
+    event-store: event_states
+    influx-variable-store: influx_variable_states
+    influx-event-store: influx_event_states
     # Interval between each write to the buffer file, in seconds. 0 or less disables the state storage.
     interval: 10
 

@@ -468,6 +468,7 @@ namespace Test
 
             if (testParams.FailureInflux)
             {
+                influx = true;
                 IfDbClient = new InfluxDBClient(Config.Influx.Host, Config.Influx.Username, Config.Influx.Password);
                 Pushers.Add(Config.Influx.ToPusher(0, null));
             }

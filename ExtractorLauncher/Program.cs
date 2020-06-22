@@ -91,14 +91,14 @@ namespace Cognite.OpcUa
                 try
                 {
                     string configFile = setup.ConfigFile ?? System.IO.Path.Combine(configDir, setup.ConfigTool ? "config.config-tool.yml" : "config.yml");
-                    config = services.AddConfig<FullConfig>(
-                        System.IO.Path.Combine(configDir, setup.ConfigTool ? "config.config-tool.yml" : "config.yml"), 1);
+                    log.Information("Loading config file from {path}", configFile);
+                    config = services.AddConfig<FullConfig>(configFile, 1);
                     if (setup.ConfigTool)
                     {
                         baseConfig = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
                     }
                 }
-                catch (Cognite.Extractor.Configuration.ConfigurationException e)
+                catch (Extractor.Configuration.ConfigurationException e)
                 {
                     log.Error("Failed to load configuration: {msg}", e.Message);
                     throw;
@@ -113,7 +113,7 @@ namespace Cognite.OpcUa
             if (!string.IsNullOrEmpty(setup.LogLevel)) config.Logger.Console = new LogConfig() { Level = setup.LogLevel };
             config.Source.AutoAccept |= setup.AutoAccept;
             config.Source.ExitOnFailure |= setup.ExitOnFailure;
-
+            services.AddMetrics();
             services.AddLogger();
             LoggingUtils.Configure(config.Logger);
 
