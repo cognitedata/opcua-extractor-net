@@ -57,7 +57,7 @@ namespace Cognite.OpcUa
         bool Debug { get; set; }
         bool ReadExtractedRanges { get; set; }
         public double? NonFiniteReplacement { get; set; }
-        public IPusher ToPusher(int index, IServiceProvider provider);
+        public IPusher ToPusher(IServiceProvider provider);
     }
     public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
@@ -72,9 +72,9 @@ namespace Cognite.OpcUa
                 && value.Value < CogniteUtils.NumericValueMax ? value : null;
         }
         private double? nonFiniteReplacement;
-        public IPusher ToPusher(int index, IServiceProvider provider)
+        public IPusher ToPusher(IServiceProvider provider)
         {
-            return new CDFPusher(provider, this) { Index = index };
+            return new CDFPusher(provider, this);
         }
     }
     public class InfluxPusherConfig : IPusherConfig
@@ -92,9 +92,9 @@ namespace Cognite.OpcUa
             set => nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
         }
         private double? nonFiniteReplacement;
-        public IPusher ToPusher(int index, IServiceProvider _)
+        public IPusher ToPusher(IServiceProvider _)
         {
-            return new InfluxPusher(this) { Index = index };
+            return new InfluxPusher(this);
         }
     }
 
@@ -121,9 +121,9 @@ namespace Cognite.OpcUa
             set => nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
         }
         private double? nonFiniteReplacement;
-        public IPusher ToPusher(int index, IServiceProvider _)
+        public IPusher ToPusher(IServiceProvider _)
         {
-            return new MQTTPusher(this) { Index = index };
+            return new MQTTPusher(this);
         }
     }
 

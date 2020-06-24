@@ -600,7 +600,7 @@ namespace Cognite.OpcUa
             if (pusher == null) throw new ArgumentNullException(nameof(pusher));
             if (pusher.NoInit)
             {
-                log.Warning("Skipping pushing on pusher with index {idx}", pusher.Index);
+                log.Warning("Skipping pushing on pusher {name}", pusher.GetType());
                 pusher.Initialized = false;
                 pusher.NoInit = false;
                 return;
@@ -608,7 +608,7 @@ namespace Cognite.OpcUa
             var result = await pusher.PushNodes(objects, timeseries, token);
             if (!result)
             {
-                log.Error("Failed to push nodes on pusher with index {idx}", pusher.Index);
+                log.Error("Failed to push nodes on pusher {name}", pusher.GetType());
                 pusher.Initialized = false;
                 pusher.DataFailing = true;
                 pusher.EventsFailing = true;
@@ -630,7 +630,7 @@ namespace Cognite.OpcUa
                         token));
                 if (!results.All(res => res))
                 {
-                    log.Error("Initialization of extracted ranges failed for pusher with index {idx}", pusher.Index);
+                    log.Error("Initialization of extracted ranges failed for pusher {name}", pusher.GetType());
                     pusher.Initialized = false;
                     pusher.DataFailing = true;
                     pusher.EventsFailing = true;

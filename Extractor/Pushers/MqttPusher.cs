@@ -20,7 +20,6 @@ namespace Cognite.OpcUa.Pushers
 {
     public sealed class MQTTPusher : IPusher
     {
-        public int Index { get; set; }
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
