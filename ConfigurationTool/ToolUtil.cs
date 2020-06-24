@@ -231,7 +231,7 @@ namespace Cognite.OpcUa.Config
             }
 
             if (data.DataValues == null) return Array.Empty<BufferedDataPoint>();
-            string uniqueId = client.GetUniqueId(state.Id);
+            string uniqueId = state.Id;
 
             var result = new List<BufferedDataPoint>();
 
@@ -264,8 +264,8 @@ namespace Cognite.OpcUa.Config
         public static string ConfigResultToString(FullConfig config)
         {
             var serializer = new SerializerBuilder()
-                .WithTagMapping("!cdf", typeof(CogniteClientConfig))
-                .WithTagMapping("!influx", typeof(InfluxClientConfig))
+                .WithTagMapping("!cdf", typeof(CognitePusherConfig))
+                .WithTagMapping("!influx", typeof(InfluxPusherConfig))
                 .WithTypeInspector(insp => new DefaultFilterTypeInspector(insp))
                 .Build();
 

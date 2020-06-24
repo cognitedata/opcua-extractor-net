@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Common;
 using Opc.Ua;
 using Prometheus;
 using Serilog;
@@ -17,17 +18,16 @@ namespace Cognite.OpcUa
     {
         private readonly InfluxPusher influxPusher;
         private readonly FailureBufferConfig config;
-        private readonly Extractor extractor;
+        private readonly FullConfig fullConfig;
+        private readonly UAExtractor extractor;
 
         private readonly Dictionary<string, InfluxBufferState> nodeBufferStates;
         private readonly Dictionary<string, InfluxBufferState> eventBufferStates;
 
-        private readonly bool useLocalQueue;
-
-        public bool Any => anyPoints || fileAnyPoints || useLocalQueue && extractor.StateStorage.AnyPoints;
+        public bool Any => anyPoints || fileAnyPoints;
         private bool fileAnyPoints;
         private bool anyPoints;
-        public bool AnyEvents => anyEvents || fileAnyEvents || useLocalQueue && extractor.StateStorage.AnyEvents;
+        public bool AnyEvents => anyEvents || fileAnyEvents;
         private bool fileAnyEvents;
         private bool anyEvents;
 
@@ -44,13 +44,13 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="fullConfig"></param>
         /// <param name="extractor"></param>
-        public FailureBuffer(FullConfig fullConfig, Extractor extractor)
+        public FailureBuffer(FullConfig fullConfig, UAExtractor extractor, InfluxPusher influxPusher)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
             config = fullConfig.FailureBuffer;
+            this.fullConfig = fullConfig;
 
-            useLocalQueue = extractor.StateStorage != null && config.LocalQueue;
             this.extractor = extractor;
 
             if (!string.IsNullOrEmpty(config.DatapointPath))
@@ -73,27 +73,11 @@ namespace Cognite.OpcUa
                 fileAnyEvents |= new FileInfo(config.EventPath).Length > 0;
             }
 
-            if (config.Influx?.Database == null) return;
+            if (!config.Influx) return;
+            this.influxPusher = influxPusher;
 
             nodeBufferStates = new Dictionary<string, InfluxBufferState>();
             eventBufferStates = new Dictionary<string, InfluxBufferState>();
-
-            influxPusher = new InfluxPusher(new InfluxClientConfig
-            {
-                Database = config.Influx.Database,
-                Host = config.Influx.Host,
-                Password = config.Influx.Password,
-                PointChunkSize = config.Influx.PointChunkSize
-            })
-            {
-                Extractor = extractor
-            };
-            var connTest = influxPusher.TestConnection(fullConfig, CancellationToken.None);
-            connTest.Wait();
-            if (connTest.Result == null || !connTest.Result.Value)
-            {
-                throw new ExtractorFailureException("Failed to connect to buffer influxdb");
-            }
         }
         /// <summary>
         /// Load buffer states from state storage if influxdb buffering and state storage is enabled.
@@ -103,52 +87,43 @@ namespace Cognite.OpcUa
         public async Task InitializeBufferStates(IEnumerable<NodeExtractionState> states,
             IEnumerable<NodeId> nodeIds, CancellationToken token)
         {
-            if (!(config.Influx != null && influxPusher != null && config.Influx.StateStorage)) return;
+            if (!config.Influx || influxPusher == null || !config.InfluxStateStore) return;
             var variableStates = states
-                .Where(state => !state.Historizing)
+                .Where(state => !state.FrontfillEnabled)
                 .Select(state => new InfluxBufferState(state, false))
                 .ToList();
 
-            foreach (var state in variableStates)
-            {
-                state.DestinationExtractedRange.Start = DateTime.MinValue;
-                state.DestinationExtractedRange.End = DateTime.MaxValue;
-            }
-
-            await extractor.StateStorage.ReadExtractionStates(variableStates, StateStorage.InfluxVariableStates,
-                false, token);
+            await extractor.StateStorage.RestoreExtractionState(
+                variableStates.ToDictionary(state => state.Id),
+                fullConfig.StateStorage.InfluxVariableStore,
+                false,
+                token);
 
             foreach (var state in variableStates)
             {
-                if (!state.StatePersisted) continue;
-                nodeBufferStates[extractor.GetUniqueId(state.Id)] = state;
-                if (state.DestinationExtractedRange.Start <= state.DestinationExtractedRange.End)
+                if (state.DestinationExtractedRange == TimeRange.Empty) continue;
+                nodeBufferStates[state.Id] = state;
+                if (state.DestinationExtractedRange.First <= state.DestinationExtractedRange.Last)
                 {
                     anyPoints = true;
                 }
             }
 
-            var eventStates = nodeIds.Select(id => new InfluxBufferState(id)).ToList();
+            var eventStates = nodeIds.Select(id => new InfluxBufferState(extractor, id)).ToList();
 
-            await extractor.StateStorage.ReadExtractionStates(eventStates,
-                StateStorage.InfluxEventStates, false,
+            await extractor.StateStorage.RestoreExtractionState(
+                eventStates.ToDictionary(state => state.Id),
+                fullConfig.StateStorage.InfluxEventStore,
+                false,
                 token);
 
             foreach (var state in eventStates)
             {
-                state.DestinationExtractedRange.Start = DateTime.MinValue;
-                state.DestinationExtractedRange.End = DateTime.MaxValue;
-            }
-
-            foreach (var state in eventStates)
-            {
-                if (state.StatePersisted)
+                if (state.DestinationExtractedRange == TimeRange.Empty) continue;
+                eventBufferStates[state.Id] = state;
+                if (state.DestinationExtractedRange.First < state.DestinationExtractedRange.Last)
                 {
-                    eventBufferStates[extractor.GetUniqueId(state.Id)] = state;
-                    if (state.DestinationExtractedRange.Start < state.DestinationExtractedRange.End)
-                    {
-                        anyEvents = true;
-                    }
+                    anyEvents = true;
                 }
             }
         }
@@ -166,25 +141,16 @@ namespace Cognite.OpcUa
                 || !pointRanges.Any()) return true;
 
             points = points.GroupBy(pt => pt.Id)
-                .Where(group => !extractor.State.GetNodeState(group.Key).Historizing)
+                .Where(group => !extractor.State.GetNodeState(group.Key).FrontfillEnabled)
                 .SelectMany(group => group)
                 .ToList();
 
             bool success = true;
 
-            if (config.Influx != null && influxPusher != null)
+            if (config.Influx && influxPusher != null)
             {
                 try
                 {
-                    if (config.Influx.Write)
-                    {
-                        var result = await influxPusher.PushDataPoints(points, token);
-                        success = result.GetValueOrDefault();
-                        if (success)
-                        {
-                            log.Information("Inserted {cnt} points into influxdb failure buffer", points.Count());
-                        }
-                    }
                     if (success && !influxPusher.DataFailing)
                     {
                         foreach ((string key, var value) in pointRanges)
@@ -192,15 +158,16 @@ namespace Cognite.OpcUa
                             if (!nodeBufferStates.ContainsKey(key))
                             {
                                 var state = extractor.State.GetNodeState(key);
-                                if (state.Historizing) continue;
+                                if (state.FrontfillEnabled) continue;
                                 nodeBufferStates[key] = new InfluxBufferState(state, false);
+                                nodeBufferStates[key].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
                             }
-                            nodeBufferStates[key].UpdateDestinationRange(value);
+                            nodeBufferStates[key].UpdateDestinationRange(value.First, value.Last);
                         }
-                        if (config.Influx.StateStorage)
+                        if (config.InfluxStateStore)
                         {
                             await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
-                                StateStorage.InfluxVariableStates, token).ConfigureAwait(false);
+                                fullConfig.StateStorage.InfluxVariableStore, token).ConfigureAwait(false);
                         }
 
                         anyPoints = true;
@@ -211,11 +178,6 @@ namespace Cognite.OpcUa
                     success = false;
                     log.Error(e, "Failed to insert into influxdb buffer");
                 }
-            }
-
-            if (useLocalQueue)
-            {
-                success &= await extractor.StateStorage.WritePointsToQueue(points, token);
             }
 
             if (!string.IsNullOrEmpty(config.DatapointPath))
@@ -244,11 +206,11 @@ namespace Cognite.OpcUa
             if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
-            if (config.Influx != null && influxPusher != null)
+            if (config.Influx && influxPusher != null)
             {
                 var activeStates = nodeBufferStates.Where(kvp =>
                         !kvp.Value.Historizing
-                        && kvp.Value.DestinationExtractedRange.End >= kvp.Value.DestinationExtractedRange.Start)
+                        && kvp.Value.DestinationExtractedRange.First >= kvp.Value.DestinationExtractedRange.Last)
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
                 if (activeStates.Any())
@@ -258,10 +220,7 @@ namespace Cognite.OpcUa
                         var dps = await influxPusher.ReadDataPoints(activeStates, token);
                         log.Information("Read {cnt} points from influxdb failure buffer", dps.Count());
                         await Task.WhenAll(pushers
-                            .Where(pusher =>
-                                !(pusher.BaseConfig is InfluxClientConfig ifc)
-                                || ifc.Host != config.Influx.Host
-                                || ifc.Database != config.Influx.Database)
+                            .Where(pusher => !(pusher is InfluxPusher))
                             .Select(pusher => pusher.PushDataPoints(dps, token)));
 
                         foreach (var state in activeStates)
@@ -269,10 +228,10 @@ namespace Cognite.OpcUa
                             state.Value.ClearRanges();
                         }
 
-                        if (config.Influx.StateStorage)
+                        if (config.InfluxStateStore)
                         {
                             await extractor.StateStorage.StoreExtractionState(activeStates.Values,
-                                StateStorage.InfluxVariableStates, token).ConfigureAwait(false);
+                                fullConfig.StateStorage.InfluxVariableStore, token).ConfigureAwait(false);
                         }
 
                         anyPoints = false;
@@ -283,11 +242,6 @@ namespace Cognite.OpcUa
                         Log.Error(e, "Failed to read points from influxdb");
                     }
                 }
-            }
-
-            if (useLocalQueue && extractor.StateStorage.AnyPoints)
-            {
-                success &= await extractor.StateStorage.ReadPointsFromQueue(pushers, token);
             }
 
             if (!string.IsNullOrEmpty(config.DatapointPath))
@@ -310,27 +264,17 @@ namespace Cognite.OpcUa
             if (events == null || !events.Any() || pushers == null || !pushers.Any()) return true;
 
             events = events.GroupBy(evt => evt.EmittingNode)
-                .Where(group => !extractor.State.GetEmitterState(group.Key).Historizing)
+                .Where(group => !extractor.State.GetEmitterState(group.Key).FrontfillEnabled)
                 .SelectMany(group => group)
                 .ToList();
 
             bool success = true;
 
-            if (config.Influx != null && influxPusher != null)
+            if (config.Influx)
             {
                 try
                 {
-                    if (config.Influx.Write)
-                    {
-                        var result = await influxPusher.PushEvents(events, token);
-                        success = result.GetValueOrDefault();
-                        if (success)
-                        {
-                            log.Information("Inserted {cnt} events into influxdb failure buffer", events.Count());
-                        }
-                    }
-
-                    if (success && !influxPusher.EventsFailing)
+                    if (!influxPusher.EventsFailing)
                     {
                         var eventRanges = new Dictionary<string, TimeRange>();
                         foreach (var evt in events)
@@ -343,29 +287,23 @@ namespace Cognite.OpcUa
                             }
 
                             var range = eventRanges[sourceId];
-                            if (evt.Time > range.End)
-                            {
-                                range.End = evt.Time;
-                            }
-                            else if (evt.Time < range.Start)
-                            {
-                                range.Start = evt.Time;
-                            }
+                            eventRanges[sourceId] = eventRanges[sourceId].Extend(evt.Time, evt.Time);
                         }
 
                         foreach ((string sourceId, var range) in eventRanges)
                         {
                             if (!eventBufferStates.ContainsKey(sourceId))
                             {
-                                eventBufferStates[sourceId] = new InfluxBufferState(extractor.State.GetNodeId(sourceId));
+                                eventBufferStates[sourceId] = new InfluxBufferState(extractor, extractor.State.GetNodeId(sourceId));
+                                eventBufferStates[sourceId].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
                             }
-                            eventBufferStates[sourceId].UpdateDestinationRange(range);
+                            eventBufferStates[sourceId].UpdateDestinationRange(range.First, range.Last);
                         }
 
-                        if (config.Influx.StateStorage)
+                        if (config.InfluxStateStore)
                         {
                             await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
-                                StateStorage.InfluxEventStates, token).ConfigureAwait(false);
+                                fullConfig.StateStorage.InfluxEventStore, token).ConfigureAwait(false);
                         }
 
                         anyEvents = true;
@@ -376,11 +314,6 @@ namespace Cognite.OpcUa
                     success = false;
                     log.Error(e, "Failed to insert events into influxdb buffer");
                 }
-            }
-
-            if (useLocalQueue)
-            {
-                success &= await extractor.StateStorage.WriteEventsToQueue(events, token);
             }
 
             if (!string.IsNullOrEmpty(config.EventPath))
@@ -409,11 +342,11 @@ namespace Cognite.OpcUa
             if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
-            if (config.Influx != null && influxPusher != null)
+            if (config.Influx && influxPusher != null)
             {
                 var activeStates = eventBufferStates.Where(kvp =>
                         !kvp.Value.Historizing
-                        && kvp.Value.DestinationExtractedRange.End >= kvp.Value.DestinationExtractedRange.Start)
+                        && kvp.Value.DestinationExtractedRange.First <= kvp.Value.DestinationExtractedRange.Last)
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
                 if (activeStates.Any())
                 {
@@ -423,10 +356,7 @@ namespace Cognite.OpcUa
 
                         log.Information("Read {cnt} events from influxdb failure buffer", events.Count());
                         await Task.WhenAll(pushers
-                            .Where(pusher =>
-                                !(pusher.BaseConfig is InfluxClientConfig ifc)
-                                || ifc.Host != config.Influx.Host
-                                || ifc.Database != config.Influx.Database)
+                            .Where(pusher => !(pusher is InfluxPusher))
                             .Select(pusher => pusher.PushEvents(events, token)));
 
                         foreach (var state in activeStates)
@@ -434,10 +364,10 @@ namespace Cognite.OpcUa
                             state.Value.ClearRanges();
                         }
 
-                        if (config.Influx.StateStorage)
+                        if (config.InfluxStateStore)
                         {
                             await extractor.StateStorage.StoreExtractionState(activeStates.Values,
-                                StateStorage.InfluxEventStates, token).ConfigureAwait(false);
+                                fullConfig.StateStorage.InfluxEventStore, token).ConfigureAwait(false);
                         }
                         anyEvents = false;
                     }
@@ -447,11 +377,6 @@ namespace Cognite.OpcUa
                         Log.Error(e, "Failed to read events from influxdb");
                     }
                 }
-            }
-
-            if (useLocalQueue && extractor.StateStorage.AnyEvents)
-            {
-                success &= await extractor.StateStorage.ReadEventsFromQueue(pushers, token);
             }
 
             if (!string.IsNullOrEmpty(config.EventPath))
@@ -502,21 +427,13 @@ namespace Cognite.OpcUa
                         continue;
                     }
 
-                    var range = ranges[point.Id];
-                    if (range.Start > point.Timestamp)
-                    {
-                        range.Start = point.Timestamp;
-                    }
-                    else if (range.End < point.Timestamp)
-                    {
-                        range.End = point.Timestamp;
-                    }
+                    ranges[point.Id] = ranges[point.Id].Extend(point.Timestamp, point.Timestamp);
                 }
 
                 foreach (var kvp in ranges)
                 {
                     var state = extractor.State.GetNodeState(kvp.Key);
-                    state.UpdateDestinationRange(kvp.Value);
+                    state.UpdateDestinationRange(kvp.Value.First, kvp.Value.Last);
                 }
 
             } while (nextPos > 0);
@@ -571,21 +488,13 @@ namespace Cognite.OpcUa
                         continue;
                     }
 
-                    var range = ranges[evt.EmittingNode];
-                    if (range.Start > evt.Time)
-                    {
-                        range.Start = evt.Time;
-                    }
-                    else if (range.End < evt.Time)
-                    {
-                        range.End = evt.Time;
-                    }
+                    ranges[evt.EmittingNode] = ranges[evt.EmittingNode].Extend(evt.Time, evt.Time);
                 }
 
                 foreach (var kvp in ranges)
                 {
                     var state = extractor.State.GetEmitterState(kvp.Key);
-                    state.UpdateDestinationRange(kvp.Value);
+                    state.UpdateDestinationRange(kvp.Value.First, kvp.Value.Last);
                 }
 
             } while (nextPos > 0);
@@ -632,7 +541,7 @@ namespace Cognite.OpcUa
         /// <param name="file">File to write to</param>
         /// <param name="evts">Events to write</param>
         /// <param name="extractor">Extractor, used to map NodeIds</param>
-        public static void WriteEventsToFile(string file, IEnumerable<BufferedEvent> evts, Extractor extractor, CancellationToken token)
+        public static void WriteEventsToFile(string file, IEnumerable<BufferedEvent> evts, UAExtractor extractor, CancellationToken token)
         {
             if (evts == null) throw new ArgumentNullException(nameof(evts));
             if (file == null) throw new ArgumentNullException(nameof(file));
@@ -725,7 +634,7 @@ namespace Cognite.OpcUa
         /// <param name="limit">Maximum number of events to read</param>
         /// <returns>List of events and new position in file</returns>
         public static (IEnumerable<BufferedEvent> events, long pos) ReadEventsFromFile(string file,
-            Extractor extractor, long startPos, int limit, CancellationToken token)
+            UAExtractor extractor, long startPos, int limit, CancellationToken token)
         {
             if (file == null) throw new ArgumentNullException(nameof(file));
             var evts = new List<BufferedEvent>();

@@ -30,12 +30,12 @@ namespace Cognite.OpcUa
         bool EventsFailing { get; set; }
         bool Initialized { get; set; }
         bool NoInit { get; set; }
-        PusherConfig BaseConfig { get; }
+        IPusherConfig BaseConfig { get; }
 
         /// <summary>
         /// Parent extractor
         /// </summary>
-        Extractor Extractor { get; set; }
+        UAExtractor Extractor { get; set; }
 
         /// <summary>
         /// Push nodes, emptying the queue
@@ -51,7 +51,11 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Get earliest and latest timestamps in destination system, if possible
         /// </summary>
-        Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
+        Task<bool> InitExtractedRanges(
+            IEnumerable<NodeExtractionState> states,
+            bool backfillEnabled,
+            bool initMissing,
+            CancellationToken token)
         {
             return Task.FromResult(true);
         }
@@ -61,7 +65,11 @@ namespace Cognite.OpcUa
         /// <param name="states">States to initialize for</param>
         /// <param name="backfillEnabled">True if backfill is enabled</param>
         /// <returns>true on success</returns>
-        Task<bool> InitExtractedEventRanges(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, bool backfillEnabled,
+        Task<bool> InitExtractedEventRanges(
+            IEnumerable<EventExtractionState> states,
+            IEnumerable<NodeId> nodes,
+            bool backfillEnabled,
+            bool initMissing,
             CancellationToken token)
         {
             return Task.FromResult(true);

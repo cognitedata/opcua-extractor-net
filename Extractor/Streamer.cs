@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Common;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Serilog;
@@ -13,7 +14,7 @@ namespace Cognite.OpcUa
 {
     public class Streamer
     {
-        private readonly Extractor extractor;
+        private readonly UAExtractor extractor;
         private readonly FullConfig config;
 
         public ConcurrentQueue<BufferedDataPoint> DataPointQueue { get; }
@@ -28,7 +29,7 @@ namespace Cognite.OpcUa
         public bool AllowEvents { get; set; }
         public bool AllowData { get; set; }
 
-        public Streamer(Extractor extractor, FullConfig config)
+        public Streamer(UAExtractor extractor, FullConfig config)
         {
             this.extractor = extractor;
             this.config = config;
@@ -57,16 +58,7 @@ namespace Cognite.OpcUa
                     pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
                     continue;
                 }
-
-                var range = pointRanges[dp.Id];
-                if (dp.Timestamp < range.Start)
-                {
-                    range.Start = dp.Timestamp;
-                }
-                else if (dp.Timestamp > range.End)
-                {
-                    range.End = dp.Timestamp;
-                }
+                pointRanges[dp.Id] = pointRanges[dp.Id].Extend(dp.Timestamp, dp.Timestamp);
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
@@ -89,7 +81,7 @@ namespace Cognite.OpcUa
                         failed.Select(pair => pair.Index.ToString(CultureInfo.InvariantCulture)).Aggregate((src, val) => src + ", " + val));
                     foreach (var state in extractor.State.NodeStates)
                     {
-                        state.ResetStreamingState();
+                        state.RestartHistory();
                     }
                 }
                 if (config.FailureBuffer.Enabled)
@@ -104,7 +96,7 @@ namespace Cognite.OpcUa
             {
                 log.Information("{cnt} failing pushers were able to push data, reconnecting", reconnectedPushers.Count);
                 // Try to push any non-historizing points
-                var nonHistorizing = pointRanges.Keys.Where(key => !extractor.State.GetNodeState(key).Historizing).ToHashSet();
+                var nonHistorizing = pointRanges.Keys.Where(key => !extractor.State.GetNodeState(key).FrontfillEnabled).ToHashSet();
                 var pointsToPush = dataPointList.Where(point => nonHistorizing.Contains(point.Id)).ToList();
                 var pushResults = await Task.WhenAll(reconnectedPushers.Select(pusher => pusher.PushDataPoints(pointsToPush, token)));
 
@@ -117,7 +109,7 @@ namespace Cognite.OpcUa
                 {
                     bool success = await extractor.TerminateHistory(30, token);
                     if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
-                    foreach (var state in extractor.State.NodeStates.Where(state => state.Historizing))
+                    foreach (var state in extractor.State.NodeStates.Where(state => state.FrontfillEnabled))
                     {
                         state.RestartHistory();
                     }
@@ -137,7 +129,7 @@ namespace Cognite.OpcUa
             foreach ((string id, var range) in pointRanges)
             {
                 var state = extractor.State.GetNodeState(id);
-                state.UpdateDestinationRange(range);
+                state.UpdateDestinationRange(range.First, range.Last);
             }
             return restartHistory;
         }
@@ -165,15 +157,7 @@ namespace Cognite.OpcUa
                     continue;
                 }
 
-                var range = eventRanges[evt.EmittingNode];
-                if (evt.Time < range.Start)
-                {
-                    range.Start = evt.Time;
-                }
-                else if (evt.Time > range.End)
-                {
-                    range.End = evt.Time;
-                }
+                eventRanges[evt.EmittingNode] = eventRanges[evt.EmittingNode].Extend(evt.Time, evt.Time);
             }
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));
 
@@ -195,7 +179,7 @@ namespace Cognite.OpcUa
                         failed.Select(pair => pair.Index.ToString(CultureInfo.InvariantCulture)).Aggregate((src, val) => src + ", " + val));
                     foreach (var state in extractor.State.EmitterStates)
                     {
-                        state.ResetStreamingState();
+                        state.RestartHistory();
                     }
                 }
 
@@ -209,8 +193,9 @@ namespace Cognite.OpcUa
             var reconnectedPushers = passingPushers.Where(pusher => pusher.EventsFailing).ToList();
             if (reconnectedPushers.Any())
             {
+                log.Information("{cnt} failing pushers were able to push events, reconnecting", reconnectedPushers.Count);
                 // Try to push any non-historizing points
-                var nonHistorizing = eventRanges.Keys.Where(key => !extractor.State.GetEmitterState(key).Historizing).ToHashSet();
+                var nonHistorizing = eventRanges.Keys.Where(key => !extractor.State.GetEmitterState(key).IsFrontfilling).ToHashSet();
                 var eventsToPush = eventList.Where(point => nonHistorizing.Contains(point.EmittingNode)).ToList();
                 var pushResults = await Task.WhenAll(reconnectedPushers.Select(pusher => pusher.PushEvents(eventsToPush, token)));
 
@@ -223,7 +208,7 @@ namespace Cognite.OpcUa
                 {
                     bool success = await extractor.TerminateHistory(30, token);
                     if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
-                    foreach (var state in extractor.State.EmitterStates.Where(state => state.Historizing))
+                    foreach (var state in extractor.State.EmitterStates.Where(state => state.IsFrontfilling))
                     {
                         state.RestartHistory();
                     }
@@ -242,7 +227,7 @@ namespace Cognite.OpcUa
             foreach (var (id, range) in eventRanges)
             {
                 var state = extractor.State.GetEmitterState(id);
-                state.UpdateDestinationRange(range);
+                state.UpdateDestinationRange(range.First, range.Last);
             }
 
 
@@ -262,13 +247,13 @@ namespace Cognite.OpcUa
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    Extractor.BadDataPoints.Inc();
+                    UAExtractor.BadDataPoints.Inc();
                     log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                     continue;
                 }
                 var buffDps = ToDataPoint(datapoint, node, uniqueId);
                 node.UpdateFromStream(buffDps);
-                if (!node.IsStreaming) return;
+                if (node.IsFrontfilling && (extractor.StateStorage == null || config.StateStorage.Interval <= 0)) return;
                 foreach (var buffDp in buffDps)
                 {
                     log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
@@ -296,7 +281,7 @@ namespace Cognite.OpcUa
                 var ret = new List<BufferedDataPoint>();
                 if (!(value.Value is Array))
                 {
-                    Extractor.BadDataPoints.Inc();
+                    UAExtractor.BadDataPoints.Inc();
                     log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
                     return Enumerable.Empty<BufferedDataPoint>();
                 }
@@ -350,8 +335,9 @@ namespace Cognite.OpcUa
             eventState.UpdateFromStream(buffEvent);
 
             // Either backfill/frontfill is done, or we are not outside of each respective bound
-            if (!((eventState.IsStreaming || buffEvent.Time < eventState.SourceExtractedRange.End)
-                  && (eventState.BackfillDone || buffEvent.Time > eventState.SourceExtractedRange.Start))) return;
+            if ((extractor.StateStorage == null || config.StateStorage.Interval <= 0)
+                && (eventState.IsFrontfilling && buffEvent.Time > eventState.SourceExtractedRange.Last
+                    || eventState.IsBackfilling && buffEvent.Time < eventState.SourceExtractedRange.First)) return;
 
             log.Verbose(buffEvent.ToDebugDescription());
             EventQueue.Enqueue(buffEvent);

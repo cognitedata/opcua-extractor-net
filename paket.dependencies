@@ -4,17 +4,14 @@ storage: none
 nuget Cognite.Extractor.Configuration
 nuget Cognite.Extractor.Logging
 nuget Cognite.Extractor.Metrics
+nuget Cognite.ExtractorUtils
 nuget Microsoft.CSharp
 nuget coverlet.msbuild
 nuget Microsoft.NET.Test.Sdk
 nuget xunit
 nuget xunit.runner.visualstudio
-nuget Microsoft.Extensions.Http.Polly
 nuget OPCFoundation.NetStandard.Opc.Ua
-nuget CogniteSdk
 nuget AdysTech.InfluxDB.Client.Net.Core
 nuget Microsoft.CodeAnalysis.FxCopAnalyzers
 nuget Microsoft.Windows.Compatibility
-nuget LiteDB 4.1.4
-nuget LiteQueue
 nuget MQTTnet

@@ -23,7 +23,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                PusherConfig = ConfigName.Mqtt,
+                Pusher = "mqtt",
                 ServerName = ServerName.Array,
                 StoreDatapoints = true
             });
@@ -39,7 +39,7 @@ namespace Test
 
             await tester.Extractor.Looper.WaitForNextPush();
 
-            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
             tester.Server.UpdateNode(tester.Server.Ids.Custom.StringArray, new[] { "test 1", "test 1" });
 
             var waitTask = tester.Bridge.WaitForNextMessage();
@@ -64,7 +64,7 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Events,
-                PusherConfig = ConfigName.Mqtt,
+                Pusher = "mqtt",
                 ServerName = ServerName.Events,
                 StoreDatapoints = true
             });
@@ -76,7 +76,7 @@ namespace Test
             tester.StartExtractor();
 
             await tester.Extractor.Looper.WaitForNextPush();
-            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => state.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling), 20);
 
             var waitTask = tester.Bridge.WaitForNextMessage();
             tester.Server.TriggerEvents(100);
@@ -100,7 +100,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                PusherConfig = ConfigName.Mqtt,
+                Pusher = "mqtt",
                 ServerName = ServerName.Array,
                 StoreDatapoints = true,
                 MqttState = true

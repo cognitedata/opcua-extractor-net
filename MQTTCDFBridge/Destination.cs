@@ -6,40 +6,35 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using CogniteSdk;
-using Microsoft.Extensions.DependencyInjection;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Com.Cognite.V1.Timeseries.Proto;
 using MQTTnet;
 using Serilog;
+using Cognite.Extractor.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Cognite.Bridge
 {
     public class Destination
     {
-        private readonly IHttpClientFactory factory;
-        private readonly CDFConfig config;
+        private readonly IServiceProvider provider;
+        private readonly CogniteConfig config;
 
         private readonly ConcurrentDictionary<string, long?> assetIds = new ConcurrentDictionary<string, long?>();
-        private readonly ConcurrentDictionary<string, bool?> tsIsString = new ConcurrentDictionary<string, bool?>();
+        private readonly ConcurrentDictionary<string, bool> tsIsString = new ConcurrentDictionary<string, bool>();
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(Destination));
-        public Destination(CDFConfig config, IServiceProvider provider)
+        public Destination(CogniteConfig config, IServiceProvider provider)
         {
             this.config = config;
-            factory = provider.GetRequiredService<IHttpClientFactory>();
+            this.provider = provider;
         }
 
-        private Client GetClient(string name = "Context")
+        private CogniteDestination GetDestination()
         {
-            return new Client.Builder()
-                .SetHttpClient(factory.CreateClient(name))
-                .AddHeader("api-key", config.ApiKey)
-                .SetAppId("MQTT Bridge")
-                .SetProject(config.Project)
-                .SetBaseUrl(new Uri(config.Host, UriKind.Absolute))
-                .Build();
+            return provider.GetRequiredService<CogniteDestination>();
         }
         /// <summary>
         /// Retrieve assets from CDF, push any that do not exist.
@@ -56,219 +51,72 @@ namespace Cognite.Bridge
             }
             var assets = JsonSerializer.Deserialize<IEnumerable<AssetCreate>>(Encoding.UTF8.GetString(msg.Payload));
             if (!assets.Any()) return true;
-            var client = GetClient();
+            var destination = GetDestination();
 
-            var idsToTest = assets.Select(asset => asset.ExternalId).Select(Identity.Create).ToList();
-
-            var missingAssets = new HashSet<string>();
+            var idsToTest = assets.Select(asset => asset.ExternalId).ToList();
 
             try
             {
-                var retrievedAssets = await client.Assets.RetrieveAsync(idsToTest, token);
-
-                foreach (var asset in retrievedAssets)
+                var created = await destination.GetOrCreateAssetsAsync(idsToTest, ids =>
+                {
+                    var idsSet = new HashSet<string>(ids);
+                    return assets.Where(asset => idsSet.Contains(asset.ExternalId));
+                }, token);
+                foreach (var asset in created)
                 {
                     assetIds[asset.ExternalId] = asset.Id;
                 }
-                log.Information("Sucessfully retrieved: {cnt} assets", retrievedAssets.Count());
             }
             catch (ResponseException ex)
             {
-                if (ex.Code == 400 && ex.Missing != null && ex.Missing.Any())
-                {
-                    foreach (var missing in ex.Missing)
-                    {
-                        if (missing.TryGetValue("externalId", out MultiValue raw))
-                        {
-                            if (!(raw is MultiValue.String value)) continue;
-                            missingAssets.Add(value.Value);
-                        }
-                    }
-
-                    log.Information("Found {NumMissingAssets} missing assets", ex.Missing.Count());
-                }
-                else
-                {
-                    log.Warning("Failed to retrieve assets from CDF: {msg}", ex.Message);
-                    return ex.Code < 500;
-                }
-            }
-
-            if (!missingAssets.Any()) return true;
-
-            var toCreate = assets.Where(asset => missingAssets.Contains(asset.ExternalId)).ToList();
-
-            try
-            {
-                var createdAssets = await client.Assets.CreateAsync(toCreate);
-                foreach (var asset in createdAssets)
-                {
-                    assetIds[asset.ExternalId] = asset.Id;
-                }
-                log.Information("Created {cnt} assets", createdAssets.Count());
-            }
-            catch (ResponseException ex)
-            {
-                log.Warning("Failed to create assets in CDF: {msg}", ex.Message);
-                return ex.Code < 500;
-            }
-
-            var lastIds = assets
-                .Where(asset => !missingAssets.Contains(asset.ExternalId))
-                .Select(asset => Identity.Create(asset.ExternalId))
-                .ToList();
-
-            if (!lastIds.Any()) return true;
-
-            try
-            {
-                var retrievedAssets = await client.Assets.RetrieveAsync(lastIds);
-                foreach (var asset in retrievedAssets)
-                {
-                    assetIds[asset.ExternalId] = asset.Id;
-                }
-                log.Information("Retrieved {cnt} missing asset ids", retrievedAssets.Count());
-            }
-            catch (ResponseException ex)
-            {
-                log.Warning("Failed to create assets in CDF: {msg}", ex.Message);
-                return ex.Code < 500;
+                log.Error(ex, "Failed to ensure assets: {msg}", ex.Message);
+                return ex.Code == 400 || ex.Code == 409;
             }
 
             return true;
         }
-        /// <summary>
-        /// Retrieve given list of assets, registering them in the state.
-        /// If any are missing, remove them and try again.
-        /// </summary>
-        /// <param name="ids">Ids to fetch</param>
-        /// <returns>True on success</returns>
-        private async Task<bool> RetrieveMissingAssetIds(IEnumerable<string> ids, CancellationToken token)
+        private async Task<bool> RetrieveMissingAssets(IEnumerable<string> ids, CancellationToken token)
         {
             if (!ids.Any()) return true;
-            var secondMissingIds = new List<string>();
-            var client = GetClient();
+            var destination = GetDestination();
+
             try
             {
-                var retrievedAssets =
-                    await client.Assets.RetrieveAsync(ids.Select(Identity.Create), token);
-
-                foreach (var asset in retrievedAssets)
+                var assets = await destination.CogniteClient.Assets.RetrieveAsync(ids.Distinct().Select(Identity.Create), true, token);
+                foreach (var asset in assets)
                 {
                     assetIds[asset.ExternalId] = asset.Id;
                 }
-                log.Information("Retrieved {cnt} missing asset ids", retrievedAssets.Count());
             }
             catch (ResponseException ex)
             {
-                if (ex.Code == 400 && ex.Missing != null && ex.Missing.Any())
-                {
-                    foreach (var missing in ex.Missing)
-                    {
-                        if (missing.TryGetValue("externalId", out MultiValue raw))
-                        {
-                            if (!(raw is MultiValue.String value)) continue;
-                            assetIds[value.Value] = null;
-                            secondMissingIds.Add(value.Value);
-                        }
-                    }
-
-                    log.Information("Found {NumMissingAssets} missing assets", ex.Missing.Count());
-                }
-                else
-                {
-                    log.Warning("Failed to retrieve missing assets: {msg}", ex.Message);
-                    return ex.Code < 500;
-                }
+                log.Error(ex, "Failed to retrieve missing assets: {msg}", ex.Message);
+                return ex.Code == 400 || ex.Code == 409;
             }
-
-            if (secondMissingIds.Any())
-            {
-                var lastMissing = ids.Except(secondMissingIds);
-                try
-                {
-                    var retrievedAssets = await client.Assets.RetrieveAsync(lastMissing.Select(Identity.Create));
-                    foreach (var asset in retrievedAssets)
-                    {
-                        assetIds[asset.ExternalId] = asset.Id;
-                    }
-                    log.Information("Retrieved {cnt} missing asset ids", retrievedAssets.Count());
-                }
-                catch (ResponseException ex)
-                {
-                    log.Warning("Failed to retrieve missing assets: {msg}", ex.Message);
-                    return ex.Code < 500;
-                }
-            }
-
             return true;
         }
-        /// <summary>
-        /// Retrieve given list of timeseries, registering them with their type in the state.
-        /// If any are missing, remove them and try again.
-        /// </summary>
-        /// <param name="ids">Ids to fetch</param>
-        /// <returns>True on success</returns>
-        private async Task<bool> RetrieveMissingTimeseries(IEnumerable<string> ids, CancellationToken token)
+
+        private async Task<bool> RetrieveMissingTimeSeries(IEnumerable<string> ids, CancellationToken token)
         {
             if (!ids.Any()) return true;
-            var secondMissingIds = new List<string>();
-            var client = GetClient();
+            var destination = GetDestination();
+
             try
             {
-                var retrievedTimeseries =
-                    await client.TimeSeries.RetrieveAsync(ids.Select(Identity.Create), token);
-
-                foreach (var ts in retrievedTimeseries)
+                var tss = await destination.CogniteClient.TimeSeries.RetrieveAsync(ids.Distinct().Select(Identity.Create), true, token);
+                foreach (var ts in tss)
                 {
                     tsIsString[ts.ExternalId] = ts.IsString;
                 }
-                log.Information("Retrieved {cnt} missing timeseries", retrievedTimeseries.Count());
             }
             catch (ResponseException ex)
             {
-                if (ex.Code == 400 && ex.Missing != null && ex.Missing.Any())
-                {
-                    foreach (var missing in ex.Missing)
-                    {
-                        if (missing.TryGetValue("externalId", out MultiValue raw))
-                        {
-                            if (!(raw is MultiValue.String value)) continue;
-                            secondMissingIds.Add(value.Value);
-                            tsIsString[value.Value] = null;
-                        }
-                    }
-
-                    log.Information("Found {NumMissingAssets} missing timeseries", ex.Missing.Count());
-                }
-                else
-                {
-                    log.Warning("Failed to retrieve missing timeseries: {msg}", ex.Message);
-                    return ex.Code < 500;
-                }
+                log.Error(ex, "Failed to retrieve missing timeseries: {msg}", ex.Message);
+                return ex.Code == 400 || ex.Code == 409;
             }
-
-            if (secondMissingIds.Any())
-            {
-                var lastMissing = ids.Except(secondMissingIds);
-                try
-                {
-                    var retrievedTimeseries = await client.TimeSeries.RetrieveAsync(lastMissing.Select(Identity.Create));
-                    foreach (var ts in retrievedTimeseries)
-                    {
-                        tsIsString[ts.ExternalId] = ts.IsString;
-                    }
-                    log.Information("Retrieved {cnt} missing timeseries", retrievedTimeseries.Count());
-                }
-                catch (ResponseException ex)
-                {
-                    log.Warning("Failed to retrieve missing timeseries: {msg}", ex.Message);
-                    return ex.Code < 500;
-                }
-            }
-
             return true;
         }
+
         /// <summary>
         /// Retrieve list of timeseries from mqtt message, pushing any that are not found and registering
         /// all in the state, whether they existed before or not.
@@ -289,14 +137,11 @@ namespace Cognite.Bridge
 
             var missingAssetIds = assetExternalIds.Except(assetIds.Keys);
 
-            var client = GetClient();
+            var destination = GetDestination();
 
             if (missingAssetIds.Any())
             {
-                if (!await RetrieveMissingAssetIds(missingAssetIds, token))
-                {
-                    return false;
-                }
+                if (!await RetrieveMissingAssets(missingAssetIds, token)) return false;
             }
 
             var testSeries = new List<TimeSeriesCreate>();
@@ -318,80 +163,22 @@ namespace Cognite.Bridge
                 }
             }
 
-            var ids = testSeries.Select(ts => Identity.Create(ts.ExternalId));
-
-            var missingIds = new HashSet<string>();
-
             try
             {
-                var retrievedTimeseries = await client.TimeSeries.RetrieveAsync(ids, token);
-                foreach (var ts in retrievedTimeseries)
+                var created = await destination.GetOrCreateTimeSeriesAsync(testSeries.Select(ts => ts.ExternalId), ids =>
+                {
+                    var idsSet = new HashSet<string>(ids);
+                    return testSeries.Where(ts => idsSet.Contains(ts.ExternalId));
+                }, token);
+                foreach (var ts in created)
                 {
                     tsIsString[ts.ExternalId] = ts.IsString;
                 }
-                log.Information("Retrieved {cnt} missing timeseries", retrievedTimeseries.Count());
             }
             catch (ResponseException ex)
             {
-                if (ex.Code == 400 && ex.Missing != null && ex.Missing.Any())
-                {
-                    foreach (var missing in ex.Missing)
-                    {
-                        if (missing.TryGetValue("externalId", out MultiValue raw))
-                        {
-                            if (!(raw is MultiValue.String value)) continue;
-                            missingIds.Add(value.Value);
-                        }
-                    }
-
-                    log.Information("Found {NumMissingTimeseries} missing timeseries", ex.Missing.Count());
-                }
-                else
-                {
-                    log.Warning("Failed to retrieve missing timeseries: {msg}", ex.Message);
-                    return ex.Code < 500;
-                }
-            }
-
-            if (!missingIds.Any()) return true;
-
-            var toCreate = testSeries.Where(ts => missingIds.Contains(ts.ExternalId));
-
-            try
-            {
-                var retrievedTimeseries = await client.TimeSeries.CreateAsync(toCreate, token);
-                foreach (var ts in retrievedTimeseries)
-                {
-                    tsIsString[ts.ExternalId] = ts.IsString;
-                }
-                log.Information("Created {cnt} missing timeseries", retrievedTimeseries.Count());
-            }
-            catch (ResponseException ex)
-            {
-                log.Warning("Failed to create missing timeseries: {msg}", ex.Message);
-                return ex.Code < 500;
-            }
-
-            var lastIds = testSeries
-                .Where(ts => !missingIds.Contains(ts.ExternalId))
-                .Select(ts => Identity.Create(ts.ExternalId))
-                .ToList();
-
-            if (!lastIds.Any()) return true;
-
-            try
-            {
-                var retrievedTimeseries = await client.TimeSeries.RetrieveAsync(lastIds, token);
-                foreach (var ts in retrievedTimeseries)
-                {
-                    tsIsString[ts.ExternalId] = ts.IsString;
-                }
-                log.Information("Retrieved {cnt} final timeseries", retrievedTimeseries.Count());
-            }
-            catch (ResponseException ex)
-            {
-                log.Warning("Failed to retrieve final missing timeseries: {msg}", ex.Message);
-                return ex.Code < 500;
+                log.Error(ex, "Failed to create missing time series: {msg}", ex.Message);
+                return ex.Code == 400 || ex.Code == 409;
             }
 
             return true;
@@ -419,65 +206,30 @@ namespace Cognite.Bridge
 
             if (missingTsIds.Any())
             {
-                if (!await RetrieveMissingTimeseries(missingTsIds, token))
-                {
-                    return false;
-                }
+                if (!await RetrieveMissingTimeSeries(missingTsIds, token)) return false;
             }
+
+            var destination = GetDestination();
 
             var req = new DataPointInsertionRequest();
             req.Items.AddRange(datapoints.Items.Where(
-                pts => tsIsString[pts.ExternalId] != null
-                && !(pts.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.NumericDatapoints && tsIsString[pts.ExternalId].Value)
-                && !(pts.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.StringDatapoints && !tsIsString[pts.ExternalId].Value)));
+                pts => tsIsString.ContainsKey(pts.ExternalId)
+                && !(pts.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.NumericDatapoints && tsIsString[pts.ExternalId])
+                && !(pts.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.StringDatapoints && !tsIsString[pts.ExternalId])));
 
             log.Verbose("Push datapoints for {cnt} out of {cnt2} timeseries", req.Items.Count, datapoints.Items.Count);
-
-            var client = GetClient("Data");
 
             var missingIds = new HashSet<string>();
 
             try
             {
-                await client.DataPoints.CreateAsync(req, token);
+                await destination.CogniteClient.DataPoints.CreateAsync(req, token);
                 log.Debug("Push datapoints for {cnt} timeseries to CDF", req.Items.Count);
             }
             catch (ResponseException ex)
             {
-                if (ex.Code == 400 && ex.Missing != null && ex.Missing.Any())
-                {
-                    foreach (var missing in ex.Missing)
-                    {
-                        if (missing.TryGetValue("externalId", out MultiValue raw))
-                        {
-                            if (!(raw is MultiValue.String value)) continue;
-                            missingIds.Add(value.Value);
-                        }
-                    }
-
-                    log.Information("Found {NumMissingTimeseries} missing timeseries", ex.Missing.Count());
-                }
-                else
-                {
-                    log.Warning("Failed to push datapoints to CDF: {msg}", ex.Message);
-                    return false;
-                }
-            }
-
-            if (!missingIds.Any()) return true;
-
-            var finalReq = new DataPointInsertionRequest();
-            finalReq.Items.AddRange(req.Items.Where(pts => !missingIds.Contains(pts.ExternalId)));
-
-            try
-            {
-                await client.DataPoints.CreateAsync(finalReq, token);
-                log.Debug("Push datapoints for {cnt} timeseries to CDF", finalReq.Items.Count);
-            }
-            catch (ResponseException ex)
-            {
                 log.Warning("Failed to push datapoints to CDF: {msg}", ex.Message);
-                return false;
+                return ex.Code == 400 || ex.Code == 409;
             }
 
             return true;
@@ -500,11 +252,11 @@ namespace Cognite.Bridge
             var assetExternalIds = events.SelectMany(evt => evt.AssetExternalIds).Where(id => id != null);
             var missingAssetIds = assetExternalIds.Except(assetIds.Keys);
 
-            var client = GetClient();
+            var destination = GetDestination();
 
             if (missingAssetIds.Any())
             {
-                if (!await RetrieveMissingAssetIds(missingAssetIds, token))
+                if (!await RetrieveMissingAssets(missingAssetIds, token))
                 {
                     return false;
                 }
@@ -532,35 +284,11 @@ namespace Cognite.Bridge
 
             try
             {
-                await client.Events.CreateAsync(events, token);
-                log.Debug("Push {cnt} events to CDF", events.Count());
+                await destination.EnsureEventsExistsAsync(events, true, token);
             }
             catch (ResponseException ex)
             {
-                if (ex.Duplicated.Any())
-                {
-                    var duplicates = ex.Duplicated.Where(dict => dict.ContainsKey("externalId")).Select(dict => dict["externalId"].ToString())
-                        .ToHashSet();
-                    log.Warning("{numduplicates} duplicated event ids, retrying", duplicates.Count);
-                    events = events.Where(evt => !duplicates.Contains(evt.ExternalId));
-                    try
-                    {
-                        await client.Events.CreateAsync(events, token);
-                        log.Debug("Push {cnt} events to CDF", events.Count());
-                    }
-                    catch (ResponseException exc)
-                    {
-                        log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}",
-                            events.Count(), exc.Message);
-                        return exc.Code < 500;
-                    }
-                }
-                else
-                {
-                    log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}",
-                        events.Count(), ex.Message);
-                    return ex.Code < 500;
-                }
+                return ex.Code == 400 || ex.Code == 409;
             }
 
             return true;

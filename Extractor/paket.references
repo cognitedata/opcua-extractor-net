@@ -1,15 +1,9 @@
 Microsoft.CSharp
-Microsoft.Extensions.Http
 OPCFoundation.NetStandard.Opc.Ua
-Microsoft.Extensions.Http.Polly
-Polly
-Polly.Extensions.Http
-CogniteSdk
 AdysTech.InfluxDB.Client.Net.Core
 Microsoft.CodeAnalysis.FxCopAnalyzers
-LiteDB
-LiteQueue
 MQTTnet
 Cognite.Extractor.Configuration
 Cognite.Extractor.Logging
 Cognite.Extractor.Metrics
+Cognite.ExtractorUtils

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
+using Cognite.Extractor.Common;
 using Opc.Ua;
 using Prometheus;
 using Serilog;
@@ -16,17 +17,16 @@ namespace Cognite.OpcUa
     /// </summary>
     public sealed class InfluxPusher : IPusher
     {
-        public Extractor Extractor { set; get; }
+        public UAExtractor Extractor { set; get; }
         public int Index { get; set; }
-        public PusherConfig BaseConfig { get; }
+        public IPusherConfig BaseConfig { get; }
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
 
 
-        private readonly InfluxClientConfig config;
-        private readonly ConcurrentDictionary<string, TimeRange> ranges = new ConcurrentDictionary<string, TimeRange>();
+        private readonly InfluxPusherConfig config;
         private InfluxDBClient client;
 
         private static readonly Counter numInfluxPusher = Metrics
@@ -50,7 +50,7 @@ namespace Cognite.OpcUa
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(InfluxPusher));
 
-        public InfluxPusher(InfluxClientConfig config)
+        public InfluxPusher(InfluxPusherConfig config)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             BaseConfig = config;
@@ -74,9 +74,6 @@ namespace Cognite.OpcUa
                     skippedDatapoints.Inc();
                     continue;
                 }
-
-                if (ranges.ContainsKey(buffer.Id) && buffer.Timestamp < ranges[buffer.Id].End
-                    && buffer.Timestamp > ranges[buffer.Id].Start) continue;
 
                 if (!buffer.IsString && !double.IsFinite(buffer.DoubleValue))
                 {
@@ -184,12 +181,17 @@ namespace Cognite.OpcUa
         /// <param name="states">List of historizing nodes</param>
         /// <param name="backfillEnabled">True if backfill is enabled, in which case the first timestamp will be read</param>
         /// <returns>True on success</returns>
-        public async Task<bool> InitExtractedRanges(IEnumerable<NodeExtractionState> states, bool backfillEnabled, CancellationToken token)
+        public async Task<bool> InitExtractedRanges(
+            IEnumerable<NodeExtractionState> states,
+            bool backfillEnabled,
+            bool initMissing,
+            CancellationToken token)
         {
             if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            var ranges = new ConcurrentDictionary<string, TimeRange>();
             var getRangeTasks = states.Select(async state =>
             {
-                var id = Extractor.GetUniqueId(state.Id,
+                var id = Extractor.GetUniqueId(state.SourceId,
                     state.ArrayDimensions != null && state.ArrayDimensions.Count > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1);
                 var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\"");
@@ -199,30 +201,25 @@ namespace Cognite.OpcUa
                     DateTime ts = last.First().Entries[0].Time;
                     ranges[id] = new TimeRange(ts, ts);
                 }
-                else
-                {
-                    if (backfillEnabled)
-                    {
-                        ranges[id] = new TimeRange(DateTime.UtcNow, DateTime.UtcNow);
-                    }
-                    else
-                    {
-                        ranges[id] = new TimeRange(DateTime.MinValue, DateTime.MinValue);
-                    }
-                }
 
-                if (backfillEnabled && last.Any())
+                if (backfillEnabled && last.Any() && last.First().HasEntries)
                 {
                     var first = await client.QueryMultiSeriesAsync(config.Database,
                         $"SELECT first(value) FROM \"{id}\"");
                     if (first.Any() && first.First().HasEntries)
                     {
                         DateTime ts = first.First().Entries[0].Time;
-                        ranges[id].Start = ts;
+                        ranges[id] = new TimeRange(ts, ranges[id].Last);
                     }
                 }
-                state.InitExtractedRange(ranges[id].Start, ranges[id].End);
-
+                if (ranges.ContainsKey(id))
+                {
+                    state.InitExtractedRange(ranges[id].First, ranges[id].Last);
+                }
+                else if (initMissing)
+                {
+                    state.InitToEmpty();
+                }
             });
             try
             {
@@ -248,12 +245,13 @@ namespace Cognite.OpcUa
             IEnumerable<NodeId> nodes,
             bool backfillEnabled,
             IEnumerable<string> seriesNames,
+            bool initMissing,
             CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
             var mutex = new object();
-            var bestRange = new TimeRange(DateTime.MaxValue, DateTime.MinValue);
-            string emitterId = Extractor.GetUniqueId(state.Id);
+            var bestRange = TimeRange.Empty;
+            string emitterId = state.Id;
 
             var ids = seriesNames.Where(name => nodes.Any(node =>
                 name.StartsWith("events." + Extractor.GetUniqueId(node), StringComparison.InvariantCulture)));
@@ -268,10 +266,7 @@ namespace Cognite.OpcUa
                     DateTime ts = last.First().Entries[0].Time;
                     lock (mutex)
                     {
-                        if (ts > bestRange.End)
-                        {
-                            bestRange.End = ts;
-                        }
+                        bestRange = bestRange.Extend(null, ts);
                     }
                 }
 
@@ -285,26 +280,31 @@ namespace Cognite.OpcUa
                         DateTime ts = first.First().Entries[0].Time;
                         lock (mutex)
                         {
-                            if (ts < bestRange.Start)
-                            {
-                                bestRange.Start = ts;
-                            }
+                            bestRange = bestRange.Extend(ts, null);
                         }
                     }
                 }
             });
             await Task.WhenAll(tasks);
             token.ThrowIfCancellationRequested();
-            if (bestRange.End == DateTime.MinValue && backfillEnabled)
+            if (bestRange.Last == CogniteTime.DateTimeEpoch && backfillEnabled)
             {
-                bestRange.End = DateTime.UtcNow;
+                bestRange = new TimeRange(bestRange.First, DateTime.UtcNow);
             }
 
-            if (bestRange.Start == DateTime.MaxValue)
+            if (bestRange.First == DateTime.MaxValue)
             {
-                bestRange.Start = bestRange.End;
+                bestRange = new TimeRange(bestRange.Last, bestRange.Last);
             }
-            state.InitExtractedRange(bestRange.Start, bestRange.End);
+
+            if (initMissing && bestRange == TimeRange.Empty)
+            {
+                state.InitToEmpty();
+            }
+            else
+            {
+                state.InitExtractedRange(bestRange.First, bestRange.Last);
+            }
         }
         /// <summary>
         /// Reads the first and last datapoint from influx for each emitter, sending the timestamps to each passed state
@@ -316,6 +316,7 @@ namespace Cognite.OpcUa
         public async Task<bool> InitExtractedEventRanges(IEnumerable<EventExtractionState> states,
             IEnumerable<NodeId> nodes,
             bool backfillEnabled,
+            bool initMissing,
             CancellationToken token)
         {
             if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
@@ -334,7 +335,7 @@ namespace Cognite.OpcUa
                 return false;
             }
 
-            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, nodes, backfillEnabled, eventSeries, token));
+            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, nodes, backfillEnabled, eventSeries, initMissing, token));
             try
             {
                 await Task.WhenAll(getRangeTasks);
@@ -452,9 +453,8 @@ namespace Cognite.OpcUa
             if (states == null) throw new ArgumentNullException(nameof(states));
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
-                    $"SELECT * FROM \"{state.Key}\"" +
-                    $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks*100}" +
-                    $" AND time <= {(state.Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks*100}")
+                    $"SELECT * FROM \"{state.Key}\""
+                    + GetWhereClause(state.Value))
             ).ToList();
 
             var results = await Task.WhenAll(fetchTasks);
@@ -492,6 +492,26 @@ namespace Cognite.OpcUa
 
             return finalPoints;
         }
+        private static string GetWhereClause(InfluxBufferState state)
+        {
+            if (state.DestinationExtractedRange == TimeRange.Complete) return "";
+            string ret = " WHERE";
+            bool first = false;
+            if (state.DestinationExtractedRange.First > CogniteTime.DateTimeEpoch)
+            {
+                first = true;
+                ret += $" time >= {(state.DestinationExtractedRange.First - CogniteTime.DateTimeEpoch).Ticks * 100}";
+            }
+            if (state.DestinationExtractedRange.Last < DateTime.MaxValue)
+            {
+                if (first) ret += " AND";
+                ret += $" time <= {(state.DestinationExtractedRange.Last - CogniteTime.DateTimeEpoch).Ticks * 100}";
+            }
+
+            return ret;
+        }
+
+
         /// <summary>
         /// Read events from influxdb back into BufferedEvents
         /// </summary>
@@ -505,9 +525,8 @@ namespace Cognite.OpcUa
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
-                $"SELECT * FROM /events.{state.Key.Replace("/", "\\/", StringComparison.InvariantCulture)}:.*/" +
-                $" WHERE time >= {(state.Value.DestinationExtractedRange.Start - DateTime.UnixEpoch).Ticks * 100}" +
-                $" AND time <= {(state.Value.DestinationExtractedRange.End - DateTime.UnixEpoch).Ticks * 100}")
+                $"SELECT * FROM /events.{state.Key.Replace("/", "\\/", StringComparison.InvariantCulture)}:.*/"
+                + GetWhereClause(state.Value))
             ).ToList();
 
             var results = await Task.WhenAll(fetchTasks);
@@ -568,7 +587,6 @@ namespace Cognite.OpcUa
 
         public void Reset()
         {
-            ranges.Clear();
         }
 
         public void Dispose()

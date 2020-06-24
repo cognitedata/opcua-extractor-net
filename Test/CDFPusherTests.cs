@@ -21,7 +21,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Configuration;
+using Cognite.Extractor.Logging;
+using Cognite.Extractor.Metrics;
+using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Xunit;
 using Xunit.Abstractions;
@@ -95,8 +99,8 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters());
             await tester.ClearPersistentData();
 
-            tester.CogniteConfig.Debug = true;
-            tester.CogniteConfig.ApiKey = null;
+            tester.Config.Cognite.Debug = true;
+            tester.Config.Cognite.ApiKey = null;
 
             await tester.StartServer();
             tester.StartExtractor();
@@ -308,12 +312,19 @@ namespace Test
         [Trait("Test", "connectiontest")]
         public async Task TestConnectionTest()
         {
-            var fullConfig = ConfigurationUtils.Read<FullConfig>("config.events.yml");
+            var services = new ServiceCollection();
+            var fullConfig = services.AddConfig<FullConfig>("config.events.yml");
             fullConfig.GenerateDefaults();
-            var config = (CogniteClientConfig)fullConfig.Pushers.First();
+            var config = fullConfig.Cognite;
 
             var handler = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            using var pusher = new CDFPusher(CommonTestUtils.GetDummyProvider(handler), config);
+            services.AddMetrics();
+            services.AddLogging();
+            CommonTestUtils.AddDummyProvider(handler, services);
+            services.AddCogniteClient("OpcUa-Extractor", true, true, false);
+
+            using var provider = services.BuildServiceProvider();
+            using var pusher = new CDFPusher(provider, config);
             var res = await pusher.TestConnection(fullConfig, CancellationToken.None);
             Assert.True(res);
         }
@@ -358,61 +369,6 @@ namespace Test
             Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
         }
 
-        [Fact]
-        [Trait("Server", "basic")]
-        [Trait("Target", "CDFPusher")]
-        [Trait("Test", "multiplecdf")]
-        // Multiple pushers that fetch properties does some magic to avoid fetching data twice
-        public async Task TestMultipleCDFPushers()
-        {
-            var fullConfig = ConfigurationUtils.Read<FullConfig>("config.test.yml");
-            fullConfig.GenerateDefaults();
-            var config = (CogniteClientConfig)fullConfig.Pushers.First();
-            var handler1 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            var handler2 = new CDFMockHandler(config.Project, CDFMockHandler.MockMode.None);
-            using var pusher1 = new CDFPusher(CommonTestUtils.GetDummyProvider(handler1), config);
-            using var pusher2 = new CDFPusher(CommonTestUtils.GetDummyProvider(handler2), config);
-
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                Builder = (config, pusher, client) => new Extractor(config, new[] { pusher1, pusher2 }, client),
-                QuitAfterMap = true
-            });
-            await tester.ClearPersistentData();
-
-            await tester.StartServer();
-            tester.StartExtractor();
-
-            await tester.TerminateRunTask();
-
-            Assert.DoesNotContain(handler1.Timeseries.Values, ts => ts.name == "Variable string");
-            Assert.Contains(handler1.Assets.Values, asset =>
-                asset.name == "BaseRoot"
-                && asset.metadata != null 
-                && asset.metadata["Asset Property 1"] == "test" 
-                && asset.metadata["Asset Property 2"] == "123.21");
-            Assert.Contains(handler1.Timeseries.Values, ts =>
-                ts.name == "Variable 1" 
-                && ts.metadata != null 
-                && ts.metadata["TS Property 1"] == "test" 
-                && ts.metadata["TS Property 2"] == "123.2");
-            Assert.DoesNotContain(handler2.Timeseries.Values, ts => ts.name == "Variable string");
-            Assert.Contains(handler2.Assets.Values, asset =>
-                asset.name == "BaseRoot"
-                && asset.metadata != null
-                && asset.metadata["Asset Property 1"] == "test"
-                && asset.metadata["Asset Property 2"] == "123.21");
-            Assert.Contains(handler2.Timeseries.Values, ts =>
-                ts.name == "Variable 1"
-                && ts.metadata != null
-                && ts.metadata["TS Property 1"] == "test"
-                && ts.metadata["TS Property 2"] == "123.2");
-            Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Equal(2, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(4, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
-            // 1 for objects folder, 1 for root, 1 for variable properties
-            Assert.Equal(3, (int)CommonTestUtils.GetMetricValue("opcua_browse_operations"));
-        }
         [Fact]
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
@@ -469,36 +425,38 @@ namespace Test
 
             var badPoints = new List<BufferedDataPoint>
             {
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.PositiveInfinity),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NegativeInfinity),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.NaN),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E100),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E100),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E105),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E105),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MaxValue),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", double.MinValue)
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.PositiveInfinity),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.NegativeInfinity),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.NaN),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E100),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E100),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E105),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E105),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.MaxValue),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.MinValue)
             };
 
             Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
             tester.Handler.StoreDatapoints = true;
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
-            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
-            tester.CogniteConfig.NonFiniteReplacement = -1;
+            Assert.True(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
+            Assert.Equal(6, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
+            tester.Config.Cognite.NonFiniteReplacement = -1;
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
             Assert.True(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
-            Assert.Equal(9, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
-            Assert.True(tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.TrueForAll(item => Math.Abs(item.Value + 1) < 0.01));
+            Assert.Equal(15, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
+            Assert.True(tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.TrueForAll(item => Math.Abs(item.Value + 1) < 0.01
+                || item.Value == CogniteUtils.NumericValueMax || item.Value == CogniteUtils.NumericValueMin));
 
             var badPoints2 = new List<BufferedDataPoint>
             {
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", 1E99),
-                new BufferedDataPoint(DateTime.Now, "gp.efg:i=2", -1E99)
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E99),
+                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E99)
             };
             await pusher.PushDataPoints(badPoints2, CancellationToken.None);
-            Assert.Equal(11, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
+            Assert.Equal(17, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
         }
 
         [Fact]
@@ -555,12 +513,12 @@ namespace Test
                 new BufferedDataPoint(new DateTime(1900, 1, 1), numId2, 0),
                 new BufferedDataPoint(DateTime.MinValue, numId2, 0),
                 // Incorrect type
-                new BufferedDataPoint(DateTime.Now, numId, 123),
-                new BufferedDataPoint(DateTime.Now, numId, "123"),
-                new BufferedDataPoint(DateTime.Now, numId, null),
-                new BufferedDataPoint(DateTime.Now, strId, 123),
-                new BufferedDataPoint(DateTime.Now, strId, "123"),
-                new BufferedDataPoint(DateTime.Now, strId, null)
+                new BufferedDataPoint(DateTime.UtcNow, numId, 123),
+                new BufferedDataPoint(DateTime.UtcNow, numId, "123"),
+                new BufferedDataPoint(DateTime.UtcNow, numId, null),
+                new BufferedDataPoint(DateTime.UtcNow, strId, 123),
+                new BufferedDataPoint(DateTime.UtcNow, strId, "123"),
+                new BufferedDataPoint(DateTime.UtcNow, strId, null)
             };
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
@@ -608,8 +566,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState(intVar) != null
-                    && tester.Extractor.State.GetNodeState(intVar).BackfillDone
-                    && tester.Extractor.State.GetNodeState(intVar).IsStreaming
+                    && !tester.Extractor.State.GetNodeState(intVar).IsBackfilling
+                    && !tester.Extractor.State.GetNodeState(intVar).IsFrontfilling
                     && tester.Handler.Datapoints.ContainsKey(intVar)
                     && tester.Handler.Datapoints[intVar].NumericDatapoints.Any(pt => pt.Timestamp < startTime), 20,
                 "Expected integer datapoint to finish backfill and frontfill");
@@ -647,8 +605,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState(intVar) != null
-                    && tester.Extractor.State.GetNodeState(intVar).BackfillDone
-                    && tester.Extractor.State.GetNodeState(intVar).IsStreaming
+                    && !tester.Extractor.State.GetNodeState(intVar).IsBackfilling
+                    && !tester.Extractor.State.GetNodeState(intVar).IsFrontfilling
                     && tester.Handler.Datapoints.ContainsKey(intVar)
                     && tester.Handler.Datapoints[intVar].NumericDatapoints.Any(pt => pt.Timestamp < startTime), 20,
                 "Expected integer datapoint to finish backfill and frontfill");
@@ -666,8 +624,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState(intVar) != null
-                    && tester.Extractor.State.GetNodeState(intVar).BackfillDone
-                    && tester.Extractor.State.GetNodeState(intVar).IsStreaming, 20,
+                    && !tester.Extractor.State.GetNodeState(intVar).IsBackfilling
+                    && !tester.Extractor.State.GetNodeState(intVar).IsFrontfilling, 20,
                 "Expected integer datapoint to finish backfill and frontfill");
 
             await tester.TerminateRunTask();
@@ -703,14 +661,14 @@ namespace Test
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 0));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 0));
 
-            Assert.True(tester.Extractor.State.NodeStates.All(state => state.Historizing && !state.IsStreaming || state.IsStreaming));
+            Assert.True(tester.Extractor.State.NodeStates.All(state => state.FrontfillEnabled && state.IsFrontfilling || !state.IsFrontfilling));
 
             Assert.Empty(tester.Handler.Assets);
             Assert.Empty(tester.Handler.Timeseries);
 
             tester.Handler.BlockAllConnections = false;
 
-            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 4));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));

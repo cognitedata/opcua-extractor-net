@@ -41,9 +41,9 @@ namespace Cognite.OpcUa
 
         public IEnumerable<BufferedNode> ActiveNodes => activeNodes.Values;
 
-        private readonly Extractor extractor;
+        private readonly UAExtractor extractor;
 
-        public State(Extractor extractor)
+        public State(UAExtractor extractor)
         {
             this.extractor = extractor;
         }
@@ -92,19 +92,19 @@ namespace Cognite.OpcUa
         public void SetNodeState(NodeExtractionState state, string uniqueId = null)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
-            nodeStates[state.Id] = state;
-            nodeStatesByExtId[uniqueId ?? extractor.GetUniqueId(state.Id)] = state;
+            nodeStates[state.SourceId] = state;
+            nodeStatesByExtId[uniqueId ?? state.Id] = state;
         }
         /// <summary>
         /// Add event state to storage
         /// </summary>
         /// <param name="state">State to add</param>
         /// <param name="uniqueId">ExternalId, leave empty to auto generate</param>
-        public void SetEmitterState(EventExtractionState state, string uniqueId = null)
+        public void SetEmitterState(EventExtractionState state)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
-            emitterStates[state.Id] = state;
-            emitterStatesByExtId[uniqueId ?? extractor.GetUniqueId(state.Id)] = state;
+            emitterStates[state.SourceId] = state;
+            emitterStatesByExtId[state.Id] = state;
         }
         /// <summary>
         /// Indicate that the given node is managed by the extractor.

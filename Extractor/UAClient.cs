@@ -42,7 +42,7 @@ namespace Cognite.OpcUa
         protected Session Session { get; set; }
         protected ApplicationConfiguration Appconfig { get; set; }
         private SessionReconnectHandler reconnectHandler;
-        public Extractor Extractor { get; set; }
+        public UAExtractor Extractor { get; set; }
         private readonly object visitedNodesLock = new object();
         protected ISet<NodeId> VisitedNodes { get; }= new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
@@ -912,12 +912,12 @@ namespace Cognite.OpcUa
                 {
                     if (token.IsCancellationRequested) break;
                     subscription.AddItems(chunk
-                        .Where(node => !hasSubscription.Contains(node.Id))
+                        .Where(node => !hasSubscription.Contains(node.SourceId))
                         .Select(node =>
                         {
                             var monitor = new MonitoredItem(subscription.DefaultItem)
                             {
-                                StartNodeId = node.Id,
+                                StartNodeId = node.SourceId,
                                 DisplayName = "Value: " + node.DisplayName,
                                 SamplingInterval = config.SamplingInterval,
                                 QueueSize = (uint)Math.Max(0, config.QueueLength)

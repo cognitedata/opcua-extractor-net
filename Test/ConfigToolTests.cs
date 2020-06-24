@@ -26,6 +26,10 @@ using Xunit.Abstractions;
 using Cognite.OpcUa.Config;
 using Cognite.Extractor.Configuration;
 using Server;
+using Microsoft.Extensions.DependencyInjection;
+using Cognite.Extractor.Utils;
+using Cognite.Extractor.Logging;
+using Cognite.Extractor.Metrics;
 
 namespace Test
 {
@@ -162,20 +166,23 @@ namespace Test
         [Fact]
         public async Task TestExtractorRuntime()
         {
-            var fullConfig = ConfigurationUtils.Read<FullConfig>("config.influxtest.yml");
-            fullConfig.GenerateDefaults();
-
+            var services = new ServiceCollection();
+            var fullConfig = services.AddConfig<FullConfig>("config.test.yml");
+            services.AddLogger();
+            services.AddMetrics();
             fullConfig.Source.EndpointUrl = ExtractorTester.HostName;
-            fullConfig.Pushers = new List<PusherConfig>();
+            fullConfig.Mqtt = null;
+            fullConfig.Influx = null;
+            fullConfig.Cognite = null;
 
             using var server = new ServerController(new[] { PredefinedSetup.Base });
             await server.Start();
+            var provider = services.BuildServiceProvider();
 
-            var runTime = new ExtractorRuntime(fullConfig);
+            var runTime = new ExtractorRuntime(fullConfig, provider);
 
             using var source = new CancellationTokenSource();
 
-            runTime.Configure();
             var runTask = runTime.Run(source);
 
             await Task.Delay(2000);

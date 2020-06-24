@@ -617,7 +617,7 @@ namespace Cognite.OpcUa.Config
             var states = nodeList.Where(node =>
                     node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty
                     && AllowTSMap(variable))
-                .Select(node => new NodeExtractionState(node as BufferedVariable)).ToList();
+                .Select(node => new NodeExtractionState(this, node as BufferedVariable, false, false, false)).ToList();
 
             log.Information("Get chunkSizes for subscribing to variables");
 
@@ -643,7 +643,7 @@ namespace Cognite.OpcUa.Config
                 {
                     await ToolUtil.RunWithTimeout(() =>
                         SubscribeToNodes(states,
-                            ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.Id), this), token), 120);
+                            ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this), token), 120);
                     baseConfig.Source.SubscriptionChunk = chunkSize;
                     failed = false;
                     break;
@@ -711,9 +711,9 @@ namespace Cognite.OpcUa.Config
         {
             var historizingStates = nodeList.Where(node =>
                     node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty && variable.Historizing)
-                .Select(node => new NodeExtractionState(node as BufferedVariable)).ToList();
+                .Select(node => new NodeExtractionState(this, node as BufferedVariable, true, true, false)).ToList();
 
-            var stateMap = historizingStates.ToDictionary(state => state.Id);
+            var stateMap = historizingStates.ToDictionary(state => state.SourceId);
 
             log.Information("Read history to decide on decent history settings");
 
@@ -748,7 +748,7 @@ namespace Cognite.OpcUa.Config
             {
                 foreach (var chunk in ExtractorUtils.ChunkBy(historizingStates, chunkSize))
                 {
-                    var historyParams = new HistoryReadParams(chunk.Select(state => state.Id), details);
+                    var historyParams = new HistoryReadParams(chunk.Select(state => state.SourceId), details);
                     try
                     {
                         var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);

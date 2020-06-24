@@ -39,9 +39,8 @@ namespace Test
         [Fact]
         public async Task TestInfluxPusher()
         {
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                ConfigName = ConfigName.Influx
+            using var tester = new ExtractorTester(new ExtractorTestParameters {
+                Pusher = "influx"
             });
             tester.Config.History.Enabled = false;
             await tester.ClearPersistentData();
@@ -75,7 +74,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                ConfigName = ConfigName.Influx,
+                Pusher = "influx",
                 ServerName = ServerName.Array
             });
             await tester.ClearPersistentData();
@@ -113,7 +112,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                ConfigName = ConfigName.Influx,
+                Pusher = "influx",
                 QuitAfterMap = true
             });
             await tester.ClearPersistentData();
@@ -144,7 +143,7 @@ namespace Test
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
 
-            var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.InfluxConfig.Database, 
+            var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.Config.Influx.Database, 
                 "SELECT * FROM \"gp.tl:i=2\"");
 
             Assert.True(read.Count > 0);
@@ -167,7 +166,7 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
-                PusherConfig = ConfigName.Influx,
+                Pusher = "influx",
                 ConfigName = ConfigName.Events
             });
             await tester.ClearPersistentData();
@@ -200,9 +199,8 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ConfigName = ConfigName.Test,
-                FailureInflux = ConfigName.Influx,
+                FailureInflux = true,
                 StoreDatapoints = true,
-                FailureInfluxWrite = true
             });
             await tester.ClearPersistentData();
             tester.Config.Extraction.AllowStringVariables = true;
@@ -214,7 +212,7 @@ namespace Test
 
             await tester.Extractor.WaitForSubscriptions();
 
-            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
 
             await tester.Extractor.Looper.WaitForNextPush();
 
@@ -237,7 +235,7 @@ namespace Test
             tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1001);
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1001);
 
-            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => state.IsStreaming), 20);
+            await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
             
             await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=10")
                 && tester.Handler.Datapoints["gp.tl:i=10"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count() == 1002, 20);
@@ -262,7 +260,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                ConfigName = ConfigName.Influx
+                Pusher = "influx"
             });
             await tester.ClearPersistentData();
 
@@ -277,8 +275,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState("gp.tl:i=10") != null
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").BackfillDone
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").IsStreaming,
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsBackfilling
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsFrontfilling,
                 20, "Expected backfill to terminate");
 
             await tester.Extractor.Looper.WaitForNextPush();
@@ -301,7 +299,7 @@ namespace Test
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
-                ConfigName = ConfigName.Influx
+                Pusher = "influx"
             });
             await tester.ClearPersistentData();
 
@@ -314,8 +312,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState("gp.tl:i=10") != null
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").BackfillDone
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").IsStreaming,
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsBackfilling
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsFrontfilling,
                 20, "Expected backfill to terminate");
 
             await tester.WaitForCondition(async () =>
@@ -334,8 +332,8 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState("gp.tl:i=10") != null
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").BackfillDone
-                    && tester.Extractor.State.GetNodeState("gp.tl:i=10").IsStreaming,
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsBackfilling
+                    && !tester.Extractor.State.GetNodeState("gp.tl:i=10").IsFrontfilling,
                 20, "Expected backfill to terminate");
 
             var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Base.IntVar);
@@ -356,7 +354,7 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
-                PusherConfig = ConfigName.Influx,
+                Pusher = "influx",
                 ConfigName = ConfigName.Events,
             });
             await tester.ClearPersistentData();
@@ -370,7 +368,7 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
-                    !state.Historizing || state.BackfillDone && state.IsStreaming),
+                    !state.FrontfillEnabled || !state.IsBackfilling && !state.IsFrontfilling),
                 20, "Expected backfill of events to terminate");
 
             await tester.WaitForCondition(async () =>
@@ -395,7 +393,7 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
-                PusherConfig = ConfigName.Influx,
+                Pusher = "influx",
                 ConfigName = ConfigName.Events,
             });
             await tester.ClearPersistentData();
@@ -409,7 +407,7 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
-                    !state.Historizing || state.BackfillDone && state.IsStreaming),
+                    !state.FrontfillEnabled || !state.IsBackfilling && !state.IsFrontfilling),
                 20, "Expected backfill of events to terminate");
 
             await tester.WaitForCondition(async () =>
@@ -431,7 +429,7 @@ namespace Test
             tester.Server.TriggerEvents(100);
 
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state =>
-                    !state.Historizing || state.BackfillDone && state.IsStreaming),
+                    !state.FrontfillEnabled || !state.IsBackfilling && !state.IsFrontfilling),
                 20, "Expected backfill of events to terminate");
 
             await tester.WaitForCondition(async () =>

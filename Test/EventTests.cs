@@ -55,7 +55,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.Events.Values.Count > 20 &&
-                    tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
+                    tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling),
                 20, "Expected history read to finish");
 
 
@@ -114,7 +114,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.Events.Values.Any()
-                    && tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
+                    && tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling),
                 40, "Expected history read to finish");
 
             await tester.Extractor.Looper.WaitForNextPush();
@@ -129,7 +129,7 @@ namespace Test
             tester.Server.TriggerEvents(100);
             await tester.WaitForCondition(() =>
                     tester.Handler.Events.Values.Any()
-                    && tester.Extractor.State.EmitterStates.All(state => state.IsStreaming)
+                    && tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling)
                     && tester.Handler.Events.Count == 507,
                 40, "Expected number of events to be increasing");
 
@@ -222,8 +222,7 @@ namespace Test
             {
                 ConfigName = ConfigName.Events,
                 ServerName = ServerName.Events,
-                FailureInflux = ConfigName.Influx,
-                FailureInfluxWrite = true
+                FailureInflux = true
             });
             await tester.ClearPersistentData();
 
@@ -291,7 +290,7 @@ namespace Test
             tester.StartExtractor();
             await tester.WaitForCondition(() =>
                     tester.Handler.Events.Values.Count > 20 &&
-                    tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
+                    tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling),
                 20, "Expected history read to finish");
 
 
@@ -345,20 +344,16 @@ namespace Test
         [Trait("Test", "multipushereventbackfill")]
         public async Task TestMultiPusherBackfillRestart()
         {
-            var influxCfg = ConfigurationUtils.Read<FullConfig>("config.influxtest.yml");
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Events,
                 ConfigName = ConfigName.Events,
-                InfluxOverride = (InfluxClientConfig)influxCfg.Pushers.First(),
+                InfluxOverride = true,
                 Builder = (cfg, pusher, client) =>
                 {
-                    var pushers = new List<IPusher>
-                    {
-                        pusher, new InfluxPusher((InfluxClientConfig) influxCfg.Pushers.First())
-                    };
+                    var pushers = pusher.Append(new InfluxPusher(cfg.Influx));
 
-                    return new Extractor(cfg, pushers, client);
+                    return new UAExtractor(cfg, pushers, client, null);
                 }
             });
             tester.Config.History.EventChunk = 100;
@@ -374,7 +369,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.Events.Values.Count == 500 &&
-                    tester.Extractor.State.EmitterStates.All(state => state.IsStreaming),
+                    tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling),
                 20, "Expected history read to finish");
 
             var events = tester.Handler.Events.Values.ToList();
@@ -402,7 +397,7 @@ namespace Test
                 "Expected restart to begin");
 
             await tester.WaitForCondition(() =>
-                    tester.Extractor.State.EmitterStates.All(state => state.BackfillDone),
+                    tester.Extractor.State.EmitterStates.All(state => !state.IsBackfilling),
                 20, "Expected backfill to finish");
 
             await tester.TerminateRunTask();

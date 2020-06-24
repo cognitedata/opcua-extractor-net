@@ -5,6 +5,8 @@ using Cognite.OpcUa.Pushers;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Metrics;
+using Cognite.Extractor.Utils;
+using Cognite.Extractor.StateStorage;
 
 namespace Cognite.OpcUa
 {
@@ -39,7 +41,6 @@ namespace Cognite.OpcUa
         public IEnumerable<string> IgnoreName { get; set; }
         public ProtoNodeId RootNode { get => rootNode; set => rootNode = value ?? rootNode; }
         private ProtoNodeId rootNode = new ProtoNodeId();
-
         public Dictionary<string, ProtoNodeId> NodeMap { get; set; }
         public IEnumerable<ProtoNodeId> IgnoreDataTypes { get; set; }
         public int MaxArraySize { get; set; } = 0;
@@ -51,8 +52,38 @@ namespace Cognite.OpcUa
         public bool EnableAuditDiscovery { get; set; } = false;
         public int DataPushDelay { get; set; } = 1000;
     }
-    public abstract class PusherConfig
+    public interface IPusherConfig
     {
+        bool Debug { get; set; }
+        bool ReadExtractedRanges { get; set; }
+        public double? NonFiniteReplacement { get; set; }
+        public IPusher ToPusher(int index, IServiceProvider provider);
+    }
+    public class CognitePusherConfig : CogniteConfig, IPusherConfig
+    {
+        public long? DataSetId { get; set; }
+        public bool Debug { get; set; } = false;
+        public bool ReadExtractedRanges { get; set; } = true;
+        public double? NonFiniteReplacement
+        {
+            get => nonFiniteReplacement;
+            set => nonFiniteReplacement = value == null || double.IsFinite(value.Value)
+                && value.Value > CogniteUtils.NumericValueMin
+                && value.Value < CogniteUtils.NumericValueMax ? value : null;
+        }
+        private double? nonFiniteReplacement;
+        public IPusher ToPusher(int index, IServiceProvider provider)
+        {
+            return new CDFPusher(provider, this) { Index = index };
+        }
+    }
+    public class InfluxPusherConfig : IPusherConfig
+    {
+        public string Host { get; set; }
+        public string Username { get; set; }
+        public string Password { get; set; }
+        public string Database { get; set; }
+        public int PointChunkSize { get; set; } = 100000;
         public bool Debug { get; set; } = false;
         public bool ReadExtractedRanges { get; set; } = true;
         public double? NonFiniteReplacement
@@ -61,39 +92,13 @@ namespace Cognite.OpcUa
             set => nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
         }
         private double? nonFiniteReplacement;
-        public abstract IPusher ToPusher(int index, IServiceProvider provider);
-    }
-    public class CogniteClientConfig : PusherConfig
-    {
-        public string Project { get; set; }
-        public string ApiKey { get; set; }
-        public string Host { get; set; } = "https://api.cognitedata.com";
-        public override IPusher ToPusher(int index, IServiceProvider provider)
-        {
-            return new CDFPusher(provider, this) {Index = index};
-        }
-        public long? DataSetId { get; set; }
-        public int EarliestChunk { get; set; } = 1000;
-        // Limits can change without notice in CDF API end-points.
-        // The limit on number of time series on the "latest" end-point is currently 100.
-        public int LatestChunk { get; set; } = 100;
-        public int TimeSeriesChunk { get; set; } = 1000;
-        public int AssetChunk { get; set; } = 1000;
-    }
-    public class InfluxClientConfig : PusherConfig
-    {
-        public string Host { get; set; }
-        public string Username { get; set; }
-        public string Password { get; set; }
-        public string Database { get; set; }
-        public int PointChunkSize { get; set; } = 100000;
-        public override IPusher ToPusher(int index, IServiceProvider _)
+        public IPusher ToPusher(int index, IServiceProvider _)
         {
             return new InfluxPusher(this) { Index = index };
         }
     }
 
-    public class MQTTPusherConfig : PusherConfig
+    public class MqttPusherConfig : IPusherConfig
     {
         public string Host { get; set; }
         public int? Port { get; set; }
@@ -108,8 +113,15 @@ namespace Cognite.OpcUa
         public string DatapointTopic { get; set; } = "cognite/opcua/datapoints";
         public string LocalState { get; set; }
         public long InvalidateBefore { get; set; }
-
-        public override IPusher ToPusher(int index, IServiceProvider _)
+        public bool Debug { get; set; }
+        public bool ReadExtractedRanges { get; set; }
+        public double? NonFiniteReplacement
+        {
+            get => nonFiniteReplacement;
+            set => nonFiniteReplacement = value == null || double.IsFinite(value.Value) ? value : null;
+        }
+        private double? nonFiniteReplacement;
+        public IPusher ToPusher(int index, IServiceProvider _)
         {
             return new MQTTPusher(this) { Index = index };
         }
@@ -118,28 +130,19 @@ namespace Cognite.OpcUa
     public class FailureBufferConfig
     {
         public bool Enabled { get; set; } = false;
-        public InfluxBufferConfig Influx { get; set; }
-        public bool LocalQueue { get; set; }
+        public bool InfluxStateStore { get; set; } = false;
+        public bool Influx { get; set; }
         public string DatapointPath { get; set; }
         public string EventPath { get; set; }
-    }
-
-    public class InfluxBufferConfig
-    {
-        public string Host { get; set; }
-        public string Username { get; set; }
-        public string Password { get; set; }
-        public string Database { get; set; }
-        public bool Write { get; set; } = true;
-        public int PointChunkSize { get; set; } = 100000;
-        public bool StateStorage { get; set; }
     }
     public class FullConfig : VersionedConfig
     {
         public UAClientConfig Source { get; set; }
         public LoggerConfig Logger { get; set; }
         public MetricsConfig Metrics { get; set; }
-        public List<PusherConfig> Pushers { get; set; }
+        public CognitePusherConfig Cognite { get; set; }
+        public MqttPusherConfig Mqtt { get; set; }
+        public InfluxPusherConfig Influx { get; set; }
         public ExtractionConfig Extraction { get; set; }
         public EventConfig Events { get; set; }
         public FailureBufferConfig FailureBuffer { get; set; }
@@ -150,7 +153,13 @@ namespace Cognite.OpcUa
             if (Source == null) Source = new UAClientConfig();
             if (Logger == null) Logger = new LoggerConfig();
             if (Metrics == null) Metrics = new MetricsConfig();
-            if (Pushers == null) Pushers = new List<PusherConfig>();
+            if (Cognite != null)
+            {
+                if (Cognite.CdfChunking == null) Cognite.CdfChunking = new ChunkingConfig();
+                if (Cognite.CdfThrottling == null) Cognite.CdfThrottling = new ThrottlingConfig();
+                if (Cognite.CdfRetries == null) Cognite.CdfRetries = new RetryConfig();
+                if (Cognite.SdkLogging == null) Cognite.SdkLogging = new SdkLoggingConfig();
+            }
             if (Extraction == null) Extraction = new ExtractionConfig();
             if (Events == null) Events = new EventConfig();
             if (FailureBuffer == null) FailureBuffer = new FailureBufferConfig();
@@ -207,9 +216,13 @@ namespace Cognite.OpcUa
         public bool IsStep { get; set; } = false;
     }
 
-    public class StateStorageConfig
+    public class StateStorageConfig : StateStoreConfig
     {
-        public string Location { get; set; }
         public int Interval { get; set; }
+        public string VariableStore { get; set; } = "variable_states";
+        public string EventStore { get; set; } = "event_states";
+        public string InfluxVariableStore { get; set; } = "influx_variable_states";
+        public string InfluxEventStore { get; set; } = "influx_event_states";
+
     }
 }

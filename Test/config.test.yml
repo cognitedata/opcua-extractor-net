@@ -1,13 +1,25 @@
-﻿source:
+﻿version: 1
+
+source:
     # The URL of the OPC-UA server to connect to
     endpoint-url: "opc.tcp://localhost:4840"
 
-pushers:
-    - !cdf
-        # The project to connect to in the API
-        project: test
-        # Cognite api key
-        api-key: test
+
+logger:
+    console:
+        level: "debug"
+
+cognite:
+    project: test
+    api-key: test
+
+mqtt:
+    host: "localhost"
+    port: 4060
+
+influx:
+    host: "http://localhost:8086"
+    database: "testdb"
 
 history:
     enabled: true

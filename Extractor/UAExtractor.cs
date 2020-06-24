@@ -21,6 +21,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.StateStorage;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
@@ -31,13 +32,13 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Main extractor class, tying together the <see cref="uaClient"/> and CDF client.
     /// </summary>
-    public class Extractor : IDisposable
+    public class UAExtractor : IDisposable
     {
         private readonly UAClient uaClient;
         private readonly FullConfig config;
         public Looper Looper { get; }
         public FailureBuffer FailureBuffer { get; }
-        public StateStorage StateStorage { get; }
+        public IExtractionStateStore StateStorage { get; }
         public State State { get; }
         public Streamer Streamer { get; }
 
@@ -76,7 +77,7 @@ namespace Cognite.OpcUa
         private static readonly Gauge trackedTimeseres = Metrics
             .CreateGauge("opcua_tracked_timeseries", "Number of variables on the opcua server mapped to timeseries");
 
-        private readonly ILogger log = Log.Logger.ForContext(typeof(Extractor));
+        private readonly ILogger log = Log.Logger.ForContext(typeof(UAExtractor));
 
         /// <summary>
         /// Construct extractor with list of pushers
@@ -84,7 +85,7 @@ namespace Cognite.OpcUa
         /// <param name="config">Full config object</param>
         /// <param name="pushers">List of pushers to be used</param>
         /// <param name="UAClient">UAClient to be used</param>
-        public Extractor(FullConfig config, IEnumerable<IPusher> pushers, UAClient uaClient)
+        public UAExtractor(FullConfig config, IEnumerable<IPusher> pushers, UAClient uaClient, IExtractionStateStore stateStore)
         {
             this.pushers = pushers ?? throw new ArgumentNullException(nameof(pushers));
             this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
@@ -92,15 +93,11 @@ namespace Cognite.OpcUa
 
             State = new State(this);
             Streamer = new Streamer(this, config);
-
-            if (!string.IsNullOrWhiteSpace(config.StateStorage.Location))
-            {
-                StateStorage = new StateStorage(this, config);
-            }
+            StateStorage = stateStore;
 
             if (config.FailureBuffer.Enabled)
             {
-                FailureBuffer = new FailureBuffer(config, this);
+                FailureBuffer = new FailureBuffer(config, this, pushers.FirstOrDefault(pusher => pusher is InfluxPusher) as InfluxPusher);
             }
             this.uaClient.Extractor = this;
             historyReader = new HistoryReader(uaClient, this, config.History);
@@ -121,8 +118,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="config">Full config object</param>
         /// <param name="pusher">Pusher to be used</param>
-        /// <param name="UAClient">UAClient to use</param>
-        public Extractor(FullConfig config, IPusher pusher, UAClient uaClient) : this(config, new List<IPusher> { pusher }, uaClient) { }
+        /// <param name="uaClient">UAClient to use</param>
+        public UAExtractor(FullConfig config, IPusher pusher, UAClient uaClient, IExtractionStateStore stateStore)
+            : this(config, new List<IPusher> { pusher }, uaClient, stateStore) { }
         #region Interface
 
         /// <summary>
@@ -196,12 +194,12 @@ namespace Cognite.OpcUa
             subscribeFlag = false;
             historyReader.Terminate(CancellationToken.None, 30).Wait();
             foreach (var state in State.NodeStates) {
-                state.ResetStreamingState();
+                state.RestartHistory();
             }
 
             foreach (var state in State.EmitterStates)
             {
-                state.ResetStreamingState();
+                state.RestartHistory();
             }
 
             Looper.WaitForNextPush().Wait();
@@ -378,22 +376,22 @@ namespace Cognite.OpcUa
             if (!config.History.Enabled) return;
             await Task.WhenAll(Task.Run(async () =>
             {
-                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.Historizing),
+                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling),
                     State.AllActiveIds.ToList(), token);
                 if (config.History.Backfill)
                 {
                     await historyReader.BackfillEvents(
-                        State.EmitterStates.Where(state => state.Historizing),
+                        State.EmitterStates.Where(state => state.IsBackfilling),
                         State.AllActiveIds.ToList(), token);
                 }
             }), Task.Run(async () =>
             {
                 await historyReader.FrontfillData(
-                    State.NodeStates.Where(state => state.Historizing).ToList(), token);
+                    State.NodeStates.Where(state => state.IsFrontfilling).ToList(), token);
                 if (config.History.Backfill)
                 {
                     await historyReader.BackfillData(
-                        State.NodeStates.Where(state => state.Historizing).ToList(), token);
+                        State.NodeStates.Where(state => state.IsBackfilling).ToList(), token);
                 }
             }));
         }
@@ -471,20 +469,12 @@ namespace Cognite.OpcUa
 
             foreach (var state in State.NodeStates)
             {
-                state.ResetStreamingState();
-                if (!config.History.Enabled || !config.History.Backfill)
-                {
-                    state.BackfillDone = true;
-                }
+                state.RestartHistory();
             }
 
             foreach (var state in State.EmitterStates)
             {
-                state.ResetStreamingState();
-                if (!config.History.Enabled || !config.History.Backfill)
-                {
-                    state.BackfillDone = true;
-                }
+                state.RestartHistory();
             }
 
             if (config.Events.EmitterIds != null
@@ -494,22 +484,22 @@ namespace Cognite.OpcUa
             {
                 Streamer.AllowEvents = true;
                 var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
-                foreach (var id in emitters)
-                {
-                    State.SetEmitterState(new EventExtractionState(id));
-                }
+                var historicalEmitters = new HashSet<NodeId>();
                 if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any() && config.History.Enabled)
                 {
-                    var histEmitters = config.Events.HistorizingEmitterIds.Select(proto =>
-                        proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
-                    foreach (var id in histEmitters)
+                    foreach (var id in config.Events.HistorizingEmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)))
                     {
-                        var state = State.GetEmitterState(id);
-                        if (state == null) throw new ConfigurationException("Historical emitter not in emitter list");
-                        state.Historizing = true;
+                        historicalEmitters.Add(id);
                     }
                 }
-                var eventFields = uaClient.GetEventFields(config.Events.EventIds.Select(proto => proto.ToNodeId(uaClient, ObjectTypeIds.BaseEventType)).ToList(), token);
+                foreach (var id in emitters)
+                {
+                    bool hist = historicalEmitters.Contains(id);
+                    State.SetEmitterState(new EventExtractionState(this, id, hist, hist && config.History.Backfill, StateStorage != null
+                        && config.StateStorage.Interval > 0));
+                }
+                var eventFields = uaClient.GetEventFields(config.Events.EventIds.Select(
+                    proto => proto.ToNodeId(uaClient, ObjectTypeIds.BaseEventType)).ToList(), token);
                 foreach (var field in eventFields)
                 {
                     State.ActiveEvents[field.Key] = field.Value;
@@ -571,7 +561,9 @@ namespace Cognite.OpcUa
                 {
                     log.Debug(node.ToDebugDescription());
                     variables.Add(node);
-                    var state = new NodeExtractionState(node);
+                    var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,
+                        StateStorage != null && config.StateStorage.Interval > 0);
+
                     State.AddActiveNode(node);
                     if (node.ArrayDimensions != null && node.ArrayDimensions.Count > 0 && node.ArrayDimensions[0] > 0)
                     {
@@ -601,8 +593,9 @@ namespace Cognite.OpcUa
         /// <param name="timeseries">Variable type nodes to push</param>
         /// <param name="pusher">Destination to push to</param>
         /// <param name="initial">True if this counts as initialization of the pusher</param>
+        /// <param name="initMissing">Whether or not to initialize nodes with missing ranges to empty</param>
         public async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries,
-            IPusher pusher, bool initial, CancellationToken token)
+            IPusher pusher, bool initial, bool initMissing, CancellationToken token)
         {
             if (pusher == null) throw new ArgumentNullException(nameof(pusher));
             if (pusher.NoInit)
@@ -628,11 +621,12 @@ namespace Cognite.OpcUa
                     .Select(ts => ts.Id)
                     .Distinct()
                     .Select(id => State.GetNodeState(id))
-                    .Where(state => state.Historizing);
-                var results = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, token), 
-                    pusher.InitExtractedEventRanges(State.EmitterStates.Where(state => state.Historizing),
+                    .Where(state => state.FrontfillEnabled);
+                var results = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, initMissing, token), 
+                    pusher.InitExtractedEventRanges(State.EmitterStates.Where(state => state.FrontfillEnabled),
                         timeseries.Concat(objects).Select(ts => ts.Id).Distinct(),
                         config.History.Backfill,
+                        initMissing,
                         token));
                 if (!results.All(res => res))
                 {
@@ -660,24 +654,24 @@ namespace Cognite.OpcUa
 
             bool initial = objects.Count() + timeseries.Count() == State.ActiveNodes.Count();
 
-            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, pusher, initial, token));
+            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, pusher, initial, false, token));
 
             if (StateStorage != null && config.StateStorage.Interval > 0)
             {
                 if (Streamer.AllowEvents)
                 {
-                    pushTasks = pushTasks.Append(StateStorage.ReadExtractionStates(
-                        State.EmitterStates.Where(state => state.Historizing),
-                        StateStorage.EmitterStates,
+                    pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
+                        State.EmitterStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
+                        config.StateStorage.EventStore,
                         false,
                         token));
                 }
 
                 if (Streamer.AllowData)
                 {
-                    pushTasks = pushTasks.Append(StateStorage.ReadExtractionStates(
-                        newStates.Where(state => state.Historizing),
-                        StateStorage.VariableStates,
+                    pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
+                        newStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
+                        config.StateStorage.VariableStore,
                         false,
                         token));
                 }
@@ -697,9 +691,9 @@ namespace Cognite.OpcUa
                 trackedTimeseres.Inc(timeseries.Count());
             }
 
-            foreach (var state in newStates.Concat<BaseExtractionState>(State.EmitterStates))
+            foreach (var state in newStates.Concat<UAHistoryExtractionState>(State.EmitterStates))
             {
-                state.FinalizeRangeInit(config.History.Backfill);
+                state.FinalizeRangeInit();
             }
         }
         /// <summary>
@@ -708,17 +702,17 @@ namespace Cognite.OpcUa
         /// <param name="nodes">Nodes to subscribe to events for</param>
         private async Task SynchronizeEvents(IEnumerable<NodeId> nodes, CancellationToken token)
         {
-            await Task.Run(() => uaClient.SubscribeToEvents(State.EmitterStates.Select(state => state.Id), 
+            await Task.Run(() => uaClient.SubscribeToEvents(State.EmitterStates.Select(state => state.SourceId), 
                 nodes, Streamer.EventSubscriptionHandler, token));
             Interlocked.Increment(ref subscribed);
             if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!config.History.Enabled) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
-                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.Historizing), nodes, token);
+                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling), nodes, token);
                 if (config.History.Backfill)
                 {
-                    await historyReader.BackfillEvents(State.EmitterStates.Where(state => state.Historizing), nodes, token);
+                    await historyReader.BackfillEvents(State.EmitterStates.Where(state => state.IsBackfilling), nodes, token);
                 }
             }
             else
@@ -738,10 +732,10 @@ namespace Cognite.OpcUa
             if (!config.History.Enabled) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
-                await historyReader.FrontfillData(states.Where(state => state.Historizing), token);
+                await historyReader.FrontfillData(states.Where(state => state.IsFrontfilling), token);
                 if (config.History.Backfill)
                 {
-                    await historyReader.BackfillData(states.Where(state => state.Historizing), token);
+                    await historyReader.BackfillData(states.Where(state => state.IsBackfilling), token);
                 }
             }
             else
@@ -917,7 +911,6 @@ namespace Cognite.OpcUa
         protected virtual void Dispose(bool disposing)
         {
             Starting.Set(0);
-            StateStorage?.Dispose();
             Looper?.Dispose();
         }
     }
