@@ -101,6 +101,7 @@ namespace Cognite.OpcUa
             }
             finally
             {
+                source.Cancel();
                 foreach (var pusher in pushers)
                 {
                     pusher.Dispose();

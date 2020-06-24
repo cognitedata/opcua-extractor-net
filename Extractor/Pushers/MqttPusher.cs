@@ -174,6 +174,7 @@ namespace Cognite.OpcUa.Pushers
             catch (Exception e)
             {
                 log.Warning("Failed to connect to MQTT broker: {msg}", e.Message);
+				return false;
             }
             log.Information("Connected to MQTT broker");
             return client.IsConnected;
