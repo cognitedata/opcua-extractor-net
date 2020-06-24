@@ -1385,11 +1385,22 @@ namespace Cognite.OpcUa
         public NodeId ToNodeId(string identifier, string namespaceUri)
         {
             if (identifier == null || namespaceUri == null) return NodeId.Null;
-            string nsString = "ns=" + Session.NamespaceUris.GetIndex(namespaceUri);
-            if (Session.NamespaceUris.GetIndex(namespaceUri) == -1)
+            int idx = Session.NamespaceUris.GetIndex(namespaceUri);
+            if (idx < 0)
             {
-                return NodeId.Null;
+                if (extractionConfig.NamespaceMap.ContainsValue(namespaceUri))
+                {
+                    string readNs = extractionConfig.NamespaceMap.First(kvp => kvp.Value == namespaceUri).Key;
+                    idx = Session.NamespaceUris.GetIndex(readNs);
+                    if (idx < 0) return NodeId.Null;
+                }
+                else
+                {
+                    return NodeId.Null;
+                }
             }
+
+            string nsString = "ns=" + idx;
             return new NodeId(nsString + ";" + identifier);
         }
         /// <summary>
