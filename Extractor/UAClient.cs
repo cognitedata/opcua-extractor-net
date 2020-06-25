@@ -27,6 +27,7 @@ using System.Linq;
 using Prometheus;
 using System.Threading;
 using Serilog;
+using Cognite.Extractor.Common;
 
 namespace Cognite.OpcUa
 {
@@ -542,7 +543,7 @@ namespace Cognite.OpcUa
             }
             do
             {
-                var references = ExtractorUtils.ChunkBy(nextIds, config.BrowseNodesChunk)
+                var references = nextIds.ChunkBy(config.BrowseNodesChunk)
                     .Select(ids => GetNodeChildren(ids.ToList(), referenceTypes, nodeClassMask, token))
                     .SelectMany(dict => dict)
                     .ToDictionary(val => val.Key, val => val.Value);
@@ -620,7 +621,7 @@ namespace Cognite.OpcUa
             try
             {
                 int count = 0;
-                foreach (var nextValues in ExtractorUtils.ChunkBy(readValueIds, config.AttributesChunk))
+                foreach (var nextValues in readValueIds.ChunkBy(config.AttributesChunk))
                 {
                     if (token.IsCancellationRequested) break;
                     count++;
@@ -908,7 +909,7 @@ namespace Cognite.OpcUa
                     .Select(sub => sub.ResolvedNodeId)
                     .ToHashSet();
 
-                foreach (var chunk in ExtractorUtils.ChunkBy(nodeList, config.SubscriptionChunk))
+                foreach (var chunk in nodeList.ChunkBy(config.SubscriptionChunk))
                 {
                     if (token.IsCancellationRequested) break;
                     subscription.AddItems(chunk
@@ -1481,11 +1482,7 @@ namespace Cognite.OpcUa
         public string GetUniqueId(ExpandedNodeId rNodeid, int index = -1)
         {
             var nodeId = ToNodeId(rNodeid);
-            if (nodeId == null)
-            {
-                log.Warning("Null converted to ExternalId");
-                throw new Exception("Null converted to ExternalId");
-            }
+            if (nodeId == null) throw new ArgumentNullException(nameof(rNodeid));
             if (nodeOverrides.ContainsKey(nodeId)) return nodeOverrides[nodeId];
 
             string namespaceUri = Session.NamespaceUris.GetString(nodeId.NamespaceIndex);

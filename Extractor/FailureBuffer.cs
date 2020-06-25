@@ -74,6 +74,7 @@ namespace Cognite.OpcUa
             }
 
             if (!config.Influx) return;
+            if (influxPusher == null) throw new ConfigurationException("FailureBuffer expecting influxpusher, but none is registered");
             this.influxPusher = influxPusher;
 
             nodeBufferStates = new Dictionary<string, InfluxBufferState>();
@@ -656,7 +657,7 @@ namespace Cognite.OpcUa
                     var (evt, _) = BufferedEvent.FromStorableBytes(dataBytes, extractor, 0);
                     if (evt.EventId == null || evt.SourceNode == null)
                     {
-                        log.Warning("Invalid datapoint in buffer file");
+                        log.Warning("Invalid event in buffer file");
                         continue;
                     }
 

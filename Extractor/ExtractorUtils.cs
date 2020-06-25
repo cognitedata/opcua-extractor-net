@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Opc.Ua;
+using Cognite.Extractor.Common;
 
 namespace Cognite.OpcUa
 {
@@ -43,98 +44,6 @@ namespace Cognite.OpcUa
                     yield return elem;
                 }
             }
-        }
-        /// <summary>
-        /// Returns a list of dictionaries chunked so that each dictionary has at most
-        /// maxKeys entries, and each list has at most maxPerList elements.
-        /// </summary>
-        /// <param name="points">Dictionary of lists to be chunked</param>
-        /// <param name="maxPerList">Maximum number of elements in each returned list</param>
-        /// <param name="maxKeys">Maximum number of keys in each returned dictionary</param>
-        /// <returns></returns>
-        public static IEnumerable<IDictionary<TKey, IEnumerable<TVal>>> ChunkDictOfLists<TKey, TVal>(
-            IDictionary<TKey, List<TVal>> points, int maxPerList, int maxKeys)
-        {
-            if (points == null) return new List<Dictionary<TKey, IEnumerable<TVal>>>();
-            var ret = new List<Dictionary<TKey, IEnumerable<TVal>>>();
-            var current = new Dictionary<TKey, IEnumerable<TVal>>();
-            int count = 0;
-            int keyCount = 0;
-
-            foreach (var (key, value) in points)
-            {
-                if (!value.Any())
-                    continue;
-
-                if (keyCount >= maxKeys)
-                {
-                    ret.Add(current);
-                    current = new Dictionary<TKey, IEnumerable<TVal>>();
-                    count = 0;
-                    keyCount = 0;
-                }
-
-                int pcount = value.Count;
-                if (count + pcount <= maxPerList)
-                {
-                    current[key] = value;
-                    count += pcount;
-                    keyCount++;
-                    continue;
-                }
-
-                // fill up the current batch to max_datapoints data points and keep the remaining data points in current.
-                var inCurrent = value.Take(Math.Min(maxPerList - count, pcount)).ToList();
-                if (inCurrent.Count > 0)
-                {
-                    current[key] = inCurrent;
-                }
-                ret.Add(current);
-
-                // inNext can have too many datapoints
-                var inNext = value.Skip(inCurrent.Count);
-                if (inNext.Any())
-                {
-                    var chunks = ChunkBy(inNext, maxPerList).Select(chunk => new Dictionary<TKey, IEnumerable<TVal>> { { key, chunk } });
-                    if (chunks.Count() > 1)
-                    {
-                        ret.AddRange(chunks.Take(chunks.Count() - 1));
-                    }
-                    current = chunks.Last();
-                    keyCount = 1;
-                    count = current[key].Count();
-                }
-                else
-                {
-                    current = new Dictionary<TKey, IEnumerable<TVal>>();
-                    count = 0;
-                    keyCount = 0;
-                }
-            }
-
-            if (current.Any())
-            {
-                ret.Add(current);
-            }
-
-            return ret;
-        }
-        /// <summary>
-        /// Divide input into a number of size limited chunks
-        /// </summary>
-        /// <param name="input">Input enumerable of any size</param>
-        /// <param name="maxSize">Maximum size of return enumerables</param>
-        /// <returns>A number of enumerables smaller or equal to maxSize</returns>
-        public static IEnumerable<IEnumerable<T>> ChunkBy<T>(IEnumerable<T> input, int maxSize)
-        {
-            if (maxSize == 0)
-            {
-                return input.Select(x => new[] {x});
-            }
-            return input
-                .Select((x, i) => new { Index = i, Value = x })
-                .GroupBy(x => x.Index / maxSize)
-                .Select(x => x.Select(v => v.Value));
         }
         /// <summary>
         /// Reduce the length of given string to maxLength, if it is longer.
@@ -193,7 +102,7 @@ namespace Cognite.OpcUa
             return granularity == TimeSpan.Zero
                 ? input.Select(item => new [] {item.item})
                 : input.GroupBy(pair => pair.time.Ticks / granularity.Ticks)
-                    .SelectMany(group => ChunkBy(group.ToList().Select(pair => pair.item), maxLength));
+                    .SelectMany(group => group.Select(pair => pair.item).ChunkBy(maxLength));
         }
 
         public enum SourceOp

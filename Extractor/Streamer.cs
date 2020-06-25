@@ -276,7 +276,7 @@ namespace Cognite.OpcUa
             if (value == null) throw new ArgumentNullException(nameof(value));
             if (variable == null) throw new ArgumentNullException(nameof(value));
 
-            if (variable.ArrayDimensions != null && variable.ArrayDimensions.Count > 0 && variable.ArrayDimensions[0] > 0)
+            if (variable.IsArray)
             {
                 var ret = new List<BufferedDataPoint>();
                 if (!(value.Value is Array))

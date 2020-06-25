@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -7,6 +6,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Common;
+using Cognite.Extractor.Utils;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
@@ -154,8 +155,8 @@ namespace Cognite.OpcUa.Pushers
                 return null;
             }
             log.Debug("Push {NumDatapointsToPush} datapoints to CDF", count);
-            var dpChunks = ExtractorUtils.ChunkDictOfLists(dataPointList, 100000, 10000).ToArray();
-            var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk, token)).ToList();
+            var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<BufferedDataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
+            var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk.ToDictionary(pair => pair.Key, pair => pair.Values), token)).ToList();
             var results = await Task.WhenAll(pushTasks);
 
 
@@ -214,13 +215,13 @@ namespace Cognite.OpcUa.Pushers
 
             if (objects.Any())
             {
-                var results = await Task.WhenAll(ExtractorUtils.ChunkBy(objects, 1000).Select(chunk => PushAssets(chunk, token)));
+                var results = await Task.WhenAll(objects.ChunkBy(1000).Select(chunk => PushAssets(chunk, token)));
                 if (!results.All(res => res)) return false;
             }
 
             if (variables.Any())
             {
-                var results = await Task.WhenAll(ExtractorUtils.ChunkBy(variables, 1000).Select(chunk => PushTimeseries(chunk, token)));
+                var results = await Task.WhenAll(variables.ChunkBy(1000).Select(chunk => PushTimeseries(chunk, token)));
                 if (!results.All(res => res)) return false;
             }
 
@@ -264,7 +265,7 @@ namespace Cognite.OpcUa.Pushers
             log.Debug("Push {NumEventsToPush} events to CDF", count);
             if (config.Debug) return null;
 
-            var results = await Task.WhenAll(ExtractorUtils.ChunkBy(eventList, 1000).Select(chunk => PushEventsChunk(chunk, token)));
+            var results = await Task.WhenAll(eventList.ChunkBy(1000).Select(chunk => PushEventsChunk(chunk, token)));
             return results.All(result => result);
         }
 

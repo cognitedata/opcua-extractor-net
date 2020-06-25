@@ -565,7 +565,7 @@ namespace Cognite.OpcUa
                         StateStorage != null && config.StateStorage.Interval > 0);
 
                     State.AddActiveNode(node);
-                    if (node.ArrayDimensions != null && node.ArrayDimensions.Count > 0 && node.ArrayDimensions[0] > 0)
+                    if (state.IsArray)
                     {
                         for (int i = 0; i < node.ArrayDimensions[0]; i++)
                         {

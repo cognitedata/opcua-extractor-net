@@ -21,6 +21,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Common;
 using Opc.Ua;
 using Serilog;
 
@@ -746,7 +747,7 @@ namespace Cognite.OpcUa.Config
 
             foreach (int chunkSize in testHistoryChunkSizes)
             {
-                foreach (var chunk in ExtractorUtils.ChunkBy(historizingStates, chunkSize))
+                foreach (var chunk in historizingStates.ChunkBy(chunkSize))
                 {
                     var historyParams = new HistoryReadParams(chunk.Select(state => state.SourceId), details);
                     try
@@ -1010,7 +1011,7 @@ namespace Cognite.OpcUa.Config
                     AttributeId = Attributes.EventNotifier,
                     NodeId = node.Id
                 }).Append(new ReadValueId { AttributeId = Attributes.EventNotifier, NodeId = ObjectIds.Server });
-                foreach (var chunk in ExtractorUtils.ChunkBy(readValueIds, baseConfig.Source.AttributesChunk))
+                foreach (var chunk in readValueIds.ChunkBy(baseConfig.Source.AttributesChunk))
                 {
                     Session.Read(
                         null,

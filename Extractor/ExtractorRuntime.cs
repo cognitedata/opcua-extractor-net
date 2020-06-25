@@ -65,15 +65,15 @@ namespace Cognite.OpcUa
 
             if (config.Cognite != null)
             {
-                pushers.Add(new CDFPusher(provider, config.Cognite));
+                pushers.Add(config.Cognite.ToPusher(provider));
             }
             if (config.Mqtt != null)
             {
-                pushers.Add(new MQTTPusher(config.Mqtt));
+                pushers.Add(config.Mqtt.ToPusher(provider));
             }
             if (config.Influx != null)
             {
-                pushers.Add(new InfluxPusher(config.Influx));
+                pushers.Add(config.Influx.ToPusher(provider));
             }
 
             await Task.WhenAll(pushers.Select(async pusher =>
