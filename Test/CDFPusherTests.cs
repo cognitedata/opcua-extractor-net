@@ -96,10 +96,17 @@ namespace Test
         [Fact]
         public async Task TestDebugMode()
         {
-            using var tester = new ExtractorTester(new ExtractorTestParameters());
+            using var tester = new ExtractorTester(new ExtractorTestParameters(){
+                Builder = (config, pushers, client) =>
+                {
+                    return new UAExtractor(config, pushers.Append(config.Influx.ToPusher(null)).Append(config.Mqtt.ToPusher(null)), client, null);
+                }
+            });
             await tester.ClearPersistentData();
 
             tester.Config.Cognite.Debug = true;
+            tester.Config.Mqtt.Debug = true;
+            tester.Config.Influx.Debug = true;
             tester.Config.Cognite.ApiKey = null;
 
             await tester.StartServer();

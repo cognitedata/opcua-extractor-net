@@ -108,6 +108,8 @@ namespace Cognite.OpcUa
             }
 
             log.Debug("Push {cnt} datapoints to influxdb {db}", ipoints.Count, config.Database);
+            if (config.Debug) return null;
+
             try
             {
                 await client.PostPointsAsync(config.Database, ipoints, config.PointChunkSize);
@@ -159,6 +161,7 @@ namespace Cognite.OpcUa
 
             log.Debug("Push {cnt} events to influxdb", count);
             var points = evts.Select(BufferedEventToInflux);
+            if (config.Debug) return true;
             try
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
@@ -352,6 +355,7 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
+            if (config.Debug) return true;
             IEnumerable<string> dbs;
             try
             {
@@ -448,6 +452,7 @@ namespace Cognite.OpcUa
             IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
+            if (config.Debug) return Array.Empty<BufferedDataPoint>();
             token.ThrowIfCancellationRequested();
             if (states == null) throw new ArgumentNullException(nameof(states));
 
@@ -521,6 +526,7 @@ namespace Cognite.OpcUa
             IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
+            if (config.Debug) return Array.Empty<BufferedEvent>();
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,

@@ -80,6 +80,7 @@ namespace Cognite.OpcUa.Pushers
             client = new MqttFactory().CreateMqttClient();
             baseBuilder = new MqttApplicationMessageBuilder()
                 .WithAtLeastOnceQoS();
+            if (config.Debug) return;
 
             client.UseDisconnectedHandler(async e =>
             {
@@ -224,6 +225,7 @@ namespace Cognite.OpcUa.Pushers
                 var results = await Task.WhenAll(variables.ChunkBy(1000).Select(chunk => PushTimeseries(chunk, token)));
                 if (!results.All(res => res)) return false;
             }
+            if (config.Debug) return true;
 
             if (!string.IsNullOrEmpty(config.LocalState))
             {
@@ -393,6 +395,7 @@ namespace Cognite.OpcUa.Pushers
 
         public async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> evts, CancellationToken token)
         {
+            if (config.Debug) return true;
             var events = evts.Select(EventToCDFEvent).Where(evt => evt != null);
 
             var data = JsonSerializer.SerializeToUtf8Bytes(events, null);

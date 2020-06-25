@@ -387,6 +387,7 @@ namespace Cognite.OpcUa
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
             if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
+            if (config.Debug) return true;
             var destination = GetDestination();
             try
             {
