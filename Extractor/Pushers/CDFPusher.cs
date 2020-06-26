@@ -113,11 +113,7 @@ namespace Cognite.OpcUa
 
             int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count());
 
-            if (count == 0)
-            {
-                log.Verbose("Push 0 datapoints to CDF");
-                return null;
-            }
+            if (count == 0) return null;
 
             var destination = GetDestination();
 
@@ -126,7 +122,6 @@ namespace Cognite.OpcUa
                 kvp => kvp.Value.Select(
                     dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue))
                 );
-            log.Debug("Push {cnt} datapoints to CDF", count);
             if (config.Debug) return null;
 
             try
@@ -191,12 +186,8 @@ namespace Cognite.OpcUa
                 eventList.Add(buffEvent);
                 count++;
             }
-            if (count == 0)
-            {
-                log.Verbose("Push 0 events to CDF");
-                return null;
-            }
-            log.Debug("Push {NumEventsToPush} events to CDF", count);
+            if (count == 0) return null;
+
             if (config.Debug) return null;
 
             var destination = GetDestination();
@@ -206,6 +197,7 @@ namespace Cognite.OpcUa
                 await destination.EnsureEventsExistsAsync(eventList.Select(EventToCDFEvent).Where(evt => evt != null), true, token);
                 eventCounter.Inc(count);
                 eventPushCounter.Inc();
+                log.Debug("Successfully pushed {count} events to CDF", count);
             }
             catch (Exception exc)
             {

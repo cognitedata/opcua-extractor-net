@@ -150,18 +150,21 @@ namespace Cognite.OpcUa.Pushers
                 dataPointList[buffer.Id].Add(buffer);
             }
 
-            if (count == 0)
-            {
-                log.Verbose("Push 0 datapoints to CDF");
-                return null;
-            }
-            log.Debug("Push {NumDatapointsToPush} datapoints to CDF", count);
+            if (count == 0) return null;
+
             var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<BufferedDataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
             var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk.ToDictionary(pair => pair.Key, pair => pair.Values), token)).ToList();
             var results = await Task.WhenAll(pushTasks);
 
 
-            if (!results.All(res => res)) return false;
+
+            if (!results.All(res => res))
+            {
+                log.Debug("Failed to push {cnt} points to CDF over MQTT", count);
+                return false;
+            }
+
+            log.Debug("Successfully pushed {cnt} points to CDF over MQTT", count);
 
             return true;
         }
@@ -259,16 +262,19 @@ namespace Cognite.OpcUa.Pushers
                 eventList.Add(buffEvent);
                 count++;
             }
-            if (count == 0)
-            {
-                log.Verbose("Push 0 events to CDF");
-                return null;
-            }
-            log.Debug("Push {NumEventsToPush} events to CDF", count);
+            if (count == 0) return null;
             if (config.Debug) return null;
 
             var results = await Task.WhenAll(eventList.ChunkBy(1000).Select(chunk => PushEventsChunk(chunk, token)));
-            return results.All(result => result);
+            if (!results.All(result => result))
+            {
+                log.Debug("Failed to push {cnt} events to CDF over MQTT", count);
+                return false;
+            }
+
+            log.Debug("Successfully pushed {cnt} events to CDF over MQTT", count);
+
+            return true;
         }
 
         /// <summary>
