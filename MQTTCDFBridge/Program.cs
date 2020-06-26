@@ -45,7 +45,7 @@ namespace Cognite.Bridge
                 source?.Cancel();
             };
 
-            while (true)
+            while (!source.Token.IsCancellationRequested)
             {
                 try
                 {
@@ -57,7 +57,7 @@ namespace Cognite.Bridge
                     log.Warning("Failed to start bridge: {msg}, retrying", ex.Message);
                 }
 
-                await Task.Delay(2000);
+                await Task.Delay(2000, source.Token);
             }
 
             quitEvent.WaitOne();

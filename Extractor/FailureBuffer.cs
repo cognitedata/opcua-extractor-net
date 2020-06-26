@@ -273,47 +273,42 @@ namespace Cognite.OpcUa
 
             if (config.Influx)
             {
-                try
+                if (!influxPusher.EventsFailing)
                 {
-                    if (!influxPusher.EventsFailing)
+                    var eventRanges = new Dictionary<string, TimeRange>();
+                    foreach (var evt in events)
                     {
-                        var eventRanges = new Dictionary<string, TimeRange>();
-                        foreach (var evt in events)
+                        var sourceId = extractor.GetUniqueId(evt.SourceNode);
+                        if (!eventRanges.ContainsKey(sourceId))
                         {
-                            var sourceId = extractor.GetUniqueId(evt.SourceNode);
-                            if (!eventRanges.ContainsKey(sourceId))
-                            {
-                                eventRanges[sourceId] = new TimeRange(evt.Time, evt.Time);
-                                continue;
-                            }
-
-                            var range = eventRanges[sourceId];
-                            eventRanges[sourceId] = eventRanges[sourceId].Extend(evt.Time, evt.Time);
+                            eventRanges[sourceId] = new TimeRange(evt.Time, evt.Time);
+                            continue;
                         }
 
-                        foreach ((string sourceId, var range) in eventRanges)
-                        {
-                            if (!eventBufferStates.ContainsKey(sourceId))
-                            {
-                                eventBufferStates[sourceId] = new InfluxBufferState(extractor, extractor.State.GetNodeId(sourceId));
-                                eventBufferStates[sourceId].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
-                            }
-                            eventBufferStates[sourceId].UpdateDestinationRange(range.First, range.Last);
-                        }
-
-                        if (config.InfluxStateStore)
-                        {
-                            await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
-                                fullConfig.StateStorage.InfluxEventStore, token).ConfigureAwait(false);
-                        }
-
-                        anyEvents = true;
+                        eventRanges[sourceId] = eventRanges[sourceId].Extend(evt.Time, evt.Time);
                     }
+
+                    foreach ((string sourceId, var range) in eventRanges)
+                    {
+                        if (!eventBufferStates.ContainsKey(sourceId))
+                        {
+                            eventBufferStates[sourceId] = new InfluxBufferState(extractor, extractor.State.GetNodeId(sourceId));
+                            eventBufferStates[sourceId].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
+                        }
+                        eventBufferStates[sourceId].UpdateDestinationRange(range.First, range.Last);
+                    }
+
+                    if (config.InfluxStateStore)
+                    {
+                        await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
+                            fullConfig.StateStorage.InfluxEventStore, token).ConfigureAwait(false);
+                    }
+
+                    anyEvents = true;
                 }
-                catch (Exception e)
+                else
                 {
-                    success = false;
-                    log.Error(e, "Failed to insert events into influxdb buffer");
+                    log.Warning("Influxpusher is failing, events will not be buffered in influxdb");
                 }
             }
 
@@ -377,6 +372,11 @@ namespace Cognite.OpcUa
                         success = false;
                         Log.Error(e, "Failed to read events from influxdb");
                     }
+                }
+                else if (anyEvents)
+                {
+                    log.Warning("No active event states, but anyEvents is set to true");
+                    //anyEvents = false;
                 }
             }
 
