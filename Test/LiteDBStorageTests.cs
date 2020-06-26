@@ -467,8 +467,8 @@ namespace Test
                     ["dt2"] = "data2"
                 },
                 SourceNode = tester.Server.Ids.Event.Obj2,
-                ReceivedTime = DateTime.Now,
-                Time = DateTime.Now
+                ReceivedTime = DateTime.UtcNow,
+                Time = DateTime.UtcNow
             };
 
             var evt2 = new BufferedEvent
@@ -479,8 +479,8 @@ namespace Test
                 Message = null,
                 MetaData = new Dictionary<string, object>(),
                 SourceNode = tester.Server.Ids.Event.Var1,
-                ReceivedTime = DateTime.Now,
-                Time = DateTime.Now
+                ReceivedTime = DateTime.UtcNow,
+                Time = DateTime.UtcNow
             };
 
             var bytes = evt.ToStorableBytes(tester.Extractor);
@@ -522,8 +522,8 @@ namespace Test
         [Trait("Test", "datapointconversion")]
         public void TestDataPointConversion()
         {
-            var dp = new BufferedDataPoint(DateTime.Now, "testid", 123.123);
-            var dp2 = new BufferedDataPoint(DateTime.Now, "testid2", "testvalue");
+            var dp = new BufferedDataPoint(DateTime.UtcNow, "testid", 123.123);
+            var dp2 = new BufferedDataPoint(DateTime.UtcNow, "testid2", "testvalue");
 
             var dpc = dp.ToStorableBytes();
             var dp2c = dp2.ToStorableBytes();
@@ -552,8 +552,8 @@ namespace Test
             var dps = new List<BufferedDataPoint>();
             for (int i = 0; i < 10000; i++)
             {
-                dps.Add(new BufferedDataPoint(DateTime.Now, "testid", i));
-                dps.Add(new BufferedDataPoint(DateTime.Now, "testid", "test " + i));
+                dps.Add(new BufferedDataPoint(DateTime.UtcNow, "testid", i));
+                dps.Add(new BufferedDataPoint(DateTime.UtcNow, "testid", "test " + i));
             }
 
             File.Create("datapoints.bin").Close();
@@ -623,8 +623,8 @@ namespace Test
                         ["dt2"] = "data2"
                     },
                     SourceNode = tester.Server.Ids.Event.Obj1,
-                    ReceivedTime = DateTime.Now,
-                    Time = DateTime.Now
+                    ReceivedTime = DateTime.UtcNow,
+                    Time = DateTime.UtcNow
                 });
             }
 

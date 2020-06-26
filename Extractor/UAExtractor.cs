@@ -153,7 +153,7 @@ namespace Cognite.OpcUa
             ConfigureExtractor(token);
 
             Started = true;
-            startTime.Set(new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds());
+            startTime.Set(new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds());
 
             foreach (var pusher in pushers)
             {

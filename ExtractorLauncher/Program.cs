@@ -197,7 +197,7 @@ namespace Cognite.OpcUa
                             break;
                         }
 
-                        DateTime startTime = DateTime.Now;
+                        DateTime startTime = DateTime.UtcNow;
                         try
                         {
                             log.Information("Starting extractor");
@@ -238,7 +238,7 @@ namespace Cognite.OpcUa
                             break;
                         }
 
-                        if (startTime > DateTime.Now - TimeSpan.FromSeconds(600))
+                        if (startTime > DateTime.UtcNow - TimeSpan.FromSeconds(600))
                         {
                             waitRepeats++;
                         }

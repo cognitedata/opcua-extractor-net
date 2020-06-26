@@ -139,7 +139,7 @@ namespace Test
 
             var pusher = tester.Pusher;
 
-            var badPoints = values.Select(value => new BufferedDataPoint(DateTime.Now, "gp.tl:i=2", value)).ToList();
+            var badPoints = values.Select(value => new BufferedDataPoint(DateTime.UtcNow, "gp.tl:i=2", value)).ToList();
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
 
