@@ -58,7 +58,6 @@ namespace Cognite.OpcUa
         {
             this.config = config;
             BaseConfig = config;
-            numCdfPusher.Inc();
             provider = clientProvider;
         }
 
@@ -67,8 +66,6 @@ namespace Cognite.OpcUa
             return provider.GetRequiredService<CogniteDestination>();
         }
 
-        private static readonly Counter numCdfPusher = Metrics
-            .CreateCounter("opcua_cdf_pusher_count", "Number of active CDF pushers");
         private static readonly Counter dataPointsCounter = Metrics
             .CreateCounter("opcua_datapoints_pushed_cdf", "Number of datapoints pushed to CDF");
         private static readonly Counter dataPointPushes = Metrics

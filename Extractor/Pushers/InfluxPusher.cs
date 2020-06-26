@@ -28,8 +28,6 @@ namespace Cognite.OpcUa
         private readonly InfluxPusherConfig config;
         private InfluxDBClient client;
 
-        private static readonly Counter numInfluxPusher = Metrics
-            .CreateCounter("opcua_influx_pusher_count", "Number of active influxdb pushers");
         private static readonly Counter dataPointsCounter = Metrics
             .CreateCounter("opcua_datapoints_pushed_influx", "Number of datapoints pushed to influxdb");
         private static readonly Counter dataPointPushes = Metrics
@@ -54,7 +52,6 @@ namespace Cognite.OpcUa
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             BaseConfig = config;
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
-            numInfluxPusher.Inc();
         }
         /// <summary>
         /// Push each datapoint to influxdb. The datapoint Id, which corresponds to timeseries externalId in CDF, is used as MeasurementName
@@ -100,7 +97,6 @@ namespace Cognite.OpcUa
             {
                 var ts = Extractor.State.GetNodeState(group.Key);
                 if (ts == null) continue;
-                dataPointsCounter.Inc(group.Count());
                 ipoints.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
             }
 
@@ -110,6 +106,7 @@ namespace Cognite.OpcUa
             {
                 await client.PostPointsAsync(config.Database, ipoints, config.PointChunkSize);
                 log.Debug("Successfully pushed {cnt} points to influxdb", count);
+                dataPointsCounter.Inc(count);
             }
             catch (Exception e)
             {
