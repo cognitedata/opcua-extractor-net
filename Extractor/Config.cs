@@ -65,6 +65,9 @@ namespace Cognite.OpcUa
         public long? DataSetId { get; set; }
         public bool Debug { get; set; } = false;
         public bool ReadExtractedRanges { get; set; } = true;
+        public string RawDatabase { get; set; }
+        public string AssetRawTable { get; set; }
+        public string TimeseriesRawTable { get; set; }
         public double? NonFiniteReplacement
         {
             get => nonFiniteReplacement;

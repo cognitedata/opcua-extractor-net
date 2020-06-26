@@ -29,8 +29,10 @@ using Prometheus;
 using Serilog;
 using Cognite.Extractor.Utils;
 using TimeRange = Cognite.Extractor.Common.TimeRange;
+using System.Text.Json;
+using Cognite.Extractor.Common;
 
-namespace Cognite.OpcUa
+namespace Cognite.OpcUa.Pushers
 {
     /// <summary>
     /// Pusher against CDF
@@ -191,7 +193,9 @@ namespace Cognite.OpcUa
 
             try
             {
-                await destination.EnsureEventsExistsAsync(eventList.Select(EventToCDFEvent).Where(evt => evt != null), true, token);
+                await destination.EnsureEventsExistsAsync(eventList
+                    .Select(evt => PusherUtils.EventToCDFEvent(evt, Extractor, config.DataSetId, nodeToAssetIds))
+                    .Where(evt => evt != null), true, token);
                 eventCounter.Inc(count);
                 eventPushCounter.Inc();
                 log.Debug("Successfully pushed {count} events to CDF", count);
@@ -255,15 +259,28 @@ namespace Cognite.OpcUa
 
             try
             {
-                var assets = await destination.GetOrCreateAssetsAsync(assetIds.Keys, async ids =>
+                if (!string.IsNullOrWhiteSpace(config.AssetRawTable))
                 {
-                    var assets = ids.Select(id => assetIds[id]);
-                    await Extractor.ReadProperties(assets, token);
-                    return assets.Select(NodeToAsset).Where(asset => asset != null);
-                }, token);
-                foreach (var asset in assets)
+                    await EnsureRawRows<AssetCreate>(config.RawDatabase, config.AssetRawTable, assetIds.Keys, async ids =>
+                    {
+                        var assets = ids.Select(id => assetIds[id]);
+                        await Extractor.ReadProperties(assets, token);
+                        return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, null)).Where(asset => asset != null)
+                            .ToDictionary(asset => asset.ExternalId);
+                    }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
+                }
+                else
                 {
-                    nodeToAssetIds[assetIds[asset.ExternalId].Id] = asset.Id;
+                    var assets = await destination.GetOrCreateAssetsAsync(assetIds.Keys, async ids =>
+                    {
+                        var assets = ids.Select(id => assetIds[id]);
+                        await Extractor.ReadProperties(assets, token);
+                        return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId)).Where(asset => asset != null);
+                    }, token);
+                    foreach (var asset in assets)
+                    {
+                        nodeToAssetIds[assetIds[asset.ExternalId].Id] = asset.Id;
+                    }
                 }
             }
             catch (Exception e)
@@ -277,11 +294,16 @@ namespace Cognite.OpcUa
 
             try
             {
+                bool metaRaw = !string.IsNullOrWhiteSpace(config.TimeseriesRawTable);
                 var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsIds.Keys, async ids =>
                 {
                     var tss = ids.Select(id => tsIds[id]);
-                    await Extractor.ReadProperties(tss, token);
-                    return tss.Select(VariableToTimeseries).Where(ts => ts != null);
+                    if (!metaRaw)
+                    {
+                        await Extractor.ReadProperties(tss, token);
+                    }
+                    return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, metaRaw))
+                        .Where(ts => ts != null);
                 }, token);
                 var foundBadTimeseries = new List<string>();
                 foreach (var ts in timeseries)
@@ -300,6 +322,16 @@ namespace Cognite.OpcUa
                 if (foundBadTimeseries.Any())
                 {
                     log.Debug("Found mismatched timeseries when ensuring: {tss}", foundBadTimeseries);
+                }
+                if (metaRaw)
+                {
+                    await EnsureRawRows<StatelessTimeSeriesCreate>(config.RawDatabase, config.TimeseriesRawTable, tsIds.Keys, async ids =>
+                    {
+                        var timeseries = ids.Select(id => tsIds[id]);
+                        await Extractor.ReadProperties(timeseries, token);
+                        return timeseries.Select(node => PusherUtils.VariableToStatelessTimeSeries(node, Extractor, null)).Where(ts => ts != null)
+                            .ToDictionary(ts => ts.ExternalId);
+                    }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
                 }
             }
             catch (Exception e)
@@ -416,169 +448,50 @@ namespace Cognite.OpcUa
                           "to insufficient acces rights on API key. Project {project} at {host}: {msg}",
                     config.Project, config.Host, ex.Message);
                 log.Debug(ex, "Could not access CDF Events");
+                return false;
             }
 
             return true;
         }
 
-        #endregion
-
-        #region Pushing
-        /// <summary>
-        /// Create timeseries poco to create this node in CDF
-        /// </summary>
-        /// <param name="variable">Variable to be converted</param>
-        /// <returns>Complete timeseries write poco</returns>
-        private TimeSeriesCreate VariableToTimeseries(BufferedVariable variable)
+        private async Task EnsureRawRows<T>(
+            string dbName,
+            string tableName,
+            IEnumerable<string> keys,
+            Func<IEnumerable<string>, Task<IDictionary<string, T>>> dtoBuilder,
+            JsonSerializerOptions options,
+            CancellationToken token)
         {
-            string externalId = Extractor.GetUniqueId(variable.Id, variable.Index);
-            TimeSeriesCreate writePoco;
-            try
+            var destination = GetDestination();
+            string cursor = null;
+            var existing = new HashSet<string>();
+            do
             {
-                writePoco = new TimeSeriesCreate
+                try
                 {
-                    Description = ExtractorUtils.Truncate(variable.Description, 1000),
-                    ExternalId = externalId,
-                    AssetId = nodeToAssetIds[variable.ParentId],
-                    Name = ExtractorUtils.Truncate(variable.DisplayName, 255),
-                    LegacyName = externalId,
-                    IsString = variable.DataType.IsString,
-                    IsStep = variable.DataType.IsStep,
-                    DataSetId = config.DataSetId
-                };
-            }
-            catch (Exception ex)
-            {
-                log.Warning("Failed to create timeseries object: {msg}", ex.Message);
-                return null;
-            }
-            if (variable.Properties != null && variable.Properties.Any())
-            {
-                writePoco.Metadata = variable.Properties
-                    .Where(prop => prop.Value != null)
-                    .Take(16)
-                    .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
-            }
-            return writePoco;
-        }
-        /// <summary>
-        /// Converts BufferedNode into asset write poco.
-        /// </summary>
-        /// <param name="node">Node to be converted</param>
-        /// <returns>Full asset write poco</returns>
-        private AssetCreate NodeToAsset(BufferedNode node)
-        {
-            AssetCreate writePoco;
-            try
-            {
-                writePoco = new AssetCreate
-                {
-                    Description = ExtractorUtils.Truncate(node.Description, 500),
-                    ExternalId = Extractor.GetUniqueId(node.Id),
-                    Name = string.IsNullOrEmpty(node.DisplayName)
-                        ? ExtractorUtils.Truncate(Extractor.GetUniqueId(node.Id), 140)
-                        : ExtractorUtils.Truncate(node.DisplayName, 140),
-                    DataSetId = config.DataSetId
-                };
-            }
-            catch (Exception ex)
-            {
-                log.Warning("Failed to create assets object: {msg}", ex.Message);
-                return null;
-            }
-
-            if (node.ParentId != null && !node.ParentId.IsNullNodeId)
-            {
-                writePoco.ParentExternalId = Extractor.GetUniqueId(node.ParentId);
-            }
-            if (node.Properties != null && node.Properties.Any())
-            {
-                writePoco.Metadata = node.Properties
-                    .Where(prop => prop.Value != null)
-                    .Take(16)
-                    .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
-            }
-            return writePoco;
-        }
-        /// <summary>
-        /// Get the value of given object assumed to be a timestamp as the number of milliseconds since 1/1/1970
-        /// </summary>
-        /// <param name="value">Value of the object. Assumed to be a timestamp or numeric value</param>
-        /// <returns>Milliseconds since epoch</returns>
-        private static long GetTimestampValue(object value)
-        {
-            if (value is DateTime dt)
-            {
-                return new DateTimeOffset(dt).ToUnixTimeMilliseconds();
-            }
-            return Convert.ToInt64(value, CultureInfo.InvariantCulture);
-        }
-        private static readonly HashSet<string> excludeMetaData = new HashSet<string> {
-            "StartTime", "EndTime", "Type", "SubType"
-        };
-        /// <summary>
-        /// Transform BufferedEvent into EventEntity to be sent to CDF.
-        /// </summary>
-        /// <param name="evt">Event to be transformed.</param>
-        /// <returns>Final EventEntity object</returns>
-        private EventCreate EventToCDFEvent(BufferedEvent evt)
-        {
-            EventCreate entity;
-            try
-            {
-                entity = new EventCreate
-                {
-                    Description = ExtractorUtils.Truncate(evt.Message, 500),
-                    StartTime = evt.MetaData.ContainsKey("StartTime")
-                        ? GetTimestampValue(evt.MetaData["StartTime"])
-                        : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                    EndTime = evt.MetaData.ContainsKey("EndTime")
-                        ? GetTimestampValue(evt.MetaData["EndTime"])
-                        : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                    AssetIds = new List<long> {nodeToAssetIds[evt.SourceNode]},
-                    ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
-                    Type = ExtractorUtils.Truncate(evt.MetaData.ContainsKey("Type")
-                        ? Extractor.ConvertToString(evt.MetaData["Type"])
-                        : Extractor.GetUniqueId(evt.EventType), 64),
-                    DataSetId = config.DataSetId
-                };
-            }
-            catch (Exception ex)
-            {
-                log.Warning("Failed to create event object: {msg}", ex.Message);
-                return null;
-            }
-
-            var finalMetaData = new Dictionary<string, string>();
-            int len = 1;
-            finalMetaData["Emitter"] = Extractor.GetUniqueId(evt.EmittingNode);
-            if (!evt.MetaData.ContainsKey("SourceNode"))
-            {
-                finalMetaData["SourceNode"] = Extractor.GetUniqueId(evt.SourceNode);
-                len++;
-            }
-            if (evt.MetaData.ContainsKey("SubType"))
-            {
-                entity.Subtype = ExtractorUtils.Truncate(Extractor.ConvertToString(evt.MetaData["SubType"]), 64);
-            }
-
-            foreach (var dt in evt.MetaData)
-            {
-                if (!excludeMetaData.Contains(dt.Key))
-                {
-                    finalMetaData[ExtractorUtils.Truncate(dt.Key, 32)] =
-                        ExtractorUtils.Truncate(Extractor.ConvertToString(dt.Value), 256);
+                    var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
+                        new RawRowQuery { Columns = new[] { "," }, Cursor = cursor, Limit = 10_000 }, token);
+                    foreach (var item in result.Items)
+                    {
+                        existing.Add(item.Key);
+                    }
+                    cursor = result.NextCursor;
                 }
+                catch (ResponseException ex) when (ex.Code == 404) {
+                    log.Warning("Table or database not found: {msg}", ex.Message);
+                    break;
+                }
+            } while (cursor != null);
 
-                if (len++ == 15) break;
-            }
+            var toCreate = keys.Except(existing);
+            if (!toCreate.Any()) return;
+            log.Information("Creating {cnt} raw rows in CDF", toCreate.Count());
 
-            if (finalMetaData.Any())
-            {
-                entity.Metadata = finalMetaData;
-            }
-            return entity;
+            var createDtos = await dtoBuilder(toCreate);
+
+            await destination.InsertRawRowsAsync(dbName, tableName, createDtos, options, token);
         }
+
         #endregion
 
         public void Dispose() { }
