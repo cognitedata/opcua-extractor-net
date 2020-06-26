@@ -288,6 +288,7 @@ namespace Test
             using var pusher = new CDFPusher(provider, config);
             var res = await pusher.TestConnection(fullConfig, CancellationToken.None);
             Assert.True(res);
+            Assert.Equal(3, handler.RequestCount);
         }
         [Fact]
         [Trait("Server", "basic")]
