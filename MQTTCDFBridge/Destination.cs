@@ -253,7 +253,6 @@ namespace Cognite.Bridge
             var missingAssetIds = assetExternalIds.Except(assetIds.Keys);
 
             var destination = GetDestination();
-
             if (missingAssetIds.Any())
             {
                 if (!await RetrieveMissingAssets(missingAssetIds, token))

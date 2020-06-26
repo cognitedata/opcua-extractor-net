@@ -728,9 +728,20 @@ namespace Test
             Source?.Cancel();
             Source?.Dispose();
             IfDbClient?.Dispose();
+            if (Extractor != null)
+            {
+                IEnumerable<IPusher> pushers = Extractor.GetType().GetField("pushers", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .GetValue(Extractor) as IEnumerable<IPusher>;
+                if (pushers != null)
+                {
+                    foreach (var pusher in pushers)
+                    {
+                        pusher.Dispose();
+                    }
+                }
+            }
             Extractor?.Close();
             Extractor?.Dispose();
-            Pusher?.Dispose();
             Server?.Dispose();
         }
     }
