@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Opc.Ua;
 using Opc.Ua.Client;
+using Prometheus;
 using Serilog;
 
 namespace Cognite.OpcUa
@@ -25,6 +26,8 @@ namespace Cognite.OpcUa
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(Streamer));
 
+        private static readonly Counter missedArrayPoints = Metrics
+            .CreateCounter("opcua_array_points_missed", "Points missed due to incorrect ArrayDimensions");
 
         public bool AllowEvents { get; set; }
         public bool AllowData { get; set; }
@@ -276,31 +279,45 @@ namespace Cognite.OpcUa
             if (value == null) throw new ArgumentNullException(nameof(value));
             if (variable == null) throw new ArgumentNullException(nameof(value));
 
-            if (variable.IsArray)
+            if (value.Value is Array values)
             {
-                var ret = new List<BufferedDataPoint>();
-                if (!(value.Value is Array))
+                int dim = 1;
+                if (!variable.IsArray)
                 {
-                    UAExtractor.BadDataPoints.Inc();
-                    log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
-                    return Enumerable.Empty<BufferedDataPoint>();
+                    log.Verbose("Array values returned for scalar variable {id}", variable.Id);
+                    if (values.Length > 1)
+                    {
+                        missedArrayPoints.Inc(values.Length - 1);
+                    }
                 }
-                var values = (Array)value.Value;
-                for (int i = 0; i < Math.Min(variable.ArrayDimensions[0], values.Length); i++)
+                else if (variable.ArrayDimensions[0] >= values.Length)
                 {
+                    dim = values.Length;
+                }
+                else
+                {
+                    dim = variable.ArrayDimensions[0];
+                    log.Verbose("Missing {cnt} points for variable {id} due to too small ArrayDimensions", values.Length - dim, variable.Id);
+                    missedArrayPoints.Inc(values.Length - dim);
+                }
+                var ret = new List<BufferedDataPoint>();
+                for (int i = 0; i < dim; i++)
+                {
+                    var id = variable.IsArray ? $"{uniqueId}[{i}]" : uniqueId;
                     var dp = variable.DataType.IsString
                         ? new BufferedDataPoint(
                             value.SourceTimestamp,
-                            $"{uniqueId}[{i}]",
+                            id,
                             extractor.ConvertToString(values.GetValue(i)))
                         : new BufferedDataPoint(
                             value.SourceTimestamp,
-                            $"{uniqueId}[{i}]",
+                            id,
                             UAClient.ConvertToDouble(values.GetValue(i)));
                     ret.Add(dp);
                 }
                 return ret;
             }
+
             var sdp = variable.DataType.IsString
                 ? new BufferedDataPoint(
                     value.SourceTimestamp,

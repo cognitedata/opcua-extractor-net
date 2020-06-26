@@ -356,14 +356,40 @@ namespace Cognite.OpcUa
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
 
-            if (node.DataType.IsString && !config.Extraction.AllowStringVariables) return false;
-            if (ignoreDataTypes.Contains(node.DataType.Raw)) return false;
-            if (node.ValueRank == ValueRanks.Scalar) return true;
+            if (node.DataType.IsString && !config.Extraction.AllowStringVariables)
+            {
+                log.Verbose("Skipping variable {id} due to string datatype and allow-string-variables being set to false", node.Id);
+                return false;
+            }
+            if (ignoreDataTypes.Contains(node.DataType.Raw))
+            {
+                log.Verbose("Skipping variable {id} due to raw datatype {raw} being in list of ignored data types", node.Id, node.DataType.Raw);
+                return false;
+            }
+            if (node.ValueRank == ValueRanks.Scalar || config.Extraction.UnknownAsScalar
+                && (node.ValueRank == ValueRanks.ScalarOrOneDimension || node.ValueRank == ValueRanks.Any)) return true;
 
             if (node.ArrayDimensions != null && node.ArrayDimensions.Count == 1)
             {
                 int length = node.ArrayDimensions.First();
-                return config.Extraction.MaxArraySize < 0 || length > 0 && length <= config.Extraction.MaxArraySize;
+                if (config.Extraction.MaxArraySize < 0 || length > 0 && length <= config.Extraction.MaxArraySize)
+                {
+                    return true;
+                }
+                else
+                {
+                    log.Verbose("Skipping variable {id} due to non-scalar ValueRank {rank} and too large dimension {dim}",
+                        node.Id, node.ValueRank, length);
+                }
+            }
+            else if (node.ArrayDimensions == null)
+            {
+                log.Verbose("Skipping variable {id} due to non-scalar ValueRank {rank} and null ArrayDimensions", node.Id, node.ValueRank);
+            }
+            else
+            {
+                log.Verbose("Skipping variable {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
+                    node.Id, node.ArrayDimensions.Count);
             }
 
             return false;
