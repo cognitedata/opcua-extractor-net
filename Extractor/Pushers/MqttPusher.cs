@@ -443,7 +443,7 @@ namespace Cognite.OpcUa.Pushers
                 var rawObj = new RawRequestWrapper<StatelessTimeSeriesCreate>
                 {
                     Database = config.RawMetadata.Database,
-                    Table = config.RawMetadata.AssetsTable,
+                    Table = config.RawMetadata.TimeseriesTable,
                     Rows = timeseries.Select(ts => new RawRowCreateDto<StatelessTimeSeriesCreate> { Key = ts.ExternalId, Columns = ts })
                 };
 
