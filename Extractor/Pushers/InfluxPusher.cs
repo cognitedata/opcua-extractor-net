@@ -438,10 +438,11 @@ namespace Cognite.OpcUa
             };
             idp.Fields.Add("value", evt.Message);
             idp.Fields.Add("id", evt.EventId);
-            idp.Fields.Add("source", SourceNodeToString(evt.SourceNode));
+            idp.Fields.Add("source", evt.MetaData.ContainsKey("SourceNode")
+                ? Extractor.ConvertToString(evt.MetaData["SourceNode"]) : SourceNodeToString(evt.SourceNode));
             foreach (var kvp in evt.MetaData)
             {
-                if (kvp.Key == "Emitter" || kvp.Key == "Type") continue;
+                if (kvp.Key == "Emitter" || kvp.Key == "Type" || kvp.Key == "SourceNode") continue;
                 var str = Extractor.ConvertToString(kvp.Value);
                 idp.Tags[kvp.Key] = string.IsNullOrEmpty(str) ? "null" : str;
             }
@@ -556,7 +557,7 @@ namespace Cognite.OpcUa
                 {
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
                     if (!(res is IDictionary<string, object> values)) return null;
-                    var sourceNode = Extractor.State.GetNodeId((string)values["SourceNode"]);
+                    var sourceNode = Extractor.State.GetNodeId((string)values["Source"]);
                     var evt = new BufferedEvent
                     {
                         Time = (DateTime)values["Time"],

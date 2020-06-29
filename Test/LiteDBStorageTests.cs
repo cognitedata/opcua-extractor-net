@@ -775,7 +775,7 @@ namespace Test
             var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
 
-            Assert.Equal(21, events.Count);
+            Assert.Equal(27, events.Count);
 
             var countregex = new Regex("\\d+$");
             var propNumbers = events

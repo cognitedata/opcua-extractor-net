@@ -90,7 +90,6 @@ namespace Test
             Assert.Equal(3, eventTypes.Count());
             var eventAssets = tester.Handler.Events.SelectMany(evt => evt.Value.assetIds).Distinct();
             Assert.Equal(2, eventAssets.Count());
-            Assert.True(tester.Handler.Events.Values.All(evt => evt.assetIds.Any()));
         }
 
         [Fact]
