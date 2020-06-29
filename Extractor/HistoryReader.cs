@@ -397,7 +397,7 @@ namespace Cognite.OpcUa
             try
             {
                 Interlocked.Increment(ref running);
-                var frontFillChunks = states.GroupByTimeGranularity(historyGranularity, config.EventNodesChunk);
+                var frontFillChunks = states.GroupByTimeGranularity(historyGranularity, state => state.SourceExtractedRange.Last, config.EventNodesChunk);
                 await Task.WhenAll(frontFillChunks.Select(chunk =>
                     Task.Run(() => FrontfillEventsChunk(chunk, token))));
             }
@@ -427,13 +427,8 @@ namespace Cognite.OpcUa
                 var backfillChunks = states.Where(state => state.SourceExtractedRange.First > historyStartTime)
                     .GroupByTimeGranularity(historyGranularity, state => state.SourceExtractedRange.First, config.EventNodesChunk);
 
-<<<<<<< HEAD
                 await Task.WhenAll(backfillChunks.Select(chunk =>
-                    Task.Run(() => BackfillEventsChunk(chunk, nodes, token))));
-=======
-                await Task.WhenAll(backFillChunks.Select(chunk =>
                     Task.Run(() => BackfillEventsChunk(chunk, token))));
->>>>>>> Remove dependency on SourceNode
             }
             finally
             {

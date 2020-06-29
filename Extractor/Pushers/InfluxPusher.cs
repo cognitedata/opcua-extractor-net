@@ -532,7 +532,7 @@ namespace Cognite.OpcUa
             IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
-            if (config.Debug) return Array.Empty<BufferedEvent>();
+            if (config.Debug || states == null) return Array.Empty<BufferedEvent>();
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
