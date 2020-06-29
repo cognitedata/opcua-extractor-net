@@ -14,6 +14,7 @@ using MQTTnet;
 using Serilog;
 using Cognite.Extractor.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Cognite.Extractor.Common;
 
 namespace Cognite.Bridge
 {
@@ -283,6 +284,30 @@ namespace Cognite.Bridge
 
             return true;
         }
+        public async Task<bool> PushRaw(MqttApplicationMessage msg, CancellationToken token)
+        {
+            if (msg == null) throw new ArgumentNullException(nameof(msg));
+            if (msg.Payload == null)
+            {
+                log.Warning("Null payload in raw");
+                return true;
+            }
+            var rows = JsonSerializer.Deserialize<RawRequestWrapper>(Encoding.UTF8.GetString(msg.Payload));
+
+            var destination = GetDestination();
+
+            try
+            {
+                await destination.InsertRawRowsAsync(rows.Database, rows.Table,
+                    rows.Rows.DistinctBy(row => row.Key).ToDictionary(row => row.Key, row => row.Columns), token);
+            }
+            catch (ResponseException ex)
+            {
+                return ex.Code == 400 || ex.Code == 409;
+            }
+
+            return true;
+        }
         [SuppressMessage("Microsoft.Performance", "CA1812")]
         internal class StatelessEventCreate : EventCreate
         {
@@ -292,6 +317,13 @@ namespace Cognite.Bridge
         internal class StatelessTimeSeriesCreate : TimeSeriesCreate
         {
             public string AssetExternalId { get; set; }
+        }
+        [SuppressMessage("Microsoft.Performance", "CA1812")]
+        internal class RawRequestWrapper
+        {
+            public string Database { get; set; }
+            public string Table { get; set; }
+            public IEnumerable<RawRowCreateJson> Rows { get; set; }
         }
     }
 }

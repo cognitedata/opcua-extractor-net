@@ -87,12 +87,14 @@ namespace Cognite.Bridge
                     .WithTopicFilter(config.Mqtt.TsTopic)
                     .WithTopicFilter(config.Mqtt.DatapointTopic)
                     .WithTopicFilter(config.Mqtt.EventTopic)
+                    .WithTopicFilter(config.Mqtt.RawTopic)
                     .Build());
                 log.Information("Subscribed to topics");
             });
             client.UseApplicationMessageReceivedHandler(async msg =>
             {
                 bool success;
+
                 if (msg.ApplicationMessage.Topic == config.Mqtt.DatapointTopic)
                 {
                     log.Verbose("Datapoints message from: {src}", msg.ClientId);
@@ -142,6 +144,19 @@ namespace Cognite.Bridge
                     catch (Exception ex)
                     {
                         log.Error(ex, "Unexpected failure while pushing timeseries to CDF: {msg}", ex.Message);
+                        success = false;
+                    }
+                }
+                else if (msg.ApplicationMessage.Topic == config.Mqtt.RawTopic)
+                {
+                    log.Verbose("Raw message from: {src}", msg.ClientId);
+                    try
+                    {
+                        success = await destination.PushRaw(msg.ApplicationMessage, token);
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Error(ex, "Unexpected failure while pushing raw to CDF: {msg}", ex.Message);
                         success = false;
                     }
                 }

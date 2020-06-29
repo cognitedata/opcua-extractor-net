@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Bridge;
@@ -73,7 +74,7 @@ namespace Test
             public async Task PublishAssets(IEnumerable<AssetCreate> assets)
             {
                 if (!client.IsConnected) throw new InvalidOperationException("Client is not connected");
-                var data = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(assets, null);
+                var data = JsonSerializer.SerializeToUtf8Bytes(assets, null);
 
                 var msg = baseBuilder
                     .WithPayload(data)
@@ -88,7 +89,7 @@ namespace Test
             public async Task PublishTimeseries(IEnumerable<StatelessTimeSeriesCreate> timeseries)
             {
                 if (!client.IsConnected) throw new InvalidOperationException("Client is not connected");
-                var data = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(timeseries, null);
+                var data = JsonSerializer.SerializeToUtf8Bytes(timeseries, null);
 
                 var msg = baseBuilder
                     .WithPayload(data)
@@ -103,7 +104,7 @@ namespace Test
             public async Task PublishEvents(IEnumerable<StatelessEventCreate> events)
             {
                 if (!client.IsConnected) throw new InvalidOperationException("Client is not connected");
-                var data = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(events, null);
+                var data = JsonSerializer.SerializeToUtf8Bytes(events, null);
 
                 var msg = baseBuilder
                     .WithPayload(data)
@@ -123,6 +124,29 @@ namespace Test
                 var msg = baseBuilder
                     .WithPayload(data)
                     .WithTopic(config.Mqtt.DatapointTopic)
+                    .Build();
+
+                var waitTask = bridge.WaitForNextMessage();
+                await client.PublishAsync(msg);
+                await waitTask;
+            }
+
+            public async Task PublishRawAssets(IEnumerable<AssetCreate> assets)
+            {
+                if (!client.IsConnected) throw new InvalidOperationException("Client is not connected");
+                // Using assets because that is already dealt with in the handler,
+                // the bridge should support anything
+                var wrapper = new RawRequestWrapper<AssetCreate>
+                {
+                    Database = "metadata",
+                    Table = "assets",
+                    Rows = assets.Select(asset => new RawRowCreateDto<AssetCreate> { Key = asset.ExternalId, Columns = asset })
+                };
+                var data = JsonSerializer.SerializeToUtf8Bytes(wrapper);
+
+                var msg = baseBuilder
+                    .WithPayload(data)
+                    .WithTopic(config.Mqtt.RawTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();
@@ -562,6 +586,62 @@ namespace Test
             Assert.Equal(2, tester.Handler.Events["test-event-7"].assetIds.Count());
             Assert.Single(tester.Handler.Events["test-event-8"].assetIds);
         }
+        [Fact]
+        [Trait("Server", "none")]
+        [Trait("Target", "MQTTBridge")]
+        [Trait("Test", "mqttraw")]
+        public async Task TestMqttRaw()
+        {
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+
+            var roundOne = new AssetCreate[]
+            {
+                new AssetCreate
+                {
+                    ExternalId = "test-asset-1",
+                    Name = "test-asset-1"
+                },
+                new AssetCreate
+                {
+                    ExternalId = "test-asset-2",
+                    Name = "test-asset-2"
+                },
+                new AssetCreate
+                {
+                    ExternalId = "test-asset-1",
+                    Name = "test-asset-3"
+                }
+            };
+
+            var roundTwo = new AssetCreate[]
+            {
+                new AssetCreate
+                {
+                    ExternalId = "test-asset-1",
+                    Name = "test-asset-1",
+                    Metadata = new Dictionary<string, string>
+                    {
+                        { "test-prop", "test-value" }
+                    },
+                },
+                new AssetCreate
+                {
+                    ExternalId = "test-asset-3",
+                    Name = "test-asset-3"
+                }
+            };
+
+            await tester.PublishRawAssets(roundOne);
+            Assert.Equal(2, tester.Handler.AssetRaw.Count);
+            Assert.True(tester.Handler.AssetRaw.ContainsKey("test-asset-1"));
+            Assert.True(tester.Handler.AssetRaw.ContainsKey("test-asset-2"));
+            await tester.PublishRawAssets(roundTwo);
+            Assert.Equal(3, tester.Handler.AssetRaw.Count);
+            Assert.Contains(tester.Handler.AssetRaw, kvp => kvp.Value.name == "test-asset-3");
+            Assert.True(tester.Handler.AssetRaw.ContainsKey("test-asset-1"));
+            var asset1 = tester.Handler.AssetRaw["test-asset-1"];
+            Assert.Equal("test-value", asset1.metadata["test-prop"]);
+        }
         class StatelessEventCreate : EventCreate
         {
             public IEnumerable<string> AssetExternalIds { get; set; }
@@ -570,6 +650,19 @@ namespace Test
         class StatelessTimeSeriesCreate : TimeSeriesCreate
         {
             public string AssetExternalId { get; set; }
+        }
+
+        class RawRequestWrapper<T>
+        {
+            public string Database { get; set; }
+            public string Table { get; set; }
+            public IEnumerable<RawRowCreateDto<T>> Rows { get; set; }
+        }
+
+        class RawRowCreateDto<T>
+        {
+            public string Key { get; set; }
+            public T Columns { get; set; }
         }
     }
 }
