@@ -263,8 +263,6 @@ namespace Test
             if (handler == null) throw new ArgumentNullException(nameof(handler));
             Assert.False(ev.description.StartsWith("prop-e3 ", StringComparison.InvariantCulture));
             Assert.False(ev.description.StartsWith("basic-block ", StringComparison.InvariantCulture));
-            Assert.False(ev.description.StartsWith("basic-nosource ", StringComparison.InvariantCulture));
-            Assert.False(ev.description.StartsWith("basic-excludeobj ", StringComparison.InvariantCulture));
             if (ev.description.StartsWith("prop ", StringComparison.InvariantCulture))
             {
                 Assert.True(ev.metadata.ContainsKey("PropertyString") && !string.IsNullOrEmpty(ev.metadata["PropertyString"]));
@@ -315,10 +313,41 @@ namespace Test
                 Assert.True(EventSourceIs(ev, handler, "Object 1", false));
                 Assert.Equal("CustomType", ev.type);
             }
+            else if (ev.description.StartsWith("basic-nosource", StringComparison.InvariantCulture))
+            {
+                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
+                Assert.True(string.IsNullOrEmpty(ev.subtype));
+                Assert.Null(ev.assetIds);
+            }
+            else if (ev.description.StartsWith("basic-excludeobj", StringComparison.InvariantCulture))
+            {
+                Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
+                Assert.True(string.IsNullOrEmpty(ev.subtype));
+                Assert.Null(ev.assetIds);
+            }
             else
             {
                 throw new Exception("Unknown event found");
             }
+        }
+
+        public static void TestEventCollection(IEnumerable<EventDummy> events)
+        {
+            Assert.True(events.Any());
+            Assert.Contains(events, ev => ev.description == "prop 0");
+            Assert.Contains(events, ev => ev.description == "basic-pass 0");
+            Assert.Contains(events, ev => ev.description == "basic-pass-2 0");
+            Assert.Contains(events, ev => ev.description == "mapped 0");
+            Assert.Contains(events, ev => ev.description == "basic-varsource 0");
+            Assert.Contains(events, ev => ev.description == "basic-excludeobj 0");
+            Assert.Contains(events, ev => ev.description == "basic-nosource 0");
+            Assert.Contains(events, ev => ev.description == "prop 99");
+            Assert.Contains(events, ev => ev.description == "basic-pass 99");
+            Assert.Contains(events, ev => ev.description == "basic-pass-2 99");
+            Assert.Contains(events, ev => ev.description == "mapped 99");
+            Assert.Contains(events, ev => ev.description == "basic-varsource 99");
+            Assert.Contains(events, ev => ev.description == "basic-excludeobj 99");
+            Assert.Contains(events, ev => ev.description == "basic-nosource 99");
         }
 
         private static bool EventSourceIs(EventDummy ev, CDFMockHandler handler, string name, bool rawSource)
@@ -515,7 +544,7 @@ namespace Test
             dummy.SetComplete();
             dummy.Type = InfluxBufferType.EventType;
             return ((InfluxPusher)Pusher).ReadEvents(
-                new Dictionary<string, InfluxBufferState> { { UAClient.GetUniqueId(node), dummy } },
+                new Dictionary<string, InfluxBufferState> { { node == null || node.IsNullNodeId ? "none" : UAClient.GetUniqueId(node), dummy } },
                 CancellationToken.None);
         }
 

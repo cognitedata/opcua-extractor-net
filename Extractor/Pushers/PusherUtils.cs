@@ -71,8 +71,7 @@ namespace Cognite.OpcUa.Pushers
         {
             if (evt == null || extractor == null) return null;
 
-            var parent = extractor.State.GetActiveNode(evt.SourceNode);
-            if (parent == null) return null;
+            var parent = evt.SourceNode == null || evt.SourceNode.IsNullNodeId ? null : extractor.State.GetActiveNode(evt.SourceNode);
             var entity = new StatelessEventCreate
             {
                 Description = ExtractorUtils.Truncate(evt.Message, 500),
@@ -82,7 +81,9 @@ namespace Cognite.OpcUa.Pushers
                 EndTime = evt.MetaData.ContainsKey("EndTime")
                     ? GetTimestampValue(evt.MetaData["EndTime"])
                     : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                AssetExternalIds = new List<string> { extractor.GetUniqueId(parent.IsVariable ? parent.ParentId : parent.Id) },
+                AssetExternalIds = parent == null
+                    ? (IEnumerable<string>)Array.Empty<string>()
+                    : new List<string> { extractor.GetUniqueId(parent.IsVariable ? parent.ParentId : parent.Id) },
                 ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
                 Type = ExtractorUtils.Truncate(evt.MetaData.ContainsKey("Type")
                     ? extractor.ConvertToString(evt.MetaData["Type"])
@@ -92,7 +93,7 @@ namespace Cognite.OpcUa.Pushers
             var finalMetaData = new Dictionary<string, string>();
             int len = 1;
             finalMetaData["Emitter"] = extractor.GetUniqueId(evt.EmittingNode);
-            if (!evt.MetaData.ContainsKey("SourceNode"))
+            if (!evt.MetaData.ContainsKey("SourceNode") && evt.SourceNode != null && !evt.SourceNode.IsNullNodeId)
             {
                 finalMetaData["SourceNode"] = extractor.GetUniqueId(evt.SourceNode);
                 len++;
@@ -128,9 +129,7 @@ namespace Cognite.OpcUa.Pushers
         public static EventCreate EventToCDFEvent(BufferedEvent evt, UAExtractor extractor, long? dataSetId,
             IDictionary<NodeId, long> nodeToAssetIds)
         {
-            if (evt == null
-
-                || extractor == null) return null;
+            if (evt == null || extractor == null) return null;
             EventCreate entity;
             entity = new EventCreate
             {
@@ -149,14 +148,14 @@ namespace Cognite.OpcUa.Pushers
             };
 
 
-            if (nodeToAssetIds != null && nodeToAssetIds.ContainsKey(evt.SourceNode)) {
+            if (nodeToAssetIds != null && evt.SourceNode != null && !evt.SourceNode.IsNullNodeId && nodeToAssetIds.ContainsKey(evt.SourceNode)) {
                 entity.AssetIds = new List<long> { nodeToAssetIds[evt.SourceNode] };
             }
 
             var finalMetaData = new Dictionary<string, string>();
             int len = 1;
             finalMetaData["Emitter"] = extractor.GetUniqueId(evt.EmittingNode);
-            if (!evt.MetaData.ContainsKey("SourceNode"))
+            if (!evt.MetaData.ContainsKey("SourceNode") && evt.SourceNode != null && !evt.SourceNode.IsNullNodeId)
             {
                 finalMetaData["SourceNode"] = extractor.GetUniqueId(evt.SourceNode);
                 len++;

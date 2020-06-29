@@ -419,11 +419,6 @@ namespace Cognite.OpcUa
 
             string eventId = Convert.ToBase64String(rawEventId);
             var sourceNode = extractedProperties.GetValueOrDefault("SourceNode");
-            if (sourceNode == null || !extractor.State.IsMappedNode(sourceNode as NodeId))
-            {
-                log.Verbose("Invalid source node, type: {type}, id: {id}", eventType, eventId);
-                return null;
-            }
 
             var time = extractedProperties.GetValueOrDefault("Time");
             if (time == null)
@@ -435,7 +430,7 @@ namespace Cognite.OpcUa
             {
                 Message = extractor.ConvertToString(extractedProperties.GetValueOrDefault("Message")),
                 EventId = config.Extraction.IdPrefix + eventId,
-                SourceNode = extractedProperties.GetValueOrDefault("SourceNode") as NodeId,
+                SourceNode = sourceNode as NodeId,
                 Time = (DateTime)time,
                 EventType = eventType,
                 MetaData = extractedProperties

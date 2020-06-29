@@ -984,18 +984,14 @@ namespace Cognite.OpcUa
         /// Subscribe to events from the given list of emitters.
         /// </summary>
         /// <param name="emitters">List of ids of nodes to serve as emitters. These are the actual targets of the subscription.</param>
-        /// <param name="eventIds">List of ids of events to subscribe to. Used to construct a filter.</param>
-        /// <param name="nodeIds">List of ids of nodes permitted as SourceNodes. Used to construct a filter.</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
         /// <returns>Map of fields, EventTypeId->(SourceTypeId, BrowseName)</returns>
         public void SubscribeToEvents(IEnumerable<NodeId> emitters,
-            IEnumerable<NodeId> nodeIds,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
             if (emitters == null) throw new ArgumentNullException(nameof(emitters));
-            if (nodeIds == null) throw new ArgumentNullException(nameof(nodeIds));
             lock (subscriptionLock)
             {
                 var subscription = Session.Subscriptions.FirstOrDefault(sub =>
@@ -1019,7 +1015,7 @@ namespace Cognite.OpcUa
 
                 if (eventFields == null) throw new ExtractorFailureException("EventFields not defined");
                 
-                var filter = BuildEventFilter(nodeIds);
+                var filter = BuildEventFilter();
                 foreach (var emitter in emitters)
                 {
                     if (token.IsCancellationRequested) return;
@@ -1108,15 +1104,15 @@ namespace Cognite.OpcUa
             return eventFields;
         }
         /// <summary>
-        /// Constructs a filter from the given list of permitted SourceNodes, the already constructed field map and an optional receivedAfter property.
+        /// Constructs a filter from the given list of permitted eventids, the already constructed field map and an optional receivedAfter property.
         /// </summary>
         /// <param name="nodeIds">Permitted SourceNode ids</param>
         /// <param name="receivedAfter">Optional, if defined, attempt to filter out events with [ReceiveTimeProperty] > receivedAfter</param>
         /// <returns>The final event filter</returns>
-        public EventFilter BuildEventFilter(IEnumerable<NodeId> nodeIds)
+        public EventFilter BuildEventFilter()
         {
             /*
-             * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds AND SourceNode IN nodeIds;
+             * Essentially equivalent to SELECT Message, EventId, SourceNode, Time FROM [source] WHERE EventId IN eventIds;
              * using the internal query language in OPC-UA
              */
             var whereClause = new ContentFilter();
@@ -1131,24 +1127,8 @@ namespace Cognite.OpcUa
                 {
                     Value = id
                 });
-            // This does not do what it looks like, rather it replaces whatever operation exists in the where clause and returns 
-            // this operation as a ContentFilterElement.
-            var elem1 = whereClause.Push(FilterOperator.InList, eventOperands.Prepend(eventListOperand).ToArray<object>());
 
-            var nodeListOperand = new SimpleAttributeOperand
-            {
-                TypeDefinitionId = ObjectTypeIds.BaseEventType,
-                AttributeId = Attributes.Value
-            };
-            nodeListOperand.BrowsePath.Add(BrowseNames.SourceNode);
-            IEnumerable<FilterOperand> nodeOperands = nodeIds.Select(id =>
-                new LiteralOperand
-                {
-                    Value = id
-                });
-
-            var elem2 = whereClause.Push(FilterOperator.InList, nodeOperands.Prepend(nodeListOperand).ToArray<object>());
-            whereClause.Push(FilterOperator.And, elem1, elem2);
+            whereClause.Push(FilterOperator.InList, eventOperands.Prepend(eventListOperand).ToArray<object>());
 
             var fieldList = eventFields
                 .Aggregate((IEnumerable<(NodeId Root, QualifiedName BrowseName)>)new List<(NodeId, QualifiedName)>(), (agg, kvp) => agg.Concat(kvp.Value))

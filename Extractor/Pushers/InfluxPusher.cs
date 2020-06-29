@@ -423,12 +423,23 @@ namespace Cognite.OpcUa
             }
         }
 
+        private string SourceNodeToString(NodeId sourceNode)
+        {
+            if (sourceNode == null || sourceNode.IsNullNodeId)
+            {
+                return "none";
+            }
+            var state = Extractor.State.GetActiveNode(sourceNode);
+            if (state == null) return "none";
+            return Extractor.GetUniqueId(sourceNode);
+        }
+
         private IInfluxDatapoint BufferedEventToInflux(BufferedEvent evt)
         {
             var idp = new InfluxDatapoint<string>
             {
                 UtcTimestamp = evt.Time,
-                MeasurementName = "events." + Extractor.GetUniqueId(evt.SourceNode) + ":"
+                MeasurementName = "events." + SourceNodeToString(evt.SourceNode) + ":"
                                   + (evt.MetaData.ContainsKey("Type") ? evt.MetaData["Type"] : Extractor.GetUniqueId(evt.EventType))
             };
             idp.Fields.Add("value", evt.Message);
@@ -544,13 +555,24 @@ namespace Cognite.OpcUa
 
                 var name = series.SeriesName.Substring(7);
 
-                var baseKey = Extractor.State.AllActiveExternalIds.FirstOrDefault(key =>
+                NodeId sourceNode = null;
+                string baseKey = null;
+                if (name.StartsWith("none", StringComparison.InvariantCulture))
+                {
+                    baseKey = "none";
+                }
+                else
+                {
+                    baseKey = Extractor.State.AllActiveExternalIds.FirstOrDefault(key =>
                     name.StartsWith(key, StringComparison.InvariantCulture));
 
-                if (baseKey == null) continue;
+                    if (baseKey == null) continue;
 
-                var sourceNode = Extractor.State.GetNodeId(baseKey);
-                if (sourceNode == null) continue;
+                    sourceNode = Extractor.State.GetNodeId(baseKey);
+                    if (sourceNode == null) continue;
+                }
+
+                
                 finalEvents.AddRange(series.Entries.Select(res =>
                 {
                     // The client uses ExpandoObject as dynamic, which implements IDictionary

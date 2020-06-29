@@ -177,7 +177,7 @@ namespace Cognite.OpcUa.Pushers
             int count = 0;
             foreach (var buffEvent in events)
             {
-                if (buffEvent.Time < minDateTime || !nodeToAssetIds.ContainsKey(buffEvent.SourceNode) && !config.Debug)
+                if (buffEvent.Time < minDateTime)
                 {
                     skippedEvents.Inc();
                     continue;
@@ -257,11 +257,13 @@ namespace Cognite.OpcUa.Pushers
 
             var destination = GetDestination();
 
+            bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database);
+
             try
             {
-                if (!string.IsNullOrWhiteSpace(config.AssetRawTable))
+                if (useRawStore && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable))
                 {
-                    await EnsureRawRows<AssetCreate>(config.RawDatabase, config.AssetRawTable, assetIds.Keys, async ids =>
+                    await EnsureRawRows<AssetCreate>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetIds.Keys, async ids =>
                     {
                         var assets = ids.Select(id => assetIds[id]);
                         await Extractor.ReadProperties(assets, token);
@@ -294,7 +296,7 @@ namespace Cognite.OpcUa.Pushers
 
             try
             {
-                bool metaRaw = !string.IsNullOrWhiteSpace(config.TimeseriesRawTable);
+                bool metaRaw = useRawStore && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
                 var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsIds.Keys, async ids =>
                 {
                     var tss = ids.Select(id => tsIds[id]);
@@ -325,7 +327,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 if (metaRaw)
                 {
-                    await EnsureRawRows<StatelessTimeSeriesCreate>(config.RawDatabase, config.TimeseriesRawTable, tsIds.Keys, async ids =>
+                    await EnsureRawRows<StatelessTimeSeriesCreate>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsIds.Keys, async ids =>
                     {
                         var timeseries = ids.Select(id => tsIds[id]);
                         await Extractor.ReadProperties(timeseries, token);

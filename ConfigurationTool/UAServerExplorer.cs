@@ -1125,7 +1125,7 @@ namespace Cognite.OpcUa.Config
 
             object listLock = new object();
 
-            await ToolUtil.RunWithTimeout(() => SubscribeToEvents(new [] {ObjectIds.Server}, nodeList.Select(node => node.Id).ToList(),
+            await ToolUtil.RunWithTimeout(() => SubscribeToEvents(new [] {ObjectIds.Server},
                 (item, args) =>
                 {
                     if (!(args.NotificationValue is EventFieldList triggeredEvent))

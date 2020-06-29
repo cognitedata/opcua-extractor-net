@@ -60,19 +60,9 @@ namespace Test
 
 
             var events = tester.Handler.Events.Values.ToList();
-            Assert.True(events.Any());
-            // Test that history has worked for the five relevant types historized on the server node.
-            Assert.Contains(events, ev => ev.description == "prop 0");
-            Assert.Contains(events, ev => ev.description == "basic-pass 0");
-            Assert.Contains(events, ev => ev.description == "basic-pass-2 0");
-            Assert.Contains(events, ev => ev.description == "mapped 0");
-            Assert.Contains(events, ev => ev.description == "basic-varsource 0");
-            Assert.Contains(events, ev => ev.description == "prop 99");
-            Assert.Contains(events, ev => ev.description == "basic-pass 99");
-            Assert.Contains(events, ev => ev.description == "basic-pass-2 99");
-            Assert.Contains(events, ev => ev.description == "mapped 99");
-            Assert.Contains(events, ev => ev.description == "basic-varsource 99");
-            Assert.Equal(500, events.Count);
+            CommonTestUtils.TestEventCollection(events);
+
+            Assert.Equal(700, events.Count);
 
             tester.Server.TriggerEvents(100);
             await tester.WaitForCondition(() =>
@@ -80,7 +70,7 @@ namespace Test
                 events = tester.Handler.Events.Values.ToList();
                 return events.Any(ev => ev.description.StartsWith("prop-e2 ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description.StartsWith("basic-pass-3 ", StringComparison.InvariantCulture))
-                       && events.Count == 507;
+                       && events.Count == 709;
             }, 20, "Expected remaining event subscriptions to trigger");
 
             await tester.TerminateRunTask();
@@ -130,22 +120,12 @@ namespace Test
             await tester.WaitForCondition(() =>
                     tester.Handler.Events.Values.Any()
                     && tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling)
-                    && tester.Handler.Events.Count == 507,
+                    && tester.Handler.Events.Count == 709,
                 40, "Expected number of events to be increasing");
 
             var events = tester.Handler.Events.Values.ToList();
-            Assert.True(events.Any());
-            Assert.Contains(events, ev => ev.description == "prop 0");
-            Assert.Contains(events, ev => ev.description == "basic-pass 0");
-            Assert.Contains(events, ev => ev.description == "basic-pass-2 0");
-            Assert.Contains(events, ev => ev.description == "mapped 0");
-            Assert.Contains(events, ev => ev.description == "basic-varsource 0");
-            Assert.Contains(events, ev => ev.description == "prop 99");
-            Assert.Contains(events, ev => ev.description == "basic-pass 99");
-            Assert.Contains(events, ev => ev.description == "basic-pass-2 99");
-            Assert.Contains(events, ev => ev.description == "mapped 99");
-            Assert.Contains(events, ev => ev.description == "basic-varsource 99");
-            Assert.Equal(507, events.Count);
+            CommonTestUtils.TestEventCollection(events);
+            Assert.Equal(709, events.Count);
 
             await tester.TerminateRunTask();
 
@@ -254,7 +234,7 @@ namespace Test
 
             Assert.False(tester.Extractor.FailureBuffer.AnyEvents);
 
-            await tester.WaitForCondition(() => tester.Handler.Events.Count == 514, 10,
+            await tester.WaitForCondition(() => tester.Handler.Events.Count == 718, 10,
                 "Expected to receive some events");
 
             await tester.TerminateRunTask();
@@ -295,19 +275,8 @@ namespace Test
 
 
             var events = tester.Handler.Events.Values.ToList();
-            Assert.True(events.Any());
-            // Test that history has worked for the five relevant types historized on the server node.
-            Assert.Contains(events, ev => ev.description == "prop 0");
-            Assert.Contains(events, ev => ev.description == "basic-pass 0");
-            Assert.Contains(events, ev => ev.description == "basic-pass-2 0");
-            Assert.Contains(events, ev => ev.description == "mapped 0");
-            Assert.Contains(events, ev => ev.description == "basic-varsource 0");
-            Assert.Contains(events, ev => ev.description == "prop 99");
-            Assert.Contains(events, ev => ev.description == "basic-pass 99");
-            Assert.Contains(events, ev => ev.description == "basic-pass-2 99");
-            Assert.Contains(events, ev => ev.description == "mapped 99");
-            Assert.Contains(events, ev => ev.description == "basic-varsource 99");
-            Assert.Equal(500, events.Count);
+            CommonTestUtils.TestEventCollection(events);
+            Assert.Equal(700, events.Count);
 
             tester.Server.TriggerEvents(100);
             await tester.WaitForCondition(() =>
@@ -315,7 +284,7 @@ namespace Test
                 events = tester.Handler.Events.Values.ToList();
                 return events.Any(ev => ev.description.StartsWith("prop-e2 ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description.StartsWith("basic-pass-3 ", StringComparison.InvariantCulture))
-                       && events.Count == 507;
+                       && events.Count == 709;
             }, 20, "Expected remaining event subscriptions to trigger");
 
             var suffixes = events
@@ -368,12 +337,13 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.Events.Values.Count == 500 &&
+                    tester.Handler.Events.Values.Count == 700 &&
                     tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling),
                 20, "Expected history read to finish");
 
             var events = tester.Handler.Events.Values.ToList();
-            Assert.Equal(500, events.Count);
+            CommonTestUtils.TestEventCollection(events);
+            Assert.Equal(700, events.Count);
 
             tester.Server.TriggerEvents(100);
             await tester.WaitForCondition(() =>
@@ -381,7 +351,7 @@ namespace Test
                 events = tester.Handler.Events.Values.ToList();
                 return events.Any(ev => ev.description.StartsWith("prop-e2 ", StringComparison.InvariantCulture))
                        && events.Any(ev => ev.description.StartsWith("basic-pass-3 ", StringComparison.InvariantCulture))
-                       && events.Count == 507;
+                       && events.Count == 709;
             }, 20, "Expected remaining event subscriptions to trigger");
             await tester.Extractor.Looper.WaitForNextPush();
 

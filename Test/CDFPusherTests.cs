@@ -649,9 +649,12 @@ namespace Test
                 StoreDatapoints = true,
                 ServerName = ServerName.Array
             });
-            tester.Config.Cognite.RawDatabase = "metadata";
-            tester.Config.Cognite.AssetRawTable = "assets";
-            tester.Config.Cognite.TimeseriesRawTable = "timeseries";
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                Database = "metadata",
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries"
+            };
             tester.Config.Extraction.AllowStringVariables = true;
             tester.Config.Extraction.MaxArraySize = 4;
 

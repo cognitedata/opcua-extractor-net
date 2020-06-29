@@ -111,6 +111,7 @@ namespace Cognite.OpcUa
             }
 
             var eventStates = nodeIds.Select(id => new InfluxBufferState(extractor, id)).ToList();
+            eventStates.Add(new InfluxBufferState(extractor, NodeId.Null));
 
             await extractor.StateStorage.RestoreExtractionState(
                 eventStates.ToDictionary(state => state.Id),
@@ -278,7 +279,7 @@ namespace Cognite.OpcUa
                     var eventRanges = new Dictionary<string, TimeRange>();
                     foreach (var evt in events)
                     {
-                        var sourceId = extractor.GetUniqueId(evt.SourceNode);
+                        var sourceId = evt.SourceNode == null || evt.SourceNode.IsNullNodeId ? "none" : extractor.GetUniqueId(evt.SourceNode);
                         if (!eventRanges.ContainsKey(sourceId))
                         {
                             eventRanges[sourceId] = new TimeRange(evt.Time, evt.Time);
