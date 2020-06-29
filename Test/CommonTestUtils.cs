@@ -530,7 +530,7 @@ namespace Test
 
         public Task<IEnumerable<BufferedDataPoint>> GetAllInfluxPoints(NodeId node, bool isString = false, int index = -1)
         {
-            var dummy = new InfluxBufferState(Extractor, node);
+            var dummy = new InfluxBufferState(Extractor.State.GetNodeState(node));
             dummy.SetComplete();
             dummy.Type = isString ? InfluxBufferType.StringType : InfluxBufferType.DoubleType;
             return ((InfluxPusher)Pusher).ReadDataPoints(
@@ -538,13 +538,13 @@ namespace Test
                 CancellationToken.None);
         }
 
-        public Task<IEnumerable<BufferedEvent>> GetAllInfluxEvents(NodeId node)
+        public Task<IEnumerable<BufferedEvent>> GetAllInfluxEvents(NodeId emitter)
         {
-            var dummy = new InfluxBufferState(Extractor, node);
+            var dummy = new InfluxBufferState(Extractor.State.GetEmitterState(emitter));
             dummy.SetComplete();
             dummy.Type = InfluxBufferType.EventType;
             return ((InfluxPusher)Pusher).ReadEvents(
-                new Dictionary<string, InfluxBufferState> { { node == null || node.IsNullNodeId ? "none" : UAClient.GetUniqueId(node), dummy } },
+                new Dictionary<string, InfluxBufferState> { { dummy.Id, dummy } },
                 CancellationToken.None);
         }
 

@@ -121,6 +121,7 @@ namespace Cognite.OpcUa
         /// <returns>NodeId if it exists</returns>
         public NodeId GetNodeId(string uniqueId)
         {
+            if (string.IsNullOrEmpty(uniqueId)) return NodeId.Null;
             return externalToNodeId.GetValueOrDefault(uniqueId) ?? NodeId.Null;
         }
         /// <summary>

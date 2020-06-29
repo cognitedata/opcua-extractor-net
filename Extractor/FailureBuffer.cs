@@ -86,12 +86,12 @@ namespace Cognite.OpcUa
         /// <param name="states">States to read into</param>
         /// <param name="nodeIds">Nodes to read for</param>
         public async Task InitializeBufferStates(IEnumerable<NodeExtractionState> states,
-            IEnumerable<NodeId> nodeIds, CancellationToken token)
+            IEnumerable<EventExtractionState> evtStates, CancellationToken token)
         {
             if (!config.Influx || influxPusher == null || !config.InfluxStateStore) return;
             var variableStates = states
                 .Where(state => !state.FrontfillEnabled)
-                .Select(state => new InfluxBufferState(state, false))
+                .Select(state => new InfluxBufferState(state))
                 .ToList();
 
             await extractor.StateStorage.RestoreExtractionState(
@@ -110,8 +110,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            var eventStates = nodeIds.Select(id => new InfluxBufferState(extractor, id)).ToList();
-            eventStates.Add(new InfluxBufferState(extractor, NodeId.Null));
+            var eventStates = evtStates.Select(state => new InfluxBufferState(state)).ToList();
 
             await extractor.StateStorage.RestoreExtractionState(
                 eventStates.ToDictionary(state => state.Id),
@@ -161,7 +160,7 @@ namespace Cognite.OpcUa
                             {
                                 var state = extractor.State.GetNodeState(key);
                                 if (state.FrontfillEnabled) continue;
-                                nodeBufferStates[key] = new InfluxBufferState(state, false);
+                                nodeBufferStates[key] = new InfluxBufferState(state);
                                 nodeBufferStates[key].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
                             }
                             nodeBufferStates[key].UpdateDestinationRange(value.First, value.Last);
@@ -279,24 +278,24 @@ namespace Cognite.OpcUa
                     var eventRanges = new Dictionary<string, TimeRange>();
                     foreach (var evt in events)
                     {
-                        var sourceId = evt.SourceNode == null || evt.SourceNode.IsNullNodeId ? "none" : extractor.GetUniqueId(evt.SourceNode);
-                        if (!eventRanges.ContainsKey(sourceId))
+                        var emitterId = extractor.GetUniqueId(evt.EmittingNode);
+                        if (!eventRanges.ContainsKey(emitterId))
                         {
-                            eventRanges[sourceId] = new TimeRange(evt.Time, evt.Time);
+                            eventRanges[emitterId] = new TimeRange(evt.Time, evt.Time);
                             continue;
                         }
 
-                        eventRanges[sourceId] = eventRanges[sourceId].Extend(evt.Time, evt.Time);
+                        eventRanges[emitterId] = eventRanges[emitterId].Extend(evt.Time, evt.Time);
                     }
 
-                    foreach ((string sourceId, var range) in eventRanges)
+                    foreach ((string emitterId, var range) in eventRanges)
                     {
-                        if (!eventBufferStates.ContainsKey(sourceId))
+                        if (!eventBufferStates.ContainsKey(emitterId))
                         {
-                            eventBufferStates[sourceId] = new InfluxBufferState(extractor, extractor.State.GetNodeId(sourceId));
-                            eventBufferStates[sourceId].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
+                            eventBufferStates[emitterId] = new InfluxBufferState(extractor.State.GetEmitterState(emitterId));
+                            eventBufferStates[emitterId].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
                         }
-                        eventBufferStates[sourceId].UpdateDestinationRange(range.First, range.Last);
+                        eventBufferStates[emitterId].UpdateDestinationRange(range.First, range.Last);
                     }
 
                     if (config.InfluxStateStore)
@@ -474,7 +473,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "Failed to read datapoints from file");
+                    Log.Error(ex, "Failed to read events from file");
                     success = false;
                     break;
                 }

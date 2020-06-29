@@ -228,25 +228,24 @@ namespace Cognite.OpcUa
         public InfluxBufferType Type { get; set; }
         public bool Historizing { get; }
 
-        public InfluxBufferState(NodeExtractionState other, bool events) : base(other?.Id)
+        public InfluxBufferState(BaseExtractionState other) : base(other?.Id)
         {
             if (other == null) throw new ArgumentNullException(nameof(other));
             DestinationExtractedRange = TimeRange.Empty;
-            if (events)
+            if (other is EventExtractionState)
             {
                 Type = InfluxBufferType.EventType;
             }
-            else
+            else if (other is NodeExtractionState state)
             {
-                Historizing = other.FrontfillEnabled;
-                Type = other.DataType.IsString ? InfluxBufferType.StringType : InfluxBufferType.DoubleType;
+                Historizing = state.FrontfillEnabled;
+                Type = state.DataType.IsString ? InfluxBufferType.StringType : InfluxBufferType.DoubleType;
             }
-        }
-
-        public InfluxBufferState(UAExtractor extractor, NodeId objectId) : base(extractor?.GetUniqueId(objectId))
-        {
-            Type = InfluxBufferType.EventType;
-            DestinationExtractedRange = TimeRange.Empty;
+            else if (other is InfluxBufferState iState)
+            {
+                Type = iState.Type;
+                Historizing = iState.Historizing;
+            }
         }
         /// <summary>
         /// Completely clear the ranges, after data has been written to all destinations.

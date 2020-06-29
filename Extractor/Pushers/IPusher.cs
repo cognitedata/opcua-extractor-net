@@ -66,7 +66,6 @@ namespace Cognite.OpcUa
         /// <returns>true on success</returns>
         Task<bool> InitExtractedEventRanges(
             IEnumerable<EventExtractionState> states,
-            IEnumerable<NodeId> nodes,
             bool backfillEnabled,
             bool initMissing,
             CancellationToken token)

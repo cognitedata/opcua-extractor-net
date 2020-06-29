@@ -178,7 +178,7 @@ namespace Cognite.OpcUa
 
             if (config.FailureBuffer.Enabled)
             {
-                await FailureBuffer.InitializeBufferStates(State.NodeStates, State.AllActiveIds, token);
+                await FailureBuffer.InitializeBufferStates(State.NodeStates, State.EmitterStates, token);
             }
             if (quitAfterMap) return;
             Pushing = true;
@@ -647,7 +647,6 @@ namespace Cognite.OpcUa
                     .Where(state => state.FrontfillEnabled);
                 var results = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, initMissing, token), 
                     pusher.InitExtractedEventRanges(State.EmitterStates.Where(state => state.FrontfillEnabled),
-                        timeseries.Concat(objects).Select(ts => ts.Id).Distinct(),
                         config.History.Backfill,
                         initMissing,
                         token));

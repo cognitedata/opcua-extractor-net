@@ -147,7 +147,6 @@ namespace Cognite.OpcUa.Pushers
                 DataSetId = dataSetId
             };
 
-
             if (nodeToAssetIds != null && evt.SourceNode != null && !evt.SourceNode.IsNullNodeId && nodeToAssetIds.ContainsKey(evt.SourceNode)) {
                 entity.AssetIds = new List<long> { nodeToAssetIds[evt.SourceNode] };
             }

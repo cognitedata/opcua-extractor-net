@@ -234,7 +234,6 @@ namespace Cognite.OpcUa
         /// <param name="backfillEnabled">True to also read start</param>
         /// <param name="seriesNames">List of all series to read for</param>
         private async Task InitExtractedEventRange(EventExtractionState state,
-            IEnumerable<NodeId> nodes,
             bool backfillEnabled,
             IEnumerable<string> seriesNames,
             bool initMissing,
@@ -243,15 +242,13 @@ namespace Cognite.OpcUa
             token.ThrowIfCancellationRequested();
             var mutex = new object();
             var bestRange = TimeRange.Empty;
-            string emitterId = state.Id;
 
-            var ids = seriesNames.Where(name => nodes.Any(node =>
-                name.StartsWith("events." + Extractor.GetUniqueId(node), StringComparison.InvariantCulture)));
+            var ids = seriesNames.Where(name => name.StartsWith("events." + state.Id, StringComparison.InvariantCulture));
 
             var tasks = ids.Select(async id =>
             {
                 var last = await client.QueryMultiSeriesAsync(config.Database,
-                    $"SELECT last(value) FROM \"{id}\" WHERE Emitter='{emitterId}'");
+                    $"SELECT last(value) FROM \"{id}\"");
 
                 if (last.Any() && last.First().HasEntries)
                 {
@@ -266,7 +263,7 @@ namespace Cognite.OpcUa
                 {
                     if (!last.Any()) return;
                     var first = await client.QueryMultiSeriesAsync(config.Database,
-                        $"SELECT first(value) FROM \"{id}\" WHERE Emitter='{emitterId}'");
+                        $"SELECT first(value) FROM \"{id}\"");
                     if (first.Any() && first.First().HasEntries)
                     {
                         DateTime ts = first.First().Entries[0].Time;
@@ -306,7 +303,6 @@ namespace Cognite.OpcUa
         /// <param name="backfillEnabled">True if backfill is enabled, in which case the first timestamp will be read</param>
         /// <returns>True on success</returns>
         public async Task<bool> InitExtractedEventRanges(IEnumerable<EventExtractionState> states,
-            IEnumerable<NodeId> nodes,
             bool backfillEnabled,
             bool initMissing,
             CancellationToken token)
@@ -327,7 +323,7 @@ namespace Cognite.OpcUa
                 return false;
             }
 
-            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, nodes, backfillEnabled, eventSeries, initMissing, token));
+            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, backfillEnabled, eventSeries, initMissing, token));
             try
             {
                 await Task.WhenAll(getRangeTasks);
@@ -429,8 +425,6 @@ namespace Cognite.OpcUa
             {
                 return "none";
             }
-            var state = Extractor.State.GetActiveNode(sourceNode);
-            if (state == null) return "none";
             return Extractor.GetUniqueId(sourceNode);
         }
 
@@ -439,15 +433,15 @@ namespace Cognite.OpcUa
             var idp = new InfluxDatapoint<string>
             {
                 UtcTimestamp = evt.Time,
-                MeasurementName = "events." + SourceNodeToString(evt.SourceNode) + ":"
+                MeasurementName = "events." + Extractor.GetUniqueId(evt.EmittingNode) + ":"
                                   + (evt.MetaData.ContainsKey("Type") ? evt.MetaData["Type"] : Extractor.GetUniqueId(evt.EventType))
             };
             idp.Fields.Add("value", evt.Message);
             idp.Fields.Add("id", evt.EventId);
-            idp.Tags["Emitter"] = Extractor.GetUniqueId(evt.EmittingNode);
+            idp.Fields.Add("source", SourceNodeToString(evt.SourceNode));
             foreach (var kvp in evt.MetaData)
             {
-                if (kvp.Key == "SourceNode" || kvp.Key == "Type") continue;
+                if (kvp.Key == "Emitter" || kvp.Key == "Type") continue;
                 var str = Extractor.ConvertToString(kvp.Value);
                 idp.Tags[kvp.Key] = string.IsNullOrEmpty(str) ? "null" : str;
             }
@@ -555,44 +549,28 @@ namespace Cognite.OpcUa
 
                 var name = series.SeriesName.Substring(7);
 
-                NodeId sourceNode = null;
-                string baseKey = null;
-                if (name.StartsWith("none", StringComparison.InvariantCulture))
-                {
-                    baseKey = "none";
-                }
-                else
-                {
-                    baseKey = Extractor.State.AllActiveExternalIds.FirstOrDefault(key =>
-                    name.StartsWith(key, StringComparison.InvariantCulture));
-
-                    if (baseKey == null) continue;
-
-                    sourceNode = Extractor.State.GetNodeId(baseKey);
-                    if (sourceNode == null) continue;
-                }
-
+                var state = states.Values.FirstOrDefault(state => name.StartsWith(state.Id, StringComparison.InvariantCulture));
+                if (state == null) continue;
                 
                 finalEvents.AddRange(series.Entries.Select(res =>
                 {
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
                     if (!(res is IDictionary<string, object> values)) return null;
-                    var emitter = Extractor.State.GetEmitterState((string)values["Emitter"]);
-                    if (emitter == null) return null;
+                    var sourceNode = Extractor.State.GetNodeId((string)values["SourceNode"]);
                     var evt = new BufferedEvent
                     {
                         Time = (DateTime)values["Time"],
                         EventId = (string)values["Id"],
                         Message = (string)values["Value"],
-                        EmittingNode = emitter.Id,
+                        EmittingNode = state.Id,
                         SourceNode = sourceNode,
                         MetaData = new Dictionary<string, object>()
                     };
-                    evt.MetaData["Type"] = name.Substring(baseKey.Length + 1);
+                    evt.MetaData["Type"] = name.Substring(state.Id.Length + 1);
                     foreach (var kvp in values)
                     {
                         if (kvp.Key == "Time" || kvp.Key == "Id" || kvp.Key == "Value"
-                            || kvp.Key == "Emitter" || kvp.Key == "Type" || string.IsNullOrEmpty(kvp.Value as string)) continue;
+                            || kvp.Key == "Type" || string.IsNullOrEmpty(kvp.Value as string)) continue;
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
                     log.Verbose(evt.ToDebugDescription());
