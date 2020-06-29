@@ -84,6 +84,8 @@ namespace Test
             await tester.Extractor.Looper.WaitForNextPush();
             await waitTask;
 
+            await tester.WaitForCondition(() => tester.Handler.Events.Count >= 7, 10);
+
             await tester.TerminateRunTask();
 
             var eventTypes = tester.Handler.Events.Select(evt => evt.Value.type).Distinct();

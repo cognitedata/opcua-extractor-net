@@ -670,7 +670,7 @@ namespace Test
             Assert.Empty(tester.Handler.Assets);
 
             await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=2[0]")
-                && tester.Handler.Datapoints["gp.tl:i=2[0]"].NumericDatapoints.Count == 1001, 10);
+                && tester.Handler.Datapoints["gp.tl:i=2[0]"].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count() == 1000, 10);
 
             await tester.TerminateRunTask();
 
