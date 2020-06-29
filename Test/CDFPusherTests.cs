@@ -638,5 +638,46 @@ namespace Test
 
             await tester.TerminateRunTask();
         }
+        [Fact]
+        [Trait("Server", "array")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "rawdata")]
+        public async Task TestRawMetadata()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                StoreDatapoints = true,
+                ServerName = ServerName.Array
+            });
+            tester.Config.Cognite.RawDatabase = "metadata";
+            tester.Config.Cognite.AssetRawTable = "assets";
+            tester.Config.Cognite.TimeseriesRawTable = "timeseries";
+            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.MaxArraySize = 4;
+
+            await tester.ClearPersistentData();
+
+            await tester.StartServer();
+            tester.Server.PopulateArrayHistory();
+
+            tester.StartExtractor();
+
+            await tester.Extractor.Looper.WaitForNextPush();
+
+            Assert.Empty(tester.Handler.Assets);
+
+            await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=2[0]")
+                && tester.Handler.Datapoints["gp.tl:i=2[0]"].NumericDatapoints.Count == 1001, 10);
+
+            await tester.TerminateRunTask();
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 4));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));
+
+            Assert.Equal(10, tester.Handler.TimeseriesRaw.Count);
+            Assert.Empty(tester.Handler.Assets);
+
+            Assert.True(tester.Handler.TimeseriesRaw["gp.tl:i=10"].metadata.ContainsKey("EURange"));
+        }
     }
 }
