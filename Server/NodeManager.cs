@@ -37,7 +37,7 @@ namespace Server
             var state = pstate as BaseDataVariableState;
             if (state == null) return;
             state.Value = value;
-            state.Timestamp = DateTime.Now;
+            state.Timestamp = DateTime.UtcNow;
             if (state.Historizing)
             {
                 store.UpdateNode(state);

@@ -153,8 +153,8 @@ namespace Cognite.OpcUa
 
                     if (recovered.Any(pair => !pair.pusher.Initialized))
                     {
-                        log.Information("Pushers with indices {idx} recovered",
-                            recovered.Select(val => val.pusher.Index.ToString(CultureInfo.InvariantCulture))
+                        log.Information("Pushers {names} recovered",
+                            recovered.Select(val => val.pusher.GetType().ToString())
                                 .Aggregate((src, val) => src + ", " + val));
 
                         var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);

@@ -244,14 +244,14 @@ namespace Cognite.OpcUa
             if (DataType.IsString || IsProperty)
             {
                 Value = new BufferedDataPoint(
-                    sourceTimestamp <= DateTime.MinValue ? DateTime.Now : sourceTimestamp,
+                    sourceTimestamp <= DateTime.MinValue ? DateTime.UtcNow : sourceTimestamp,
                     client.GetUniqueId(Id),
                     client.ConvertToString(value));
             }
             else
             {
                 Value = new BufferedDataPoint(
-                    sourceTimestamp <= DateTime.MinValue ? DateTime.Now : sourceTimestamp,
+                    sourceTimestamp <= DateTime.MinValue ? DateTime.UtcNow : sourceTimestamp,
                     client.GetUniqueId(Id),
                     UAClient.ConvertToDouble(value));
             }

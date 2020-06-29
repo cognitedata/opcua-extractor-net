@@ -60,6 +60,8 @@ namespace Cognite.OpcUa
 
         private readonly IList<IEnumerable<BufferedDataPoint>> buffer;
 
+        public bool IsArray => ArrayDimensions != null && ArrayDimensions.Count == 1 && ArrayDimensions[0] > 0;
+
         /// <summary>
         /// Constructor. Copies relevant data from BufferedVariable, initializes the buffer if Historizing is true.
         /// </summary>

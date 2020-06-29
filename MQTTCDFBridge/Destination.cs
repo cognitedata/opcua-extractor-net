@@ -152,14 +152,14 @@ namespace Cognite.Bridge
                 {
                     testSeries.Add(ts);
                 }
-                else if (assetIds.ContainsKey(ts.AssetExternalId))
+                else
                 {
-                    var id = assetIds[ts.AssetExternalId];
+                    var id = assetIds.GetValueOrDefault(ts.AssetExternalId);
                     if (id != null)
                     {
-                        testSeries.Add(ts);
                         ts.AssetId = id;
                     }
+                    testSeries.Add(ts);
                 }
             }
 
@@ -253,7 +253,6 @@ namespace Cognite.Bridge
             var missingAssetIds = assetExternalIds.Except(assetIds.Keys);
 
             var destination = GetDestination();
-
             if (missingAssetIds.Any())
             {
                 if (!await RetrieveMissingAssets(missingAssetIds, token))
@@ -262,21 +261,12 @@ namespace Cognite.Bridge
                 }
             }
 
-            int ignoreCount = 0;
             foreach (var evt in events)
             {
                 evt.AssetIds = evt.AssetExternalIds.Where(id => assetIds.ContainsKey(id) && assetIds[id] != null)
                     .Select(id => assetIds[id] ?? 0);
-                if (!evt.AssetIds.Any() && evt.AssetExternalIds.Any())
-                {
-                    ignoreCount++;
-                }
             }
 
-            if (ignoreCount > 0)
-            {
-                log.Warning("Ignoring {cnt} events due to missing assetIds", ignoreCount);
-            }
 
             events = events.Where(evt => evt.AssetIds.Any() || !evt.AssetExternalIds.Any());
 

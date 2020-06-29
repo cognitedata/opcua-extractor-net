@@ -61,20 +61,19 @@ namespace Cognite.OpcUa
             if (source == null) throw new ArgumentNullException(nameof(source));
 
             var client = new UAClient(config);
-            int index = 0;
             var pushers = new List<IPusher>();
 
             if (config.Cognite != null)
             {
-                pushers.Add(new CDFPusher(provider, config.Cognite) { Index = index++ });
+                pushers.Add(config.Cognite.ToPusher(provider));
             }
             if (config.Mqtt != null)
             {
-                pushers.Add(new MQTTPusher(config.Mqtt) { Index = index++ });
+                pushers.Add(config.Mqtt.ToPusher(provider));
             }
             if (config.Influx != null)
             {
-                pushers.Add(new InfluxPusher(config.Influx) { Index = index++ });
+                pushers.Add(config.Influx.ToPusher(provider));
             }
 
             await Task.WhenAll(pushers.Select(async pusher =>
@@ -101,6 +100,7 @@ namespace Cognite.OpcUa
             }
             finally
             {
+                source.Cancel();
                 foreach (var pusher in pushers)
                 {
                     pusher.Dispose();

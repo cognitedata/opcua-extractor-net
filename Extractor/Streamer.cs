@@ -77,8 +77,8 @@ namespace Cognite.OpcUa
                         pusher.DataFailing = true;
                         failedPushers.Add(pusher);
                     }
-                    log.Warning("Pushers with indices {idx} failed while pushing datapoints",
-                        failed.Select(pair => pair.Index.ToString(CultureInfo.InvariantCulture)).Aggregate((src, val) => src + ", " + val));
+                    log.Warning("Pushers of types {types} failed while pushing datapoints",
+                        failedPushers.Select(pusher => pusher.GetType().ToString()).Aggregate((src, val) => src + ", " + val));
                     foreach (var state in extractor.State.NodeStates)
                     {
                         state.RestartHistory();
@@ -175,8 +175,8 @@ namespace Cognite.OpcUa
                         pusher.EventsFailing = true;
                         failedPushers.Add(pusher);
                     }
-                    log.Warning("Pushers with indices {idx} failed while pushing events", 
-                        failed.Select(pair => pair.Index.ToString(CultureInfo.InvariantCulture)).Aggregate((src, val) => src + ", " + val));
+                    log.Warning("Pushers of types {types} failed while pushing events", 
+                        failedPushers.Select(pusher => pusher.GetType().ToString()).Aggregate((src, val) => src + ", " + val));
                     foreach (var state in extractor.State.EmitterStates)
                     {
                         state.RestartHistory();
@@ -276,7 +276,7 @@ namespace Cognite.OpcUa
             if (value == null) throw new ArgumentNullException(nameof(value));
             if (variable == null) throw new ArgumentNullException(nameof(value));
 
-            if (variable.ArrayDimensions != null && variable.ArrayDimensions.Count > 0 && variable.ArrayDimensions[0] > 0)
+            if (variable.IsArray)
             {
                 var ret = new List<BufferedDataPoint>();
                 if (!(value.Value is Array))

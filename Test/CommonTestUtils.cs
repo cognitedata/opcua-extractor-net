@@ -427,10 +427,10 @@ namespace Test
                     CommonTestUtils.AddDummyProvider(Handler, services);
                     services.AddCogniteClient("OPC-UA Extractor", true, true, false);
                     provider = services.BuildServiceProvider();
-                    Pusher = Config.Cognite.ToPusher(0, provider);
+                    Pusher = Config.Cognite.ToPusher(provider);
                     break;
                 case "influx":
-                    Pusher = Config.Influx.ToPusher(0, null);
+                    Pusher = Config.Influx.ToPusher(null);
                     influx = true;
                     IfDbClient = new InfluxDBClient(Config.Influx.Host, Config.Influx.Username, Config.Influx.Password);
                     break;
@@ -457,7 +457,7 @@ namespace Test
                     {
                         Config.Mqtt.LocalState = "mqtt_created_states";
                     }
-                    Pusher = Config.Mqtt.ToPusher(0, null);
+                    Pusher = Config.Mqtt.ToPusher(null);
                     break;
             }
 
@@ -470,7 +470,7 @@ namespace Test
             {
                 influx = true;
                 IfDbClient = new InfluxDBClient(Config.Influx.Host, Config.Influx.Username, Config.Influx.Password);
-                Pushers.Add(Config.Influx.ToPusher(0, null));
+                Pushers.Add(Config.Influx.ToPusher(null));
             }
 
             if (provider == null)
@@ -728,9 +728,20 @@ namespace Test
             Source?.Cancel();
             Source?.Dispose();
             IfDbClient?.Dispose();
+            if (Extractor != null)
+            {
+                IEnumerable<IPusher> pushers = Extractor.GetType().GetField("pushers", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .GetValue(Extractor) as IEnumerable<IPusher>;
+                if (pushers != null)
+                {
+                    foreach (var pusher in pushers)
+                    {
+                        pusher.Dispose();
+                    }
+                }
+            }
             Extractor?.Close();
             Extractor?.Dispose();
-            Pusher?.Dispose();
             Server?.Dispose();
         }
     }

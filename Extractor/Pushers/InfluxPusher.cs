@@ -18,7 +18,6 @@ namespace Cognite.OpcUa
     public sealed class InfluxPusher : IPusher
     {
         public UAExtractor Extractor { set; get; }
-        public int Index { get; set; }
         public IPusherConfig BaseConfig { get; }
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
@@ -29,8 +28,6 @@ namespace Cognite.OpcUa
         private readonly InfluxPusherConfig config;
         private InfluxDBClient client;
 
-        private static readonly Counter numInfluxPusher = Metrics
-            .CreateCounter("opcua_influx_pusher_count", "Number of active influxdb pushers");
         private static readonly Counter dataPointsCounter = Metrics
             .CreateCounter("opcua_datapoints_pushed_influx", "Number of datapoints pushed to influxdb");
         private static readonly Counter dataPointPushes = Metrics
@@ -55,7 +52,6 @@ namespace Cognite.OpcUa
             this.config = config ?? throw new ArgumentNullException(nameof(config));
             BaseConfig = config;
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
-            numInfluxPusher.Inc();
         }
         /// <summary>
         /// Push each datapoint to influxdb. The datapoint Id, which corresponds to timeseries externalId in CDF, is used as MeasurementName
@@ -91,11 +87,8 @@ namespace Cognite.OpcUa
                 dataPointList.Add(buffer);
             }
 
-            if (count == 0)
-            {
-                log.Verbose("Push 0 datapoints to influxdb");
-                return null;
-            }
+            if (count == 0) return null;
+
             var groups = dataPointList.GroupBy(point => point.Id);
 
             var ipoints = new List<IInfluxDatapoint>();
@@ -104,14 +97,16 @@ namespace Cognite.OpcUa
             {
                 var ts = Extractor.State.GetNodeState(group.Key);
                 if (ts == null) continue;
-                dataPointsCounter.Inc(group.Count());
                 ipoints.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
             }
 
-            log.Debug("Push {cnt} datapoints to influxdb {db}", ipoints.Count, config.Database);
+            if (config.Debug) return null;
+
             try
             {
                 await client.PostPointsAsync(config.Database, ipoints, config.PointChunkSize);
+                log.Debug("Successfully pushed {cnt} points to influxdb", count);
+                dataPointsCounter.Inc(count);
             }
             catch (Exception e)
             {
@@ -121,7 +116,7 @@ namespace Cognite.OpcUa
                         iex.FailedLine, iex.Reason);
                 }
                 dataPointPushFailures.Inc();
-                log.Error("Failed to insert datapoints into influxdb: {msg}", e.Message);
+                log.Error("Failed to insert {count} datapoints into influxdb: {msg}", count, e.Message);
                 log.Debug(e, "Failed to insert datapoints into influxdb");
                 return false;
             }
@@ -152,22 +147,19 @@ namespace Cognite.OpcUa
                 evts.Add(evt);
             }
 
-            if (count == 0)
-            {
-                log.Verbose("Push 0 events to influxdb");
-                return null;
-            }
+            if (count == 0) return null;
 
-            log.Debug("Push {cnt} events to influxdb", count);
             var points = evts.Select(BufferedEventToInflux);
+            if (config.Debug) return true;
             try
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
                 eventsCounter.Inc(count);
+                log.Debug("Successfully pushed {cnt} events to influxdb", count);
             }
             catch (Exception ex)
             {
-                log.Warning("Failed to push events to influxdb");
+                log.Warning("Failed to push {cnt} events to influxdb", count);
                 log.Debug(ex, "Failed to push events to influxdb");
                 eventPushFailures.Inc();
                 return false;
@@ -353,6 +345,7 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
+            if (config.Debug) return true;
             IEnumerable<string> dbs;
             try
             {
@@ -367,7 +360,17 @@ namespace Cognite.OpcUa
             }
             if (dbs == null || !dbs.Contains(config.Database))
             {
-                log.Error("Database {db} does not exist in influxDb: {host}", config.Database, config.Host);
+                log.Warning("Database {db} does not exist in influxDb: {host}, attempting to create", config.Database, config.Host);
+                try
+                {
+                    if (await client.CreateDatabaseAsync(config.Database)) return true;
+                }
+                catch (Exception ex)
+                {
+                    log.Error(ex, "Failed to create database {db} in influxdb: {message}", config.Database, ex.Message);
+                    return false;
+                }
+                log.Error("Database not successfully created");
                 return false;
             }
             return true;
@@ -449,6 +452,7 @@ namespace Cognite.OpcUa
             IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
+            if (config.Debug) return Array.Empty<BufferedDataPoint>();
             token.ThrowIfCancellationRequested();
             if (states == null) throw new ArgumentNullException(nameof(states));
 
@@ -522,6 +526,7 @@ namespace Cognite.OpcUa
             IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
+            if (config.Debug) return Array.Empty<BufferedEvent>();
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,

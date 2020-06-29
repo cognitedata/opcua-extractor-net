@@ -155,7 +155,9 @@ namespace Test
 
             explorer.LogSummary();
 
-            ToolUtil.ConfigResultToString(baseConfig);
+            var result = ToolUtil.ConfigResultToString(baseConfig);
+
+            ConfigurationUtils.TryReadConfigFromString<FullConfig>(result, 1);
 
             explorer.Close();
         }

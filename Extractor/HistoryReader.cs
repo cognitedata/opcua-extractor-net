@@ -80,15 +80,15 @@ namespace Cognite.OpcUa
 
             string uniqueId = uaClient.GetUniqueId(nodeid);
 
+            var (first, last) = data.DataValues.MinMax(dp => dp.SourceTimestamp);
+
             if (frontfill)
             {
-                var last = data.DataValues.Any() ? data.DataValues.Max(dp => dp.SourceTimestamp) : DateTime.MinValue;
                 nodeState.UpdateFromFrontfill(last, final);
                 log.Debug("Frontfill of data for {id} at {ts}", uniqueId, last);
             }
             else
             {
-                var first = data.DataValues.Any() ? data.DataValues.Min(dp => dp.SourceTimestamp) : DateTime.MaxValue;
                 nodeState.UpdateFromBackfill(first, final);
                 log.Debug("Backfill of data for {id} at {ts}", uniqueId, first);
             }
@@ -352,10 +352,9 @@ namespace Cognite.OpcUa
             try
             {
                 Interlocked.Increment(ref running);
-                var frontFillChunks = ExtractorUtils.GroupByTimeGranularity(
-                    states.Select(state => (state, state.SourceExtractedRange.Last)),
-                    historyGranularity, config.DataNodesChunk);
-                await Task.WhenAll(frontFillChunks.Select(chunk => Task.Run(() => FrontfillDataChunk(chunk, token))));
+                var frontfillChunks = states.GroupByTimeGranularity(historyGranularity,
+                    state => state.SourceExtractedRange.Last, config.DataNodesChunk);
+                await Task.WhenAll(frontfillChunks.Select(chunk => Task.Run(() => FrontfillDataChunk(chunk, token))));
             }
             finally
             {
@@ -379,11 +378,9 @@ namespace Cognite.OpcUa
                         state.UpdateFromBackfill(CogniteTime.DateTimeEpoch, true);
                     }
                 }
-                var backFillChunks = ExtractorUtils.GroupByTimeGranularity(
-                    states.Where(state => state.SourceExtractedRange.First > historyStartTime)
-                        .Select(state => (state, state.SourceExtractedRange.First)),
-                    historyGranularity, config.DataNodesChunk);
-                await Task.WhenAll(backFillChunks.Select(chunk => Task.Run(() => BackfillDataChunk(chunk, token))));
+                var backfillChunks = states.Where(state => state.SourceExtractedRange.First > historyStartTime)
+                    .GroupByTimeGranularity(historyGranularity, state => state.SourceExtractedRange.First, config.DataNodesChunk);
+                await Task.WhenAll(backfillChunks.Select(chunk => Task.Run(() => BackfillDataChunk(chunk, token))));
             }
             finally
             {
@@ -401,10 +398,9 @@ namespace Cognite.OpcUa
             try
             {
                 Interlocked.Increment(ref running);
-                var frontFillChunks = ExtractorUtils.GroupByTimeGranularity(
-                    states.Select(state => (state, state.SourceExtractedRange.Last)),
-                    historyGranularity, config.EventNodesChunk);
-                await Task.WhenAll(frontFillChunks.Select(chunk =>
+                var frontfillChunks = states.GroupByTimeGranularity(historyGranularity,
+                    state => state.SourceExtractedRange.Last, config.EventNodesChunk);
+                await Task.WhenAll(frontfillChunks.Select(chunk =>
                     Task.Run(() => FrontfillEventsChunk(chunk, nodes, token))));
             }
             finally
@@ -430,12 +426,10 @@ namespace Cognite.OpcUa
                         state.UpdateFromBackfill(DateTime.MinValue, true);
                     }
                 }
-                var backFillChunks = ExtractorUtils.GroupByTimeGranularity(
-                    states.Where(state => state.SourceExtractedRange.First > historyStartTime)
-                        .Select(state => (state, state.SourceExtractedRange.First)),
-                    historyGranularity, config.EventNodesChunk);
+                var backfillChunks = states.Where(state => state.SourceExtractedRange.First > historyStartTime)
+                    .GroupByTimeGranularity(historyGranularity, state => state.SourceExtractedRange.First, config.EventNodesChunk);
 
-                await Task.WhenAll(backFillChunks.Select(chunk =>
+                await Task.WhenAll(backfillChunks.Select(chunk =>
                     Task.Run(() => BackfillEventsChunk(chunk, nodes, token))));
             }
             finally

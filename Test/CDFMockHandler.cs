@@ -276,8 +276,8 @@ namespace Test
             foreach (var asset in newAssets.items)
             {
                 asset.id = assetIdCounter++;
-                asset.createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
-                asset.lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
+                asset.createdTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+                asset.lastUpdatedTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
                 asset.rootId = 123;
                 Assets.Add(asset.externalId, asset);
             }
@@ -399,8 +399,8 @@ namespace Test
             foreach (var ts in newTimeseries.items)
             {
                 ts.id = timeseriesIdCounter++;
-                ts.createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
-                ts.lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
+                ts.createdTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+                ts.lastUpdatedTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
                 Timeseries.Add(ts.externalId, ts);
             }
             string result = JsonConvert.SerializeObject(newTimeseries);
@@ -486,8 +486,8 @@ namespace Test
                 }
                 if (duplicated.Any()) continue;
                 ev.id = eventIdCounter++;
-                ev.createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
-                ev.lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
+                ev.createdTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+                ev.lastUpdatedTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
                 created.Add((ev.externalId, ev));
             }
 
@@ -608,8 +608,8 @@ namespace Test
                 description = "",
                 metadata = new Dictionary<string, string>(),
                 id = assetIdCounter++,
-                createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds(),
-                lastUpdatedTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds(),
+                createdTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds(),
+                lastUpdatedTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds(),
                 rootId = 123
             };
             Assets.Add(externalId, asset);
@@ -623,7 +623,7 @@ namespace Test
                 id = timeseriesIdCounter++,
                 isString = false,
                 isStep = false,
-                createdTime = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds(),
+                createdTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds(),
                 externalId = externalId
             };
             Timeseries.Add(externalId, ts);
@@ -690,7 +690,7 @@ namespace Test
                 {
                     new DataPoint
                     {
-                        timestamp = new DateTimeOffset(DateTime.Now.Subtract(TimeSpan.FromMinutes(15))).ToUnixTimeMilliseconds(),
+                        timestamp = new DateTimeOffset(DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(15))).ToUnixTimeMilliseconds(),
                         value = 0
                     }
                 };

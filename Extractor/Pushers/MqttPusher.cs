@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -7,6 +6,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Common;
+using Cognite.Extractor.Utils;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
@@ -20,7 +21,6 @@ namespace Cognite.OpcUa.Pushers
 {
     public sealed class MQTTPusher : IPusher
     {
-        public int Index { get; set; }
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
@@ -80,6 +80,7 @@ namespace Cognite.OpcUa.Pushers
             client = new MqttFactory().CreateMqttClient();
             baseBuilder = new MqttApplicationMessageBuilder()
                 .WithAtLeastOnceQoS();
+            if (config.Debug) return;
 
             client.UseDisconnectedHandler(async e =>
             {
@@ -149,18 +150,21 @@ namespace Cognite.OpcUa.Pushers
                 dataPointList[buffer.Id].Add(buffer);
             }
 
-            if (count == 0)
-            {
-                log.Verbose("Push 0 datapoints to CDF");
-                return null;
-            }
-            log.Debug("Push {NumDatapointsToPush} datapoints to CDF", count);
-            var dpChunks = ExtractorUtils.ChunkDictOfLists(dataPointList, 100000, 10000).ToArray();
-            var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk, token)).ToList();
+            if (count == 0) return null;
+
+            var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<BufferedDataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
+            var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk.ToDictionary(pair => pair.Key, pair => pair.Values), token)).ToList();
             var results = await Task.WhenAll(pushTasks);
 
 
-            if (!results.All(res => res)) return false;
+
+            if (!results.All(res => res))
+            {
+                log.Debug("Failed to push {cnt} points to CDF over MQTT", count);
+                return false;
+            }
+
+            log.Debug("Successfully pushed {cnt} points to CDF over MQTT", count);
 
             return true;
         }
@@ -174,6 +178,7 @@ namespace Cognite.OpcUa.Pushers
             catch (Exception e)
             {
                 log.Warning("Failed to connect to MQTT broker: {msg}", e.Message);
+				return false;
             }
             log.Information("Connected to MQTT broker");
             return client.IsConnected;
@@ -214,15 +219,16 @@ namespace Cognite.OpcUa.Pushers
 
             if (objects.Any())
             {
-                var results = await Task.WhenAll(ExtractorUtils.ChunkBy(objects, 1000).Select(chunk => PushAssets(chunk, token)));
+                var results = await Task.WhenAll(objects.ChunkBy(1000).Select(chunk => PushAssets(chunk, token)));
                 if (!results.All(res => res)) return false;
             }
 
             if (variables.Any())
             {
-                var results = await Task.WhenAll(ExtractorUtils.ChunkBy(variables, 1000).Select(chunk => PushTimeseries(chunk, token)));
+                var results = await Task.WhenAll(variables.ChunkBy(1000).Select(chunk => PushTimeseries(chunk, token)));
                 if (!results.All(res => res)) return false;
             }
+            if (config.Debug) return true;
 
             if (!string.IsNullOrEmpty(config.LocalState))
             {
@@ -256,16 +262,19 @@ namespace Cognite.OpcUa.Pushers
                 eventList.Add(buffEvent);
                 count++;
             }
-            if (count == 0)
-            {
-                log.Verbose("Push 0 events to CDF");
-                return null;
-            }
-            log.Debug("Push {NumEventsToPush} events to CDF", count);
+            if (count == 0) return null;
             if (config.Debug) return null;
 
-            var results = await Task.WhenAll(ExtractorUtils.ChunkBy(eventList, 1000).Select(chunk => PushEventsChunk(chunk, token)));
-            return results.All(result => result);
+            var results = await Task.WhenAll(eventList.ChunkBy(1000).Select(chunk => PushEventsChunk(chunk, token)));
+            if (!results.All(result => result))
+            {
+                log.Debug("Failed to push {cnt} events to CDF over MQTT", count);
+                return false;
+            }
+
+            log.Debug("Successfully pushed {cnt} events to CDF over MQTT", count);
+
+            return true;
         }
 
         /// <summary>
@@ -392,6 +401,7 @@ namespace Cognite.OpcUa.Pushers
 
         public async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> evts, CancellationToken token)
         {
+            if (config.Debug) return true;
             var events = evts.Select(EventToCDFEvent).Where(evt => evt != null);
 
             var data = JsonSerializer.SerializeToUtf8Bytes(events, null);

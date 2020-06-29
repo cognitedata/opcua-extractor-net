@@ -17,12 +17,13 @@ namespace Server
             server.Start().Wait();
             server.PopulateEvents();
 
-            // int idx = 0;
+            int idx = 0;
             while(true)
             {
                 //server.TriggerEvents(0);
                 //server.DirectGrowth(idx++);
                 //server.ReferenceGrowth(idx++);
+				server.UpdateNode(server.Ids.Base.DoubleVar1, idx++);
                 Task.Delay(1000).Wait();
             }
         }

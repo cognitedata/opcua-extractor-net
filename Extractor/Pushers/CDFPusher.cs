@@ -41,7 +41,6 @@ namespace Cognite.OpcUa
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
         private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
         
-        public int Index { get; set; }
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
@@ -59,7 +58,6 @@ namespace Cognite.OpcUa
         {
             this.config = config;
             BaseConfig = config;
-            numCdfPusher.Inc();
             provider = clientProvider;
         }
 
@@ -68,8 +66,6 @@ namespace Cognite.OpcUa
             return provider.GetRequiredService<CogniteDestination>();
         }
 
-        private static readonly Counter numCdfPusher = Metrics
-            .CreateCounter("opcua_cdf_pusher_count", "Number of active CDF pushers");
         private static readonly Counter dataPointsCounter = Metrics
             .CreateCounter("opcua_datapoints_pushed_cdf", "Number of datapoints pushed to CDF");
         private static readonly Counter dataPointPushes = Metrics
@@ -114,11 +110,7 @@ namespace Cognite.OpcUa
 
             int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count());
 
-            if (count == 0)
-            {
-                log.Verbose("Push 0 datapoints to CDF");
-                return null;
-            }
+            if (count == 0) return null;
 
             var destination = GetDestination();
 
@@ -127,7 +119,6 @@ namespace Cognite.OpcUa
                 kvp => kvp.Value.Select(
                     dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue))
                 );
-            log.Debug("Push {cnt} datapoints to CDF", count);
             if (config.Debug) return null;
 
             try
@@ -192,12 +183,8 @@ namespace Cognite.OpcUa
                 eventList.Add(buffEvent);
                 count++;
             }
-            if (count == 0)
-            {
-                log.Verbose("Push 0 events to CDF");
-                return null;
-            }
-            log.Debug("Push {NumEventsToPush} events to CDF", count);
+            if (count == 0) return null;
+
             if (config.Debug) return null;
 
             var destination = GetDestination();
@@ -207,6 +194,7 @@ namespace Cognite.OpcUa
                 await destination.EnsureEventsExistsAsync(eventList.Select(EventToCDFEvent).Where(evt => evt != null), true, token);
                 eventCounter.Inc(count);
                 eventPushCounter.Inc();
+                log.Debug("Successfully pushed {count} events to CDF", count);
             }
             catch (Exception exc)
             {
@@ -388,6 +376,7 @@ namespace Cognite.OpcUa
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
             if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
+            if (config.Debug) return true;
             var destination = GetDestination();
             try
             {

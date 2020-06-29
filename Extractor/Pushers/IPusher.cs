@@ -25,7 +25,6 @@ namespace Cognite.OpcUa
 {
     public interface IPusher : IDisposable
     {
-        int Index { get; set; }
         bool DataFailing { get; set; }
         bool EventsFailing { get; set; }
         bool Initialized { get; set; }

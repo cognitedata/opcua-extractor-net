@@ -297,14 +297,14 @@ namespace Test
             await tester.PublishTimeseries(roundOne);
             Assert.Equal(2, tester.Handler.Timeseries.Count);
             await tester.PublishTimeseries(roundTwo);
-            Assert.Equal(3, tester.Handler.Timeseries.Count);
-            Assert.DoesNotContain(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-3");
+            Assert.Equal(4, tester.Handler.Timeseries.Count);
+            Assert.Contains(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-3");
             Assert.Contains(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-4");
             await tester.RecreateBridge();
             await tester.PublishTimeseries(roundThree);
-            Assert.Equal(4, tester.Handler.Timeseries.Count);
+            Assert.Equal(6, tester.Handler.Timeseries.Count);
             Assert.Contains(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-5");
-            Assert.DoesNotContain(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-6");
+            Assert.Contains(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-6");
         }
         [Fact]
         [Trait("Server", "none")]

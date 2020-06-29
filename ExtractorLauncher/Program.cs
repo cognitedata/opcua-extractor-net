@@ -105,6 +105,17 @@ namespace Cognite.OpcUa
                 }
                 config.Source.ConfigRoot = configDir;
             }
+            else
+            {
+                config.GenerateDefaults();
+                if (setup.ConfigTool)
+                {
+                    baseConfig = new FullConfig();
+                    baseConfig.GenerateDefaults();
+                    baseConfig.Version = 1;
+                    config.Version = 1;
+                }
+            }
 
             if (!string.IsNullOrEmpty(setup.Host)) config.Source.EndpointUrl = setup.Host;
             if (!string.IsNullOrEmpty(setup.Username)) config.Source.Username = setup.Username;
@@ -113,6 +124,13 @@ namespace Cognite.OpcUa
             if (!string.IsNullOrEmpty(setup.LogLevel)) config.Logger.Console = new LogConfig() { Level = setup.LogLevel };
             config.Source.AutoAccept |= setup.AutoAccept;
             config.Source.ExitOnFailure |= setup.ExitOnFailure;
+
+            if (setup.NoConfig)
+            {
+                services.AddSingleton(config.Logger);
+                services.AddSingleton(config.Metrics);
+            }
+
             services.AddMetrics();
             services.AddLogger();
             LoggingUtils.Configure(config.Logger);
@@ -179,7 +197,7 @@ namespace Cognite.OpcUa
                             break;
                         }
 
-                        DateTime startTime = DateTime.Now;
+                        DateTime startTime = DateTime.UtcNow;
                         try
                         {
                             log.Information("Starting extractor");
@@ -220,7 +238,7 @@ namespace Cognite.OpcUa
                             break;
                         }
 
-                        if (startTime > DateTime.Now - TimeSpan.FromSeconds(600))
+                        if (startTime > DateTime.UtcNow - TimeSpan.FromSeconds(600))
                         {
                             waitRepeats++;
                         }

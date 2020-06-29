@@ -63,7 +63,6 @@ namespace Server
 
         public void UpdateNode(NodeId id, object value)
         {
-            log.Information("Update node {id}", id);
             Server.UpdateNode(id, value);
         }
 

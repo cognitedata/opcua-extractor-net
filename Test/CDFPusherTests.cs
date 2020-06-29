@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Metrics;
@@ -96,10 +97,17 @@ namespace Test
         [Fact]
         public async Task TestDebugMode()
         {
-            using var tester = new ExtractorTester(new ExtractorTestParameters());
+            using var tester = new ExtractorTester(new ExtractorTestParameters(){
+                Builder = (config, pushers, client) =>
+                {
+                    return new UAExtractor(config, pushers.Append(config.Influx.ToPusher(null)).Append(config.Mqtt.ToPusher(null)), client, null);
+                }
+            });
             await tester.ClearPersistentData();
 
             tester.Config.Cognite.Debug = true;
+            tester.Config.Mqtt.Debug = true;
+            tester.Config.Influx.Debug = true;
             tester.Config.Cognite.ApiKey = null;
 
             await tester.StartServer();
@@ -260,52 +268,6 @@ namespace Test
 
             await tester.TerminateRunTask();
         }
-        [InlineData(20000, 100, 20, 1000, 100000)]
-        [InlineData(200, 10000, 20, 10, 100000)]
-        [InlineData(20000, 5, 2, 10000, 50000)]
-        [InlineData(20, 150000, 30, 2, 100000)]
-        [Trait("Server", "none")]
-        [Trait("Target", "Utils")]
-        [Trait("Test", "dictChunk")]
-        [Theory]
-        public void TestDictionaryChunking(int timeseries, int datapoints, int expChunks, int expTimeseriesMax, int expDatapointsMax)
-        {
-            var dict = new Dictionary<string, List<BufferedDataPoint>>();
-            for (int i = 0; i < timeseries; i++)
-            {
-                var points = new List<BufferedDataPoint>();
-                for (int j = 0; j < datapoints; j++)
-                {
-                    points.Add(new BufferedDataPoint(DateTime.MinValue, "id" + i, i*datapoints + j));
-                }
-
-                dict["id" + i] = points;
-            }
-            var results = ExtractorUtils.ChunkDictOfLists(dict, 100000, 10000);
-            var min = results.Min(dct => dct.Values.Min(val => val.Count()));
-            Assert.True(min > 0);
-            var max = results.Max(dct => dct.Values.Sum(val => val.Count()));
-            var maxTs = results.Max(dct => dct.Values.Count);
-            Assert.Equal(expDatapointsMax, max);
-            Assert.Equal(expTimeseriesMax, maxTs);
-            Assert.Equal(expChunks, results.Count());
-            var total = results.Sum(dct => dct.Values.Sum(val => val.Count()));
-            Assert.Equal(datapoints * timeseries, total);
-
-            var exists = new bool[timeseries * datapoints];
-            foreach (var dct in results)
-            {
-                foreach (var kvp in dct)
-                {
-                    foreach (var dp in kvp.Value)
-                    {
-                        exists[(int) dp.DoubleValue] = true;
-                    }
-                }
-            }
-            Assert.True(exists.All(val => val));
-
-        }
         [Fact]
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
@@ -327,6 +289,7 @@ namespace Test
             using var pusher = new CDFPusher(provider, config);
             var res = await pusher.TestConnection(fullConfig, CancellationToken.None);
             Assert.True(res);
+            Assert.Equal(3, handler.RequestCount);
         }
         [Fact]
         [Trait("Server", "basic")]
