@@ -142,7 +142,7 @@ namespace Test
                     Table = "assets",
                     Rows = assets.Select(asset => new RawRowCreateDto<AssetCreate> { Key = asset.ExternalId, Columns = asset })
                 };
-                var data = JsonSerializer.SerializeToUtf8Bytes(wrapper);
+                var data = JsonSerializer.SerializeToUtf8Bytes(wrapper, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
                 var msg = baseBuilder
                     .WithPayload(data)

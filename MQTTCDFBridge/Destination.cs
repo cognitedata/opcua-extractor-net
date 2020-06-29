@@ -292,7 +292,10 @@ namespace Cognite.Bridge
                 log.Warning("Null payload in raw");
                 return true;
             }
-            var rows = JsonSerializer.Deserialize<RawRequestWrapper>(Encoding.UTF8.GetString(msg.Payload));
+            var rows = JsonSerializer.Deserialize<RawRequestWrapper>(Encoding.UTF8.GetString(msg.Payload), new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
 
             var destination = GetDestination();
 
