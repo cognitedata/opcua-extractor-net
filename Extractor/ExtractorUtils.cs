@@ -28,24 +28,6 @@ namespace Cognite.OpcUa
     {
         private static readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorUtils));
         /// <summary>
-        /// Returns elements of the source enumerable, where all elments have distinct results of the selector function.
-        /// </summary>
-        /// <param name="selector">Function to generate keys</param>
-        /// <returns></returns>
-        public static IEnumerable<TSource> DistinctBy<TSource, TKey>(this IEnumerable<TSource> source,
-            Func<TSource, TKey> selector)
-        {
-            if (source == null) throw new ArgumentNullException(nameof(source));
-            HashSet<TKey> seenKeys = new HashSet<TKey>();
-            foreach (var elem in source)
-            {
-                if (seenKeys.Add(selector(elem)))
-                {
-                    yield return elem;
-                }
-            }
-        }
-        /// <summary>
         /// Reduce the length of given string to maxLength, if it is longer.
         /// </summary>
         /// <param name="str">String to be shortened</param>
@@ -88,21 +70,6 @@ namespace Cognite.OpcUa
             }
 
             return (objects, timeseries);
-        }
-        /// <summary>
-        /// Group list of items paired with time by some given time granularity.
-        /// Effectively divides time into even chunks with length given by granularity, starting from DateTime.MinValue.
-        /// </summary>
-        /// <param name="input">List of arbitrary objects paired with a timestamp</param>
-        /// <param name="granularity">Length of time chunks</param>
-        /// <param name="maxLength">Maximum length of each chunk after grouping</param>
-        /// <returns>List of lists grouped by given granularity, where each list has given maximum length</returns>
-        public static IEnumerable<IEnumerable<T>> GroupByTimeGranularity<T>(IEnumerable<(T item, DateTime time)> input, TimeSpan granularity, int maxLength)
-        {
-            return granularity == TimeSpan.Zero
-                ? input.Select(item => new [] {item.item})
-                : input.GroupBy(pair => pair.time.Ticks / granularity.Ticks)
-                    .SelectMany(group => group.Select(pair => pair.item).ChunkBy(maxLength));
         }
 
         public enum SourceOp

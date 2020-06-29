@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 using Cognite.OpcUa;
+using Cognite.Extractor.Common;
 
 namespace Test
 {
