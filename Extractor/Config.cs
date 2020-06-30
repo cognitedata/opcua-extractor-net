@@ -51,6 +51,7 @@ namespace Cognite.OpcUa
         public int AutoRebrowsePeriod { get; set; } = 0;
         public bool EnableAuditDiscovery { get; set; } = false;
         public int DataPushDelay { get; set; } = 1000;
+        public bool UnknownAsScalar { get; set; } = false;
     }
     public interface IPusherConfig
     {

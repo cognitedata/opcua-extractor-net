@@ -730,7 +730,9 @@ namespace Cognite.OpcUa
             IEnumerable<DataValue> values;
             try
             {
-                values = GetNodeAttributes(nodes.Where(buff => buff.ValueRank == ValueRanks.Scalar),
+                // 10 is reasonable, this is used for metadata which is heavily restricted in length to begin with.
+                values = GetNodeAttributes(nodes.Where(buff => buff.ValueRank == ValueRanks.Scalar
+                    || buff.ArrayDimensions != null && buff.ArrayDimensions.Count == 1 && buff.ArrayDimensions[0] < 10),
                     new List<uint>(),
                     new List<uint> {Attributes.Value},
                     token
@@ -745,7 +747,8 @@ namespace Cognite.OpcUa
             foreach (var node in nodes)
             {
                 node.DataRead = true;
-                if (node.ValueRank == ValueRanks.Scalar)
+                if (node.ValueRank == ValueRanks.Scalar
+                    || node.ArrayDimensions != null && node.ArrayDimensions.Count == 1 && node.ArrayDimensions[0] < 10)
                 {
                     enumerator.MoveNext();
                     node.SetDataPoint(enumerator.Current?.Value,

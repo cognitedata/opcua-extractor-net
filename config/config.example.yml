@@ -354,6 +354,9 @@ extraction:
     # Enable using audit events to discover new nodes. If this is set to true, the client will expect AuditAddNodes/AuditAddReferences
     # events on the server node. These will be used to add new nodes automatically, by recursively browsing from each given ParentId.
     enable-audit-discovery:
+    # Assume unknown ValueRanks without ArrayDimensions are all scalar, and create timeseries in CDF accordingly.
+    # If such a variable produces an array, only the first element will be mapped to CDF
+    unknown-as-scalar: false
 
 
 events:
