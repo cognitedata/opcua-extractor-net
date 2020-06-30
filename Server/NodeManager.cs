@@ -304,6 +304,9 @@ namespace Server
                             case PredefinedSetup.Auditing:
                                 CreateAuditAddressSpace(externalReferences);
                                 break;
+                            case PredefinedSetup.Wrong:
+                                CreateWrongAddressSpace(externalReferences);
+                                break;
                         }
                     }
                 }
@@ -600,6 +603,35 @@ namespace Server
                 Ids.Audit.ExcludeObj = exclude.NodeId;
             }
         }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
+            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
+        public void CreateWrongAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
+        {
+            lock (Lock)
+            {
+                var root = CreateObject("WrongRoot");
+                AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
+
+                var rankImp = CreateVariable("RankImprecise", DataTypes.Double, 4);
+                rankImp.ValueRank = ValueRanks.Any;
+                AddNodeRelation(rankImp, root, ReferenceTypeIds.HasComponent);
+
+                var rankImpNoDim = CreateVariable("RankImpreciseNoDim", DataTypes.Double);
+                rankImpNoDim.ValueRank = ValueRanks.ScalarOrOneDimension;
+                AddNodeRelation(rankImpNoDim, root, ReferenceTypeIds.HasComponent);
+
+                var wrongDim = CreateVariable("WrongDim", DataTypes.Double, 4);
+                AddNodeRelation(wrongDim, root, ReferenceTypeIds.HasComponent);
+
+                AddPredefinedNodes(SystemContext, root, rankImp, rankImpNoDim, wrongDim);
+
+                Ids.Wrong.Root = root.NodeId;
+                Ids.Wrong.RankImprecise = rankImp.NodeId;
+                Ids.Wrong.RankImpreciseNoDim = rankImpNoDim.NodeId;
+                Ids.Wrong.WrongDim = wrongDim.NodeId;
+            }
+        }
+
         private static void AddNodeToExt(NodeState state, NodeId id, NodeId typeId,
             IDictionary<NodeId, IList<IReference>> externalReferences)
         {
@@ -1100,7 +1132,8 @@ namespace Server
         Full,
         Custom,
         Events,
-        Auditing
+        Auditing,
+        Wrong
     }
 
     #region nodeid_reference
@@ -1113,12 +1146,14 @@ namespace Server
             Custom = new CustomNodeReference();
             Event = new EventNodeReference();
             Audit = new AuditNodeReference();
+            Wrong = new WrongNodeReference();
         }
         public BaseNodeReference Base { get; set; }
         public FullNodeReference Full { get; set; }
         public CustomNodeReference Custom { get; set; }
         public EventNodeReference Event { get; set; }
         public AuditNodeReference Audit { get; set; }
+        public WrongNodeReference Wrong { get; set; }
     }
 
     public class BaseNodeReference
@@ -1173,6 +1208,14 @@ namespace Server
         public NodeId DirectAdd { get; set; }
         public NodeId RefAdd { get; set; }
         public NodeId ExcludeObj { get; set; }
+    }
+
+    public class WrongNodeReference
+    {
+        public NodeId Root { get; set; }
+        public NodeId RankImprecise { get; set; }
+        public NodeId RankImpreciseNoDim { get; set; }
+        public NodeId WrongDim { get; set; }
     }
     #endregion
 }

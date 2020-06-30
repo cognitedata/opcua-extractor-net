@@ -358,12 +358,12 @@ namespace Cognite.OpcUa
 
             if (node.DataType.IsString && !config.Extraction.AllowStringVariables)
             {
-                log.Verbose("Skipping variable {id} due to string datatype and allow-string-variables being set to false", node.Id);
+                log.Debug("Skipping variable {id} due to string datatype and allow-string-variables being set to false", node.Id);
                 return false;
             }
             if (ignoreDataTypes.Contains(node.DataType.Raw))
             {
-                log.Verbose("Skipping variable {id} due to raw datatype {raw} being in list of ignored data types", node.Id, node.DataType.Raw);
+                log.Debug("Skipping variable {id} due to raw datatype {raw} being in list of ignored data types", node.Id, node.DataType.Raw);
                 return false;
             }
             if (node.ValueRank == ValueRanks.Scalar || config.Extraction.UnknownAsScalar
@@ -378,17 +378,17 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    log.Verbose("Skipping variable {id} due to non-scalar ValueRank {rank} and too large dimension {dim}",
+                    log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and too large dimension {dim}",
                         node.Id, node.ValueRank, length);
                 }
             }
             else if (node.ArrayDimensions == null)
             {
-                log.Verbose("Skipping variable {id} due to non-scalar ValueRank {rank} and null ArrayDimensions", node.Id, node.ValueRank);
+                log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and null ArrayDimensions", node.Id, node.ValueRank);
             }
             else
             {
-                log.Verbose("Skipping variable {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
+                log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
                     node.Id, node.ArrayDimensions.Count);
             }
 

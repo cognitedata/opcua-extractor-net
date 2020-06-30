@@ -9,7 +9,7 @@
     <None Remove=".editorconfig" />
   </ItemGroup>
   <ItemGroup>
-    <AdditionalFiles Include=".editorconfig" />
+    <AdditionalFiles Include="../.editorconfig" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Extractor\Extractor.csproj" />

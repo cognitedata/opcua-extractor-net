@@ -284,7 +284,7 @@ namespace Cognite.OpcUa
                 int dim = 1;
                 if (!variable.IsArray)
                 {
-                    log.Verbose("Array values returned for scalar variable {id}", variable.Id);
+                    log.Debug("Array values returned for scalar variable {id}", variable.Id);
                     if (values.Length > 1)
                     {
                         missedArrayPoints.Inc(values.Length - 1);
@@ -297,7 +297,7 @@ namespace Cognite.OpcUa
                 else
                 {
                     dim = variable.ArrayDimensions[0];
-                    log.Verbose("Missing {cnt} points for variable {id} due to too small ArrayDimensions", values.Length - dim, variable.Id);
+                    log.Debug("Missing {cnt} points for variable {id} due to too small ArrayDimensions", values.Length - dim, variable.Id);
                     missedArrayPoints.Inc(values.Length - dim);
                 }
                 var ret = new List<BufferedDataPoint>();
@@ -316,6 +316,10 @@ namespace Cognite.OpcUa
                     ret.Add(dp);
                 }
                 return ret;
+            }
+            if (variable.IsArray)
+            {
+                uniqueId = $"{uniqueId}[0]";
             }
 
             var sdp = variable.DataType.IsString

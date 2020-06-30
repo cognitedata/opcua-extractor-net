@@ -7,12 +7,6 @@
     <LangVersion>8.0</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <None Remove=".editorconfig" />
-  </ItemGroup>
-  <ItemGroup>
-    <AdditionalFiles Include=".editorconfig" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\ConfigurationTool\ConfigurationTool.csproj" />
     <ProjectReference Include="..\Extractor\Extractor.csproj" />
     <ProjectReference Include="..\MQTTCDFBridge\MQTTCDFBridge.csproj" />
@@ -23,6 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
+    <None Include="../.editorconfig" />
   </ItemGroup>
   <ItemGroup>
     <None Update="config.bridge.yml">

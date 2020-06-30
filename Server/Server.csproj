@@ -12,12 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Remove=".editorconfig" />
-  </ItemGroup>
-  <ItemGroup>
-    <AdditionalFiles Include=".editorconfig" />
+    <None Include="..\.editorconfig" />
   </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

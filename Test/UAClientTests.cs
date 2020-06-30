@@ -25,7 +25,7 @@ using Xunit.Abstractions;
 namespace Test
 {
     [Collection("Extractor tests")]
-    public class UAClientTests : MakeConsoleWork 
+    public class UAClientTests : MakeConsoleWork
     {
         public UAClientTests(ITestOutputHelper output) : base(output) { }
 
@@ -82,7 +82,7 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.WaitForCondition(() => (int) CommonTestUtils.GetMetricValue("opcua_history_reads") == expectedReads, 20,
+            await tester.WaitForCondition(() => (int)CommonTestUtils.GetMetricValue("opcua_history_reads") == expectedReads, 20,
                 () => $"Expected history to be read {expectedReads} times, got {CommonTestUtils.GetMetricValue("opcua_history_reads")}");
 
             await tester.TerminateRunTask();
@@ -163,6 +163,56 @@ namespace Test
 
             await tester.TerminateRunTask(ex =>
                 ex is ExtractorFailureException || ex is AggregateException aex && aex.InnerException is ExtractorFailureException);
+        }
+        [Trait("Server", "custom")]
+        [Trait("Target", "UAExtractor")]
+        [Trait("Test", "arraysizemismatch")]
+        [Fact]
+        public async Task TestArraySizeMismatch()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Wrong,
+                StoreDatapoints = true
+            });
+            await tester.ClearPersistentData();
+            await tester.StartServer();
+
+            tester.Config.Extraction.MaxArraySize = 4;
+
+            tester.StartExtractor();
+
+            await tester.Extractor.WaitForSubscriptions();
+
+            Assert.DoesNotContain(tester.Handler.Timeseries, ts => ts.Value.name == "RankImpreciseNoDim");
+            Assert.Contains(tester.Handler.Timeseries, ts => ts.Value.name == "RankImprecise[0]");
+            Assert.Contains(tester.Handler.Timeseries, ts => ts.Value.name == "WrongDim[0]");
+
+            tester.Server.UpdateNode(tester.Server.Ids.Wrong.WrongDim, new[] { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1 });
+
+            await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=4[3]")
+                && tester.Handler.Datapoints["gp.tl:i=4[3]"].NumericDatapoints.Count >= 1
+                && CommonTestUtils.TestMetricValue("opcua_array_points_missed", 2), 10);
+            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.tl:i=4[4]"));
+            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.tl:i=4[5]"));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_array_points_missed", 2));
+
+            tester.Config.Extraction.UnknownAsScalar = true;
+
+            tester.Extractor.RestartExtractor();
+
+            await Task.Delay(500);
+
+            await tester.Extractor.WaitForSubscriptions();
+
+            Assert.Contains(tester.Handler.Timeseries, ts => ts.Value.name == "RankImpreciseNoDim");
+
+            tester.Server.UpdateNode(tester.Server.Ids.Wrong.RankImpreciseNoDim, new[] { 1, 1, 1, 1 });
+
+            await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=3")
+                && tester.Handler.Datapoints["gp.tl:i=3"].NumericDatapoints.Count >= 1
+                && CommonTestUtils.TestMetricValue("opcua_array_points_missed", 5), 10);
+            Assert.False(tester.Handler.Datapoints.ContainsKey("gp.tl:i=3[0]"));
         }
     }
 }

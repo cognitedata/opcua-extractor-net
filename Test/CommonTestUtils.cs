@@ -331,7 +331,7 @@ namespace Test
                 : asset != null && ev.assetIds.Contains(asset.id);
         }
     }
-    public enum ServerName { Basic, Full, Array, Events, Audit, Proxy }
+    public enum ServerName { Basic, Full, Array, Events, Audit, Proxy, Wrong }
     public enum ConfigName { Events, Test }
 
     public sealed class ExtractorTester : IDisposable
@@ -343,7 +343,8 @@ namespace Test
             {ServerName.Array, PredefinedSetup.Custom},
             {ServerName.Events, PredefinedSetup.Events},
             {ServerName.Audit, PredefinedSetup.Auditing},
-            {ServerName.Proxy, PredefinedSetup.Base}
+            {ServerName.Proxy, PredefinedSetup.Base},
+            {ServerName.Wrong, PredefinedSetup.Wrong}
         };
 
         private static readonly Dictionary<ConfigName, string> configNames = new Dictionary<ConfigName, string>
