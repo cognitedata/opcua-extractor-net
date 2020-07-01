@@ -149,6 +149,7 @@ namespace Cognite.OpcUa
         /// <returns>UniqueId or null</returns>
         public string GetUniqueId(NodeId id)
         {
+            if (id == null || id.IsNullNodeId) return null;
             return managedNodes.GetValueOrDefault(id);
         }
         /// <summary>

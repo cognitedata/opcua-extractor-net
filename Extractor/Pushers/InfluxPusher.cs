@@ -419,15 +419,6 @@ namespace Cognite.OpcUa
             }
         }
 
-        private string SourceNodeToString(NodeId sourceNode)
-        {
-            if (sourceNode == null || sourceNode.IsNullNodeId)
-            {
-                return "none";
-            }
-            return Extractor.GetUniqueId(sourceNode);
-        }
-
         private IInfluxDatapoint BufferedEventToInflux(BufferedEvent evt)
         {
             var idp = new InfluxDatapoint<string>
@@ -438,8 +429,9 @@ namespace Cognite.OpcUa
             };
             idp.Fields.Add("value", evt.Message);
             idp.Fields.Add("id", evt.EventId);
-            idp.Fields.Add("source", evt.MetaData.ContainsKey("SourceNode")
-                ? Extractor.ConvertToString(evt.MetaData["SourceNode"]) : SourceNodeToString(evt.SourceNode));
+            var sourceNode = evt.MetaData.ContainsKey("SourceNode")
+                ? Extractor.ConvertToString(evt.MetaData["SourceNode"]) : Extractor.GetUniqueId(evt.SourceNode);
+            idp.Fields.Add("source", sourceNode ?? "null");
             foreach (var kvp in evt.MetaData)
             {
                 if (kvp.Key == "Emitter" || kvp.Key == "Type" || kvp.Key == "SourceNode") continue;

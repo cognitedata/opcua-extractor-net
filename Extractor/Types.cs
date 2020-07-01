@@ -485,7 +485,7 @@ namespace Cognite.OpcUa
             var bytes = new List<byte>();
             bytes.AddRange(ExtractorUtils.StringToStorable(Message));
             bytes.AddRange(ExtractorUtils.StringToStorable(EventId));
-            bytes.AddRange(ExtractorUtils.StringToStorable(SourceNode == null || SourceNode.IsNullNodeId ? "none" : extractor.GetUniqueId(SourceNode)));
+            bytes.AddRange(ExtractorUtils.StringToStorable(extractor.GetUniqueId(SourceNode)));
             bytes.AddRange(BitConverter.GetBytes(Time.ToBinary()));
             bytes.AddRange(ExtractorUtils.StringToStorable(extractor.GetUniqueId(EventType)));
             bytes.AddRange(ExtractorUtils.StringToStorable(extractor.GetUniqueId(EmittingNode)));
@@ -520,7 +520,7 @@ namespace Cognite.OpcUa
             (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
             evt.EventId = txt;
             (txt, next) = ExtractorUtils.StringFromStorable(bytes, next);
-            evt.SourceNode = txt == "none" ? NodeId.Null : extractor.State.GetNodeId(txt);
+            evt.SourceNode = extractor.State.GetNodeId(txt);
             long dt = BitConverter.ToInt64(bytes, next);
             next += sizeof(long);
             evt.Time = DateTime.FromBinary(dt);
