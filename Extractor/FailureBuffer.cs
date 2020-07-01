@@ -146,6 +146,10 @@ namespace Cognite.OpcUa
                 .SelectMany(group => group)
                 .ToList();
 
+            log.Information("Push {cnt} points to failurebuffer", points.Count());
+
+            if (!points.Any()) return true;
+
             bool success = true;
 
             if (config.Influx && influxPusher != null)
@@ -154,6 +158,7 @@ namespace Cognite.OpcUa
                 {
                     if (success && !influxPusher.DataFailing)
                     {
+                        bool any = false;
                         foreach ((string key, var value) in pointRanges)
                         {
                             if (!nodeBufferStates.ContainsKey(key))
@@ -164,6 +169,7 @@ namespace Cognite.OpcUa
                                 nodeBufferStates[key].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
                             }
                             nodeBufferStates[key].UpdateDestinationRange(value.First, value.Last);
+                            any |= value.First <= value.Last;
                         }
                         if (config.InfluxStateStore)
                         {
@@ -171,7 +177,7 @@ namespace Cognite.OpcUa
                                 fullConfig.StateStorage.InfluxVariableStore, token).ConfigureAwait(false);
                         }
 
-                        anyPoints = true;
+                        anyPoints |= any;
                     }
                 }
                 catch (Exception e)
@@ -243,6 +249,10 @@ namespace Cognite.OpcUa
                         Log.Error(e, "Failed to read points from influxdb");
                     }
                 }
+                else if (anyPoints)
+                {
+                    log.Warning("All ranges are empty, but anyPoints is set to true");
+                }
             }
 
             if (!string.IsNullOrEmpty(config.DatapointPath))
@@ -269,6 +279,10 @@ namespace Cognite.OpcUa
                 .SelectMany(group => group)
                 .ToList();
 
+            log.Information("Push {cnt} events to failurebuffer", events.Count());
+
+            if (!events.Any()) return true;
+
             bool success = true;
 
             if (config.Influx)
@@ -276,6 +290,7 @@ namespace Cognite.OpcUa
                 if (!influxPusher.EventsFailing)
                 {
                     var eventRanges = new Dictionary<string, TimeRange>();
+                    bool any = false;
                     foreach (var evt in events)
                     {
                         var emitterId = extractor.GetUniqueId(evt.EmittingNode);
@@ -284,7 +299,7 @@ namespace Cognite.OpcUa
                             eventRanges[emitterId] = new TimeRange(evt.Time, evt.Time);
                             continue;
                         }
-
+                        any = true;
                         eventRanges[emitterId] = eventRanges[emitterId].Extend(evt.Time, evt.Time);
                     }
 
@@ -303,8 +318,10 @@ namespace Cognite.OpcUa
                         await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
                             fullConfig.StateStorage.InfluxEventStore, token).ConfigureAwait(false);
                     }
-
-                    anyEvents = true;
+                    if (any)
+                    {
+                        anyEvents = true;
+                    }
                 }
                 else
                 {

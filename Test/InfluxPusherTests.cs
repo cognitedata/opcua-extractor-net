@@ -224,14 +224,14 @@ namespace Test
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1000);
 
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
-                20, "Failurebuffer must receive some data");
+                10, "Failurebuffer must receive some data");
 
             await Task.Delay(500);
             tester.Handler.AllowPush = true;
             tester.Handler.AllowConnectionTest = true;
 
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.Any,
-                20, "FailureBuffer should be emptied");
+                10, "FailureBuffer should be emptied");
 
             tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1001);
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1001);

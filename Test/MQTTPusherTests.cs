@@ -76,7 +76,7 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.Extractor.Looper.WaitForNextPush();
+            await tester.Extractor.WaitForSubscriptions();
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling), 20);
 
             var waitTask = tester.Bridge.WaitForNextMessage();
