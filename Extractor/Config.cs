@@ -52,6 +52,26 @@ namespace Cognite.OpcUa
         public bool EnableAuditDiscovery { get; set; } = false;
         public int DataPushDelay { get; set; } = 1000;
         public bool UnknownAsScalar { get; set; } = false;
+        public UpdateConfig Update { get => update; set => update = value ?? update; }
+        private UpdateConfig update = new UpdateConfig();
+    }
+    public class UpdateConfig
+    {
+        public bool AnyUpdate =>
+            objects.Description || objects.Name || objects.Metadata || objects.Context
+            || variables.Description || variables.Name || variables.Metadata || variables.Context;
+        public TypeUpdateConfig Objects { get => objects; set => objects = value ?? objects; }
+        private TypeUpdateConfig objects = new TypeUpdateConfig();
+        public TypeUpdateConfig Variables { get => variables; set => variables = value ?? variables; }
+        private TypeUpdateConfig variables = new TypeUpdateConfig();
+    }
+    public class TypeUpdateConfig
+    {
+        public bool Description { get; set; } = false;
+        public bool Name { get; set; } = false;
+        public bool Metadata { get; set; } = false;
+        public bool Context { get; set; } = false;
+
     }
     public interface IPusherConfig
     {

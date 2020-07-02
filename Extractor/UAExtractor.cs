@@ -423,7 +423,9 @@ namespace Cognite.OpcUa
         /// </summary>
         public async Task Rebrowse(CancellationToken token)
         {
-            await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
+            // If we are updating we want to re-discover nodes in order to run them through mapping again.
+            await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token,
+                !config.Extraction.Update.AnyUpdate);
             var historyTasks = await MapUAToDestinations(token);
             Looper.ScheduleTasks(historyTasks);
         }
@@ -467,7 +469,8 @@ namespace Cognite.OpcUa
                 State.AddManagedNode(node);
             }
 
-            var historyTasks = Synchronize(variables, token);
+            // Changed flag means that it already existed, so we avoid synchronizing these.
+            var historyTasks = Synchronize(variables.Where(var => !var.Changed), token);
             Starting.Set(0);
             return historyTasks;
         }
@@ -541,6 +544,7 @@ namespace Cognite.OpcUa
             objects = new List<BufferedNode>();
             timeseries = new List<BufferedVariable>();
             variables = new List<BufferedVariable>();
+            var rawObjects = new List<BufferedNode>();
             var rawVariables = new List<BufferedVariable>();
             var nodeMap = new Dictionary<string, BufferedNode>();
 
@@ -565,23 +569,134 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    objects.Add(buffer);
+                    rawObjects.Add(buffer);
                 }
                 nodeMap.Add(GetUniqueId(buffer.Id), buffer);
             }
             log.Information("Getting data for {NumVariables} variables and {NumObjects} objects", 
-                rawVariables.Count, objects.Count);
-            uaClient.ReadNodeData(objects.Concat(rawVariables), token);
-            foreach (var node in objects)
+                rawVariables.Count, rawObjects.Count);
+
+            var nodes = rawObjects.Concat(rawVariables);
+
+            var update = config.Extraction.Update;
+
+            if (update.Objects.Metadata || update.Variables.Metadata)
             {
+                var toReadProperties = nodes
+                    .Where(node => State.IsMappedNode(node.Id)
+                        && (update.Objects.Metadata && !node.IsVariable
+                            || update.Variables.Metadata && node.IsVariable))
+                    .ToList();
+                if (toReadProperties.Any())
+                {
+                    ReadProperties(toReadProperties, token).Wait();
+                }
+            }
+            uaClient.ReadNodeData(nodes, token);
+
+
+            foreach (var node in rawObjects)
+            {
+                if (update.AnyUpdate)
+                {
+                    var old = State.GetActiveNode(node.Id);
+                    if (old != null)
+                    {
+                        if (update.Objects.Context && old.ParentId != node.ParentId) node.Changed = true;
+
+                        if (!node.Changed && update.Objects.Description && old.Description != node.Description
+                            && !string.IsNullOrWhiteSpace(node.Description)) node.Changed = true;
+
+                        if (!node.Changed && update.Objects.Name && old.DisplayName != node.DisplayName
+                            && !string.IsNullOrWhiteSpace(node.DisplayName)) node.Changed = true;
+
+                        if (!node.Changed && update.Objects.Metadata)
+                        {
+                            var oldProperties = old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
+                            node.Changed = node.Properties.Any(prop =>
+                            {
+                                if (!oldProperties.ContainsKey(prop.DisplayName)) return true;
+                                var oldProp = oldProperties[prop.DisplayName];
+                                return oldProp.IsString && oldProp.StringValue != prop.Value.StringValue
+                                    && !string.IsNullOrWhiteSpace(oldProp.StringValue)
+                                    || !oldProp.IsString && oldProp.DoubleValue != prop.Value.DoubleValue;
+                            });
+                        }
+                        if (node.Changed)
+                        {
+                            State.AddActiveNode(node);
+                            objects.Add(node);
+                        }
+                        continue;
+                    }
+                }
                 log.Debug(node.ToDebugDescription());
                 State.AddActiveNode(node);
+                objects.Add(node);
             }
 
             foreach (var node in rawVariables)
             {
                 if (AllowTSMap(node))
                 {
+                    if (update.AnyUpdate)
+                    {
+                        var old = State.GetActiveNode(node.Id);
+                        if (old != null && old is BufferedVariable variable)
+                        {
+                            var oldState = State.GetNodeState(node.Id);
+
+                            if (update.Variables.Context && old.ParentId != node.ParentId) node.Changed = true;
+
+                            if (!node.Changed && update.Variables.Description && old.Description != node.Description
+                                && !string.IsNullOrWhiteSpace(node.Description)) node.Changed = true;
+
+                            if (!node.Changed && update.Variables.Name && old.DisplayName != node.DisplayName
+                                && !string.IsNullOrWhiteSpace(node.DisplayName))
+                            {
+                                node.Changed = true;
+                                if (oldState.IsArray)
+                                {
+                                    for (int i = 0; i < oldState.ArrayDimensions[0]; i++)
+                                    {
+                                        var ts = new BufferedVariable(node, i);
+                                        ts.Changed = true;
+                                        State.AddActiveNode(ts);
+                                        timeseries.Add(ts);
+                                    }
+                                }
+                            }
+
+                            if (!node.Changed && update.Variables.Metadata)
+                            {
+                                var oldProperties = old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
+                                node.Changed = node.Properties.Any(prop =>
+                                {
+                                    if (!string.IsNullOrWhiteSpace(prop.DisplayName) && !oldProperties.ContainsKey(prop.DisplayName)) return true;
+                                    var oldProp = oldProperties[prop.DisplayName];
+                                    return oldProp.IsString && oldProp.StringValue != prop.Value.StringValue
+                                        && !string.IsNullOrWhiteSpace(prop.Value.StringValue)
+                                        || !oldProp.IsString && oldProp.DoubleValue != prop.Value.DoubleValue;
+                                });
+                            }
+
+                            if (node.Changed)
+                            {
+                                State.AddActiveNode(node);
+                                if (oldState.IsArray)
+                                {
+                                    objects.Add(node);
+                                }
+                                else
+                                {
+                                    timeseries.Add(node);
+                                }
+                            }
+
+                            continue;
+                        }
+                    }
+
                     log.Debug(node.ToDebugDescription());
                     variables.Add(node);
                     var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,

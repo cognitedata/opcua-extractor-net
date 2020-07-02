@@ -305,16 +305,22 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="root">Root node to browse for</param>
         /// <param name="callback">Callback to call for each found node</param>
-        public Task BrowseNodeHierarchy(NodeId root, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
+        public Task BrowseNodeHierarchy(NodeId root,
+            Action<ReferenceDescription, NodeId> callback,
+            CancellationToken token,
+            bool ignoreVisited = true)
         {
-            return BrowseNodeHierarchy(new[] {root}, callback, token);
+            return BrowseNodeHierarchy(new[] {root}, callback, token, ignoreVisited);
         }
         /// <summary>
         /// Browse an opcua directory, calling callback for all relevant nodes found.
         /// </summary>
         /// <param name="roots">Initial nodes to start mapping.</param>
         /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
-        public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots, Action<ReferenceDescription, NodeId> callback, CancellationToken token)
+        public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots,
+            Action<ReferenceDescription, NodeId> callback,
+            CancellationToken token,
+            bool ignoreVisited = true)
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
             log.Debug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
@@ -323,7 +329,7 @@ namespace Cognite.OpcUa
                 bool docb = true;
                 lock (visitedNodesLock)
                 {
-                    if (!VisitedNodes.Add(root))
+                    if (!VisitedNodes.Add(root) && ignoreVisited)
                     {
                         docb = false;
                     }
@@ -335,7 +341,8 @@ namespace Cognite.OpcUa
                     callback(rootNode, null);
                 }
             }
-            await Task.Run(() => BrowseDirectory(roots, callback, token), token);
+            await Task.Run(() => BrowseDirectory(roots, callback, token, null,
+                (uint)NodeClass.Variable | (uint)NodeClass.Object, ignoreVisited), token);
         }
         /// <summary>
         /// Get the root node and return it as a reference description.

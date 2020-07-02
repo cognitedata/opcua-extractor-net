@@ -54,6 +54,10 @@ namespace Cognite.OpcUa
         /// </summary>
         public string Description { get; set; }
         /// <summary>
+        /// True if the node has been modified after pushing.
+        /// </summary>
+        public bool Changed { get; set; }
+        /// <summary>
         /// Return a string description, for logging
         /// </summary>
         /// <returns>Descriptive string</returns>
