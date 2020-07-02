@@ -57,9 +57,7 @@ namespace Cognite.OpcUa
     }
     public class UpdateConfig
     {
-        public bool AnyUpdate =>
-            objects.Description || objects.Name || objects.Metadata || objects.Context
-            || variables.Description || variables.Name || variables.Metadata || variables.Context;
+        public bool AnyUpdate => objects.AnyUpdate || variables.AnyUpdate;
         public TypeUpdateConfig Objects { get => objects; set => objects = value ?? objects; }
         private TypeUpdateConfig objects = new TypeUpdateConfig();
         public TypeUpdateConfig Variables { get => variables; set => variables = value ?? variables; }
@@ -67,6 +65,7 @@ namespace Cognite.OpcUa
     }
     public class TypeUpdateConfig
     {
+        public bool AnyUpdate => Description || Name || Metadata || Context;
         public bool Description { get; set; } = false;
         public bool Name { get; set; } = false;
         public bool Metadata { get; set; } = false;

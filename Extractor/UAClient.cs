@@ -699,7 +699,7 @@ namespace Cognite.OpcUa
             {
                 if (token.IsCancellationRequested) return;
                 enumerator.MoveNext();
-                node.Description = enumerator.Current.GetValue("");
+                node.Description = enumerator.Current.GetValue(new LocalizedText("")).Text;
                 if (node.IsVariable && node is BufferedVariable vnode)
                 {
                     enumerator.MoveNext();

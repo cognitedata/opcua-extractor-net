@@ -184,7 +184,11 @@ namespace Cognite.OpcUa.Pushers
             return client.IsConnected;
         }
 
-        public async Task<bool> PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> variables, CancellationToken token)
+        public async Task<bool> PushNodes(
+            IEnumerable<BufferedNode> objects,
+            IEnumerable<BufferedVariable> variables,
+            UpdateConfig update,
+            CancellationToken token)
         {
             if (!client.IsConnected) return false;
 

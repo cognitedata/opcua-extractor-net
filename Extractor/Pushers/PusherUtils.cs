@@ -30,6 +30,14 @@ namespace Cognite.OpcUa.Pushers
                 return Convert.ToInt64(value, CultureInfo.InvariantCulture);
             }
         }
+        public static Dictionary<string, string> PropertiesToMetadata(IEnumerable<BufferedVariable> properties)
+        {
+            return properties
+                .Where(prop => prop.Value != null)
+                .Take(16)
+                .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
+        }
+
         /// <summary>
         /// Converts BufferedNode into asset write poco.
         /// </summary>
@@ -52,10 +60,7 @@ namespace Cognite.OpcUa.Pushers
             }
             if (node.Properties != null && node.Properties.Any())
             {
-                writePoco.Metadata = node.Properties
-                    .Where(prop => prop.Value != null)
-                    .Take(16)
-                    .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
+                writePoco.Metadata = PropertiesToMetadata(node.Properties);
             }
             return writePoco;
         }
@@ -203,10 +208,7 @@ namespace Cognite.OpcUa.Pushers
             };
             if (variable.Properties != null && variable.Properties.Any())
             {
-                writePoco.Metadata = variable.Properties
-                    .Where(prop => prop.Value != null)
-                    .Take(16)
-                    .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
+                writePoco.Metadata = PropertiesToMetadata(variable.Properties);
             }
             return writePoco;
         }
@@ -251,10 +253,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (variable.Properties != null && variable.Properties.Any())
             {
-                writePoco.Metadata = variable.Properties
-                    .Where(prop => prop.Value != null)
-                    .Take(16)
-                    .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
+                writePoco.Metadata = PropertiesToMetadata(variable.Properties);
             }
             return writePoco;
         }

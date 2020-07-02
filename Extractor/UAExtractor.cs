@@ -743,7 +743,7 @@ namespace Cognite.OpcUa
                 pusher.NoInit = false;
                 return;
             }
-            var result = await pusher.PushNodes(objects, timeseries, token);
+            var result = await pusher.PushNodes(objects, timeseries, config.Extraction.Update, token);
             if (!result)
             {
                 log.Error("Failed to push nodes on pusher {name}", pusher.GetType());

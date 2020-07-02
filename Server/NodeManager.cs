@@ -419,7 +419,7 @@ namespace Server
         {
             lock (Lock)
             {
-                var root = CreateObject("CustomRoot");
+                var root = CreateObject("CustomRoot 2");
                 AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
 
                 var myarray = CreateVariable("Variable Array", DataTypes.Double, 4);
