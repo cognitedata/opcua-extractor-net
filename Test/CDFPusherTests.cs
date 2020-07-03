@@ -682,63 +682,86 @@ namespace Test
             Assert.True(tester.Handler.TimeseriesRaw["gp.tl:i=10"].metadata.ContainsKey("EURange"));
         }
 
-        private static void VerifyStartingConditions(CDFMockHandler handler, UpdateConfig upd)
+        private static void VerifyStartingConditions(
+            Dictionary<string, AssetDummy> assets,
+            Dictionary<string, TimeseriesDummy> timeseries,
+            UpdateConfig upd,
+            bool raw)
         {
             if (upd == null) upd = new UpdateConfig();
-            Assert.Equal(6, handler.Assets.Count);
-            Assert.Equal(10, handler.Timeseries.Count);
+            Assert.Equal(6, assets.Count);
+            Assert.Equal(10, timeseries.Count);
 
-            if (!upd.Objects.Name) Assert.Equal("CustomRoot", handler.Assets["gp.tl:i=1"].name);
-            if (!upd.Objects.Description) Assert.True(string.IsNullOrEmpty(handler.Assets["gp.tl:i=1"].description));
+            if (!upd.Objects.Name) Assert.Equal("CustomRoot", assets["gp.tl:i=1"].name);
+            if (!upd.Objects.Description) Assert.True(string.IsNullOrEmpty(assets["gp.tl:i=1"].description));
 
-            if (!upd.Variables.Name) Assert.Equal("StringyVar", handler.Timeseries["gp.tl:i=8"].name);
-            if (!upd.Variables.Description) Assert.True(string.IsNullOrEmpty(handler.Timeseries["gp.tl:i=8"].description));
+            if (!upd.Variables.Name) Assert.Equal("StringyVar", timeseries["gp.tl:i=8"].name);
+            if (!upd.Variables.Description) Assert.True(string.IsNullOrEmpty(timeseries["gp.tl:i=8"].description));
 
-            if (!upd.Objects.Context) Assert.Equal("gp.tl:i=1", handler.Assets["gp.tl:i=15"].parentExternalId);
-            if (!upd.Variables.Context) Assert.Equal(handler.Assets["gp.tl:i=1"].id, handler.Timeseries["gp.tl:i=8"].assetId);
+            if (raw)
+            {
+                if (!upd.Variables.Context) Assert.Equal("gp.tl:i=1", (timeseries["gp.tl:i=8"] as StatelessTimeseriesDummy).assetExternalId);
+            }
+            else
+            {
+                if (!upd.Variables.Context) Assert.Equal(assets["gp.tl:i=1"].id, timeseries["gp.tl:i=8"].assetId);
+            }
+            if (!upd.Objects.Context) Assert.Equal("gp.tl:i=1", assets["gp.tl:i=15"].parentExternalId);
 
             if (!upd.Objects.Metadata)
             {
-                Assert.True(handler.Assets["gp.tl:i=14"].metadata == null || !handler.Assets["gp.tl:i=14"].metadata.Any());
-                Assert.Single(handler.Assets["gp.tl:i=15"].metadata);
-                Assert.Equal("1234", handler.Assets["gp.tl:i=15"].metadata["NumericProp"]);
+                Assert.True(assets["gp.tl:i=14"].metadata == null || !assets["gp.tl:i=14"].metadata.Any());
+                Assert.Single(assets["gp.tl:i=15"].metadata);
+                Assert.Equal("1234", assets["gp.tl:i=15"].metadata["NumericProp"]);
             }
             if (!upd.Variables.Metadata)
             {
-                Assert.True(handler.Timeseries["gp.tl:i=8"].metadata == null || !handler.Timeseries["gp.tl:i=8"].metadata.Any());
-                Assert.Equal(2, handler.Timeseries["gp.tl:i=10"].metadata.Count);
-                Assert.Equal("(0, 100)", handler.Timeseries["gp.tl:i=10"].metadata["EURange"]);
+                Assert.True(timeseries["gp.tl:i=8"].metadata == null || !timeseries["gp.tl:i=8"].metadata.Any());
+                Assert.Equal(2, timeseries["gp.tl:i=10"].metadata.Count);
+                Assert.Equal("(0, 100)", timeseries["gp.tl:i=10"].metadata["EURange"]);
             }
         }
 
-        private static void VerifyModified(CDFMockHandler handler, UpdateConfig upd)
+        private static void VerifyModified(
+            Dictionary<string, AssetDummy> assets,
+            Dictionary<string, TimeseriesDummy> timeseries,
+            UpdateConfig upd,
+            bool raw)
         {
             if (upd == null) upd = new UpdateConfig();
-            Assert.Equal(6, handler.Assets.Count);
-            Assert.Equal(10, handler.Timeseries.Count);
+            Assert.Equal(6, assets.Count);
+            Assert.Equal(10, timeseries.Count);
 
-            if (upd.Objects.Name) Assert.Equal("CustomRoot updated", handler.Assets["gp.tl:i=1"].name);
-            if (upd.Objects.Description) Assert.Equal("custom root description", handler.Assets["gp.tl:i=1"].description);
+            if (upd.Objects.Name) Assert.Equal("CustomRoot updated", assets["gp.tl:i=1"].name);
+            if (upd.Objects.Description) Assert.Equal("custom root description", assets["gp.tl:i=1"].description);
 
-            if (upd.Variables.Name) Assert.Equal("StringyVar updated", handler.Timeseries["gp.tl:i=8"].name);
-            if (upd.Variables.Description) Assert.Equal("Stringy var description", handler.Timeseries["gp.tl:i=8"].description);
-            // TODO
-            // if (upd.Objects.Context) Assert.Equal("gp.tl:i=14", handler.Assets["gp.tl:i=15"].parentExternalId);
-            if (upd.Variables.Context) Assert.Equal(handler.Assets["gp.tl:i=14"].id, handler.Timeseries["gp.tl:i=8"].assetId);
+            if (upd.Variables.Name) Assert.Equal("StringyVar updated", timeseries["gp.tl:i=8"].name);
+            if (upd.Variables.Description) Assert.Equal("Stringy var description", timeseries["gp.tl:i=8"].description);
+            if (raw)
+            {
+                if (upd.Objects.Context) Assert.Equal("gp.tl:i=14", assets["gp.tl:i=15"].parentExternalId);
+                if (upd.Variables.Context) Assert.Equal("gp.tl:i=14", (timeseries["gp.tl:i=8"] as StatelessTimeseriesDummy).assetExternalId);
+            }
+            else
+            {
+                // if (upd.Objects.Context) Assert.Equal("gp.tl:i=14", handler.Assets["gp.tl:i=15"].parentExternalId);
+                if (upd.Variables.Context) Assert.Equal(assets["gp.tl:i=14"].id, timeseries["gp.tl:i=8"].assetId);
+            }
+
 
             if (upd.Objects.Metadata)
             {
-                Assert.Single(handler.Assets["gp.tl:i=14"].metadata);
-                Assert.Equal("New asset prop value", handler.Assets["gp.tl:i=14"].metadata["NewAssetProp"]);
-                Assert.Single(handler.Assets["gp.tl:i=15"].metadata);
-                Assert.Equal("4321", handler.Assets["gp.tl:i=15"].metadata["NumericProp"]);
+                Assert.Single(assets["gp.tl:i=14"].metadata);
+                Assert.Equal("New asset prop value", assets["gp.tl:i=14"].metadata["NewAssetProp"]);
+                Assert.Single(assets["gp.tl:i=15"].metadata);
+                Assert.Equal("4321", assets["gp.tl:i=15"].metadata["NumericProp"]);
             }
             if (upd.Variables.Metadata)
             {
-                Assert.Single(handler.Timeseries["gp.tl:i=8"].metadata);
-                Assert.Equal("New prop value", handler.Timeseries["gp.tl:i=8"].metadata["NewProp"]);
-                Assert.Equal(2, handler.Timeseries["gp.tl:i=10"].metadata.Count);
-                Assert.Equal("(0, 200)", handler.Timeseries["gp.tl:i=10"].metadata["EURange"]);
+                Assert.Single(timeseries["gp.tl:i=8"].metadata);
+                Assert.Equal("New prop value", timeseries["gp.tl:i=8"].metadata["NewProp"]);
+                Assert.Equal(2, timeseries["gp.tl:i=10"].metadata.Count);
+                Assert.Equal("(0, 200)", timeseries["gp.tl:i=10"].metadata["EURange"]);
             }
         }
 
@@ -781,14 +804,72 @@ namespace Test
 
             await tester.Extractor.WaitForSubscriptions();
 
-            VerifyStartingConditions(tester.Handler, null);
+            VerifyStartingConditions(tester.Handler.Assets, tester.Handler.Timeseries, null, false);
 
             tester.Server.ModifyCustomServer();
 
             await tester.Extractor.Rebrowse(tester.Source.Token);
 
-            VerifyStartingConditions(tester.Handler, upd);
-            VerifyModified(tester.Handler, upd);
+            VerifyStartingConditions(tester.Handler.Assets, tester.Handler.Timeseries, upd, false);
+            VerifyModified(tester.Handler.Assets, tester.Handler.Timeseries, upd, false);
+        }
+        [Theory]
+        [InlineData(true, true, true, true, false, false, false, false)]
+        [InlineData(false, false, false, false, true, true, true, true)]
+        [InlineData(true, false, true, false, true, false, true, false)]
+        [InlineData(false, true, false, true, false, true, false, true)]
+        [InlineData(true, true, true, true, true, true, true, true)]
+        [Trait("Server", "array")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "fieldsupdateraw")]
+        public async Task TestUpdateFieldsRaw(
+            bool assetName, bool variableName,
+            bool assetDesc, bool variableDesc,
+            bool assetContext, bool variableContext,
+            bool assetMeta, bool variableMeta)
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Array
+            });
+            var upd = tester.Config.Extraction.Update;
+            upd.Objects.Name = assetName;
+            upd.Objects.Description = assetDesc;
+            upd.Objects.Context = assetContext;
+            upd.Objects.Metadata = assetMeta;
+            upd.Variables.Name = variableName;
+            upd.Variables.Description = variableDesc;
+            upd.Variables.Context = variableContext;
+            upd.Variables.Metadata = variableMeta;
+
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                Database = "metadata",
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries"
+            };
+
+            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.History.Enabled = false;
+
+            await tester.ClearPersistentData();
+            await tester.StartServer();
+            tester.StartExtractor();
+
+            await tester.Extractor.WaitForSubscriptions();
+
+            VerifyStartingConditions(tester.Handler.AssetRaw, tester.Handler.TimeseriesRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), null, true);
+
+            tester.Server.ModifyCustomServer();
+
+            await tester.Extractor.Rebrowse(tester.Source.Token);
+
+            VerifyStartingConditions(tester.Handler.AssetRaw, tester.Handler.TimeseriesRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, true);
+            VerifyModified(tester.Handler.AssetRaw, tester.Handler.TimeseriesRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, true);
         }
     }
 }

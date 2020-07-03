@@ -32,6 +32,7 @@ namespace Cognite.OpcUa.Pushers
         }
         public static Dictionary<string, string> PropertiesToMetadata(IEnumerable<BufferedVariable> properties)
         {
+            if (properties == null) return new Dictionary<string, string>();
             return properties
                 .Where(prop => prop.Value != null)
                 .Take(16)
@@ -310,7 +311,18 @@ namespace Cognite.OpcUa.Pushers
                     if (oldMetaData == null || newMetaData != null && newMetaData.Any(kvp =>
                         !oldMetaData.ContainsKey(kvp.Key) || oldMetaData[kvp.Key] != kvp.Value))
                     {
+                        if (oldMetaData != null)
+                        {
+                            foreach (var field in oldMetaData)
+                            {
+                                if (!newMetaData.ContainsKey(field.Key))
+                                {
+                                    newMetaData[field.Key] = field.Value;
+                                }
+                            }
+                        }
                         ret["metadata"] = newMetaData;
+                        
                     }
                 }
                 else

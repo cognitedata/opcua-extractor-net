@@ -621,8 +621,8 @@ namespace Test
         }
         private HttpResponseMessage HandleGetRawAssets()
         {
-            var data = new RawListWrapper<object>();
-            data.items = AssetRaw.Select(kvp => new RawWrapper<object> { columns = new object(), key = kvp.Key, lastUpdatedTime = 0 });
+            var data = new RawListWrapper<AssetDummy>();
+            data.items = AssetRaw.Select(kvp => new RawWrapper<AssetDummy> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
             var content = JsonConvert.SerializeObject(data);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -631,8 +631,8 @@ namespace Test
         }
         private HttpResponseMessage HandleGetRawTimeseries()
         {
-            var data = new RawListWrapper<object>();
-            data.items = TimeseriesRaw.Select(kvp => new RawWrapper<object> { columns = new object(), key = kvp.Key, lastUpdatedTime = 0 });
+            var data = new RawListWrapper<StatelessTimeseriesDummy>();
+            data.items = TimeseriesRaw.Select(kvp => new RawWrapper<StatelessTimeseriesDummy> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
             var content = JsonConvert.SerializeObject(data);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {

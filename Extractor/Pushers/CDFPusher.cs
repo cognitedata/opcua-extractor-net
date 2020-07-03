@@ -394,7 +394,7 @@ namespace Cognite.OpcUa.Pushers
         private static string BuildColumnString(TypeUpdateConfig config, bool assets)
         {
             var fields = new List<string>();
-            if (config.Context) fields.Add(assets ? "parentExternalId" : "assetId");
+            if (config.Context) fields.Add(assets ? "parentExternalId" : "assetExternalId");
             if (config.Description) fields.Add("description");
             if (config.Metadata) fields.Add("metadata");
             if (config.Name) fields.Add("name");
