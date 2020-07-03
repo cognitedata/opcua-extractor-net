@@ -711,7 +711,7 @@ namespace Test
             if (!upd.Objects.Metadata)
             {
                 Assert.True(assets["gp.tl:i=14"].metadata == null || !assets["gp.tl:i=14"].metadata.Any());
-                Assert.Single(assets["gp.tl:i=15"].metadata);
+                Assert.Equal(2, assets["gp.tl:i=15"].metadata.Count);
                 Assert.Equal("1234", assets["gp.tl:i=15"].metadata["NumericProp"]);
             }
             if (!upd.Variables.Metadata)
@@ -753,14 +753,16 @@ namespace Test
             {
                 Assert.Single(assets["gp.tl:i=14"].metadata);
                 Assert.Equal("New asset prop value", assets["gp.tl:i=14"].metadata["NewAssetProp"]);
-                Assert.Single(assets["gp.tl:i=15"].metadata);
+                Assert.Equal(3, assets["gp.tl:i=15"].metadata.Count);
                 Assert.Equal("4321", assets["gp.tl:i=15"].metadata["NumericProp"]);
+                Assert.True(assets["gp.tl:i=15"].metadata.ContainsKey("StringProp"));
+                Assert.True(assets["gp.tl:i=15"].metadata.ContainsKey("StringProp updated"));
             }
             if (upd.Variables.Metadata)
             {
                 Assert.Single(timeseries["gp.tl:i=8"].metadata);
                 Assert.Equal("New prop value", timeseries["gp.tl:i=8"].metadata["NewProp"]);
-                Assert.Equal(2, timeseries["gp.tl:i=10"].metadata.Count);
+                Assert.Equal(3, timeseries["gp.tl:i=10"].metadata.Count);
                 Assert.Equal("(0, 200)", timeseries["gp.tl:i=10"].metadata["EURange"]);
             }
         }

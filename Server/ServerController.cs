@@ -191,6 +191,18 @@ namespace Server
                 if (prop == null) return;
                 prop.Value = 4321L;
             });
+            Server.MutateNode(Ids.Custom.EUProp, node =>
+            {
+                var prop = node as PropertyState;
+                if (prop == null) return;
+                prop.DisplayName = new LocalizedText("EngineeringUnits updated");
+            });
+            Server.MutateNode(Ids.Custom.ObjProp2, node =>
+            {
+                var prop = node as PropertyState;
+                if (prop == null) return;
+                prop.DisplayName = new LocalizedText("StringProp updated");
+            });
         }
     }
 }

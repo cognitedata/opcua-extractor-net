@@ -505,13 +505,17 @@ namespace Server
                 objProp.NodeId = GenerateNodeId();
                 objProp.Value = 1234L;
 
+                var objProp2 = obj2.AddProperty<string>("StringProp", DataTypeIds.String, -1);
+                objProp2.NodeId = GenerateNodeId();
+                objProp2.Value = "String prop value";
+
                 AddNodeRelation(obj2, root, ReferenceTypeIds.Organizes);
 
                 store.AddHistorizingNode(myarray);
                 store.AddHistorizingNode(numberVar);
 
                 AddPredefinedNodes(SystemContext, root, myarray, mystrarray, stringyType, ignoreType, numberType, numberType2, stringyVar,
-                    ignoreVar, numberVar, numberVar2, euprop, rangeprop, obj, obj2, objProp);
+                    ignoreVar, numberVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2);
 
                 Ids.Custom.Root = root.NodeId;
                 Ids.Custom.Array = myarray.NodeId;
@@ -528,6 +532,8 @@ namespace Server
                 Ids.Custom.Obj1 = obj.NodeId;
                 Ids.Custom.Obj2 = obj2.NodeId;
                 Ids.Custom.ObjProp = objProp.NodeId;
+                Ids.Custom.ObjProp2 = objProp2.NodeId;
+                Ids.Custom.EUProp = euprop.NodeId;
             }
         }
         
@@ -1234,6 +1240,8 @@ namespace Server
         public NodeId Obj1 { get; set; }
         public NodeId Obj2 { get; set; }
         public NodeId ObjProp { get; set; }
+        public NodeId ObjProp2 { get; set; }
+        public NodeId EUProp { get; set; }
     }
 
     public class EventNodeReference
