@@ -146,9 +146,9 @@ namespace Cognite.OpcUa
                 .SelectMany(group => group)
                 .ToList();
 
-            log.Information("Push {cnt} points to failurebuffer", points.Count());
-
             if (!points.Any()) return true;
+
+            log.Information("Push {cnt} points to failurebuffer", points.Count());
 
             bool success = true;
 
@@ -249,10 +249,6 @@ namespace Cognite.OpcUa
                         Log.Error(e, "Failed to read points from influxdb");
                     }
                 }
-                else if (anyPoints)
-                {
-                    log.Warning("All ranges are empty, but anyPoints is set to true");
-                }
             }
 
             if (!string.IsNullOrEmpty(config.DatapointPath))
@@ -279,9 +275,9 @@ namespace Cognite.OpcUa
                 .SelectMany(group => group)
                 .ToList();
 
-            log.Information("Push {cnt} events to failurebuffer", events.Count());
-
             if (!events.Any()) return true;
+
+            log.Information("Push {cnt} events to failurebuffer", events.Count());
 
             bool success = true;
 
@@ -389,11 +385,6 @@ namespace Cognite.OpcUa
                         success = false;
                         Log.Error(e, "Failed to read events from influxdb");
                     }
-                }
-                else if (anyEvents)
-                {
-                    log.Warning("No active event states, but anyEvents is set to true");
-                    //anyEvents = false;
                 }
             }
 

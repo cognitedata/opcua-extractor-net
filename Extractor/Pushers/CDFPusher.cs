@@ -257,11 +257,13 @@ namespace Cognite.OpcUa.Pushers
 
             var destination = GetDestination();
 
-            bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database);
+            bool useRawAssets = config.RawMetadata != null 
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
 
             try
             {
-                if (useRawStore && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable))
+                if (useRawAssets)
                 {
                     await EnsureRawRows<AssetCreate>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetIds.Keys, async ids =>
                     {
@@ -294,17 +296,20 @@ namespace Cognite.OpcUa.Pushers
 
             var tsIds = new ConcurrentDictionary<string, BufferedVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
 
+            bool useRawTimeseries = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
+
             try
             {
-                bool metaRaw = useRawStore && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
                 var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsIds.Keys, async ids =>
                 {
                     var tss = ids.Select(id => tsIds[id]);
-                    if (!metaRaw)
+                    if (!useRawTimeseries)
                     {
                         await Extractor.ReadProperties(tss, token);
                     }
-                    return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, metaRaw))
+                    return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, useRawTimeseries))
                         .Where(ts => ts != null);
                 }, token);
                 var foundBadTimeseries = new List<string>();
@@ -325,7 +330,7 @@ namespace Cognite.OpcUa.Pushers
                 {
                     log.Debug("Found mismatched timeseries when ensuring: {tss}", foundBadTimeseries);
                 }
-                if (metaRaw)
+                if (useRawTimeseries)
                 {
                     await EnsureRawRows<StatelessTimeSeriesCreate>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsIds.Keys, async ids =>
                     {

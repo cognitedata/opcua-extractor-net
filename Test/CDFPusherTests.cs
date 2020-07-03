@@ -146,7 +146,8 @@ namespace Test
             await tester.WaitForCondition(() =>
                 tester.Handler.Assets.Count == 4
                 && tester.Handler.Timeseries.Count == 10
-                && tester.Handler.Datapoints.ContainsKey(arrId), 20,
+                && tester.Handler.Datapoints.ContainsKey(arrId)
+                && tester.Handler.Datapoints[arrId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count() == 1000, 20,
                 () => $"Expected to get 4 assets and got {tester.Handler.Assets.Count}"
                       + $", 10 timeseries and got {tester.Handler.Timeseries.Count}");
 
