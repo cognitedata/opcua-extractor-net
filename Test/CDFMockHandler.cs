@@ -43,6 +43,10 @@ namespace Test
         public Dictionary<string, EventDummy> Events { get; } = new Dictionary<string, EventDummy>();
         public Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)> Datapoints { get; } =
             new Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)>();
+
+        public Dictionary<string, AssetDummy> AssetRaw { get; } = new Dictionary<string, AssetDummy>();
+        public Dictionary<string, StatelessTimeseriesDummy> TimeseriesRaw { get; } = new Dictionary<string, StatelessTimeseriesDummy>();
+
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
         long eventIdCounter = 1;
@@ -152,6 +156,16 @@ namespace Test
                             res = req.Method == HttpMethod.Get
                                 ? HandleListEvents()
                                 : HandleCreateEvents(content);
+                            break;
+                        case "/raw/dbs/metadata/tables/assets/rows":
+                            res = req.Method == HttpMethod.Get
+                                ? HandleGetRawAssets()
+                                : HandleCreateRawAssets(content);
+                            break;
+                        case "/raw/dbs/metadata/tables/timeseries/rows":
+                            res = req.Method == HttpMethod.Get
+                                ? HandleGetRawTimeseries()
+                                : HandleCreateRawTimeseries(content);
                             break;
                         default:
                             log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
@@ -598,6 +612,51 @@ namespace Test
             };
             return res;
         }
+        private HttpResponseMessage HandleGetRawAssets()
+        {
+            var data = new RawListWrapper<object>();
+            data.items = AssetRaw.Select(kvp => new RawWrapper<object> { columns = new object(), key = kvp.Key, lastUpdatedTime = 0 });
+            var content = JsonConvert.SerializeObject(data);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
+            };
+        }
+        private HttpResponseMessage HandleGetRawTimeseries()
+        {
+            var data = new RawListWrapper<object>();
+            data.items = TimeseriesRaw.Select(kvp => new RawWrapper<object> { columns = new object(), key = kvp.Key, lastUpdatedTime = 0 });
+            var content = JsonConvert.SerializeObject(data);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
+            };
+        }
+        private HttpResponseMessage HandleCreateRawAssets(string content)
+        {
+            var toCreate = JsonConvert.DeserializeObject<RawListWrapper<AssetDummy>>(content);
+            foreach (var item in toCreate.items)
+            {
+                AssetRaw[item.key] = item.columns;
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}")
+            };
+        }
+        private HttpResponseMessage HandleCreateRawTimeseries(string content)
+        {
+            var toCreate = JsonConvert.DeserializeObject<RawListWrapper<StatelessTimeseriesDummy>>(content);
+            foreach (var item in toCreate.items)
+            {
+                TimeseriesRaw[item.key] = item.columns;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}")
+            };
+        }
 
         private AssetDummy MockAsset(string externalId)
         {
@@ -670,7 +729,6 @@ namespace Test
     {
         public IEnumerable<TimeseriesDummy> items { get; set; }
     }
-
     public class EventsReadWrapper
     {
         public IEnumerable<EventDummy> items { get; set; }
@@ -705,8 +763,24 @@ namespace Test
         public string externalId { get; set; }
         public IEnumerable<DataPoint> datapoints { get; set; }
         public string name { get; set; }
-        public long assetId { get; set; }
+        public long? assetId { get; set; }
     }
+    public class StatelessTimeseriesDummy : TimeseriesDummy
+    {
+        public string assetExternalId { get; set; }
+    }
+    public class RawWrapper<T>
+    {
+        public string key { get; set; }
+        public long lastUpdatedTime { get; set; }
+        public T columns { get; set; }
+    }
+
+    public class RawListWrapper<T>
+    {
+        public IEnumerable<RawWrapper<T>> items { get; set; }
+    }
+
 
     public class LoginInfo
     {

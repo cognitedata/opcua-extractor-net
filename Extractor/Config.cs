@@ -65,6 +65,7 @@ namespace Cognite.OpcUa
         public long? DataSetId { get; set; }
         public bool Debug { get; set; } = false;
         public bool ReadExtractedRanges { get; set; } = true;
+        public RawMetadataConfig RawMetadata { get; set; }
         public double? NonFiniteReplacement
         {
             get => nonFiniteReplacement;
@@ -78,6 +79,13 @@ namespace Cognite.OpcUa
             return new CDFPusher(provider, this);
         }
     }
+    public class RawMetadataConfig
+    {
+        public string Database { get; set; }
+        public string AssetsTable { get; set; }
+        public string TimeseriesTable { get; set; }
+    }
+
     public class InfluxPusherConfig : IPusherConfig
     {
         public string Host { get; set; }

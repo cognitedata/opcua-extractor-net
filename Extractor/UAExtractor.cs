@@ -178,7 +178,7 @@ namespace Cognite.OpcUa
 
             if (config.FailureBuffer.Enabled)
             {
-                await FailureBuffer.InitializeBufferStates(State.NodeStates, State.AllActiveIds, token);
+                await FailureBuffer.InitializeBufferStates(State.NodeStates, State.EmitterStates, token);
             }
             if (quitAfterMap) return;
             Pushing = true;
@@ -402,13 +402,10 @@ namespace Cognite.OpcUa
             if (!config.History.Enabled) return;
             await Task.WhenAll(Task.Run(async () =>
             {
-                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling),
-                    State.AllActiveIds.ToList(), token);
+                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling), token);
                 if (config.History.Backfill)
                 {
-                    await historyReader.BackfillEvents(
-                        State.EmitterStates.Where(state => state.IsBackfilling),
-                        State.AllActiveIds.ToList(), token);
+                    await historyReader.BackfillEvents(State.EmitterStates.Where(state => state.IsBackfilling), token);
                 }
             }), Task.Run(async () =>
             {
@@ -470,7 +467,7 @@ namespace Cognite.OpcUa
                 State.AddManagedNode(node);
             }
 
-            var historyTasks = Synchronize(variables, objects, token);
+            var historyTasks = Synchronize(variables, token);
             Starting.Set(0);
             return historyTasks;
         }
@@ -650,7 +647,6 @@ namespace Cognite.OpcUa
                     .Where(state => state.FrontfillEnabled);
                 var results = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, initMissing, token), 
                     pusher.InitExtractedEventRanges(State.EmitterStates.Where(state => state.FrontfillEnabled),
-                        timeseries.Concat(objects).Select(ts => ts.Id).Distinct(),
                         config.History.Backfill,
                         initMissing,
                         token));
@@ -726,19 +722,19 @@ namespace Cognite.OpcUa
         /// Subscribe to event changes, then run history.
         /// </summary>
         /// <param name="nodes">Nodes to subscribe to events for</param>
-        private async Task SynchronizeEvents(IEnumerable<NodeId> nodes, CancellationToken token)
+        private async Task SynchronizeEvents(CancellationToken token)
         {
             await Task.Run(() => uaClient.SubscribeToEvents(State.EmitterStates.Select(state => state.SourceId), 
-                nodes, Streamer.EventSubscriptionHandler, token));
+                Streamer.EventSubscriptionHandler, token));
             Interlocked.Increment(ref subscribed);
             if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!config.History.Enabled) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
-                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling), nodes, token);
+                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling), token);
                 if (config.History.Backfill)
                 {
-                    await historyReader.BackfillEvents(State.EmitterStates.Where(state => state.IsBackfilling), nodes, token);
+                    await historyReader.BackfillEvents(State.EmitterStates.Where(state => state.IsBackfilling), token);
                 }
             }
             else
@@ -775,7 +771,7 @@ namespace Cognite.OpcUa
         /// <param name="variables">Variables to synchronize</param>
         /// <param name="objects">Recently added objects, used for event subscriptions</param>
         /// <returns>Two tasks, one for data and one for events</returns>
-        private IEnumerable<Task> Synchronize(IEnumerable<BufferedVariable> variables, IEnumerable<BufferedNode> objects, CancellationToken token)
+        private IEnumerable<Task> Synchronize(IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
             var states = variables.Select(ts => ts.Id).Distinct().Select(id => State.GetNodeState(id));
 
@@ -788,7 +784,7 @@ namespace Cognite.OpcUa
             }
             if (State.EmitterStates.Any())
             {
-                tasks.Add(SynchronizeEvents(objects.Concat(variables).Select(node => node.Id).Distinct().ToList(), token));
+                tasks.Add(SynchronizeEvents(token));
             }
 
             if (config.Extraction.EnableAuditDiscovery)

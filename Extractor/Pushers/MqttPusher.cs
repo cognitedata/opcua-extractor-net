@@ -353,7 +353,7 @@ namespace Cognite.OpcUa.Pushers
 
         private async Task<bool> PushAssets(IEnumerable<BufferedNode> objects, CancellationToken token)
         {
-            var assets = objects.Select(NodeToAsset);
+            var assets = objects.Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId));
             var data = JsonSerializer.SerializeToUtf8Bytes(assets, null);
             
             var msg = baseBuilder
@@ -377,7 +377,8 @@ namespace Cognite.OpcUa.Pushers
 
         private async Task<bool> PushTimeseries(IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
-            var timeseries = variables.Select(VariableToTimeseries);
+            var timeseries = variables.Select(variable => PusherUtils.VariableToStatelessTimeSeries(variable, Extractor, config.DataSetId))
+                .Where(variable => variable != null);
 
             var data = JsonSerializer.SerializeToUtf8Bytes(timeseries, null);
             var msg = baseBuilder
@@ -402,7 +403,7 @@ namespace Cognite.OpcUa.Pushers
         public async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> evts, CancellationToken token)
         {
             if (config.Debug) return true;
-            var events = evts.Select(EventToCDFEvent).Where(evt => evt != null);
+            var events = evts.Select(evt => PusherUtils.EventToStatelessCDFEvent(evt, Extractor, config.DataSetId)).Where(evt => evt != null);
 
             var data = JsonSerializer.SerializeToUtf8Bytes(events, null);
 
@@ -427,147 +428,9 @@ namespace Cognite.OpcUa.Pushers
         }
 
         #endregion
-        #region payload
-        /// <summary>
-        /// Converts BufferedNode into asset write poco.
-        /// </summary>
-        /// <param name="node">Node to be converted</param>
-        /// <returns>Full asset write poco</returns>
-        private AssetCreate NodeToAsset(BufferedNode node)
-        {
-            var writePoco = new AssetCreate
-            {
-                Description = ExtractorUtils.Truncate(node.Description, 500),
-                ExternalId = Extractor.GetUniqueId(node.Id),
-                Name = string.IsNullOrEmpty(node.DisplayName)
-                    ? ExtractorUtils.Truncate(Extractor.GetUniqueId(node.Id), 140) : ExtractorUtils.Truncate(node.DisplayName, 140),
-                DataSetId = config.DataSetId
-            };
-            if (node.ParentId != null && !node.ParentId.IsNullNodeId)
-            {
-                writePoco.ParentExternalId = Extractor.GetUniqueId(node.ParentId);
-            }
-            if (node.Properties != null && node.Properties.Any())
-            {
-                writePoco.Metadata = node.Properties
-                    .Where(prop => prop.Value != null)
-                    .Take(16)
-                    .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
-            }
-            return writePoco;
-        }
-        /// <summary>
-        /// Get the value of given object assumed to be a timestamp as the number of milliseconds since 1/1/1970
-        /// </summary>
-        /// <param name="value">Value of the object. Assumed to be a timestamp or numeric value</param>
-        /// <returns>Milliseconds since epoch</returns>
-        private static long GetTimestampValue(object value)
-        {
-            if (value is DateTime dt)
-            {
-                return new DateTimeOffset(dt).ToUnixTimeMilliseconds();
-            }
-            else
-            {
-                return Convert.ToInt64(value, CultureInfo.InvariantCulture);
-            }
-        }
-        private static readonly HashSet<string> excludeMetaData = new HashSet<string> {
-            "StartTime", "EndTime", "Type", "SubType"
-        };
-        /// <summary>
-        /// Transform BufferedEvent into EventEntity to be sent to CDF.
-        /// </summary>
-        /// <param name="evt">Event to be transformed.</param>
-        /// <returns>Final EventEntity object</returns>
-        private StatelessEventCreate EventToCDFEvent(BufferedEvent evt)
-        {
-            var parent = Extractor.State.GetActiveNode(evt.SourceNode);
-            if (parent == null) return null;
-            var entity = new StatelessEventCreate
-            {
-                Description = ExtractorUtils.Truncate(evt.Message, 500),
-                StartTime = evt.MetaData.ContainsKey("StartTime")
-                    ? GetTimestampValue(evt.MetaData["StartTime"])
-                    : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                EndTime = evt.MetaData.ContainsKey("EndTime")
-                    ? GetTimestampValue(evt.MetaData["EndTime"])
-                    : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                AssetExternalIds = new List<string> { Extractor.GetUniqueId(parent.IsVariable ? parent.ParentId : parent.Id) },
-                ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
-                Type = ExtractorUtils.Truncate(evt.MetaData.ContainsKey("Type")
-                    ? Extractor.ConvertToString(evt.MetaData["Type"])
-                    : Extractor.GetUniqueId(evt.EventType), 64),
-                DataSetId = config.DataSetId
-            };
-            var finalMetaData = new Dictionary<string, string>();
-            int len = 1;
-            finalMetaData["Emitter"] = Extractor.GetUniqueId(evt.EmittingNode);
-            if (!evt.MetaData.ContainsKey("SourceNode"))
-            {
-                finalMetaData["SourceNode"] = Extractor.GetUniqueId(evt.SourceNode);
-                len++;
-            }
-            if (evt.MetaData.ContainsKey("SubType"))
-            {
-                entity.Subtype = ExtractorUtils.Truncate(Extractor.ConvertToString(evt.MetaData["SubType"]), 64);
-            }
 
-            foreach (var dt in evt.MetaData)
-            {
-                if (!excludeMetaData.Contains(dt.Key))
-                {
-                    finalMetaData[ExtractorUtils.Truncate(dt.Key, 32)] =
-                        ExtractorUtils.Truncate(Extractor.ConvertToString(dt.Value), 256);
-                }
 
-                if (len++ == 15) break;
-            }
 
-            if (finalMetaData.Any())
-            {
-                entity.Metadata = finalMetaData;
-            }
-            return entity;
-        }
-        /// <summary>
-        /// Create timeseries poco to create this node in CDF
-        /// </summary>
-        /// <param name="variable">Variable to be converted</param>
-        /// <returns>Complete timeseries write poco</returns>
-        private StatelessTimeSeriesCreate VariableToTimeseries(BufferedVariable variable)
-        {
-            string externalId = Extractor.GetUniqueId(variable.Id, variable.Index);
-            var writePoco = new StatelessTimeSeriesCreate
-            {
-                Description = ExtractorUtils.Truncate(variable.Description, 1000),
-                ExternalId = externalId,
-                AssetExternalId = Extractor.GetUniqueId(variable.ParentId),
-                Name = ExtractorUtils.Truncate(variable.DisplayName, 255),
-                LegacyName = externalId,
-                IsString = variable.DataType.IsString,
-                IsStep = variable.DataType.IsStep,
-                DataSetId = config.DataSetId
-            };
-            if (variable.Properties != null && variable.Properties.Any())
-            {
-                writePoco.Metadata = variable.Properties
-                    .Where(prop => prop.Value != null)
-                    .Take(16)
-                    .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
-            }
-            return writePoco;
-        }
-
-        class StatelessEventCreate : EventCreate
-        {
-            public IEnumerable<string> AssetExternalIds { get; set; }
-        }
-
-        class StatelessTimeSeriesCreate : TimeSeriesCreate
-        {
-            public string AssetExternalId { get; set; }
-        }
 
         class MqttState : BaseStorableState
         {
@@ -581,8 +444,6 @@ namespace Cognite.OpcUa.Pushers
             public string Id { get; set; }
             public DateTime? LastTimeModified { get; set; }
         }
-        #endregion
-
         public void Dispose()
         {
             closed = true;

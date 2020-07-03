@@ -303,7 +303,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="states">Emitters to be read from</param>
         /// <param name="nodes">SourceNodes to read for</param>
-        private void FrontfillEventsChunk(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
+        private void FrontfillEventsChunk(IEnumerable<EventExtractionState> states, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
             var finalTimeStamp = states.Select(node => node.SourceExtractedRange.Last).Min();
@@ -314,7 +314,7 @@ namespace Cognite.OpcUa
                 EndTime = DateTime.UtcNow.AddDays(10),
                 StartTime = finalTimeStamp,
                 NumValuesPerNode = (uint)config.EventChunk,
-                Filter = uaClient.BuildEventFilter(nodes)
+                Filter = uaClient.BuildEventFilter()
             };
             log.Information("Frontfill events from {start} for {cnt} emitters", finalTimeStamp, states.Count());
 
@@ -325,8 +325,7 @@ namespace Cognite.OpcUa
         /// Backfill events for the given list of states
         /// </summary>
         /// <param name="states">Emitters to be read from</param>
-        /// <param name="nodes">SourceNodes to read for</param>
-        private void BackfillEventsChunk(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
+        private void BackfillEventsChunk(IEnumerable<EventExtractionState> states, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
             var finalTimeStamp = states.Select(node => node.SourceExtractedRange.First).Max();
@@ -337,7 +336,7 @@ namespace Cognite.OpcUa
                 EndTime = historyStartTime,
                 StartTime = finalTimeStamp,
                 NumValuesPerNode = (uint)config.EventChunk,
-                Filter = uaClient.BuildEventFilter(nodes)
+                Filter = uaClient.BuildEventFilter()
             };
             log.Information("Backfill events from {start} for {cnt} emitters", finalTimeStamp, states.Count());
 
@@ -393,15 +392,14 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="states">Emitters to be read from</param>
         /// <param name="nodes">SourceNodes to read for</param>
-        public async Task FrontfillEvents(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
+        public async Task FrontfillEvents(IEnumerable<EventExtractionState> states, CancellationToken token)
         {
             try
             {
                 Interlocked.Increment(ref running);
-                var frontfillChunks = states.GroupByTimeGranularity(historyGranularity,
-                    state => state.SourceExtractedRange.Last, config.EventNodesChunk);
-                await Task.WhenAll(frontfillChunks.Select(chunk =>
-                    Task.Run(() => FrontfillEventsChunk(chunk, nodes, token))));
+                var frontFillChunks = states.GroupByTimeGranularity(historyGranularity, state => state.SourceExtractedRange.Last, config.EventNodesChunk);
+                await Task.WhenAll(frontFillChunks.Select(chunk =>
+                    Task.Run(() => FrontfillEventsChunk(chunk, token))));
             }
             finally
             {
@@ -414,7 +412,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="states">Emitters to be read from</param>
         /// <param name="nodes">SourceNodes to read for</param>
-        public async Task BackfillEvents(IEnumerable<EventExtractionState> states, IEnumerable<NodeId> nodes, CancellationToken token)
+        public async Task BackfillEvents(IEnumerable<EventExtractionState> states, CancellationToken token)
         {
             try
             {
@@ -430,7 +428,7 @@ namespace Cognite.OpcUa
                     .GroupByTimeGranularity(historyGranularity, state => state.SourceExtractedRange.First, config.EventNodesChunk);
 
                 await Task.WhenAll(backfillChunks.Select(chunk =>
-                    Task.Run(() => BackfillEventsChunk(chunk, nodes, token))));
+                    Task.Run(() => BackfillEventsChunk(chunk, token))));
             }
             finally
             {

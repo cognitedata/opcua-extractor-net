@@ -92,8 +92,23 @@ cognite:
     read-extracted-ranges: true
     # Data set to use for new objects. Existing objects will not be updated
     data-set-id:
+
+    # Default empty. Store assets and/or timeseries data in raw. Assets will not be created at all,
+    # timeseries will be created with just externalId, isStep and isString.
+    # Both timeseries and assets will be persisted in their entirety to raw.
+    # Datapoints are not affected, events will be created, but without asset context. The externalId
+    # of the source node is added to metadata if applicable.
+    # Use different table names for assets and timeseries.
+    raw-metadata:
+        # Database to store data in, required.
+        database:
+        # Table to store assets in.
+        assets-table:
+        # Table to store timeseries in.
+        timeseries-table:
     # Config for authentication if a bearer access token has to be used for authentication.
     # Leave empty to disable.
+
     idp-authentication:
         # Application Id
         client-id:

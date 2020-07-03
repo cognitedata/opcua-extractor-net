@@ -184,8 +184,8 @@ namespace Test
             await tester.WaitForCondition(async () =>
             {
                 var evts = await tester.GetAllInfluxEvents(tester.Server.Ids.Event.Obj1);
-                var evts2 = await tester.GetAllInfluxEvents(tester.Server.Ids.Event.Obj2);
-                return evts.Count() == 4 && evts2.Count() == 2;
+                var evts2 = await tester.GetAllInfluxEvents(ObjectIds.Server);
+                return evts.Count() == 2 && evts2.Count() == 7;
             }, 5, "Expected to get some events in influxdb");
 
             await tester.TerminateRunTask();
@@ -224,14 +224,14 @@ namespace Test
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1000);
 
             await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
-                20, "Failurebuffer must receive some data");
+                10, "Failurebuffer must receive some data");
 
             await Task.Delay(500);
             tester.Handler.AllowPush = true;
             tester.Handler.AllowConnectionTest = true;
 
             await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.Any,
-                20, "FailureBuffer should be emptied");
+                10, "FailureBuffer should be emptied");
 
             tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1001);
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1001);
@@ -374,8 +374,8 @@ namespace Test
 
             await tester.WaitForCondition(async () =>
             {
-                var evts = await tester.GetAllInfluxEvents(tester.Server.Ids.Event.Obj1);
-                return evts.Count() == 300;
+                var evts = await tester.GetAllInfluxEvents(ObjectIds.Server);
+                return evts.Count() == 700;
             }, 5, "Expected to get some events in influxdb");
 
             await tester.TerminateRunTask();
@@ -383,7 +383,7 @@ namespace Test
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 0));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 500));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 700));
         }
         [Trait("Server", "events")]
         [Trait("Target", "InfluxPusher")]
@@ -413,14 +413,14 @@ namespace Test
 
             await tester.WaitForCondition(async () =>
             {
-                var evts = await tester.GetAllInfluxEvents(tester.Server.Ids.Event.Obj1);
-                return evts.Count() == 300;
+                var evts = await tester.GetAllInfluxEvents(ObjectIds.Server);
+                return evts.Count() == 700;
             }, 5, "Expected to get some events in influxdb");
 
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 0));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 500));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 700));
 
             CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor();
@@ -435,8 +435,8 @@ namespace Test
 
             await tester.WaitForCondition(async () =>
             {
-                var evts = await tester.GetAllInfluxEvents(tester.Server.Ids.Event.Obj1);
-                return evts.Count() == 304;
+                var evts = await tester.GetAllInfluxEvents(ObjectIds.Server);
+                return evts.Count() == 707;
             }, 5, "Expected to get some events in influxdb");
 
             await tester.TerminateRunTask();

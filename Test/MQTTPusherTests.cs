@@ -76,7 +76,7 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.Extractor.Looper.WaitForNextPush();
+            await tester.Extractor.WaitForSubscriptions();
             await tester.WaitForCondition(() => tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling), 20);
 
             var waitTask = tester.Bridge.WaitForNextMessage();
@@ -84,13 +84,14 @@ namespace Test
             await tester.Extractor.Looper.WaitForNextPush();
             await waitTask;
 
+            await tester.WaitForCondition(() => tester.Handler.Events.Count >= 7, 10);
+
             await tester.TerminateRunTask();
 
             var eventTypes = tester.Handler.Events.Select(evt => evt.Value.type).Distinct();
             Assert.Equal(3, eventTypes.Count());
             var eventAssets = tester.Handler.Events.SelectMany(evt => evt.Value.assetIds).Distinct();
             Assert.Equal(2, eventAssets.Count());
-            Assert.True(tester.Handler.Events.Values.All(evt => evt.assetIds.Any()));
         }
 
         [Fact]

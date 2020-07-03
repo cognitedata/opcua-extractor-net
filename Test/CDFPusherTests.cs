@@ -22,10 +22,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
 using Cognite.Extractor.Metrics;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Pushers;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Xunit;
@@ -146,7 +146,8 @@ namespace Test
             await tester.WaitForCondition(() =>
                 tester.Handler.Assets.Count == 4
                 && tester.Handler.Timeseries.Count == 10
-                && tester.Handler.Datapoints.ContainsKey(arrId), 20,
+                && tester.Handler.Datapoints.ContainsKey(arrId)
+                && tester.Handler.Datapoints[arrId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count() == 1000, 20,
                 () => $"Expected to get 4 assets and got {tester.Handler.Assets.Count}"
                       + $", 10 timeseries and got {tester.Handler.Timeseries.Count}");
 
@@ -637,6 +638,50 @@ namespace Test
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));
 
             await tester.TerminateRunTask();
+        }
+        [Fact]
+        [Trait("Server", "array")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "rawdata")]
+        public async Task TestRawMetadata()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                StoreDatapoints = true,
+                ServerName = ServerName.Array
+            });
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                Database = "metadata",
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries"
+            };
+            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.MaxArraySize = 4;
+
+            await tester.ClearPersistentData();
+
+            await tester.StartServer();
+            tester.Server.PopulateArrayHistory();
+
+            tester.StartExtractor();
+
+            await tester.Extractor.Looper.WaitForNextPush();
+
+            Assert.Empty(tester.Handler.Assets);
+
+            await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=2[0]")
+                && tester.Handler.Datapoints["gp.tl:i=2[0]"].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count() == 1000, 10);
+
+            await tester.TerminateRunTask();
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 4));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));
+
+            Assert.Equal(10, tester.Handler.TimeseriesRaw.Count);
+            Assert.Empty(tester.Handler.Assets);
+
+            Assert.True(tester.Handler.TimeseriesRaw["gp.tl:i=10"].metadata.ContainsKey("EURange"));
         }
     }
 }
