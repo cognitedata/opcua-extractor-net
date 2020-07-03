@@ -419,67 +419,20 @@ namespace Cognite.OpcUa.Pushers
                 if (update.AnyUpdate)
                 {
                     string columns = BuildColumnString(update, true);
-                    await UpsertRawRows<AssetCreate>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetIds.Keys, async rows =>
+                    await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetIds.Keys, async rows =>
                     {
-                        var ret = new Dictionary<string, AssetCreate>();
                         var rowDict = rows.ToDictionary(row => row.Key);
 
                         var toReadProperties = assetIds.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
                         await Extractor.ReadProperties(toReadProperties, token);
 
-                        var assets = assetIds
-                            .Select(kvp => PusherUtils.NodeToAsset(kvp.Value, Extractor, null))
-                            .Where(asset => asset != null)
-                            .ToList();
+                        var updates = assetIds
+                            .Select(kvp => (kvp.Key, PusherUtils.CreateRawAssetUpdate(kvp.Value, Extractor, rowDict.GetValueOrDefault(kvp.Key), update)))
+                            .Where(elem => elem.Item2 != null)
+                            .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
 
-                        foreach (var asset in assets)
-                        {
-                            if (rowDict.TryGetValue(asset.ExternalId, out var row))
-                            {
-                                bool changed = false;
-                                string parentExternalId =
-                                    row.Columns.ContainsKey("parentExternalId")
-                                    ? row.Columns["parentExternalId"].GetString()
-                                    : null;
-
-                                string description =
-                                    row.Columns.ContainsKey("description")
-                                    ? row.Columns["description"].GetString()
-                                    : null;
-
-                                string name =
-                                    row.Columns.ContainsKey("name")
-                                    ? row.Columns["name"].GetString()
-                                    : null;
-
-                                var metadata =
-                                    row.Columns.ContainsKey("metadata")
-                                    ? JsonSerializer.Deserialize<Dictionary<string, string>>(row.Columns["metadata"].ToString())
-                                    : null;
-
-                                if (update.Context && !string.IsNullOrEmpty(asset.ParentExternalId)) changed |= asset.ParentExternalId != parentExternalId;
-                                else asset.ParentExternalId = parentExternalId;
-
-                                if (update.Name && !string.IsNullOrEmpty(asset.Name)) changed |= asset.Name != name;
-                                else asset.Name = name;
-
-                                if (update.Description && !string.IsNullOrEmpty(asset.Description)) changed |= asset.Description != description;
-                                else asset.Description = description;
-
-                                if (update.Metadata) changed |= asset.Metadata != null
-                                    && asset.Metadata.Any(kvp => !metadata.ContainsKey(kvp.Key)
-                                        || metadata[kvp.Key] != kvp.Value && !string.IsNullOrEmpty(kvp.Value));
-                                else asset.Metadata = metadata;
-
-                                ret[asset.ExternalId] = asset;
-                            }
-                            else
-                            {
-                                ret[asset.ExternalId] = asset;
-                            }
-                        }
-                        return ret;
-                    }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, columns, token);
+                        return updates;
+                    }, null, columns, token);
                 }
                 else
                 {
@@ -658,67 +611,21 @@ namespace Cognite.OpcUa.Pushers
                 if (update.AnyUpdate)
                 {
                     string columns = BuildColumnString(update, false);
-                    await UpsertRawRows<StatelessTimeSeriesCreate>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsIds.Keys, async rows =>
+                    await UpsertRawRows<JsonElement>(config.RawMetadata.Database,
+                        config.RawMetadata.TimeseriesTable, tsIds.Keys, async rows =>
                     {
-                        var ret = new Dictionary<string, StatelessTimeSeriesCreate>();
                         var rowDict = rows.ToDictionary(row => row.Key);
 
                         var toReadProperties = tsIds.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
                         await Extractor.ReadProperties(toReadProperties, token);
 
-                        var timeseries = tsIds
-                            .Select(kvp => PusherUtils.VariableToStatelessTimeSeries(kvp.Value, Extractor, null))
-                            .Where(asset => asset != null)
-                            .ToList();
+                        var updates = tsIds
+                            .Select(kvp => (kvp.Key, PusherUtils.CreateRawTsUpdate(kvp.Value, Extractor, rowDict.GetValueOrDefault(kvp.Key), update)))
+                            .Where(elem => elem.Item2 != null)
+                            .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
 
-                        foreach (var ts in timeseries)
-                        {
-                            if (rowDict.TryGetValue(ts.ExternalId, out var row))
-                            {
-                                bool changed = false;
-                                string assetExternalId =
-                                    row.Columns.ContainsKey("assetExternalId")
-                                    ? row.Columns["assetExternalId"].GetString()
-                                    : null;
-
-                                string description =
-                                    row.Columns.ContainsKey("description")
-                                    ? row.Columns["description"].GetString()
-                                    : null;
-
-                                string name =
-                                    row.Columns.ContainsKey("name")
-                                    ? row.Columns["name"].GetString()
-                                    : null;
-
-                                var metadata =
-                                    row.Columns.ContainsKey("metadata")
-                                    ? JsonSerializer.Deserialize<Dictionary<string, string>>(row.Columns["metadata"].ToString())
-                                    : null;
-
-                                if (update.Context && !string.IsNullOrEmpty(ts.AssetExternalId)) changed |= ts.AssetExternalId != assetExternalId;
-                                else ts.AssetExternalId = assetExternalId;
-
-                                if (update.Name && !string.IsNullOrEmpty(ts.Name)) changed |= ts.Name != name;
-                                else ts.Name = name;
-
-                                if (update.Description && !string.IsNullOrEmpty(ts.Description)) changed |= ts.Description != description;
-                                else ts.Description = description;
-
-                                if (update.Metadata) changed |= ts.Metadata != null
-                                    && ts.Metadata.Any(kvp => !metadata.ContainsKey(kvp.Key)
-                                        || metadata[kvp.Key] != kvp.Value && !string.IsNullOrEmpty(kvp.Value));
-                                else ts.Metadata = metadata;
-
-                                ret[ts.ExternalId] = ts;
-                            }
-                            else
-                            {
-                                ret[ts.ExternalId] = ts;
-                            }
-                        }
-                        return ret;
-                    }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, columns, token);
+                        return updates;
+                    }, null, columns, token);
                 }
                 else
                 {
