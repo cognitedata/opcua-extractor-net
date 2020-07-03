@@ -233,6 +233,36 @@ namespace Server
                 AddNodeRelation(target, parent, type);
             }
         }
+        public void MutateNode(NodeId id, Action<NodeState> mutation)
+        {
+            PredefinedNodes.TryGetValue(id, out var state);
+            if (state == null) return;
+            mutation(state);
+        }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
+            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
+        public NodeId AddProperty<T>(NodeId parentId, string name, NodeId dataType, object value, int rank = -1)
+        {
+            var parent = PredefinedNodes[parentId];
+            var prop = parent.AddProperty<T>(name, dataType, rank);
+            prop.NodeId = GenerateNodeId();
+            prop.Value = value;
+            AddPredefinedNode(SystemContext, prop);
+            return prop.NodeId;
+        }
+
+        public void ReContextualize(NodeId id, NodeId oldParentId, NodeId newParentId, NodeId referenceType)
+        {
+            var state = PredefinedNodes[id];
+            var oldParent = PredefinedNodes[oldParentId];
+            var newParent = PredefinedNodes[newParentId];
+            if (state == null || oldParent == null || newParent == null) return;
+            oldParent.RemoveReference(referenceType, false, id);
+            state.RemoveReference(referenceType, true, oldParentId);
+            newParent.AddReference(referenceType, false, id);
+            state.AddReference(referenceType, true, newParentId);
+        }
+
         #endregion
 
 
@@ -419,7 +449,7 @@ namespace Server
         {
             lock (Lock)
             {
-                var root = CreateObject("CustomRoot 2");
+                var root = CreateObject("CustomRoot");
                 AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
 
                 var myarray = CreateVariable("Variable Array", DataTypes.Double, 4);
@@ -467,11 +497,21 @@ namespace Server
                 rangeprop.NodeId = GenerateNodeId();
                 rangeprop.Value = eurange;
 
+                var obj = CreateObject("ChildObject");
+                AddNodeRelation(obj, root, ReferenceTypeIds.Organizes);
+
+                var obj2 = CreateObject("ChildObject2");
+                var objProp = obj2.AddProperty<long>("NumericProp", DataTypeIds.Int64, -1);
+                objProp.NodeId = GenerateNodeId();
+                objProp.Value = 1234L;
+
+                AddNodeRelation(obj2, root, ReferenceTypeIds.Organizes);
+
                 store.AddHistorizingNode(myarray);
                 store.AddHistorizingNode(numberVar);
 
                 AddPredefinedNodes(SystemContext, root, myarray, mystrarray, stringyType, ignoreType, numberType, numberType2, stringyVar,
-                    ignoreVar, numberVar, numberVar2, euprop, rangeprop);
+                    ignoreVar, numberVar, numberVar2, euprop, rangeprop, obj, obj2, objProp);
 
                 Ids.Custom.Root = root.NodeId;
                 Ids.Custom.Array = myarray.NodeId;
@@ -484,6 +524,10 @@ namespace Server
                 Ids.Custom.IgnoreVar = ignoreVar.NodeId;
                 Ids.Custom.MysteryVar = numberVar.NodeId;
                 Ids.Custom.NumberVar = numberVar2.NodeId;
+                Ids.Custom.RangeProp = rangeprop.NodeId;
+                Ids.Custom.Obj1 = obj.NodeId;
+                Ids.Custom.Obj2 = obj2.NodeId;
+                Ids.Custom.ObjProp = objProp.NodeId;
             }
         }
         
@@ -1186,6 +1230,10 @@ namespace Server
         public NodeId IgnoreVar { get; set; }
         public NodeId MysteryVar { get; set; }
         public NodeId NumberVar { get; set; }
+        public NodeId RangeProp { get; set; }
+        public NodeId Obj1 { get; set; }
+        public NodeId Obj2 { get; set; }
+        public NodeId ObjProp { get; set; }
     }
 
     public class EventNodeReference

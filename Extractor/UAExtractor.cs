@@ -612,8 +612,10 @@ namespace Cognite.OpcUa
 
                         if (!node.Changed && update.Objects.Metadata)
                         {
-                            var oldProperties = old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
-                            node.Changed = node.Properties.Any(prop =>
+                            var oldProperties = old.Properties == null
+                                ? new Dictionary<string, BufferedDataPoint>()
+                                : old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
+                            node.Changed = node.Properties != null && node.Properties.Any(prop =>
                             {
                                 if (!oldProperties.ContainsKey(prop.DisplayName)) return true;
                                 var oldProp = oldProperties[prop.DisplayName];
@@ -669,8 +671,10 @@ namespace Cognite.OpcUa
 
                             if (!node.Changed && update.Variables.Metadata)
                             {
-                                var oldProperties = old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
-                                node.Changed = node.Properties.Any(prop =>
+                                var oldProperties = old.Properties == null
+                                    ? new Dictionary<string, BufferedDataPoint>()
+                                    : old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
+                                node.Changed = node.Properties != null && node.Properties.Any(prop =>
                                 {
                                     if (!string.IsNullOrWhiteSpace(prop.DisplayName) && !oldProperties.ContainsKey(prop.DisplayName)) return true;
                                     var oldProp = oldProperties[prop.DisplayName];

@@ -97,5 +97,18 @@ namespace Server
         {
             custom.AddReference(sourceId, parentId, type, audit);
         }
+        public NodeId AddProperty<T>(NodeId parentId, string name, NodeId dataType, object value, int rank = -1)
+        {
+            return custom.AddProperty<T>(parentId, name, dataType, value, rank);
+        }
+        public void MutateNode(NodeId id, Action<NodeState> mutation)
+        {
+            if (mutation == null) throw new ArgumentNullException(nameof(mutation));
+            custom.MutateNode(id, mutation);
+        }
+        public void ReContextualize(NodeId id, NodeId oldParentId, NodeId newParentId, NodeId referenceType)
+        {
+            custom.ReContextualize(id, oldParentId, newParentId, referenceType);
+        }
     }
 }

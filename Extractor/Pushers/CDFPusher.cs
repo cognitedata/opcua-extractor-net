@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,7 +29,6 @@ using Serilog;
 using Cognite.Extractor.Utils;
 using TimeRange = Cognite.Extractor.Common.TimeRange;
 using System.Text.Json;
-using Cognite.Extractor.Common;
 
 namespace Cognite.OpcUa.Pushers
 {
@@ -483,7 +481,8 @@ namespace Cognite.OpcUa.Pushers
                                 var newMetaData = PusherUtils.PropertiesToMetadata(kvp.Value.Properties)
                                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                                if (newMetaData.Any(meta => !asset.Metadata.ContainsKey(meta.Key) || asset.Metadata[meta.Key] != meta.Value))
+                                if (asset.Metadata == null
+                                    || newMetaData.Any(meta => !asset.Metadata.ContainsKey(meta.Key) || asset.Metadata[meta.Key] != meta.Value))
                                 {
                                     assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
                                 }
@@ -581,7 +580,8 @@ namespace Cognite.OpcUa.Pushers
                             var newMetaData = PusherUtils.PropertiesToMetadata(kvp.Value.Properties)
                                 .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                            if (newMetaData.Any(meta => !ts.Metadata.ContainsKey(meta.Key) || ts.Metadata[meta.Key] != meta.Value))
+                            if (ts.Metadata == null
+                                || newMetaData.Any(meta => !ts.Metadata.ContainsKey(meta.Key) || ts.Metadata[meta.Key] != meta.Value))
                             {
                                 tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
                             }
