@@ -421,11 +421,17 @@ namespace Cognite.OpcUa.Config
 
             foreach (int chunkSize in testChunks)
             {
+                int count = 0;
+                var toCheck = nodeList.TakeWhile(node =>
+                {
+                    count += node.IsVariable ? 5 : 1;
+                    return count > chunkSize + 10;
+                });
                 log.Information("Attempting to read attributes with ChunkSize {chunkSize}", chunkSize);
                 config.Source.AttributesChunk = chunkSize;
                 try
                 {
-                    await ToolUtil.RunWithTimeout(() => ReadNodeData(nodeList, token), 120);
+                    await ToolUtil.RunWithTimeout(() => ReadNodeData(toCheck, token), 120);
                 }
                 catch (Exception e)
                 {
@@ -643,7 +649,7 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     await ToolUtil.RunWithTimeout(() =>
-                        SubscribeToNodes(states,
+                        SubscribeToNodes(states.Take(chunkSize),
                             ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this), token), 120);
                     baseConfig.Source.SubscriptionChunk = chunkSize;
                     failed = false;
@@ -747,57 +753,55 @@ namespace Cognite.OpcUa.Config
 
             foreach (int chunkSize in testHistoryChunkSizes)
             {
-                foreach (var chunk in historizingStates.ChunkBy(chunkSize))
+                var chunk = historizingStates.Take(chunkSize);
+                var historyParams = new HistoryReadParams(chunk.Select(state => state.SourceId), details);
+                try
                 {
-                    var historyParams = new HistoryReadParams(chunk.Select(state => state.SourceId), details);
-                    try
+                    var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
+
+                    foreach (var (id, rawData) in result)
                     {
-                        var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
-
-                        foreach (var (id, rawData) in result)
+                        var data = ToolUtil.ReadResultToDataPoints(rawData, stateMap[id], this);
+                        if (data.Length > 10 && nodeWithData == null)
                         {
-                            var data = ToolUtil.ReadResultToDataPoints(rawData, stateMap[id], this);
-                            if (data.Length > 10 && nodeWithData == null)
-                            {
-                                nodeWithData = id;
-                            }
-
-
-                            if (data.Length < 2) continue;
-                            count++;
-                            long avgTicks = (data.Last().Timestamp.Ticks - data.First().Timestamp.Ticks) / (data.Length - 1);
-                            sumDistance += avgTicks;
-
-                            if (historyParams.Completed[id]) continue;
-                            if (avgTicks == 0) continue;
-                            long estimate = (DateTime.UtcNow.Ticks - data.First().Timestamp.Ticks) / avgTicks;
-                            if (estimate > largestEstimate)
-                            {
-                                nodeWithData = id;
-                                largestEstimate = estimate;
-                            }
+                            nodeWithData = id;
                         }
 
 
-                        failed = false;
-                        baseConfig.History.DataNodesChunk = chunkSize;
-                        config.History.DataNodesChunk = chunkSize;
-                        done = true;
+                        if (data.Length < 2) continue;
+                        count++;
+                        long avgTicks = (data.Last().Timestamp.Ticks - data.First().Timestamp.Ticks) / (data.Length - 1);
+                        sumDistance += avgTicks;
+
+                        if (historyParams.Completed[id]) continue;
+                        if (avgTicks == 0) continue;
+                        long estimate = (DateTime.UtcNow.Ticks - data.First().Timestamp.Ticks) / avgTicks;
+                        if (estimate > largestEstimate)
+                        {
+                            nodeWithData = id;
+                            largestEstimate = estimate;
+                        }
                     }
-                    catch (Exception e)
+
+
+                    failed = false;
+                    baseConfig.History.DataNodesChunk = chunkSize;
+                    config.History.DataNodesChunk = chunkSize;
+                    done = true;
+                }
+                catch (Exception e)
+                {
+                    failed = true;
+                    done = false;
+                    log.Warning(e, "Failed to read history");
+                    if (e is ServiceResultException exc && (
+                            exc.StatusCode == StatusCodes.BadHistoryOperationUnsupported
+                            || exc.StatusCode == StatusCodes.BadServiceUnsupported))
                     {
-                        failed = true;
-                        done = false;
-                        log.Warning(e, "Failed to read history");
-                        if (e is ServiceResultException exc && (
-                                exc.StatusCode == StatusCodes.BadHistoryOperationUnsupported
-                                || exc.StatusCode == StatusCodes.BadServiceUnsupported))
-                        {
-                            log.Warning("History read unsupported, despite Historizing being set to true. " +
-                                        "The history config option must be set to false, or this will cause issues");
-                            done = true;
-                            break;
-                        }
+                        log.Warning("History read unsupported, despite Historizing being set to true. " +
+                                    "The history config option must be set to false, or this will cause issues");
+                        done = true;
+                        break;
                     }
                 }
 
