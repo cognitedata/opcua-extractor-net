@@ -3,59 +3,59 @@ NUGET
   remote: https://www.nuget.org/api/v2
     AdysTech.InfluxDB.Client.Net.Core (0.15)
       Newtonsoft.Json (>= 10.0.3) - restriction: >= netstandard2.1
-    Cognite.Extractor.Common (1.0.0-alpha-018) - restriction: >= netstandard2.0
-      System.Text.Json (>= 4.7.1) - restriction: >= netstandard2.0
-    Cognite.Extractor.Configuration (1.0.0-alpha-018)
+    Cognite.Extractor.Common (1.0.0-alpha-019) - restriction: >= netstandard2.0
+      System.Text.Json (>= 4.7.2) - restriction: >= netstandard2.0
+    Cognite.Extractor.Configuration (1.0.0-alpha-019)
       Microsoft.CSharp (>= 4.7) - restriction: >= netstandard2.0
-      Microsoft.Extensions.DependencyInjection (>= 3.1.3) - restriction: >= netstandard2.0
-      YamlDotNet (>= 8.1.1) - restriction: >= netstandard2.0
-    Cognite.Extractor.Logging (1.0.0-alpha-018)
-      Microsoft.Extensions.DependencyInjection (>= 3.1.3) - restriction: >= netstandard2.0
+      Microsoft.Extensions.DependencyInjection (>= 3.1.5) - restriction: >= netstandard2.0
+      YamlDotNet (>= 8.1.2) - restriction: >= netstandard2.0
+    Cognite.Extractor.Logging (1.0.0-alpha-019)
+      Microsoft.Extensions.DependencyInjection (>= 3.1.5) - restriction: >= netstandard2.0
       Serilog (>= 2.9) - restriction: >= netstandard2.0
       Serilog.Extensions.Logging (>= 3.0.1) - restriction: >= netstandard2.0
       Serilog.Sinks.Async (>= 1.4) - restriction: >= netstandard2.0
       Serilog.Sinks.Console (>= 3.1.1) - restriction: >= netstandard2.0
       Serilog.Sinks.File (>= 4.1) - restriction: >= netstandard2.0
-    Cognite.Extractor.Metrics (1.0.0-alpha-018)
-      Cognite.Extractor.Common (>= 1.0.0-alpha-018) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.0.0-alpha-018) - restriction: >= netstandard2.0
+    Cognite.Extractor.Metrics (1.0.0-alpha-019)
+      Cognite.Extractor.Common (>= 1.0.0-alpha-019) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.0.0-alpha-019) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 3.1.3) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http.Polly (>= 3.1.3) - restriction: >= netstandard2.0
       Polly.Extensions.Http (>= 3.0) - restriction: >= netstandard2.0
       prometheus-net (>= 3.5) - restriction: >= netstandard2.0
-    Cognite.Extractor.StateStorage (1.0.0-alpha-018) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.0.0-alpha-018) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.0.0-alpha-018) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.0.0-alpha-018) - restriction: >= netstandard2.0
+    Cognite.Extractor.StateStorage (1.0.0-alpha-019) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.0.0-alpha-019) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.0.0-alpha-019) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.0.0-alpha-019) - restriction: >= netstandard2.0
       LiteDB (>= 5.0.8) - restriction: >= netstandard2.0
-    Cognite.ExtractorUtils (1.0.0-alpha-018)
-      Cognite.Extractor.Common (>= 1.0.0-alpha-018) - restriction: >= netstandard2.0
-      Cognite.Extractor.Configuration (>= 1.0.0-alpha-018) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.0.0-alpha-018) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.0.0-alpha-018) - restriction: >= netstandard2.0
-      Cognite.Extractor.StateStorage (>= 1.0.0-alpha-018) - restriction: >= netstandard2.0
-      CogniteSdk (>= 1.0.12) - restriction: >= netstandard2.0
-      Google.Protobuf (>= 3.12.1) - restriction: >= netstandard2.0
+    Cognite.ExtractorUtils (1.0.0-alpha-019)
+      Cognite.Extractor.Common (>= 1.0.0-alpha-019) - restriction: >= netstandard2.0
+      Cognite.Extractor.Configuration (>= 1.0.0-alpha-019) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.0.0-alpha-019) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.0.0-alpha-019) - restriction: >= netstandard2.0
+      Cognite.Extractor.StateStorage (>= 1.0.0-alpha-019) - restriction: >= netstandard2.0
+      CogniteSdk (>= 1.0.17) - restriction: >= netstandard2.0
+      Google.Protobuf (>= 3.12.3) - restriction: >= netstandard2.0
       Microsoft.CSharp (>= 4.7) - restriction: >= netstandard2.0
-      Microsoft.Extensions.DependencyInjection (>= 3.1.3) - restriction: >= netstandard2.0
-      Microsoft.Extensions.Http (>= 3.1.3) - restriction: >= netstandard2.0
-      Microsoft.Extensions.Http.Polly (>= 3.1.3) - restriction: >= netstandard2.0
+      Microsoft.Extensions.DependencyInjection (>= 3.1.5) - restriction: >= netstandard2.0
+      Microsoft.Extensions.Http (>= 3.1.5) - restriction: >= netstandard2.0
+      Microsoft.Extensions.Http.Polly (>= 3.1.5) - restriction: >= netstandard2.0
       Polly (>= 7.2.1) - restriction: >= netstandard2.0
       Polly.Extensions.Http (>= 3.0) - restriction: >= netstandard2.0
-      prometheus-net (>= 3.5) - restriction: >= netstandard2.0
+      prometheus-net (>= 3.6) - restriction: >= netstandard2.0
       Serilog (>= 2.9) - restriction: >= netstandard2.0
       Serilog.Extensions.Logging (>= 3.0.1) - restriction: >= netstandard2.0
       Serilog.Sinks.Async (>= 1.4) - restriction: >= netstandard2.0
       Serilog.Sinks.Console (>= 3.1.1) - restriction: >= netstandard2.0
       Serilog.Sinks.File (>= 4.1) - restriction: >= netstandard2.0
-      System.Text.Json (>= 4.7.1) - restriction: >= netstandard2.0
-    CogniteSdk (1.0.16) - restriction: >= netstandard2.0
-      CogniteSdk.Types (>= 1.0.16) - restriction: >= netstandard2.0
+      System.Text.Json (>= 4.7.2) - restriction: >= netstandard2.0
+    CogniteSdk (1.0.17) - restriction: >= netstandard2.0
+      CogniteSdk.Types (>= 1.0.17) - restriction: >= netstandard2.0
       Oryx (>= 1.3) - restriction: >= netstandard2.0
-      Oryx.Cognite (>= 1.0.16) - restriction: >= netstandard2.0
+      Oryx.Cognite (>= 1.0.17) - restriction: >= netstandard2.0
     CogniteSdk.Protobuf (0.9) - restriction: >= netstandard2.0
       Google.Protobuf (>= 3.9) - restriction: >= netstandard2.0
-    CogniteSdk.Types (1.0.16) - restriction: >= netstandard2.0
+    CogniteSdk.Types (1.0.17) - restriction: >= netstandard2.0
       System.Text.Json (>= 4.7.1) - restriction: >= netstandard2.0
     coverlet.msbuild (2.9)
     FSharp.Core (4.7.2) - restriction: >= netstandard2.0
@@ -359,9 +359,9 @@ NUGET
       FSharp.Core (>= 4.7 < 5.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.Logging (>= 3.1.1) - restriction: >= netstandard2.0
       TaskBuilder.fs (>= 2.1 < 3.0) - restriction: >= netstandard2.0
-    Oryx.Cognite (1.0.16) - restriction: >= netstandard2.0
+    Oryx.Cognite (1.0.17) - restriction: >= netstandard2.0
       CogniteSdk.Protobuf (>= 0.9) - restriction: >= netstandard2.0
-      CogniteSdk.Types (>= 1.0.16) - restriction: >= netstandard2.0
+      CogniteSdk.Types (>= 1.0.17) - restriction: >= netstandard2.0
       FSharp.Core (>= 4.7.1) - restriction: >= netstandard2.0
       Oryx (>= 1.3) - restriction: >= netstandard2.0
       Oryx.Protobuf (>= 1.2.1) - restriction: >= netstandard2.0

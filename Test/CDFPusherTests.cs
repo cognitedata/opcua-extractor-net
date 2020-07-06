@@ -744,7 +744,7 @@ namespace Test
             }
             else
             {
-                // if (upd.Objects.Context) Assert.Equal("gp.tl:i=14", handler.Assets["gp.tl:i=15"].parentExternalId);
+                if (upd.Objects.Context) Assert.Equal("gp.tl:i=14", assets["gp.tl:i=15"].parentExternalId);
                 if (upd.Variables.Context) Assert.Equal(assets["gp.tl:i=14"].id, timeseries["gp.tl:i=8"].assetId);
             }
 

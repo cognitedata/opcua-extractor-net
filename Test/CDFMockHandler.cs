@@ -696,8 +696,7 @@ namespace Test
                 var upd = item.update;
                 if (upd.parentExternalId != null)
                 {
-                    // TODO: Bug in SDK
-                    //old.parentExternalId = upd.ParentExternalId.Set;
+                    old.parentExternalId = upd.parentExternalId.set;
                 }
                 if (upd.name != null)
                 {

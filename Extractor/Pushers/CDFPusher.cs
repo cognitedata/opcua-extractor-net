@@ -391,6 +391,7 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
+        #endregion
         private static string BuildColumnString(TypeUpdateConfig config, bool assets)
         {
             var fields = new List<string>();
@@ -465,11 +466,9 @@ namespace Cognite.OpcUa.Pushers
                         if (existing.TryGetValue(kvp.Key, out var asset))
                         {
                             var assetUpdate = new AssetUpdate();
-                            if (update.Context)
-                            {
-                                // TODO: Bug in SDK
-                                // assetUpdate.ParentExternalId = new UpdateNullable<string>(Extractor.GetUniqueId(kvp.Value.ParentId));
-                            }
+                            if (update.Context && kvp.Value.ParentId != null && !kvp.Value.ParentId.IsNullNodeId)
+                                assetUpdate.ParentExternalId = new UpdateNullable<string>(Extractor.GetUniqueId(kvp.Value.ParentId));
+
                             if (update.Description && !string.IsNullOrEmpty(kvp.Value.Description) && kvp.Value.Description != asset.Description)
                                 assetUpdate.Description = new UpdateNullable<string>(kvp.Value.Description);
 
@@ -717,8 +716,6 @@ namespace Cognite.OpcUa.Pushers
 
             await destination.InsertRawRowsAsync(dbName, tableName, toCreate, options, token);
         }
-
-        #endregion
 
         public void Dispose() { }
     }
