@@ -390,6 +390,27 @@ namespace Cognite.OpcUa.Pushers
             }
             return CreateRawUpdateCommon(node, raw, update, ret);
         }
+
+        public static IEnumerable<IEnumerable<string>> ChunkByHierarchy(IEnumerable<KeyValuePair<string, BufferedNode>> objects)
+        {
+            if (objects == null) return Array.Empty<IEnumerable<string>>();
+            var level = new Dictionary<NodeId, int>();
+            foreach (var obj in objects) level[obj.Value.Id] = 0;
+            bool changed = false;
+            do
+            {
+                foreach (var obj in objects)
+                {
+                    if (obj.Value.ParentId == null || obj.Value.ParentId.IsNullNodeId) continue;
+                    if (level[obj.Value.ParentId] <= level[obj.Value.Id])
+                    {
+                        changed = true;
+                        level[obj.Value.ParentId] = level[obj.Value.Id] + 1;
+                    }
+                }
+            } while (!changed);
+            return objects.GroupBy(obj => level[obj.Value.Id]).OrderByDescending(group => group.Key).Select(group => group.Select(kvp => kvp.Key));
+        }
     }
 
     public class StatelessEventCreate : EventCreate

@@ -33,6 +33,7 @@ namespace Cognite.OpcUa
         private int attributesChunk = 1000;
         public int SubscriptionChunk { get => subscriptionChunk; set => subscriptionChunk = Math.Max(1, value); }
         private int subscriptionChunk = 1000;
+        public int KeepAliveInterval { get; set; } = 5000;
     }
     public class ExtractionConfig
     {

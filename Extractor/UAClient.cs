@@ -184,6 +184,7 @@ namespace Cognite.OpcUa
                         : new UserIdentity(config.Username, config.Password),
                     null
                 );
+                Session.KeepAliveInterval = config.KeepAliveInterval;
             }
             catch (ServiceResultException ex)
             {
@@ -212,6 +213,9 @@ namespace Cognite.OpcUa
             Session = reconnectHandler.Session;
             reconnectHandler.Dispose();
             log.Warning("--- RECONNECTED ---");
+            // If subscriptions are still alive, we're probably good.
+            if (Session.Subscriptions.Any()) return;
+
             if (extractionConfig.CustomNumericTypes != null)
             {
                 numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
@@ -450,8 +454,6 @@ namespace Cognite.OpcUa
                 var continuationPoints = new ByteStringCollection();
                 int index = 0;
                 int bindex = 0;
-                log.Debug("GetNodeChildren parents {count}", parents.Count());
-                log.Debug("GetNodeChildren results {count}", results.Count);
                 foreach (var result in results)
                 {
                     var nodeId = parents.ElementAt(bindex++);
@@ -550,10 +552,22 @@ namespace Cognite.OpcUa
             }
             do
             {
-                var references = nextIds.ChunkBy(config.BrowseNodesChunk)
-                    .Select(ids => GetNodeChildren(ids.ToList(), referenceTypes, nodeClassMask, token))
-                    .SelectMany(dict => dict)
-                    .ToDictionary(val => val.Key, val => val.Value);
+                var references = new Dictionary<NodeId, ReferenceDescriptionCollection>();
+                var total = nextIds.Count;
+                int count = 0;
+                int countChildren = 0;
+                foreach (var chunk in nextIds.ChunkBy(config.BrowseNodesChunk))
+                {
+                    if (token.IsCancellationRequested) return;
+                    var result = GetNodeChildren(chunk, referenceTypes, nodeClassMask, token);
+                    foreach (var res in result)
+                    {
+                        references[res.Key] = res.Value;
+                        countChildren += res.Value.Count;
+                    }
+                    count += result.Count;
+                    log.Debug("Read node children {cnt} / {total}. Children: {childcnt}", count, total, countChildren);
+                }
 
                 nextIds.Clear();
                 levelCnt++;
@@ -623,8 +637,10 @@ namespace Cognite.OpcUa
                     readValueIds.AddRange(variables.Select(attribute => new ReadValueId {AttributeId = attribute, NodeId = node.Id}));
                 }
             }
-            IEnumerable<DataValue> values = new DataValueCollection();
+            var values = new List<DataValue>();
             IncOperations();
+            int total = readValueIds.Count;
+            int attrCount = 0;
             try
             {
                 int count = 0;
@@ -641,11 +657,12 @@ namespace Cognite.OpcUa
                         out _
                     );
                     attributeRequests.Inc();
-                    values = values.Concat(lvalues);
-                    log.Debug("Read {NumAttributesRead} attributes", lvalues.Count);
+                    values.AddRange(lvalues);
+                    attrCount += lvalues.Count;
+                    log.Debug("Read {NumAttributesRead} / {total} attributes", attrCount, total);
                 }
                 log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
-                    readValueIds.Count, count, nodes.Count());
+                    values.Count, count, nodes.Count());
             }
             catch
             {
@@ -668,9 +685,12 @@ namespace Cognite.OpcUa
             var variableAttributes = new List<uint>
             {
                 Attributes.DataType,
-                Attributes.Historizing,
                 Attributes.ValueRank
             };
+            if (historyConfig.Enabled && historyConfig.Data)
+            {
+                variableAttributes.Add(Attributes.Historizing);
+            }
             if (extractionConfig.MaxArraySize > 0)
             {
                 variableAttributes.Add(Attributes.ArrayDimensions);
@@ -688,10 +708,13 @@ namespace Cognite.OpcUa
             {
                 throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
-
-            if (values.Count() < nodes.Count(node => node.IsVariable) * 3 + nodes.Count())
+            int total = values.Count();
+            int expected = nodes.Count(node => node.IsVariable) * variableAttributes.Count + nodes.Count();
+            if (total < expected)
             {
-                throw new ExtractorFailureException("Too few results in ReadNodeData, this is a bug in the OPC-UA server implementation");
+
+                throw new ExtractorFailureException(
+                    $"Too few results in ReadNodeData, this is a bug in the OPC-UA server implementation, total : {total}, expected: {expected}");
             }
 
             var enumerator = values.GetEnumerator();
@@ -705,8 +728,12 @@ namespace Cognite.OpcUa
                     enumerator.MoveNext();
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
                     vnode.SetDataType(dataType, numericDataTypes);
-                    enumerator.MoveNext();
-                    vnode.Historizing = historyConfig.Enabled && historyConfig.Data && enumerator.Current.GetValue(false);
+                    if (historyConfig.Enabled && historyConfig.Data)
+                    {
+                        enumerator.MoveNext();
+                        vnode.Historizing = enumerator.Current.GetValue(false);
+                    }
+
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
                     if (extractionConfig.MaxArraySize > 0)
@@ -795,7 +822,22 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            var result = GetNodeChildren(idsToCheck, ReferenceTypeIds.HasProperty, (uint)NodeClass.Variable, token);
+            var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
+            var total = idsToCheck.Count;
+            int found = 0;
+            int readCount = 0;
+            foreach (var chunk in idsToCheck.ChunkBy(config.BrowseNodesChunk))
+            {
+                var read = GetNodeChildren(chunk, ReferenceTypeIds.HasProperty, (uint)NodeClass.Variable, token);
+                foreach (var kvp in read)
+                {
+                    result[kvp.Key] = kvp.Value;
+                    found += kvp.Value.Count;
+                }
+                readCount += chunk.Count();
+                log.Debug("Read properties for {cnt} / {total} nodes. Found: {found}", readCount, total, found);
+            }
+
             foreach (var parent in nodes)
             {
                 if (!result.ContainsKey(parent.Id)) continue;
@@ -919,9 +961,13 @@ namespace Cognite.OpcUa
                     .Select(sub => sub.ResolvedNodeId)
                     .ToHashSet();
 
+                int total = nodeList.Count();
+                int subscribed = 0;
+
                 foreach (var chunk in nodeList.ChunkBy(config.SubscriptionChunk))
                 {
                     if (token.IsCancellationRequested) break;
+                    int lcount = 0;
                     subscription.AddItems(chunk
                         .Where(node => !hasSubscription.Contains(node.SourceId))
                         .Select(node =>
@@ -935,11 +981,14 @@ namespace Cognite.OpcUa
                             };
                             monitor.Notification += subscriptionHandler;
                             count++;
+                            lcount++;
                             return monitor;
                         }).ToList()
                     );
 
-                    log.Information("Add subscriptions for {numnodes} nodes", chunk.Count());
+                    subscribed += chunk.Count();
+
+                    log.Debug("Add subscriptions for {numnodes} nodes, {subscribed} / {total} done.", lcount, subscribed, total);
 
                     IncOperations();
                     try
@@ -984,7 +1033,7 @@ namespace Cognite.OpcUa
 
                     numSubscriptions.Set(subscription.MonitoredItemCount);
                 }
-                log.Information("Added {TotalAddedSubscriptions} subscriptions", count);
+                log.Information("Added {TotalAddedSubscriptions} / {total} subscriptions", count, total);
             }
         }
         /// <summary>
