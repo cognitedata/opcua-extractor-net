@@ -39,7 +39,11 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push nodes, emptying the queue
         /// </summary>
-        Task<bool> PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> variables, CancellationToken token)
+        Task<bool> PushNodes(
+            IEnumerable<BufferedNode> objects,
+            IEnumerable<BufferedVariable> variables,
+            UpdateConfig update,
+            CancellationToken token)
         {
             return Task.FromResult(true);
         }

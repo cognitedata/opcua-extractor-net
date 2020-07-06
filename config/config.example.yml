@@ -387,6 +387,22 @@ extraction:
     # Assume unknown ValueRanks without ArrayDimensions are all scalar, and create timeseries in CDF accordingly.
     # If such a variable produces an array, only the first element will be mapped to CDF
     unknown-as-scalar: false
+    # Update data in destinations on rebrowse or restart.
+    # Set auto-rebrowse-period to some value to do this periodically.
+    # Context refers to the structure of the node graph in OPC-UA. (assetId and parentId in CDF)
+    # Metadata refers to any information obtained from OPC-UA properties. (metadata in CDF)
+    # Enabling anything here will increase the startup- and rebrowse-time of the extractor. Enabling metadata will increase it more.
+    update:
+        objects:
+            name: false
+            description: false
+            context: false
+            metadata: false
+        variables:
+            name: false
+            description: false
+            context: false
+            metadata: false
 
 
 events:

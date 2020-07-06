@@ -161,5 +161,48 @@ namespace Server
             Server.AddReference(objId, Ids.Audit.RefAdd, ReferenceTypeIds.HasComponent, true);
             Server.AddReference(varId, Ids.Audit.RefAdd, ReferenceTypeIds.HasComponent, true);
         }
+        public void ModifyCustomServer()
+        {
+            Server.MutateNode(Ids.Custom.Root, root =>
+            {
+                root.Description = new LocalizedText("custom root description");
+                root.DisplayName = new LocalizedText("CustomRoot updated");
+            });
+            Server.MutateNode(Ids.Custom.StringyVar, node =>
+            {
+                node.Description = new LocalizedText("Stringy var description");
+                node.DisplayName = new LocalizedText("StringyVar updated");
+            });
+            Server.ReContextualize(Ids.Custom.Obj2, Ids.Custom.Root, Ids.Custom.Obj1, ReferenceTypeIds.Organizes);
+            Server.ReContextualize(Ids.Custom.StringyVar, Ids.Custom.Root, Ids.Custom.Obj1, ReferenceTypeIds.HasComponent);
+
+            Server.AddProperty<string>(Ids.Custom.StringyVar, "NewProp", DataTypeIds.String, "New prop value");
+            Server.AddProperty<string>(Ids.Custom.Obj1, "NewAssetProp", DataTypeIds.String, "New asset prop value");
+
+            Server.MutateNode(Ids.Custom.RangeProp, node =>
+            {
+                var prop = node as PropertyState;
+                if (prop == null) return;
+                prop.Value = new Opc.Ua.Range(200, 0);
+            });
+            Server.MutateNode(Ids.Custom.ObjProp, node =>
+            {
+                var prop = node as PropertyState;
+                if (prop == null) return;
+                prop.Value = 4321L;
+            });
+            Server.MutateNode(Ids.Custom.EUProp, node =>
+            {
+                var prop = node as PropertyState;
+                if (prop == null) return;
+                prop.DisplayName = new LocalizedText("EngineeringUnits updated");
+            });
+            Server.MutateNode(Ids.Custom.ObjProp2, node =>
+            {
+                var prop = node as PropertyState;
+                if (prop == null) return;
+                prop.DisplayName = new LocalizedText("StringProp updated");
+            });
+        }
     }
 }

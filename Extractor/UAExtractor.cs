@@ -423,7 +423,9 @@ namespace Cognite.OpcUa
         /// </summary>
         public async Task Rebrowse(CancellationToken token)
         {
-            await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token);
+            // If we are updating we want to re-discover nodes in order to run them through mapping again.
+            await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, token,
+                !config.Extraction.Update.AnyUpdate);
             var historyTasks = await MapUAToDestinations(token);
             Looper.ScheduleTasks(historyTasks);
         }
@@ -467,7 +469,8 @@ namespace Cognite.OpcUa
                 State.AddManagedNode(node);
             }
 
-            var historyTasks = Synchronize(variables, token);
+            // Changed flag means that it already existed, so we avoid synchronizing these.
+            var historyTasks = Synchronize(variables.Where(var => !var.Changed), token);
             Starting.Set(0);
             return historyTasks;
         }
@@ -529,6 +532,33 @@ namespace Cognite.OpcUa
                 }
             }
         }
+
+
+        private void CheckForNodeUpdates(BufferedNode node, BufferedNode old, TypeUpdateConfig update)
+        {
+            if (update.Context && old.ParentId != node.ParentId) node.Changed = true;
+
+            if (!node.Changed && update.Description && old.Description != node.Description
+                && !string.IsNullOrWhiteSpace(node.Description)) node.Changed = true;
+
+            if (!node.Changed && update.Name && old.DisplayName != node.DisplayName
+                && !string.IsNullOrWhiteSpace(node.DisplayName)) node.Changed = true;
+
+            if (!node.Changed && update.Metadata)
+            {
+                var oldProperties = old.Properties == null
+                    ? new Dictionary<string, BufferedDataPoint>()
+                    : old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
+                node.Changed = node.Properties != null && node.Properties.Any(prop =>
+                {
+                    if (!oldProperties.ContainsKey(prop.DisplayName)) return true;
+                    var oldProp = oldProperties[prop.DisplayName];
+                    return oldProp.IsString && oldProp.StringValue != prop.Value.StringValue
+                        && !string.IsNullOrWhiteSpace(oldProp.StringValue)
+                        || !oldProp.IsString && oldProp.DoubleValue != prop.Value.DoubleValue;
+                });
+            }
+        }
         /// <summary>
         /// Read nodes from commonQueue and sort them into lists of context objects, destination timeseries and source variables
         /// </summary>
@@ -541,6 +571,7 @@ namespace Cognite.OpcUa
             objects = new List<BufferedNode>();
             timeseries = new List<BufferedVariable>();
             variables = new List<BufferedVariable>();
+            var rawObjects = new List<BufferedNode>();
             var rawVariables = new List<BufferedVariable>();
             var nodeMap = new Dictionary<string, BufferedNode>();
 
@@ -565,47 +596,115 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    objects.Add(buffer);
+                    rawObjects.Add(buffer);
                 }
                 nodeMap.Add(GetUniqueId(buffer.Id), buffer);
             }
             log.Information("Getting data for {NumVariables} variables and {NumObjects} objects", 
-                rawVariables.Count, objects.Count);
-            uaClient.ReadNodeData(objects.Concat(rawVariables), token);
-            foreach (var node in objects)
+                rawVariables.Count, rawObjects.Count);
+
+            var nodes = rawObjects.Concat(rawVariables);
+
+            var update = config.Extraction.Update;
+
+            if (update.Objects.Metadata || update.Variables.Metadata)
             {
+                var toReadProperties = nodes
+                    .Where(node => State.IsMappedNode(node.Id)
+                        && (update.Objects.Metadata && !node.IsVariable
+                            || update.Variables.Metadata && node.IsVariable))
+                    .ToList();
+                if (toReadProperties.Any())
+                {
+                    ReadProperties(toReadProperties, token).Wait();
+                }
+            }
+            uaClient.ReadNodeData(nodes, token);
+
+
+            foreach (var node in rawObjects)
+            {
+                if (update.AnyUpdate)
+                {
+                    var old = State.GetActiveNode(node.Id);
+                    if (old != null)
+                    {
+                        CheckForNodeUpdates(node, old, update.Objects);
+                        if (node.Changed)
+                        {
+                            State.AddActiveNode(node);
+                            objects.Add(node);
+                        }
+                        continue;
+                    }
+                }
                 log.Debug(node.ToDebugDescription());
                 State.AddActiveNode(node);
+                objects.Add(node);
             }
 
             foreach (var node in rawVariables)
             {
-                if (AllowTSMap(node))
+                if (!AllowTSMap(node)) continue;
+                if (update.AnyUpdate)
                 {
-                    log.Debug(node.ToDebugDescription());
-                    variables.Add(node);
-                    var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,
-                        StateStorage != null && config.StateStorage.Interval > 0);
+                    var old = State.GetActiveNode(node.Id);
+                    if (old != null && old is BufferedVariable variable)
+                    {
 
-                    State.AddActiveNode(node);
-                    if (state.IsArray)
-                    {
-                        for (int i = 0; i < node.ArrayDimensions[0]; i++)
+                        CheckForNodeUpdates(node, old, update.Variables);
+
+                        if (node.Changed)
                         {
-                            var ts = new BufferedVariable(node, i);
-                            timeseries.Add(ts);
-                            State.AddActiveNode(ts);
-                            var uniqueId = GetUniqueId(node.Id, i);
-                            State.SetNodeState(state, uniqueId);
-                            State.RegisterNode(node.Id, uniqueId);
+                            var oldState = State.GetNodeState(node.Id);
+                            State.AddActiveNode(node);
+                            if (oldState.IsArray)
+                            {
+                                if (update.Variables.Name && old.DisplayName != node.DisplayName && !string.IsNullOrWhiteSpace(node.DisplayName))
+                                {
+                                    for (int i = 0; i < oldState.ArrayDimensions[0]; i++)
+                                    {
+                                        var ts = new BufferedVariable(node, i);
+                                        ts.Changed = true;
+                                        State.AddActiveNode(ts);
+                                        timeseries.Add(ts);
+                                    }
+                                }
+                                objects.Add(node);
+                            }
+                            else
+                            {
+                                timeseries.Add(node);
+                            }
                         }
-                        objects.Add(node);
+
+                        continue;
                     }
-                    else
+                }
+
+                log.Debug(node.ToDebugDescription());
+                variables.Add(node);
+                var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,
+                    StateStorage != null && config.StateStorage.Interval > 0);
+
+                State.AddActiveNode(node);
+                if (state.IsArray)
+                {
+                    for (int i = 0; i < node.ArrayDimensions[0]; i++)
                     {
-                        State.SetNodeState(state);
-                        timeseries.Add(node);
+                        var ts = new BufferedVariable(node, i);
+                        timeseries.Add(ts);
+                        State.AddActiveNode(ts);
+                        var uniqueId = GetUniqueId(node.Id, i);
+                        State.SetNodeState(state, uniqueId);
+                        State.RegisterNode(node.Id, uniqueId);
                     }
+                    objects.Add(node);
+                }
+                else
+                {
+                    State.SetNodeState(state);
+                    timeseries.Add(node);
                 }
             }
         }
@@ -628,7 +727,7 @@ namespace Cognite.OpcUa
                 pusher.NoInit = false;
                 return;
             }
-            var result = await pusher.PushNodes(objects, timeseries, token);
+            var result = await pusher.PushNodes(objects, timeseries, config.Extraction.Update, token);
             if (!result)
             {
                 log.Error("Failed to push nodes on pusher {name}", pusher.GetType());

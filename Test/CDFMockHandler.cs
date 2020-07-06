@@ -22,6 +22,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Com.Cognite.V1.Timeseries.Proto;
@@ -129,6 +130,9 @@ namespace Test
                         case "/assets":
                             res = HandleCreateAssets(content);
                             break;
+                        case "/assets/update":
+                            res = HandleUpdateAssets(content);
+                            break;
                         case "/timeseries/byids":
                             res = HandleGetTimeseries(content);
                             break;
@@ -148,6 +152,9 @@ namespace Test
                             break;
                         case "/timeseries/data/list":
                             res = HandleGetDatapoints(content);
+                            break;
+                        case "/timeseries/update":
+                            res = HandleUpdateTimeSeries(content);
                             break;
                         case "/events/list":
                             res = HandleListEvents();
@@ -614,8 +621,8 @@ namespace Test
         }
         private HttpResponseMessage HandleGetRawAssets()
         {
-            var data = new RawListWrapper<object>();
-            data.items = AssetRaw.Select(kvp => new RawWrapper<object> { columns = new object(), key = kvp.Key, lastUpdatedTime = 0 });
+            var data = new RawListWrapper<AssetDummy>();
+            data.items = AssetRaw.Select(kvp => new RawWrapper<AssetDummy> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
             var content = JsonConvert.SerializeObject(data);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -624,8 +631,8 @@ namespace Test
         }
         private HttpResponseMessage HandleGetRawTimeseries()
         {
-            var data = new RawListWrapper<object>();
-            data.items = TimeseriesRaw.Select(kvp => new RawWrapper<object> { columns = new object(), key = kvp.Key, lastUpdatedTime = 0 });
+            var data = new RawListWrapper<StatelessTimeseriesDummy>();
+            data.items = TimeseriesRaw.Select(kvp => new RawWrapper<StatelessTimeseriesDummy> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
             var content = JsonConvert.SerializeObject(data);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -655,6 +662,164 @@ namespace Test
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{}")
+            };
+        }
+
+        private HttpResponseMessage HandleUpdateAssets(string content)
+        {
+            var toUpdate = JsonConvert.DeserializeObject<ItemWrapper<AssetUpdateItem>>(content);
+            var ret = new List<AssetDummy>();
+            var missing = toUpdate.Items.Where(upd => !Assets.ContainsKey(upd.externalId))
+                .Select(upd => upd.externalId);
+
+            if (missing.Any())
+            {
+                var missingContent = new ErrorWrapper
+                {
+                    error = new ErrorContent
+                    {
+                        missing = missing.Select(id => new Identity { externalId = id }),
+                        message = "missing",
+                        code = 400
+                    }
+                };
+                return new HttpResponseMessage
+                {
+                    StatusCode = HttpStatusCode.BadRequest,
+                    Content = new StringContent(JsonConvert.SerializeObject(missingContent))
+                };
+            }
+
+            foreach (var item in toUpdate.Items)
+            {
+                var old = Assets[item.externalId];
+                var upd = item.update;
+                if (upd.parentExternalId != null)
+                {
+                    old.parentExternalId = upd.parentExternalId.set;
+                }
+                if (upd.name != null)
+                {
+                    old.name = upd.name.set;
+                }
+                if (upd.description != null)
+                {
+                    old.description = upd.description.set;
+                }
+                if (upd.metadata != null)
+                {
+                    if (upd.metadata.set != null)
+                    {
+                        old.metadata = upd.metadata.set;
+                    }
+                    else if (old.metadata == null)
+                    {
+                        old.metadata = new Dictionary<string, string>();
+                    }
+                    if (upd.metadata.remove != null)
+                    {
+                        foreach (var field in upd.metadata.remove)
+                        {
+                            old.metadata.Remove(field);
+                        }
+                    }
+                    if (upd.metadata.add != null)
+                    {
+                        foreach (var field in upd.metadata.add)
+                        {
+                            old.metadata[field.Key] = field.Value;
+                        }
+                    }
+                }
+                ret.Add(old);
+            }
+            var result = new AssetReadWrapper
+            {
+                items = ret,
+            };
+            return new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(JsonConvert.SerializeObject(result))
+            };
+        }
+
+        private HttpResponseMessage HandleUpdateTimeSeries(string content)
+        {
+            var toUpdate = JsonConvert.DeserializeObject<ItemWrapper<TimeseriesUpdateItem>>(content);
+            var ret = new List<TimeseriesDummy>();
+            var missing = toUpdate.Items.Where(upd => !Timeseries.ContainsKey(upd.externalId))
+                .Select(upd => upd.externalId);
+
+            if (missing.Any())
+            {
+                var missingContent = new ErrorWrapper
+                {
+                    error = new ErrorContent
+                    {
+                        missing = missing.Select(id => new Identity { externalId = id }),
+                        message = "missing",
+                        code = 400
+                    }
+                };
+                return new HttpResponseMessage
+                {
+                    StatusCode = HttpStatusCode.BadRequest,
+                    Content = new StringContent(JsonConvert.SerializeObject(missingContent))
+                };
+            }
+
+            foreach (var item in toUpdate.Items)
+            {
+                var old = Timeseries[item.externalId];
+                var upd = item.update;
+                if (upd.assetId != null)
+                {
+                    old.assetId = upd.assetId.set;
+                }
+                if (upd.name != null)
+                {
+                    old.name = upd.name.set;
+                }
+                if (upd.description != null)
+                {
+                    old.description = upd.description.set;
+                }
+                if (upd.metadata != null)
+                {
+                    if (upd.metadata.set != null)
+                    {
+                        old.metadata = upd.metadata.set;
+                    }
+                    else if (old.metadata == null)
+                    {
+                        old.metadata = new Dictionary<string, string>();
+                    }
+                    if (upd.metadata.remove != null)
+                    {
+                        foreach (var field in upd.metadata.remove)
+                        {
+                            old.metadata.Remove(field);
+                        }
+                    }
+                    if (upd.metadata.add != null)
+                    {
+                        foreach (var field in upd.metadata.add)
+                        {
+                            old.metadata[field.Key] = field.Value;
+                        }
+                    }
+                }
+                ret.Add(old);
+            }
+            var result = new TimeseriesReadWrapper
+            {
+                items = ret,
+            };
+            return new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(JsonConvert.SerializeObject(result))
             };
         }
 
@@ -704,6 +869,44 @@ namespace Test
     public class AssetReadWrapper
     {
         public IEnumerable<AssetDummy> items { get; set; }
+    }
+
+    public class NullableSet<T>
+    {
+        public T set { get; set; }
+        public bool setNull { get; set; }
+    }
+
+    public class DictionaryUpdate
+    {
+        public Dictionary<string, string> set { get; set; }
+        public IEnumerable<string> remove { get; set; }
+        public Dictionary<string, string> add { get; set; }
+    }
+    public class AssetUpdate
+    {
+        public DictionaryUpdate metadata { get; set; }
+        public NullableSet<string> parentExternalId { get; set; }
+        public NullableSet<string> name { get; set; }
+        public NullableSet<string> description { get; set; }
+    }
+    public class AssetUpdateItem
+    {
+        public string externalId { get; set; }
+        public AssetUpdate update { get; set; }
+    }
+
+    public class TimeseriesUpdate
+    {
+        public DictionaryUpdate metadata { get; set; }
+        public NullableSet<long> assetId { get; set; }
+        public NullableSet<string> name { get; set; }
+        public NullableSet<string> description { get; set; }
+    }
+    public class TimeseriesUpdateItem
+    {
+        public string externalId { get; set; }
+        public TimeseriesUpdate update { get; set; }
     }
     public class Identity
     {
@@ -763,6 +966,7 @@ namespace Test
         public string externalId { get; set; }
         public IEnumerable<DataPoint> datapoints { get; set; }
         public string name { get; set; }
+        public string description { get; set; }
         public long? assetId { get; set; }
     }
     public class StatelessTimeseriesDummy : TimeseriesDummy
@@ -814,6 +1018,10 @@ namespace Test
         public string source { get; set; }
         public long createdTime { get; set; }
         public long lastUpdatedTime { get; set; }
+    }
+    public class ItemWrapper<T>
+    {
+        public IEnumerable<T> Items { get; set; }
     }
     public class EventWrapper
     {

@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,7 +29,6 @@ using Serilog;
 using Cognite.Extractor.Utils;
 using TimeRange = Cognite.Extractor.Common.TimeRange;
 using System.Text.Json;
-using Cognite.Extractor.Common;
 
 namespace Cognite.OpcUa.Pushers
 {
@@ -216,12 +214,17 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="objects">List of objects to be synchronized</param>
         /// <param name="variables">List of variables to be synchronized</param>
         /// <returns>True if no operation failed unexpectedly</returns>
-        public async Task<bool> PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> variables, CancellationToken token)
+        public async Task<bool> PushNodes(
+            IEnumerable<BufferedNode> objects,
+            IEnumerable<BufferedVariable> variables,
+            UpdateConfig update,
+            CancellationToken token)
         {
             var tsList = new List<BufferedVariable>();
 
             if (variables == null) throw new ArgumentNullException(nameof(variables));
             if (objects == null) throw new ArgumentNullException(nameof(objects));
+            if (update == null) throw new ArgumentNullException(nameof(update));
 
 
             if (!variables.Any() && !objects.Any())
@@ -253,39 +256,9 @@ namespace Cognite.OpcUa.Pushers
                 return true;
             }
 
-            var assetIds = new ConcurrentDictionary<string, BufferedNode>(objects.ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
-
-            var destination = GetDestination();
-
-            bool useRawAssets = config.RawMetadata != null 
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
-
             try
             {
-                if (useRawAssets)
-                {
-                    await EnsureRawRows<AssetCreate>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetIds.Keys, async ids =>
-                    {
-                        var assets = ids.Select(id => assetIds[id]);
-                        await Extractor.ReadProperties(assets, token);
-                        return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, null)).Where(asset => asset != null)
-                            .ToDictionary(asset => asset.ExternalId);
-                    }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
-                }
-                else
-                {
-                    var assets = await destination.GetOrCreateAssetsAsync(assetIds.Keys, async ids =>
-                    {
-                        var assets = ids.Select(id => assetIds[id]);
-                        await Extractor.ReadProperties(assets, token);
-                        return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId)).Where(asset => asset != null);
-                    }, token);
-                    foreach (var asset in assets)
-                    {
-                        nodeToAssetIds[assetIds[asset.ExternalId].Id] = asset.Id;
-                    }
-                }
+                await PushAssets(objects, update.Objects, token);
             }
             catch (Exception e)
             {
@@ -294,52 +267,10 @@ namespace Cognite.OpcUa.Pushers
                 return false;
             }
 
-            var tsIds = new ConcurrentDictionary<string, BufferedVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
-
-            bool useRawTimeseries = config.RawMetadata != null
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
 
             try
             {
-                var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsIds.Keys, async ids =>
-                {
-                    var tss = ids.Select(id => tsIds[id]);
-                    if (!useRawTimeseries)
-                    {
-                        await Extractor.ReadProperties(tss, token);
-                    }
-                    return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, useRawTimeseries))
-                        .Where(ts => ts != null);
-                }, token);
-                var foundBadTimeseries = new List<string>();
-                foreach (var ts in timeseries)
-                {
-                    var loc = tsIds[ts.ExternalId];
-                    if (nodeToAssetIds.ContainsKey(loc.ParentId))
-                    {
-                        nodeToAssetIds[loc.Id] = nodeToAssetIds[loc.ParentId];
-                    }
-                    if (ts.IsString != loc.DataType.IsString)
-                    {
-                        mismatchedTimeseries.Add(ts.ExternalId);
-                        foundBadTimeseries.Add(ts.ExternalId);
-                    }
-                }
-                if (foundBadTimeseries.Any())
-                {
-                    log.Debug("Found mismatched timeseries when ensuring: {tss}", foundBadTimeseries);
-                }
-                if (useRawTimeseries)
-                {
-                    await EnsureRawRows<StatelessTimeSeriesCreate>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsIds.Keys, async ids =>
-                    {
-                        var timeseries = ids.Select(id => tsIds[id]);
-                        await Extractor.ReadProperties(timeseries, token);
-                        return timeseries.Select(node => PusherUtils.VariableToStatelessTimeSeries(node, Extractor, null)).Where(ts => ts != null)
-                            .ToDictionary(ts => ts.ExternalId);
-                    }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
-                }
+                await PushTimeseries(tsList, update.Variables, token);
             }
             catch (Exception e)
             {
@@ -460,6 +391,254 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
+        #endregion
+        private static string BuildColumnString(TypeUpdateConfig config, bool assets)
+        {
+            var fields = new List<string>();
+            if (config.Context) fields.Add(assets ? "parentExternalId" : "assetExternalId");
+            if (config.Description) fields.Add("description");
+            if (config.Metadata) fields.Add("metadata");
+            if (config.Name) fields.Add("name");
+            return string.Join(',', fields);
+        }
+
+        private async Task PushAssets(
+            IEnumerable<BufferedNode> objects,
+            TypeUpdateConfig update,
+            CancellationToken token)
+        {
+            var assetIds = new ConcurrentDictionary<string, BufferedNode>(objects.ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
+            var destination = GetDestination();
+            bool useRawAssets = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
+
+            if (useRawAssets)
+            {
+                if (update.AnyUpdate)
+                {
+                    string columns = BuildColumnString(update, true);
+                    await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetIds.Keys, async rows =>
+                    {
+                        var rowDict = rows.ToDictionary(row => row.Key);
+
+                        var toReadProperties = assetIds.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
+                        await Extractor.ReadProperties(toReadProperties, token);
+
+                        var updates = assetIds
+                            .Select(kvp => (kvp.Key, PusherUtils.CreateRawAssetUpdate(kvp.Value, Extractor, rowDict.GetValueOrDefault(kvp.Key), update)))
+                            .Where(elem => elem.Item2 != null)
+                            .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
+
+                        return updates;
+                    }, null, columns, token);
+                }
+                else
+                {
+                    await EnsureRawRows<AssetCreate>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetIds.Keys, async ids =>
+                    {
+                        var assets = ids.Select(id => assetIds[id]);
+                        await Extractor.ReadProperties(assets, token);
+                        return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, null)).Where(asset => asset != null)
+                            .ToDictionary(asset => asset.ExternalId);
+                    }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
+                }
+
+            }
+            else
+            {
+                var assets = await destination.GetOrCreateAssetsAsync(assetIds.Keys, async ids =>
+                {
+                    var assets = ids.Select(id => assetIds[id]);
+                    await Extractor.ReadProperties(assets, token);
+                    return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId)).Where(asset => asset != null);
+                }, token);
+                foreach (var asset in assets)
+                {
+                    nodeToAssetIds[assetIds[asset.ExternalId].Id] = asset.Id;
+                }
+                if (update.AnyUpdate)
+                {
+                    var updates = new List<AssetUpdateItem>();
+                    var existing = assets.ToDictionary(asset => asset.ExternalId);
+                    foreach (var kvp in assetIds)
+                    {
+                        if (existing.TryGetValue(kvp.Key, out var asset))
+                        {
+                            var assetUpdate = new AssetUpdate();
+                            if (update.Context && kvp.Value.ParentId != null && !kvp.Value.ParentId.IsNullNodeId)
+                                assetUpdate.ParentExternalId = new UpdateNullable<string>(Extractor.GetUniqueId(kvp.Value.ParentId));
+
+                            if (update.Description && !string.IsNullOrEmpty(kvp.Value.Description) && kvp.Value.Description != asset.Description)
+                                assetUpdate.Description = new UpdateNullable<string>(kvp.Value.Description);
+
+                            if (update.Name && !string.IsNullOrEmpty(kvp.Value.DisplayName) && kvp.Value.DisplayName != asset.Name)
+                                assetUpdate.Name = new UpdateNullable<string>(kvp.Value.DisplayName);
+
+                            if (update.Metadata && kvp.Value.Properties != null && kvp.Value.Properties.Any())
+                            {
+                                var newMetaData = PusherUtils.PropertiesToMetadata(kvp.Value.Properties)
+                                    .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
+                                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                                if (asset.Metadata == null
+                                    || newMetaData.Any(meta => !asset.Metadata.ContainsKey(meta.Key) || asset.Metadata[meta.Key] != meta.Value))
+                                {
+                                    assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
+                                }
+                            }
+
+                            if (assetUpdate.ParentExternalId != null || assetUpdate.Description != null
+                                || assetUpdate.Name != null || assetUpdate.Metadata != null)
+                            {
+                                updates.Add(
+                                    new AssetUpdateItem(asset.ExternalId)
+                                    {
+                                        Update = assetUpdate
+                                    });
+                            }
+                        }
+                    }
+                    if (updates.Any())
+                    {
+                        log.Information("Updating {cnt} assets in CDF", updates.Count);
+                        await destination.CogniteClient.Assets.UpdateAsync(updates, token);
+                    }
+                }
+            }
+        }
+
+        private async Task PushTimeseries(
+            IEnumerable<BufferedVariable> tsList,
+            TypeUpdateConfig update,
+            CancellationToken token)
+        {
+            var tsIds = new ConcurrentDictionary<string, BufferedVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
+            var destination = GetDestination();
+            bool useRawTimeseries = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
+
+            var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsIds.Keys, async ids =>
+            {
+                var tss = ids.Select(id => tsIds[id]);
+                if (!useRawTimeseries)
+                {
+                    await Extractor.ReadProperties(tss, token);
+                }
+                return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, useRawTimeseries))
+                    .Where(ts => ts != null);
+            }, token);
+            var foundBadTimeseries = new List<string>();
+            foreach (var ts in timeseries)
+            {
+                var loc = tsIds[ts.ExternalId];
+                if (nodeToAssetIds.ContainsKey(loc.ParentId))
+                {
+                    nodeToAssetIds[loc.Id] = nodeToAssetIds[loc.ParentId];
+                }
+                if (ts.IsString != loc.DataType.IsString)
+                {
+                    mismatchedTimeseries.Add(ts.ExternalId);
+                    foundBadTimeseries.Add(ts.ExternalId);
+                }
+            }
+            if (foundBadTimeseries.Any())
+            {
+                log.Debug("Found mismatched timeseries when ensuring: {tss}", string.Join(", ", foundBadTimeseries));
+            }
+
+            if (update.AnyUpdate && !useRawTimeseries)
+            {
+                var updates = new List<TimeSeriesUpdateItem>();
+                var existing = timeseries.ToDictionary(asset => asset.ExternalId);
+                foreach (var kvp in tsIds)
+                {
+                    if (existing.TryGetValue(kvp.Key, out var ts))
+                    {
+                        var tsUpdate = new TimeSeriesUpdate();
+                        if (update.Context)
+                        {
+                            if (kvp.Value.ParentId != null && !kvp.Value.ParentId.IsNullNodeId
+                                && nodeToAssetIds.TryGetValue(kvp.Value.ParentId, out long assetId))
+                            {
+                                if (assetId != ts.AssetId && assetId > 0)
+                                {
+                                    tsUpdate.AssetId = new UpdateNullable<long?>(assetId);
+                                }
+                            }
+                        }
+
+                        if (update.Description && !string.IsNullOrEmpty(kvp.Value.Description) && kvp.Value.Description != ts.Description)
+                            tsUpdate.Description = new UpdateNullable<string>(kvp.Value.Description);
+
+                        if (update.Name && !string.IsNullOrEmpty(kvp.Value.DisplayName) && kvp.Value.DisplayName != ts.Name)
+                            tsUpdate.Name = new UpdateNullable<string>(kvp.Value.DisplayName);
+
+                        if (update.Metadata && kvp.Value.Properties != null && kvp.Value.Properties.Any())
+                        {
+                            var newMetaData = PusherUtils.PropertiesToMetadata(kvp.Value.Properties)
+                                .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
+                                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                            if (ts.Metadata == null
+                                || newMetaData.Any(meta => !ts.Metadata.ContainsKey(meta.Key) || ts.Metadata[meta.Key] != meta.Value))
+                            {
+                                tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
+                            }
+                        }
+
+                        if (tsUpdate.AssetId != null || tsUpdate.Description != null
+                            || tsUpdate.Name != null || tsUpdate.Metadata != null)
+                        {
+                            updates.Add(
+                                new TimeSeriesUpdateItem(ts.ExternalId)
+                                {
+                                    Update = tsUpdate
+                                });
+                        }
+                    }
+                }
+                if (updates.Any())
+                {
+                    log.Information("Updating {cnt} timeseries in CDF", updates.Count);
+                    await destination.CogniteClient.TimeSeries.UpdateAsync(updates, token);
+                }
+            }
+
+
+            if (useRawTimeseries)
+            {
+                if (update.AnyUpdate)
+                {
+                    string columns = BuildColumnString(update, false);
+                    await UpsertRawRows<JsonElement>(config.RawMetadata.Database,
+                        config.RawMetadata.TimeseriesTable, tsIds.Keys, async rows =>
+                    {
+                        var rowDict = rows.ToDictionary(row => row.Key);
+
+                        var toReadProperties = tsIds.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
+                        await Extractor.ReadProperties(toReadProperties, token);
+
+                        var updates = tsIds
+                            .Select(kvp => (kvp.Key, PusherUtils.CreateRawTsUpdate(kvp.Value, Extractor, rowDict.GetValueOrDefault(kvp.Key), update)))
+                            .Where(elem => elem.Item2 != null)
+                            .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
+
+                        return updates;
+                    }, null, columns, token);
+                }
+                else
+                {
+                    await EnsureRawRows<StatelessTimeSeriesCreate>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsIds.Keys, async ids =>
+                    {
+                        var timeseries = ids.Select(id => tsIds[id]);
+                        await Extractor.ReadProperties(timeseries, token);
+                        return timeseries.Select(node => PusherUtils.VariableToStatelessTimeSeries(node, Extractor, null)).Where(ts => ts != null)
+                            .ToDictionary(ts => ts.ExternalId);
+                    }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
+                }
+
+            }
+        }
 
         private async Task EnsureRawRows<T>(
             string dbName,
@@ -499,7 +678,44 @@ namespace Cognite.OpcUa.Pushers
             await destination.InsertRawRowsAsync(dbName, tableName, createDtos, options, token);
         }
 
-        #endregion
+        private async Task UpsertRawRows<T>(
+            string dbName,
+            string tableName,
+            IEnumerable<string> toRetrieve,
+            Func<IEnumerable<RawRow>, Task<IDictionary<string, T>>> dtoBuilder,
+            JsonSerializerOptions options,
+            string columns,
+            CancellationToken token)
+        {
+            var destination = GetDestination();
+            string cursor = null;
+            var existing = new List<RawRow>();
+            var keys = new HashSet<string>(toRetrieve);
+            do
+            {
+                try
+                {
+                    var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
+                        new RawRowQuery { Columns = new[] { columns }, Cursor = cursor, Limit = 10_000 }, token);
+                    foreach (var item in result.Items)
+                    {
+                        existing.Add(item);
+                    }
+                    cursor = result.NextCursor;
+                }
+                catch (ResponseException ex) when (ex.Code == 404)
+                {
+                    log.Warning("Table or database not found: {msg}", ex.Message);
+                    break;
+                }
+            } while (cursor != null);
+
+            var toCreate = await dtoBuilder(existing.Where(row => toRetrieve.Contains(row.Key)));
+            if (!toCreate.Any()) return;
+            log.Information("Creating or updating {cnt} raw rows in CDF", toCreate.Count);
+
+            await destination.InsertRawRowsAsync(dbName, tableName, toCreate, options, token);
+        }
 
         public void Dispose() { }
     }

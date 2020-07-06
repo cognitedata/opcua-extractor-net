@@ -30,6 +30,15 @@ namespace Cognite.OpcUa.Pushers
                 return Convert.ToInt64(value, CultureInfo.InvariantCulture);
             }
         }
+        public static Dictionary<string, string> PropertiesToMetadata(IEnumerable<BufferedVariable> properties)
+        {
+            if (properties == null) return new Dictionary<string, string>();
+            return properties
+                .Where(prop => prop.Value != null)
+                .Take(16)
+                .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
+        }
+
         /// <summary>
         /// Converts BufferedNode into asset write poco.
         /// </summary>
@@ -52,10 +61,7 @@ namespace Cognite.OpcUa.Pushers
             }
             if (node.Properties != null && node.Properties.Any())
             {
-                writePoco.Metadata = node.Properties
-                    .Where(prop => prop.Value != null)
-                    .Take(16)
-                    .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
+                writePoco.Metadata = PropertiesToMetadata(node.Properties);
             }
             return writePoco;
         }
@@ -203,10 +209,7 @@ namespace Cognite.OpcUa.Pushers
             };
             if (variable.Properties != null && variable.Properties.Any())
             {
-                writePoco.Metadata = variable.Properties
-                    .Where(prop => prop.Value != null)
-                    .Take(16)
-                    .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
+                writePoco.Metadata = PropertiesToMetadata(variable.Properties);
             }
             return writePoco;
         }
@@ -251,14 +254,142 @@ namespace Cognite.OpcUa.Pushers
 
             if (variable.Properties != null && variable.Properties.Any())
             {
-                writePoco.Metadata = variable.Properties
-                    .Where(prop => prop.Value != null)
-                    .Take(16)
-                    .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
+                writePoco.Metadata = PropertiesToMetadata(variable.Properties);
             }
             return writePoco;
         }
 
+        private static void UpdateIfModified(Dictionary<string, object> ret, RawRow raw, string newValue, string key)
+        {
+            if (raw.Columns.ContainsKey(key))
+            {
+                string oldValue = null;
+                try
+                {
+                    oldValue = raw.Columns[key].GetString();
+                }
+                catch (JsonException) { }
+                if (string.IsNullOrWhiteSpace(oldValue) || !string.IsNullOrWhiteSpace(newValue) && newValue != oldValue)
+                {
+                    ret[key] = newValue;
+                }
+            }
+            else
+            {
+                ret[key] = newValue;
+            }
+        }
+        private static JsonElement? CreateRawUpdateCommon(
+            BufferedNode node,
+            RawRow raw,
+            TypeUpdateConfig update,
+            Dictionary<string, object> ret)
+        {
+            if (update.Description)
+            {
+                string newDescription = ExtractorUtils.Truncate(node.Description, 1000);
+                UpdateIfModified(ret, raw, newDescription, "description");
+            }
+
+            if (update.Name)
+            {
+                string newName = ExtractorUtils.Truncate(node.DisplayName, 255);
+                UpdateIfModified(ret, raw, newName, "name");
+            }
+
+            if (update.Metadata)
+            {
+                var newMetaData = PropertiesToMetadata(node.Properties);
+                if (raw.Columns.ContainsKey("metadata"))
+                {
+                    Dictionary<string, string> oldMetaData = null;
+                    try
+                    {
+                        oldMetaData = JsonSerializer.Deserialize<Dictionary<string, string>>(raw.Columns["metadata"].ToString());
+                    }
+                    catch (JsonException) { }
+                    if (oldMetaData == null || newMetaData != null && newMetaData.Any(kvp =>
+                        !oldMetaData.ContainsKey(kvp.Key) || oldMetaData[kvp.Key] != kvp.Value))
+                    {
+                        if (oldMetaData != null)
+                        {
+                            foreach (var field in oldMetaData)
+                            {
+                                if (!newMetaData.ContainsKey(field.Key))
+                                {
+                                    newMetaData[field.Key] = field.Value;
+                                }
+                            }
+                        }
+                        ret["metadata"] = newMetaData;
+                        
+                    }
+                }
+                else
+                {
+                    ret["metadata"] = newMetaData;
+                }
+            }
+            if (!ret.Any()) return null;
+
+            foreach (var kvp in raw.Columns)
+            {
+                if (!ret.ContainsKey(kvp.Key))
+                {
+                    ret[kvp.Key] = kvp.Value;
+                }
+            }
+            return JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(ret)).RootElement;
+        }
+
+        public static JsonElement? CreateRawTsUpdate(
+            BufferedVariable variable, 
+            UAExtractor extractor,
+            RawRow raw,
+            TypeUpdateConfig update)
+        {
+            if (variable == null || extractor == null || update == null) return null;
+
+            if (raw == null)
+            {
+                var create = VariableToStatelessTimeSeries(variable, extractor, null);
+                return JsonDocument.Parse(JsonSerializer.Serialize(create,
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })).RootElement;
+            }
+
+
+            var ret = new Dictionary<string, object>();
+            if (update.Context)
+            {
+                string newAssetExtId = extractor.GetUniqueId(variable.ParentId);
+                UpdateIfModified(ret, raw, newAssetExtId, "assetExternalId");
+            }
+            return CreateRawUpdateCommon(variable, raw, update, ret);   
+        }
+
+        public static JsonElement? CreateRawAssetUpdate(
+            BufferedNode node,
+            UAExtractor extractor,
+            RawRow raw,
+            TypeUpdateConfig update)
+        {
+            if (node == null || extractor == null || update == null) return null;
+
+            if (raw == null)
+            {
+                var create = NodeToAsset(node, extractor, null);
+                return JsonDocument.Parse(JsonSerializer.Serialize(create,
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })).RootElement;
+            }
+
+            var ret = new Dictionary<string, object>();
+            if (update.Context)
+            {
+                string newParentId = extractor.GetUniqueId(node.ParentId);
+                UpdateIfModified(ret, raw, newParentId, "parentExternalId");
+            }
+            return CreateRawUpdateCommon(node, raw, update, ret);
+        }
     }
 
     public class StatelessEventCreate : EventCreate

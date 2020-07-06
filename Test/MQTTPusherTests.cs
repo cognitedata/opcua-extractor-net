@@ -49,7 +49,7 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.Equal(4, tester.Handler.Assets.Count);
+            Assert.Equal(6, tester.Handler.Assets.Count);
             Assert.Equal(10, tester.Handler.Timeseries.Count);
             Assert.True(tester.Handler.Datapoints.ContainsKey("gp.tl:i=2[0]"));
             Assert.Equal(1000, tester.Handler.Datapoints["gp.tl:i=2[0]"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count());
@@ -126,7 +126,7 @@ namespace Test
             await tester.Extractor.Looper.WaitForNextPush();
             await waitTask;
 
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 4));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 6));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 10));
             CommonTestUtils.ResetTestMetrics();
 
@@ -143,7 +143,7 @@ namespace Test
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 0));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 0));
-            Assert.Equal(4, tester.Handler.Assets.Count);
+            Assert.Equal(6, tester.Handler.Assets.Count);
             Assert.Equal(10, tester.Handler.Timeseries.Count);
         }
         [Fact]
@@ -183,7 +183,7 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 4));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 6));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));
 
             Assert.Equal(10, tester.Handler.TimeseriesRaw.Count);
