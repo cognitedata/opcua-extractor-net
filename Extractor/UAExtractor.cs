@@ -458,7 +458,8 @@ namespace Cognite.OpcUa
                 return Array.Empty<Task>();
             }
 
-            log.Information("Map {obj} objects, {var} variables to destinations", objects.Count, variables.Count);
+            log.Information("Map {obj} objects, and {ts} destination timeseries, representing {var} variables, to destinations",
+                objects.Count, timeseries.Count, variables.Count);
 
             Streamer.AllowData = State.NodeStates.Any();
 
@@ -676,6 +677,7 @@ namespace Cognite.OpcUa
                             else
                             {
                                 timeseries.Add(node);
+                                variables.Add(node);
                             }
                         }
 

@@ -728,14 +728,14 @@ namespace Cognite.OpcUa
                     enumerator.MoveNext();
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
                     vnode.SetDataType(dataType, numericDataTypes);
+
+                    enumerator.MoveNext();
+                    vnode.ValueRank = enumerator.Current.GetValue(0);
                     if (historyConfig.Enabled && historyConfig.Data)
                     {
                         enumerator.MoveNext();
                         vnode.Historizing = enumerator.Current.GetValue(false);
                     }
-
-                    enumerator.MoveNext();
-                    vnode.ValueRank = enumerator.Current.GetValue(0);
                     if (extractionConfig.MaxArraySize > 0)
                     {
                         enumerator.MoveNext();

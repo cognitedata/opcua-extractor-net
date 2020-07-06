@@ -399,16 +399,17 @@ namespace Cognite.OpcUa.Pushers
             bool changed = false;
             do
             {
+                changed = false;
                 foreach (var obj in objects)
                 {
-                    if (obj.Value.ParentId == null || obj.Value.ParentId.IsNullNodeId) continue;
+                    if (obj.Value.ParentId == null || obj.Value.ParentId.IsNullNodeId || !level.ContainsKey(obj.Value.ParentId)) continue;
                     if (level[obj.Value.ParentId] <= level[obj.Value.Id])
                     {
                         changed = true;
                         level[obj.Value.ParentId] = level[obj.Value.Id] + 1;
                     }
                 }
-            } while (!changed);
+            } while (changed);
             return objects.GroupBy(obj => level[obj.Value.Id]).OrderByDescending(group => group.Key).Select(group => group.Select(kvp => kvp.Key));
         }
     }

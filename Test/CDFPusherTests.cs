@@ -810,7 +810,9 @@ namespace Test
 
             tester.Server.ModifyCustomServer();
 
-            await tester.Extractor.Rebrowse(tester.Source.Token);
+            var rebrowseTask = tester.Extractor.Rebrowse(tester.Source.Token);
+            await Task.WhenAny(rebrowseTask, Task.Delay(10000));
+            Assert.True(rebrowseTask.IsCompleted);
 
             VerifyStartingConditions(tester.Handler.Assets, tester.Handler.Timeseries, upd, false);
             VerifyModified(tester.Handler.Assets, tester.Handler.Timeseries, upd, false);
