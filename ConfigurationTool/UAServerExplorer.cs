@@ -136,6 +136,7 @@ namespace Cognite.OpcUa.Config
                 log.Error("Failed to connect to server using initial options");
                 log.Debug(ex, "Failed to connect to endpoint");
             }
+            Session.KeepAliveInterval = Math.Max(config.Source.KeepAliveInterval, 30000);
             log.Information("Attempting to list endpoints using given url as discovery server");
 
             var context = Appconfig.CreateMessageContext();
