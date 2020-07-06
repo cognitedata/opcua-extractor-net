@@ -29,6 +29,8 @@ mqtt:
     event-topic: cognite/opcua/events
     # Datapoints topic
     datapoint-topic: cognite/opcua/datapoints
+    # Raw topic
+    raw-topic: cognite/opcua/raw
 
 cognite:
     # The project to connect to in the API

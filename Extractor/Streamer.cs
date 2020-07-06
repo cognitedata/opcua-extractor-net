@@ -110,6 +110,7 @@ namespace Cognite.OpcUa
 
                 if (config.History.Enabled)
                 {
+                    log.Information("Restarting history for {cnt} states", extractor.State.NodeStates.Count(state => state.IsFrontfilling));
                     bool success = await extractor.TerminateHistory(30, token);
                     if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
                     foreach (var state in extractor.State.NodeStates.Where(state => state.FrontfillEnabled))
@@ -207,8 +208,9 @@ namespace Cognite.OpcUa
                 // success there implies success otherwise.
                 if (!pushResults.All(res => res == null || res == true)) return false;
 
-                if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
+                if (extractor.State.EmitterStates.Any(state => state.IsFrontfilling))
                 {
+                    log.Information("Restarting event history for {cnt} states", extractor.State.EmitterStates.Count(state => state.IsFrontfilling));
                     bool success = await extractor.TerminateHistory(30, token);
                     if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
                     foreach (var state in extractor.State.EmitterStates.Where(state => state.IsFrontfilling))

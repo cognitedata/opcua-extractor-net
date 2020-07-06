@@ -16,6 +16,7 @@ namespace Cognite.Bridge
         public string TsTopic { get; set; } = "cognite/opcua/timeseries";
         public string EventTopic { get; set; } = "cognite/opcua/events";
         public string DatapointTopic { get; set; } = "cognite/opcua/datapoints";
+        public string RawTopic { get; set; } = "cognite/opcua/raw";
     }
 
     public class BridgeConfig : VersionedConfig

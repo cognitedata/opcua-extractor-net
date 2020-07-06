@@ -219,6 +219,8 @@ mqtt:
     event-topic: cognite/opcua/events
     # Datapoints topic
     datapoint-topic: cognite/opcua/datapoints
+    # Raw topic
+    raw-topic: cognite/opcua/raw
     # Set to enable storing a list of created assets/timeseries to local litedb.
     # Requires the StateStorage.Location property to be set.
     # If this is left empty, metadata will have to be read each time the extractor restarts.
@@ -232,6 +234,19 @@ mqtt:
     debug: false
     # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
     non-finite-replacement:
+    # Default empty. Store assets and/or timeseries data in raw. Assets will not be created at all,
+    # timeseries will be created with just externalId, isStep and isString.
+    # Both timeseries and assets will be persisted in their entirety to raw.
+    # Datapoints are not affected, events will be created, but without asset context. The externalId
+    # of the source node is added to metadata if applicable.
+    # Use different table names for assets and timeseries.
+    raw-metadata:
+        # Database to store data in, required.
+        database:
+        # Table to store assets in.
+        assets-table:
+        # Table to store timeseries in.
+        timeseries-table:
 
         
 

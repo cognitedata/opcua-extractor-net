@@ -146,5 +146,50 @@ namespace Test
             Assert.Equal(4, tester.Handler.Assets.Count);
             Assert.Equal(10, tester.Handler.Timeseries.Count);
         }
+        [Fact]
+        [Trait("Server", "array")]
+        [Trait("Target", "MQTTPusher")]
+        [Trait("Test", "rawdatamqtt")]
+        public async Task TestMqttRawMetadata()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                Pusher = "mqtt",
+                StoreDatapoints = true,
+                ServerName = ServerName.Array
+            });
+            tester.Config.Mqtt.RawMetadata = new RawMetadataConfig
+            {
+                Database = "metadata",
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries"
+            };
+            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.MaxArraySize = 4;
+
+            await tester.ClearPersistentData();
+
+            await tester.StartServer();
+            tester.Server.PopulateArrayHistory();
+
+            tester.StartExtractor();
+
+            await tester.Extractor.Looper.WaitForNextPush();
+
+            Assert.Empty(tester.Handler.Assets);
+
+            await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=2[0]")
+                && tester.Handler.Datapoints["gp.tl:i=2[0]"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count() == 1000, 10);
+
+            await tester.TerminateRunTask();
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 4));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));
+
+            Assert.Equal(10, tester.Handler.TimeseriesRaw.Count);
+            Assert.Empty(tester.Handler.Assets);
+
+            Assert.True(tester.Handler.TimeseriesRaw["gp.tl:i=10"].metadata.ContainsKey("EURange"));
+        }
     }
 }

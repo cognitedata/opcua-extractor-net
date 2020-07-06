@@ -120,10 +120,12 @@ namespace Cognite.OpcUa
         public string TsTopic { get; set; } = "cognite/opcua/timeseries";
         public string EventTopic { get; set; } = "cognite/opcua/events";
         public string DatapointTopic { get; set; } = "cognite/opcua/datapoints";
+        public string RawTopic { get; set; } = "cognite/opcua/raw";
         public string LocalState { get; set; }
         public long InvalidateBefore { get; set; }
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; }
+        public RawMetadataConfig RawMetadata { get; set; }
         public double? NonFiniteReplacement
         {
             get => nonFiniteReplacement;

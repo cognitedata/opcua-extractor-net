@@ -217,6 +217,8 @@ namespace Cognite.OpcUa.Pushers
 
             log.Information("Pushing {cnt} assets and {cnt2} timeseries over MQTT", objects.Count(), variables.Count());
 
+            if (config.Debug) return true;
+
             if (objects.Any())
             {
                 var results = await Task.WhenAll(objects.ChunkBy(1000).Select(chunk => PushAssets(chunk, token)));
@@ -228,7 +230,6 @@ namespace Cognite.OpcUa.Pushers
                 var results = await Task.WhenAll(variables.ChunkBy(1000).Select(chunk => PushTimeseries(chunk, token)));
                 if (!results.All(res => res)) return false;
             }
-            if (config.Debug) return true;
 
             if (!string.IsNullOrEmpty(config.LocalState))
             {
@@ -354,6 +355,39 @@ namespace Cognite.OpcUa.Pushers
         private async Task<bool> PushAssets(IEnumerable<BufferedNode> objects, CancellationToken token)
         {
             var assets = objects.Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId));
+            bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
+
+            if (useRawStore)
+            {
+                var rawObj = new RawRequestWrapper<AssetCreate>
+                {
+                    Database = config.RawMetadata.Database,
+                    Table = config.RawMetadata.AssetsTable,
+                    Rows = assets.Select(asset => new RawRowCreateDto<AssetCreate> { Key = asset.ExternalId, Columns = asset })
+                };
+                var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+                var rawMsg = baseBuilder
+                    .WithTopic(config.RawTopic)
+                    .WithPayload(rawData)
+                    .Build();
+
+                try
+                {
+                    await client.PublishAsync(rawMsg, token);
+                    createdAssets.Inc(assets.Count());
+                }
+                catch (Exception ex)
+                {
+                    log.Error("Failed to write assets to raw over MQTT: {msg}", ex.Message);
+                }
+
+                return true;
+            }
+
             var data = JsonSerializer.SerializeToUtf8Bytes(assets, null);
             
             var msg = baseBuilder
@@ -377,8 +411,63 @@ namespace Cognite.OpcUa.Pushers
 
         private async Task<bool> PushTimeseries(IEnumerable<BufferedVariable> variables, CancellationToken token)
         {
+            bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
+
             var timeseries = variables.Select(variable => PusherUtils.VariableToStatelessTimeSeries(variable, Extractor, config.DataSetId))
                 .Where(variable => variable != null);
+
+            if (useRawStore)
+            {
+                var minimalTimeseries = variables.Select(variable => PusherUtils.VariableToTimeseries(variable, Extractor, config.DataSetId, null, true))
+                    .Where(variable => variable != null);
+
+                var minimalData = JsonSerializer.SerializeToUtf8Bytes(minimalTimeseries, null);
+
+                var minimalMsg = baseBuilder
+                    .WithPayload(minimalData)
+                    .WithTopic(config.TsTopic)
+                    .Build();
+
+                try
+                {
+                    await client.PublishAsync(minimalMsg, token);
+                    createdTimeseries.Inc(timeseries.Count());
+                }
+                catch (Exception e)
+                {
+                    log.Error("Failed to write minimal timeseries to MQTT: {msg}", e.Message);
+                    return false;
+                }
+
+                var rawObj = new RawRequestWrapper<StatelessTimeSeriesCreate>
+                {
+                    Database = config.RawMetadata.Database,
+                    Table = config.RawMetadata.TimeseriesTable,
+                    Rows = timeseries.Select(ts => new RawRowCreateDto<StatelessTimeSeriesCreate> { Key = ts.ExternalId, Columns = ts })
+                };
+
+                var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+                var rawMsg = baseBuilder
+                    .WithTopic(config.RawTopic)
+                    .WithPayload(rawData)
+                    .Build();
+
+                try
+                {
+                    await client.PublishAsync(rawMsg, token);
+                }
+                catch (Exception e)
+                {
+                    log.Error("Failed to write timeseries to raw over MQTT: {msg}", e.Message);
+                    return false;
+                }
+
+                return true;
+            }
 
             var data = JsonSerializer.SerializeToUtf8Bytes(timeseries, null);
             var msg = baseBuilder
@@ -443,6 +532,18 @@ namespace Cognite.OpcUa.Pushers
             public bool Existing { get; set; }
             public string Id { get; set; }
             public DateTime? LastTimeModified { get; set; }
+        }
+        class RawRequestWrapper<T>
+        {
+            public string Database { get; set; }
+            public string Table { get; set; }
+            public IEnumerable<RawRowCreateDto<T>> Rows { get; set; }
+        }
+
+        class RawRowCreateDto<T>
+        {
+            public string Key { get; set; }
+            public T Columns { get; set; }
         }
         public void Dispose()
         {
