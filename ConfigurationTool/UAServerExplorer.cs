@@ -118,7 +118,10 @@ namespace Cognite.OpcUa.Config
             this.baseConfig = baseConfig ?? new FullConfig();
             this.config = config ?? throw new ArgumentNullException(nameof(config));
 
-            this.baseConfig.Source = config.Source;
+            this.baseConfig.Source.EndpointUrl = config.Source.EndpointUrl;
+            this.baseConfig.Source.Password = config.Source.Password;
+            this.baseConfig.Source.Username = config.Source.Username;
+            this.baseConfig.Source.Secure = config.Source.Secure;
         }
         /// <summary>
         /// Try connecting to the server, and treating it as a discovery server, to list other endpoints on the same server.
@@ -215,6 +218,7 @@ namespace Cognite.OpcUa.Config
 
                 if (results.Any(res => res.BrowseNodesChunk == browseNodesChunk && res.BrowseChunk == browseChunk))
                 {
+                    log.Information("Skipping {bnc}, {bc} due to having been browsed", browseNodesChunk, browseChunk);
                     continue;
                 }
                 config.Source.BrowseChunk = browseChunk;

@@ -54,6 +54,7 @@ namespace Test
         {
             var fullConfig = ConfigurationUtils.Read<FullConfig>("config.config-tool-test.yml");
             var baseConfig = ConfigurationUtils.Read<FullConfig>("config.config-tool-test.yml");
+            Console.WriteLine($"{baseConfig.Source.BrowseNodesChunk}");
             fullConfig.GenerateDefaults();
             baseConfig.GenerateDefaults();
 
