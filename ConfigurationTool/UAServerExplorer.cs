@@ -484,7 +484,6 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token);
-                    ReadNodeData(nodeList, token);
                 }
                 catch (Exception e)
                 {
@@ -501,7 +500,7 @@ namespace Cognite.OpcUa.Config
                 .Select(node => node as BufferedVariable)
                 .Where(node => node != null);
 
-
+            ReadNodeData(variables, token);
 
             history = false;
             bool stringVariables = false;

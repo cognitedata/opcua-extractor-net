@@ -113,8 +113,9 @@ namespace Cognite.OpcUa
                 {
                     log.Information("Restarting history");
                     triggerHistoryRestart.Reset();
-                    tasks = tasks.Append(extractor.RestartHistory(token)).Append(Task.Run(() => WaitHandle.WaitAny(
-                        new[] { triggerHistoryRestart, token.WaitHandle }))).ToList();
+                    tasks = tasks
+                        .Append(Task.Run(async () => await extractor.RestartHistory(token)))
+                        .Append(Task.Run(() => WaitHandle.WaitAny(new[] { triggerHistoryRestart, token.WaitHandle }))).ToList();
                 }
 
                 if (triggerGrowTaskList.WaitOne(0))
