@@ -268,7 +268,8 @@ namespace Cognite.OpcUa.Pushers
                 {
                     ExternalId = externalId,
                     IsString = variable.DataType.IsString,
-                    IsStep = variable.DataType.IsStep
+                    IsStep = variable.DataType.IsStep,
+                    DataSetId = dataSetId
                 };
             }
 
