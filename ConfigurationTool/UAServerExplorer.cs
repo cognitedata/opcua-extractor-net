@@ -762,7 +762,11 @@ namespace Cognite.OpcUa.Config
                     foreach (var (id, rawData) in result)
                     {
                         var data = ToolUtil.ReadResultToDataPoints(rawData, stateMap[id], this);
-                        if (data.Length > 10 && nodeWithData == null)
+                        // If we want to do analysis of how best to read history, we need some number of datapoints
+                        // If this number is too low, it typically means that there is no real history to read.
+                        // Some servers write a single datapoint to history on startup, having a decently large number here
+                        // means that we don't base our history analysis on those.
+                        if (data.Length > 100 && nodeWithData == null)
                         {
                             nodeWithData = id;
                         }
@@ -824,7 +828,7 @@ namespace Cognite.OpcUa.Config
 
             if (nodeWithData == null)
             {
-                log.Warning("No nodes found with more than 10 datapoints in history, further history analysis is not possible");
+                log.Warning("No nodes found with more than 100 datapoints in history, further history analysis is not possible");
                 return;
             }
 

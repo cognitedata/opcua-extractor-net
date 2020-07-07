@@ -173,7 +173,7 @@ cognite:
     sdk-logging:
         # True to disable logging from the SDK
         disable: false
-        # Level of logging, one of fatal, error, warning, information|, debug, verbose.
+        # Level of logging, one of trace, debug, information, warning, error, critical, none
         level: debug
         # Format of the log message
         format: "CDF ({Message}): {HttpMethod} {Url} - {Elapsed} ms"
@@ -284,11 +284,11 @@ failure-buffer:
 # This allows you to set the read-extracted-ranges option to false on the pushers without having to read all of history on startup.
 # If the OPC-UA server does not support history this does nothing.
 state-storage:
-    # Path to .db file used by the state storage
+    # Path to .db file used by the state storage, or database in CDF raw.
     location: "buffer.db"
     # Which type of database to use. One of "None", "Raw", "LiteDb"
     database: "Raw"
-    # Names of the stores to use for each type of range
+    # Names of the stores to use for each type of range. Raw tables or collections in litedb.
     variable-store: variable_states
     event-store: event_states
     influx-variable-store: influx_variable_states
