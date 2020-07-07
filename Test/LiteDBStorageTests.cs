@@ -377,7 +377,7 @@ namespace Test
                 tester.Server.TriggerEvents(1);
 
                 await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents,
-                20, "Failurebuffer must receive some data");
+                    20, "Failurebuffer must receive some data");
 
                 await tester.Extractor.Looper.WaitForNextPush();
 
