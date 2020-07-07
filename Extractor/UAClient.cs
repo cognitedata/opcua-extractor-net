@@ -214,19 +214,21 @@ namespace Cognite.OpcUa
             reconnectHandler.Dispose();
             log.Warning("--- RECONNECTED ---");
             // If subscriptions are still alive, we're probably good.
-            if (Session.Subscriptions.Any()) return;
+            if (!Session.Subscriptions.Any())
+            {
+                if (extractionConfig.CustomNumericTypes != null)
+                {
+                    numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
+                }
+                nodeOverrides?.Clear();
+                eventFields?.Clear();
+                Task.Run(() => Extractor?.RestartExtractor());
+                lock (visitedNodesLock)
+                {
+                    VisitedNodes.Clear();
+                }
+            }
 
-            if (extractionConfig.CustomNumericTypes != null)
-            {
-                numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
-            }
-            nodeOverrides?.Clear();
-            eventFields?.Clear();
-            Task.Run(() => Extractor?.RestartExtractor());
-            lock (visitedNodesLock)
-            {
-                VisitedNodes.Clear();
-            }
             connects.Inc();
             connected.Set(1);
             reconnectHandler = null;
