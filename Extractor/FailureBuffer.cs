@@ -290,12 +290,12 @@ namespace Cognite.OpcUa
                     foreach (var evt in events)
                     {
                         var emitterId = extractor.GetUniqueId(evt.EmittingNode);
+                        any = true;
                         if (!eventRanges.ContainsKey(emitterId))
                         {
                             eventRanges[emitterId] = new TimeRange(evt.Time, evt.Time);
                             continue;
                         }
-                        any = true;
                         eventRanges[emitterId] = eventRanges[emitterId].Extend(evt.Time, evt.Time);
                     }
 

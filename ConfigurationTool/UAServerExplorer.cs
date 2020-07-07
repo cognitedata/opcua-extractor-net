@@ -118,7 +118,10 @@ namespace Cognite.OpcUa.Config
             this.baseConfig = baseConfig ?? new FullConfig();
             this.config = config ?? throw new ArgumentNullException(nameof(config));
 
-            this.baseConfig.Source = config.Source;
+            this.baseConfig.Source.EndpointUrl = config.Source.EndpointUrl;
+            this.baseConfig.Source.Password = config.Source.Password;
+            this.baseConfig.Source.Username = config.Source.Username;
+            this.baseConfig.Source.Secure = config.Source.Secure;
         }
         /// <summary>
         /// Try connecting to the server, and treating it as a discovery server, to list other endpoints on the same server.
@@ -136,6 +139,7 @@ namespace Cognite.OpcUa.Config
                 log.Error("Failed to connect to server using initial options");
                 log.Debug(ex, "Failed to connect to endpoint");
             }
+            Session.KeepAliveInterval = Math.Max(config.Source.KeepAliveInterval, 30000);
             log.Information("Attempting to list endpoints using given url as discovery server");
 
             var context = Appconfig.CreateMessageContext();
@@ -214,8 +218,11 @@ namespace Cognite.OpcUa.Config
 
                 if (results.Any(res => res.BrowseNodesChunk == browseNodesChunk && res.BrowseChunk == browseChunk))
                 {
+                    log.Information("Skipping {bnc}, {bc} due to having been browsed", browseNodesChunk, browseChunk);
                     continue;
                 }
+                config.Source.BrowseChunk = browseChunk;
+                config.Source.BrowseNodesChunk = browseNodesChunk;
 
                 log.Information("Browse with BrowseNodesChunk: {bnc}, BrowseChunk: {bc}", browseNodesChunk,
                     browseChunk);
@@ -225,9 +232,12 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     await ToolUtil.RunWithTimeout(BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodes, this), token), 120);
-                    log.Information("Browse succeeded, attempting to read children of all nodes, to further test operation limit");
-                    await ToolUtil.RunWithTimeout(() => BrowseDirectory(nodes.Select(node => node.Id).Take(browseNodesChunk),
-                        (_, __) => { }, token), 120);
+                    if (nodes.Count < browseNodesChunk)
+                    {
+                        log.Information("Browse succeeded, attempting to read children of all nodes, to further test operation limit");
+                        await ToolUtil.RunWithTimeout(() => BrowseDirectory(nodes.Select(node => node.Id).Take(browseNodesChunk),
+                            (_, __) => { }, token), 120);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -421,11 +431,17 @@ namespace Cognite.OpcUa.Config
 
             foreach (int chunkSize in testChunks)
             {
+                int count = 0;
+                var toCheck = nodeList.TakeWhile(node =>
+                {
+                    count += node.IsVariable ? 5 : 1;
+                    return count > chunkSize + 10;
+                });
                 log.Information("Attempting to read attributes with ChunkSize {chunkSize}", chunkSize);
                 config.Source.AttributesChunk = chunkSize;
                 try
                 {
-                    await ToolUtil.RunWithTimeout(() => ReadNodeData(nodeList, token), 120);
+                    await ToolUtil.RunWithTimeout(() => ReadNodeData(toCheck, token), 120);
                 }
                 catch (Exception e)
                 {
@@ -477,7 +493,6 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token);
-                    ReadNodeData(nodeList, token);
                 }
                 catch (Exception e)
                 {
@@ -494,7 +509,7 @@ namespace Cognite.OpcUa.Config
                 .Select(node => node as BufferedVariable)
                 .Where(node => node != null);
 
-
+            ReadNodeData(variables, token);
 
             history = false;
             bool stringVariables = false;
@@ -643,7 +658,7 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     await ToolUtil.RunWithTimeout(() =>
-                        SubscribeToNodes(states,
+                        SubscribeToNodes(states.Take(chunkSize),
                             ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this), token), 120);
                     baseConfig.Source.SubscriptionChunk = chunkSize;
                     failed = false;
@@ -747,57 +762,59 @@ namespace Cognite.OpcUa.Config
 
             foreach (int chunkSize in testHistoryChunkSizes)
             {
-                foreach (var chunk in historizingStates.ChunkBy(chunkSize))
+                var chunk = historizingStates.Take(chunkSize);
+                var historyParams = new HistoryReadParams(chunk.Select(state => state.SourceId), details);
+                try
                 {
-                    var historyParams = new HistoryReadParams(chunk.Select(state => state.SourceId), details);
-                    try
+                    var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
+
+                    foreach (var (id, rawData) in result)
                     {
-                        var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
-
-                        foreach (var (id, rawData) in result)
+                        var data = ToolUtil.ReadResultToDataPoints(rawData, stateMap[id], this);
+                        // If we want to do analysis of how best to read history, we need some number of datapoints
+                        // If this number is too low, it typically means that there is no real history to read.
+                        // Some servers write a single datapoint to history on startup, having a decently large number here
+                        // means that we don't base our history analysis on those.
+                        if (data.Length > 100 && nodeWithData == null)
                         {
-                            var data = ToolUtil.ReadResultToDataPoints(rawData, stateMap[id], this);
-                            if (data.Length > 10 && nodeWithData == null)
-                            {
-                                nodeWithData = id;
-                            }
-
-
-                            if (data.Length < 2) continue;
-                            count++;
-                            long avgTicks = (data.Last().Timestamp.Ticks - data.First().Timestamp.Ticks) / (data.Length - 1);
-                            sumDistance += avgTicks;
-
-                            if (historyParams.Completed[id]) continue;
-                            if (avgTicks == 0) continue;
-                            long estimate = (DateTime.UtcNow.Ticks - data.First().Timestamp.Ticks) / avgTicks;
-                            if (estimate > largestEstimate)
-                            {
-                                nodeWithData = id;
-                                largestEstimate = estimate;
-                            }
+                            nodeWithData = id;
                         }
 
 
-                        failed = false;
-                        baseConfig.History.DataNodesChunk = chunkSize;
-                        config.History.DataNodesChunk = chunkSize;
-                        done = true;
+                        if (data.Length < 2) continue;
+                        count++;
+                        long avgTicks = (data.Last().Timestamp.Ticks - data.First().Timestamp.Ticks) / (data.Length - 1);
+                        sumDistance += avgTicks;
+
+                        if (historyParams.Completed[id]) continue;
+                        if (avgTicks == 0) continue;
+                        long estimate = (DateTime.UtcNow.Ticks - data.First().Timestamp.Ticks) / avgTicks;
+                        if (estimate > largestEstimate)
+                        {
+                            nodeWithData = id;
+                            largestEstimate = estimate;
+                        }
                     }
-                    catch (Exception e)
+
+
+                    failed = false;
+                    baseConfig.History.DataNodesChunk = chunkSize;
+                    config.History.DataNodesChunk = chunkSize;
+                    done = true;
+                }
+                catch (Exception e)
+                {
+                    failed = true;
+                    done = false;
+                    log.Warning(e, "Failed to read history");
+                    if (e is ServiceResultException exc && (
+                            exc.StatusCode == StatusCodes.BadHistoryOperationUnsupported
+                            || exc.StatusCode == StatusCodes.BadServiceUnsupported))
                     {
-                        failed = true;
-                        done = false;
-                        log.Warning(e, "Failed to read history");
-                        if (e is ServiceResultException exc && (
-                                exc.StatusCode == StatusCodes.BadHistoryOperationUnsupported
-                                || exc.StatusCode == StatusCodes.BadServiceUnsupported))
-                        {
-                            log.Warning("History read unsupported, despite Historizing being set to true. " +
-                                        "The history config option must be set to false, or this will cause issues");
-                            done = true;
-                            break;
-                        }
+                        log.Warning("History read unsupported, despite Historizing being set to true. " +
+                                    "The history config option must be set to false, or this will cause issues");
+                        done = true;
+                        break;
                     }
                 }
 
@@ -820,7 +837,7 @@ namespace Cognite.OpcUa.Config
 
             if (nodeWithData == null)
             {
-                log.Warning("No nodes found with more than 10 datapoints in history, further history analysis is not possible");
+                log.Warning("No nodes found with more than 100 datapoints in history, further history analysis is not possible");
                 return;
             }
 
@@ -1274,6 +1291,11 @@ namespace Cognite.OpcUa.Config
             baseConfig.Events.EventIds = emittedEvents.Distinct().Select(NodeIdToProto).ToList();
             baseConfig.Events.EmitterIds = emitterIds.Distinct().Select(NodeIdToProto).ToList();
             baseConfig.Events.HistorizingEmitterIds = historizingEmitters.Distinct().Select(pair => NodeIdToProto(pair.id)).ToList();
+
+            if (!baseConfig.Events.EventIds.Any())
+            {
+                baseConfig.Events.EmitterIds = Enumerable.Empty<ProtoNodeId>();
+            }
         }
 
         public static Dictionary<string, string> GenerateNamespaceMap(IEnumerable<string> namespaces)

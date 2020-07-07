@@ -37,12 +37,20 @@ source:
     # Completely exit the extractor on failure, instead of doing an internal restart. Internal reset should re-initialize everything relevant,
     # but this can be set to do restart with some external tool instead.
     exit-on-failure: false
-    # Max sizes of various requests to OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
-    # Maximum number of results per browse or browseNext operation
+    # Restart the extractor on reconnect. If the server handles reconnecting and is not expected to have important structural changes
+    # on restart, this can be left as false for smoother reconnects (in this case, OPC-UA has systems in place to handle reconnecting).
+    restart-on-reconnect: false
+    # Interval in ms between each keep-alive request to the server. If the extractor times out during startup, increasing this may help.
+    # Timeout is 2 * interval + 100ms, this can happen if the server is poorly parallelized and hangs during heavy load.
+    keep-alive-interval: 5000
+    # Max-sizes of various requests to OPC-UA. Defaults are usually okay, but some servers may fail with too large request sizes
+    # Max number of results per browse or browseNext operation
     browse-chunk: 1000
-    #Max number of nodes to browse at the same time. Higher is much faster, but may be restricted by the server.
+    # Max number of nodes to browse at the same time. Higher is much faster, but may be restricted by the server.
     browse-nodes-chunk: 1000
-    attributes-chunk: 1000
+    # Maximum number of attributes to request per call to the server. Higher is faster.
+    attributes-chunk: 10000
+    # Maximum number of monitoredItems to create on the server per call. Higher is faster.
     subscription-chunk: 1000
 
 # Config for reading of history from the server
@@ -165,7 +173,7 @@ cognite:
     sdk-logging:
         # True to disable logging from the SDK
         disable: false
-        # Level of logging, one of fatal, error, warning, information|, debug, verbose.
+        # Level of logging, one of trace, debug, information, warning, error, critical, none
         level: debug
         # Format of the log message
         format: "CDF ({Message}): {HttpMethod} {Url} - {Elapsed} ms"
@@ -276,11 +284,11 @@ failure-buffer:
 # This allows you to set the read-extracted-ranges option to false on the pushers without having to read all of history on startup.
 # If the OPC-UA server does not support history this does nothing.
 state-storage:
-    # Path to .db file used by the state storage
+    # Path to .db file used by the state storage, or database in CDF raw.
     location: "buffer.db"
     # Which type of database to use. One of "None", "Raw", "LiteDb"
     database: "Raw"
-    # Names of the stores to use for each type of range
+    # Names of the stores to use for each type of range. Raw tables or collections in litedb.
     variable-store: variable_states
     event-store: event_states
     influx-variable-store: influx_variable_states

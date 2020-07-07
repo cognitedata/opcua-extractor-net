@@ -30,9 +30,11 @@ namespace Cognite.OpcUa
         private int browseChunk = 1000;
         // 0 means server defined:
         public int AttributesChunk { get => attributesChunk; set => attributesChunk = Math.Max(0, value); }
-        private int attributesChunk = 1000;
+        private int attributesChunk = 10000;
         public int SubscriptionChunk { get => subscriptionChunk; set => subscriptionChunk = Math.Max(1, value); }
         private int subscriptionChunk = 1000;
+        public int KeepAliveInterval { get; set; } = 5000;
+        public bool RestartOnReconnect { get; set; } = false;
     }
     public class ExtractionConfig
     {

@@ -157,7 +157,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Error("Failed to push {count} points to CDF: {msg}", count, e.Message);
+                log.Error(e, "Failed to push {count} points to CDF: {msg}", count, e.Message);
                 dataPointPushFailures.Inc();
                 // Return false indicating unexpected failure if we want to buffer.
                 return false;
@@ -247,11 +247,11 @@ namespace Cognite.OpcUa.Pushers
                 await Extractor.ReadProperties(objects.Concat(variables), token);
                 foreach (var node in objects)
                 {
-                    log.Debug(node.ToDebugDescription());
+                    log.Verbose(node.ToDebugDescription());
                 }
                 foreach (var node in variables)
                 {
-                    log.Debug(node.ToDebugDescription());
+                    log.Verbose(node.ToDebugDescription());
                 }
                 return true;
             }
@@ -422,7 +422,7 @@ namespace Cognite.OpcUa.Pushers
                     {
                         var rowDict = rows.ToDictionary(row => row.Key);
 
-                        var toReadProperties = assetIds.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
+                        var toReadProperties = assetIds.Select(kvp => kvp.Value);
                         await Extractor.ReadProperties(toReadProperties, token);
 
                         var updates = assetIds
@@ -447,16 +447,22 @@ namespace Cognite.OpcUa.Pushers
             }
             else
             {
-                var assets = await destination.GetOrCreateAssetsAsync(assetIds.Keys, async ids =>
+                var assets = new List<Asset>();
+                foreach (var chunk in PusherUtils.ChunkByHierarchy(assetIds))
                 {
-                    var assets = ids.Select(id => assetIds[id]);
-                    await Extractor.ReadProperties(assets, token);
-                    return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId)).Where(asset => asset != null);
-                }, token);
-                foreach (var asset in assets)
-                {
-                    nodeToAssetIds[assetIds[asset.ExternalId].Id] = asset.Id;
+                    var assetChunk = await destination.GetOrCreateAssetsAsync(chunk, async ids =>
+                    {
+                        var assets = ids.Select(id => assetIds[id]);
+                        await Extractor.ReadProperties(assets, token);
+                        return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId)).Where(asset => asset != null);
+                    }, token);
+                    foreach (var asset in assetChunk)
+                    {
+                        nodeToAssetIds[assetIds[asset.ExternalId].Id] = asset.Id;
+                    }
+                    assets.AddRange(assetChunk);
                 }
+                
                 if (update.AnyUpdate)
                 {
                     var updates = new List<AssetUpdateItem>();

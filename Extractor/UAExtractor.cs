@@ -458,7 +458,8 @@ namespace Cognite.OpcUa
                 return Array.Empty<Task>();
             }
 
-            log.Information("Map {obj} objects, {var} variables to destinations", objects.Count, variables.Count);
+            log.Information("Map {obj} objects, and {ts} destination timeseries, representing {var} variables, to destinations",
+                objects.Count, timeseries.Count, variables.Count);
 
             Streamer.AllowData = State.NodeStates.Any();
 
@@ -600,6 +601,7 @@ namespace Cognite.OpcUa
                 }
                 nodeMap.Add(GetUniqueId(buffer.Id), buffer);
             }
+
             log.Information("Getting data for {NumVariables} variables and {NumObjects} objects", 
                 rawVariables.Count, rawObjects.Count);
 
@@ -638,7 +640,7 @@ namespace Cognite.OpcUa
                         continue;
                     }
                 }
-                log.Debug(node.ToDebugDescription());
+                log.Verbose(node.ToDebugDescription());
                 State.AddActiveNode(node);
                 objects.Add(node);
             }
@@ -675,14 +677,14 @@ namespace Cognite.OpcUa
                             else
                             {
                                 timeseries.Add(node);
+                                variables.Add(node);
                             }
                         }
 
                         continue;
                     }
                 }
-
-                log.Debug(node.ToDebugDescription());
+                log.Verbose(node.ToDebugDescription());
                 variables.Add(node);
                 var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,
                     StateStorage != null && config.StateStorage.Interval > 0);
