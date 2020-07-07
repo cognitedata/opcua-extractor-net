@@ -290,6 +290,7 @@ namespace Cognite.OpcUa
                     foreach (var evt in events)
                     {
                         var emitterId = extractor.GetUniqueId(evt.EmittingNode);
+                        log.Debug("FailureBuffer event: {evt}", evt.EventId);
                         any = true;
                         if (!eventRanges.ContainsKey(emitterId))
                         {
@@ -316,6 +317,7 @@ namespace Cognite.OpcUa
                     }
                     if (any)
                     {
+                        log.Debug("AnyEvents is now true");
                         anyEvents = true;
                     }
                 }
@@ -324,6 +326,8 @@ namespace Cognite.OpcUa
                     log.Warning("Influxpusher is failing, events will not be buffered in influxdb");
                 }
             }
+
+            log.Information("Pushed {cnt} events to failurebuffer");
 
             if (!string.IsNullOrEmpty(config.EventPath))
             {
@@ -378,6 +382,7 @@ namespace Cognite.OpcUa
                             await extractor.StateStorage.StoreExtractionState(activeStates.Values,
                                 fullConfig.StateStorage.InfluxEventStore, token).ConfigureAwait(false);
                         }
+                        log.Debug("AnyEvents is now false");
                         anyEvents = false;
                     }
                     catch (Exception e)
