@@ -218,6 +218,7 @@ namespace Test
             tester.Server.PopulateEvents();
 
             tester.StartExtractor();
+            await tester.Extractor.WaitForSubscriptions();
             await tester.WaitForCondition(() => tester.Pusher.EventsFailing, 20, "Expect pusher to start failing");
 
             tester.Server.TriggerEvents(100);

@@ -110,7 +110,7 @@ namespace Cognite.OpcUa
 
                 if (config.History.Enabled)
                 {
-                    log.Information("Restarting history for {cnt} states", extractor.State.NodeStates.Count(state => state.IsFrontfilling));
+                    log.Information("Restarting history for {cnt} states", extractor.State.NodeStates.Count(state => state.FrontfillEnabled));
                     bool success = await extractor.TerminateHistory(30, token);
                     if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
                     foreach (var state in extractor.State.NodeStates.Where(state => state.FrontfillEnabled))
@@ -147,6 +147,7 @@ namespace Cognite.OpcUa
             IEnumerable<IPusher> failingPushers, CancellationToken token)
         {
             if (!AllowEvents) return false;
+
             var eventList = new List<BufferedEvent>();
             var eventRanges = new Dictionary<NodeId, TimeRange>();
 
@@ -208,12 +209,12 @@ namespace Cognite.OpcUa
                 // success there implies success otherwise.
                 if (!pushResults.All(res => res == null || res == true)) return false;
 
-                if (extractor.State.EmitterStates.Any(state => state.IsFrontfilling))
+                if (extractor.State.EmitterStates.Any(state => state.FrontfillEnabled))
                 {
-                    log.Information("Restarting event history for {cnt} states", extractor.State.EmitterStates.Count(state => state.IsFrontfilling));
+                    log.Information("Restarting event history for {cnt} states", extractor.State.EmitterStates.Count(state => state.FrontfillEnabled));
                     bool success = await extractor.TerminateHistory(30, token);
                     if (!success) throw new ExtractorFailureException("Failed to terminate history reader");
-                    foreach (var state in extractor.State.EmitterStates.Where(state => state.IsFrontfilling))
+                    foreach (var state in extractor.State.EmitterStates.Where(state => state.FrontfillEnabled))
                     {
                         state.RestartHistory();
                     }
