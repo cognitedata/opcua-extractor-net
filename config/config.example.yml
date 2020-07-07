@@ -37,6 +37,9 @@ source:
     # Completely exit the extractor on failure, instead of doing an internal restart. Internal reset should re-initialize everything relevant,
     # but this can be set to do restart with some external tool instead.
     exit-on-failure: false
+    # Restart the extractor on reconnect. If the server handles reconnecting and is not expected to have important structural changes
+    # on restart, this can be left as false for smoother reconnects (in this case, OPC-UA has systems in place to handle reconnecting).
+    restart-on-reconnect: false
     # Interval in ms between each keep-alive request to the server. If the extractor times out during startup, increasing this may help.
     # Timeout is 2 * interval + 100ms, this can happen if the server is poorly parallelized and hangs during heavy load.
     keep-alive-interval: 5000

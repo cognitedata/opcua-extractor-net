@@ -34,6 +34,7 @@ namespace Cognite.OpcUa
         public int SubscriptionChunk { get => subscriptionChunk; set => subscriptionChunk = Math.Max(1, value); }
         private int subscriptionChunk = 1000;
         public int KeepAliveInterval { get; set; } = 5000;
+        public bool RestartOnReconnect { get; set; } = false;
     }
     public class ExtractionConfig
     {

@@ -99,6 +99,7 @@ namespace Test
                 ServerName = ServerName.Proxy
             });
             tester.Config.History.Enabled = false;
+            tester.Config.Source.RestartOnReconnect = true;
 
             await tester.StartServer();
 
@@ -139,6 +140,7 @@ namespace Test
             {
                 ServerName = ServerName.Proxy
             });
+            tester.Config.Source.RestartOnReconnect = true;
 
             await tester.StartServer();
 

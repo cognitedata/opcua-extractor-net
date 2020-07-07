@@ -213,8 +213,7 @@ namespace Cognite.OpcUa
             Session = reconnectHandler.Session;
             reconnectHandler.Dispose();
             log.Warning("--- RECONNECTED ---");
-            // If subscriptions are still alive, we're probably good.
-            if (!Session.Subscriptions.Any())
+            if (config.RestartOnReconnect)
             {
                 if (extractionConfig.CustomNumericTypes != null)
                 {
