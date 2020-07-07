@@ -217,6 +217,8 @@ namespace Cognite.OpcUa.Config
                 {
                     continue;
                 }
+                config.Source.BrowseChunk = browseChunk;
+                config.Source.BrowseNodesChunk = browseNodesChunk;
 
                 log.Information("Browse with BrowseNodesChunk: {bnc}, BrowseChunk: {bc}", browseNodesChunk,
                     browseChunk);
@@ -226,9 +228,12 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     await ToolUtil.RunWithTimeout(BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodes, this), token), 120);
-                    log.Information("Browse succeeded, attempting to read children of all nodes, to further test operation limit");
-                    await ToolUtil.RunWithTimeout(() => BrowseDirectory(nodes.Select(node => node.Id).Take(browseNodesChunk),
-                        (_, __) => { }, token), 120);
+                    if (nodes.Count < browseNodesChunk)
+                    {
+                        log.Information("Browse succeeded, attempting to read children of all nodes, to further test operation limit");
+                        await ToolUtil.RunWithTimeout(() => BrowseDirectory(nodes.Select(node => node.Id).Take(browseNodesChunk),
+                            (_, __) => { }, token), 120);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1282,6 +1287,11 @@ namespace Cognite.OpcUa.Config
             baseConfig.Events.EventIds = emittedEvents.Distinct().Select(NodeIdToProto).ToList();
             baseConfig.Events.EmitterIds = emitterIds.Distinct().Select(NodeIdToProto).ToList();
             baseConfig.Events.HistorizingEmitterIds = historizingEmitters.Distinct().Select(pair => NodeIdToProto(pair.id)).ToList();
+
+            if (!baseConfig.Events.EventIds.Any())
+            {
+                baseConfig.Events.EmitterIds = Enumerable.Empty<ProtoNodeId>();
+            }
         }
 
         public static Dictionary<string, string> GenerateNamespaceMap(IEnumerable<string> namespaces)
