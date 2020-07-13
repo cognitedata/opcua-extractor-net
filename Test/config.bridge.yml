@@ -9,5 +9,5 @@ mqtt:
     port: 4060
 
 cognite:
-    project: project
+    project: test
     api-key: key

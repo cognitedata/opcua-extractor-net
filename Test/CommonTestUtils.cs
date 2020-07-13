@@ -359,6 +359,98 @@ namespace Test
                 ? asset != null && asset.externalId == ev.metadata["SourceNode"] || timeseries != null && timeseries.externalId == ev.metadata["SourceNode"]
                 : asset != null && ev.assetIds.Contains(asset.id);
         }
+        public static void VerifyStartingConditions(
+            Dictionary<string, AssetDummy> assets,
+            Dictionary<string, TimeseriesDummy> timeseries,
+            UpdateConfig upd,
+            bool raw)
+        {
+            if (assets == null) throw new ArgumentNullException(nameof(assets));
+            if (timeseries == null) throw new ArgumentNullException(nameof(timeseries));
+            if (upd == null) upd = new UpdateConfig();
+            Assert.Equal(6, assets.Count);
+            Assert.Equal(10, timeseries.Count);
+
+            if (!upd.Objects.Name) Assert.Equal("CustomRoot", assets["gp.tl:i=1"].name);
+            if (!upd.Objects.Description) Assert.True(string.IsNullOrEmpty(assets["gp.tl:i=1"].description));
+
+            if (!upd.Variables.Name) Assert.Equal("StringyVar", timeseries["gp.tl:i=8"].name);
+            if (!upd.Variables.Description) Assert.True(string.IsNullOrEmpty(timeseries["gp.tl:i=8"].description));
+
+            if (raw)
+            {
+                if (!upd.Variables.Context) Assert.Equal("gp.tl:i=1", (timeseries["gp.tl:i=8"] as StatelessTimeseriesDummy).assetExternalId);
+            }
+            else
+            {
+                if (!upd.Variables.Context) Assert.Equal(assets["gp.tl:i=1"].id, timeseries["gp.tl:i=8"].assetId);
+            }
+            if (!upd.Objects.Context) Assert.Equal("gp.tl:i=1", assets["gp.tl:i=15"].parentExternalId);
+
+            if (!upd.Objects.Metadata)
+            {
+                Assert.True(assets["gp.tl:i=14"].metadata == null || !assets["gp.tl:i=14"].metadata.Any());
+                Assert.Equal(2, assets["gp.tl:i=15"].metadata.Count);
+                Assert.Equal("1234", assets["gp.tl:i=15"].metadata["NumericProp"]);
+            }
+            if (!upd.Variables.Metadata)
+            {
+                Assert.True(timeseries["gp.tl:i=8"].metadata == null || !timeseries["gp.tl:i=8"].metadata.Any());
+                Assert.Equal(2, timeseries["gp.tl:i=10"].metadata.Count);
+                Assert.Equal("(0, 100)", timeseries["gp.tl:i=10"].metadata["EURange"]);
+            }
+        }
+
+        public static void VerifyModified(
+            Dictionary<string, AssetDummy> assets,
+            Dictionary<string, TimeseriesDummy> timeseries,
+            UpdateConfig upd,
+            bool raw,
+            bool mqtt = false)
+        {
+            if (assets == null) throw new ArgumentNullException(nameof(assets));
+            if (timeseries == null) throw new ArgumentNullException(nameof(timeseries));
+            if (upd == null) upd = new UpdateConfig();
+            Assert.Equal(6, assets.Count);
+            Assert.Equal(10, timeseries.Count);
+
+            if (upd.Objects.Name) Assert.Equal("CustomRoot updated", assets["gp.tl:i=1"].name);
+            if (upd.Objects.Description) Assert.Equal("custom root description", assets["gp.tl:i=1"].description);
+
+            if (upd.Variables.Name) Assert.Equal("StringyVar updated", timeseries["gp.tl:i=8"].name);
+            if (upd.Variables.Description) Assert.Equal("Stringy var description", timeseries["gp.tl:i=8"].description);
+            if (raw)
+            {
+                if (upd.Objects.Context) Assert.Equal("gp.tl:i=14", assets["gp.tl:i=15"].parentExternalId);
+                if (upd.Variables.Context) Assert.Equal("gp.tl:i=14", (timeseries["gp.tl:i=8"] as StatelessTimeseriesDummy).assetExternalId);
+            }
+            else
+            {
+                if (upd.Objects.Context) Assert.Equal("gp.tl:i=14", assets["gp.tl:i=15"].parentExternalId);
+                if (upd.Variables.Context) Assert.Equal(assets["gp.tl:i=14"].id, timeseries["gp.tl:i=8"].assetId);
+            }
+
+
+            if (upd.Objects.Metadata)
+            {
+                Assert.Single(assets["gp.tl:i=14"].metadata);
+                Assert.Equal("New asset prop value", assets["gp.tl:i=14"].metadata["NewAssetProp"]);
+                Assert.Equal(raw && mqtt ? 2 : 3, assets["gp.tl:i=15"].metadata.Count);
+                Assert.Equal("4321", assets["gp.tl:i=15"].metadata["NumericProp"]);
+                if (!raw || !mqtt)
+                {
+                    Assert.True(assets["gp.tl:i=15"].metadata.ContainsKey("StringProp"));
+                }
+                Assert.True(assets["gp.tl:i=15"].metadata.ContainsKey("StringProp updated"));
+            }
+            if (upd.Variables.Metadata)
+            {
+                Assert.Single(timeseries["gp.tl:i=8"].metadata);
+                Assert.Equal("New prop value", timeseries["gp.tl:i=8"].metadata["NewProp"]);
+                Assert.Equal(raw && mqtt ? 2 : 3, timeseries["gp.tl:i=10"].metadata.Count);
+                Assert.Equal("(0, 200)", timeseries["gp.tl:i=10"].metadata["EURange"]);
+            }
+        }
     }
     public enum ServerName { Basic, Full, Array, Events, Audit, Proxy, Wrong }
     public enum ConfigName { Events, Test }
@@ -386,6 +478,7 @@ namespace Test
 
         public ServerController Server { get; private set; }
         public FullConfig Config { get; }
+        public BridgeConfig BridgeConfig { get; }
         public CDFMockHandler Handler { get; }
         public UAExtractor Extractor { get; private set; }
         public UAClient UAClient { get; }
@@ -488,6 +581,7 @@ namespace Test
                         Config.Mqtt.LocalState = "mqtt_created_states";
                     }
                     Pusher = Config.Mqtt.ToPusher(null);
+                    BridgeConfig = mqttConfig;
                     break;
             }
 

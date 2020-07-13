@@ -191,5 +191,125 @@ namespace Test
 
             Assert.True(tester.Handler.TimeseriesRaw["gp.tl:i=10"].metadata.ContainsKey("EURange"));
         }
+        [Theory]
+        [InlineData(true, true, true, true, false, false, false, false)]
+        [InlineData(false, false, false, false, true, true, true, true)]
+        [InlineData(true, true, true, true, true, true, true, true)]
+        [Trait("Server", "array")]
+        [Trait("Target", "MQTTPusher")]
+        [Trait("Test", "fieldsupdatemqtt")]
+        public async Task TestUpdateFields(
+            bool assetName, bool variableName,
+            bool assetDesc, bool variableDesc,
+            bool assetContext, bool variableContext,
+            bool assetMeta, bool variableMeta)
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Array,
+                Pusher = "mqtt"
+            });
+            tester.BridgeConfig.Cognite.Update = true;
+            var upd = tester.Config.Extraction.Update;
+            upd.Objects.Name = assetName;
+            upd.Objects.Description = assetDesc;
+            upd.Objects.Context = assetContext;
+            upd.Objects.Metadata = assetMeta;
+            upd.Variables.Name = variableName;
+            upd.Variables.Description = variableDesc;
+            upd.Variables.Context = variableContext;
+            upd.Variables.Metadata = variableMeta;
+
+            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.History.Enabled = false;
+
+            await tester.ClearPersistentData();
+            await tester.StartServer();
+            tester.StartExtractor();
+
+            var waitTask = tester.Bridge.WaitForNextMessage();
+            await tester.Extractor.WaitForSubscriptions();
+            await waitTask;
+            await Task.Delay(200);
+
+            CommonTestUtils.VerifyStartingConditions(tester.Handler.Assets, tester.Handler.Timeseries, null, false);
+
+            tester.Server.ModifyCustomServer();
+
+            waitTask = tester.Bridge.WaitForNextMessage();
+            var rebrowseTask = tester.Extractor.Rebrowse(tester.Source.Token);
+            await Task.WhenAny(rebrowseTask, Task.Delay(10000));
+            Assert.True(rebrowseTask.IsCompleted);
+            await waitTask;
+            await Task.Delay(200);
+
+            CommonTestUtils.VerifyStartingConditions(tester.Handler.Assets, tester.Handler.Timeseries, upd, false);
+            CommonTestUtils.VerifyModified(tester.Handler.Assets, tester.Handler.Timeseries, upd, false, true);
+        }
+        [Theory]
+        [InlineData(true, false, true, false, true, false, true, false)]
+        [InlineData(false, true, false, true, false, true, false, true)]
+        [InlineData(true, true, true, true, true, true, true, true)]
+        [Trait("Server", "array")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "fieldsupdaterawmqtt")]
+        public async Task TestUpdateFieldsRaw(
+            bool assetName, bool variableName,
+            bool assetDesc, bool variableDesc,
+            bool assetContext, bool variableContext,
+            bool assetMeta, bool variableMeta)
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Array,
+                Pusher = "mqtt"
+            });
+            tester.BridgeConfig.Cognite.Update = true;
+            var upd = tester.Config.Extraction.Update;
+            upd.Objects.Name = assetName;
+            upd.Objects.Description = assetDesc;
+            upd.Objects.Context = assetContext;
+            upd.Objects.Metadata = assetMeta;
+            upd.Variables.Name = variableName;
+            upd.Variables.Description = variableDesc;
+            upd.Variables.Context = variableContext;
+            upd.Variables.Metadata = variableMeta;
+
+            tester.Config.Mqtt.RawMetadata = new RawMetadataConfig
+            {
+                Database = "metadata",
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries"
+            };
+
+            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.History.Enabled = false;
+
+            await tester.ClearPersistentData();
+            await tester.StartServer();
+            tester.StartExtractor();
+
+            var waitTask = tester.Bridge.WaitForNextMessage();
+            await tester.Extractor.WaitForSubscriptions();
+            await waitTask;
+            await Task.Delay(200);
+
+            CommonTestUtils.VerifyStartingConditions(tester.Handler.AssetRaw, tester.Handler.TimeseriesRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), null, true);
+
+            tester.Server.ModifyCustomServer();
+
+            waitTask = tester.Bridge.WaitForNextMessage();
+            await tester.Extractor.Rebrowse(tester.Source.Token);
+            await waitTask;
+            await Task.Delay(200);
+
+            CommonTestUtils.VerifyStartingConditions(tester.Handler.AssetRaw, tester.Handler.TimeseriesRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, true);
+            CommonTestUtils.VerifyModified(tester.Handler.AssetRaw, tester.Handler.TimeseriesRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, true, true);
+        }
     }
 }

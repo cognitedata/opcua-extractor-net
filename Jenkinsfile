@@ -104,7 +104,7 @@ podTemplate(
             stage('Build') {
                 sh('dotnet build ExtractorLauncher/')
             }
-            timeout(10) {
+            timeout(20) {
                 stage('Run tests') {
                     sh('mosquitto -p 4060 &')
                     sh('./test.sh')

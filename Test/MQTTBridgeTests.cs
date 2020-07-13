@@ -40,7 +40,7 @@ namespace Test
             {
                 var services = new ServiceCollection();
                 Config = services.AddConfig<BridgeConfig>("config.bridge.yml");
-                Handler = new CDFMockHandler("project", mode)
+                Handler = new CDFMockHandler(Config.Cognite.Project, mode)
                 {
                     StoreDatapoints = true
                 };

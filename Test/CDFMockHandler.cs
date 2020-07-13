@@ -654,6 +654,7 @@ namespace Test
         }
         private HttpResponseMessage HandleCreateRawTimeseries(string content)
         {
+            log.Information(content);
             var toCreate = JsonConvert.DeserializeObject<RawListWrapper<StatelessTimeseriesDummy>>(content);
             foreach (var item in toCreate.items)
             {

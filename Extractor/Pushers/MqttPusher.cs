@@ -191,6 +191,9 @@ namespace Cognite.OpcUa.Pushers
             CancellationToken token)
         {
             if (!client.IsConnected) return false;
+            if (variables == null) throw new ArgumentNullException(nameof(variables));
+            if (objects == null) throw new ArgumentNullException(nameof(objects));
+            if (update == null) throw new ArgumentNullException(nameof(update));
 
             if (!string.IsNullOrEmpty(config.LocalState))
             {
@@ -208,13 +211,29 @@ namespace Cognite.OpcUa.Pushers
 
                 existingNodes = new HashSet<string>(states.Where(state => state.Value.Existing).Select(state => state.Key));
 
+
                 if (existingNodes.Any())
                 {
-                    objects = objects
-                        .Where(obj => !existingNodes.Contains(Extractor.GetUniqueId(obj.Id))).ToList();
-                    variables = variables
-                        .Where(variable => !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index))).ToList();
+                    if (!update.Objects.AnyUpdate)
+                    {
+                        objects = objects
+                            .Where(obj => !existingNodes.Contains(Extractor.GetUniqueId(obj.Id))).ToList();
+                    }
+                    else
+                    {
+                        foreach (var obj in objects) obj.Changed = existingNodes.Contains(Extractor.GetUniqueId(obj.Id));
+                    }
+                    if (!update.Variables.AnyUpdate)
+                    {
+                        variables = variables
+                            .Where(variable => !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index))).ToList();
+                    }
+                    else
+                    {
+                        foreach (var node in variables) node.Changed = existingNodes.Contains(Extractor.GetUniqueId(node.Id, node.Index));
+                    }
                 }
+
             }
             if (!objects.Any() && !variables.Any()) return true;
             await Extractor.ReadProperties(objects.Concat(variables), token);
@@ -225,13 +244,13 @@ namespace Cognite.OpcUa.Pushers
 
             if (objects.Any())
             {
-                var results = await Task.WhenAll(objects.ChunkBy(1000).Select(chunk => PushAssets(chunk, token)));
+                var results = await Task.WhenAll(objects.ChunkBy(1000).Select(chunk => PushAssets(chunk, update.Objects, token)));
                 if (!results.All(res => res)) return false;
             }
 
             if (variables.Any())
             {
-                var results = await Task.WhenAll(variables.ChunkBy(1000).Select(chunk => PushTimeseries(chunk, token)));
+                var results = await Task.WhenAll(variables.ChunkBy(1000).Select(chunk => PushTimeseries(chunk, update.Variables, token)));
                 if (!results.All(res => res)) return false;
             }
 
@@ -356,11 +375,11 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
 
-        private async Task<bool> PushAssets(IEnumerable<BufferedNode> objects, CancellationToken token)
+        private async Task<bool> PushAssets(IEnumerable<BufferedNode> objects, TypeUpdateConfig update, CancellationToken token)
         {
-            var assets = objects.Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId));
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
+            var assets = ConvertNodes(objects, update, !useRawStore);
 
             if (useRawStore)
             {
@@ -413,35 +432,79 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
 
-        private async Task<bool> PushTimeseries(IEnumerable<BufferedVariable> variables, CancellationToken token)
+        private IEnumerable<AssetCreate> ConvertNodes(IEnumerable<BufferedNode> nodes, TypeUpdateConfig update, bool useUpdate = true)
+        {
+            foreach (var node in nodes)
+            {
+                var create = PusherUtils.NodeToAsset(node, Extractor, config.DataSetId);
+                if (create == null) continue;
+                if (!node.Changed || !useUpdate)
+                {
+                    yield return create;
+                    continue;
+                }
+                if (!update.Context) create.ParentExternalId = null;
+                if (!update.Description) create.Description = null;
+                if (!update.Metadata) create.Metadata = null;
+                if (!update.Name) create.Name = null;
+                yield return create;
+            }
+        }
+
+        private IEnumerable<StatelessTimeSeriesCreate> ConvertVariables(IEnumerable<BufferedVariable> variables,
+            TypeUpdateConfig update, bool useUpdate = true)
+        {
+            foreach (var variable in variables)
+            {
+                var create = PusherUtils.VariableToStatelessTimeSeries(variable, Extractor, config.DataSetId);
+                if (create == null) continue;
+                if (!variable.Changed || !useUpdate)
+                {
+                    yield return create;
+                    continue;
+                }
+                if (!update.Context) create.AssetExternalId = null;
+                if (!update.Description) create.Description = null;
+                if (!update.Metadata) create.Metadata = null;
+                if (!update.Name) create.Name = null;
+                yield return create;
+            }
+        }
+
+        private async Task<bool> PushTimeseries(IEnumerable<BufferedVariable> variables, TypeUpdateConfig update, CancellationToken token)
         {
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
 
-            var timeseries = variables.Select(variable => PusherUtils.VariableToStatelessTimeSeries(variable, Extractor, config.DataSetId))
-                .Where(variable => variable != null);
+            var timeseries = ConvertVariables(variables, update, !useRawStore);
 
             if (useRawStore)
             {
-                var minimalTimeseries = variables.Select(variable => PusherUtils.VariableToTimeseries(variable, Extractor, config.DataSetId, null, true))
-                    .Where(variable => variable != null);
+                var minimalTimeseries = variables
+                    .Where(variable => !update.AnyUpdate || !variable.Changed)
+                    .Select(variable => PusherUtils.VariableToTimeseries(variable, Extractor, config.DataSetId, null, true))
+                    .Where(variable => variable != null)
+                    .ToList();
 
-                var minimalData = JsonSerializer.SerializeToUtf8Bytes(minimalTimeseries, null);
-
-                var minimalMsg = baseBuilder
-                    .WithPayload(minimalData)
-                    .WithTopic(config.TsTopic)
-                    .Build();
-
-                try
+                if (minimalTimeseries.Any())
                 {
-                    await client.PublishAsync(minimalMsg, token);
-                    createdTimeseries.Inc(timeseries.Count());
-                }
-                catch (Exception e)
-                {
-                    log.Error("Failed to write minimal timeseries to MQTT: {msg}", e.Message);
-                    return false;
+                    var minimalData = JsonSerializer.SerializeToUtf8Bytes(minimalTimeseries, null);
+
+                    var minimalMsg = baseBuilder
+                        .WithPayload(minimalData)
+                        .WithTopic(config.TsTopic)
+                        .Build();
+
+                    try
+                    {
+                        await client.PublishAsync(minimalMsg, token);
+                        createdTimeseries.Inc(timeseries.Count());
+                    }
+                    catch (Exception e)
+                    {
+                        log.Error("Failed to write minimal timeseries to MQTT: {msg}", e.Message);
+                        return false;
+                    }
                 }
 
                 var rawObj = new RawRequestWrapper<StatelessTimeSeriesCreate>
