@@ -30,7 +30,7 @@ namespace Test
 
         private sealed class BridgeTester : IDisposable
         {
-            private readonly BridgeConfig config;
+            public readonly BridgeConfig Config;
             private MQTTBridge bridge;
             public CDFMockHandler Handler { get; }
             private readonly IMqttClient client;
@@ -39,22 +39,22 @@ namespace Test
             public BridgeTester(CDFMockHandler.MockMode mode)
             {
                 var services = new ServiceCollection();
-                config = services.AddConfig<BridgeConfig>("config.bridge.yml");
+                Config = services.AddConfig<BridgeConfig>("config.bridge.yml");
                 Handler = new CDFMockHandler("project", mode)
                 {
                     StoreDatapoints = true
                 };
-                config.Logger.Console.Level = "debug";
+                Config.Logger.Console.Level = "debug";
                 CommonTestUtils.AddDummyProvider(Handler, services);
                 services.AddLogger();
                 services.AddCogniteClient("MQTT-CDF Bridge", true, true, false);
                 provider = services.BuildServiceProvider();
 
-                bridge = new MQTTBridge(new Destination(config.Cognite, provider), config);
+                bridge = new MQTTBridge(new Destination(Config.Cognite, provider), Config);
                 bridge.StartBridge(CancellationToken.None).Wait();
                 var options = new MqttClientOptionsBuilder()
                     .WithClientId("test-mqtt-publisher")
-                    .WithTcpServer(config.Mqtt.Host, config.Mqtt.Port)
+                    .WithTcpServer(Config.Mqtt.Host, Config.Mqtt.Port)
                     .WithCleanSession()
                     .Build();
                 client = new MqttFactory().CreateMqttClient();
@@ -66,7 +66,7 @@ namespace Test
             public async Task RecreateBridge()
             {
                 bridge.Dispose();
-                bridge = new MQTTBridge(new Destination(config.Cognite, provider), config);
+                bridge = new MQTTBridge(new Destination(Config.Cognite, provider), Config);
                 bool success = await bridge.StartBridge(CancellationToken.None);
                 if (!success) throw new Exception("Unable to start bridge");
             }
@@ -78,7 +78,7 @@ namespace Test
 
                 var msg = baseBuilder
                     .WithPayload(data)
-                    .WithTopic(config.Mqtt.AssetTopic)
+                    .WithTopic(Config.Mqtt.AssetTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();
@@ -93,7 +93,7 @@ namespace Test
 
                 var msg = baseBuilder
                     .WithPayload(data)
-                    .WithTopic(config.Mqtt.TsTopic)
+                    .WithTopic(Config.Mqtt.TsTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();
@@ -108,7 +108,7 @@ namespace Test
 
                 var msg = baseBuilder
                     .WithPayload(data)
-                    .WithTopic(config.Mqtt.EventTopic)
+                    .WithTopic(Config.Mqtt.EventTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();
@@ -123,7 +123,7 @@ namespace Test
 
                 var msg = baseBuilder
                     .WithPayload(data)
-                    .WithTopic(config.Mqtt.DatapointTopic)
+                    .WithTopic(Config.Mqtt.DatapointTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();
@@ -146,7 +146,7 @@ namespace Test
 
                 var msg = baseBuilder
                     .WithPayload(data)
-                    .WithTopic(config.Mqtt.RawTopic)
+                    .WithTopic(Config.Mqtt.RawTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();
@@ -330,6 +330,116 @@ namespace Test
             Assert.Contains(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-5");
             Assert.Contains(tester.Handler.Timeseries.Values, ts => ts.name == "test-ts-6");
         }
+        [Fact]
+        [Trait("Server", "none")]
+        [Trait("Target", "MQTTBridge")]
+        [Trait("Test", "mqttupdateassets")]
+        public async Task TestUpdateAssets()
+        {
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+            var assetOne = new AssetCreate
+            {
+                ExternalId = "test-asset-1",
+                Name = "test-asset-1"
+            };
+            var assetTwo = new AssetCreate
+            {
+                ExternalId = "test-asset-2",
+                Name = "test-asset-2"
+            };
+            await tester.PublishAssets(new[] { assetOne, assetTwo });
+            Assert.Equal(2, tester.Handler.Assets.Count);
+            Assert.True(tester.Handler.Assets.ContainsKey("test-asset-1"));
+            Assert.True(tester.Handler.Assets.ContainsKey("test-asset-2"));
+            Assert.Equal("test-asset-1", tester.Handler.Assets["test-asset-1"].name);
+
+            assetOne.Name = "test-asset-1-2";
+            assetOne.Description = "test desc";
+            assetOne.Metadata = new Dictionary<string, string> { { "key", "value" } };
+
+            await tester.PublishAssets(new[] { assetOne, assetTwo });
+            Assert.Equal(2, tester.Handler.Assets.Count);
+            Assert.Equal("test-asset-1", tester.Handler.Assets["test-asset-1"].name);
+            tester.Config.Cognite.Update = true;
+
+            await tester.PublishAssets(new[] { assetOne, assetTwo });
+            Assert.Equal("test-asset-1-2", tester.Handler.Assets["test-asset-1"].name);
+            Assert.Equal("test desc", tester.Handler.Assets["test-asset-1"].description);
+            Assert.Equal("value", tester.Handler.Assets["test-asset-1"].metadata["key"]);
+
+            var assetThree = new AssetCreate
+            {
+                ExternalId = "test-asset-3",
+                Name = "test-asset-3"
+            };
+            assetTwo.ParentExternalId = "test-asset-3";
+
+            await tester.PublishAssets(new[] { assetOne, assetTwo, assetThree });
+            Assert.Equal(3, tester.Handler.Assets.Count);
+            Assert.Equal("test-asset-3", tester.Handler.Assets["test-asset-2"].parentExternalId);
+        }
+        [Fact]
+        [Trait("Server", "none")]
+        [Trait("Target", "MQTTBridge")]
+        [Trait("Test", "mqttupdatetimeseries")]
+        public async Task TestUpdateTimeSeries()
+        {
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+            var assetOne = new AssetCreate
+            {
+                ExternalId = "test-asset-1"
+            };
+            var assetTwo = new AssetCreate
+            {
+                ExternalId = "test-asset-2"
+            };
+            await tester.PublishAssets(new[] { assetOne, assetTwo });
+
+            var tsOne = new StatelessTimeSeriesCreate
+            {
+                AssetExternalId = "test-asset-1",
+                ExternalId = "test-ts-1",
+                Name = "test-ts-1"
+            };
+            var tsTwo = new StatelessTimeSeriesCreate
+            {
+                AssetExternalId = "test-asset-1",
+                ExternalId = "test-ts-2",
+                Name = "test-ts-2"
+            };
+            var tss = tester.Handler.Timeseries;
+            await tester.PublishTimeseries(new[] { tsOne, tsTwo });
+            Assert.Equal(2, tss.Count);
+            Assert.Equal("test-ts-1", tss["test-ts-1"].name);
+
+            tsOne.Name = "test-ts-1-2";
+            tsOne.Description = "test desc";
+            tsOne.Metadata = new Dictionary<string, string> { { "key", "value" } };
+
+            await tester.PublishTimeseries(new[] { tsOne, tsTwo });
+            Assert.Equal("test-ts-1", tss["test-ts-1"].name);
+
+            tester.Config.Cognite.Update = true;
+
+            await tester.PublishTimeseries(new[] { tsOne, tsTwo });
+            Assert.Equal("test-ts-1-2", tss["test-ts-1"].name);
+            Assert.Equal("test desc", tss["test-ts-1"].description);
+            Assert.Equal("value", tss["test-ts-1"].metadata["key"]);
+            Assert.Equal(1, tss["test-ts-2"].assetId);
+
+            var tsThree = new StatelessTimeSeriesCreate
+            {
+                AssetExternalId = "test-asset-2",
+                ExternalId = "test-ts-3",
+                Name = "test-ts-3"
+            };
+            tsTwo.AssetExternalId = "test-asset-2";
+
+            await tester.PublishTimeseries(new[] { tsOne, tsTwo, tsThree });
+            Assert.Equal(3, tss.Count);
+            Assert.Equal(2, tss["test-ts-2"].assetId);
+        }
+
         [Fact]
         [Trait("Server", "none")]
         [Trait("Target", "MQTTBridge")]

@@ -38,7 +38,7 @@ namespace Cognite.Bridge
             return provider.GetRequiredService<CogniteDestination>();
         }
 
-        private AssetUpdateItem GetAssetUpdate(AssetCreate update, Asset old)
+        private static AssetUpdateItem GetAssetUpdate(AssetCreate update, Asset old)
         {
             if (update == null || old == null) return null;
 
@@ -59,7 +59,7 @@ namespace Cognite.Bridge
             return new AssetUpdateItem(update.ExternalId) { Update = upd };
         }
 
-        private TimeSeriesUpdateItem GetTimeSeriesUpdate(StatelessTimeSeriesCreate update, TimeSeries old)
+        private static TimeSeriesUpdateItem GetTimeSeriesUpdate(StatelessTimeSeriesCreate update, TimeSeries old)
         {
             if (update == null || old == null) return null;
 
@@ -67,7 +67,8 @@ namespace Cognite.Bridge
             if (update.DataSetId != null && update.DataSetId != old.DataSetId) upd.DataSetId = new UpdateNullable<long?>(update.DataSetId);
             if (update.Description != null && update.Description != old.Description) upd.Description = new UpdateNullable<string>(update.Description);
 
-            if (update.Metadata != null && update.Metadata.Any(kvp => !old.Metadata.TryGetValue(kvp.Key, out string value) || value != kvp.Value))
+            if (update.Metadata != null && update.Metadata
+                .Any(kvp => old.Metadata == null || !old.Metadata.TryGetValue(kvp.Key, out string value) || value != kvp.Value))
                 upd.Metadata = new UpdateDictionary<string>(update.Metadata, Enumerable.Empty<string>());
 
             if (update.Name != null && update.Name != old.Name) upd.Name = new UpdateNullable<string>(update.Name);

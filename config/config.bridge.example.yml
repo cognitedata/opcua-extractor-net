@@ -39,6 +39,8 @@ cognite:
     api-key:
     # Cognite service url
     host: "https://api.cognitedata.com"
+    # True to enable updating existing timeseries and assets
+    update: false
     # Config for authentication if a bearer access token has to be used for authentication.
     # Leave empty to disable.
     idp-authentication:
