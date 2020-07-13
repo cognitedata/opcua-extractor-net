@@ -21,13 +21,13 @@ namespace Cognite.Bridge
     public class Destination
     {
         private readonly IServiceProvider provider;
-        private readonly CogniteConfig config;
+        private readonly CogniteDestConfig config;
 
         private readonly ConcurrentDictionary<string, long?> assetIds = new ConcurrentDictionary<string, long?>();
         private readonly ConcurrentDictionary<string, bool> tsIsString = new ConcurrentDictionary<string, bool>();
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(Destination));
-        public Destination(CogniteConfig config, IServiceProvider provider)
+        public Destination(CogniteDestConfig config, IServiceProvider provider)
         {
             this.config = config;
             this.provider = provider;
@@ -37,6 +37,51 @@ namespace Cognite.Bridge
         {
             return provider.GetRequiredService<CogniteDestination>();
         }
+
+        private AssetUpdateItem GetAssetUpdate(AssetCreate update, Asset old)
+        {
+            if (update == null || old == null) return null;
+
+            var upd = new AssetUpdate();
+            if (update.DataSetId != null && update.DataSetId != old.DataSetId) upd.DataSetId = new UpdateNullable<long?>(update.DataSetId);
+            if (update.Description != null && update.Description != old.Description) upd.Description = new UpdateNullable<string>(update.Description);
+
+            if (update.Metadata != null && update.Metadata.Any())
+                upd.Metadata = new UpdateDictionary<string>(update.Metadata, Enumerable.Empty<string>());
+
+            if (update.Name != null && update.Name != old.Name) upd.Name = new Update<string>(update.Name);
+            if (update.ParentExternalId != null && update.ParentExternalId != old.ParentExternalId)
+                upd.ParentExternalId = new Update<string>(update.ParentExternalId);
+
+            if (upd.DataSetId == null && upd.Description == null && upd.Metadata == null && upd.Name == null
+                && upd.ParentExternalId == null) return null;
+
+            return new AssetUpdateItem(update.ExternalId) { Update = upd };
+        }
+
+        private TimeSeriesUpdateItem GetTimeSeriesUpdate(StatelessTimeSeriesCreate update, TimeSeries old)
+        {
+            if (update == null || old == null) return null;
+
+            var upd = new TimeSeriesUpdate();
+            if (update.DataSetId != null && update.DataSetId != old.DataSetId) upd.DataSetId = new UpdateNullable<long?>(update.DataSetId);
+            if (update.Description != null && update.Description != old.Description) upd.Description = new UpdateNullable<string>(update.Description);
+
+            if (update.Metadata != null && update.Metadata.Any(kvp => !old.Metadata.TryGetValue(kvp.Key, out string value) || value != kvp.Value))
+                upd.Metadata = new UpdateDictionary<string>(update.Metadata, Enumerable.Empty<string>());
+
+            if (update.Name != null && update.Name != old.Name) upd.Name = new UpdateNullable<string>(update.Name);
+            if (update.AssetId != null && update.AssetId != old.AssetId)
+                upd.AssetId = new UpdateNullable<long?>(update.AssetId);
+
+            if (update.Unit != null & update.Unit != old.Unit) upd.Unit = new UpdateNullable<string>(update.Unit);
+
+            if (upd.DataSetId == null && upd.Description == null && upd.Metadata == null && upd.Name == null
+                && upd.Unit == null && upd.AssetId == null) return null;
+
+            return new TimeSeriesUpdateItem(update.ExternalId) { Update = upd };
+        }
+
         /// <summary>
         /// Retrieve assets from CDF, push any that do not exist.
         /// </summary>
@@ -56,14 +101,18 @@ namespace Cognite.Bridge
 
             var idsToTest = assets.Select(asset => asset.ExternalId).ToList();
 
+            var createdIds = new ConcurrentBag<string>();
+
+            IEnumerable<Asset> found;
             try
             {
-                var created = await destination.GetOrCreateAssetsAsync(idsToTest, ids =>
+                found = await destination.GetOrCreateAssetsAsync(idsToTest, ids =>
                 {
                     var idsSet = new HashSet<string>(ids);
+                    foreach (var id in ids) createdIds.Add(id);
                     return assets.Where(asset => idsSet.Contains(asset.ExternalId));
                 }, token);
-                foreach (var asset in created)
+                foreach (var asset in found)
                 {
                     assetIds[asset.ExternalId] = asset.Id;
                 }
@@ -72,6 +121,29 @@ namespace Cognite.Bridge
             {
                 log.Error(ex, "Failed to ensure assets: {msg}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
+            }
+            if (config.Update)
+            {
+                var createdIdsSet = new HashSet<string>(createdIds);
+
+                var newAssetsMap = assets.ToDictionary(asset => asset.ExternalId);
+                var toUpdate = found
+                    .Where(asset => !createdIdsSet.Contains(asset.ExternalId))
+                    .Select(old => GetAssetUpdate(newAssetsMap.GetValueOrDefault(old.ExternalId), old))
+                    .Where(update => update != null)
+                    .ToList();
+
+                if (!toUpdate.Any()) return true;
+
+                try
+                {
+                    await destination.CogniteClient.Assets.UpdateAsync(toUpdate, token);
+                }
+                catch (ResponseException ex)
+                {
+                    log.Error(ex, "Failed to update assets: {msg}", ex.Message);
+                    return ex.Code == 400 || ex.Code == 409;
+                }
             }
 
             return true;
@@ -164,14 +236,19 @@ namespace Cognite.Bridge
                 }
             }
 
+            var createdIds = new ConcurrentBag<string>();
+
+            IEnumerable<TimeSeries> found;
+
             try
             {
-                var created = await destination.GetOrCreateTimeSeriesAsync(testSeries.Select(ts => ts.ExternalId), ids =>
+                found = await destination.GetOrCreateTimeSeriesAsync(testSeries.Select(ts => ts.ExternalId), ids =>
                 {
                     var idsSet = new HashSet<string>(ids);
+                    foreach (var id in ids) createdIds.Add(id);
                     return testSeries.Where(ts => idsSet.Contains(ts.ExternalId));
                 }, token);
-                foreach (var ts in created)
+                foreach (var ts in found)
                 {
                     tsIsString[ts.ExternalId] = ts.IsString;
                 }
@@ -180,6 +257,30 @@ namespace Cognite.Bridge
             {
                 log.Error(ex, "Failed to create missing time series: {msg}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
+            }
+
+            if (config.Update)
+            {
+                var createdIdsSet = new HashSet<string>(createdIds);
+
+                var newTsMap = timeseries.ToDictionary(ts => ts.ExternalId);
+                var toUpdate = found
+                    .Where(asset => !createdIdsSet.Contains(asset.ExternalId))
+                    .Select(old => GetTimeSeriesUpdate(newTsMap.GetValueOrDefault(old.ExternalId), old))
+                    .Where(update => update != null)
+                    .ToList();
+
+                if (!toUpdate.Any()) return true;
+
+                try
+                {
+                    await destination.CogniteClient.TimeSeries.UpdateAsync(toUpdate, token);
+                }
+                catch (ResponseException ex)
+                {
+                    log.Error(ex, "Failed to update timeseries: {msg}", ex.Message);
+                    return ex.Code == 400 || ex.Code == 409;
+                }
             }
 
             return true;

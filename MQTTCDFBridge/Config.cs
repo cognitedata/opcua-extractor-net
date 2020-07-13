@@ -19,10 +19,15 @@ namespace Cognite.Bridge
         public string RawTopic { get; set; } = "cognite/opcua/raw";
     }
 
+    public class CogniteDestConfig : CogniteConfig
+    {
+        public bool Update { get; set; }
+    }
+
     public class BridgeConfig : VersionedConfig
     {
         public LoggerConfig Logger { get; set; }
-        public CogniteConfig Cognite { get; set; }
+        public CogniteDestConfig Cognite { get; set; }
         public MQTTConfig Mqtt { get; set; }
 
         public override void GenerateDefaults()
