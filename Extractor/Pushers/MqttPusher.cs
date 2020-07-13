@@ -379,7 +379,7 @@ namespace Cognite.OpcUa.Pushers
         {
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
-            var assets = ConvertNodes(objects, update, !useRawStore);
+            var assets = ConvertNodes(objects, update);
 
             if (useRawStore)
             {
@@ -432,13 +432,13 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
 
-        private IEnumerable<AssetCreate> ConvertNodes(IEnumerable<BufferedNode> nodes, TypeUpdateConfig update, bool useUpdate = true)
+        private IEnumerable<AssetCreate> ConvertNodes(IEnumerable<BufferedNode> nodes, TypeUpdateConfig update)
         {
             foreach (var node in nodes)
             {
                 var create = PusherUtils.NodeToAsset(node, Extractor, config.DataSetId);
                 if (create == null) continue;
-                if (!node.Changed || !useUpdate)
+                if (!node.Changed)
                 {
                     yield return create;
                     continue;
@@ -451,14 +451,13 @@ namespace Cognite.OpcUa.Pushers
             }
         }
 
-        private IEnumerable<StatelessTimeSeriesCreate> ConvertVariables(IEnumerable<BufferedVariable> variables,
-            TypeUpdateConfig update, bool useUpdate = true)
+        private IEnumerable<StatelessTimeSeriesCreate> ConvertVariables(IEnumerable<BufferedVariable> variables, TypeUpdateConfig update)
         {
             foreach (var variable in variables)
             {
                 var create = PusherUtils.VariableToStatelessTimeSeries(variable, Extractor, config.DataSetId);
                 if (create == null) continue;
-                if (!variable.Changed || !useUpdate)
+                if (!variable.Changed)
                 {
                     yield return create;
                     continue;
@@ -476,7 +475,7 @@ namespace Cognite.OpcUa.Pushers
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
 
-            var timeseries = ConvertVariables(variables, update, !useRawStore);
+            var timeseries = ConvertVariables(variables, update);
 
             if (useRawStore)
             {

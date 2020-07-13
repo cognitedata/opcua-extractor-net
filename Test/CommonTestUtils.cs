@@ -405,8 +405,7 @@ namespace Test
             Dictionary<string, AssetDummy> assets,
             Dictionary<string, TimeseriesDummy> timeseries,
             UpdateConfig upd,
-            bool raw,
-            bool mqtt = false)
+            bool raw)
         {
             if (assets == null) throw new ArgumentNullException(nameof(assets));
             if (timeseries == null) throw new ArgumentNullException(nameof(timeseries));
@@ -435,19 +434,16 @@ namespace Test
             {
                 Assert.Single(assets["gp.tl:i=14"].metadata);
                 Assert.Equal("New asset prop value", assets["gp.tl:i=14"].metadata["NewAssetProp"]);
-                Assert.Equal(raw && mqtt ? 2 : 3, assets["gp.tl:i=15"].metadata.Count);
+                Assert.Equal(3, assets["gp.tl:i=15"].metadata.Count);
                 Assert.Equal("4321", assets["gp.tl:i=15"].metadata["NumericProp"]);
-                if (!raw || !mqtt)
-                {
-                    Assert.True(assets["gp.tl:i=15"].metadata.ContainsKey("StringProp"));
-                }
+                Assert.True(assets["gp.tl:i=15"].metadata.ContainsKey("StringProp"));
                 Assert.True(assets["gp.tl:i=15"].metadata.ContainsKey("StringProp updated"));
             }
             if (upd.Variables.Metadata)
             {
                 Assert.Single(timeseries["gp.tl:i=8"].metadata);
                 Assert.Equal("New prop value", timeseries["gp.tl:i=8"].metadata["NewProp"]);
-                Assert.Equal(raw && mqtt ? 2 : 3, timeseries["gp.tl:i=10"].metadata.Count);
+                Assert.Equal(3, timeseries["gp.tl:i=10"].metadata.Count);
                 Assert.Equal("(0, 200)", timeseries["gp.tl:i=10"].metadata["EURange"]);
             }
         }

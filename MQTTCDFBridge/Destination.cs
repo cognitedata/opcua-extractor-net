@@ -15,6 +15,7 @@ using Serilog;
 using Cognite.Extractor.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Cognite.Extractor.Common;
+using System.Buffers;
 
 namespace Cognite.Bridge
 {
@@ -381,6 +382,7 @@ namespace Cognite.Bridge
             }
             catch (ResponseException ex)
             {
+                log.Error("Failed to push events to CDF: {msg}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
             }
 
@@ -403,16 +405,156 @@ namespace Cognite.Bridge
 
             try
             {
-                await destination.InsertRawRowsAsync(rows.Database, rows.Table,
-                    rows.Rows.DistinctBy(row => row.Key).ToDictionary(row => row.Key, row => row.Columns), token);
+                if (config.Update)
+                {
+                    await UpsertRawRows(rows.Database, rows.Table,
+                        rows.Rows.DistinctBy(row => row.Key).ToDictionary(row => row.Key, row => row.Columns), token);
+                }
+                else
+                {
+                    await destination.InsertRawRowsAsync(rows.Database, rows.Table,
+                        rows.Rows.DistinctBy(row => row.Key).ToDictionary(row => row.Key, row => row.Columns), token);
+                }
             }
             catch (ResponseException ex)
             {
+                log.Error("Failed to push raw rows to CDF: {msg}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
             }
 
             return true;
         }
+
+        private async Task UpsertRawRows(
+            string dbName,
+            string tableName,
+            IDictionary<string, JsonElement> toUpsert,
+            CancellationToken token)
+        {
+            if (!toUpsert.Any()) return;
+            var destination = GetDestination();
+            string cursor = null;
+            var existing = new List<RawRow>();
+            do
+            {
+                try
+                {
+                    var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
+                        new RawRowQuery { Cursor = cursor, Limit = 10_000 }, token);
+                    foreach (var item in result.Items)
+                    {
+                        existing.Add(item);
+                    }
+                    cursor = result.NextCursor;
+                }
+                catch (ResponseException ex) when (ex.Code == 404)
+                {
+                    log.Warning("Table or database not found: {msg}", ex.Message);
+                    break;
+                }
+            } while (cursor != null);
+
+            foreach (var row in existing)
+            {
+                if (toUpsert.TryGetValue(row.Key, out var newRow))
+                {
+                    var oldRow = JsonDocument.Parse(JsonSerializer.Serialize(row.Columns)).RootElement;
+                    toUpsert[row.Key] = JsonDocument.Parse(Merge(oldRow, newRow)).RootElement;
+                    
+                }
+            }
+            log.Information("Creating or updating {cnt} raw rows in CDF", toUpsert.Count);
+
+            await destination.InsertRawRowsAsync(dbName, tableName, toUpsert, token);
+        }
+
+        // Adapted from https://stackoverflow.com/a/59574030/9946909
+        private static string Merge(JsonElement r1, JsonElement r2)
+        {
+            var outputBuffer = new ArrayBufferWriter<byte>();
+
+            using (var jsonWriter = new Utf8JsonWriter(outputBuffer, new JsonWriterOptions { Indented = true }))
+            {
+                if (r1.ValueKind != JsonValueKind.Array && r1.ValueKind != JsonValueKind.Object || r1.ValueKind != r2.ValueKind)
+                {
+                    r2.WriteTo(jsonWriter);
+                }
+                else if (r1.ValueKind == JsonValueKind.Array)
+                {
+                    MergeArrays(jsonWriter, r1, r2);
+                }
+                else
+                {
+                    MergeObjects(jsonWriter, r1, r2);
+                }
+            }
+
+            return Encoding.UTF8.GetString(outputBuffer.WrittenSpan);
+        }
+
+        private static void MergeObjects(Utf8JsonWriter jsonWriter, JsonElement root1, JsonElement root2)
+        {
+            jsonWriter.WriteStartObject();
+            foreach (JsonProperty property in root1.EnumerateObject())
+            {
+                string propertyName = property.Name;
+
+                JsonValueKind newValueKind;
+
+                if (root2.TryGetProperty(propertyName, out JsonElement newValue) && (newValueKind = newValue.ValueKind) != JsonValueKind.Null)
+                {
+                    jsonWriter.WritePropertyName(propertyName);
+
+                    JsonElement originalValue = property.Value;
+                    JsonValueKind originalValueKind = originalValue.ValueKind;
+
+                    if (newValueKind == JsonValueKind.Object && originalValueKind == JsonValueKind.Object)
+                    {
+                        MergeObjects(jsonWriter, originalValue, newValue);
+                    }
+                    else if (newValueKind == JsonValueKind.Array && originalValueKind == JsonValueKind.Array)
+                    {
+                        MergeArrays(jsonWriter, originalValue, newValue);
+                    }
+                    else
+                    {
+                        newValue.WriteTo(jsonWriter);
+                    }
+                }
+                else
+                {
+                    property.WriteTo(jsonWriter);
+                }
+            }
+
+            // Write all the properties of the second document that are unique to it.
+            foreach (JsonProperty property in root2.EnumerateObject())
+            {
+                if (!root1.TryGetProperty(property.Name, out _))
+                {
+                    property.WriteTo(jsonWriter);
+                }
+            }
+
+            jsonWriter.WriteEndObject();
+        }
+
+        private static void MergeArrays(Utf8JsonWriter jsonWriter, JsonElement root1, JsonElement root2)
+        {
+            jsonWriter.WriteStartArray();
+
+            foreach (JsonElement element in root1.EnumerateArray())
+            {
+                element.WriteTo(jsonWriter);
+            }
+            foreach (JsonElement element in root2.EnumerateArray())
+            {
+                element.WriteTo(jsonWriter);
+            }
+
+            jsonWriter.WriteEndArray();
+        }
+
         [SuppressMessage("Microsoft.Performance", "CA1812")]
         internal class StatelessEventCreate : EventCreate
         {

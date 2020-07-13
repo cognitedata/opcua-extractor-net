@@ -245,11 +245,11 @@ namespace Test
             await Task.Delay(200);
 
             CommonTestUtils.VerifyStartingConditions(tester.Handler.Assets, tester.Handler.Timeseries, upd, false);
-            CommonTestUtils.VerifyModified(tester.Handler.Assets, tester.Handler.Timeseries, upd, false, true);
+            CommonTestUtils.VerifyModified(tester.Handler.Assets, tester.Handler.Timeseries, upd, false);
         }
         [Theory]
-        [InlineData(true, false, true, false, true, false, true, false)]
-        [InlineData(false, true, false, true, false, true, false, true)]
+        [InlineData(true, true, true, true, false, false, false, false)]
+        [InlineData(false, false, false, false, true, true, true, true)]
         [InlineData(true, true, true, true, true, true, true, true)]
         [Trait("Server", "array")]
         [Trait("Target", "CDFPusher")]
@@ -309,7 +309,7 @@ namespace Test
             CommonTestUtils.VerifyStartingConditions(tester.Handler.AssetRaw, tester.Handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, true);
             CommonTestUtils.VerifyModified(tester.Handler.AssetRaw, tester.Handler.TimeseriesRaw
-                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, true, true);
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, true);
         }
     }
 }
