@@ -54,10 +54,12 @@ namespace Test
             tester.StartExtractor();
 
             await tester.WaitForCondition(() =>
-                    tester.Handler.Events.Values.Count > 20 &&
+                    tester.Handler.Events.Count > 20 &&
                     tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling),
                 20, "Expected history read to finish");
 
+
+            await tester.WaitForCondition(() => tester.Handler.Events.Count == 700, 10);
 
             var events = tester.Handler.Events.Values.ToList();
             CommonTestUtils.TestEventCollection(events);

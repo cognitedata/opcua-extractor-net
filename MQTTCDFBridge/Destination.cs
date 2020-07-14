@@ -15,19 +15,20 @@ using Serilog;
 using Cognite.Extractor.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Cognite.Extractor.Common;
+using System.Buffers;
 
 namespace Cognite.Bridge
 {
     public class Destination
     {
         private readonly IServiceProvider provider;
-        private readonly CogniteConfig config;
+        private readonly CogniteDestConfig config;
 
         private readonly ConcurrentDictionary<string, long?> assetIds = new ConcurrentDictionary<string, long?>();
         private readonly ConcurrentDictionary<string, bool> tsIsString = new ConcurrentDictionary<string, bool>();
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(Destination));
-        public Destination(CogniteConfig config, IServiceProvider provider)
+        public Destination(CogniteDestConfig config, IServiceProvider provider)
         {
             this.config = config;
             this.provider = provider;
@@ -37,6 +38,52 @@ namespace Cognite.Bridge
         {
             return provider.GetRequiredService<CogniteDestination>();
         }
+
+        private static AssetUpdateItem GetAssetUpdate(AssetCreate update, Asset old)
+        {
+            if (update == null || old == null) return null;
+
+            var upd = new AssetUpdate();
+            if (update.DataSetId != null && update.DataSetId != old.DataSetId) upd.DataSetId = new UpdateNullable<long?>(update.DataSetId);
+            if (update.Description != null && update.Description != old.Description) upd.Description = new UpdateNullable<string>(update.Description);
+
+            if (update.Metadata != null && update.Metadata.Any())
+                upd.Metadata = new UpdateDictionary<string>(update.Metadata, Enumerable.Empty<string>());
+
+            if (update.Name != null && update.Name != old.Name) upd.Name = new Update<string>(update.Name);
+            if (update.ParentExternalId != null && update.ParentExternalId != old.ParentExternalId)
+                upd.ParentExternalId = new Update<string>(update.ParentExternalId);
+
+            if (upd.DataSetId == null && upd.Description == null && upd.Metadata == null && upd.Name == null
+                && upd.ParentExternalId == null) return null;
+
+            return new AssetUpdateItem(update.ExternalId) { Update = upd };
+        }
+
+        private static TimeSeriesUpdateItem GetTimeSeriesUpdate(StatelessTimeSeriesCreate update, TimeSeries old)
+        {
+            if (update == null || old == null) return null;
+
+            var upd = new TimeSeriesUpdate();
+            if (update.DataSetId != null && update.DataSetId != old.DataSetId) upd.DataSetId = new UpdateNullable<long?>(update.DataSetId);
+            if (update.Description != null && update.Description != old.Description) upd.Description = new UpdateNullable<string>(update.Description);
+
+            if (update.Metadata != null && update.Metadata
+                .Any(kvp => old.Metadata == null || !old.Metadata.TryGetValue(kvp.Key, out string value) || value != kvp.Value))
+                upd.Metadata = new UpdateDictionary<string>(update.Metadata, Enumerable.Empty<string>());
+
+            if (update.Name != null && update.Name != old.Name) upd.Name = new UpdateNullable<string>(update.Name);
+            if (update.AssetId != null && update.AssetId != old.AssetId)
+                upd.AssetId = new UpdateNullable<long?>(update.AssetId);
+
+            if (update.Unit != null & update.Unit != old.Unit) upd.Unit = new UpdateNullable<string>(update.Unit);
+
+            if (upd.DataSetId == null && upd.Description == null && upd.Metadata == null && upd.Name == null
+                && upd.Unit == null && upd.AssetId == null) return null;
+
+            return new TimeSeriesUpdateItem(update.ExternalId) { Update = upd };
+        }
+
         /// <summary>
         /// Retrieve assets from CDF, push any that do not exist.
         /// </summary>
@@ -56,14 +103,18 @@ namespace Cognite.Bridge
 
             var idsToTest = assets.Select(asset => asset.ExternalId).ToList();
 
+            var createdIds = new ConcurrentBag<string>();
+
+            IEnumerable<Asset> found;
             try
             {
-                var created = await destination.GetOrCreateAssetsAsync(idsToTest, ids =>
+                found = await destination.GetOrCreateAssetsAsync(idsToTest, ids =>
                 {
                     var idsSet = new HashSet<string>(ids);
+                    foreach (var id in ids) createdIds.Add(id);
                     return assets.Where(asset => idsSet.Contains(asset.ExternalId));
                 }, token);
-                foreach (var asset in created)
+                foreach (var asset in found)
                 {
                     assetIds[asset.ExternalId] = asset.Id;
                 }
@@ -72,6 +123,29 @@ namespace Cognite.Bridge
             {
                 log.Error(ex, "Failed to ensure assets: {msg}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
+            }
+            if (config.Update)
+            {
+                var createdIdsSet = new HashSet<string>(createdIds);
+
+                var newAssetsMap = assets.ToDictionary(asset => asset.ExternalId);
+                var toUpdate = found
+                    .Where(asset => !createdIdsSet.Contains(asset.ExternalId))
+                    .Select(old => GetAssetUpdate(newAssetsMap.GetValueOrDefault(old.ExternalId), old))
+                    .Where(update => update != null)
+                    .ToList();
+
+                if (!toUpdate.Any()) return true;
+
+                try
+                {
+                    await destination.CogniteClient.Assets.UpdateAsync(toUpdate, token);
+                }
+                catch (ResponseException ex)
+                {
+                    log.Error(ex, "Failed to update assets: {msg}", ex.Message);
+                    return ex.Code == 400 || ex.Code == 409;
+                }
             }
 
             return true;
@@ -164,14 +238,19 @@ namespace Cognite.Bridge
                 }
             }
 
+            var createdIds = new ConcurrentBag<string>();
+
+            IEnumerable<TimeSeries> found;
+
             try
             {
-                var created = await destination.GetOrCreateTimeSeriesAsync(testSeries.Select(ts => ts.ExternalId), ids =>
+                found = await destination.GetOrCreateTimeSeriesAsync(testSeries.Select(ts => ts.ExternalId), ids =>
                 {
                     var idsSet = new HashSet<string>(ids);
+                    foreach (var id in ids) createdIds.Add(id);
                     return testSeries.Where(ts => idsSet.Contains(ts.ExternalId));
                 }, token);
-                foreach (var ts in created)
+                foreach (var ts in found)
                 {
                     tsIsString[ts.ExternalId] = ts.IsString;
                 }
@@ -180,6 +259,30 @@ namespace Cognite.Bridge
             {
                 log.Error(ex, "Failed to create missing time series: {msg}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
+            }
+
+            if (config.Update)
+            {
+                var createdIdsSet = new HashSet<string>(createdIds);
+
+                var newTsMap = timeseries.ToDictionary(ts => ts.ExternalId);
+                var toUpdate = found
+                    .Where(asset => !createdIdsSet.Contains(asset.ExternalId))
+                    .Select(old => GetTimeSeriesUpdate(newTsMap.GetValueOrDefault(old.ExternalId), old))
+                    .Where(update => update != null)
+                    .ToList();
+
+                if (!toUpdate.Any()) return true;
+
+                try
+                {
+                    await destination.CogniteClient.TimeSeries.UpdateAsync(toUpdate, token);
+                }
+                catch (ResponseException ex)
+                {
+                    log.Error(ex, "Failed to update timeseries: {msg}", ex.Message);
+                    return ex.Code == 400 || ex.Code == 409;
+                }
             }
 
             return true;
@@ -279,6 +382,7 @@ namespace Cognite.Bridge
             }
             catch (ResponseException ex)
             {
+                log.Error("Failed to push events to CDF: {msg}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
             }
 
@@ -301,16 +405,156 @@ namespace Cognite.Bridge
 
             try
             {
-                await destination.InsertRawRowsAsync(rows.Database, rows.Table,
-                    rows.Rows.DistinctBy(row => row.Key).ToDictionary(row => row.Key, row => row.Columns), token);
+                if (config.Update)
+                {
+                    await UpsertRawRows(rows.Database, rows.Table,
+                        rows.Rows.DistinctBy(row => row.Key).ToDictionary(row => row.Key, row => row.Columns), token);
+                }
+                else
+                {
+                    await destination.InsertRawRowsAsync(rows.Database, rows.Table,
+                        rows.Rows.DistinctBy(row => row.Key).ToDictionary(row => row.Key, row => row.Columns), token);
+                }
             }
             catch (ResponseException ex)
             {
+                log.Error("Failed to push raw rows to CDF: {msg}", ex.Message);
                 return ex.Code == 400 || ex.Code == 409;
             }
 
             return true;
         }
+
+        private async Task UpsertRawRows(
+            string dbName,
+            string tableName,
+            IDictionary<string, JsonElement> toUpsert,
+            CancellationToken token)
+        {
+            if (!toUpsert.Any()) return;
+            var destination = GetDestination();
+            string cursor = null;
+            var existing = new List<RawRow>();
+            do
+            {
+                try
+                {
+                    var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
+                        new RawRowQuery { Cursor = cursor, Limit = 10_000 }, token);
+                    foreach (var item in result.Items)
+                    {
+                        existing.Add(item);
+                    }
+                    cursor = result.NextCursor;
+                }
+                catch (ResponseException ex) when (ex.Code == 404)
+                {
+                    log.Warning("Table or database not found: {msg}", ex.Message);
+                    break;
+                }
+            } while (cursor != null);
+
+            foreach (var row in existing)
+            {
+                if (toUpsert.TryGetValue(row.Key, out var newRow))
+                {
+                    var oldRow = JsonDocument.Parse(JsonSerializer.Serialize(row.Columns)).RootElement;
+                    toUpsert[row.Key] = JsonDocument.Parse(Merge(oldRow, newRow)).RootElement;
+                    
+                }
+            }
+            log.Information("Creating or updating {cnt} raw rows in CDF", toUpsert.Count);
+
+            await destination.InsertRawRowsAsync(dbName, tableName, toUpsert, token);
+        }
+
+        // Adapted from https://stackoverflow.com/a/59574030/9946909
+        private static string Merge(JsonElement r1, JsonElement r2)
+        {
+            var outputBuffer = new ArrayBufferWriter<byte>();
+
+            using (var jsonWriter = new Utf8JsonWriter(outputBuffer, new JsonWriterOptions { Indented = true }))
+            {
+                if (r1.ValueKind != JsonValueKind.Array && r1.ValueKind != JsonValueKind.Object || r1.ValueKind != r2.ValueKind)
+                {
+                    r2.WriteTo(jsonWriter);
+                }
+                else if (r1.ValueKind == JsonValueKind.Array)
+                {
+                    MergeArrays(jsonWriter, r1, r2);
+                }
+                else
+                {
+                    MergeObjects(jsonWriter, r1, r2);
+                }
+            }
+
+            return Encoding.UTF8.GetString(outputBuffer.WrittenSpan);
+        }
+
+        private static void MergeObjects(Utf8JsonWriter jsonWriter, JsonElement root1, JsonElement root2)
+        {
+            jsonWriter.WriteStartObject();
+            foreach (JsonProperty property in root1.EnumerateObject())
+            {
+                string propertyName = property.Name;
+
+                JsonValueKind newValueKind;
+
+                if (root2.TryGetProperty(propertyName, out JsonElement newValue) && (newValueKind = newValue.ValueKind) != JsonValueKind.Null)
+                {
+                    jsonWriter.WritePropertyName(propertyName);
+
+                    JsonElement originalValue = property.Value;
+                    JsonValueKind originalValueKind = originalValue.ValueKind;
+
+                    if (newValueKind == JsonValueKind.Object && originalValueKind == JsonValueKind.Object)
+                    {
+                        MergeObjects(jsonWriter, originalValue, newValue);
+                    }
+                    else if (newValueKind == JsonValueKind.Array && originalValueKind == JsonValueKind.Array)
+                    {
+                        MergeArrays(jsonWriter, originalValue, newValue);
+                    }
+                    else
+                    {
+                        newValue.WriteTo(jsonWriter);
+                    }
+                }
+                else
+                {
+                    property.WriteTo(jsonWriter);
+                }
+            }
+
+            // Write all the properties of the second document that are unique to it.
+            foreach (JsonProperty property in root2.EnumerateObject())
+            {
+                if (!root1.TryGetProperty(property.Name, out _))
+                {
+                    property.WriteTo(jsonWriter);
+                }
+            }
+
+            jsonWriter.WriteEndObject();
+        }
+
+        private static void MergeArrays(Utf8JsonWriter jsonWriter, JsonElement root1, JsonElement root2)
+        {
+            jsonWriter.WriteStartArray();
+
+            foreach (JsonElement element in root1.EnumerateArray())
+            {
+                element.WriteTo(jsonWriter);
+            }
+            foreach (JsonElement element in root2.EnumerateArray())
+            {
+                element.WriteTo(jsonWriter);
+            }
+
+            jsonWriter.WriteEndArray();
+        }
+
         [SuppressMessage("Microsoft.Performance", "CA1812")]
         internal class StatelessEventCreate : EventCreate
         {

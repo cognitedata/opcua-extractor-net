@@ -535,7 +535,7 @@ namespace Cognite.OpcUa
         }
 
 
-        private void CheckForNodeUpdates(BufferedNode node, BufferedNode old, TypeUpdateConfig update)
+        private static void CheckForNodeUpdates(BufferedNode node, BufferedNode old, TypeUpdateConfig update)
         {
             if (update.Context && old.ParentId != node.ParentId) node.Changed = true;
 

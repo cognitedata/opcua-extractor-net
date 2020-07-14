@@ -19,16 +19,21 @@ namespace Cognite.Bridge
         public string RawTopic { get; set; } = "cognite/opcua/raw";
     }
 
+    public class CogniteDestConfig : CogniteConfig
+    {
+        public bool Update { get; set; }
+    }
+
     public class BridgeConfig : VersionedConfig
     {
         public LoggerConfig Logger { get; set; }
-        public CogniteConfig Cognite { get; set; }
+        public CogniteDestConfig Cognite { get; set; }
         public MQTTConfig Mqtt { get; set; }
 
         public override void GenerateDefaults()
         {
             if (Logger == null) Logger = new LoggerConfig();
-            if (Cognite == null) Cognite = new CogniteConfig();
+            if (Cognite == null) Cognite = new CogniteDestConfig();
             if (Cognite.CdfChunking == null) Cognite.CdfChunking = new ChunkingConfig();
             if (Cognite.CdfRetries == null) Cognite.CdfRetries = new RetryConfig();
             if (Cognite.CdfThrottling == null) Cognite.CdfThrottling = new ThrottlingConfig();
