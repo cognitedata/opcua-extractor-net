@@ -49,17 +49,18 @@ namespace Cognite.OpcUa.Config
 
         private readonly List<(int, int)> testBrowseChunkSizes = new List<(int, int)>
         {
-            (100, 1000),
+            (1000, 0),
+            (1000, 1000),
             (1000, 100),
+            (100, 1000),
             (100, 100),
             (1, 1000),
-            (1000, 0),
             (1, 0),
-            (1000, 1000)
         };
 
         private readonly List<int> testAttributeChunkSizes = new List<int>
         {
+            100000,
             10000,
             1000,
             100,
@@ -68,6 +69,7 @@ namespace Cognite.OpcUa.Config
 
         private readonly List<int> testSubscriptionChunkSizes = new List<int>
         {
+            10000,
             1000,
             100,
             10,
@@ -221,6 +223,13 @@ namespace Cognite.OpcUa.Config
                     log.Information("Skipping {bnc}, {bc} due to having been browsed", browseNodesChunk, browseChunk);
                     continue;
                 }
+                if (results.Any())
+                {
+                    var maxSize = results.Select(res => res.NumNodes).Max();
+                    if (maxSize > 100 * browseNodesChunk) continue;
+                }
+
+
                 config.Source.BrowseChunk = browseChunk;
                 config.Source.BrowseNodesChunk = browseNodesChunk;
 
@@ -232,12 +241,9 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     await ToolUtil.RunWithTimeout(BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodes, this), token), 120);
-                    if (nodes.Count < browseNodesChunk)
-                    {
-                        log.Information("Browse succeeded, attempting to read children of all nodes, to further test operation limit");
-                        await ToolUtil.RunWithTimeout(() => BrowseDirectory(nodes.Select(node => node.Id).Take(browseNodesChunk),
-                            (_, __) => { }, token), 120);
-                    }
+                    log.Information("Browse succeeded, attempting to read children of all nodes, to further test operation limit");
+                    await ToolUtil.RunWithTimeout(() => BrowseDirectory(nodes.Select(node => node.Id).Take(browseNodesChunk),
+                        (_, __) => { }, token), 120);
                 }
                 catch (Exception ex)
                 {
@@ -643,6 +649,9 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
+            var testChunks = testSubscriptionChunkSizes.Where(chunkSize =>
+                chunkSize <= states.Count || chunkSize <= 1000);
+
             if (states.Count < 1000)
             {
                 log.Warning("There are only {count} extractable variables, so expected chunksizes may not be accurate. " +
@@ -652,7 +661,7 @@ namespace Cognite.OpcUa.Config
 
             var dps = new List<BufferedDataPoint>();
 
-            foreach (int chunkSize in testSubscriptionChunkSizes)
+            foreach (int chunkSize in testChunks)
             {
                 config.Source.SubscriptionChunk = chunkSize;
                 try
