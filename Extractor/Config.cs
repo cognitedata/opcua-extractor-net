@@ -87,6 +87,7 @@ namespace Cognite.OpcUa
         public bool Debug { get; set; } = false;
         public bool ReadExtractedRanges { get; set; } = true;
         public RawMetadataConfig RawMetadata { get; set; }
+        public MetadataMapConfig MetadataMapping { get; set; }
         public double? NonFiniteReplacement
         {
             get => nonFiniteReplacement;
@@ -105,6 +106,12 @@ namespace Cognite.OpcUa
         public string Database { get; set; }
         public string AssetsTable { get; set; }
         public string TimeseriesTable { get; set; }
+    }
+
+    public class MetadataMapConfig
+    {
+        public Dictionary<string, string> Assets { get; set; }
+        public Dictionary<string, string> Timeseries { get; set; }
     }
 
     public class InfluxPusherConfig : IPusherConfig
@@ -147,6 +154,7 @@ namespace Cognite.OpcUa
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; }
         public RawMetadataConfig RawMetadata { get; set; }
+        public MetadataMapConfig MetadataMapping { get; set; }
         public double? NonFiniteReplacement
         {
             get => nonFiniteReplacement;

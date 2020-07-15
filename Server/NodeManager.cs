@@ -511,11 +511,19 @@ namespace Server
 
                 AddNodeRelation(obj2, root, ReferenceTypeIds.Organizes);
 
+                var arrprop = myarray.AddProperty<EUInformation>("EngineeringUnits", DataTypes.EUInformation, -1);
+                arrprop.NodeId = GenerateNodeId();
+                arrprop.Value = euinf;
+
+                var arrprop2 = myarray.AddProperty<Opc.Ua.Range>("EURange", DataTypes.Range, -1);
+                arrprop2.NodeId = GenerateNodeId();
+                arrprop2.Value = eurange;
+
                 store.AddHistorizingNode(myarray);
                 store.AddHistorizingNode(numberVar);
 
                 AddPredefinedNodes(SystemContext, root, myarray, mystrarray, stringyType, ignoreType, numberType, numberType2, stringyVar,
-                    ignoreVar, numberVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2);
+                    ignoreVar, numberVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2, arrprop, arrprop2);
 
                 Ids.Custom.Root = root.NodeId;
                 Ids.Custom.Array = myarray.NodeId;

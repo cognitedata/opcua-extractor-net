@@ -205,7 +205,7 @@ namespace Cognite.OpcUa
             {
                 foreach (var prop in Properties)
                 {
-                    propertyString += $"{prop.DisplayName} : {prop.Value.StringValue},\n";
+                    propertyString += $"    {prop.DisplayName}: {prop.Value?.StringValue},\n";
                 }
             }
             propertyString += "}";

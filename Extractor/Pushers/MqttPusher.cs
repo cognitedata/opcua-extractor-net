@@ -436,7 +436,7 @@ namespace Cognite.OpcUa.Pushers
         {
             foreach (var node in nodes)
             {
-                var create = PusherUtils.NodeToAsset(node, Extractor, config.DataSetId);
+                var create = PusherUtils.NodeToAsset(node, Extractor, config.DataSetId, config.MetadataMapping?.Assets);
                 if (create == null) continue;
                 if (!node.Changed)
                 {
@@ -455,7 +455,7 @@ namespace Cognite.OpcUa.Pushers
         {
             foreach (var variable in variables)
             {
-                var create = PusherUtils.VariableToStatelessTimeSeries(variable, Extractor, config.DataSetId);
+                var create = PusherUtils.VariableToStatelessTimeSeries(variable, Extractor, config.DataSetId, config.MetadataMapping?.Timeseries);
                 if (create == null) continue;
                 if (!variable.Changed)
                 {
@@ -481,7 +481,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var minimalTimeseries = variables
                     .Where(variable => !update.AnyUpdate || !variable.Changed)
-                    .Select(variable => PusherUtils.VariableToTimeseries(variable, Extractor, config.DataSetId, null, true))
+                    .Select(variable => PusherUtils.VariableToTimeseries(variable, Extractor, config.DataSetId, null, null, true))
                     .Where(variable => variable != null)
                     .ToList();
 

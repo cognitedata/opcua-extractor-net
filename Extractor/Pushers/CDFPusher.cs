@@ -409,6 +409,7 @@ namespace Cognite.OpcUa.Pushers
         {
             var assetIds = new ConcurrentDictionary<string, BufferedNode>(objects.ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
             var destination = GetDestination();
+            var metaMap = config.MetadataMapping?.Assets;
             bool useRawAssets = config.RawMetadata != null
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
@@ -426,7 +427,8 @@ namespace Cognite.OpcUa.Pushers
                         await Extractor.ReadProperties(toReadProperties, token);
 
                         var updates = assetIds
-                            .Select(kvp => (kvp.Key, PusherUtils.CreateRawAssetUpdate(kvp.Value, Extractor, rowDict.GetValueOrDefault(kvp.Key), update)))
+                            .Select(kvp => (kvp.Key, PusherUtils.CreateRawAssetUpdate(kvp.Value, Extractor,
+                                rowDict.GetValueOrDefault(kvp.Key), update, metaMap)))
                             .Where(elem => elem.Item2 != null)
                             .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
 
@@ -439,7 +441,8 @@ namespace Cognite.OpcUa.Pushers
                     {
                         var assets = ids.Select(id => assetIds[id]);
                         await Extractor.ReadProperties(assets, token);
-                        return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, null)).Where(asset => asset != null)
+                        return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, null, metaMap))
+                            .Where(asset => asset != null)
                             .ToDictionary(asset => asset.ExternalId);
                     }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
                 }
@@ -454,7 +457,9 @@ namespace Cognite.OpcUa.Pushers
                     {
                         var assets = ids.Select(id => assetIds[id]);
                         await Extractor.ReadProperties(assets, token);
-                        return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId)).Where(asset => asset != null);
+                        return assets
+                            .Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId, metaMap))
+                            .Where(asset => asset != null);
                     }, token);
                     foreach (var asset in assetChunk)
                     {
@@ -520,6 +525,7 @@ namespace Cognite.OpcUa.Pushers
         {
             var tsIds = new ConcurrentDictionary<string, BufferedVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
             var destination = GetDestination();
+            var metaMap = config.MetadataMapping?.Timeseries;
             bool useRawTimeseries = config.RawMetadata != null
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
@@ -531,7 +537,7 @@ namespace Cognite.OpcUa.Pushers
                 {
                     await Extractor.ReadProperties(tss, token);
                 }
-                return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, useRawTimeseries))
+                return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, metaMap, useRawTimeseries))
                     .Where(ts => ts != null);
             }, token);
             var foundBadTimeseries = new List<string>();
@@ -625,7 +631,8 @@ namespace Cognite.OpcUa.Pushers
                         await Extractor.ReadProperties(toReadProperties, token);
 
                         var updates = tsIds
-                            .Select(kvp => (kvp.Key, PusherUtils.CreateRawTsUpdate(kvp.Value, Extractor, rowDict.GetValueOrDefault(kvp.Key), update)))
+                            .Select(kvp => (kvp.Key, PusherUtils.CreateRawTsUpdate(kvp.Value, Extractor,
+                                rowDict.GetValueOrDefault(kvp.Key), update, metaMap)))
                             .Where(elem => elem.Item2 != null)
                             .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
 
@@ -638,7 +645,8 @@ namespace Cognite.OpcUa.Pushers
                     {
                         var timeseries = ids.Select(id => tsIds[id]);
                         await Extractor.ReadProperties(timeseries, token);
-                        return timeseries.Select(node => PusherUtils.VariableToStatelessTimeSeries(node, Extractor, null)).Where(ts => ts != null)
+                        return timeseries.Select(node => PusherUtils.VariableToStatelessTimeSeries(node, Extractor, null, metaMap))
+                            .Where(ts => ts != null)
                             .ToDictionary(ts => ts.ExternalId);
                     }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
                 }
