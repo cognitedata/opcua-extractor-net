@@ -114,9 +114,21 @@ cognite:
         assets-table:
         # Table to store timeseries in.
         timeseries-table:
+
+    # Map metadata to asset/timeseries attributes. Each of "assets" and "timeseries" is a map from property DisplayName to
+    # CDF attribute. Legal attributes are "name, description, parentId" and "unit" for timeseries. "parentId" must somehow refer to
+    # an existing asset. For timeseries it must be a mapped asset, for assets it can be any asset.
+    # Example usage:
+    # timeseries:
+    #    "EngineeringUnits": "unit"
+    #    "EURange": "description"
+    # assets:
+    #    "Name": "name"
+    metadata-mapping:
+        assets:
+        timeseries:
     # Config for authentication if a bearer access token has to be used for authentication.
     # Leave empty to disable.
-
     idp-authentication:
         # Application Id
         client-id:
@@ -255,6 +267,18 @@ mqtt:
         assets-table:
         # Table to store timeseries in.
         timeseries-table:
+    # Map metadata to asset/timeseries attributes. Each of "assets" and "timeseries" is a map from property DisplayName to
+    # CDF attribute. Legal attributes are "name, description, parentId" and "unit" for timeseries. "parentId" must somehow refer to
+    # an existing asset. For timeseries it must be a mapped asset, for assets it can be any asset.
+    # Example usage:
+    # timeseries:
+    #    "EngineeringUnits": "unit"
+    #    "EURange": "description"
+    # assets:
+    #    "Name": "name"
+    metadata-mapping:
+        assets:
+        timeseries:
 
         
 

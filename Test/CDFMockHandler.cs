@@ -969,6 +969,7 @@ namespace Test
         public string name { get; set; }
         public string description { get; set; }
         public long? assetId { get; set; }
+        public string unit { get; set; }
     }
     public class StatelessTimeseriesDummy : TimeseriesDummy
     {

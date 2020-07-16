@@ -807,7 +807,7 @@ namespace Cognite.OpcUa
             {
                 if (node.IsVariable)
                 {
-                    if (node is BufferedVariable variable && variable.Index == -1)
+                    if (node is BufferedVariable variable && variable.Index <= 0)
                     {
                         idsToCheck.Add(node.Id);
                     }
@@ -823,6 +823,8 @@ namespace Cognite.OpcUa
                     }
                 }
             }
+            idsToCheck = idsToCheck.Distinct().ToList();
+
             var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             var total = idsToCheck.Count;
             int found = 0;
@@ -839,6 +841,8 @@ namespace Cognite.OpcUa
                 log.Debug("Read properties for {cnt} / {total} nodes. Found: {found}", readCount, total, found);
             }
 
+            nodes = nodes.DistinctBy(node => node.Id);
+
             foreach (var parent in nodes)
             {
                 if (!result.ContainsKey(parent.Id)) continue;
@@ -851,6 +855,23 @@ namespace Cognite.OpcUa
                         parent.Properties = new List<BufferedVariable>();
                     }
                     parent.Properties.Add(property);
+                }
+                if (parent.IsVariable && parent is BufferedVariable variable)
+                {
+                    BufferedVariable arrayParent = variable.Index == -1 ? variable : variable.ArrayParent;
+
+                    if (arrayParent != null && arrayParent.Index == -1 && arrayParent.ArrayDimensions != null
+                        && arrayParent.ArrayDimensions.Count == 1 && arrayParent.ArrayDimensions[0] > 0)
+                    {
+                        for (int i = 0; i < arrayParent.ArrayDimensions[0]; i++)
+                        {
+                            var arrayChild = Extractor.State.GetActiveNode(parent.Id, i);
+                            arrayChild.PropertiesRead = true;
+                            arrayChild.Properties = parent.Properties;
+                        }
+                        arrayParent.PropertiesRead = true;
+                        arrayParent.Properties = parent.Properties;
+                    }
                 }
             }
             ReadNodeData(properties, token);

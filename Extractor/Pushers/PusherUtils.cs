@@ -44,7 +44,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="node">Node to be converted</param>
         /// <returns>Full asset write poco</returns>
-        public static AssetCreate NodeToAsset(BufferedNode node, UAExtractor extractor, long? dataSetId)
+        public static AssetCreate NodeToAsset(BufferedNode node, UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
         {
             if (extractor == null || node == null) return null;
             var writePoco = new AssetCreate
@@ -55,6 +55,7 @@ namespace Cognite.OpcUa.Pushers
                     ? ExtractorUtils.Truncate(extractor.GetUniqueId(node.Id), 140) : ExtractorUtils.Truncate(node.DisplayName, 140),
                 DataSetId = dataSetId
             };
+
             if (node.ParentId != null && !node.ParentId.IsNullNodeId)
             {
                 writePoco.ParentExternalId = extractor.GetUniqueId(node.ParentId);
@@ -62,7 +63,24 @@ namespace Cognite.OpcUa.Pushers
             if (node.Properties != null && node.Properties.Any())
             {
                 writePoco.Metadata = PropertiesToMetadata(node.Properties);
+                if (metaMap?.Any() ?? false)
+                {
+                    foreach (var prop in node.Properties)
+                    {
+                        if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                        {
+                            var value = prop.Value.StringValue;
+                            switch (mapped)
+                            {
+                                case "description": writePoco.Description = value; break;
+                                case "name": writePoco.Name = value; break;
+                                case "parentId": writePoco.ParentExternalId = value; break;
+                            }
+                        }
+                    }
+                }
             }
+            
             return writePoco;
         }
         private static readonly HashSet<string> excludeMetaData = new HashSet<string> {
@@ -192,7 +210,8 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="variable">Variable to be converted</param>
         /// <returns>Complete timeseries write poco</returns>
-        public static StatelessTimeSeriesCreate VariableToStatelessTimeSeries(BufferedVariable variable, UAExtractor extractor, long? dataSetId)
+        public static StatelessTimeSeriesCreate VariableToStatelessTimeSeries(BufferedVariable variable,
+            UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
         {
             if (variable == null || extractor == null) return null;
             string externalId = extractor.GetUniqueId(variable.Id, variable.Index);
@@ -210,6 +229,23 @@ namespace Cognite.OpcUa.Pushers
             if (variable.Properties != null && variable.Properties.Any())
             {
                 writePoco.Metadata = PropertiesToMetadata(variable.Properties);
+                if (metaMap?.Any() ?? false)
+                {
+                    foreach (var prop in variable.Properties)
+                    {
+                        if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                        {
+                            var value = prop.Value.StringValue;
+                            switch (mapped)
+                            {
+                                case "description": writePoco.Description = value; break;
+                                case "name": writePoco.Name = value; break;
+                                case "unit": writePoco.Unit = value; break;
+                                case "parentId": writePoco.AssetExternalId = value; break;
+                            }
+                        }
+                    }
+                }
             }
             return writePoco;
         }
@@ -219,7 +255,7 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="variable">Variable to be converted</param>
         /// <returns>Complete timeseries write poco</returns>
         public static TimeSeriesCreate VariableToTimeseries(BufferedVariable variable, UAExtractor extractor, long? dataSetId,
-            IDictionary<NodeId, long> nodeToAssetIds, bool minimal = false)
+            IDictionary<NodeId, long> nodeToAssetIds, Dictionary<string, string> metaMap, bool minimal = false)
         {
             if (variable == null
                 || extractor == null) return null;
@@ -247,14 +283,37 @@ namespace Cognite.OpcUa.Pushers
                 DataSetId = dataSetId
             };
 
-            if (nodeToAssetIds != null && nodeToAssetIds.ContainsKey(variable.ParentId))
+            if (nodeToAssetIds != null && nodeToAssetIds.TryGetValue(variable.ParentId, out long parent))
             {
-                writePoco.AssetId = nodeToAssetIds[variable.ParentId];
+                writePoco.AssetId = parent;
             }
 
             if (variable.Properties != null && variable.Properties.Any())
             {
                 writePoco.Metadata = PropertiesToMetadata(variable.Properties);
+                if (metaMap?.Any() ?? false)
+                {
+                    foreach (var prop in variable.Properties)
+                    {
+                        if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                        {
+                            var value = prop.Value.StringValue;
+                            switch (mapped)
+                            {
+                                case "description": writePoco.Description = value; break;
+                                case "name": writePoco.Name = value; break;
+                                case "unit": writePoco.Unit = value; break;
+                                case "parentId":
+                                    var id = extractor.State.GetNodeId(value);
+                                    if (id != null && nodeToAssetIds != null && nodeToAssetIds.TryGetValue(id, out long assetId))
+                                    {
+                                        writePoco.AssetId = assetId;
+                                    }
+                                    break;
+                            }
+                        }
+                    }
+                }
             }
             return writePoco;
         }
@@ -346,13 +405,14 @@ namespace Cognite.OpcUa.Pushers
             BufferedVariable variable, 
             UAExtractor extractor,
             RawRow raw,
-            TypeUpdateConfig update)
+            TypeUpdateConfig update,
+            Dictionary<string, string> metaMap)
         {
             if (variable == null || extractor == null || update == null) return null;
 
             if (raw == null)
             {
-                var create = VariableToStatelessTimeSeries(variable, extractor, null);
+                var create = VariableToStatelessTimeSeries(variable, extractor, null, metaMap);
                 return JsonDocument.Parse(JsonSerializer.Serialize(create,
                     new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })).RootElement;
             }
@@ -371,13 +431,14 @@ namespace Cognite.OpcUa.Pushers
             BufferedNode node,
             UAExtractor extractor,
             RawRow raw,
-            TypeUpdateConfig update)
+            TypeUpdateConfig update,
+            Dictionary<string, string> metaMap)
         {
             if (node == null || extractor == null || update == null) return null;
 
             if (raw == null)
             {
-                var create = NodeToAsset(node, extractor, null);
+                var create = NodeToAsset(node, extractor, null, metaMap);
                 return JsonDocument.Parse(JsonSerializer.Serialize(create,
                     new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })).RootElement;
             }
