@@ -753,6 +753,7 @@ namespace Cognite.OpcUa
             {
                 foreach (var chunk in readValueIds.ChunkBy(config.AttributesChunk))
                 {
+                    if (token.IsCancellationRequested) break;
                     Session.Read(
                         null,
                         0,
@@ -762,6 +763,7 @@ namespace Cognite.OpcUa
                         out _
                     );
                     count++;
+                    attrCount += lvalues.Count;
                     attributeRequests.Inc();
                     values.AddRange(lvalues);
                     log.Debug("Read {NumAttributesRead} / {total} values", attrCount, total);

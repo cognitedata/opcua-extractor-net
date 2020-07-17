@@ -61,7 +61,7 @@ namespace Cognite.OpcUa
         public bool UnknownAsScalar { get; set; }
         public int MaxArraySize { get; set; }
         public bool AllowStringVariables { get; set; }
-        public bool AutoIdentifyTypes { get; set; } = true;
+        public bool AutoIdentifyTypes { get; set; } = false;
         public bool EnumsAsStrings { get; set; }
         public bool DataTypeMetadata { get; set; }
         public bool NullAsNumeric { get; set; }

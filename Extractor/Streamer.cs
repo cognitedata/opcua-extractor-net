@@ -307,16 +307,7 @@ namespace Cognite.OpcUa
                 for (int i = 0; i < dim; i++)
                 {
                     var id = variable.IsArray ? $"{uniqueId}[{i}]" : uniqueId;
-                    var dp = variable.DataType.IsString
-                        ? new BufferedDataPoint(
-                            value.SourceTimestamp,
-                            id,
-                            extractor.ConvertToString(values.GetValue(i)))
-                        : new BufferedDataPoint(
-                            value.SourceTimestamp,
-                            id,
-                            UAClient.ConvertToDouble(values.GetValue(i)));
-                    ret.Add(dp);
+                    ret.Add(variable.DataType.ToDataPoint(extractor, values.GetValue(i), value.SourceTimestamp, id));
                 }
                 return ret;
             }
@@ -325,15 +316,7 @@ namespace Cognite.OpcUa
                 uniqueId = $"{uniqueId}[0]";
             }
 
-            var sdp = variable.DataType.IsString
-                ? new BufferedDataPoint(
-                    value.SourceTimestamp,
-                    uniqueId,
-                    extractor.ConvertToString(value.Value))
-                : new BufferedDataPoint(
-                    value.SourceTimestamp,
-                    uniqueId,
-                    UAClient.ConvertToDouble(value.Value));
+            var sdp = variable.DataType.ToDataPoint(extractor, value.Value, value.SourceTimestamp, uniqueId);
             return new[] { sdp };
         }
         /// <summary>

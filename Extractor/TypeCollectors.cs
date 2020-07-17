@@ -18,7 +18,7 @@ namespace Cognite.OpcUa
         public bool IsStep { get; set; }
         public bool IsString { get; set; }
         public NodeId Raw { get; }
-        public IEnumerable<EnumValueType> EnumValues { get; set; }
+        public IDictionary<long, string> EnumValues { get; set; }
         /// <summary>
         /// Construct BufferedDataType from NodeId of datatype
         /// </summary>
@@ -39,6 +39,32 @@ namespace Cognite.OpcUa
                 IsString = true;
             }
         }
+        public BufferedDataPoint ToDataPoint(UAExtractor extractor, object value, DateTime timestamp, string id)
+        {
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
+            if (IsString)
+            {
+                if (EnumValues != null)
+                {
+                    try
+                    {
+                        var longVal = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                        if (EnumValues.TryGetValue(longVal, out string enumVal))
+                        {
+                            return new BufferedDataPoint(timestamp, id, enumVal);
+                        }
+                    }
+                    catch
+                    {
+
+                    }
+                    Log.Debug("Bad enum value for {id}: {val}", id, value);
+                }
+                return new BufferedDataPoint(timestamp, id, extractor.ConvertToString(value));
+            }
+            return new BufferedDataPoint(timestamp, id, UAClient.ConvertToDouble(value));
+        }
+
         /// <summary>
         /// Construct datatype from config object ProtoDateType and NodeId of datatype. Used when datatypes are being overriden.
         /// </summary>
@@ -57,6 +83,7 @@ namespace Cognite.OpcUa
             IsStep = other.IsStep;
             IsString = other.IsString;
             Raw = rawDataType;
+            if (other.EnumValues != null) EnumValues = new Dictionary<long, string>();
         }
 
         public override string ToString()
@@ -65,6 +92,9 @@ namespace Cognite.OpcUa
                 $"    NodeId: {Raw}\n" +
                 $"    isStep: {IsStep}\n" +
                 $"    isString: {IsString}\n" +
+                (EnumValues != null ? 
+                $"    EnumValues: {string.Concat(EnumValues)}\n"
+                : "") +
                 "}";
         }
     }
@@ -143,13 +173,14 @@ namespace Cognite.OpcUa
             {
                 IsString = config.EnumsAsStrings,
                 IsStep = !config.EnumsAsStrings,
-                EnumValues = Enumerable.Empty<EnumValueType>()
+                EnumValues = new Dictionary<long, string>()
             };
 
             var ancestors = GetAncestors(id);
             foreach (var parent in ancestors)
             {
-                if (parent != DataTypes.BaseDataType && dataTypes.TryGetValue(parent, out var dt)) return dt;
+                if (parent != DataTypes.BaseDataType && dataTypes.TryGetValue(parent, out var dt))
+                    return new BufferedDataType(id, dt);
             }
             return new BufferedDataType(id);
         }
@@ -223,7 +254,7 @@ namespace Cognite.OpcUa
                 ret = new Dictionary<string, string>();
                 foreach (var val in dt.EnumValues)
                 {
-                    ret[val.Value.ToString(CultureInfo.InvariantCulture)] = val.DisplayName.Text;
+                    ret[val.Key.ToString(CultureInfo.InvariantCulture)] = val.Value;
                 }
             }
             if (config.DataTypeMetadata)
@@ -267,6 +298,7 @@ namespace Cognite.OpcUa
 
             if (enumTypesToGet.Any())
             {
+                log.Information("Get enum properties for {cnt} enum types", enumTypesToGet.Count);
                 var enumPropMap = new Dictionary<NodeId, NodeId>();
                 var children = uaClient.GetNodeChildren(enumTypesToGet, ReferenceTypes.HierarchicalReferences, (uint)NodeClass.Variable, token);
                 foreach (var id in enumTypesToGet)
@@ -277,7 +309,7 @@ namespace Cognite.OpcUa
                     {
                         if (prop.BrowseName.Name == "EnumStrings" || prop.BrowseName.Name == "EnumValues")
                         {
-                            enumPropMap[id] = id;
+                            enumPropMap[id] = uaClient.ToNodeId(prop.NodeId);
                             break;
                         }
                     }
@@ -290,15 +322,31 @@ namespace Cognite.OpcUa
                     var value = values[kvp.Value];
                     if (value.Value is LocalizedText[] strings)
                     {
-                        type.EnumValues = strings.Select((str, i) => new EnumValueType
+                        for (int i = 0; i < strings.Length; i++)
                         {
-                            Value = i,
-                            DisplayName = str
-                        }).ToArray();
+                            type.EnumValues[i] = strings[i].Text;
+                        }
                     }
                     else if (value.Value is EnumValueType[] enumValues)
                     {
-                        type.EnumValues = enumValues;
+                        foreach (var val in enumValues)
+                        {
+                            type.EnumValues[val.Value] = val.DisplayName.Text;
+                        }
+                    }
+                    else if (value.Value is ExtensionObject[] exts)
+                    {
+                        foreach (var ext in exts)
+                        {
+                            if (ext.Body is EnumValueType val)
+                            {
+                                type.EnumValues[val.Value] = val.DisplayName.Text;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        log.Warning("Unknown enum strings type: {type}", value.Value.GetType());
                     }
                 }
             }
