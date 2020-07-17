@@ -98,19 +98,19 @@ namespace Test
             await explorer.IdentifyDataTypeSettings(source.Token);
             if (serverName != ServerName.Audit)
             {
-                Assert.True(baseConfig.Extraction.AllowStringVariables);
+                Assert.True(baseConfig.Extraction.DataTypes.AllowStringVariables);
             }
 
             if (serverName == ServerName.Array)
             {
-                Assert.Equal(4, baseConfig.Extraction.MaxArraySize);
-                Assert.Equal(2, baseConfig.Extraction.CustomNumericTypes.Count());
-                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=6");
-                Assert.Contains(baseConfig.Extraction.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=7");
+                Assert.Equal(4, baseConfig.Extraction.DataTypes.MaxArraySize);
+                Assert.Equal(2, baseConfig.Extraction.DataTypes.CustomNumericTypes.Count());
+                Assert.Contains(baseConfig.Extraction.DataTypes.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=6");
+                Assert.Contains(baseConfig.Extraction.DataTypes.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=7");
             }
             else
             {
-                Assert.Equal(0, baseConfig.Extraction.MaxArraySize);
+                Assert.Equal(0, baseConfig.Extraction.DataTypes.MaxArraySize);
             }
 
 

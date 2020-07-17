@@ -34,7 +34,7 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
-            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
 
             await tester.StartServer();
             tester.Server.PopulateBaseHistory();
@@ -91,7 +91,7 @@ namespace Test
 
                 tester.Config.Cognite.ReadExtractedRanges = false;
 
-                tester.Config.Extraction.AllowStringVariables = true;
+                tester.Config.Extraction.DataTypes.AllowStringVariables = true;
                 tester.Config.History.Backfill = true;
 
                 var now = DateTime.UtcNow;
@@ -141,7 +141,7 @@ namespace Test
             tester2.Server.PopulateBaseHistory();
 
             tester2.Config.Cognite.ReadExtractedRanges = false;
-            tester2.Config.Extraction.AllowStringVariables = true;
+            tester2.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester2.Config.History.Backfill = true;
             CommonTestUtils.ResetTestMetrics();
 
@@ -264,7 +264,7 @@ namespace Test
             {
                 await tester.ClearPersistentData();
 
-                tester.Config.Extraction.AllowStringVariables = true;
+                tester.Config.Extraction.DataTypes.AllowStringVariables = true;
                 tester.Config.History.Enabled = false;
 
                 await tester.StartServer();
@@ -319,7 +319,7 @@ namespace Test
             await tester2.StartServer();
 
             tester2.StartExtractor();
-            tester2.Config.Extraction.AllowStringVariables = true;
+            tester2.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester2.Config.History.Enabled = false;
 
             await tester2.Extractor.WaitForSubscriptions();
@@ -682,7 +682,7 @@ namespace Test
             await tester.ClearPersistentData();
             await tester.StartServer();
 
-            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
 
             tester.StartExtractor();
 
@@ -738,7 +738,7 @@ namespace Test
 
             await tester.StartServer();
 
-            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
 
             tester.StartExtractor();
 

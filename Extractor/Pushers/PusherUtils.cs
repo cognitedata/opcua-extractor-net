@@ -30,13 +30,32 @@ namespace Cognite.OpcUa.Pushers
                 return Convert.ToInt64(value, CultureInfo.InvariantCulture);
             }
         }
-        public static Dictionary<string, string> PropertiesToMetadata(IEnumerable<BufferedVariable> properties)
+        public static Dictionary<string, string> PropertiesToMetadata(
+            IEnumerable<BufferedVariable> properties,
+            Dictionary<string, string> extras = null)
         {
-            if (properties == null) return new Dictionary<string, string>();
-            return properties
-                .Where(prop => prop.Value != null)
-                .Take(16)
-                .ToDictionary(prop => ExtractorUtils.Truncate(prop.DisplayName, 32), prop => ExtractorUtils.Truncate(prop.Value.StringValue, 256));
+            if (properties == null && extras == null) return new Dictionary<string, string>();
+
+            var raw = new List<KeyValuePair<string, string>>();
+            if (extras != null) raw.AddRange(extras);
+            if (properties != null)
+            {
+
+                raw.AddRange(properties.Select(prop => new KeyValuePair<string, string>(
+                    ExtractorUtils.LimitUtf8ByteCount(prop.DisplayName, 128), ExtractorUtils.LimitUtf8ByteCount(prop.Value.StringValue, 256)
+                )));
+                    
+            }
+            int count = 0;
+            int byteCount = 0;
+            raw = raw.TakeWhile(pair =>
+            {
+                count++;
+                byteCount += Encoding.UTF8.GetByteCount(pair.Key) + Encoding.UTF8.GetByteCount(pair.Value);
+                return count <= 256 && byteCount <= 10240;
+            }).ToList();
+
+            return raw.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
         }
 
         /// <summary>
@@ -228,7 +247,8 @@ namespace Cognite.OpcUa.Pushers
             };
             if (variable.Properties != null && variable.Properties.Any())
             {
-                writePoco.Metadata = PropertiesToMetadata(variable.Properties);
+                var extra = extractor.DataTypeManager.GetAdditionalMetadata(variable);
+                writePoco.Metadata = PropertiesToMetadata(variable.Properties, extra);
                 if (metaMap?.Any() ?? false)
                 {
                     foreach (var prop in variable.Properties)
@@ -291,7 +311,8 @@ namespace Cognite.OpcUa.Pushers
 
             if (variable.Properties != null && variable.Properties.Any())
             {
-                writePoco.Metadata = PropertiesToMetadata(variable.Properties);
+                var extra = extractor.DataTypeManager.GetAdditionalMetadata(variable);
+                writePoco.Metadata = PropertiesToMetadata(variable.Properties, extra);
                 if (metaMap?.Any() ?? false)
                 {
                     foreach (var prop in variable.Properties)
@@ -340,6 +361,7 @@ namespace Cognite.OpcUa.Pushers
             }
         }
         private static JsonElement? CreateRawUpdateCommon(
+            UAExtractor extractor,
             BufferedNode node,
             RawRow raw,
             TypeUpdateConfig update,
@@ -359,7 +381,8 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata)
             {
-                var newMetaData = PropertiesToMetadata(node.Properties);
+                var extra = node is BufferedVariable variable ? extractor.DataTypeManager.GetAdditionalMetadata(variable) : null;
+                var newMetaData = PropertiesToMetadata(node.Properties, extra);
                 if (raw.Columns.ContainsKey("metadata"))
                 {
                     Dictionary<string, string> oldMetaData = null;
@@ -425,7 +448,7 @@ namespace Cognite.OpcUa.Pushers
                 string newAssetExtId = extractor.GetUniqueId(variable.ParentId);
                 UpdateIfModified(ret, raw, newAssetExtId, "assetExternalId");
             }
-            return CreateRawUpdateCommon(variable, raw, update, ret);   
+            return CreateRawUpdateCommon(extractor, variable, raw, update, ret);   
         }
 
         public static JsonElement? CreateRawAssetUpdate(
@@ -450,7 +473,7 @@ namespace Cognite.OpcUa.Pushers
                 string newParentId = extractor.GetUniqueId(node.ParentId);
                 UpdateIfModified(ret, raw, newParentId, "parentExternalId");
             }
-            return CreateRawUpdateCommon(node, raw, update, ret);
+            return CreateRawUpdateCommon(extractor, node, raw, update, ret);
         }
 
         public static IEnumerable<IEnumerable<string>> ChunkByHierarchy(IEnumerable<KeyValuePair<string, BufferedNode>> objects)

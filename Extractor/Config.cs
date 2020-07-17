@@ -44,19 +44,29 @@ namespace Cognite.OpcUa
         public ProtoNodeId RootNode { get => rootNode; set => rootNode = value ?? rootNode; }
         private ProtoNodeId rootNode = new ProtoNodeId();
         public Dictionary<string, ProtoNodeId> NodeMap { get; set; }
-        public IEnumerable<ProtoNodeId> IgnoreDataTypes { get; set; }
-        public int MaxArraySize { get; set; } = 0;
-        public bool AllowStringVariables { get; set; } = false;
         public Dictionary<string, string> NamespaceMap { get => namespaceMap; set => namespaceMap = value ?? namespaceMap; }
         private Dictionary<string, string> namespaceMap = new Dictionary<string, string>();
-        public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
         public int AutoRebrowsePeriod { get; set; } = 0;
         public bool EnableAuditDiscovery { get; set; } = false;
         public int DataPushDelay { get; set; } = 1000;
-        public bool UnknownAsScalar { get; set; } = false;
         public UpdateConfig Update { get => update; set => update = value ?? update; }
         private UpdateConfig update = new UpdateConfig();
+        public DataTypeConfig DataTypes { get => dataTypes; set => dataTypes = value ?? dataTypes; }
+        private DataTypeConfig dataTypes = new DataTypeConfig();
     }
+    public class DataTypeConfig
+    {
+        public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
+        public IEnumerable<ProtoNodeId> IgnoreDataTypes { get; set; }
+        public bool UnknownAsScalar { get; set; }
+        public int MaxArraySize { get; set; }
+        public bool AllowStringVariables { get; set; }
+        public bool AutoIdentifyTypes { get; set; } = true;
+        public bool EnumsAsStrings { get; set; }
+        public bool DataTypeMetadata { get; set; }
+        public bool NullAsNumeric { get; set; }
+    }
+
     public class UpdateConfig
     {
         public bool AnyUpdate => objects.AnyUpdate || variables.AnyUpdate;

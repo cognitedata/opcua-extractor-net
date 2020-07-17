@@ -59,7 +59,7 @@ namespace Test
                 QuitAfterMap = true,
                 MockMode = mode
             });
-            tester.Config.Extraction.AllowStringVariables = false;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = false;
 
             tester.Handler.AllowConnectionTest = mode != CDFMockHandler.MockMode.FailAsset;
             await tester.ClearPersistentData();
@@ -133,8 +133,8 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             await tester.StartServer();
             tester.Server.PopulateArrayHistory();
@@ -144,11 +144,12 @@ namespace Test
             var arrId = tester.UAClient.GetUniqueId(tester.Server.Ids.Custom.Array, 2);
 
             await tester.WaitForCondition(() =>
-                tester.Handler.Assets.Count == 6
-                && tester.Handler.Timeseries.Count == 10
+                tester.Handler.Assets.Count == 7
+                && tester.Handler.Timeseries.Count == 16
                 && tester.Handler.Datapoints.ContainsKey(arrId)
-                && tester.Handler.Datapoints[arrId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count() == 1000, 20,
-                () => $"Expected to get 6 assets and got {tester.Handler.Assets.Count}");
+                && tester.Handler.Datapoints[arrId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count() == 1000, 10,
+                () => $"Expected to get 7 assets and got {tester.Handler.Assets.Count}, 16 timeseries and got {tester.Handler.Timeseries.Count}," +
+                    $"1000 datapoints and got {tester.Handler.Datapoints[arrId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count()}");
 
             int lastData = tester.Handler.Datapoints[arrId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count();
             Assert.Equal(1000, lastData);
@@ -164,8 +165,8 @@ namespace Test
             tester.TestContinuity(arrId);
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Equal(6, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(10, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.Equal(7, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(16, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
         }
         [Trait("Server", "array")]
         [Trait("Target", "CDFPusher")]
@@ -180,18 +181,18 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             await tester.StartServer();
             tester.Server.PopulateArrayHistory();
 
-            tester.Config.Extraction.CustomNumericTypes = new[]
+            tester.Config.Extraction.DataTypes.CustomNumericTypes = new[]
             {
                 tester.IdToProtoDataType(tester.Server.Ids.Custom.MysteryType),
                 tester.IdToProtoDataType(tester.Server.Ids.Custom.NumberType),
             };
-            tester.Config.Extraction.IgnoreDataTypes = new[]
+            tester.Config.Extraction.DataTypes.IgnoreDataTypes = new[]
             {
                 tester.IdToProto(tester.Server.Ids.Custom.IgnoreType)
             };
@@ -200,11 +201,11 @@ namespace Test
 
             var arrId = tester.UAClient.GetUniqueId(tester.Server.Ids.Custom.Array, 2);
             await tester.WaitForCondition(() =>
-                    tester.Handler.Assets.Count == 6
-                    && tester.Handler.Timeseries.Count == 9
+                    tester.Handler.Assets.Count == 7
+                    && tester.Handler.Timeseries.Count == 15
                     && tester.Handler.Datapoints.ContainsKey(arrId), 20,
-                () => $"Expected to get 6 assets and got {tester.Handler.Assets.Count}"
-                      + $", 9 timeseries and got {tester.Handler.Timeseries.Count}");
+                () => $"Expected to get 7 assets and got {tester.Handler.Assets.Count}"
+                      + $", 15 timeseries and got {tester.Handler.Timeseries.Count}");
 
             var mystId = tester.UAClient.GetUniqueId(tester.Server.Ids.Custom.MysteryVar);
             var numId = tester.UAClient.GetUniqueId(tester.Server.Ids.Custom.NumberVar);
@@ -239,8 +240,8 @@ namespace Test
             Assert.DoesNotContain(tester.Handler.Timeseries.Values, ts => ts.name == "IgnoreVar");
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Equal(6, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(9, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.Equal(7, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(15, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
         }
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
@@ -434,7 +435,7 @@ namespace Test
             await tester.ClearPersistentData();
 
             tester.Config.History.Enabled = false;
-            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
 
             await tester.StartServer();
             var numId = "gp.tl:i=2";
@@ -608,8 +609,8 @@ namespace Test
                 ServerName = ServerName.Array
             });
             await tester.ClearPersistentData();
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             tester.Handler.BlockAllConnections = true;
 
@@ -632,8 +633,8 @@ namespace Test
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
 
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 6));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 7));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 16));
 
             await tester.TerminateRunTask();
         }
@@ -654,8 +655,8 @@ namespace Test
                 AssetsTable = "assets",
                 TimeseriesTable = "timeseries"
             };
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             await tester.ClearPersistentData();
 
@@ -673,10 +674,10 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 6));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 7));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 16));
 
-            Assert.Equal(10, tester.Handler.TimeseriesRaw.Count);
+            Assert.Equal(16, tester.Handler.TimeseriesRaw.Count);
             Assert.Empty(tester.Handler.Assets);
 
             Assert.True(tester.Handler.TimeseriesRaw["gp.tl:i=10"].metadata.ContainsKey("EURange"));
@@ -711,8 +712,8 @@ namespace Test
             upd.Variables.Context = variableContext;
             upd.Variables.Metadata = variableMeta;
 
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
 
             await tester.ClearPersistentData();
@@ -768,8 +769,8 @@ namespace Test
                 TimeseriesTable = "timeseries"
             };
 
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
 
             await tester.ClearPersistentData();
@@ -800,8 +801,8 @@ namespace Test
             {
                 ServerName = ServerName.Array
             });
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
             tester.Config.Cognite.MetadataMapping = new MetadataMapConfig
             {

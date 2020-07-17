@@ -18,9 +18,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Serilog;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Opc.Ua;
-using Cognite.Extractor.Common;
+using System.Text;
 
 namespace Cognite.OpcUa
 {
@@ -38,6 +37,23 @@ namespace Cognite.OpcUa
             if (string.IsNullOrEmpty(str) || str.Length <= maxLength) return str;
             return str.Substring(0, maxLength);
         }
+
+        // https://stackoverflow.com/a/44026351/9946909
+        public static string LimitUtf8ByteCount(this string s, int n)
+        {
+            if (string.IsNullOrEmpty(s) || Encoding.UTF8.GetByteCount(s) <= n) return s;
+
+            var a = Encoding.UTF8.GetBytes(s);
+            if (n > 0 && (a[n] & 0xC0) == 0x80)
+            {
+                // remove all bytes whose two highest bits are 10
+                // and one more (start of multi-byte sequence - highest bits should be 11)
+                while (--n > 0 && (a[n] & 0xC0) == 0x80);
+            }
+            // convert back to string (with the limit adjusted)
+            return Encoding.UTF8.GetString(a, 0, n);
+        }
+
         /// <summary>
         /// Divide a list of BufferedNodes into lists of nodes mapped to destination context objects and
         /// data variables respectively.

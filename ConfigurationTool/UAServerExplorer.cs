@@ -390,7 +390,7 @@ namespace Cognite.OpcUa.Config
             }
             log.Information("Found {count} custom numeric datatypes", customNumericTypes.Count);
             summary.CustomNumTypesCount = customNumericTypes.Count;
-            baseConfig.Extraction.CustomNumericTypes = customNumericTypes;
+            baseConfig.Extraction.DataTypes.CustomNumericTypes = customNumericTypes;
         }
         /// <summary>
         /// Get AttributeChunk config value, by attempting to read for various chunk sizes.
@@ -419,9 +419,9 @@ namespace Cognite.OpcUa.Config
                 throw;
             }
 
-            int oldArraySize = config.Extraction.MaxArraySize;
+            int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
             int expectedAttributeReads = nodeList.Aggregate(0, (acc, node) => acc + (node.IsVariable ? 5 : 1));
-            config.Extraction.MaxArraySize = 10;
+            config.Extraction.DataTypes.MaxArraySize = 10;
 
             var testChunks = testAttributeChunkSizes.Where(chunkSize =>
                 chunkSize <= expectedAttributeReads || chunkSize <= 1000);
@@ -471,7 +471,7 @@ namespace Cognite.OpcUa.Config
 
             summary.AttributeChunkSize = baseConfig.Source.AttributesChunk;
 
-            config.Extraction.MaxArraySize = oldArraySize;
+            config.Extraction.DataTypes.MaxArraySize = oldArraySize;
 
             if (!succeeded)
             {
@@ -485,11 +485,11 @@ namespace Cognite.OpcUa.Config
         {
             var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
 
-            int oldArraySize = config.Extraction.MaxArraySize;
+            int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
 
-            int arrayLimit = config.Extraction.MaxArraySize == 0 ? 10 : config.Extraction.MaxArraySize;
+            int arrayLimit = config.Extraction.DataTypes.MaxArraySize == 0 ? 10 : config.Extraction.DataTypes.MaxArraySize;
 
-            config.Extraction.MaxArraySize = 10;
+            config.Extraction.DataTypes.MaxArraySize = 10;
 
             if (useServer)
             {
@@ -544,18 +544,18 @@ namespace Cognite.OpcUa.Config
                     history = true;
                 }
 
-                if (variable.DataType == null)
+                if (variable.DataTypeId == null || variable.DataTypeId.IsNullNodeId)
                 {
                     Log.Warning("Variable datatype is null on id: {id}", variable.Id);
                     continue;
                 }
 
-                var dataType = dataTypes.FirstOrDefault(type => variable.DataType != null && type.Id == variable.DataType.Raw);
+                var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.DataTypeId);
 
                 if (dataType == null)
                 {
                     log.Warning("DataType found on node but not in hierarchy, " +
-                                "this may mean that some datatypes are defined outside of the main datatype hierarchy: {type}", variable.DataType.Raw);
+                                "this may mean that some datatypes are defined outside of the main datatype hierarchy: {type}", variable.DataTypeId);
                     continue;
                 }
 
@@ -583,7 +583,7 @@ namespace Cognite.OpcUa.Config
             {
                 log.Information("Variables with string datatype were discovered, and the AllowStringVariables config option " +
                                 "will be set to true");
-            } else if (!baseConfig.Extraction.AllowStringVariables)
+            } else if (!baseConfig.Extraction.DataTypes.AllowStringVariables)
             {
                 log.Information("No string variables found and the AllowStringVariables option will be set to false");
             }
@@ -601,10 +601,10 @@ namespace Cognite.OpcUa.Config
                 ? "Historizing variables were found, tests on history chunkSizes will be performed later"
                 : "No historizing variables were found, tests on history chunkSizes will be skipped");
 
-            config.Extraction.MaxArraySize = oldArraySize;
+            config.Extraction.DataTypes.MaxArraySize = oldArraySize;
 
-            baseConfig.Extraction.AllowStringVariables = baseConfig.Extraction.AllowStringVariables || stringVariables;
-            baseConfig.Extraction.MaxArraySize = maxLimitedArrayLength > 1 ? maxLimitedArrayLength : oldArraySize;
+            baseConfig.Extraction.DataTypes.AllowStringVariables = baseConfig.Extraction.DataTypes.AllowStringVariables || stringVariables;
+            baseConfig.Extraction.DataTypes.MaxArraySize = maxLimitedArrayLength > 1 ? maxLimitedArrayLength : oldArraySize;
 
             summary.StringVariables = stringVariables;
             summary.MaxArraySize = maxLimitedArrayLength;
@@ -627,7 +627,7 @@ namespace Cognite.OpcUa.Config
 
             int length = node.ArrayDimensions.First();
 
-            return config.Extraction.MaxArraySize < 0 || length > 0 && length <= config.Extraction.MaxArraySize;
+            return config.Extraction.DataTypes.MaxArraySize < 0 || length > 0 && length <= config.Extraction.DataTypes.MaxArraySize;
 
         }
         /// <summary>
@@ -636,6 +636,13 @@ namespace Cognite.OpcUa.Config
         public async Task GetSubscriptionChunkSizes(CancellationToken token)
         {
             bool failed = true;
+            foreach (var node in nodeList)
+            {
+                if (node is BufferedVariable variable)
+                {
+                    variable.DataType = new BufferedDataType(variable.DataTypeId ?? NodeId.Null);
+                }
+            }
             var states = nodeList.Where(node =>
                     node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty
                     && AllowTSMap(variable))

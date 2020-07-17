@@ -464,13 +464,14 @@ namespace Test
                 }
                 if (item.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.NumericDatapoints)
                 {
+                    log.Information("{cnt} numeric datapoints to {id}", item.NumericDatapoints.Datapoints.Count, item.ExternalId);
                     Datapoints[item.ExternalId].NumericDatapoints.AddRange(item.NumericDatapoints.Datapoints);
                 }
                 else
                 {
+                    log.Information("{cnt} string datapoints to {id}", item.StringDatapoints.Datapoints.Count, item.ExternalId);
                     Datapoints[item.ExternalId].StringDatapoints.AddRange(item.StringDatapoints.Datapoints);
                 }
-
             }
 
             return new HttpResponseMessage(HttpStatusCode.OK)

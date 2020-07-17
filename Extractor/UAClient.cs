@@ -48,7 +48,6 @@ namespace Cognite.OpcUa
         protected ISet<NodeId> VisitedNodes { get; }= new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
-        private Dictionary<NodeId, ProtoDataType> numericDataTypes = new Dictionary<NodeId, ProtoDataType>();
         public bool Started { get; private set; }
         private CancellationToken liveToken;
         private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> eventFields;
@@ -126,7 +125,6 @@ namespace Cognite.OpcUa
             // This includes any stored NodeId, which may refer to an outdated namespaceIndex
             eventFields?.Clear();
             nodeOverrides?.Clear();
-            numericDataTypes?.Clear();
 
             var application = new ApplicationInstance
             {
@@ -197,11 +195,6 @@ namespace Cognite.OpcUa
             connects.Inc();
             connected.Set(1);
             log.Information("Successfully connected to server at {EndpointURL}", config.EndpointUrl);
-
-            if (extractionConfig.CustomNumericTypes != null)
-            {
-                numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
-            }
         }
         /// <summary>
         /// Event triggered after a succesfull reconnect.
@@ -215,10 +208,7 @@ namespace Cognite.OpcUa
             log.Warning("--- RECONNECTED ---");
             if (config.RestartOnReconnect)
             {
-                if (extractionConfig.CustomNumericTypes != null)
-                {
-                    numericDataTypes = extractionConfig.CustomNumericTypes.ToDictionary(elem => elem.NodeId.ToNodeId(this), elem => elem);
-                }
+                Extractor.DataTypeManager.Reconfigure();
                 nodeOverrides?.Clear();
                 eventFields?.Clear();
                 Task.Run(() => Extractor?.RestartExtractor());
@@ -406,7 +396,7 @@ namespace Cognite.OpcUa
         /// <param name="referenceTypes">Referencetype to browse, defaults to HierarchicalReferences</param>
         /// <param name="nodeClassMask">Mask for node classes, as specified in the OPC-UA specification</param>
         /// <returns>Dictionary from parent nodeId to collection of children as ReferenceDescriptions</returns>
-        private Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(
+        public Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(
             IEnumerable<NodeId> parents,
             NodeId referenceTypes,
             uint nodeClassMask,
@@ -534,7 +524,7 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback for each node</param>
         /// <param name="referenceTypes">Permitted reference types, defaults to HierarchicalReferences</param>
         /// <param name="nodeClassMask">Mask for node classes as described in the OPC-UA specification</param>
-        protected void BrowseDirectory(
+        public void BrowseDirectory(
             IEnumerable<NodeId> roots,
             Action<ReferenceDescription, NodeId> callback,
             CancellationToken token,
@@ -692,7 +682,7 @@ namespace Cognite.OpcUa
             {
                 variableAttributes.Add(Attributes.Historizing);
             }
-            if (extractionConfig.MaxArraySize > 0)
+            if (extractionConfig.DataTypes.MaxArraySize > 0)
             {
                 variableAttributes.Add(Attributes.ArrayDimensions);
             }
@@ -728,7 +718,7 @@ namespace Cognite.OpcUa
                 {
                     enumerator.MoveNext();
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
-                    vnode.SetDataType(dataType, numericDataTypes);
+                    vnode.DataTypeId = dataType;
 
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
@@ -737,7 +727,7 @@ namespace Cognite.OpcUa
                         enumerator.MoveNext();
                         vnode.Historizing = enumerator.Current.GetValue(false);
                     }
-                    if (extractionConfig.MaxArraySize > 0)
+                    if (extractionConfig.DataTypes.MaxArraySize > 0)
                     {
                         enumerator.MoveNext();
                         var dimVal = enumerator.Current.GetValue(typeof(int[])) as int[];
@@ -750,6 +740,52 @@ namespace Cognite.OpcUa
             }
             enumerator.Dispose();
         }
+        public Dictionary<NodeId, DataValue> ReadRawValues(IEnumerable<NodeId> ids, CancellationToken token)
+        {
+            var readValueIds = ids.Distinct().Select(id => new ReadValueId { AttributeId = Attributes.Value, NodeId = id }).ToList();
+
+            IncOperations();
+            var values = new List<DataValue>();
+            int total = readValueIds.Count;
+            int attrCount = 0;
+            int count = 0;
+            try
+            {
+                foreach (var chunk in readValueIds.ChunkBy(config.AttributesChunk))
+                {
+                    Session.Read(
+                        null,
+                        0,
+                        TimestampsToReturn.Neither,
+                        new ReadValueIdCollection(chunk),
+                        out DataValueCollection lvalues,
+                        out _
+                    );
+                    count++;
+                    attributeRequests.Inc();
+                    values.AddRange(lvalues);
+                    log.Debug("Read {NumAttributesRead} / {total} values", attrCount, total);
+                }
+                log.Information("Read {TotalAttributesRead} values with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
+                                    values.Count, count, ids.Count());
+            }
+            catch (Exception ex)
+            {
+                attributeRequestFailures.Inc();
+                if (ex is ServiceResultException serviceEx)
+                {
+                    throw ExtractorUtils.HandleServiceResult(serviceEx, ExtractorUtils.SourceOp.ReadAttributes);
+                }
+                throw;
+            }
+            finally
+            {
+                DecOperations();
+            }
+            return values.Select((dv, index) => (ids.ElementAt(index), dv)).ToDictionary(pair => pair.Item1, pair => pair.dv);
+        }
+
+
         /// <summary>
         /// Gets the values of the given list of variables, then updates each variable with a BufferedDataPoint
         /// </summary>
@@ -1343,84 +1379,7 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        /// <summary>
-        /// Collects the fields of a given list of eventIds. It does this by mapping out the entire event type hierarchy,
-        /// and collecting the fields of each node on the way.
-        /// </summary>
-        private class EventFieldCollector
-        {
-            readonly UAClient uaClient;
-            readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> properties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
-            readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> localProperties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
-            readonly IEnumerable<NodeId> targetEventIds;
-            /// <summary>
-            /// Construct the collector.
-            /// </summary>
-            /// <param name="parent">UAClient to be used for browse calls.</param>
-            /// <param name="targetEventIds">Target event ids</param>
-            public EventFieldCollector(UAClient parent, IEnumerable<NodeId> targetEventIds)
-            {
-                uaClient = parent;
-                this.targetEventIds = targetEventIds;
-            }
-            /// <summary>
-            /// Main collection function. Calls BrowseDirectory on BaseEventType, waits for it to complete, which should populate properties and localProperties,
-            /// then collects the resulting fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).
-            /// </summary>
-            /// <returns>The collected fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).</returns>
-            public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventIdFields(CancellationToken token)
-            {
-                properties[ObjectTypeIds.BaseEventType] = new List<ReferenceDescription>();
-                localProperties[ObjectTypeIds.BaseEventType] = new List<ReferenceDescription>();
-
-                uaClient.BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType },
-                    EventTypeCallback, token, ReferenceTypeIds.HierarchicalReferences, (uint)NodeClass.ObjectType | (uint)NodeClass.Variable);
-                var propVariables = new Dictionary<ExpandedNodeId, (NodeId, QualifiedName)>();
-                foreach (var kvp in localProperties)
-                {
-                    foreach (var description in kvp.Value)
-                    {
-                        if (!propVariables.ContainsKey(description.NodeId))
-                        {
-                            propVariables[description.NodeId] = (kvp.Key, description.BrowseName);
-                        }
-                    }
-                }
-                return targetEventIds
-                    .Where(id => properties.ContainsKey(id))
-                    .ToDictionary(id => id, id => properties[id]
-                        .Where(desc => propVariables.ContainsKey(desc.NodeId))
-                        .Select(desc => propVariables[desc.NodeId]));
-            }
-            /// <summary>
-            /// HandleNode callback for the event type mapping.
-            /// </summary>
-            /// <param name="child">Type or property to be handled</param>
-            /// <param name="parent">Parent type id</param>
-            private void EventTypeCallback(ReferenceDescription child, NodeId parent)
-            {
-                var id = uaClient.ToNodeId(child.NodeId);
-                if (child.NodeClass == NodeClass.ObjectType && !properties.ContainsKey(id))
-                {
-                    var parentProperties = new List<ReferenceDescription>();
-                    if (properties.ContainsKey(parent))
-                    {
-                        foreach (var prop in properties[parent])
-                        {
-                            parentProperties.Add(prop);
-                        }
-                    }
-                    properties[id] = parentProperties;
-                    localProperties[id] = new List<ReferenceDescription>();
-                }
-                if (child.ReferenceTypeId == ReferenceTypeIds.HasProperty)
-                {
-                    properties[parent] = properties[parent].Append(child);
-                    localProperties[parent] = localProperties[parent].Append(child);
-                }
-            }
-
-        }
+        
         #endregion
 
         #region Utils

@@ -77,7 +77,7 @@ namespace Test
             await tester.StartServer();
             tester.Server.PopulateBaseHistory();
 
-            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.History.DataChunk = 10000;
 
             tester.StartExtractor();
@@ -180,7 +180,7 @@ namespace Test
             await tester.ClearPersistentData();
             await tester.StartServer();
 
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             tester.StartExtractor();
 
@@ -199,7 +199,7 @@ namespace Test
             Assert.False(tester.Handler.Datapoints.ContainsKey("gp.tl:i=4[5]"));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_array_points_missed", 2));
 
-            tester.Config.Extraction.UnknownAsScalar = true;
+            tester.Config.Extraction.DataTypes.UnknownAsScalar = true;
 
             tester.Extractor.RestartExtractor();
 
