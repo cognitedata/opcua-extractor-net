@@ -111,10 +111,6 @@ namespace Cognite.OpcUa
         /// </summary>
         public BufferedDataType DataType { get; set; }
         /// <summary>
-        /// Raw data-type id of this variable
-        /// </summary>
-        public NodeId DataTypeId { get; set; }
-        /// <summary>
         /// True if the opcua node stores its own history
         /// </summary>
         public bool Historizing { get; set; }
@@ -213,7 +209,6 @@ namespace Cognite.OpcUa
             ArrayParent = other;
             Index = index;
             Historizing = other.Historizing;
-            DataTypeId = other.DataTypeId;
             DataType = other.DataType;
             ValueRank = other.ValueRank;
             ArrayDimensions = other.ArrayDimensions;

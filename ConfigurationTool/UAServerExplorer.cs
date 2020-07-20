@@ -544,18 +544,18 @@ namespace Cognite.OpcUa.Config
                     history = true;
                 }
 
-                if (variable.DataTypeId == null || variable.DataTypeId.IsNullNodeId)
+                if (variable.DataType == null || variable.DataType.Raw == null || variable.DataType.Raw.IsNullNodeId)
                 {
                     Log.Warning("Variable datatype is null on id: {id}", variable.Id);
                     continue;
                 }
 
-                var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.DataTypeId);
+                var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.DataType.Raw);
 
                 if (dataType == null)
                 {
                     log.Warning("DataType found on node but not in hierarchy, " +
-                                "this may mean that some datatypes are defined outside of the main datatype hierarchy: {type}", variable.DataTypeId);
+                                "this may mean that some datatypes are defined outside of the main datatype hierarchy: {type}", variable.DataType);
                     continue;
                 }
 
@@ -636,13 +636,6 @@ namespace Cognite.OpcUa.Config
         public async Task GetSubscriptionChunkSizes(CancellationToken token)
         {
             bool failed = true;
-            foreach (var node in nodeList)
-            {
-                if (node is BufferedVariable variable)
-                {
-                    variable.DataType = new BufferedDataType(variable.DataTypeId ?? NodeId.Null);
-                }
-            }
             var states = nodeList.Where(node =>
                     node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty
                     && AllowTSMap(variable))

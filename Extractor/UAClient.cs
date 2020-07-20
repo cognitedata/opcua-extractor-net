@@ -208,7 +208,7 @@ namespace Cognite.OpcUa
             log.Warning("--- RECONNECTED ---");
             if (config.RestartOnReconnect)
             {
-                Extractor.DataTypeManager.Reconfigure();
+                Extractor?.DataTypeManager?.Configure();
                 nodeOverrides?.Clear();
                 eventFields?.Clear();
                 Task.Run(() => Extractor?.RestartExtractor());
@@ -718,7 +718,7 @@ namespace Cognite.OpcUa
                 {
                     enumerator.MoveNext();
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
-                    vnode.DataTypeId = dataType;
+                    vnode.DataType = Extractor?.DataTypeManager?.GetDataType(dataType) ?? new BufferedDataType(dataType);
 
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
@@ -903,7 +903,8 @@ namespace Cognite.OpcUa
                     {
                         for (int i = 0; i < arrayParent.ArrayDimensions[0]; i++)
                         {
-                            var arrayChild = Extractor.State.GetActiveNode(parent.Id, i);
+                            var arrayChild = Extractor?.State?.GetActiveNode(parent.Id, i);
+                            if (arrayChild == null) continue;
                             arrayChild.PropertiesRead = true;
                             arrayChild.Properties = parent.Properties;
                         }

@@ -151,6 +151,7 @@ namespace Cognite.OpcUa
             }
 
             ConfigureExtractor(token);
+            await DataTypeManager.GetDataTypeStructureAsync(token);
 
             Started = true;
             startTime.Set(new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds());
@@ -436,7 +437,7 @@ namespace Cognite.OpcUa
         {
             RootNode = config.Extraction.RootNode.ToNodeId(uaClient, ObjectIds.ObjectsFolder);
 
-            DataTypeManager.Reconfigure();
+            DataTypeManager.Configure();
 
             if (config.Extraction.NodeMap != null)
             {
@@ -512,7 +513,7 @@ namespace Cognite.OpcUa
                 });
                 if (config.Extraction.DataTypes.DataTypeMetadata
                     && old is BufferedVariable oldVariable && node is BufferedVariable variable
-                    && oldVariable.DataTypeId != variable.DataTypeId)
+                    && oldVariable.DataType.Raw != variable.DataType.Raw)
                 {
                     node.Changed = true;
                 }
@@ -581,11 +582,7 @@ namespace Cognite.OpcUa
                 }
             }
             uaClient.ReadNodeData(nodes, token);
-            DataTypeManager.InvestigateDataTypes(rawVariables.Select(variable => variable.DataTypeId).ToHashSet(), token);
-            foreach (var variable in rawVariables)
-            {
-                variable.DataType = DataTypeManager.GetDataType(variable.DataTypeId);
-            }
+            DataTypeManager.GetDataTypeMetadataAsync(rawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), token).Wait();
 
             foreach (var node in rawObjects)
             {

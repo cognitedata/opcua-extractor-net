@@ -37,7 +37,6 @@ namespace Server
                 await app.CheckApplicationInstanceCertificate(false, 0);
                 Server = new TestServer(setups);
                 await app.Start(Server);
-                log.Information("Server started");
             }
             catch (Exception e)
             {

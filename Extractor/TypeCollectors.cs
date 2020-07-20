@@ -102,12 +102,11 @@ namespace Cognite.OpcUa
     public class DataTypeManager
     {
         private readonly ILogger log = Log.Logger.ForContext<DataTypeManager>();
-        readonly UAClient uaClient;
-        readonly Dictionary<NodeId, NodeId> parentIds = new Dictionary<NodeId, NodeId>();
-        readonly Dictionary<NodeId, BufferedDataType> dataTypes = new Dictionary<NodeId, BufferedDataType>();
-        readonly HashSet<NodeId> ignoreDataTypes = new HashSet<NodeId>();
+        private readonly UAClient uaClient;
+        private readonly Dictionary<NodeId, NodeId> parentIds = new Dictionary<NodeId, NodeId>();
+        private readonly Dictionary<NodeId, BufferedDataType> dataTypes = new Dictionary<NodeId, BufferedDataType>();
+        private readonly HashSet<NodeId> ignoreDataTypes = new HashSet<NodeId>();
         private readonly DataTypeConfig config;
-        private readonly BufferedDataType defaultDataType = new BufferedDataType(NodeId.Null) { IsString = true };
 
         public DataTypeManager(UAClient client, DataTypeConfig config)
         {
@@ -116,7 +115,7 @@ namespace Cognite.OpcUa
             uaClient = client;
             this.config = config;
         }
-        public void Reconfigure()
+        public void Configure()
         {
             if (config.CustomNumericTypes != null)
             {
@@ -150,6 +149,7 @@ namespace Cognite.OpcUa
         private IEnumerable<NodeId> GetAncestors(NodeId id)
         {
             var ids = new List<NodeId>();
+            ids.Add(id);
             while (parentIds.TryGetValue(id, out var parent))
             {
                 ids.Add(parent);
@@ -158,7 +158,7 @@ namespace Cognite.OpcUa
             return ids;
         }
 
-        private BufferedDataType GetType(NodeId id)
+        private BufferedDataType CreateDataType(NodeId id)
         {
             if (id == null || id.IsNullNodeId)
             {
@@ -167,26 +167,32 @@ namespace Cognite.OpcUa
                     IsString = !config.NullAsNumeric
                 };
             }
-            if (id == DataTypes.Number) return new BufferedDataType(id) { IsString = false };
-            if (id == DataTypes.Boolean) return new BufferedDataType(id) { IsString = false, IsStep = true };
-            if (id == DataTypes.Enumeration) return new BufferedDataType(id)
-            {
-                IsString = config.EnumsAsStrings,
-                IsStep = !config.EnumsAsStrings,
-                EnumValues = new Dictionary<long, string>()
-            };
+
 
             var ancestors = GetAncestors(id);
             foreach (var parent in ancestors)
             {
                 if (parent != DataTypes.BaseDataType && dataTypes.TryGetValue(parent, out var dt))
                     return new BufferedDataType(id, dt);
+
+                if (parent == DataTypes.Number) return new BufferedDataType(id) { IsString = false };
+                if (parent == DataTypes.Boolean) return new BufferedDataType(id) { IsString = false, IsStep = true };
+                if (parent == DataTypes.Enumeration) return new BufferedDataType(id)
+                {
+                    IsString = config.EnumsAsStrings,
+                    IsStep = !config.EnumsAsStrings,
+                    EnumValues = new Dictionary<long, string>()
+                };
             }
             return new BufferedDataType(id);
         }
         public BufferedDataType GetDataType(NodeId id)
         {
-            return dataTypes.GetValueOrDefault(id) ?? defaultDataType;
+            if (id == null) id = NodeId.Null;
+            if (dataTypes.TryGetValue(id, out var dt)) return dt;
+            dt = CreateDataType(id);
+            dataTypes[id] = dt;
+            return dt;
         }
 
         /// <summary>
@@ -197,13 +203,12 @@ namespace Cognite.OpcUa
         public bool AllowTSMap(BufferedVariable node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
-
-            BufferedDataType dt;
-            if (!dataTypes.TryGetValue(node.DataTypeId, out dt))
+            if (node.DataType == null)
             {
-                log.Warning("Missing datatype: {dt}", node.DataTypeId);
-                dt = new BufferedDataType(node.DataTypeId);
+                log.Warning("Skipping variable {id} due to missing datatype", node.Id);
+                return false;
             }
+            var dt = node.DataType;
 
             if (dt.IsString && !config.AllowStringVariables)
             {
@@ -246,8 +251,8 @@ namespace Cognite.OpcUa
 
         public Dictionary<string, string> GetAdditionalMetadata(BufferedVariable variable)
         {
-            if (variable == null) return null;
-            if (!dataTypes.TryGetValue(variable.DataTypeId, out var dt)) return null;
+            if (variable == null || variable.DataType == null) return null;
+            var dt = variable.DataType;
             Dictionary<string, string> ret = null;
             if (dt.EnumValues != null && !config.EnumsAsStrings)
             {
@@ -264,92 +269,85 @@ namespace Cognite.OpcUa
             }
             return ret;
         }
-
-        public void InvestigateDataTypes(IEnumerable<NodeId> types, CancellationToken token)
+        public async Task GetDataTypeMetadataAsync(IEnumerable<NodeId> types, CancellationToken token)
         {
-            var typeSet = new HashSet<NodeId>(types.Where(type => !dataTypes.ContainsKey(type)));
+            var typeSet = new HashSet<NodeId>(types.Where(type =>
+                dataTypes.TryGetValue(type, out var dt)
+                && dt.EnumValues != null
+                && !dt.EnumValues.Any()));
             if (!typeSet.Any()) return;
 
-            if (!config.AutoIdentifyTypes)
+            log.Information("Get enum properties for {cnt} enum types", typeSet.Count);
+            var enumPropMap = new Dictionary<NodeId, NodeId>();
+            var children = await Task.Run(() => uaClient.GetNodeChildren(typeSet, ReferenceTypes.HierarchicalReferences, (uint)NodeClass.Variable, token));
+
+            foreach (var id in typeSet)
             {
-                foreach (var type in typeSet)
+                if (!children.TryGetValue(id, out var properties)) continue;
+                if (properties == null) continue;
+                foreach (var prop in properties)
                 {
-                    dataTypes[type] = new BufferedDataType(type);
+                    if (prop.BrowseName.Name == "EnumStrings" || prop.BrowseName.Name == "EnumValues")
+                    {
+                        enumPropMap[id] = uaClient.ToNodeId(prop.NodeId);
+                        break;
+                    }
                 }
-                return;
             }
+            if (!enumPropMap.Any()) return;
+
+            var values = await Task.Run(() => uaClient.ReadRawValues(enumPropMap.Values, token));
+            foreach (var kvp in enumPropMap)
+            {
+                var type = dataTypes[kvp.Key];
+                var value = values[kvp.Value];
+                if (value.Value is LocalizedText[] strings)
+                {
+                    for (int i = 0; i < strings.Length; i++)
+                    {
+                        type.EnumValues[i] = strings[i].Text;
+                    }
+                }
+                else if (value.Value is EnumValueType[] enumValues)
+                {
+                    foreach (var val in enumValues)
+                    {
+                        type.EnumValues[val.Value] = val.DisplayName.Text;
+                    }
+                }
+                else if (value.Value is ExtensionObject[] exts)
+                {
+                    foreach (var ext in exts)
+                    {
+                        if (ext.Body is EnumValueType val)
+                        {
+                            type.EnumValues[val.Value] = val.DisplayName.Text;
+                        }
+                    }
+                }
+                else
+                {
+                    log.Warning("Unknown enum strings type: {type}", value.Value.GetType());
+                }
+            }
+        }
+
+        public async Task GetDataTypeStructureAsync(CancellationToken token)
+        {
+            if (!config.AutoIdentifyTypes) return;
 
             void Callback(ReferenceDescription child, NodeId parent)
             {
                 var id = uaClient.ToNodeId(child.NodeId);
                 parentIds[id] = parent;
-                if (dataTypes.ContainsKey(id)) return;
-                dataTypes[id] = GetType(id);
             }
 
-            uaClient.BrowseDirectory(new List<NodeId> { DataTypeIds.BaseDataType },
+            await Task.Run(() => uaClient.BrowseDirectory(new List<NodeId> { DataTypeIds.BaseDataType },
                 Callback,
                 token,
                 ReferenceTypeIds.HasSubtype,
                 (uint)NodeClass.DataType,
-                false);
-
-            var enumTypesToGet = typeSet.Where(type => dataTypes[type].EnumValues != null).ToList();
-
-            if (enumTypesToGet.Any())
-            {
-                log.Information("Get enum properties for {cnt} enum types", enumTypesToGet.Count);
-                var enumPropMap = new Dictionary<NodeId, NodeId>();
-                var children = uaClient.GetNodeChildren(enumTypesToGet, ReferenceTypes.HierarchicalReferences, (uint)NodeClass.Variable, token);
-                foreach (var id in enumTypesToGet)
-                {
-                    if (!children.TryGetValue(id, out var properties)) continue;
-                    if (properties == null) continue;
-                    foreach (var prop in properties)
-                    {
-                        if (prop.BrowseName.Name == "EnumStrings" || prop.BrowseName.Name == "EnumValues")
-                        {
-                            enumPropMap[id] = uaClient.ToNodeId(prop.NodeId);
-                            break;
-                        }
-                    }
-                }
-                if (!enumPropMap.Any()) return;
-                var values = uaClient.ReadRawValues(enumPropMap.Values, token);
-                foreach (var kvp in enumPropMap)
-                {
-                    var type = dataTypes[kvp.Key];
-                    var value = values[kvp.Value];
-                    if (value.Value is LocalizedText[] strings)
-                    {
-                        for (int i = 0; i < strings.Length; i++)
-                        {
-                            type.EnumValues[i] = strings[i].Text;
-                        }
-                    }
-                    else if (value.Value is EnumValueType[] enumValues)
-                    {
-                        foreach (var val in enumValues)
-                        {
-                            type.EnumValues[val.Value] = val.DisplayName.Text;
-                        }
-                    }
-                    else if (value.Value is ExtensionObject[] exts)
-                    {
-                        foreach (var ext in exts)
-                        {
-                            if (ext.Body is EnumValueType val)
-                            {
-                                type.EnumValues[val.Value] = val.DisplayName.Text;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        log.Warning("Unknown enum strings type: {type}", value.Value.GetType());
-                    }
-                }
-            }
+                false));
         }
     }
 
