@@ -70,11 +70,12 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="protoDataType">Overriding propoDataType</param>
         /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
-        public BufferedDataType(ProtoDataType protoDataType, NodeId rawDataType) : this(rawDataType)
+        public BufferedDataType(ProtoDataType protoDataType, NodeId rawDataType, DataTypeConfig config) : this(rawDataType)
         {
             if (protoDataType == null) throw new ArgumentNullException(nameof(protoDataType));
+            if (config == null) throw new ArgumentNullException(nameof(config));
             IsStep = protoDataType.IsStep;
-            IsString = false;
+            IsString = config.EnumsAsStrings && protoDataType.Enum;
             if (protoDataType.Enum)
             {
                 EnumValues = new Dictionary<long, string>();
@@ -131,7 +132,7 @@ namespace Cognite.OpcUa
                         log.Warning("Invalid datatype nodeId: {ns}: {identifier}", type.NodeId.NamespaceUri, type.NodeId.NodeId);
                         continue;
                     }
-                    dataTypes[id] = new BufferedDataType(type, id);
+                    dataTypes[id] = new BufferedDataType(type, id, config);
                     log.Information("Add custom datatype: {id}", id);
                 }
             }

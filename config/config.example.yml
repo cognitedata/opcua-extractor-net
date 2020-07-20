@@ -361,23 +361,9 @@ extraction:
     # Specify specific DisplayNames to ignore.
     ignore-name:
         # -name1
-    
-    # List of NodeIds corresponding to DataTypes that should be ignored.
-    ignore-data-types:
-        # - NamespaceUri:
-        #	NodeId:
 
     # Delay in ms between each push of data points to targets
     data-push-delay: 1000
-    
-    # Maximum size of array variables. Only arrays with the ArrayDimensions property in opc-ua specified will be used,
-    # leave at 0 to only allow scalar values.
-    # Note that some server implementations have issues with the ArrayDimensions property, so it is not fetched at all if MaxArraySize is 0
-    # -1 indicates that there is no limit to array lenght, though only 1-dimensional structures will be read either way.
-    max-array-size: 0
-    
-    # Set to true to allow fetching string variables. This means that all variables with non-numeric type is converted to string in some way.
-    allow-string-variables: false
     
     # Source node in the OPC-UA server. Leave empty to use the top level Objects node.
     root-node:
@@ -401,24 +387,63 @@ extraction:
     #   "http://examples.freeopcua.github.io": efg
     namespace-map:
 
-    # Add custom numeric types using their nodeId. IsStep indicates whether the datatype is discrete.
-    # This also overwrite default behavior, so it is possible to make Integer discrete, etc.
-    # Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type or similar, 
-    # in which case each element needs a conversion
-    custom-numeric-types:
-    #    - node-id: 
-    #          namespace-uri:
-    #          node-id:
-    #      is-step: false
+    # Config for how OPC-UA data-types are mapped to destinations
+    data-types:
+        # Add custom numeric types using their nodeId. is-step indicates whether the datatype is discrete,
+        # enum indicates that it is an enumeration, which may be mapped to a string if enums-as-strings is true.
+        # This also overwrite default behavior, so it is possible to make Integer discrete, etc.
+        # Note that the type in question needs to have a sensible numerical conversion in C#, unless it is an array type or similar, 
+        # in which case each element needs a conversion
+        custom-numeric-types:
+        #    - node-id: 
+        #          namespace-uri:
+        #          node-id:
+        #      is-step: false
+        #      enum: false
+
+        # List of NodeIds corresponding to DataTypes that should be ignored. Timeseries with these datatypes will not be mapped to destinations.
+        ignore-data-types:
+            # - NamespaceUri:
+            #	NodeId:
+
+        # Assume unknown ValueRanks without ArrayDimensions are all scalar, and create timeseries in CDF accordingly.
+        # If such a variable produces an array, only the first element will be mapped to CDF
+        unknown-as-scalar: false
+
+        # Maximum size of array variables. Only arrays with the ArrayDimensions property in opc-ua specified will be used,
+        # leave at 0 to only allow scalar values.
+        # Note that some server implementations have issues with the ArrayDimensions property, so it is not fetched at all if MaxArraySize is 0
+        # -1 indicates that there is no limit to array lenght, though only 1-dimensional structures will be read either way.
+        max-array-size: 0
+   
+        # Set to true to allow fetching string variables. This means that all variables with non-numeric type is converted to string in some way.
+        allow-string-variables: false
+
+        # Map out the dataType hierarchy before starting, useful if there are custom or enum types.
+        # Necessary for enum metadata and for enums-as-strings to work. If this is false, any
+        # custom numeric types have to be added manually.
+        auto-identify-types: false
+
+        # If this is false and auto-identify-types is true, or there are manually added enums in custom-numeric-types,
+        # enums will be mapped to numeric timeseries, and labels are added as metadata fields.
+        # If this is true, labels are not mapped to metadata, and enums will be mapped to string timeseries with values
+        # equal to mapped label values.
+        enums-as-strings: false
+
+        # Add a metadata property dataType which contains the id of the OPC-UA datatype.
+        data-type-metadata: false
+
+        # True to treat null nodeIds as numeric instead of string
+        null-as-numeric: false
+
+
     # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
     # Note that this is a heavy operation, so this number should not be set too low.
     auto-rebrowse-period: 0
     # Enable using audit events to discover new nodes. If this is set to true, the client will expect AuditAddNodes/AuditAddReferences
     # events on the server node. These will be used to add new nodes automatically, by recursively browsing from each given ParentId.
     enable-audit-discovery:
-    # Assume unknown ValueRanks without ArrayDimensions are all scalar, and create timeseries in CDF accordingly.
-    # If such a variable produces an array, only the first element will be mapped to CDF
-    unknown-as-scalar: false
+
     # Update data in destinations on rebrowse or restart.
     # Set auto-rebrowse-period to some value to do this periodically.
     # Context refers to the structure of the node graph in OPC-UA. (assetId and parentId in CDF)

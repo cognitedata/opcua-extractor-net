@@ -370,31 +370,33 @@ namespace Cognite.OpcUa.Config
                         || ToolUtil.NodeNameContains(type, "int", true)
                         || ToolUtil.NodeNameContains(type, "number")
                         || ToolUtil.NodeNameContains(type, "bool")
+                        || ToolUtil.NodeNameContains(type, "enum")
                         || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number)
                         || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean)
                         || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration)))
                 {
                     log.Information("Found potential custom numeric datatype: {id}", type.Id);
                     count++;
-                    if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))
+                    bool isEnum = false;
+                    if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration)
+                        || ToolUtil.NodeNameContains(type, "enum"))
                     {
+                        isEnum = true;
                         log.Information("Type is enumeration, consider whether to turn on extraction.enums-as-strings");
                         summary.Enums = true;
                     }
-                    else if (!ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number)
-                        && !ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean))
+                    else if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number)
+                        || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean))
                     {
-                        customNumericTypes.Add(new ProtoDataType
-                        {
-                            IsStep = ToolUtil.NodeNameContains(type, "bool"),
-                            NodeId = NodeIdToProto(type.Id)
-                        });
-                    }
-                    else
-                    {
-                        log.Information("Numeric dataType is child of number of boolean, auto-discovery can be used instead");
+                        log.Information("Numeric dataType is child of number or boolean, auto-discovery can be used instead");
                         baseConfig.Extraction.DataTypes.AutoIdentifyTypes = true;
                     }
+                    customNumericTypes.Add(new ProtoDataType
+                    {
+                        IsStep = ToolUtil.NodeNameContains(type, "bool"),
+                        Enum = isEnum,
+                        NodeId = NodeIdToProto(type.Id)
+                    });
                 }
             }
 
