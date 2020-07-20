@@ -831,5 +831,84 @@ namespace Test
             var arrayParent = tester.Handler.Assets[tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.Array)];
             Assert.Equal("(0, 100)", arrayParent.description);
         }
+        [Trait("Server", "array")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "enummapping")]
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task TestEnumMapping(bool enumsAsStrings)
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Array,
+                StoreDatapoints = true
+            });
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.EnumsAsStrings = enumsAsStrings;
+            tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
+            tester.Config.History.Enabled = false;
+
+            await tester.ClearPersistentData();
+            await tester.StartServer();
+            tester.StartExtractor();
+
+            await tester.Extractor.WaitForSubscriptions();
+            await tester.WaitForCondition(() =>
+                tester.Handler.Datapoints.TryGetValue(tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.MysteryVar), out var dps)
+                && dps.NumericDatapoints.Any(), 10);
+
+            foreach (var variable in tester.Handler.Timeseries.Values)
+            {
+                Assert.True(variable.metadata.ContainsKey("dataType"));
+            }
+            Assert.Equal(
+                tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.NumberType),
+                tester.Handler.Timeseries[tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.NumberVar)].metadata["dataType"]);
+
+            var enumId1 = tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumVar1);
+            var enumId2 = tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumVar2);
+            var enumId3 = tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumVar3);
+
+            Assert.Equal(
+                tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumType2),
+                tester.Handler.Assets[enumId3].metadata["dataType"]);
+            Assert.Equal(
+                tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumType2),
+                tester.Handler.Timeseries[enumId3 + "[1]"].metadata["dataType"]);
+
+            if (enumsAsStrings)
+            {
+                Assert.False(tester.Handler.Timeseries[enumId2].metadata.ContainsKey("123"));
+                Assert.False(tester.Handler.Assets[enumId3].metadata.ContainsKey("321"));
+                Assert.False(tester.Handler.Timeseries[enumId1].metadata.ContainsKey("1"));
+
+                Assert.Single(tester.Handler.Datapoints[enumId1].StringDatapoints);
+                Assert.Single(tester.Handler.Datapoints[enumId2].StringDatapoints);
+                Assert.Single(tester.Handler.Datapoints[enumId3 + "[1]"].StringDatapoints);
+                Assert.Equal("Enum2", tester.Handler.Datapoints[enumId1].StringDatapoints.First().Value);
+                Assert.Equal("VEnum2", tester.Handler.Datapoints[enumId2].StringDatapoints.First().Value);
+                Assert.Equal("VEnum2", tester.Handler.Datapoints[enumId3 + "[1]"].StringDatapoints.First().Value);
+                Assert.Equal("VEnum1", tester.Handler.Datapoints[enumId3 + "[2]"].StringDatapoints.First().Value);
+            }
+            else
+            {
+                Assert.Equal("VEnum1", tester.Handler.Timeseries[enumId2].metadata["321"]);
+                Assert.Equal("VEnum2", tester.Handler.Timeseries[enumId2].metadata["123"]);
+                Assert.Equal("Enum1", tester.Handler.Timeseries[enumId1].metadata["0"]);
+                Assert.Equal("Enum3", tester.Handler.Timeseries[enumId1].metadata["2"]);
+                Assert.Equal("VEnum1", tester.Handler.Timeseries[enumId3 + "[1]"].metadata["321"]);
+
+                Assert.Single(tester.Handler.Datapoints[enumId1].NumericDatapoints);
+                Assert.Single(tester.Handler.Datapoints[enumId2].NumericDatapoints);
+                Assert.Single(tester.Handler.Datapoints[enumId3 + "[1]"].NumericDatapoints);
+                Assert.Equal(1, tester.Handler.Datapoints[enumId1].NumericDatapoints.First().Value);
+                Assert.Equal(123, tester.Handler.Datapoints[enumId2].NumericDatapoints.First().Value);
+                Assert.Equal(123, tester.Handler.Datapoints[enumId3 + "[1]"].NumericDatapoints.First().Value);
+                Assert.Equal(321, tester.Handler.Datapoints[enumId3 + "[2]"].NumericDatapoints.First().Value);
+            }
+        }
     }
 }

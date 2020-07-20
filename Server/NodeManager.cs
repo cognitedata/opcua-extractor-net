@@ -569,6 +569,11 @@ namespace Server
                 Ids.Custom.ObjProp = objProp.NodeId;
                 Ids.Custom.ObjProp2 = objProp2.NodeId;
                 Ids.Custom.EUProp = euprop.NodeId;
+                Ids.Custom.EnumType1 = enumType1.NodeId;
+                Ids.Custom.EnumType2 = enumType2.NodeId;
+                Ids.Custom.EnumVar1 = enumVar1.NodeId;
+                Ids.Custom.EnumVar2 = enumVar2.NodeId;
+                Ids.Custom.EnumVar3 = enumVar3.NodeId;
             }
         }
         
@@ -1277,6 +1282,11 @@ namespace Server
         public NodeId ObjProp { get; set; }
         public NodeId ObjProp2 { get; set; }
         public NodeId EUProp { get; set; }
+        public NodeId EnumType1 { get; set; }
+        public NodeId EnumType2 { get; set; }
+        public NodeId EnumVar1 { get; set; }
+        public NodeId EnumVar2 { get; set; }
+        public NodeId EnumVar3 { get; set; }
     }
 
     public class EventNodeReference

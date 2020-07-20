@@ -40,11 +40,9 @@ namespace Cognite.OpcUa.Pushers
             if (extras != null) raw.AddRange(extras);
             if (properties != null)
             {
-
                 raw.AddRange(properties.Select(prop => new KeyValuePair<string, string>(
                     ExtractorUtils.LimitUtf8ByteCount(prop.DisplayName, 128), ExtractorUtils.LimitUtf8ByteCount(prop.Value.StringValue, 256)
                 )));
-                    
             }
             int count = 0;
             int byteCount = 0;
@@ -79,22 +77,21 @@ namespace Cognite.OpcUa.Pushers
             {
                 writePoco.ParentExternalId = extractor.GetUniqueId(node.ParentId);
             }
-            if (node.Properties != null && node.Properties.Any())
+
+            var extras = node is BufferedVariable variable ? extractor.DataTypeManager.GetAdditionalMetadata(variable) : null;
+            writePoco.Metadata = PropertiesToMetadata(node.Properties, extras);
+            if (node.Properties != null && node.Properties.Any() && (metaMap?.Any() ?? false))
             {
-                writePoco.Metadata = PropertiesToMetadata(node.Properties);
-                if (metaMap?.Any() ?? false)
+                foreach (var prop in node.Properties)
                 {
-                    foreach (var prop in node.Properties)
+                    if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
                     {
-                        if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                        var value = prop.Value.StringValue;
+                        switch (mapped)
                         {
-                            var value = prop.Value.StringValue;
-                            switch (mapped)
-                            {
-                                case "description": writePoco.Description = value; break;
-                                case "name": writePoco.Name = value; break;
-                                case "parentId": writePoco.ParentExternalId = value; break;
-                            }
+                            case "description": writePoco.Description = value; break;
+                            case "name": writePoco.Name = value; break;
+                            case "parentId": writePoco.ParentExternalId = value; break;
                         }
                     }
                 }
@@ -245,24 +242,22 @@ namespace Cognite.OpcUa.Pushers
                 IsStep = variable.DataType.IsStep,
                 DataSetId = dataSetId
             };
-            if (variable.Properties != null && variable.Properties.Any())
+
+            var extra = extractor.DataTypeManager.GetAdditionalMetadata(variable);
+            writePoco.Metadata = PropertiesToMetadata(variable.Properties, extra);
+            if (variable.Properties != null && variable.Properties.Any() && (metaMap?.Any() ?? false))
             {
-                var extra = extractor.DataTypeManager.GetAdditionalMetadata(variable);
-                writePoco.Metadata = PropertiesToMetadata(variable.Properties, extra);
-                if (metaMap?.Any() ?? false)
+                foreach (var prop in variable.Properties)
                 {
-                    foreach (var prop in variable.Properties)
+                    if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
                     {
-                        if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                        var value = prop.Value.StringValue;
+                        switch (mapped)
                         {
-                            var value = prop.Value.StringValue;
-                            switch (mapped)
-                            {
-                                case "description": writePoco.Description = value; break;
-                                case "name": writePoco.Name = value; break;
-                                case "unit": writePoco.Unit = value; break;
-                                case "parentId": writePoco.AssetExternalId = value; break;
-                            }
+                            case "description": writePoco.Description = value; break;
+                            case "name": writePoco.Name = value; break;
+                            case "unit": writePoco.Unit = value; break;
+                            case "parentId": writePoco.AssetExternalId = value; break;
                         }
                     }
                 }
@@ -309,30 +304,28 @@ namespace Cognite.OpcUa.Pushers
                 writePoco.AssetId = parent;
             }
 
-            if (variable.Properties != null && variable.Properties.Any())
+            var extra = extractor.DataTypeManager.GetAdditionalMetadata(variable);
+            writePoco.Metadata = PropertiesToMetadata(variable.Properties, extra);
+
+            if (variable.Properties != null && variable.Properties.Any() && (metaMap?.Any() ?? false))
             {
-                var extra = extractor.DataTypeManager.GetAdditionalMetadata(variable);
-                writePoco.Metadata = PropertiesToMetadata(variable.Properties, extra);
-                if (metaMap?.Any() ?? false)
+                foreach (var prop in variable.Properties)
                 {
-                    foreach (var prop in variable.Properties)
+                    if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
                     {
-                        if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                        var value = prop.Value.StringValue;
+                        switch (mapped)
                         {
-                            var value = prop.Value.StringValue;
-                            switch (mapped)
-                            {
-                                case "description": writePoco.Description = value; break;
-                                case "name": writePoco.Name = value; break;
-                                case "unit": writePoco.Unit = value; break;
-                                case "parentId":
-                                    var id = extractor.State.GetNodeId(value);
-                                    if (id != null && nodeToAssetIds != null && nodeToAssetIds.TryGetValue(id, out long assetId))
-                                    {
-                                        writePoco.AssetId = assetId;
-                                    }
-                                    break;
-                            }
+                            case "description": writePoco.Description = value; break;
+                            case "name": writePoco.Name = value; break;
+                            case "unit": writePoco.Unit = value; break;
+                            case "parentId":
+                                var id = extractor.State.GetNodeId(value);
+                                if (id != null && nodeToAssetIds != null && nodeToAssetIds.TryGetValue(id, out long assetId))
+                                {
+                                    writePoco.AssetId = assetId;
+                                }
+                                break;
                         }
                     }
                 }

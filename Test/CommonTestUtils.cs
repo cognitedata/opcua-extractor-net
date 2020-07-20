@@ -49,9 +49,6 @@ namespace Test
     {
         public ConfigInitFixture()
         {
-            ConfigurationUtils.AddTagMapping<CognitePusherConfig>("!cdf");
-            ConfigurationUtils.AddTagMapping<InfluxPusherConfig>("!influx");
-            ConfigurationUtils.AddTagMapping<MqttPusherConfig>("!mqtt");
             var defaultConfig = new LoggerConfig();
             defaultConfig.Console = new LogConfig() { Level = "debug" };
             LoggingUtils.Configure(defaultConfig);

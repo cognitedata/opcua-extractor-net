@@ -264,7 +264,7 @@ namespace Cognite.OpcUa
             }
             if (config.DataTypeMetadata)
             {
-                ret = ret ?? new Dictionary<string, string>();
+                ret ??= new Dictionary<string, string>();
                 ret["dataType"] = uaClient.GetUniqueId(dt.Raw);
             }
             return ret;
