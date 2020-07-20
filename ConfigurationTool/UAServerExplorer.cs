@@ -107,7 +107,7 @@ namespace Cognite.OpcUa.Config
             public int NumHistorizingEmitters;
             public List<string> NamespaceMap;
             public TimeSpan HistoryGranularity;
-
+            public bool Enums;
             public bool Auditing;
             public bool Subscriptions;
             public bool History;
@@ -357,39 +357,53 @@ namespace Cognite.OpcUa.Config
                 throw;
             }
 
+            dataTypes = dataTypes.Distinct().ToList();
+
             customNumericTypes = new List<ProtoDataType>();
+            int count = 0;
             foreach (var type in dataTypes)
             {
                 string identifier = type.Id.IdType == IdType.String ? (string) type.Id.Identifier : null;
                 if (IsCustomObject(type.Id)
-                    && (identifier != null && (
-                        identifier.Contains("real", StringComparison.InvariantCultureIgnoreCase)
-                        || identifier.Contains("integer", StringComparison.InvariantCultureIgnoreCase)
-                        || identifier.StartsWith("int", StringComparison.InvariantCultureIgnoreCase)
-                        || identifier.Contains("number", StringComparison.InvariantCultureIgnoreCase)
-                    )
-                    || type.DisplayName != null && (
-                        type.DisplayName.Contains("real", StringComparison.InvariantCultureIgnoreCase)
-                        || type.DisplayName.Contains("integer", StringComparison.InvariantCultureIgnoreCase)
-                        || type.DisplayName.StartsWith("int", StringComparison.InvariantCultureIgnoreCase)
-                        || type.DisplayName.Contains("number", StringComparison.InvariantCultureIgnoreCase)
-                    )
-                    || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number)
-                    || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean)
-                    ))
+                    && (ToolUtil.NodeNameContains(type, "real")
+                        || ToolUtil.NodeNameContains(type, "integer")
+                        || ToolUtil.NodeNameContains(type, "int", true)
+                        || ToolUtil.NodeNameContains(type, "number")
+                        || ToolUtil.NodeNameContains(type, "bool")
+                        || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number)
+                        || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean)
+                        || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration)))
                 {
                     log.Information("Found potential custom numeric datatype: {id}", type.Id);
-                    customNumericTypes.Add(new ProtoDataType
+                    count++;
+                    if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))
                     {
-                        IsStep = identifier != null && identifier.Contains("bool", StringComparison.InvariantCultureIgnoreCase)
+                        log.Information("Type is enumeration, consider whether to turn on extraction.enums-as-strings");
+                        summary.Enums = true;
+                    }
+                    else if (!ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number)
+                        && !ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean))
+                    {
+                        customNumericTypes.Add(new ProtoDataType
+                        {
+                            IsStep = identifier != null && identifier.Contains("bool", StringComparison.InvariantCultureIgnoreCase)
                                  || type.DisplayName != null && type.DisplayName.Contains("bool", StringComparison.InvariantCultureIgnoreCase)
                                  || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean),
-                        NodeId = NodeIdToProto(type.Id)
-                    });
+                            NodeId = NodeIdToProto(type.Id)
+                        });
+                    }
+                    else
+                    {
+                        log.Information("Numeric dataType is child of number of boolean, auto-discovery can be used instead");
+                        baseConfig.Extraction.DataTypes.AutoIdentifyTypes = true;
+                    }
                 }
             }
-            log.Information("Found {count} custom numeric datatypes", customNumericTypes.Count);
-            summary.CustomNumTypesCount = customNumericTypes.Count;
+
+            if (!summary.Enums && dataTypes.Any(type => ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))) summary.Enums = true;
+
+            log.Information("Found {count} custom numeric datatypes, of which {count} cannot be auto-discovered", count, customNumericTypes.Count);
+            summary.CustomNumTypesCount = count;
             baseConfig.Extraction.DataTypes.CustomNumericTypes = customNumericTypes;
         }
         /// <summary>
@@ -566,14 +580,8 @@ namespace Cognite.OpcUa.Config
             foreach (var dataType in identifiedTypes)
             {
                 string identifier = dataType.Id.IdType == IdType.String ? (string)dataType.Id.Identifier : null;
-                if (dataType.DisplayName != null
-                    && !dataType.DisplayName.Contains("picture", StringComparison.InvariantCultureIgnoreCase)
-                    && !dataType.DisplayName.Contains("image", StringComparison.InvariantCultureIgnoreCase)
-                    && (identifier == null
-                        || !identifier.Contains("picture", StringComparison.InvariantCultureIgnoreCase)
-                        && !identifier.Contains("image", StringComparison.InvariantCultureIgnoreCase)
-                        )
-                    )
+                if (ToolUtil.NodeNameContains(dataType, "picture")
+                    || ToolUtil.NodeNameContains(dataType, "image"))
                 {
                     stringVariables = true;
                 }
@@ -1427,7 +1435,12 @@ namespace Cognite.OpcUa.Config
                 log.Information("There are variables that would be mapped to strings in CDF, if this is not correct " +
                                 "they may be numeric types that the auto detection did not catch, or they may need to be filtered out");
             }
-            if (summary.CustomNumTypesCount > 0 || summary.MaxArraySize > 0 || summary.StringVariables)
+            if (summary.Enums)
+            {
+                log.Information("There are variables with enum datatype. These can either be mapped to raw integer values with labels in" +
+                    "metadata, or to string timeseries with labels as values.");
+            }
+            if (summary.CustomNumTypesCount > 0 || summary.MaxArraySize > 0 || summary.StringVariables || summary.Enums)
             {
                 log.Information("");
             }

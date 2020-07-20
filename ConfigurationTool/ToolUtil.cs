@@ -286,6 +286,20 @@ namespace Cognite.OpcUa.Config
 
             return configText;
         }
+        public static bool NodeNameContains(BufferedNode node, string str, bool startsWith = false)
+        {
+            if (node == null) return false;
+            string identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
+            if (startsWith)
+            {
+                return identifier != null && identifier.StartsWith(str, StringComparison.InvariantCultureIgnoreCase)
+                    || node.DisplayName != null && node.DisplayName.StartsWith(str, StringComparison.InvariantCultureIgnoreCase);
+            }
+            else {
+                return identifier != null && identifier.Contains(str, StringComparison.InvariantCultureIgnoreCase)
+                        || node.DisplayName != null && node.DisplayName.Contains(str, StringComparison.InvariantCultureIgnoreCase);
+            }
+        }
     }
     public class DefaultFilterTypeInspector : TypeInspectorSkeleton
     {
