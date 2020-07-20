@@ -104,9 +104,10 @@ namespace Test
             if (serverName == ServerName.Array)
             {
                 Assert.Equal(4, baseConfig.Extraction.DataTypes.MaxArraySize);
-                Assert.Equal(2, baseConfig.Extraction.DataTypes.CustomNumericTypes.Count());
+                Assert.Equal(4, baseConfig.Extraction.DataTypes.CustomNumericTypes.Count());
                 Assert.Contains(baseConfig.Extraction.DataTypes.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=6");
                 Assert.Contains(baseConfig.Extraction.DataTypes.CustomNumericTypes, proto => proto.NodeId.NodeId == "i=7");
+                Assert.Contains(baseConfig.Extraction.DataTypes.CustomNumericTypes, proto => proto.Enum);
             }
             else
             {

@@ -577,11 +577,13 @@ namespace Cognite.OpcUa.Config
                 identifiedTypes.Add(dataType);
             }
 
+            log.Information("Found {cnt} distinct data-types in detected variables", identifiedTypes.Count);
+
             foreach (var dataType in identifiedTypes)
             {
                 string identifier = dataType.Id.IdType == IdType.String ? (string)dataType.Id.Identifier : null;
-                if (ToolUtil.NodeNameContains(dataType, "picture")
-                    || ToolUtil.NodeNameContains(dataType, "image"))
+                if (!ToolUtil.NodeNameContains(dataType, "picture")
+                    && !ToolUtil.NodeNameContains(dataType, "image"))
                 {
                     stringVariables = true;
                 }
