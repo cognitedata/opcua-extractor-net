@@ -386,9 +386,7 @@ namespace Cognite.OpcUa.Config
                     {
                         customNumericTypes.Add(new ProtoDataType
                         {
-                            IsStep = identifier != null && identifier.Contains("bool", StringComparison.InvariantCultureIgnoreCase)
-                                 || type.DisplayName != null && type.DisplayName.Contains("bool", StringComparison.InvariantCultureIgnoreCase)
-                                 || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean),
+                            IsStep = ToolUtil.NodeNameContains(type, "bool"),
                             NodeId = NodeIdToProto(type.Id)
                         });
                     }

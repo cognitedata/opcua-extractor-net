@@ -264,6 +264,7 @@ namespace Cognite.OpcUa
     {
         public ProtoNodeId NodeId { get; set; }
         public bool IsStep { get; set; } = false;
+        public bool Enum { get; set; } = false;
     }
 
     public class StateStorageConfig : StateStoreConfig

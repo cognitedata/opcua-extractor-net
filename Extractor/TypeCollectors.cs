@@ -75,6 +75,10 @@ namespace Cognite.OpcUa
             if (protoDataType == null) throw new ArgumentNullException(nameof(protoDataType));
             IsStep = protoDataType.IsStep;
             IsString = false;
+            if (protoDataType.Enum)
+            {
+                EnumValues = new Dictionary<long, string>();
+            }
         }
 
         public BufferedDataType(NodeId rawDataType, BufferedDataType other) : this(rawDataType)
