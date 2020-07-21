@@ -1,4 +1,5 @@
-﻿using Cognite.Extractor.Utils;
+﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.Utils;
 using CogniteSdk;
 using Opc.Ua;
 using System;
@@ -14,6 +15,9 @@ namespace Cognite.OpcUa.Pushers
 {
     public static class PusherUtils
     {
+        public static readonly DateTime CogniteMinTime = CogniteTime.FromUnixTimeMilliseconds(CogniteUtils.TimestampMin);
+        public static readonly DateTime CogniteMaxTime = CogniteTime.FromUnixTimeMilliseconds(CogniteUtils.TimestampMax);
+
         /// <summary>
         /// Get the value of given object assumed to be a timestamp as the number of milliseconds since 1/1/1970
         /// </summary>

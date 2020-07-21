@@ -117,7 +117,6 @@ namespace Cognite.OpcUa
                 }
                 dataPointPushFailures.Inc();
                 log.Error("Failed to insert {count} datapoints into influxdb: {msg}", count, e.Message);
-                log.Debug(e, "Failed to insert datapoints into influxdb");
                 return false;
             }
             dataPointPushes.Inc();
@@ -159,8 +158,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                log.Warning("Failed to push {cnt} events to influxdb", count);
-                log.Debug(ex, "Failed to push events to influxdb");
+                log.Warning("Failed to push {cnt} events to influxdb: {msg}", count, ex.Message);
                 eventPushFailures.Inc();
                 return false;
             }
@@ -311,15 +309,14 @@ namespace Cognite.OpcUa
             IEnumerable<string> eventSeries;
             try
             {
-                var measurements = await client.QueryMultiSeriesAsync(config.Database,
-                    "SHOW MEASUREMENTS");
+                var measurements = await client.QueryMultiSeriesAsync(config.Database, "SHOW MEASUREMENTS");
                 eventSeries = measurements.SelectMany(series => series.Entries.Select(entry => entry.Name as string));
                 eventSeries = eventSeries.Where(series => series.StartsWith("events.", StringComparison.InvariantCulture));
 
             }
             catch (Exception e)
             {
-                log.Error(e, "Failed to list measurements in influxdb");
+                log.Error("Failed to list measurements in influxdb: {msg}", e.Message);
                 return false;
             }
 
@@ -330,7 +327,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                log.Error(e, "Failed to get timestamps from influxdb");
+                log.Error("Failed to get timestamps from influxdb: {msg}", e.Message);
                 return false;
             }
             return true;
@@ -350,8 +347,7 @@ namespace Cognite.OpcUa
             catch (Exception ex)
             {
                 log.Error("Failed to get db names from influx server: {host}, this is most likely due to a faulty connection or" +
-                          " wrong credentials");
-                log.Debug(ex, "Failed to get db names from influx server: {host}", config.Host);
+                          " wrong credentials: {msg}", ex.Message);
                 return false;
             }
             if (dbs == null || !dbs.Contains(config.Database))
@@ -363,7 +359,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception ex)
                 {
-                    log.Error(ex, "Failed to create database {db} in influxdb: {message}", config.Database, ex.Message);
+                    log.Error("Failed to create database {db} in influxdb: {message}", config.Database, ex.Message);
                     return false;
                 }
                 log.Error("Database not successfully created");
@@ -395,7 +391,7 @@ namespace Cognite.OpcUa
                 idp.Fields.Add("value", Math.Abs(dp.DoubleValue.Value) < 0.1);
                 return idp;
             }
-            if (state.DataType.Identifier < DataTypes.Float
+            if (state.DataType.IsStep || state.DataType.Identifier < DataTypes.Float
                      || state.DataType.Identifier == DataTypes.Integer
                      || state.DataType.Identifier == DataTypes.UInteger)
             {
