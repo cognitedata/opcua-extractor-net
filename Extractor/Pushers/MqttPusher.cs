@@ -124,7 +124,7 @@ namespace Cognite.OpcUa.Pushers
                     continue;
                 }
 
-                if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
+                if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue.Value) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
                 {
                     if (config.NonFiniteReplacement != null)
                     {
@@ -340,7 +340,7 @@ namespace Cognite.OpcUa.Pushers
                         new NumericDatapoint
                         {
                             Timestamp = new DateTimeOffset(ipoint.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = ipoint.DoubleValue
+                            Value = ipoint.DoubleValue.Value
                         }));
                 }
 

@@ -71,7 +71,7 @@ namespace Cognite.OpcUa
                     continue;
                 }
 
-                if (!buffer.IsString && !double.IsFinite(buffer.DoubleValue))
+                if (!buffer.IsString && !double.IsFinite(buffer.DoubleValue.Value))
                 {
                     if (config.NonFiniteReplacement != null)
                     {
@@ -392,7 +392,7 @@ namespace Cognite.OpcUa
                     UtcTimestamp = dp.Timestamp,
                     MeasurementName = dp.Id
                 };
-                idp.Fields.Add("value", Math.Abs(dp.DoubleValue) < 0.1);
+                idp.Fields.Add("value", Math.Abs(dp.DoubleValue.Value) < 0.1);
                 return idp;
             }
             if (state.DataType.Identifier < DataTypes.Float
@@ -414,7 +414,7 @@ namespace Cognite.OpcUa
                     UtcTimestamp = dp.Timestamp,
                     MeasurementName = dp.Id
                 };
-                idp.Fields.Add("value", dp.DoubleValue);
+                idp.Fields.Add("value", dp.DoubleValue.Value);
                 return idp;
             }
         }

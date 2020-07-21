@@ -153,36 +153,6 @@ namespace Cognite.OpcUa
             }
         }
         /// <summary>
-        /// Turn string into an array of bytes on the format [unsigned short length][string].
-        /// </summary>
-        /// <param name="str">String to transform</param>
-        /// <returns>Storable bytes</returns>
-        public static byte[] StringToStorable(string str)
-        {
-            ushort size = (ushort)((str?.Length ?? 0) * sizeof(char));
-            byte[] bytes = new byte[size + sizeof(ushort)];
-            Buffer.BlockCopy(BitConverter.GetBytes(size), 0, bytes, 0, sizeof(ushort));
-            if (size == 0) return bytes;
-            Buffer.BlockCopy(str?.ToCharArray() ?? Array.Empty<char>(), 0, bytes, sizeof(ushort), 
-                size);
-            return bytes;
-        }
-        /// <summary>
-        /// Read a string from given array of bytes, starting from given position.
-        /// String being read is assumed to be on the format [unsigned short length][string]
-        /// </summary>
-        /// <param name="bytes">Bytes to read</param>
-        /// <param name="pos">Position to start reading from</param>
-        /// <returns>Resulting parsed string and new position in the byte array.</returns>
-        public static (string result, int pos) StringFromStorable(byte[] bytes, int pos)
-        {
-            ushort size = BitConverter.ToUInt16(bytes, pos);
-            if (size == 0) return (null, pos + sizeof(ushort));
-            var chars = new char[size/sizeof(char)];
-            Buffer.BlockCopy(bytes, pos + sizeof(ushort), chars, 0, size);
-            return (new string(chars), pos + size + sizeof(ushort));
-        }
-        /// <summary>
         /// Parse ServiceResult from OPC-UA and log then transform it into a
         /// SilentServiceException if it is recognized, or just return it if not.
         /// </summary>

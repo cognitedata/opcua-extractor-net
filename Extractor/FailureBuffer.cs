@@ -403,49 +403,65 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         private async Task<bool> ReadDatapointsFromFile(IEnumerable<IPusher> pushers, CancellationToken token)
         {
-            long nextPos = 0;
             bool success = true;
+            bool final = false;
 
-            do
+            using (var stream = new FileStream(config.DatapointPath, FileMode.OpenOrCreate, FileAccess.Read))
             {
-                IEnumerable<BufferedDataPoint> points;
-                try
+                do
                 {
-                    (points, nextPos) =
-                        await Task.Run(() => ReadDatapointsFromFile(config.DatapointPath, nextPos, 100000, token));
-                    foreach (var pusher in pushers)
+                    try
                     {
-                        success &= await pusher.PushDataPoints(points, token) ?? true;
+                        var points = new List<BufferedDataPoint>();
+
+                        int count = 0;
+                        while (!token.IsCancellationRequested && count < 1_000_000)
+                        {
+                            var dp = BufferedDataPoint.FromStream(stream);
+                            if (dp == null)
+                            {
+                                final = true;
+                                break;
+                            }
+                            points.Add(dp);
+                        }
+                        log.Information("Read {cnt} datapoints from file", points.Count);
+                        if (!points.Any()) break;
+
+                        var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(points, token)));
+
+                        success &= results.All(result => result ?? true);
+                        if (!success) break;
+
+                        var ranges = new Dictionary<string, TimeRange>();
+
+                        foreach (var point in points)
+                        {
+                            if (!ranges.ContainsKey(point.Id))
+                            {
+                                ranges[point.Id] = new TimeRange(point.Timestamp, point.Timestamp);
+                                continue;
+                            }
+
+                            ranges[point.Id] = ranges[point.Id].Extend(point.Timestamp, point.Timestamp);
+                        }
+
+                        foreach (var kvp in ranges)
+                        {
+                            var state = extractor.State.GetNodeState(kvp.Key);
+                            state.UpdateDestinationRange(kvp.Value.First, kvp.Value.Last);
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Failed to read datapoints from file");
-                    success = false;
-                    break;
-                }
-
-                if (!success) break;
-                var ranges = new Dictionary<string, TimeRange>();
-
-                foreach (var point in points)
-                {
-                    if (!ranges.ContainsKey(point.Id))
+                    catch (Exception ex)
                     {
-                        ranges[point.Id] = new TimeRange(point.Timestamp, point.Timestamp);
-                        continue;
+                        log.Error(ex, "Failed to read datapoints from file");
+                        success = false;
+                        break;
                     }
+                } while (!final && !token.IsCancellationRequested);
+            }
 
-                    ranges[point.Id] = ranges[point.Id].Extend(point.Timestamp, point.Timestamp);
-                }
-
-                foreach (var kvp in ranges)
-                {
-                    var state = extractor.State.GetNodeState(kvp.Key);
-                    state.UpdateDestinationRange(kvp.Value.First, kvp.Value.Last);
-                }
-
-            } while (nextPos > 0);
+            if (token.IsCancellationRequested) return true;
 
             if (!success) return false;
 
@@ -463,50 +479,64 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         private async Task<bool> ReadEventsFromFile(IEnumerable<IPusher> pushers, CancellationToken token)
         {
-            long nextPos = 0;
             bool success = true;
+            bool final = false;
 
-            do
+            using (var stream = new FileStream(config.EventPath, FileMode.OpenOrCreate, FileAccess.Read))
             {
-                IEnumerable<BufferedEvent> events;
-                try
+                do
                 {
-                    (events, nextPos) = await Task.Run(() => 
-                        ReadEventsFromFile(config.EventPath, extractor, nextPos, 10000, token));
-
-                    foreach (var pusher in pushers)
+                    try
                     {
-                        success &= await pusher.PushEvents(events, token) ?? true;
+                        var events = new List<BufferedEvent>();
+
+                        int count = 0;
+                        while (!token.IsCancellationRequested && count < 10_000)
+                        {
+                            var evt = BufferedEvent.FromStream(stream, extractor);
+                            if (evt == null)
+                            {
+                                final = true;
+                                break;
+                            }
+                            events.Add(evt);
+                        }
+                        log.Information("Read {cnt} events from file", events.Count);
+
+                        var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
+
+                        success &= results.All(result => result ?? true);
+                        if (!success) break;
+
+                        var ranges = new Dictionary<NodeId, TimeRange>();
+
+                        foreach (var evt in events)
+                        {
+                            if (!ranges.TryGetValue(evt.EmittingNode, out var range))
+                            {
+                                ranges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
+                                continue;
+                            }
+
+                            ranges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
+                        }
+
+                        foreach (var kvp in ranges)
+                        {
+                            var state = extractor.State.GetEmitterState(kvp.Key);
+                            state.UpdateDestinationRange(kvp.Value.First, kvp.Value.Last);
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Failed to read events from file");
-                    success = false;
-                    break;
-                }
-
-                if (!success) break;
-                var ranges = new Dictionary<NodeId, TimeRange>();
-
-                foreach (var evt in events)
-                {
-                    if (!ranges.ContainsKey(evt.EmittingNode))
+                    catch (Exception ex)
                     {
-                        ranges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
-                        continue;
+                        Log.Error(ex, "Failed to read events from file");
+                        success = false;
+                        break;
                     }
+                } while (!final && !token.IsCancellationRequested);
+            }
 
-                    ranges[evt.EmittingNode] = ranges[evt.EmittingNode].Extend(evt.Time, evt.Time);
-                }
-
-                foreach (var kvp in ranges)
-                {
-                    var state = extractor.State.GetEmitterState(kvp.Key);
-                    state.UpdateDestinationRange(kvp.Value.First, kvp.Value.Last);
-                }
-
-            } while (nextPos > 0);
+            if (token.IsCancellationRequested) return true;
 
             if (!success) return false;
 
@@ -573,121 +603,6 @@ namespace Cognite.OpcUa
                 numEventsInBuffer.Inc();
             }
             fs.Flush();
-        }
-        /// <summary>
-        /// Read datapoints from a binary file. Reads straight from file stream into datapoints
-        /// </summary>
-        /// <param name="file">File to read from</param>
-        /// <param name="startPos">Start position in file</param>
-        /// <param name="limit">Maximum number of datapoints to read</param>
-        /// <returns>List of datapoints and new position in file</returns>
-        public static (IEnumerable<BufferedDataPoint> dps, long pos) ReadDatapointsFromFile(string file, long startPos, int limit,
-            CancellationToken token)
-        {
-            if (file == null) throw new ArgumentNullException(nameof(file));
-            var dps = new List<BufferedDataPoint>();
-            int count = 0;
-            long pos;
-            bool final;
-            using (var fs = new FileStream(file, FileMode.OpenOrCreate, FileAccess.Read, FileShare.None))
-            {
-                var sizeBytes = new byte[sizeof(ushort)];
-                fs.Seek(startPos, SeekOrigin.Begin);
-                while (!token.IsCancellationRequested && count < limit)
-                {
-                    int read = fs.Read(sizeBytes, 0, sizeBytes.Length);
-                    if (read < sizeBytes.Length) break;
-                    ushort size = BitConverter.ToUInt16(sizeBytes, 0);
-                    var dataBytes = new byte[size];
-                    int dRead = fs.Read(dataBytes, 0, size);
-                    if (dRead < size) break;
-                    var (buffDp, _) = BufferedDataPoint.FromStorableBytes(dataBytes, 0);
-                    if (buffDp.Id == null)
-                    {
-                        log.Warning("Invalid datapoint in buffer file");
-                        continue;
-                    }
-
-                    count++;
-                    log.Verbose(buffDp.ToDebugDescription());
-                    dps.Add(buffDp);
-                }
-
-                pos = fs.Position;
-                final = pos == fs.Length;
-                if (count == 0)
-                {
-                    log.Verbose("Read 0 point from file");
-                }
-                else
-                {
-                    log.Debug("Read {NumDatapointsToRead} points from file", count);
-                }
-                fs.Flush();
-            }
-
-            if (final || dps.Count < limit)
-            {
-                pos = 0;
-            }
-
-
-            return (dps, pos);
-        }
-        /// <summary>
-        /// Read events from binary file
-        /// </summary>
-        /// <param name="file">File to read from</param>
-        /// <param name="extractor">Extractor, used for NodeId transformations</param>
-        /// <param name="startPos">Position to start reading from</param>
-        /// <param name="limit">Maximum number of events to read</param>
-        /// <returns>List of events and new position in file</returns>
-        public static (IEnumerable<BufferedEvent> events, long pos) ReadEventsFromFile(string file,
-            UAExtractor extractor, long startPos, int limit, CancellationToken token)
-        {
-            if (file == null) throw new ArgumentNullException(nameof(file));
-            var evts = new List<BufferedEvent>();
-            int count = 0;
-            long pos;
-            bool final;
-            using (FileStream fs = new FileStream(file, FileMode.OpenOrCreate, FileAccess.Read, FileShare.None))
-            {
-                fs.Seek(startPos, SeekOrigin.Begin);
-                byte[] sizeBytes = new byte[sizeof(ushort)];
-                while (!token.IsCancellationRequested && count < limit)
-                {
-                    int read = fs.Read(sizeBytes, 0, sizeBytes.Length);
-                    if (read < sizeBytes.Length) break;
-                    ushort size = BitConverter.ToUInt16(sizeBytes, 0);
-                    byte[] dataBytes = new byte[size];
-                    int dRead = fs.Read(dataBytes, 0, size);
-                    if (dRead < size) break;
-                    var (evt, _) = BufferedEvent.FromStorableBytes(dataBytes, extractor, 0);
-                    if (evt.EventId == null || evt.SourceNode == null)
-                    {
-                        log.Warning("Invalid event in buffer file");
-                        continue;
-                    }
-
-                    count++;
-                    log.Verbose(evt.ToDebugDescription());
-                    evts.Add(evt);
-                }
-                if (count > 0)
-                {
-                    log.Debug("Read {NumEventsToRead} events from file", count);
-                }
-                pos = fs.Position;
-                final = pos == fs.Length;
-                fs.Flush();
-            }
-
-            if (final || count < limit)
-            {
-                pos = 0;
-            }
-
-            return (evts, pos);
         }
         public void Dispose()
         {
