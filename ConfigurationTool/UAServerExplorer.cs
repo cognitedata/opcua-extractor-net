@@ -334,6 +334,81 @@ namespace Cognite.OpcUa.Config
         {
             return id.NamespaceIndex != 0 || id.IdType != IdType.Numeric;
         }
+
+        private void TestDataType(BufferedNode type)
+        {
+            if (!IsCustomObject(type.Id)) return;
+            uint dataTypeSwitch = 0;
+            bool inHierarchy = false;
+
+            if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number))
+            {
+                dataTypeSwitch = DataTypes.Number;
+                inHierarchy = true;
+            }
+            else if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean))
+            {
+                dataTypeSwitch = DataTypes.Boolean;
+                inHierarchy = true;
+            }
+            else if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))
+            {
+                dataTypeSwitch = DataTypes.Enumeration;
+                inHierarchy = true;
+            }
+            if (dataTypeSwitch == 0)
+            {
+                if (ToolUtil.NodeNameContains(type, "real")
+                    || ToolUtil.NodeNameContains(type, "integer")
+                    || ToolUtil.NodeNameStartsWith(type, "int")
+                    || ToolUtil.NodeNameContains(type, "number"))
+                {
+                    dataTypeSwitch = DataTypes.Number;
+                }
+                else if (ToolUtil.NodeNameContains(type, "bool"))
+                {
+                    dataTypeSwitch = DataTypes.Boolean;
+                }
+                else if (ToolUtil.NodeNameContains(type, "enum"))
+                {
+                    dataTypeSwitch = DataTypes.Enumeration;
+                }
+            }
+            switch (dataTypeSwitch)
+            {
+                case DataTypes.Number:
+                    log.Information("Found potential numeric type: {id}", type.Id);
+                    break;
+                case DataTypes.Boolean:
+                    log.Information("Found potential boolean type: {id}", type.Id);
+                    break;
+                case DataTypes.Enumeration:
+                    log.Information("Found potential enum type: {id}, consider turning on extraction.enum-as-strings", type.Id);
+                    summary.Enums = true;
+                    break;
+            }
+            if (dataTypeSwitch > 0)
+            {
+                customNumericTypes.Add(new ProtoDataType
+                {
+                    IsStep = dataTypeSwitch == DataTypes.Boolean,
+                    Enum = dataTypeSwitch == DataTypes.Enumeration,
+                    NodeId = NodeIdToProto(type.Id)
+                });
+                if (inHierarchy)
+                {
+                    log.Information("DataType {id} is correctly in hierarchy, auto discovery can be used instead", type.Id);
+                    baseConfig.Extraction.DataTypes.AutoIdentifyTypes = true;
+                }
+                if (dataTypeSwitch == DataTypes.Enumeration)
+                {
+                    log.Information("DataType {id} is enum, and auto discovery should be enabled to discover labels", type.Id);
+                    baseConfig.Extraction.DataTypes.AutoIdentifyTypes = true;
+                }
+            }
+        }
+
+
         /// <summary>
         /// Browse the datatype hierarchy, checking for custom numeric datatypes.
         /// </summary>
@@ -360,50 +435,15 @@ namespace Cognite.OpcUa.Config
             dataTypes = dataTypes.Distinct().ToList();
 
             customNumericTypes = new List<ProtoDataType>();
-            int count = 0;
             foreach (var type in dataTypes)
             {
-                string identifier = type.Id.IdType == IdType.String ? (string) type.Id.Identifier : null;
-                if (IsCustomObject(type.Id)
-                    && (ToolUtil.NodeNameContains(type, "real")
-                        || ToolUtil.NodeNameContains(type, "integer")
-                        || ToolUtil.NodeNameContains(type, "int", true)
-                        || ToolUtil.NodeNameContains(type, "number")
-                        || ToolUtil.NodeNameContains(type, "bool")
-                        || ToolUtil.NodeNameContains(type, "enum")
-                        || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number)
-                        || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean)
-                        || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration)))
-                {
-                    log.Information("Found potential custom numeric datatype: {id}", type.Id);
-                    count++;
-                    bool isEnum = false;
-                    if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration)
-                        || ToolUtil.NodeNameContains(type, "enum"))
-                    {
-                        isEnum = true;
-                        log.Information("Type is enumeration, consider whether to turn on extraction.enums-as-strings");
-                        summary.Enums = true;
-                    }
-                    else if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number)
-                        || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean))
-                    {
-                        log.Information("Numeric dataType is child of number or boolean, auto-discovery can be used instead");
-                        baseConfig.Extraction.DataTypes.AutoIdentifyTypes = true;
-                    }
-                    customNumericTypes.Add(new ProtoDataType
-                    {
-                        IsStep = ToolUtil.NodeNameContains(type, "bool"),
-                        Enum = isEnum,
-                        NodeId = NodeIdToProto(type.Id)
-                    });
-                }
+                TestDataType(type);
             }
 
             if (!summary.Enums && dataTypes.Any(type => ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))) summary.Enums = true;
 
-            log.Information("Found {count} custom numeric datatypes, of which {count} cannot be auto-discovered", count, customNumericTypes.Count);
-            summary.CustomNumTypesCount = count;
+            log.Information("Found {count} custom datatypes", customNumericTypes.Count);
+            summary.CustomNumTypesCount = customNumericTypes.Count;
             baseConfig.Extraction.DataTypes.CustomNumericTypes = customNumericTypes;
         }
         /// <summary>
