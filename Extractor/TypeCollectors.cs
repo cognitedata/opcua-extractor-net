@@ -79,6 +79,7 @@ namespace Cognite.OpcUa
             if (protoDataType.Enum)
             {
                 EnumValues = new Dictionary<long, string>();
+                IsStep = !config.EnumsAsStrings;
             }
         }
 
