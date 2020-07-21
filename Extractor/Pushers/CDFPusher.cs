@@ -100,7 +100,7 @@ namespace Cognite.OpcUa.Pushers
                     group.Select(dp =>
                     {
                         if (dp.IsString) return dp;
-                        if (!double.IsFinite(dp.DoubleValue))
+                        if (!double.IsFinite(dp.DoubleValue.Value))
                         {
                             if (config.NonFiniteReplacement != null) return new BufferedDataPoint(dp, config.NonFiniteReplacement.Value);
                             return null;
@@ -117,7 +117,7 @@ namespace Cognite.OpcUa.Pushers
             var inserts = dataPointList.ToDictionary(kvp =>
                 Identity.Create(kvp.Key),
                 kvp => kvp.Value.Select(
-                    dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue))
+                    dp => dp.IsString ? new Datapoint(dp.Timestamp, dp.StringValue) : new Datapoint(dp.Timestamp, dp.DoubleValue.Value))
                 );
             if (config.Debug) return null;
 
