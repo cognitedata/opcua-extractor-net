@@ -49,9 +49,6 @@ namespace Test
     {
         public ConfigInitFixture()
         {
-            ConfigurationUtils.AddTagMapping<CognitePusherConfig>("!cdf");
-            ConfigurationUtils.AddTagMapping<InfluxPusherConfig>("!influx");
-            ConfigurationUtils.AddTagMapping<MqttPusherConfig>("!mqtt");
             var defaultConfig = new LoggerConfig();
             defaultConfig.Console = new LogConfig() { Level = "debug" };
             LoggingUtils.Configure(defaultConfig);
@@ -368,8 +365,8 @@ namespace Test
             if (assets == null) throw new ArgumentNullException(nameof(assets));
             if (timeseries == null) throw new ArgumentNullException(nameof(timeseries));
             if (upd == null) upd = new UpdateConfig();
-            Assert.Equal(6, assets.Count);
-            Assert.Equal(10, timeseries.Count);
+            Assert.Equal(7, assets.Count);
+            Assert.Equal(16, timeseries.Count);
 
             if (!upd.Objects.Name) Assert.Equal("CustomRoot", assets["gp.tl:i=1"].name);
             if (!upd.Objects.Description) Assert.True(string.IsNullOrEmpty(assets["gp.tl:i=1"].description));
@@ -410,8 +407,8 @@ namespace Test
             if (assets == null) throw new ArgumentNullException(nameof(assets));
             if (timeseries == null) throw new ArgumentNullException(nameof(timeseries));
             if (upd == null) upd = new UpdateConfig();
-            Assert.Equal(6, assets.Count);
-            Assert.Equal(10, timeseries.Count);
+            Assert.Equal(7, assets.Count);
+            Assert.Equal(16, timeseries.Count);
 
             if (upd.Objects.Name) Assert.Equal("CustomRoot updated", assets["gp.tl:i=1"].name);
             if (upd.Objects.Description) Assert.Equal("custom root description", assets["gp.tl:i=1"].description);

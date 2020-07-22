@@ -235,10 +235,7 @@ namespace Cognite.OpcUa.Pushers
 
             foreach (var node in variables)
             { 
-                if (Extractor.AllowTSMap(node))
-                {
-                    tsList.Add(node);
-                }
+                tsList.Add(node);
             }
 
             log.Information("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());

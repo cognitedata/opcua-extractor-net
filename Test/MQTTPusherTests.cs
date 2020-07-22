@@ -35,8 +35,8 @@ namespace Test
             
             tester.StartExtractor();
             
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             await tester.Extractor.Looper.WaitForNextPush();
 
@@ -49,8 +49,8 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.Equal(6, tester.Handler.Assets.Count);
-            Assert.Equal(10, tester.Handler.Timeseries.Count);
+            Assert.Equal(7, tester.Handler.Assets.Count);
+            Assert.Equal(16, tester.Handler.Timeseries.Count);
             Assert.True(tester.Handler.Datapoints.ContainsKey("gp.tl:i=2[0]"));
             Assert.Equal(1000, tester.Handler.Datapoints["gp.tl:i=2[0]"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count());
             Assert.True(tester.Handler.Datapoints.ContainsKey("gp.tl:i=3[0]"));
@@ -107,8 +107,8 @@ namespace Test
                 StoreDatapoints = true,
                 MqttState = true
             });
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
 
             await tester.StartServer();
@@ -118,16 +118,16 @@ namespace Test
 
             await tester.Extractor.Looper.WaitForNextPush();
 
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             var waitTask = tester.Bridge.WaitForNextMessage();
             tester.Server.UpdateNode(tester.Server.Ids.Custom.Array, new[] { 1000, 1000, 1000, 1000 });
             await tester.Extractor.Looper.WaitForNextPush();
             await waitTask;
 
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 6));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 10));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 7));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 16));
             CommonTestUtils.ResetTestMetrics();
 
             tester.Extractor.RestartExtractor();
@@ -143,8 +143,8 @@ namespace Test
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 0));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 0));
-            Assert.Equal(6, tester.Handler.Assets.Count);
-            Assert.Equal(10, tester.Handler.Timeseries.Count);
+            Assert.Equal(7, tester.Handler.Assets.Count);
+            Assert.Equal(16, tester.Handler.Timeseries.Count);
         }
         [Fact]
         [Trait("Server", "array")]
@@ -164,8 +164,8 @@ namespace Test
                 AssetsTable = "assets",
                 TimeseriesTable = "timeseries"
             };
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             await tester.ClearPersistentData();
 
@@ -183,10 +183,10 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 6));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 7));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 16));
 
-            Assert.Equal(10, tester.Handler.TimeseriesRaw.Count);
+            Assert.Equal(16, tester.Handler.TimeseriesRaw.Count);
             Assert.Empty(tester.Handler.Assets);
 
             Assert.True(tester.Handler.TimeseriesRaw["gp.tl:i=10"].metadata.ContainsKey("EURange"));
@@ -220,8 +220,8 @@ namespace Test
             upd.Variables.Context = variableContext;
             upd.Variables.Metadata = variableMeta;
 
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
 
             await tester.ClearPersistentData();
@@ -283,8 +283,8 @@ namespace Test
                 TimeseriesTable = "timeseries"
             };
 
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
 
             await tester.ClearPersistentData();

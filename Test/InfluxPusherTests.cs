@@ -79,8 +79,8 @@ namespace Test
                 ServerName = ServerName.Array
             });
             await tester.ClearPersistentData();
-            tester.Config.Extraction.MaxArraySize = 4;
-            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.History.Enabled = false;
 
             await tester.StartServer();
@@ -204,7 +204,7 @@ namespace Test
                 StoreDatapoints = true,
             });
             await tester.ClearPersistentData();
-            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
 
             await tester.StartServer();
             tester.Server.PopulateBaseHistory();

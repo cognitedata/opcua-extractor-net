@@ -59,7 +59,7 @@ namespace Test
                 QuitAfterMap = true,
                 MockMode = mode
             });
-            tester.Config.Extraction.AllowStringVariables = false;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = false;
 
             tester.Handler.AllowConnectionTest = mode != CDFMockHandler.MockMode.FailAsset;
             await tester.ClearPersistentData();
@@ -133,8 +133,8 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             await tester.StartServer();
             tester.Server.PopulateArrayHistory();
@@ -144,11 +144,12 @@ namespace Test
             var arrId = tester.UAClient.GetUniqueId(tester.Server.Ids.Custom.Array, 2);
 
             await tester.WaitForCondition(() =>
-                tester.Handler.Assets.Count == 6
-                && tester.Handler.Timeseries.Count == 10
+                tester.Handler.Assets.Count == 7
+                && tester.Handler.Timeseries.Count == 16
                 && tester.Handler.Datapoints.ContainsKey(arrId)
-                && tester.Handler.Datapoints[arrId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count() == 1000, 20,
-                () => $"Expected to get 6 assets and got {tester.Handler.Assets.Count}");
+                && tester.Handler.Datapoints[arrId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count() == 1000, 10,
+                () => $"Expected to get 7 assets and got {tester.Handler.Assets.Count}, 16 timeseries and got {tester.Handler.Timeseries.Count}," +
+                    $"1000 datapoints and got {tester.Handler.Datapoints[arrId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count()}");
 
             int lastData = tester.Handler.Datapoints[arrId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count();
             Assert.Equal(1000, lastData);
@@ -164,8 +165,8 @@ namespace Test
             tester.TestContinuity(arrId);
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Equal(6, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(10, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.Equal(7, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(16, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
         }
         [Trait("Server", "array")]
         [Trait("Target", "CDFPusher")]
@@ -180,18 +181,18 @@ namespace Test
             });
             await tester.ClearPersistentData();
 
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             await tester.StartServer();
             tester.Server.PopulateArrayHistory();
 
-            tester.Config.Extraction.CustomNumericTypes = new[]
+            tester.Config.Extraction.DataTypes.CustomNumericTypes = new[]
             {
                 tester.IdToProtoDataType(tester.Server.Ids.Custom.MysteryType),
                 tester.IdToProtoDataType(tester.Server.Ids.Custom.NumberType),
             };
-            tester.Config.Extraction.IgnoreDataTypes = new[]
+            tester.Config.Extraction.DataTypes.IgnoreDataTypes = new[]
             {
                 tester.IdToProto(tester.Server.Ids.Custom.IgnoreType)
             };
@@ -200,11 +201,11 @@ namespace Test
 
             var arrId = tester.UAClient.GetUniqueId(tester.Server.Ids.Custom.Array, 2);
             await tester.WaitForCondition(() =>
-                    tester.Handler.Assets.Count == 6
-                    && tester.Handler.Timeseries.Count == 9
+                    tester.Handler.Assets.Count == 7
+                    && tester.Handler.Timeseries.Count == 15
                     && tester.Handler.Datapoints.ContainsKey(arrId), 20,
-                () => $"Expected to get 6 assets and got {tester.Handler.Assets.Count}"
-                      + $", 9 timeseries and got {tester.Handler.Timeseries.Count}");
+                () => $"Expected to get 7 assets and got {tester.Handler.Assets.Count}"
+                      + $", 15 timeseries and got {tester.Handler.Timeseries.Count}");
 
             var mystId = tester.UAClient.GetUniqueId(tester.Server.Ids.Custom.MysteryVar);
             var numId = tester.UAClient.GetUniqueId(tester.Server.Ids.Custom.NumberVar);
@@ -239,8 +240,8 @@ namespace Test
             Assert.DoesNotContain(tester.Handler.Timeseries.Values, ts => ts.name == "IgnoreVar");
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
-            Assert.Equal(6, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
-            Assert.Equal(9, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
+            Assert.Equal(7, (int)CommonTestUtils.GetMetricValue("opcua_tracked_assets"));
+            Assert.Equal(15, (int)CommonTestUtils.GetMetricValue("opcua_tracked_timeseries"));
         }
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
@@ -434,7 +435,7 @@ namespace Test
             await tester.ClearPersistentData();
 
             tester.Config.History.Enabled = false;
-            tester.Config.Extraction.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
 
             await tester.StartServer();
             var numId = "gp.tl:i=2";
@@ -608,8 +609,8 @@ namespace Test
                 ServerName = ServerName.Array
             });
             await tester.ClearPersistentData();
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             tester.Handler.BlockAllConnections = true;
 
@@ -632,8 +633,8 @@ namespace Test
 
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
 
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 6));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 7));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 16));
 
             await tester.TerminateRunTask();
         }
@@ -654,8 +655,8 @@ namespace Test
                 AssetsTable = "assets",
                 TimeseriesTable = "timeseries"
             };
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
             await tester.ClearPersistentData();
 
@@ -673,10 +674,10 @@ namespace Test
 
             await tester.TerminateRunTask();
 
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 6));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 10));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 7));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 16));
 
-            Assert.Equal(10, tester.Handler.TimeseriesRaw.Count);
+            Assert.Equal(16, tester.Handler.TimeseriesRaw.Count);
             Assert.Empty(tester.Handler.Assets);
 
             Assert.True(tester.Handler.TimeseriesRaw["gp.tl:i=10"].metadata.ContainsKey("EURange"));
@@ -711,8 +712,8 @@ namespace Test
             upd.Variables.Context = variableContext;
             upd.Variables.Metadata = variableMeta;
 
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
 
             await tester.ClearPersistentData();
@@ -768,8 +769,8 @@ namespace Test
                 TimeseriesTable = "timeseries"
             };
 
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
 
             await tester.ClearPersistentData();
@@ -800,8 +801,8 @@ namespace Test
             {
                 ServerName = ServerName.Array
             });
-            tester.Config.Extraction.AllowStringVariables = true;
-            tester.Config.Extraction.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.History.Enabled = false;
             tester.Config.Cognite.MetadataMapping = new MetadataMapConfig
             {
@@ -829,6 +830,85 @@ namespace Test
 
             var arrayParent = tester.Handler.Assets[tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.Array)];
             Assert.Equal("(0, 100)", arrayParent.description);
+        }
+        [Trait("Server", "array")]
+        [Trait("Target", "CDFPusher")]
+        [Trait("Test", "enummapping")]
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task TestEnumMapping(bool enumsAsStrings)
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Array,
+                StoreDatapoints = true
+            });
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+            tester.Config.Extraction.DataTypes.EnumsAsStrings = enumsAsStrings;
+            tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
+            tester.Config.History.Enabled = false;
+
+            await tester.ClearPersistentData();
+            await tester.StartServer();
+            tester.StartExtractor();
+
+            await tester.Extractor.WaitForSubscriptions();
+            await tester.WaitForCondition(() =>
+                tester.Handler.Datapoints.TryGetValue(tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.MysteryVar), out var dps)
+                && dps.NumericDatapoints.Any(), 10);
+
+            foreach (var variable in tester.Handler.Timeseries.Values)
+            {
+                Assert.True(variable.metadata.ContainsKey("dataType"));
+            }
+            Assert.Equal(
+                tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.NumberType),
+                tester.Handler.Timeseries[tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.NumberVar)].metadata["dataType"]);
+
+            var enumId1 = tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumVar1);
+            var enumId2 = tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumVar2);
+            var enumId3 = tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumVar3);
+
+            Assert.Equal(
+                tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumType2),
+                tester.Handler.Assets[enumId3].metadata["dataType"]);
+            Assert.Equal(
+                tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumType2),
+                tester.Handler.Timeseries[enumId3 + "[1]"].metadata["dataType"]);
+
+            if (enumsAsStrings)
+            {
+                Assert.False(tester.Handler.Timeseries[enumId2].metadata.ContainsKey("123"));
+                Assert.False(tester.Handler.Assets[enumId3].metadata.ContainsKey("321"));
+                Assert.False(tester.Handler.Timeseries[enumId1].metadata.ContainsKey("1"));
+
+                Assert.Single(tester.Handler.Datapoints[enumId1].StringDatapoints);
+                Assert.Single(tester.Handler.Datapoints[enumId2].StringDatapoints);
+                Assert.Single(tester.Handler.Datapoints[enumId3 + "[1]"].StringDatapoints);
+                Assert.Equal("Enum2", tester.Handler.Datapoints[enumId1].StringDatapoints.First().Value);
+                Assert.Equal("VEnum2", tester.Handler.Datapoints[enumId2].StringDatapoints.First().Value);
+                Assert.Equal("VEnum2", tester.Handler.Datapoints[enumId3 + "[1]"].StringDatapoints.First().Value);
+                Assert.Equal("VEnum1", tester.Handler.Datapoints[enumId3 + "[2]"].StringDatapoints.First().Value);
+            }
+            else
+            {
+                Assert.Equal("VEnum1", tester.Handler.Timeseries[enumId2].metadata["321"]);
+                Assert.Equal("VEnum2", tester.Handler.Timeseries[enumId2].metadata["123"]);
+                Assert.Equal("Enum1", tester.Handler.Timeseries[enumId1].metadata["0"]);
+                Assert.Equal("Enum3", tester.Handler.Timeseries[enumId1].metadata["2"]);
+                Assert.Equal("VEnum1", tester.Handler.Timeseries[enumId3 + "[1]"].metadata["321"]);
+
+                Assert.Single(tester.Handler.Datapoints[enumId1].NumericDatapoints);
+                Assert.Single(tester.Handler.Datapoints[enumId2].NumericDatapoints);
+                Assert.Single(tester.Handler.Datapoints[enumId3 + "[1]"].NumericDatapoints);
+                Assert.Equal(1, tester.Handler.Datapoints[enumId1].NumericDatapoints.First().Value);
+                Assert.Equal(123, tester.Handler.Datapoints[enumId2].NumericDatapoints.First().Value);
+                Assert.Equal(123, tester.Handler.Datapoints[enumId3 + "[1]"].NumericDatapoints.First().Value);
+                Assert.Equal(321, tester.Handler.Datapoints[enumId3 + "[2]"].NumericDatapoints.First().Value);
+            }
         }
     }
 }

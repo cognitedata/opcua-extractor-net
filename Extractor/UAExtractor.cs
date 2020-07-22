@@ -41,6 +41,7 @@ namespace Cognite.OpcUa
         public IExtractionStateStore StateStorage { get; }
         public State State { get; }
         public Streamer Streamer { get; }
+        public DataTypeManager DataTypeManager { get; }
 
         private readonly HistoryReader historyReader;
         public NodeId RootNode { get; private set; }
@@ -52,8 +53,6 @@ namespace Cognite.OpcUa
         private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
-
-        private HashSet<NodeId> ignoreDataTypes;
 
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
@@ -93,6 +92,7 @@ namespace Cognite.OpcUa
 
             State = new State(this);
             Streamer = new Streamer(this, config);
+            DataTypeManager = new DataTypeManager(uaClient, config.Extraction.DataTypes);
             StateStorage = stateStore;
 
             if (config.FailureBuffer.Enabled)
@@ -151,6 +151,7 @@ namespace Cognite.OpcUa
             }
 
             ConfigureExtractor(token);
+            await DataTypeManager.GetDataTypeStructureAsync(token);
 
             Started = true;
             startTime.Set(new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds());
@@ -347,53 +348,7 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        /// <summary>
-        /// Returns true if the timeseries may be mapped based on rules of array size and datatypes.
-        /// </summary>
-        /// <param name="node">Variable to be tested</param>
-        /// <returns>True if variable may be mapped to a timeseries</returns>
-        public bool AllowTSMap(BufferedVariable node)
-        {
-            if (node == null) throw new ArgumentNullException(nameof(node));
 
-            if (node.DataType.IsString && !config.Extraction.AllowStringVariables)
-            {
-                log.Debug("Skipping variable {id} due to string datatype and allow-string-variables being set to false", node.Id);
-                return false;
-            }
-            if (ignoreDataTypes.Contains(node.DataType.Raw))
-            {
-                log.Debug("Skipping variable {id} due to raw datatype {raw} being in list of ignored data types", node.Id, node.DataType.Raw);
-                return false;
-            }
-            if (node.ValueRank == ValueRanks.Scalar || config.Extraction.UnknownAsScalar
-                && (node.ValueRank == ValueRanks.ScalarOrOneDimension || node.ValueRank == ValueRanks.Any)) return true;
-
-            if (node.ArrayDimensions != null && node.ArrayDimensions.Count == 1)
-            {
-                int length = node.ArrayDimensions.First();
-                if (config.Extraction.MaxArraySize < 0 || length > 0 && length <= config.Extraction.MaxArraySize)
-                {
-                    return true;
-                }
-                else
-                {
-                    log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and too large dimension {dim}",
-                        node.Id, node.ValueRank, length);
-                }
-            }
-            else if (node.ArrayDimensions == null)
-            {
-                log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and null ArrayDimensions", node.Id, node.ValueRank);
-            }
-            else
-            {
-                log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
-                    node.Id, node.ArrayDimensions.Count);
-            }
-
-            return false;
-        }
         /// <summary>
         /// Returns a task running history for both data and events.
         /// </summary>
@@ -482,9 +437,7 @@ namespace Cognite.OpcUa
         {
             RootNode = config.Extraction.RootNode.ToNodeId(uaClient, ObjectIds.ObjectsFolder);
 
-            ignoreDataTypes = config.Extraction.IgnoreDataTypes != null
-                ? config.Extraction.IgnoreDataTypes.Select(proto => proto.ToNodeId(uaClient)).ToHashSet()
-                : new HashSet<NodeId>();
+            DataTypeManager.Configure();
 
             if (config.Extraction.NodeMap != null)
             {
@@ -535,7 +488,7 @@ namespace Cognite.OpcUa
         }
 
 
-        private static void CheckForNodeUpdates(BufferedNode node, BufferedNode old, TypeUpdateConfig update)
+        private void CheckForNodeUpdates(BufferedNode node, BufferedNode old, TypeUpdateConfig update)
         {
             if (update.Context && old.ParentId != node.ParentId) node.Changed = true;
 
@@ -558,7 +511,14 @@ namespace Cognite.OpcUa
                         && !string.IsNullOrWhiteSpace(oldProp.StringValue)
                         || !oldProp.IsString && oldProp.DoubleValue != prop.Value.DoubleValue;
                 });
+                if (config.Extraction.DataTypes.DataTypeMetadata
+                    && old is BufferedVariable oldVariable && node is BufferedVariable variable
+                    && oldVariable.DataType.Raw != variable.DataType.Raw)
+                {
+                    node.Changed = true;
+                }
             }
+
         }
         /// <summary>
         /// Read nodes from commonQueue and sort them into lists of context objects, destination timeseries and source variables
@@ -622,7 +582,7 @@ namespace Cognite.OpcUa
                 }
             }
             uaClient.ReadNodeData(nodes, token);
-
+            DataTypeManager.GetDataTypeMetadataAsync(rawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), token).Wait();
 
             foreach (var node in rawObjects)
             {
@@ -647,7 +607,7 @@ namespace Cognite.OpcUa
 
             foreach (var node in rawVariables)
             {
-                if (!AllowTSMap(node)) continue;
+                if (!DataTypeManager.AllowTSMap(node)) continue;
                 if (update.AnyUpdate)
                 {
                     var old = State.GetActiveNode(node.Id);
@@ -684,7 +644,7 @@ namespace Cognite.OpcUa
                         continue;
                     }
                 }
-                log.Verbose(node.ToDebugDescription());
+                log.Debug(node.ToDebugDescription());
                 variables.Add(node);
                 var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,
                     StateStorage != null && config.StateStorage.Interval > 0);

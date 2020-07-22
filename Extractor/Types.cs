@@ -100,80 +100,16 @@ namespace Cognite.OpcUa
             ParentId = parentId;
         }
     }
-    /// <summary>
-    /// Represents a simplified OPC-UA datatype, containing information relevant to us (isString, isStep)
-    /// </summary>
-    public class BufferedDataType
-    {
-        public uint Identifier { get; }
-        public bool IsStep { get; }
-        public bool IsString { get; }
-        public NodeId Raw { get; }
-        /// <summary>
-        /// Construct BufferedDataType from NodeId of datatype
-        /// </summary>
-        /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
-        public BufferedDataType(NodeId rawDataType)
-        {
-            if (rawDataType == null) throw new ArgumentNullException(nameof(rawDataType));
-            Raw = rawDataType;
-            if (rawDataType.IdType == IdType.Numeric && rawDataType.NamespaceIndex == 0)
-            {
-                Identifier = (uint)rawDataType.Identifier;
-                IsString = (Identifier < DataTypes.Boolean || Identifier > DataTypes.Double)
-                           && Identifier != DataTypes.Integer && Identifier != DataTypes.UInteger;
-                IsStep = Identifier == DataTypes.Boolean;
-            }
-            else
-            {
-                IsString = true;
-            }
-        }
-        /// <summary>
-        /// Construct datatype from config object ProtoDateType and NodeId of datatype. Used when datatypes are being overriden.
-        /// </summary>
-        /// <param name="protoDataType">Overriding propoDataType</param>
-        /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
-        public BufferedDataType(ProtoDataType protoDataType, NodeId rawDataType) : this(rawDataType)
-        {
-            if (protoDataType == null) throw new ArgumentNullException(nameof(protoDataType));
-            IsStep = protoDataType.IsStep;
-            IsString = false;
-        }
-        public override string ToString()
-        {
-            return "DataType: {\n" +
-                $"    numIdentifier: {Identifier}\n" +
-                $"    isStep: {IsStep}\n" +
-                $"    isString: {IsString}\n" +
-                "}";
-        }
-    }
+    
     /// <summary>
     /// Represents an opcua variable, which may be either a piece of metadata or a cdf timeseries
     /// </summary>
     public class BufferedVariable : BufferedNode
     {
         /// <summary>
-        /// DataType in opcua
+        /// Data type of this variable
         /// </summary>
-        public BufferedDataType DataType { get; private set; }
-        /// <summary>
-        /// Sets the datatype based on OPC-UA nodeId and configured map of numerical types.
-        /// </summary>
-        /// <param name="dataType">Raw nodeid of datatype from OPC-UA</param>
-        /// <param name="numericalTypeMap">Mapping of numerical types</param>
-        public void SetDataType(NodeId dataType, Dictionary<NodeId, ProtoDataType> numericalTypeMap)
-        {
-            if (numericalTypeMap == null) throw new ArgumentNullException(nameof(numericalTypeMap));
-            if (numericalTypeMap.ContainsKey(dataType))
-            {
-                var proto = numericalTypeMap[dataType];
-                DataType = new BufferedDataType(proto, dataType);
-                return;
-            }
-            DataType = new BufferedDataType(dataType);
-        }
+        public BufferedDataType DataType { get; set; }
         /// <summary>
         /// True if the opcua node stores its own history
         /// </summary>
@@ -247,7 +183,7 @@ namespace Cognite.OpcUa
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (value == null) return;
-            if (DataType.IsString || IsProperty)
+            if (IsProperty || (DataType?.IsString ?? true))
             {
                 Value = new BufferedDataPoint(
                     sourceTimestamp <= DateTime.MinValue ? DateTime.UtcNow : sourceTimestamp,

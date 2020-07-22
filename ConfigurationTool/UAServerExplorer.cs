@@ -107,7 +107,7 @@ namespace Cognite.OpcUa.Config
             public int NumHistorizingEmitters;
             public List<string> NamespaceMap;
             public TimeSpan HistoryGranularity;
-
+            public bool Enums;
             public bool Auditing;
             public bool Subscriptions;
             public bool History;
@@ -334,6 +334,81 @@ namespace Cognite.OpcUa.Config
         {
             return id.NamespaceIndex != 0 || id.IdType != IdType.Numeric;
         }
+
+        private void TestDataType(BufferedNode type)
+        {
+            if (!IsCustomObject(type.Id)) return;
+            uint dataTypeSwitch = 0;
+            bool inHierarchy = false;
+
+            if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number))
+            {
+                dataTypeSwitch = DataTypes.Number;
+                inHierarchy = true;
+            }
+            else if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean))
+            {
+                dataTypeSwitch = DataTypes.Boolean;
+                inHierarchy = true;
+            }
+            else if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))
+            {
+                dataTypeSwitch = DataTypes.Enumeration;
+                inHierarchy = true;
+            }
+            if (dataTypeSwitch == 0)
+            {
+                if (ToolUtil.NodeNameContains(type, "real")
+                    || ToolUtil.NodeNameContains(type, "integer")
+                    || ToolUtil.NodeNameStartsWith(type, "int")
+                    || ToolUtil.NodeNameContains(type, "number"))
+                {
+                    dataTypeSwitch = DataTypes.Number;
+                }
+                else if (ToolUtil.NodeNameContains(type, "bool"))
+                {
+                    dataTypeSwitch = DataTypes.Boolean;
+                }
+                else if (ToolUtil.NodeNameContains(type, "enum"))
+                {
+                    dataTypeSwitch = DataTypes.Enumeration;
+                }
+            }
+            switch (dataTypeSwitch)
+            {
+                case DataTypes.Number:
+                    log.Information("Found potential numeric type: {id}", type.Id);
+                    break;
+                case DataTypes.Boolean:
+                    log.Information("Found potential boolean type: {id}", type.Id);
+                    break;
+                case DataTypes.Enumeration:
+                    log.Information("Found potential enum type: {id}, consider turning on extraction.enum-as-strings", type.Id);
+                    summary.Enums = true;
+                    break;
+            }
+            if (dataTypeSwitch > 0)
+            {
+                customNumericTypes.Add(new ProtoDataType
+                {
+                    IsStep = dataTypeSwitch == DataTypes.Boolean,
+                    Enum = dataTypeSwitch == DataTypes.Enumeration,
+                    NodeId = NodeIdToProto(type.Id)
+                });
+                if (inHierarchy)
+                {
+                    log.Information("DataType {id} is correctly in hierarchy, auto discovery can be used instead", type.Id);
+                    baseConfig.Extraction.DataTypes.AutoIdentifyTypes = true;
+                }
+                if (dataTypeSwitch == DataTypes.Enumeration)
+                {
+                    log.Information("DataType {id} is enum, and auto discovery should be enabled to discover labels", type.Id);
+                    baseConfig.Extraction.DataTypes.AutoIdentifyTypes = true;
+                }
+            }
+        }
+
+
         /// <summary>
         /// Browse the datatype hierarchy, checking for custom numeric datatypes.
         /// </summary>
@@ -357,40 +432,19 @@ namespace Cognite.OpcUa.Config
                 throw;
             }
 
+            dataTypes = dataTypes.Distinct().ToList();
+
             customNumericTypes = new List<ProtoDataType>();
             foreach (var type in dataTypes)
             {
-                string identifier = type.Id.IdType == IdType.String ? (string) type.Id.Identifier : null;
-                if (IsCustomObject(type.Id)
-                    && (identifier != null && (
-                        identifier.Contains("real", StringComparison.InvariantCultureIgnoreCase)
-                        || identifier.Contains("integer", StringComparison.InvariantCultureIgnoreCase)
-                        || identifier.StartsWith("int", StringComparison.InvariantCultureIgnoreCase)
-                        || identifier.Contains("number", StringComparison.InvariantCultureIgnoreCase)
-                    )
-                    || type.DisplayName != null && (
-                        type.DisplayName.Contains("real", StringComparison.InvariantCultureIgnoreCase)
-                        || type.DisplayName.Contains("integer", StringComparison.InvariantCultureIgnoreCase)
-                        || type.DisplayName.StartsWith("int", StringComparison.InvariantCultureIgnoreCase)
-                        || type.DisplayName.Contains("number", StringComparison.InvariantCultureIgnoreCase)
-                    )
-                    || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number)
-                    || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean)
-                    ))
-                {
-                    log.Information("Found potential custom numeric datatype: {id}", type.Id);
-                    customNumericTypes.Add(new ProtoDataType
-                    {
-                        IsStep = identifier != null && identifier.Contains("bool", StringComparison.InvariantCultureIgnoreCase)
-                                 || type.DisplayName != null && type.DisplayName.Contains("bool", StringComparison.InvariantCultureIgnoreCase)
-                                 || ToolUtil.IsChildOf(dataTypes, type, DataTypes.Boolean),
-                        NodeId = NodeIdToProto(type.Id)
-                    });
-                }
+                TestDataType(type);
             }
-            log.Information("Found {count} custom numeric datatypes", customNumericTypes.Count);
+
+            if (!summary.Enums && dataTypes.Any(type => ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))) summary.Enums = true;
+
+            log.Information("Found {count} custom datatypes", customNumericTypes.Count);
             summary.CustomNumTypesCount = customNumericTypes.Count;
-            baseConfig.Extraction.CustomNumericTypes = customNumericTypes;
+            baseConfig.Extraction.DataTypes.CustomNumericTypes = customNumericTypes;
         }
         /// <summary>
         /// Get AttributeChunk config value, by attempting to read for various chunk sizes.
@@ -419,9 +473,9 @@ namespace Cognite.OpcUa.Config
                 throw;
             }
 
-            int oldArraySize = config.Extraction.MaxArraySize;
+            int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
             int expectedAttributeReads = nodeList.Aggregate(0, (acc, node) => acc + (node.IsVariable ? 5 : 1));
-            config.Extraction.MaxArraySize = 10;
+            config.Extraction.DataTypes.MaxArraySize = 10;
 
             var testChunks = testAttributeChunkSizes.Where(chunkSize =>
                 chunkSize <= expectedAttributeReads || chunkSize <= 1000);
@@ -471,7 +525,7 @@ namespace Cognite.OpcUa.Config
 
             summary.AttributeChunkSize = baseConfig.Source.AttributesChunk;
 
-            config.Extraction.MaxArraySize = oldArraySize;
+            config.Extraction.DataTypes.MaxArraySize = oldArraySize;
 
             if (!succeeded)
             {
@@ -485,11 +539,11 @@ namespace Cognite.OpcUa.Config
         {
             var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
 
-            int oldArraySize = config.Extraction.MaxArraySize;
+            int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
 
-            int arrayLimit = config.Extraction.MaxArraySize == 0 ? 10 : config.Extraction.MaxArraySize;
+            int arrayLimit = config.Extraction.DataTypes.MaxArraySize == 0 ? 10 : config.Extraction.DataTypes.MaxArraySize;
 
-            config.Extraction.MaxArraySize = 10;
+            config.Extraction.DataTypes.MaxArraySize = 10;
 
             if (useServer)
             {
@@ -544,18 +598,18 @@ namespace Cognite.OpcUa.Config
                     history = true;
                 }
 
-                if (variable.DataType == null)
+                if (variable.DataType == null || variable.DataType.Raw == null || variable.DataType.Raw.IsNullNodeId)
                 {
                     Log.Warning("Variable datatype is null on id: {id}", variable.Id);
                     continue;
                 }
 
-                var dataType = dataTypes.FirstOrDefault(type => variable.DataType != null && type.Id == variable.DataType.Raw);
+                var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.DataType.Raw);
 
                 if (dataType == null)
                 {
                     log.Warning("DataType found on node but not in hierarchy, " +
-                                "this may mean that some datatypes are defined outside of the main datatype hierarchy: {type}", variable.DataType.Raw);
+                                "this may mean that some datatypes are defined outside of the main datatype hierarchy: {type}", variable.DataType);
                     continue;
                 }
 
@@ -563,17 +617,13 @@ namespace Cognite.OpcUa.Config
                 identifiedTypes.Add(dataType);
             }
 
+            log.Information("Found {cnt} distinct data-types in detected variables", identifiedTypes.Count);
+
             foreach (var dataType in identifiedTypes)
             {
                 string identifier = dataType.Id.IdType == IdType.String ? (string)dataType.Id.Identifier : null;
-                if (dataType.DisplayName != null
-                    && !dataType.DisplayName.Contains("picture", StringComparison.InvariantCultureIgnoreCase)
-                    && !dataType.DisplayName.Contains("image", StringComparison.InvariantCultureIgnoreCase)
-                    && (identifier == null
-                        || !identifier.Contains("picture", StringComparison.InvariantCultureIgnoreCase)
-                        && !identifier.Contains("image", StringComparison.InvariantCultureIgnoreCase)
-                        )
-                    )
+                if (!ToolUtil.NodeNameContains(dataType, "picture")
+                    && !ToolUtil.NodeNameContains(dataType, "image"))
                 {
                     stringVariables = true;
                 }
@@ -583,7 +633,7 @@ namespace Cognite.OpcUa.Config
             {
                 log.Information("Variables with string datatype were discovered, and the AllowStringVariables config option " +
                                 "will be set to true");
-            } else if (!baseConfig.Extraction.AllowStringVariables)
+            } else if (!baseConfig.Extraction.DataTypes.AllowStringVariables)
             {
                 log.Information("No string variables found and the AllowStringVariables option will be set to false");
             }
@@ -601,10 +651,10 @@ namespace Cognite.OpcUa.Config
                 ? "Historizing variables were found, tests on history chunkSizes will be performed later"
                 : "No historizing variables were found, tests on history chunkSizes will be skipped");
 
-            config.Extraction.MaxArraySize = oldArraySize;
+            config.Extraction.DataTypes.MaxArraySize = oldArraySize;
 
-            baseConfig.Extraction.AllowStringVariables = baseConfig.Extraction.AllowStringVariables || stringVariables;
-            baseConfig.Extraction.MaxArraySize = maxLimitedArrayLength > 1 ? maxLimitedArrayLength : oldArraySize;
+            baseConfig.Extraction.DataTypes.AllowStringVariables = baseConfig.Extraction.DataTypes.AllowStringVariables || stringVariables;
+            baseConfig.Extraction.DataTypes.MaxArraySize = maxLimitedArrayLength > 1 ? maxLimitedArrayLength : oldArraySize;
 
             summary.StringVariables = stringVariables;
             summary.MaxArraySize = maxLimitedArrayLength;
@@ -627,7 +677,7 @@ namespace Cognite.OpcUa.Config
 
             int length = node.ArrayDimensions.First();
 
-            return config.Extraction.MaxArraySize < 0 || length > 0 && length <= config.Extraction.MaxArraySize;
+            return config.Extraction.DataTypes.MaxArraySize < 0 || length > 0 && length <= config.Extraction.DataTypes.MaxArraySize;
 
         }
         /// <summary>
@@ -1427,7 +1477,12 @@ namespace Cognite.OpcUa.Config
                 log.Information("There are variables that would be mapped to strings in CDF, if this is not correct " +
                                 "they may be numeric types that the auto detection did not catch, or they may need to be filtered out");
             }
-            if (summary.CustomNumTypesCount > 0 || summary.MaxArraySize > 0 || summary.StringVariables)
+            if (summary.Enums)
+            {
+                log.Information("There are variables with enum datatype. These can either be mapped to raw integer values with labels in" +
+                    "metadata, or to string timeseries with labels as values.");
+            }
+            if (summary.CustomNumTypesCount > 0 || summary.MaxArraySize > 0 || summary.StringVariables || summary.Enums)
             {
                 log.Information("");
             }

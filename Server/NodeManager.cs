@@ -519,11 +519,38 @@ namespace Server
                 arrprop2.NodeId = GenerateNodeId();
                 arrprop2.Value = eurange;
 
+                var enumType1 = CreateDataType("CustomEnumType1", DataTypes.Enumeration, externalReferences);
+                var enumProp1 = enumType1.AddProperty<LocalizedText[]>("EnumStrings", DataTypes.LocalizedText, ValueRanks.OneDimension);
+                enumProp1.NodeId = GenerateNodeId();
+                enumProp1.Value = new LocalizedText[] { "Enum1", "Enum2", "Enum3" };
+
+                var enumType2 = CreateDataType("CustomEnumType2", DataTypes.Enumeration, externalReferences);
+                var enumProp2 = enumType2.AddProperty<EnumValueType[]>("EnumValues", DataTypes.EnumValueType, ValueRanks.OneDimension);
+                enumProp2.NodeId = GenerateNodeId();
+                enumProp2.Value = new EnumValueType[] {
+                    new EnumValueType { Value = 321, DisplayName = "VEnum1", Description = "VEnumDesc1" },
+                    new EnumValueType { Value = 123, DisplayName = "VEnum2", Description = "VEnumDesc2" }
+                };
+
+                var enumVar1 = CreateVariable("EnumVar1", enumType1.NodeId);
+                enumVar1.Value = 1;
+                AddNodeRelation(enumVar1, root, ReferenceTypeIds.HasComponent);
+
+                var enumVar2 = CreateVariable("EnumVar2", enumType2.NodeId);
+                enumVar2.Value = 123;
+                AddNodeRelation(enumVar2, root, ReferenceTypeIds.HasComponent);
+
+                var enumVar3 = CreateVariable("EnumVar3", enumType2.NodeId, 4);
+                enumVar3.Value = new[] { 123, 123, 321, 123 };
+                AddNodeRelation(enumVar3, root, ReferenceTypeIds.HasComponent);
+
+
                 store.AddHistorizingNode(myarray);
                 store.AddHistorizingNode(numberVar);
 
                 AddPredefinedNodes(SystemContext, root, myarray, mystrarray, stringyType, ignoreType, numberType, numberType2, stringyVar,
-                    ignoreVar, numberVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2, arrprop, arrprop2);
+                    ignoreVar, numberVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2, arrprop, arrprop2,
+                    enumType1, enumType2, enumProp1, enumProp2, enumVar1, enumVar2, enumVar3);
 
                 Ids.Custom.Root = root.NodeId;
                 Ids.Custom.Array = myarray.NodeId;
@@ -542,6 +569,11 @@ namespace Server
                 Ids.Custom.ObjProp = objProp.NodeId;
                 Ids.Custom.ObjProp2 = objProp2.NodeId;
                 Ids.Custom.EUProp = euprop.NodeId;
+                Ids.Custom.EnumType1 = enumType1.NodeId;
+                Ids.Custom.EnumType2 = enumType2.NodeId;
+                Ids.Custom.EnumVar1 = enumVar1.NodeId;
+                Ids.Custom.EnumVar2 = enumVar2.NodeId;
+                Ids.Custom.EnumVar3 = enumVar3.NodeId;
             }
         }
         
@@ -1250,6 +1282,11 @@ namespace Server
         public NodeId ObjProp { get; set; }
         public NodeId ObjProp2 { get; set; }
         public NodeId EUProp { get; set; }
+        public NodeId EnumType1 { get; set; }
+        public NodeId EnumType2 { get; set; }
+        public NodeId EnumVar1 { get; set; }
+        public NodeId EnumVar2 { get; set; }
+        public NodeId EnumVar3 { get; set; }
     }
 
     public class EventNodeReference
