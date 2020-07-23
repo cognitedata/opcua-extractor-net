@@ -75,12 +75,7 @@ namespace Cognite.OpcUa
             }
 
 
-
             string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
-
-            ConfigurationUtils.AddTagMapping<CognitePusherConfig>("!cdf");
-            ConfigurationUtils.AddTagMapping<InfluxPusherConfig>("!influx");
-            ConfigurationUtils.AddTagMapping<MqttPusherConfig>("!mqtt");
 
             var services = new ServiceCollection();
 

@@ -175,12 +175,15 @@ namespace Cognite.OpcUa
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
         public BufferedVariable(NodeId id, string displayName, NodeId parentId) : base(id, displayName, true, parentId) { }
+        /// <summary>
+        /// True if this node represents an array
+        /// </summary>
         public bool IsArray => ArrayDimensions != null && ArrayDimensions.Count == 1 && ArrayDimensions[0] > 0;
         /// <summary>
         /// Sets the datapoint to provided DataValue.
         /// </summary>
         /// <param name="value">Value to set</param>
-        /// <param name="SourceTimestamp">Timestamp from source</param>
+        /// <param name="sourceTimestamp">Timestamp from source</param>
         /// <param name="client">Current client context</param>
         public void SetDataPoint(object value, DateTime sourceTimestamp, UAClient client)
         {
