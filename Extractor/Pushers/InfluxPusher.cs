@@ -385,6 +385,13 @@ namespace Cognite.OpcUa
             return true;
         }
 
+        private static bool IsInteger(uint dataType)
+        {
+            return dataType >= DataTypes.SByte && dataType <= DataTypes.UInt64
+                     || dataType == DataTypes.Integer
+                     || dataType == DataTypes.UInteger;
+        }
+
         private static IInfluxDatapoint BufferedDPToInflux(NodeExtractionState state, BufferedDataPoint dp)
         {
 
@@ -408,9 +415,7 @@ namespace Cognite.OpcUa
                 idp.Fields.Add("value", Math.Abs(dp.DoubleValue.Value) < 0.1);
                 return idp;
             }
-            if (state.DataType.IsStep || state.DataType.Identifier < DataTypes.Float
-                     || state.DataType.Identifier == DataTypes.Integer
-                     || state.DataType.Identifier == DataTypes.UInteger)
+            if (state.DataType.IsStep || IsInteger(state.DataType.Identifier))
             {
                 var idp = new InfluxDatapoint<long>
                 {
