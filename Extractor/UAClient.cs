@@ -883,8 +883,8 @@ namespace Cognite.OpcUa
 
             foreach (var parent in nodes)
             {
-                if (!result.ContainsKey(parent.Id)) continue;
-                foreach (var child in result[parent.Id])
+                if (!result.TryGetValue(parent.Id, out var children)) continue;
+                foreach (var child in children)
                 {
                     var property = new BufferedVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
                     properties.Add(property);
@@ -1506,7 +1506,7 @@ namespace Cognite.OpcUa
         {
             var nodeId = ToNodeId(rNodeid);
             if (nodeId == null || nodeId.IsNullNodeId) return null;
-            if (nodeOverrides.ContainsKey(nodeId)) return nodeOverrides[nodeId];
+            if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride)) return nodeOverride;
 
             string namespaceUri = Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
             string prefix = extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");

@@ -134,18 +134,18 @@ namespace Cognite.OpcUa.Pushers
             var entity = new StatelessEventCreate
             {
                 Description = ExtractorUtils.Truncate(evt.Message, 500),
-                StartTime = evt.MetaData.ContainsKey("StartTime")
-                    ? GetTimestampValue(evt.MetaData["StartTime"])
-                    : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                EndTime = evt.MetaData.ContainsKey("EndTime")
-                    ? GetTimestampValue(evt.MetaData["EndTime"])
-                    : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
+                StartTime = evt.MetaData.TryGetValue("StartTime", out var rawStartTime)
+                    ? GetTimestampValue(rawStartTime)
+                    : evt.Time.ToUnixTimeMilliseconds(),
+                EndTime = evt.MetaData.TryGetValue("EndTime", out var rawEndTime)
+                    ? GetTimestampValue(rawEndTime)
+                    : evt.Time.ToUnixTimeMilliseconds(),
                 AssetExternalIds = parent == null
                     ? (IEnumerable<string>)Array.Empty<string>()
                     : new List<string> { extractor.GetUniqueId(parent.IsVariable ? parent.ParentId : parent.Id) },
                 ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
-                Type = ExtractorUtils.Truncate(evt.MetaData.ContainsKey("Type")
-                    ? extractor.ConvertToString(evt.MetaData["Type"])
+                Type = ExtractorUtils.Truncate(evt.MetaData.TryGetValue("Type", out var rawType)
+                    ? extractor.ConvertToString(rawType)
                     : extractor.GetUniqueId(evt.EventType), 64),
                 DataSetId = dataSetId
             };
@@ -193,21 +193,22 @@ namespace Cognite.OpcUa.Pushers
             entity = new EventCreate
             {
                 Description = ExtractorUtils.Truncate(evt.Message, 500),
-                StartTime = evt.MetaData.ContainsKey("StartTime")
-                    ? GetTimestampValue(evt.MetaData["StartTime"])
-                    : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
-                EndTime = evt.MetaData.ContainsKey("EndTime")
-                    ? GetTimestampValue(evt.MetaData["EndTime"])
-                    : new DateTimeOffset(evt.Time).ToUnixTimeMilliseconds(),
+                StartTime = evt.MetaData.TryGetValue("StartTime", out var rawStartTime)
+                    ? GetTimestampValue(rawStartTime)
+                    : evt.Time.ToUnixTimeMilliseconds(),
+                EndTime = evt.MetaData.TryGetValue("EndTime", out var rawEndTime)
+                    ? GetTimestampValue(rawEndTime)
+                    : evt.Time.ToUnixTimeMilliseconds(),
                 ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
-                Type = ExtractorUtils.Truncate(evt.MetaData.ContainsKey("Type")
-                    ? extractor.ConvertToString(evt.MetaData["Type"])
+                Type = ExtractorUtils.Truncate(evt.MetaData.TryGetValue("Type", out var rawType)
+                    ? extractor.ConvertToString(rawType)
                     : extractor.GetUniqueId(evt.EventType), 64),
                 DataSetId = dataSetId
             };
 
-            if (nodeToAssetIds != null && evt.SourceNode != null && !evt.SourceNode.IsNullNodeId && nodeToAssetIds.ContainsKey(evt.SourceNode)) {
-                entity.AssetIds = new List<long> { nodeToAssetIds[evt.SourceNode] };
+            if (nodeToAssetIds != null && evt.SourceNode != null && !evt.SourceNode.IsNullNodeId
+                && nodeToAssetIds.TryGetValue(evt.SourceNode, out var assetId)) {
+                entity.AssetIds = new List<long> { assetId };
             }
 
             var finalMetaData = new Dictionary<string, string>();
@@ -218,9 +219,9 @@ namespace Cognite.OpcUa.Pushers
                 finalMetaData["SourceNode"] = extractor.GetUniqueId(evt.SourceNode);
                 len++;
             }
-            if (evt.MetaData.ContainsKey("SubType"))
+            if (evt.MetaData.TryGetValue("SubType", out var rawSubType))
             {
-                entity.Subtype = ExtractorUtils.Truncate(extractor.ConvertToString(evt.MetaData["SubType"]), 64);
+                entity.Subtype = ExtractorUtils.Truncate(extractor.ConvertToString(rawSubType), 64);
             }
 
             foreach (var dt in evt.MetaData)
@@ -354,12 +355,12 @@ namespace Cognite.OpcUa.Pushers
 
         private static void UpdateIfModified(Dictionary<string, object> ret, RawRow raw, string newValue, string key)
         {
-            if (raw.Columns.ContainsKey(key))
+            if (raw.Columns.TryGetValue(key, out var column))
             {
                 string oldValue = null;
                 try
                 {
-                    oldValue = raw.Columns[key].GetString();
+                    oldValue = column.GetString();
                 }
                 catch (JsonException) { }
                 if (string.IsNullOrWhiteSpace(oldValue) || !string.IsNullOrWhiteSpace(newValue) && newValue != oldValue)
@@ -395,16 +396,16 @@ namespace Cognite.OpcUa.Pushers
             {
                 var extra = node is BufferedVariable variable ? extractor.DataTypeManager.GetAdditionalMetadata(variable) : null;
                 var newMetaData = PropertiesToMetadata(node.Properties, extra);
-                if (raw.Columns.ContainsKey("metadata"))
+                if (raw.Columns.TryGetValue("metadata", out var rawMetaData))
                 {
                     Dictionary<string, string> oldMetaData = null;
                     try
                     {
-                        oldMetaData = JsonSerializer.Deserialize<Dictionary<string, string>>(raw.Columns["metadata"].ToString());
+                        oldMetaData = JsonSerializer.Deserialize<Dictionary<string, string>>(rawMetaData.ToString());
                     }
                     catch (JsonException) { }
                     if (oldMetaData == null || newMetaData != null && newMetaData.Any(kvp =>
-                        !oldMetaData.ContainsKey(kvp.Key) || oldMetaData[kvp.Key] != kvp.Value))
+                        !oldMetaData.TryGetValue(kvp.Key, out var field) || field != kvp.Value))
                     {
                         if (oldMetaData != null)
                         {

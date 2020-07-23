@@ -219,9 +219,9 @@ namespace Cognite.OpcUa
                         ranges[id] = new TimeRange(ts, ranges[id].Last);
                     }
                 }
-                if (ranges.ContainsKey(id))
+                if (ranges.TryGetValue(id, out var range))
                 {
-                    state.InitExtractedRange(ranges[id].First, ranges[id].Last);
+                    state.InitExtractedRange(range.First, range.Last);
                 }
                 else if (initMissing)
                 {
@@ -438,12 +438,12 @@ namespace Cognite.OpcUa
             {
                 UtcTimestamp = evt.Time,
                 MeasurementName = "events." + Extractor.GetUniqueId(evt.EmittingNode) + ":"
-                                  + (evt.MetaData.ContainsKey("Type") ? evt.MetaData["Type"] : Extractor.GetUniqueId(evt.EventType))
+                                  + (evt.MetaData.TryGetValue("Type", out var rawType) ? rawType : Extractor.GetUniqueId(evt.EventType))
             };
             idp.Fields.Add("value", evt.Message);
             idp.Fields.Add("id", evt.EventId);
-            var sourceNode = evt.MetaData.ContainsKey("SourceNode")
-                ? Extractor.ConvertToString(evt.MetaData["SourceNode"]) : Extractor.GetUniqueId(evt.SourceNode);
+            var sourceNode = evt.MetaData.TryGetValue("SourceNode", out var rawSourceNode)
+                ? Extractor.ConvertToString(rawSourceNode) : Extractor.GetUniqueId(evt.SourceNode);
             idp.Fields.Add("source", sourceNode ?? "null");
             foreach (var kvp in evt.MetaData)
             {
@@ -482,8 +482,8 @@ namespace Cognite.OpcUa
                 if (!series.Any()) continue;
                 var current = series.First();
                 string id = current.SeriesName;
-                if (!states.ContainsKey(id)) continue;
-                bool isString = states[id].Type == InfluxBufferType.StringType;
+                if (!states.TryGetValue(id, out var state)) continue;
+                bool isString = state.Type == InfluxBufferType.StringType;
                 finalPoints.AddRange(current.Entries.Select(dp =>
                 {
                     if (isString)

@@ -431,12 +431,9 @@ namespace Cognite.OpcUa
             if (child.NodeClass == NodeClass.ObjectType && !properties.ContainsKey(id))
             {
                 var parentProperties = new List<ReferenceDescription>();
-                if (properties.ContainsKey(parent))
+                if (properties.TryGetValue(parent, out var pProps))
                 {
-                    foreach (var prop in properties[parent])
-                    {
-                        parentProperties.Add(prop);
-                    }
+                    parentProperties.AddRange(pProps);
                 }
                 properties[id] = parentProperties;
                 localProperties[id] = new List<ReferenceDescription>();

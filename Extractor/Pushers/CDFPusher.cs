@@ -302,9 +302,9 @@ namespace Cognite.OpcUa.Pushers
 
             foreach (var state in states)
             {
-                if (ranges.ContainsKey(state.Id))
+                if (ranges.TryGetValue(state.Id, out var range))
                 {
-                    state.InitExtractedRange(ranges[state.Id].First, ranges[state.Id].Last);
+                    state.InitExtractedRange(range.First, range.Last);
                 }
                 else if (initMissing)
                 {

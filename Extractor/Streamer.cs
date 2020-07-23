@@ -72,12 +72,12 @@ namespace Cognite.OpcUa
             while (DataPointQueue.TryDequeue(out BufferedDataPoint dp))
             {
                 dataPointList.Add(dp);
-                if (!pointRanges.ContainsKey(dp.Id))
+                if (!pointRanges.TryGetValue(dp.Id, out var range))
                 {
                     pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
                     continue;
                 }
-                pointRanges[dp.Id] = pointRanges[dp.Id].Extend(dp.Timestamp, dp.Timestamp);
+                pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
@@ -173,13 +173,13 @@ namespace Cognite.OpcUa
             while (EventQueue.TryDequeue(out BufferedEvent evt))
             {
                 eventList.Add(evt);
-                if (!eventRanges.ContainsKey(evt.EmittingNode))
+                if (!eventRanges.TryGetValue(evt.EmittingNode, out var range))
                 {
                     eventRanges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
                     continue;
                 }
 
-                eventRanges[evt.EmittingNode] = eventRanges[evt.EmittingNode].Extend(evt.Time, evt.Time);
+                eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
             }
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));
 

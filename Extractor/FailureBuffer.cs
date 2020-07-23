@@ -178,14 +178,14 @@ namespace Cognite.OpcUa
                         bool any = false;
                         foreach ((string key, var value) in pointRanges)
                         {
-                            if (!nodeBufferStates.ContainsKey(key))
+                            if (!nodeBufferStates.TryGetValue(key, out var bufferState))
                             {
                                 var state = extractor.State.GetNodeState(key);
                                 if (state.FrontfillEnabled) continue;
-                                nodeBufferStates[key] = new InfluxBufferState(state);
-                                nodeBufferStates[key].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
+                                nodeBufferStates[key] = bufferState = new InfluxBufferState(state);
+                                bufferState.InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
                             }
-                            nodeBufferStates[key].UpdateDestinationRange(value.First, value.Last);
+                            bufferState.UpdateDestinationRange(value.First, value.Last);
                             any |= value.First <= value.Last;
                         }
                         if (config.InfluxStateStore)
@@ -308,22 +308,22 @@ namespace Cognite.OpcUa
                     {
                         var emitterId = extractor.GetUniqueId(evt.EmittingNode);
                         any = true;
-                        if (!eventRanges.ContainsKey(emitterId))
+                        if (!eventRanges.TryGetValue(emitterId, out var range))
                         {
                             eventRanges[emitterId] = new TimeRange(evt.Time, evt.Time);
                             continue;
                         }
-                        eventRanges[emitterId] = eventRanges[emitterId].Extend(evt.Time, evt.Time);
+                        eventRanges[emitterId] = range.Extend(evt.Time, evt.Time);
                     }
 
                     foreach ((string emitterId, var range) in eventRanges)
                     {
-                        if (!eventBufferStates.ContainsKey(emitterId))
+                        if (!eventBufferStates.TryGetValue(emitterId, out var bufferState))
                         {
-                            eventBufferStates[emitterId] = new InfluxBufferState(extractor.State.GetEmitterState(emitterId));
-                            eventBufferStates[emitterId].InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
+                            eventBufferStates[emitterId] = bufferState = new InfluxBufferState(extractor.State.GetEmitterState(emitterId));
+                            bufferState.InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
                         }
-                        eventBufferStates[emitterId].UpdateDestinationRange(range.First, range.Last);
+                        bufferState.UpdateDestinationRange(range.First, range.Last);
                     }
 
                     if (config.InfluxStateStore)
@@ -454,13 +454,13 @@ namespace Cognite.OpcUa
 
                         foreach (var point in points)
                         {
-                            if (!ranges.ContainsKey(point.Id))
+                            if (!ranges.TryGetValue(point.Id, out var range))
                             {
                                 ranges[point.Id] = new TimeRange(point.Timestamp, point.Timestamp);
                                 continue;
                             }
 
-                            ranges[point.Id] = ranges[point.Id].Extend(point.Timestamp, point.Timestamp);
+                            ranges[point.Id] = range.Extend(point.Timestamp, point.Timestamp);
                         }
 
                         foreach (var kvp in ranges)

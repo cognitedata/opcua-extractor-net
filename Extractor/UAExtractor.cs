@@ -505,8 +505,7 @@ namespace Cognite.OpcUa
                     : old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
                 node.Changed = node.Properties != null && node.Properties.Any(prop =>
                 {
-                    if (!oldProperties.ContainsKey(prop.DisplayName)) return true;
-                    var oldProp = oldProperties[prop.DisplayName];
+                    if (!oldProperties.TryGetValue(prop.DisplayName, out var oldProp)) return true;
                     return oldProp.IsString && oldProp.StringValue != prop.Value.StringValue
                         && !string.IsNullOrWhiteSpace(oldProp.StringValue)
                         || !oldProp.IsString && oldProp.DoubleValue != prop.Value.DoubleValue;
