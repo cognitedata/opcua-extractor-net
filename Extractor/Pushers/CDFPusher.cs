@@ -29,7 +29,6 @@ using Serilog;
 using Cognite.Extractor.Utils;
 using TimeRange = Cognite.Extractor.Common.TimeRange;
 using System.Text.Json;
-using Cognite.Extractor.Common;
 
 namespace Cognite.OpcUa.Pushers
 {

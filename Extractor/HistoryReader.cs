@@ -53,8 +53,9 @@ namespace Cognite.OpcUa
             this.config = config;
             this.uaClient = uaClient;
             this.extractor = extractor;
-            historyStartTime = DateTimeOffset.FromUnixTimeMilliseconds(config.StartTime).DateTime;
-            historyGranularity = config.Granularity <= 0 ? TimeSpan.Zero
+            historyStartTime = CogniteTime.FromUnixTimeMilliseconds(config.StartTime);
+            historyGranularity = config.Granularity <= 0
+                ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.Granularity);
         }
         /// <summary>
@@ -99,8 +100,7 @@ namespace Cognite.OpcUa
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
                     UAExtractor.BadDataPoints.Inc();
-                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
-                        datapoint.SourceTimestamp);
+                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                     continue;
                 }
 
@@ -275,6 +275,7 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = (uint)config.DataChunk
             };
             log.Information("Frontfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
+
             BaseHistoryReadOp(details, nodes.Select(node => node.SourceId), true, true, HistoryDataHandler, token);
         }
         /// <summary>
@@ -421,7 +422,7 @@ namespace Cognite.OpcUa
                 {
                     if (state.SourceExtractedRange.First < historyStartTime)
                     {
-                        state.UpdateFromBackfill(DateTime.MinValue, true);
+                        state.UpdateFromBackfill(CogniteTime.DateTimeEpoch, true);
                     }
                 }
                 var backfillChunks = states.Where(state => state.SourceExtractedRange.First > historyStartTime)

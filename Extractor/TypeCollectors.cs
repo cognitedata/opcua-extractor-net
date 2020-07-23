@@ -154,14 +154,12 @@ namespace Cognite.OpcUa
 
         private IEnumerable<NodeId> GetAncestors(NodeId id)
         {
-            var ids = new List<NodeId>();
-            ids.Add(id);
+            yield return id;
             while (parentIds.TryGetValue(id, out var parent))
             {
-                ids.Add(parent);
+                yield return parent;
                 id = parent;
             }
-            return ids;
         }
 
         private BufferedDataType CreateDataType(NodeId id)
@@ -174,9 +172,7 @@ namespace Cognite.OpcUa
                 };
             }
 
-
-            var ancestors = GetAncestors(id);
-            foreach (var parent in ancestors)
+            foreach (var parent in GetAncestors(id))
             {
                 if (parent != DataTypes.BaseDataType && dataTypes.TryGetValue(parent, out var dt))
                     return new BufferedDataType(id, dt);

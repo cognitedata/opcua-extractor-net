@@ -18,16 +18,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.StateStorage;
-using Cognite.Extractor.Utils;
-using Cognite.OpcUa.Pushers;
 using Microsoft.Extensions.DependencyInjection;
-using Polly;
-using Polly.Timeout;
 using Serilog;
 
 namespace Cognite.OpcUa
@@ -39,7 +33,7 @@ namespace Cognite.OpcUa
     public class ExtractorRuntime
     {
         private readonly FullConfig config;
-        private IServiceProvider provider;
+        private readonly IServiceProvider provider;
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorRuntime));
 

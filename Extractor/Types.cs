@@ -175,6 +175,7 @@ namespace Cognite.OpcUa
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
         public BufferedVariable(NodeId id, string displayName, NodeId parentId) : base(id, displayName, true, parentId) { }
+        public bool IsArray => ArrayDimensions != null && ArrayDimensions.Count == 1 && ArrayDimensions[0] > 0;
         /// <summary>
         /// Sets the datapoint to provided DataValue.
         /// </summary>

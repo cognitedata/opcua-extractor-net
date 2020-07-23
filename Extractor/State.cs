@@ -54,6 +54,7 @@ namespace Cognite.OpcUa
         /// <returns>State if it exists</returns>
         public NodeExtractionState GetNodeState(string externalId)
         {
+            if (externalId == null) return null;
             return nodeStatesByExtId.GetValueOrDefault(externalId);
         }
         /// <summary>
@@ -63,6 +64,7 @@ namespace Cognite.OpcUa
         /// <returns>State if it exists</returns>
         public NodeExtractionState GetNodeState(NodeId id)
         {
+            if (id == null || id.IsNullNodeId) return null;
             return nodeStates.GetValueOrDefault(id);
         }
         /// <summary>
@@ -72,6 +74,7 @@ namespace Cognite.OpcUa
         /// <returns>State if it exists</returns>
         public EventExtractionState GetEmitterState(string externalId)
         {
+            if (externalId == null) return null;
             return emitterStatesByExtId.GetValueOrDefault(externalId);
         }
         /// <summary>
@@ -81,6 +84,7 @@ namespace Cognite.OpcUa
         /// <returns>State if it exists</returns>
         public EventExtractionState GetEmitterState(NodeId id)
         {
+            if (id == null || id.IsNullNodeId) return null;
             return emitterStates.GetValueOrDefault(id);
         }
 
@@ -112,6 +116,7 @@ namespace Cognite.OpcUa
         /// <param name="id">Id to add</param>
         public void AddManagedNode(NodeId id)
         {
+            if (id == null || id.IsNullNodeId) throw new ArgumentNullException(nameof(id));
             managedNodes[id] = extractor.GetUniqueId(id);
         }
         /// <summary>
@@ -131,6 +136,7 @@ namespace Cognite.OpcUa
         /// <param name="id">UniqueId key</param>
         public void RegisterNode(NodeId nodeId, string id)
         {
+            if (nodeId == null || nodeId.IsNullNodeId) throw new ArgumentNullException(nameof(nodeId));
             externalToNodeId[id] = nodeId;
         }
         /// <summary>
@@ -140,6 +146,7 @@ namespace Cognite.OpcUa
         /// <returns>True if id exists in managed nodes</returns>
         public bool IsMappedNode(NodeId id)
         {
+            if (id == null || id.IsNullNodeId) return false;
             return managedNodes.ContainsKey(id);
         }
         /// <summary>
@@ -178,6 +185,7 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         public BufferedNode GetActiveNode(NodeId id, int index = -1)
         {
+            if (id == null || id.IsNullNodeId) return null;
             return activeNodes.GetValueOrDefault((id, index));
         }
     }

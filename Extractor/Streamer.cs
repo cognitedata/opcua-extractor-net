@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -81,7 +80,8 @@ namespace Cognite.OpcUa
                         failedPushers.Add(pusher);
                     }
                     log.Warning("Pushers of types {types} failed while pushing datapoints",
-                        failedPushers.Select(pusher => pusher.GetType().ToString()).Aggregate((src, val) => src + ", " + val));
+                        string.Concat(failedPushers.Select(pusher => pusher.GetType().ToString())));
+
                     foreach (var state in extractor.State.NodeStates)
                     {
                         state.RestartHistory();
@@ -124,8 +124,8 @@ namespace Cognite.OpcUa
                 {
                     pusher.DataFailing = false;
                 }
-
             }
+
             if (config.FailureBuffer.Enabled && extractor.FailureBuffer.Any)
             {
                 await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
@@ -368,12 +368,11 @@ namespace Cognite.OpcUa
             }
             var eventType = eventFields[eventTypeIndex].Value as NodeId;
             // Many servers don't handle filtering on history data.
-            if (eventType == null || !extractor.State.ActiveEvents.ContainsKey(eventType))
+            if (eventType == null || !extractor.State.ActiveEvents.TryGetValue(eventType, out var targetEventFields))
             {
                 log.Verbose("Invalid event type: {eventType}", eventType);
                 return null;
             }
-            var targetEventFields = extractor.State.ActiveEvents[eventType];
 
             var extractedProperties = new Dictionary<string, object>();
 
@@ -387,11 +386,11 @@ namespace Cognite.OpcUa
 
                 string name = clause.BrowsePath[0].Name;
                 if (config.Events.ExcludeProperties.Contains(name) || config.Events.BaseExcludeProperties.Contains(name)) continue;
-                if (config.Events.DestinationNameMap.ContainsKey(name) && name != "EventId" && name != "SourceNode" && name != "EventType")
+                if (name != "EventId" && name != "SourceNode" && name != "EventType" && config.Events.DestinationNameMap.TryGetValue(name, out var mapped))
                 {
-                    name = config.Events.DestinationNameMap[name];
+                    name = mapped;
                 }
-                if (!extractedProperties.ContainsKey(name) || extractedProperties[name] == null)
+                if (!extractedProperties.TryGetValue(name, out var extracted) || extracted == null)
                 {
                     extractedProperties[name] = eventFields[i].Value;
                 }
