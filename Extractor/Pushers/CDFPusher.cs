@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2019 Cognite AS
+Copyright (C) 2020 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -39,7 +39,6 @@ namespace Cognite.OpcUa.Pushers
     {
         private readonly CognitePusherConfig config;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
-        private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
         
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
@@ -52,18 +51,13 @@ namespace Cognite.OpcUa.Pushers
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
         private readonly HashSet<string> missingTimeseries = new HashSet<string>();
-        private readonly IServiceProvider provider;
+        private readonly CogniteDestination destination;
 
         public CDFPusher(IServiceProvider clientProvider, CognitePusherConfig config)
         {
             this.config = config;
             BaseConfig = config;
-            provider = clientProvider;
-        }
-
-        private CogniteDestination GetDestination()
-        {
-            return provider.GetRequiredService<CogniteDestination>();
+            destination = clientProvider.GetRequiredService<CogniteDestination>();
         }
 
         private static readonly Counter dataPointsCounter = Metrics
@@ -111,8 +105,6 @@ namespace Cognite.OpcUa.Pushers
             int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count());
 
             if (count == 0) return null;
-
-            var destination = GetDestination();
 
             var inserts = dataPointList.ToDictionary(kvp =>
                 Identity.Create(kvp.Key),
@@ -175,7 +167,7 @@ namespace Cognite.OpcUa.Pushers
             int count = 0;
             foreach (var buffEvent in events)
             {
-                if (buffEvent.Time < minDateTime)
+                if (buffEvent.Time < PusherUtils.CogniteMinTime || buffEvent.Time > PusherUtils.CogniteMaxTime)
                 {
                     skippedEvents.Inc();
                     continue;
@@ -183,11 +175,8 @@ namespace Cognite.OpcUa.Pushers
                 eventList.Add(buffEvent);
                 count++;
             }
-            if (count == 0) return null;
 
-            if (config.Debug) return null;
-
-            var destination = GetDestination();
+            if (count == 0 || config.Debug) return null;
 
             try
             {
@@ -220,12 +209,9 @@ namespace Cognite.OpcUa.Pushers
             UpdateConfig update,
             CancellationToken token)
         {
-            var tsList = new List<BufferedVariable>();
-
             if (variables == null) throw new ArgumentNullException(nameof(variables));
             if (objects == null) throw new ArgumentNullException(nameof(objects));
             if (update == null) throw new ArgumentNullException(nameof(update));
-
 
             if (!variables.Any() && !objects.Any())
             {
@@ -233,20 +219,11 @@ namespace Cognite.OpcUa.Pushers
                 return true;
             }
 
-            foreach (var node in variables)
-            { 
-                tsList.Add(node);
-            }
-
             log.Information("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
             if (config.Debug)
             {
                 await Extractor.ReadProperties(objects.Concat(variables), token);
-                foreach (var node in objects)
-                {
-                    log.Verbose(node.ToDebugDescription());
-                }
-                foreach (var node in variables)
+                foreach (var node in objects.Concat(variables))
                 {
                     log.Verbose(node.ToDebugDescription());
                 }
@@ -264,10 +241,9 @@ namespace Cognite.OpcUa.Pushers
                 return false;
             }
 
-
             try
             {
-                await PushTimeseries(tsList, update.Variables, token);
+                await PushTimeseries(variables, update.Variables, token);
             }
             catch (Exception e)
             {
@@ -297,7 +273,7 @@ namespace Cognite.OpcUa.Pushers
             var ids = new List<string>();
             foreach (var state in states)
             {
-                if (state.ArrayDimensions != null && state.ArrayDimensions.Count > 0 && state.ArrayDimensions[0] > 0)
+                if (state.IsArray)
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
@@ -311,8 +287,6 @@ namespace Cognite.OpcUa.Pushers
             }
             log.Information("Getting extracted ranges from CDF for {cnt} states", ids.Count);
             if (config.Debug) return true;
-
-            var destination = GetDestination();
 
             Dictionary<string, TimeRange> ranges;
             try
@@ -328,9 +302,9 @@ namespace Cognite.OpcUa.Pushers
 
             foreach (var state in states)
             {
-                if (ranges.ContainsKey(state.Id))
+                if (ranges.TryGetValue(state.Id, out var range))
                 {
-                    state.InitExtractedRange(ranges[state.Id].First, ranges[state.Id].Last);
+                    state.InitExtractedRange(range.First, range.Last);
                 }
                 else if (initMissing)
                 {
@@ -344,16 +318,14 @@ namespace Cognite.OpcUa.Pushers
         {
             if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
             if (config.Debug) return true;
-            var destination = GetDestination();
             try
             {
                 await destination.TestCogniteConfig(token);
             }
             catch (Exception ex)
             {
-                log.Debug(ex, "Failed to get login status from CDF. Project {project} at {url}", config.Project, config.Host);
-                log.Error("Failed to get CDF login status, this is likely a problem with the network. Project {project} at {url}", 
-                    config.Project, config.Host);
+                log.Error("Failed to get CDF login status, this is likely a problem with the network or configuration. Project {project} at {url}: {msg}", 
+                    config.Project, config.Host, ex.Message);
                 return false;
             }
 
@@ -366,7 +338,6 @@ namespace Cognite.OpcUa.Pushers
                 log.Error("Could not access CDF Time Series - most likely due " +
                           "to insufficient access rights on API key. Project {project} at {host}: {msg}",
                     config.Project, config.Host, ex.Message);
-                log.Debug(ex, "Could not access CDF Time Series");
                 return false;
             }
 
@@ -382,7 +353,6 @@ namespace Cognite.OpcUa.Pushers
                 log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
                           "to insufficient acces rights on API key. Project {project} at {host}: {msg}",
                     config.Project, config.Host, ex.Message);
-                log.Debug(ex, "Could not access CDF Events");
                 return false;
             }
 
@@ -405,7 +375,6 @@ namespace Cognite.OpcUa.Pushers
             CancellationToken token)
         {
             var assetIds = new ConcurrentDictionary<string, BufferedNode>(objects.ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
-            var destination = GetDestination();
             var metaMap = config.MetadataMapping?.Assets;
             bool useRawAssets = config.RawMetadata != null
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
@@ -521,7 +490,6 @@ namespace Cognite.OpcUa.Pushers
             CancellationToken token)
         {
             var tsIds = new ConcurrentDictionary<string, BufferedVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
-            var destination = GetDestination();
             var metaMap = config.MetadataMapping?.Timeseries;
             bool useRawTimeseries = config.RawMetadata != null
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
@@ -537,13 +505,14 @@ namespace Cognite.OpcUa.Pushers
                 return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, metaMap, useRawTimeseries))
                     .Where(ts => ts != null);
             }, token);
+
             var foundBadTimeseries = new List<string>();
             foreach (var ts in timeseries)
             {
                 var loc = tsIds[ts.ExternalId];
-                if (nodeToAssetIds.ContainsKey(loc.ParentId))
+                if (nodeToAssetIds.TryGetValue(loc.ParentId, out var parentId))
                 {
-                    nodeToAssetIds[loc.Id] = nodeToAssetIds[loc.ParentId];
+                    nodeToAssetIds[loc.Id] = parentId;
                 }
                 if (ts.IsString != loc.DataType.IsString)
                 {
@@ -613,7 +582,6 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
 
-
             if (useRawTimeseries)
             {
                 if (update.AnyUpdate)
@@ -659,7 +627,6 @@ namespace Cognite.OpcUa.Pushers
             JsonSerializerOptions options,
             CancellationToken token)
         {
-            var destination = GetDestination();
             string cursor = null;
             var existing = new HashSet<string>();
             do
@@ -698,7 +665,6 @@ namespace Cognite.OpcUa.Pushers
             string columns,
             CancellationToken token)
         {
-            var destination = GetDestination();
             string cursor = null;
             var existing = new List<RawRow>();
             var keys = new HashSet<string>(toRetrieve);

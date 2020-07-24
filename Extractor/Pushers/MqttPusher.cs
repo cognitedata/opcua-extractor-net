@@ -1,6 +1,22 @@
-﻿using System;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2020 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -115,20 +131,22 @@ namespace Cognite.OpcUa.Pushers
             int count = 0;
             var dataPointList = new Dictionary<string, List<BufferedDataPoint>>();
 
-            foreach (var lBuffer in points)
+            foreach (var ldp in points)
             {
-                var buffer = lBuffer;
-                if (buffer.Timestamp < minDateTime)
+                var dp = ldp;
+                if (dp.Timestamp < minDateTime)
                 {
                     skippedDatapoints.Inc();
                     continue;
                 }
 
-                if (!buffer.IsString && (!double.IsFinite(buffer.DoubleValue.Value) || buffer.DoubleValue >= 1E100 || buffer.DoubleValue <= -1E100))
+                if (!dp.IsString && (!double.IsFinite(dp.DoubleValue.Value)
+                    || dp.DoubleValue >= CogniteUtils.NumericValueMax
+                    || dp.DoubleValue <= CogniteUtils.NumericValueMin))
                 {
                     if (config.NonFiniteReplacement != null)
                     {
-                        buffer = new BufferedDataPoint(buffer, config.NonFiniteReplacement.Value);
+                        dp = new BufferedDataPoint(dp, config.NonFiniteReplacement.Value);
                     }
                     else
                     {
@@ -137,17 +155,17 @@ namespace Cognite.OpcUa.Pushers
                     }
                 }
 
-                if (buffer.IsString && buffer.StringValue == null)
+                if (dp.IsString && dp.StringValue == null)
                 {
-                    buffer = new BufferedDataPoint(buffer, "");
+                    dp = new BufferedDataPoint(dp, "");
                 }
 
                 count++;
-                if (!dataPointList.ContainsKey(buffer.Id))
+                if (!dataPointList.ContainsKey(dp.Id))
                 {
-                    dataPointList[buffer.Id] = new List<BufferedDataPoint>();
+                    dataPointList[dp.Id] = new List<BufferedDataPoint>();
                 }
-                dataPointList[buffer.Id].Add(buffer);
+                dataPointList[dp.Id].Add(dp);
             }
 
             if (count == 0) return null;
@@ -155,8 +173,6 @@ namespace Cognite.OpcUa.Pushers
             var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<BufferedDataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
             var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk.ToDictionary(pair => pair.Key, pair => pair.Values), token)).ToList();
             var results = await Task.WhenAll(pushTasks);
-
-
 
             if (!results.All(res => res))
             {

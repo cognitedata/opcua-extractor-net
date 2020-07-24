@@ -1,4 +1,21 @@
-﻿using System;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2020 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Opc.Ua;
@@ -54,6 +71,7 @@ namespace Cognite.OpcUa
         /// <returns>State if it exists</returns>
         public NodeExtractionState GetNodeState(string externalId)
         {
+            if (externalId == null) return null;
             return nodeStatesByExtId.GetValueOrDefault(externalId);
         }
         /// <summary>
@@ -63,6 +81,7 @@ namespace Cognite.OpcUa
         /// <returns>State if it exists</returns>
         public NodeExtractionState GetNodeState(NodeId id)
         {
+            if (id == null || id.IsNullNodeId) return null;
             return nodeStates.GetValueOrDefault(id);
         }
         /// <summary>
@@ -72,6 +91,7 @@ namespace Cognite.OpcUa
         /// <returns>State if it exists</returns>
         public EventExtractionState GetEmitterState(string externalId)
         {
+            if (externalId == null) return null;
             return emitterStatesByExtId.GetValueOrDefault(externalId);
         }
         /// <summary>
@@ -81,6 +101,7 @@ namespace Cognite.OpcUa
         /// <returns>State if it exists</returns>
         public EventExtractionState GetEmitterState(NodeId id)
         {
+            if (id == null || id.IsNullNodeId) return null;
             return emitterStates.GetValueOrDefault(id);
         }
 
@@ -112,6 +133,7 @@ namespace Cognite.OpcUa
         /// <param name="id">Id to add</param>
         public void AddManagedNode(NodeId id)
         {
+            if (id == null || id.IsNullNodeId) throw new ArgumentNullException(nameof(id));
             managedNodes[id] = extractor.GetUniqueId(id);
         }
         /// <summary>
@@ -131,6 +153,7 @@ namespace Cognite.OpcUa
         /// <param name="id">UniqueId key</param>
         public void RegisterNode(NodeId nodeId, string id)
         {
+            if (nodeId == null || nodeId.IsNullNodeId) throw new ArgumentNullException(nameof(nodeId));
             externalToNodeId[id] = nodeId;
         }
         /// <summary>
@@ -140,6 +163,7 @@ namespace Cognite.OpcUa
         /// <returns>True if id exists in managed nodes</returns>
         public bool IsMappedNode(NodeId id)
         {
+            if (id == null || id.IsNullNodeId) return false;
             return managedNodes.ContainsKey(id);
         }
         /// <summary>
@@ -178,6 +202,7 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         public BufferedNode GetActiveNode(NodeId id, int index = -1)
         {
+            if (id == null || id.IsNullNodeId) return null;
             return activeNodes.GetValueOrDefault((id, index));
         }
     }

@@ -1,7 +1,23 @@
-﻿using System;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2020 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -56,12 +72,12 @@ namespace Cognite.OpcUa
             while (DataPointQueue.TryDequeue(out BufferedDataPoint dp))
             {
                 dataPointList.Add(dp);
-                if (!pointRanges.ContainsKey(dp.Id))
+                if (!pointRanges.TryGetValue(dp.Id, out var range))
                 {
                     pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
                     continue;
                 }
-                pointRanges[dp.Id] = pointRanges[dp.Id].Extend(dp.Timestamp, dp.Timestamp);
+                pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
             }
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
@@ -81,7 +97,8 @@ namespace Cognite.OpcUa
                         failedPushers.Add(pusher);
                     }
                     log.Warning("Pushers of types {types} failed while pushing datapoints",
-                        failedPushers.Select(pusher => pusher.GetType().ToString()).Aggregate((src, val) => src + ", " + val));
+                        string.Concat(failedPushers.Select(pusher => pusher.GetType().ToString())));
+
                     foreach (var state in extractor.State.NodeStates)
                     {
                         state.RestartHistory();
@@ -124,8 +141,8 @@ namespace Cognite.OpcUa
                 {
                     pusher.DataFailing = false;
                 }
-
             }
+
             if (config.FailureBuffer.Enabled && extractor.FailureBuffer.Any)
             {
                 await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
@@ -156,13 +173,13 @@ namespace Cognite.OpcUa
             while (EventQueue.TryDequeue(out BufferedEvent evt))
             {
                 eventList.Add(evt);
-                if (!eventRanges.ContainsKey(evt.EmittingNode))
+                if (!eventRanges.TryGetValue(evt.EmittingNode, out var range))
                 {
                     eventRanges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
                     continue;
                 }
 
-                eventRanges[evt.EmittingNode] = eventRanges[evt.EmittingNode].Extend(evt.Time, evt.Time);
+                eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
             }
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));
 
@@ -368,12 +385,11 @@ namespace Cognite.OpcUa
             }
             var eventType = eventFields[eventTypeIndex].Value as NodeId;
             // Many servers don't handle filtering on history data.
-            if (eventType == null || !extractor.State.ActiveEvents.ContainsKey(eventType))
+            if (eventType == null || !extractor.State.ActiveEvents.TryGetValue(eventType, out var targetEventFields))
             {
                 log.Verbose("Invalid event type: {eventType}", eventType);
                 return null;
             }
-            var targetEventFields = extractor.State.ActiveEvents[eventType];
 
             var extractedProperties = new Dictionary<string, object>();
 
@@ -387,11 +403,11 @@ namespace Cognite.OpcUa
 
                 string name = clause.BrowsePath[0].Name;
                 if (config.Events.ExcludeProperties.Contains(name) || config.Events.BaseExcludeProperties.Contains(name)) continue;
-                if (config.Events.DestinationNameMap.ContainsKey(name) && name != "EventId" && name != "SourceNode" && name != "EventType")
+                if (name != "EventId" && name != "SourceNode" && name != "EventType" && config.Events.DestinationNameMap.TryGetValue(name, out var mapped))
                 {
-                    name = config.Events.DestinationNameMap[name];
+                    name = mapped;
                 }
-                if (!extractedProperties.ContainsKey(name) || extractedProperties[name] == null)
+                if (!extractedProperties.TryGetValue(name, out var extracted) || extracted == null)
                 {
                     extractedProperties[name] = eventFields[i].Value;
                 }

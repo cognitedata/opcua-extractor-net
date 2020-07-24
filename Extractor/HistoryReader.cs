@@ -1,4 +1,21 @@
-﻿using System;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2020 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -53,8 +70,9 @@ namespace Cognite.OpcUa
             this.config = config;
             this.uaClient = uaClient;
             this.extractor = extractor;
-            historyStartTime = DateTimeOffset.FromUnixTimeMilliseconds(config.StartTime).DateTime;
-            historyGranularity = config.Granularity <= 0 ? TimeSpan.Zero
+            historyStartTime = CogniteTime.FromUnixTimeMilliseconds(config.StartTime);
+            historyGranularity = config.Granularity <= 0
+                ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.Granularity);
         }
         /// <summary>
@@ -99,8 +117,7 @@ namespace Cognite.OpcUa
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
                     UAExtractor.BadDataPoints.Inc();
-                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
-                        datapoint.SourceTimestamp);
+                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
                     continue;
                 }
 
@@ -275,6 +292,7 @@ namespace Cognite.OpcUa
                 NumValuesPerNode = (uint)config.DataChunk
             };
             log.Information("Frontfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
+
             BaseHistoryReadOp(details, nodes.Select(node => node.SourceId), true, true, HistoryDataHandler, token);
         }
         /// <summary>
@@ -421,7 +439,7 @@ namespace Cognite.OpcUa
                 {
                     if (state.SourceExtractedRange.First < historyStartTime)
                     {
-                        state.UpdateFromBackfill(DateTime.MinValue, true);
+                        state.UpdateFromBackfill(CogniteTime.DateTimeEpoch, true);
                     }
                 }
                 var backfillChunks = states.Where(state => state.SourceExtractedRange.First > historyStartTime)

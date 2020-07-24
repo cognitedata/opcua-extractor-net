@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2019 Cognite AS
+Copyright (C) 2020 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -69,8 +69,7 @@ namespace Cognite.OpcUa
             {
                 if (node.IsVariable && node is BufferedVariable variable)
                 {
-                    if (variable.ArrayDimensions != null && variable.ArrayDimensions.Count > 0 &&
-                        variable.ArrayDimensions[0] > 0 && variable.Index == -1)
+                    if (variable.IsArray && variable.Index == -1)
                     {
                         objects.Add(variable);
                     }
@@ -136,7 +135,9 @@ namespace Cognite.OpcUa
                 {
                     log.Error(message + " - {msg}", failure.Message);
                     log.Debug(failure, message);
+                    return;
                 }
+                log.Error(message + " - {msg}", aex?.InnerException.Message ?? aex.Message);
             } 
             else if (e is SilentServiceException silent)
             {

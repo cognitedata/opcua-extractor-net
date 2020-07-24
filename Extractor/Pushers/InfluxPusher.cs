@@ -1,4 +1,21 @@
-﻿using System;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2020 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -117,7 +134,6 @@ namespace Cognite.OpcUa
                 }
                 dataPointPushFailures.Inc();
                 log.Error("Failed to insert {count} datapoints into influxdb: {msg}", count, e.Message);
-                log.Debug(e, "Failed to insert datapoints into influxdb");
                 return false;
             }
             dataPointPushes.Inc();
@@ -159,8 +175,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                log.Warning("Failed to push {cnt} events to influxdb", count);
-                log.Debug(ex, "Failed to push events to influxdb");
+                log.Warning("Failed to push {cnt} events to influxdb: {msg}", count, ex.Message);
                 eventPushFailures.Inc();
                 return false;
             }
@@ -204,9 +219,9 @@ namespace Cognite.OpcUa
                         ranges[id] = new TimeRange(ts, ranges[id].Last);
                     }
                 }
-                if (ranges.ContainsKey(id))
+                if (ranges.TryGetValue(id, out var range))
                 {
-                    state.InitExtractedRange(ranges[id].First, ranges[id].Last);
+                    state.InitExtractedRange(range.First, range.Last);
                 }
                 else if (initMissing)
                 {
@@ -311,15 +326,14 @@ namespace Cognite.OpcUa
             IEnumerable<string> eventSeries;
             try
             {
-                var measurements = await client.QueryMultiSeriesAsync(config.Database,
-                    "SHOW MEASUREMENTS");
+                var measurements = await client.QueryMultiSeriesAsync(config.Database, "SHOW MEASUREMENTS");
                 eventSeries = measurements.SelectMany(series => series.Entries.Select(entry => entry.Name as string));
                 eventSeries = eventSeries.Where(series => series.StartsWith("events.", StringComparison.InvariantCulture));
 
             }
             catch (Exception e)
             {
-                log.Error(e, "Failed to list measurements in influxdb");
+                log.Error("Failed to list measurements in influxdb: {msg}", e.Message);
                 return false;
             }
 
@@ -330,7 +344,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
-                log.Error(e, "Failed to get timestamps from influxdb");
+                log.Error("Failed to get timestamps from influxdb: {msg}", e.Message);
                 return false;
             }
             return true;
@@ -350,8 +364,7 @@ namespace Cognite.OpcUa
             catch (Exception ex)
             {
                 log.Error("Failed to get db names from influx server: {host}, this is most likely due to a faulty connection or" +
-                          " wrong credentials");
-                log.Debug(ex, "Failed to get db names from influx server: {host}", config.Host);
+                          " wrong credentials: {msg}", ex.Message);
                 return false;
             }
             if (dbs == null || !dbs.Contains(config.Database))
@@ -363,13 +376,20 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception ex)
                 {
-                    log.Error(ex, "Failed to create database {db} in influxdb: {message}", config.Database, ex.Message);
+                    log.Error("Failed to create database {db} in influxdb: {message}", config.Database, ex.Message);
                     return false;
                 }
                 log.Error("Database not successfully created");
                 return false;
             }
             return true;
+        }
+
+        private static bool IsInteger(uint dataType)
+        {
+            return dataType >= DataTypes.SByte && dataType <= DataTypes.UInt64
+                     || dataType == DataTypes.Integer
+                     || dataType == DataTypes.UInteger;
         }
 
         private static IInfluxDatapoint BufferedDPToInflux(NodeExtractionState state, BufferedDataPoint dp)
@@ -395,9 +415,7 @@ namespace Cognite.OpcUa
                 idp.Fields.Add("value", Math.Abs(dp.DoubleValue.Value) < 0.1);
                 return idp;
             }
-            if (state.DataType.Identifier < DataTypes.Float
-                     || state.DataType.Identifier == DataTypes.Integer
-                     || state.DataType.Identifier == DataTypes.UInteger)
+            if (state.DataType.IsStep || IsInteger(state.DataType.Identifier))
             {
                 var idp = new InfluxDatapoint<long>
                 {
@@ -425,12 +443,12 @@ namespace Cognite.OpcUa
             {
                 UtcTimestamp = evt.Time,
                 MeasurementName = "events." + Extractor.GetUniqueId(evt.EmittingNode) + ":"
-                                  + (evt.MetaData.ContainsKey("Type") ? evt.MetaData["Type"] : Extractor.GetUniqueId(evt.EventType))
+                                  + (evt.MetaData.TryGetValue("Type", out var rawType) ? rawType : Extractor.GetUniqueId(evt.EventType))
             };
             idp.Fields.Add("value", evt.Message);
             idp.Fields.Add("id", evt.EventId);
-            var sourceNode = evt.MetaData.ContainsKey("SourceNode")
-                ? Extractor.ConvertToString(evt.MetaData["SourceNode"]) : Extractor.GetUniqueId(evt.SourceNode);
+            var sourceNode = evt.MetaData.TryGetValue("SourceNode", out var rawSourceNode)
+                ? Extractor.ConvertToString(rawSourceNode) : Extractor.GetUniqueId(evt.SourceNode);
             idp.Fields.Add("source", sourceNode ?? "null");
             foreach (var kvp in evt.MetaData)
             {
@@ -469,8 +487,8 @@ namespace Cognite.OpcUa
                 if (!series.Any()) continue;
                 var current = series.First();
                 string id = current.SeriesName;
-                if (!states.ContainsKey(id)) continue;
-                bool isString = states[id].Type == InfluxBufferType.StringType;
+                if (!states.TryGetValue(id, out var state)) continue;
+                bool isString = state.Type == InfluxBufferType.StringType;
                 finalPoints.AddRange(current.Entries.Select(dp =>
                 {
                     if (isString)

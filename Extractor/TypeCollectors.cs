@@ -1,4 +1,21 @@
-﻿using Opc.Ua;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2020 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Opc.Ua;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -154,14 +171,12 @@ namespace Cognite.OpcUa
 
         private IEnumerable<NodeId> GetAncestors(NodeId id)
         {
-            var ids = new List<NodeId>();
-            ids.Add(id);
+            yield return id;
             while (parentIds.TryGetValue(id, out var parent))
             {
-                ids.Add(parent);
+                yield return parent;
                 id = parent;
             }
-            return ids;
         }
 
         private BufferedDataType CreateDataType(NodeId id)
@@ -174,9 +189,7 @@ namespace Cognite.OpcUa
                 };
             }
 
-
-            var ancestors = GetAncestors(id);
-            foreach (var parent in ancestors)
+            foreach (var parent in GetAncestors(id))
             {
                 if (parent != DataTypes.BaseDataType && dataTypes.TryGetValue(parent, out var dt))
                     return new BufferedDataType(id, dt);
@@ -418,12 +431,9 @@ namespace Cognite.OpcUa
             if (child.NodeClass == NodeClass.ObjectType && !properties.ContainsKey(id))
             {
                 var parentProperties = new List<ReferenceDescription>();
-                if (properties.ContainsKey(parent))
+                if (properties.TryGetValue(parent, out var pProps))
                 {
-                    foreach (var prop in properties[parent])
-                    {
-                        parentProperties.Add(prop);
-                    }
+                    parentProperties.AddRange(pProps);
                 }
                 properties[id] = parentProperties;
                 localProperties[id] = new List<ReferenceDescription>();

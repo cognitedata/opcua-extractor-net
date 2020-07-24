@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2019 Cognite AS
+Copyright (C) 2020 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -176,10 +176,14 @@ namespace Cognite.OpcUa
         /// <param name="ParentId">Id of parent of buffered node</param>
         public BufferedVariable(NodeId id, string displayName, NodeId parentId) : base(id, displayName, true, parentId) { }
         /// <summary>
+        /// True if this node represents an array
+        /// </summary>
+        public bool IsArray => ArrayDimensions != null && ArrayDimensions.Count == 1 && ArrayDimensions[0] > 0;
+        /// <summary>
         /// Sets the datapoint to provided DataValue.
         /// </summary>
         /// <param name="value">Value to set</param>
-        /// <param name="SourceTimestamp">Timestamp from source</param>
+        /// <param name="sourceTimestamp">Timestamp from source</param>
         /// <param name="client">Current client context</param>
         public void SetDataPoint(object value, DateTime sourceTimestamp, UAClient client)
         {
