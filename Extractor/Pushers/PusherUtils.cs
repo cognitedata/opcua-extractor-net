@@ -59,16 +59,19 @@ namespace Cognite.OpcUa.Pushers
             if (extras != null) raw.AddRange(extras);
             if (properties != null)
             {
-                raw.AddRange(properties.Select(prop => new KeyValuePair<string, string>(
-                    ExtractorUtils.LimitUtf8ByteCount(prop.DisplayName, 128), ExtractorUtils.LimitUtf8ByteCount(prop.Value.StringValue, 256)
-                )));
+                raw.AddRange(properties
+                    .Select(prop => new KeyValuePair<string, string>(
+                        ExtractorUtils.LimitUtf8ByteCount(prop?.DisplayName, 128), ExtractorUtils.LimitUtf8ByteCount(prop?.Value?.StringValue, 256)
+                    ))
+                    .Where(kvp => kvp.Key != null));
             }
             int count = 0;
             int byteCount = 0;
             raw = raw.TakeWhile(pair =>
             {
                 count++;
-                byteCount += Encoding.UTF8.GetByteCount(pair.Key) + Encoding.UTF8.GetByteCount(pair.Value);
+                if (pair.Key != null) byteCount += Encoding.UTF8.GetByteCount(pair.Key);
+                if (pair.Value != null) byteCount += Encoding.UTF8.GetByteCount(pair.Value);
                 return count <= 256 && byteCount <= 10240;
             }).ToList();
 
