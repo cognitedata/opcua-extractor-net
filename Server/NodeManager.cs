@@ -996,6 +996,8 @@ namespace Server
                         if (serverHandle == null) continue;
                         nodeToRead.Processed = true;
 
+                        serverHandle.Index = i;
+
                         results[i] = new HistoryReadResult();
                         results[i].HistoryData = null;
                         results[i].ContinuationPoint = null;
