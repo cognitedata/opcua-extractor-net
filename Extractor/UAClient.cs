@@ -615,6 +615,7 @@ namespace Cognite.OpcUa
         private IEnumerable<DataValue> GetNodeAttributes(IEnumerable<BufferedNode> nodes,
             IEnumerable<uint> common,
             IEnumerable<uint> variables,
+            IEnumerable<uint> properties,
             CancellationToken token)
         {
             if (!nodes.Any()) return new List<DataValue>();
@@ -625,7 +626,14 @@ namespace Cognite.OpcUa
                 readValueIds.AddRange(common.Select(attribute => new ReadValueId {AttributeId = attribute, NodeId = node.Id}));
                 if (node.IsVariable)
                 {
-                    readValueIds.AddRange(variables.Select(attribute => new ReadValueId {AttributeId = attribute, NodeId = node.Id}));
+                    if (node is BufferedVariable variable && variable.IsProperty)
+                    {
+                        readValueIds.AddRange(properties.Select(attribute => new ReadValueId { AttributeId = attribute, NodeId = node.Id }));
+                    }
+                    else
+                    {
+                        readValueIds.AddRange(variables.Select(attribute => new ReadValueId { AttributeId = attribute, NodeId = node.Id }));
+                    }
                 }
             }
             var values = new List<DataValue>();
@@ -678,14 +686,23 @@ namespace Cognite.OpcUa
                 Attributes.DataType,
                 Attributes.ValueRank
             };
+
+            bool arraysEnabled = extractionConfig.DataTypes.MaxArraySize != 0;
+
             if (historyConfig.Enabled && historyConfig.Data)
             {
                 variableAttributes.Add(Attributes.Historizing);
             }
-            if (extractionConfig.DataTypes.MaxArraySize > 0)
+            if (arraysEnabled)
             {
                 variableAttributes.Add(Attributes.ArrayDimensions);
             }
+            var propertyAttributes = new List<uint>
+            {
+                Attributes.DataType,
+                Attributes.ValueRank,
+                Attributes.ArrayDimensions
+            };
 
             IEnumerable<DataValue> values;
             try
@@ -693,17 +710,30 @@ namespace Cognite.OpcUa
                 values = GetNodeAttributes(nodes, new List<uint>
                 {
                     Attributes.Description
-                }, variableAttributes, token);
+                }, variableAttributes, propertyAttributes, token);
             }
             catch (ServiceResultException ex)
             {
                 throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
             int total = values.Count();
-            int expected = nodes.Count(node => node.IsVariable) * variableAttributes.Count + nodes.Count();
+            int expected = nodes.Aggregate(0, (seed, node) =>
+            {
+                if (node.IsVariable && node is BufferedVariable variable)
+                {
+                    if (variable.IsProperty)
+                    {
+                        return seed + propertyAttributes.Count + 1;
+                    }
+                    else
+                    {
+                        return seed + variableAttributes.Count + 1;
+                    }
+                }
+                return seed + 1;
+            });
             if (total < expected)
             {
-
                 throw new ExtractorFailureException(
                     $"Too few results in ReadNodeData, this is a bug in the OPC-UA server implementation, total : {total}, expected: {expected}");
             }
@@ -722,12 +752,12 @@ namespace Cognite.OpcUa
 
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
-                    if (historyConfig.Enabled && historyConfig.Data)
+                    if (historyConfig.Enabled && historyConfig.Data && !vnode.IsProperty)
                     {
                         enumerator.MoveNext();
                         vnode.Historizing = enumerator.Current.GetValue(false);
                     }
-                    if (extractionConfig.DataTypes.MaxArraySize > 0)
+                    if (vnode.IsProperty || arraysEnabled)
                     {
                         enumerator.MoveNext();
                         var dimVal = enumerator.Current.GetValue(typeof(int[])) as int[];
@@ -804,10 +834,12 @@ namespace Cognite.OpcUa
             try
             {
                 // 10 is reasonable, this is used for metadata which is heavily restricted in length to begin with.
+                var attributes = new List<uint> { Attributes.Value };
                 values = GetNodeAttributes(nodes.Where(buff => buff.ValueRank == ValueRanks.Scalar
                     || buff.ArrayDimensions != null && buff.ArrayDimensions.Count == 1 && buff.ArrayDimensions[0] < 10),
                     new List<uint>(),
-                    new List<uint> {Attributes.Value},
+                    attributes,
+                    attributes,
                     token
                 );
             }

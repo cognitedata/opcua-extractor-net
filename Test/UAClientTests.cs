@@ -246,7 +246,7 @@ namespace Test
 
             var asset = Assert.Single(tester.Handler.Assets.Values, x => x.name == "CustomRoot");
 
-            Assert.Equal(@"[""test1"", ""test2""]", asset.metadata["Variable StringArray"]);
+            Assert.Equal("[test1, test2]", asset.metadata["Variable StringArray"]);
         }
     }
 }
