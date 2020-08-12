@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
@@ -215,6 +216,37 @@ namespace Test
                 && tester.Handler.Datapoints["gp.tl:i=3"].NumericDatapoints.Count >= 1
                 && CommonTestUtils.TestMetricValue("opcua_array_points_missed", 5), 10);
             Assert.False(tester.Handler.Datapoints.ContainsKey("gp.tl:i=3[0]"));
+        }
+
+        [Trait("Server", "custom")]
+        [Trait("Target", "UAClient")]
+        [Trait("Test", "propertyFilters")]
+        [Fact]
+        public async Task TestPropertyFilters()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Array,
+                Builder = (config, pushers, client) =>
+                {
+                    config.Extraction.PropertyNameFilter = "ble Strin";
+                    return new UAExtractor(config, pushers, client, null);
+                },
+                QuitAfterMap = true
+            });
+
+            tester.Config.History.Enabled = false;
+
+            await tester.StartServer();
+            await tester.ClearPersistentData();
+
+            tester.StartExtractor();
+
+            await tester.TerminateRunTask();
+
+            var asset = Assert.Single(tester.Handler.Assets.Values, x => x.name == "CustomRoot");
+
+            Assert.Equal("[test1, test2]", asset.metadata["Variable StringArray"]);
         }
     }
 }

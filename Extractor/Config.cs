@@ -70,6 +70,8 @@ namespace Cognite.OpcUa
         private UpdateConfig update = new UpdateConfig();
         public DataTypeConfig DataTypes { get => dataTypes; set => dataTypes = value ?? dataTypes; }
         private DataTypeConfig dataTypes = new DataTypeConfig();
+        public string PropertyNameFilter { get; set; }
+        public string PropertyIdFilter { get; set; }
     }
     public class DataTypeConfig
     {

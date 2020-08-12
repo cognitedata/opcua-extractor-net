@@ -19,6 +19,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.StateStorage;
@@ -60,6 +61,8 @@ namespace Cognite.OpcUa
         private int subscribed;
         private bool subscribeFlag = false;
 
+        private Regex propertyNameFilter;
+        private Regex propertyIdFilter;
 
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
@@ -111,6 +114,18 @@ namespace Cognite.OpcUa
                 pusher.Extractor = this;
             }
             Looper = new Looper(this, config, pushers);
+
+            propertyNameFilter = CreatePropertyFilterRegex(config.Extraction.PropertyNameFilter);
+            propertyIdFilter = CreatePropertyFilterRegex(config.Extraction.PropertyIdFilter);
+        }
+
+        private static Regex CreatePropertyFilterRegex(string regex)
+        {
+            if (regex == null)
+            {
+                return null;
+            }
+            return new Regex(regex, RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.CultureInvariant);
         }
 
         /// <summary>
@@ -878,7 +893,8 @@ namespace Cognite.OpcUa
             {
                 var bufferedNode = new BufferedVariable(uaClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
-                if (node.TypeDefinition == VariableTypeIds.PropertyType)
+                
+                if (IsProperty(node))
                 {
                     bufferedNode.IsProperty = true;
                 }
@@ -887,6 +903,33 @@ namespace Cognite.OpcUa
                 commonQueue.Enqueue(bufferedNode);
             }
         }
+
+        private bool IsProperty(ReferenceDescription node)
+        {
+            if (node.TypeDefinition == VariableTypeIds.PropertyType)
+            {
+                return true;
+            }
+
+            var name = node.DisplayName?.Text;
+            if (propertyNameFilter != null
+                && name != null
+                && propertyNameFilter.IsMatch(name))
+            {
+                return true;
+            }
+
+            if (propertyIdFilter != null
+                && node.NodeId.IdType == IdType.String
+                && node.NodeId.Identifier is string id
+                && propertyIdFilter.IsMatch(id))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// Handle subscription callback for audit events (AddReferences/AddNodes). Triggers partial re-browse when necessary
         /// </summary>

@@ -461,6 +461,12 @@ extraction:
             context: false
             metadata: false
 
+    # Regex on node DisplayName for treating variables as properties.
+    # Variable nodes with a name that matches this regex will be treated as metadata instead of as a timeseries
+    # Nodes with property type definition will always be treated as properties
+    property-name-filter:
+    # Equivalent filter, but on node id if the node has a string identifier
+    property-id-filter:
 
 events:
     # Event ids to map, with full namespace-uri, and node identifier on the form "i=123"
