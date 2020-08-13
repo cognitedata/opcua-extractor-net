@@ -444,7 +444,13 @@ namespace Cognite.OpcUa.Pushers
                         {
                             var assetUpdate = new AssetUpdate();
                             if (update.Context && kvp.Value.ParentId != null && !kvp.Value.ParentId.IsNullNodeId)
-                                assetUpdate.ParentExternalId = new UpdateNullable<string>(Extractor.GetUniqueId(kvp.Value.ParentId));
+                            {
+                                var parentId = Extractor.GetUniqueId(kvp.Value.ParentId);
+                                if (parentId != asset.ParentExternalId)
+                                {
+                                    assetUpdate.ParentExternalId = new UpdateNullable<string>(Extractor.GetUniqueId(kvp.Value.ParentId));
+                                }
+                            }
 
                             if (update.Description && !string.IsNullOrEmpty(kvp.Value.Description) && kvp.Value.Description != asset.Description)
                                 assetUpdate.Description = new UpdateNullable<string>(kvp.Value.Description);
@@ -552,9 +558,11 @@ namespace Cognite.OpcUa.Pushers
                         if (update.Name && !string.IsNullOrEmpty(kvp.Value.DisplayName) && kvp.Value.DisplayName != ts.Name)
                             tsUpdate.Name = new UpdateNullable<string>(kvp.Value.DisplayName);
 
-                        if (update.Metadata && kvp.Value.Properties != null && kvp.Value.Properties.Any())
+                        var extra = Extractor.DataTypeManager.GetAdditionalMetadata(kvp.Value);
+                        if (update.Metadata && kvp.Value.Properties != null && kvp.Value.Properties.Any()
+                            || extra.Any())
                         {
-                            var newMetaData = PusherUtils.PropertiesToMetadata(kvp.Value.Properties)
+                            var newMetaData = PusherUtils.PropertiesToMetadata(kvp.Value.Properties, extra)
                                 .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
                             if (ts.Metadata == null
@@ -563,7 +571,6 @@ namespace Cognite.OpcUa.Pushers
                                 tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
                             }
                         }
-
                         if (tsUpdate.AssetId != null || tsUpdate.Description != null
                             || tsUpdate.Name != null || tsUpdate.Metadata != null)
                         {
