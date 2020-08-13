@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -34,10 +34,15 @@
     </GitCleanVersion>
   </PropertyGroup>
   <PropertyGroup>
-    <PreBuildEvent>
-mkdir "$(MSBuildProjectDirectory)/Properties"
-git describe --tags --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
-git log -1  --format="%25%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
-</PreBuildEvent>
+    <PreBuildEvent Condition=" '$(OS)' == 'WINDOWS_NT' ">
+      mkdir "$(MSBuildProjectDirectory)/Properties"
+      git describe --tags --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
+      git log -1  --format="%25%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
+    </PreBuildEvent>
+    <PreBuildEvent Condition=" '$(OS)' == 'UNIX' ">
+      mkdir "$(MSBuildProjectDirectory)/Properties"
+      git describe --tags --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
+      git log -1  --format="%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
+    </PreBuildEvent>
   </PropertyGroup>
 </Project>
