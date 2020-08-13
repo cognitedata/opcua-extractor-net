@@ -560,7 +560,7 @@ namespace Cognite.OpcUa.Pushers
 
                         var extra = Extractor.DataTypeManager.GetAdditionalMetadata(kvp.Value);
                         if (update.Metadata && kvp.Value.Properties != null && kvp.Value.Properties.Any()
-                            || extra.Any())
+                            || (extra?.Any() ?? false))
                         {
                             var newMetaData = PusherUtils.PropertiesToMetadata(kvp.Value.Properties, extra)
                                 .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
