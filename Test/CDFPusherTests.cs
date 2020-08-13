@@ -865,7 +865,7 @@ namespace Test
                 Assert.True(variable.metadata.ContainsKey("dataType"));
             }
             Assert.Equal(
-                tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.NumberType),
+                "NumberType",
                 tester.Handler.Timeseries[tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.NumberVar)].metadata["dataType"]);
 
             var enumId1 = tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumVar1);
@@ -873,10 +873,10 @@ namespace Test
             var enumId3 = tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumVar3);
 
             Assert.Equal(
-                tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumType2),
+                "CustomEnumType2",
                 tester.Handler.Assets[enumId3].metadata["dataType"]);
             Assert.Equal(
-                tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.EnumType2),
+                "CustomEnumType2",
                 tester.Handler.Timeseries[enumId3 + "[1]"].metadata["dataType"]);
 
             if (enumsAsStrings)
