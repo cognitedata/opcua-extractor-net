@@ -128,6 +128,7 @@ namespace Cognite.OpcUa
         private readonly UAClient uaClient;
         private readonly Dictionary<NodeId, NodeId> parentIds = new Dictionary<NodeId, NodeId>();
         private readonly Dictionary<NodeId, BufferedDataType> dataTypes = new Dictionary<NodeId, BufferedDataType>();
+        private readonly Dictionary<NodeId, string> customTypeNames = new Dictionary<NodeId, string>();
         private readonly HashSet<NodeId> ignoreDataTypes = new HashSet<NodeId>();
         private readonly DataTypeConfig config;
 
@@ -290,7 +291,7 @@ namespace Cognite.OpcUa
                 }
                 else
                 {
-                    ret["dataType"] = uaClient.GetUniqueId(dt.Raw);
+                    ret["dataType"] = customTypeNames.GetValueOrDefault(dt.Raw) ?? uaClient.GetUniqueId(dt.Raw);
                 }
             }
             return ret;
@@ -366,6 +367,7 @@ namespace Cognite.OpcUa
             {
                 var id = uaClient.ToNodeId(child.NodeId);
                 parentIds[id] = parent;
+                customTypeNames[id] = child.DisplayName?.Text;
             }
 
             await Task.Run(() => uaClient.BrowseDirectory(new List<NodeId> { DataTypeIds.BaseDataType },
