@@ -117,6 +117,7 @@ namespace Cognite.OpcUa
             if (!string.IsNullOrEmpty(setup.Password)) config.Source.Password = setup.Password;
             config.Source.Secure |= setup.Secure;
             if (!string.IsNullOrEmpty(setup.LogLevel)) config.Logger.Console = new LogConfig() { Level = setup.LogLevel };
+            else if (setup.NoConfig) config.Logger.Console = new LogConfig { Level = "information" };
             config.Source.AutoAccept |= setup.AutoAccept;
             config.Source.ExitOnFailure |= setup.ExitOnFailure;
 
