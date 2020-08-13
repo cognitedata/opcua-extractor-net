@@ -46,6 +46,7 @@ namespace Cognite.OpcUa.Config
             if (toRun == null) throw new ArgumentNullException(nameof(toRun));
             await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(timeoutSec)), toRun);
             if (!toRun.IsCompleted) throw new TimeoutException();
+            if (toRun.Exception != null) throw new FatalException("Task failed during RunWithTimeout", toRun.Exception);
             return toRun.Result;
         }
         /// <summary>
@@ -58,6 +59,7 @@ namespace Cognite.OpcUa.Config
             if (toRun == null) throw new ArgumentNullException(nameof(toRun));
             await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(timeoutSec)), toRun);
             if (!toRun.IsCompleted) throw new TimeoutException();
+            if (toRun.Exception != null) throw new FatalException("Task failed during RunWithTimeout", toRun.Exception);
         }
         /// <summary>
         /// Run with timeout, returning nothing or throwing a TimeoutException
