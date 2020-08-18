@@ -220,7 +220,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="node">Variable to be tested</param>
         /// <returns>True if variable may be mapped to a timeseries</returns>
-        public bool AllowTSMap(BufferedVariable node)
+        public bool AllowTSMap(BufferedVariable node, int? arraySizeOverride = null, bool overrideString = false)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
             if (node.DataType == null)
@@ -230,7 +230,7 @@ namespace Cognite.OpcUa
             }
             var dt = node.DataType;
 
-            if (dt.IsString && !config.AllowStringVariables)
+            if (dt.IsString && !config.AllowStringVariables && !overrideString)
             {
                 log.Debug("Skipping variable {id} due to string datatype and allow-string-variables being set to false", node.Id);
                 return false;
@@ -246,7 +246,7 @@ namespace Cognite.OpcUa
             if (node.ArrayDimensions != null && node.ArrayDimensions.Count == 1)
             {
                 int length = node.ArrayDimensions.First();
-                if (config.MaxArraySize < 0 || length > 0 && length <= config.MaxArraySize)
+                if (config.MaxArraySize < 0 || length > 0 && length <= (arraySizeOverride ?? config.MaxArraySize))
                 {
                     return true;
                 }
