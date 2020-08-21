@@ -59,11 +59,29 @@ namespace Cognite.OpcUa.Pushers
             if (extras != null) raw.AddRange(extras);
             if (properties != null)
             {
-                raw.AddRange(properties
-                    .Select(prop => new KeyValuePair<string, string>(
-                        ExtractorUtils.LimitUtf8ByteCount(prop?.DisplayName, 128), ExtractorUtils.LimitUtf8ByteCount(prop?.Value?.StringValue, 256)
-                    ))
-                    .Where(kvp => kvp.Key != null));
+                foreach (var prop in properties)
+                {
+                    if (prop != null && !string.IsNullOrEmpty(prop.DisplayName))
+                    {
+                        raw.Add(new KeyValuePair<string, string>(
+                            ExtractorUtils.LimitUtf8ByteCount(prop.DisplayName, 128), ExtractorUtils.LimitUtf8ByteCount(prop.Value?.StringValue, 256)
+                        ));
+
+                        // Handles one layer of nested properties. This only happens if variables that have their own properties are mapped
+                        // to properties.
+                        if (prop.Properties != null)
+                        {
+                            raw.AddRange(prop.Properties
+                                .Where(prop => prop != null && !string.IsNullOrEmpty(prop.DisplayName))
+                                .Select(nestedProp => new KeyValuePair<string, string>(
+                                    ExtractorUtils.LimitUtf8ByteCount($"{prop.DisplayName}_{nestedProp.DisplayName}", 128),
+                                    ExtractorUtils.LimitUtf8ByteCount(nestedProp.Value?.StringValue, 256)))
+                            );
+                        }
+
+                    }
+                }
+
             }
             int count = 0;
             int byteCount = 0;

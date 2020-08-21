@@ -229,7 +229,7 @@ namespace Test
                 ServerName = ServerName.Array,
                 Builder = (config, pushers, client) =>
                 {
-                    config.Extraction.PropertyNameFilter = "ble Strin";
+                    config.Extraction.PropertyNameFilter = "ble Strin|ble Arr";
                     return new UAExtractor(config, pushers, client, null);
                 },
                 QuitAfterMap = true
@@ -246,7 +246,12 @@ namespace Test
 
             var asset = Assert.Single(tester.Handler.Assets.Values, x => x.name == "CustomRoot");
 
+            Assert.Equal(4, asset.metadata.Count);
+
             Assert.Equal("[test1, test2]", asset.metadata["Variable StringArray"]);
+            Assert.Equal("[0, 0, 0, 0]", asset.metadata["Variable Array"]);
+            Assert.Equal("°C: degree Celsius", asset.metadata["Variable Array_EngineeringUnits"]);
+            Assert.Equal("(0, 100)", asset.metadata["Variable Array_EURange"]);
         }
     }
 }
