@@ -897,6 +897,9 @@ namespace Cognite.OpcUa
                 if (IsProperty(node))
                 {
                     bufferedNode.IsProperty = true;
+                    // Properties do not have children themselves in OPC-UA,
+                    // but mapped variables might.
+                    bufferedNode.PropertiesRead = node.TypeDefinition == VariableTypeIds.PropertyType;
                 }
                 State.RegisterNode(bufferedNode.Id, GetUniqueId(bufferedNode.Id));
                 log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);

@@ -850,7 +850,6 @@ namespace Cognite.OpcUa
             foreach (var node in nodes)
             {
                 node.DataRead = true;
-
                 enumerator.MoveNext();
                 node.SetDataPoint(enumerator.Current?.Value,
                     enumerator.Current?.SourceTimestamp ?? DateTime.MinValue,
@@ -865,6 +864,9 @@ namespace Cognite.OpcUa
         public void GetNodeProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
         {
             if (nodes == null || !nodes.Any()) return;
+
+            var nodeList = nodes.ToList();
+
             var properties = new HashSet<BufferedVariable>();
             log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
             var idsToCheck = new List<NodeId>();
@@ -877,13 +879,18 @@ namespace Cognite.OpcUa
                         idsToCheck.Add(node.Id);
                     }
                 }
-                else
+                if (node.Properties != null)
                 {
-                    if (node.Properties != null)
+                    foreach (var property in node.Properties)
                     {
-                        foreach (var property in node.Properties)
+                        if (!node.IsVariable)
                         {
                             properties.Add(property);
+                        }
+                        if (!property.PropertiesRead)
+                        {
+                            idsToCheck.Add(property.Id);
+                            nodeList.Add(property);
                         }
                     }
                 }
@@ -906,9 +913,9 @@ namespace Cognite.OpcUa
                 log.Debug("Read properties for {cnt} / {total} nodes. Found: {found}", readCount, total, found);
             }
 
-            nodes = nodes.DistinctBy(node => node.Id);
+            nodeList = nodeList.DistinctBy(node => node.Id).ToList();
 
-            foreach (var parent in nodes)
+            foreach (var parent in nodeList)
             {
                 if (!result.TryGetValue(parent.Id, out var children)) continue;
                 foreach (var child in children)
@@ -923,6 +930,7 @@ namespace Cognite.OpcUa
                 }
                 if (parent.IsVariable && parent is BufferedVariable variable)
                 {
+                    if (variable.IsProperty) continue;
                     BufferedVariable arrayParent = variable.Index == -1 ? variable : variable.ArrayParent;
 
                     if (arrayParent != null && arrayParent.Index == -1 && arrayParent.ArrayDimensions != null
@@ -940,6 +948,7 @@ namespace Cognite.OpcUa
                     }
                 }
             }
+
             ReadNodeData(properties, token);
             var toGetValue = properties.Where(node => Extractor.DataTypeManager.AllowTSMap(node, 10, true));
             ReadNodeValues(toGetValue, token);
@@ -1480,7 +1489,7 @@ namespace Cognite.OpcUa
             if (value.GetType().IsArray)
             {
                 string result = "[";
-                if (value is object[] values)
+                if (value is Array values)
                 {
                     int count = 0;
                     foreach (var dvalue in values)
