@@ -67,6 +67,8 @@ namespace Cognite.OpcUa.Pushers
                             ExtractorUtils.LimitUtf8ByteCount(prop.DisplayName, 128), ExtractorUtils.LimitUtf8ByteCount(prop.Value?.StringValue, 256)
                         ));
 
+                        // Handles one layer of nested properties. This only happens if variables that have their own properties are mapped
+                        // to properties.
                         if (prop.Properties != null)
                         {
                             raw.AddRange(prop.Properties
