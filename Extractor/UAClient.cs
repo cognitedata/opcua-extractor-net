@@ -28,6 +28,7 @@ using Prometheus;
 using System.Threading;
 using Serilog;
 using Cognite.Extractor.Common;
+using System.Text;
 
 namespace Cognite.OpcUa
 {
@@ -1488,16 +1489,17 @@ namespace Cognite.OpcUa
             if (value == null) return "";
             if (value.GetType().IsArray)
             {
-                string result = "[";
+                var builder = new StringBuilder("[");
                 if (value is Array values)
                 {
                     int count = 0;
                     foreach (var dvalue in values)
                     {
-                        result += ((count++ > 0) ? ", " : "") + ConvertToString(dvalue);
+                        builder.Append(((count++ > 0) ? ", " : "") + ConvertToString(dvalue));
                     }
                 }
-                return result + "]";
+                builder.Append("]");
+                return builder.ToString();
             }
             if (value.GetType() == typeof(NodeId))
             {
