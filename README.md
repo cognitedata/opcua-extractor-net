@@ -60,5 +60,4 @@ To add more servers just add them to the servers folder, then edit the startserv
 
 ### Releasing
 The release.sh script just creates a new tag on the current commit, then pushes it to `origin`, which should be this repository. If the CI is run on a commit with a tag, it automatically
-deploys to github releases. It always deploys docker images to eu.gcr.io if run on master. The version is generated from `git describe`, which uses the number of commits since last tag. 
- 
+deploys to github releases. It always deploys docker images to eu.gcr.io if run on master. The version is generated from `git describe`, which uses the number of commits since last tag.
