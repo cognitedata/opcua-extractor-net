@@ -29,6 +29,7 @@ OpcUaService/Properties
 # Config
 config/*
 !config.example.yml
+!config.minimal.yml
 !opc.ua.net.extractor.Config.xml
 !Server.Test.Config.xml
 !config.bridge.example.yml
