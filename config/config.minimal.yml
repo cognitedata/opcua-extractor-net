@@ -1,0 +1,40 @@
+# Template for the config file,
+# Defaults to config.yml in ./config.
+# The config tool defaults to config/config.config-tool.yml, and uses the same config 
+# options, though only EndpointURL and if needed username/password/secure are required.
+# The values here are generally the default values, except for the contents of lists etc.
+# Your config file can contain only a subset of these config options. Any extra options will
+# cause the extractor to fail.
+
+# This is a minimal example configuration for meaningful extraction from OPC-UA to CDF.
+# It is recommended to run the config-tool in order to configure the extractor to
+# extract all relevant information.
+
+# By default this will extract the OPC-UA node hierarchy to the CDF asset hierarchy
+# and stream live data to timeseries. With proper configuration the extractor can
+# read string timeseries, events and historical data.
+
+# Version of the config schema
+version: 1
+
+source:
+    # The URL of the OPC-UA server to connect to
+    endpoint-url: "opc.tcp://localhost:4840"
+
+cognite:
+    # The project to connect to in the API, uses the environment variable COGNITE_PROJECT.
+    project: "${COGNITE_PROJECT}"
+    # Cognite api key
+    api-key: "${COGNITE_API_KEY}"
+
+extraction:
+    # Global prefix for externalId in destinations. Should be unique to prevent name conflicts.
+    id-prefix: "gp:"
+    # Map OPC-UA namespaces to prefixes in CDF. If not mapped, the full namespace URI is used.
+    # Saves space compared to using the full URL. Using the ns index is not safe as the order can change on the server.
+    # It is recommended to set this before extracting the node hierarchy.
+    # For example:
+    # NamespaceMap:
+    #   "urn:cognite:net:server": cns
+    #   "urn:freeopcua:python:server": fps
+    #   "http://examples.freeopcua.github.io": efg
