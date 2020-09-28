@@ -341,8 +341,7 @@ namespace Cognite.OpcUa.Pushers
                 return false;
             }
 
-            if (fullConfig.Events.EventIds == null || fullConfig.Events.EmitterIds == null ||
-                !fullConfig.Events.EventIds.Any() || !fullConfig.Events.EmitterIds.Any()) return true;
+            if (!fullConfig.Events.Enabled) return true;
 
             try
             {

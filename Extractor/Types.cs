@@ -60,6 +60,10 @@ namespace Cognite.OpcUa
         /// </summary>
         public bool Changed { get; set; }
         /// <summary>
+        /// Raw OPC-UA EventNotifier attribute.
+        /// </summary>
+        public byte EventNotifier { get; set; }
+        /// <summary>
         /// Return a string description, for logging
         /// </summary>
         /// <returns>Descriptive string</returns>

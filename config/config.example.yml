@@ -469,15 +469,19 @@ extraction:
     property-id-filter:
 
 events:
-    # Event ids to map, with full namespace-uri, and node identifier on the form "i=123"
-    # Custom events must be subtypes of the BaseEventType.
-    event-ids:
-        #-   namespace-uri:
-        #    node-id:
-    # Id of nodes to be observed as event emitters. Empty Namespace/NodeId defaults to the server node.
-    emitter-ids:
-        #-   namespace-uri:
-        #    node-id:
+    # True to enable reading events from the server, reads from any nodes in the hierarchy
+    # with a suitable EventNotifier, as well as the Server node.
+    enabled: false
+
+    # Default true, enable reading both custom events and base opc-ua events.
+    all-events: true
+
+    # True to enable reading historical events from historizing event emitters
+    history: false
+
+    # Regex filter on event type DisplayName, matches will not be extracted.
+    exclude-event-filter:
+
     # List of BrowseName for properties to be excluded from automatic mapping to destination metadata.
     # All event properties are read, by default only "Time" and "Severity" are used from the base event.
     # Be aware that a maximum of 16 metadata entries are allowed in CDF.
@@ -495,7 +499,3 @@ events:
     # it is generated from Event NodeId in the same way ExternalIds are generated for normal nodes.
     destination-name-map:
         #Property1: SubType
-    # Emitters that should be read for historical events. Leave empty to disable history read of events. Requires History.Enabled to be true.
-    historizing-emitter-ids:
-        #-   NamespaceUri:
-        #    NodeId:

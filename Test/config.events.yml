@@ -36,26 +36,14 @@ extraction:
         "opc.tcp://test.localhost": "tl:"
 
 events:
-    # Event ids to map, with full namespace-uri, and node identifier on the form "i=123"
-    # Custom events must be subtypes of the BaseEventType.
-    event-ids:
-        -   namespace-uri: "opc.tcp://test.localhost"
-            node-id: "i=7"
-        -   namespace-uri: "opc.tcp://test.localhost"
-            node-id: "i=11"
-        -   namespace-uri: "opc.tcp://test.localhost"
-            node-id: "i=13"
-    # Id of nodes to be observed as event emitters. Empty Namespace/NodeId defaults to the server node.
-    emitter-ids:
-        -   namespace-uri: "opc.tcp://test.localhost"
-            node-id: "i=2"
-        -   namespace-uri:
-            node-id:
+    enabled: true
     # List of BrowseName for properties to be excluded from automatic mapping to destination metadata.
     # All event properties are read, by default only "Time" and "Severity" are used from the base event.
     # Be aware that a maximum of 16 metadata entries are allowed in CDF.
     exclude-properties:
         - PropertyNum
+
+    exclude-event-filter: "EventBasic 2"
     # Map source browse names to other values in the destination. For CDF, internal properties may be overwritten, by default
     # "Message" is mapped to description, "SourceNode" is used for context and "EventType" is used for type. These may also be excluded or replaced by 
     # overrides in DestinationNameMap. If multiple properties are mapped to the same value, the first non-null is used.
@@ -65,8 +53,3 @@ events:
     # it is generated from Event NodeId in the same way ExternalIds are generated for normal nodes.
     destination-name-map:
         TypeProp: Type
-
-    # Emitters that should be read for historical events. Leave empty to disable history read of events.
-    historizing-emitter-ids:
-        -   namespace-uri:
-            node-id:

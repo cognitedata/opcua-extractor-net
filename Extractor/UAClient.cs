@@ -377,6 +377,17 @@ namespace Cognite.OpcUa
             return refd;
         }
         /// <summary>
+        /// Retrieve a representation of the server node
+        /// </summary>
+        /// <returns></returns>
+        public BufferedNode GetServerNode(CancellationToken token)
+        {
+            var desc = GetRootNode(ObjectIds.Server);
+            var node = new BufferedNode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null);
+            ReadNodeData(new[] { node }, token);
+            return node;
+        }
+        /// <summary>
         /// Add externalId override for a single node
         /// </summary>
         /// <param name="nodeId">Id of node to be overridden</param>
@@ -677,6 +688,16 @@ namespace Cognite.OpcUa
                 Attributes.DataType,
                 Attributes.ValueRank
             };
+            var commonAttributes = new List<uint>
+            {
+                Attributes.Description
+            };
+            var propertyAttributes = new List<uint>
+            {
+                Attributes.DataType,
+                Attributes.ValueRank,
+                Attributes.ArrayDimensions
+            };
 
             bool arraysEnabled = extractionConfig.DataTypes.MaxArraySize != 0;
 
@@ -688,20 +709,16 @@ namespace Cognite.OpcUa
             {
                 variableAttributes.Add(Attributes.ArrayDimensions);
             }
-            var propertyAttributes = new List<uint>
+            if (eventConfig.Enabled)
             {
-                Attributes.DataType,
-                Attributes.ValueRank,
-                Attributes.ArrayDimensions
-            };
+                commonAttributes.Add(Attributes.EventNotifier);
+            }
+
 
             IEnumerable<DataValue> values;
             try
             {
-                values = GetNodeAttributes(nodes, new List<uint>
-                {
-                    Attributes.Description
-                }, variableAttributes, propertyAttributes, token);
+                values = GetNodeAttributes(nodes, commonAttributes, variableAttributes, propertyAttributes, token);
             }
             catch (ServiceResultException ex)
             {
@@ -735,6 +752,11 @@ namespace Cognite.OpcUa
                 if (token.IsCancellationRequested) return;
                 enumerator.MoveNext();
                 node.Description = enumerator.Current.GetValue(new LocalizedText("")).Text;
+                if (eventConfig.Enabled)
+                {
+                    enumerator.MoveNext();
+                    node.EventNotifier = enumerator.Current.GetValue(EventNotifiers.None);
+                }
                 if (node.IsVariable && node is BufferedVariable vnode)
                 {
                     enumerator.MoveNext();
@@ -1233,10 +1255,10 @@ namespace Cognite.OpcUa
         {
             return Session?.SystemContext;
         }
-        public Dictionary<NodeId, IEnumerable<(NodeId root, QualifiedName browseName)>> GetEventFields(IEnumerable<NodeId> eventIds, CancellationToken token)
+        public Dictionary<NodeId, IEnumerable<(NodeId root, QualifiedName browseName)>> GetEventFields(CancellationToken token)
         {
             if (eventFields != null) return eventFields;
-            var collector = new EventFieldCollector(this, eventIds);
+            var collector = new EventFieldCollector(this, eventConfig);
             eventFields = collector.GetEventIdFields(token);
             foreach (var pair in eventFields)
             {

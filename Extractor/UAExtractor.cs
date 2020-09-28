@@ -472,36 +472,54 @@ namespace Cognite.OpcUa
                 state.RestartHistory();
             }
 
-            if (config.Events.EmitterIds != null
-                && config.Events.EventIds != null
-                && config.Events.EmitterIds.Any()
-                && config.Events.EventIds.Any())
+            if (config.Events.Enabled)
             {
                 Streamer.AllowEvents = true;
-                var emitters = config.Events.EmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)).ToList();
-                var historicalEmitters = new HashSet<NodeId>();
-                if (config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any() && config.History.Enabled)
-                {
-                    foreach (var id in config.Events.HistorizingEmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)))
-                    {
-                        historicalEmitters.Add(id);
-                    }
-                }
-                foreach (var id in emitters)
-                {
-                    bool hist = historicalEmitters.Contains(id);
-                    State.SetEmitterState(new EventExtractionState(this, id, hist, hist && config.History.Backfill, StateStorage != null
-                        && config.StateStorage.Interval > 0));
-                }
-                var eventFields = uaClient.GetEventFields(config.Events.EventIds.Select(
-                    proto => proto.ToNodeId(uaClient, ObjectTypeIds.BaseEventType)).ToList(), token);
+                var eventFields = uaClient.GetEventFields(token);
                 foreach (var field in eventFields)
                 {
                     State.ActiveEvents[field.Key] = field.Value;
                 }
+                var serverNode = uaClient.GetServerNode(token);
+                if ((serverNode.EventNotifier & EventNotifiers.SubscribeToEvents) != 0)
+                {
+                    var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.History.Enabled;
+                    State.SetEmitterState(new EventExtractionState(this, serverNode.Id, history,
+                        history && config.History.Backfill, StateStorage != null && config.StateStorage.Interval > 0));
+                }
             }
         }
+        private void CheckForNodeUpdates(BufferedNode node, BufferedNode old, TypeUpdateConfig update)
+        {
+            if (update.Context && old.ParentId != node.ParentId) node.Changed = true;
 
+            if (!node.Changed && update.Description && old.Description != node.Description
+                && !string.IsNullOrWhiteSpace(node.Description)) node.Changed = true;
+
+            if (!node.Changed && update.Name && old.DisplayName != node.DisplayName
+                && !string.IsNullOrWhiteSpace(node.DisplayName)) node.Changed = true;
+
+            if (!node.Changed && update.Metadata)
+            {
+                var oldProperties = old.Properties == null
+                    ? new Dictionary<string, BufferedDataPoint>()
+                    : old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
+                node.Changed = node.Properties != null && node.Properties.Any(prop =>
+                {
+                    if (!oldProperties.TryGetValue(prop.DisplayName, out var oldProp)) return true;
+                    return oldProp.IsString && oldProp.StringValue != prop.Value.StringValue
+                        && !string.IsNullOrWhiteSpace(oldProp.StringValue)
+                        || !oldProp.IsString && oldProp.DoubleValue != prop.Value.DoubleValue;
+                });
+                if (config.Extraction.DataTypes.DataTypeMetadata
+                    && old is BufferedVariable oldVariable && node is BufferedVariable variable
+                    && oldVariable.DataType.Raw != variable.DataType.Raw)
+                {
+                    node.Changed = true;
+                }
+            }
+
+        }
         /// <summary>
         /// Read nodes from commonQueue and sort them into lists of context objects, destination timeseries and source variables
         /// </summary>
@@ -587,6 +605,15 @@ namespace Cognite.OpcUa
                 objects.Add(node);
             }
 
+            foreach (var node in rawObjects.Concat(rawVariables))
+            {
+                if ((node.EventNotifier & EventNotifiers.SubscribeToEvents) == 0) continue;
+                bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.History.Enabled;
+                var eventState = new EventExtractionState(this, node.Id, history, history && config.History.Backfill,
+                    StateStorage != null && config.StateStorage.Interval > 0);
+                State.SetEmitterState(eventState);
+            }
+
             foreach (var node in rawVariables)
             {
                 if (!DataTypeManager.AllowTSMap(node)) continue;
@@ -625,7 +652,7 @@ namespace Cognite.OpcUa
                         continue;
                     }
                 }
-                log.Debug(node.ToDebugDescription());
+                log.Verbose(node.ToDebugDescription());
                 variables.Add(node);
                 var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,
                     StateStorage != null && config.StateStorage.Interval > 0);

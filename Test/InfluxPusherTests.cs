@@ -383,7 +383,7 @@ namespace Test
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 0));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 700));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 900));
         }
         [Trait("Server", "events")]
         [Trait("Target", "InfluxPusher")]
@@ -420,7 +420,7 @@ namespace Test
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 0));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 700));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 900));
 
             CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor();

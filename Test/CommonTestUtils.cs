@@ -258,7 +258,6 @@ namespace Test
         {
             if (ev == null) throw new ArgumentNullException(nameof(ev));
             if (handler == null) throw new ArgumentNullException(nameof(handler));
-            Assert.False(ev.description.StartsWith("prop-e3 ", StringComparison.InvariantCulture));
             Assert.False(ev.description.StartsWith("basic-block ", StringComparison.InvariantCulture));
             if (ev.description.StartsWith("prop ", StringComparison.InvariantCulture))
             {
@@ -270,8 +269,6 @@ namespace Test
             }
             else if (ev.description.StartsWith("prop-e2 ", StringComparison.InvariantCulture))
             {
-                // This node is not historizing, so the first event should be lost
-                Assert.NotEqual("prop-e2 0", ev.description);
                 Assert.True(ev.metadata.ContainsKey("PropertyString") && !string.IsNullOrEmpty(ev.metadata["PropertyString"]));
                 Assert.False(ev.metadata.ContainsKey("PropertyNum"));
                 Assert.True(EventSourceIs(ev, handler, "Object 1", false));
@@ -290,10 +287,6 @@ namespace Test
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyNum"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));
                 Assert.True(EventSourceIs(ev, handler, "Object 2", false));
-                if (ev.description.StartsWith("basic-pass-3 ", StringComparison.InvariantCulture))
-                {
-                    Assert.NotEqual("basic-pass-3 0", ev.description);
-                }
             }
             else if (ev.description.StartsWith("basic-varsource ", StringComparison.InvariantCulture))
             {
@@ -321,6 +314,11 @@ namespace Test
                 Assert.True(ev.metadata == null || !ev.metadata.ContainsKey("PropertyString"));
                 Assert.True(string.IsNullOrEmpty(ev.subtype));
                 Assert.Null(ev.assetIds);
+            }
+            else if (ev.description.StartsWith("prop-e3 ", StringComparison.InvariantCulture))
+            {
+                Assert.True(ev.metadata.ContainsKey("PropertyString") && !string.IsNullOrEmpty(ev.metadata["PropertyString"]));
+                Assert.False(ev.metadata.ContainsKey("PropertyNum"));
             }
             else
             {
