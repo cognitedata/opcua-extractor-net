@@ -172,6 +172,7 @@ namespace Test
             });
             await tester.ClearPersistentData();
             tester.Config.History.Enabled = false;
+            tester.Config.Events.History = false;
 
             await tester.StartServer();
 

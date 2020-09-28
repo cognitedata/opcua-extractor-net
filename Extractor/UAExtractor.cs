@@ -369,7 +369,7 @@ namespace Cognite.OpcUa
         /// </summary>
         public async Task RestartHistory(CancellationToken token)
         {
-            if (!config.History.Enabled) return;
+            if (!config.History.Enabled && !config.Events.History) return;
             await Task.WhenAll(Task.Run(async () =>
             {
                 await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling), token);
@@ -483,7 +483,7 @@ namespace Cognite.OpcUa
                 var serverNode = uaClient.GetServerNode(token);
                 if ((serverNode.EventNotifier & EventNotifiers.SubscribeToEvents) != 0)
                 {
-                    var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.History.Enabled;
+                    var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
                     State.SetEmitterState(new EventExtractionState(this, serverNode.Id, history,
                         history && config.History.Backfill, StateStorage != null && config.StateStorage.Interval > 0));
                 }
@@ -608,7 +608,7 @@ namespace Cognite.OpcUa
             foreach (var node in rawObjects.Concat(rawVariables))
             {
                 if ((node.EventNotifier & EventNotifiers.SubscribeToEvents) == 0) continue;
-                bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.History.Enabled;
+                bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
                 var eventState = new EventExtractionState(this, node.Id, history, history && config.History.Backfill,
                     StateStorage != null && config.StateStorage.Interval > 0);
                 State.SetEmitterState(eventState);
@@ -797,7 +797,7 @@ namespace Cognite.OpcUa
                 Streamer.EventSubscriptionHandler, token));
             Interlocked.Increment(ref subscribed);
             if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
-            if (!config.History.Enabled) return;
+            if (!config.Events.History) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
                 await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling), token);

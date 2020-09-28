@@ -37,6 +37,7 @@ extraction:
 
 events:
     enabled: true
+    history: true
     # List of BrowseName for properties to be excluded from automatic mapping to destination metadata.
     # All event properties are read, by default only "Time" and "Severity" are used from the base event.
     # Be aware that a maximum of 16 metadata entries are allowed in CDF.
