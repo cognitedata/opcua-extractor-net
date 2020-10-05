@@ -371,9 +371,10 @@ namespace Cognite.OpcUa
             if (refd.NodeId == NodeId.Null) return null;
             refd.BrowseName = results[1].GetValue(QualifiedName.Null);
             refd.DisplayName = results[2].GetValue(LocalizedText.Null);
-            refd.NodeClass = results[3].GetValue(NodeClass.Unspecified);
+            refd.NodeClass = (NodeClass)results[3].GetValue(0);
             refd.ReferenceTypeId = null;
             refd.IsForward = true;
+            log.Information("Root node: {id}", refd.NodeId);
             return refd;
         }
         /// <summary>
