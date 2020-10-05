@@ -53,6 +53,8 @@ namespace Cognite.OpcUa
         private CancellationToken liveToken;
         private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> eventFields;
 
+        private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
+
         private int pendingOperations;
 
         private static readonly Counter connects = Metrics
@@ -1527,42 +1529,56 @@ namespace Cognite.OpcUa
         /// to be used for mapping assets and timeseries in CDF to opcua nodes.
         /// To avoid having to send the entire namespaceUri to CDF, we allow mapping Uris to prefixes in the config file.
         /// </remarks>
-        /// <param name="nodeid">Nodeid to be converted</param>
+        /// <param name="rNodeId">Nodeid to be converted</param>
         /// <returns>Unique string representation</returns>
-        public string GetUniqueId(ExpandedNodeId rNodeid, int index = -1)
+        public string GetUniqueId(ExpandedNodeId rNodeId, int index = -1)
         {
-            var nodeId = ToNodeId(rNodeid);
+            if (rNodeId == null || rNodeId.IsNull) return null;
+            var nodeId = ToNodeId(rNodeId);
             if (nodeId == null || nodeId.IsNullNodeId) return null;
             if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride)) return nodeOverride;
 
-            string namespaceUri = Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
-            string prefix = extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
-            // Strip the ns=namespaceIndex; part, as it may be inconsistent between sessions
-            // We still want the identifierType part of the id, so we just remove the first ocurrence of ns=..
-            // If we can find out if the value of the key alone is unique, then we can remove the identifierType, though I suspect
-            // that i=1 and s=1 (1 as string key) would be considered distinct.
-            string nodeidstr = nodeId.ToString();
-            string nsstr = $"ns={nodeId.NamespaceIndex};";
-            int pos = nodeidstr.IndexOf(nsstr, StringComparison.CurrentCulture);
-            if (pos == 0)
-            {
-                nodeidstr = nodeidstr.Substring(0, pos) + nodeidstr.Substring(pos + nsstr.Length);
-            }
-            string extId = $"{extractionConfig.IdPrefix}{prefix}{nodeidstr}".Replace("\n", "", StringComparison.InvariantCulture);
+            // ExternalIds shorter than 32 chars are unlikely, this will generally avoid at least 1 re-allocation of the buffer,
+            // and usually boost performance.
+            var buffer = new StringBuilder(extractionConfig.IdPrefix, 32);
 
-            // ExternalId is limited to 255 characters
-            extId = extId.Trim();
-            if (extId.Length > 255)
+            if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
-                if (index <= -1) return extId.Substring(0, 255);
-                string indexSub = $"[{index}]";
-                return extId.Substring(0, 255 - indexSub.Length) + indexSub;
+                var namespaceUri = rNodeId.NamespaceUri ?? Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
+                string newPrefix = extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
+                nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
+
+            buffer.Append(prefix);
+            // Use 0 as namespace-index. This means that the namespace is not appended, as the string representation
+            // of a base namespace nodeId does not include the namespace-index, which fits our use-case.
+            NodeId.Format(buffer, nodeId.Identifier, nodeId.IdType, 0);
+
+            TrimEnd(buffer);
+
             if (index > -1)
             {
-                extId += $"[{index}]";
+                // Modifying buffer.Length effectively removes the last few elements, but more efficiently than modifying strings,
+                // StringBuilder is just a char array.
+                buffer.Length = Math.Min(buffer.Length, 255 - index / 10 + 3);
+                buffer.AppendFormat(CultureInfo.InvariantCulture, "[{0}]", index);
             }
-            return extId;
+            return buffer.ToString();
+        }
+        // Used to trim the whitespace off the end of a StringBuilder
+        private static void TrimEnd(StringBuilder sb)
+        {
+            if (sb == null || sb.Length == 0) return;
+
+            int i = sb.Length - 1;
+            for (; i >= 0; i--)
+                if (!char.IsWhiteSpace(sb[i]))
+                    break;
+
+            if (i < sb.Length - 1)
+                sb.Length = i + 1;
+
+            return;
         }
 
         public void Dispose()
