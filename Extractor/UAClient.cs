@@ -374,7 +374,6 @@ namespace Cognite.OpcUa
             refd.NodeClass = (NodeClass)results[3].GetValue(0);
             refd.ReferenceTypeId = null;
             refd.IsForward = true;
-            log.Information("Root node: {id}", refd.NodeId);
             return refd;
         }
         /// <summary>

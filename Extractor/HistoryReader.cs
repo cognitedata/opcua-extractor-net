@@ -127,22 +127,13 @@ namespace Cognite.OpcUa
                     log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
                     cnt++;
                 }
-                foreach (var buffDp in buffDps)
-                {
-                    extractor.Streamer.DataPointQueue.Enqueue(buffDp);
-                }
+                extractor.Streamer.Enqueue(buffDps);
             }
 
             if (!final || !frontfill) return cnt;
 
             var buffered = nodeState.FlushBuffer();
-            foreach (var dplist in buffered)
-            {
-                foreach (var dp in dplist)
-                {
-                    extractor.Streamer.DataPointQueue.Enqueue(dp);
-                }
-            }
+            extractor.Streamer.Enqueue(buffered.SelectMany(dplist => dplist));
 
             return cnt;
         }
@@ -187,7 +178,7 @@ namespace Cognite.OpcUa
                 if (buffEvt == null) continue;
                 range = range.Extend(buffEvt.Time, buffEvt.Time);
 
-                extractor.Streamer.EventQueue.Enqueue(buffEvt);
+                extractor.Streamer.Enqueue(buffEvt);
                 cnt++;
             }
 
@@ -204,10 +195,8 @@ namespace Cognite.OpcUa
 
             if (!final || !frontfill) return cnt;
             var buffered = emitterState.FlushBuffer();
-            foreach (var evt in buffered)
-            { 
-                extractor.Streamer.EventQueue.Enqueue(evt);
-            }
+
+            extractor.Streamer.Enqueue(buffered);
             return cnt;
         }
         /// <summary>

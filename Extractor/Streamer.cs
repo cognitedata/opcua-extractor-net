@@ -34,11 +34,11 @@ namespace Cognite.OpcUa
         private readonly UAExtractor extractor;
         private readonly FullConfig config;
 
-        public ConcurrentQueue<BufferedDataPoint> DataPointQueue { get; }
-            = new ConcurrentQueue<BufferedDataPoint>();
+        private readonly Queue<BufferedDataPoint> dataPointQueue = new Queue<BufferedDataPoint>();
+        private readonly Queue<BufferedEvent> eventQueue = new Queue<BufferedEvent>();
 
-        public ConcurrentQueue<BufferedEvent> EventQueue { get; }
-            = new ConcurrentQueue<BufferedEvent>();
+        private readonly object dataPointMutex = new object();
+        private readonly object eventMutex = new object();
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(Streamer));
 
@@ -52,6 +52,37 @@ namespace Cognite.OpcUa
         {
             this.extractor = extractor;
             this.config = config;
+        }
+
+        public void Enqueue(BufferedDataPoint dp)
+        {
+            lock (dataPointMutex)
+            {
+                dataPointQueue.Enqueue(dp);
+            }
+        }
+        public void Enqueue(IEnumerable<BufferedDataPoint> dps)
+        {
+            if (dps == null) return;
+            lock (dataPointMutex)
+            {
+                foreach (var dp in dps) dataPointQueue.Enqueue(dp);
+            }
+        }
+        public void Enqueue(BufferedEvent evt)
+        {
+            lock (eventMutex)
+            {
+                eventQueue.Enqueue(evt);
+            }
+        }
+        public void Enqueue(IEnumerable<BufferedEvent> events)
+        {
+            if (events == null) return;
+            lock (eventMutex)
+            {
+                foreach (var evt in events) eventQueue.Enqueue(evt);
+            }
         }
         /// <summary>
         /// Push data points to destinations
@@ -69,16 +100,20 @@ namespace Cognite.OpcUa
             var dataPointList = new List<BufferedDataPoint>();
             var pointRanges = new Dictionary<string, TimeRange>();
 
-            while (DataPointQueue.TryDequeue(out BufferedDataPoint dp))
+            lock (dataPointMutex)
             {
-                dataPointList.Add(dp);
-                if (!pointRanges.TryGetValue(dp.Id, out var range))
+                while (dataPointQueue.TryDequeue(out BufferedDataPoint dp))
                 {
-                    pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
-                    continue;
+                    dataPointList.Add(dp);
+                    if (!pointRanges.TryGetValue(dp.Id, out var range))
+                    {
+                        pointRanges[dp.Id] = new TimeRange(dp.Timestamp, dp.Timestamp);
+                        continue;
+                    }
+                    pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
                 }
-                pointRanges[dp.Id] = range.Extend(dp.Timestamp, dp.Timestamp);
             }
+
 
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushDataPoints(dataPointList, token)));
 
@@ -170,17 +205,21 @@ namespace Cognite.OpcUa
 
             bool restartHistory = false;
 
-            while (EventQueue.TryDequeue(out BufferedEvent evt))
+            lock (eventMutex)
             {
-                eventList.Add(evt);
-                if (!eventRanges.TryGetValue(evt.EmittingNode, out var range))
+                while (eventQueue.TryDequeue(out BufferedEvent evt))
                 {
-                    eventRanges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
-                    continue;
-                }
+                    eventList.Add(evt);
+                    if (!eventRanges.TryGetValue(evt.EmittingNode, out var range))
+                    {
+                        eventRanges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
+                        continue;
+                    }
 
-                eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
+                    eventRanges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
+                }
             }
+
             var results = await Task.WhenAll(passingPushers.Select(pusher => pusher.PushEvents(eventList, token)));
 
             var anyFailed = results.Any(status => status == false);
@@ -281,10 +320,7 @@ namespace Cognite.OpcUa
                 {
                     log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
                 }
-                foreach (var buffDp in buffDps)
-                {
-                    DataPointQueue.Enqueue(buffDp);
-                }
+                Enqueue(buffDps);
             }
         }
         /// <summary>
@@ -364,7 +400,7 @@ namespace Cognite.OpcUa
                     || eventState.IsBackfilling && buffEvent.Time < eventState.SourceExtractedRange.First)) return;
 
             log.Verbose(buffEvent.ToDebugDescription());
-            EventQueue.Enqueue(buffEvent);
+            Enqueue(buffEvent);
         }
         /// <summary>
         /// Construct event from filter and collection of event fields
