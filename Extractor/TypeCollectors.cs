@@ -441,11 +441,18 @@ namespace Cognite.OpcUa
                     }
                 }
             }
+
+            HashSet<NodeId> whitelist = null;
+            if (config.EventIds != null && config.EventIds.Any())
+            {
+                whitelist = new HashSet<NodeId>(config.EventIds.Select(proto => proto.ToNodeId(uaClient, ObjectTypeIds.BaseEventType)));
+            }
             // Add mappings to result
             foreach (var type in types.Values)
             {
                 if (ignoreFilter != null && ignoreFilter.IsMatch(type.DisplayName.Text)) continue;
                 if (!config.AllEvents && type.Id.NamespaceIndex == 0) continue;
+                if (whitelist != null && whitelist.Any() && !whitelist.Contains(type.Id)) continue;
                 result[type.Id] = new List<(NodeId, QualifiedName)>();
                 foreach (var desc in type.CollectedFields)
                 {

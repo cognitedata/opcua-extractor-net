@@ -469,6 +469,12 @@ extraction:
     property-id-filter:
 
 events:
+    # Events are extracted with the following rules: By default all events are extracted.
+    # Set all-events to false in order to disable extracting base OPC-UA events.
+    # Specify events in the event-ids option to only extract a limited list of events.
+    # Emitters are added from the node hierarchy, or from the emitter-ids option,
+    # if found in both, the node hierarchy is used.
+
     # True to enable reading events from the server, reads from any nodes in the hierarchy
     # with a suitable EventNotifier, as well as the Server node.
     enabled: false
@@ -499,3 +505,22 @@ events:
     # it is generated from Event NodeId in the same way ExternalIds are generated for normal nodes.
     destination-name-map:
         #Property1: SubType
+
+    # Event ids to map, with full namespace-uri, and node identifier on the form "i=123" or "s=somestring"
+    # Custom events must be subtypes of the BaseEventType.
+    # This is used to specify which specific events should be extracted, instead of just extracting all events.
+    event-ids:
+        #-   namespace-uri:
+        #    node-id:
+    # Id of nodes to be observed as event emitters. Empty Namespace/NodeId defaults to the server node.
+    # This is used to add extra emitters that are not in the extracted node hierarchy, or that does not
+    # correctly specify the EventNotifier property. 
+    emitter-ids:
+        #-   namespace-uri:
+        #    node-id:
+
+    # Subset of the emitter-ids property. Used to make certain emitters historical.
+    # Requires the events.history property to be true
+    historizing-emitter-ids:
+        #-   NamespaceUri:
+        #    NodeId:

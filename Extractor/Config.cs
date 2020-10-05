@@ -238,6 +238,9 @@ namespace Cognite.OpcUa
     }
     public class EventConfig
     {
+        public IEnumerable<ProtoNodeId> EventIds { get; set; }
+        public IEnumerable<ProtoNodeId> EmitterIds { get; set; }
+        public IEnumerable<ProtoNodeId> HistorizingEmitterIds { get; set; }
         public bool Enabled { get; set; }
         public bool AllEvents { get; set; } = true;
         public bool History { get; set; }

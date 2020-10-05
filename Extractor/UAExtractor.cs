@@ -86,7 +86,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="config">Full config object</param>
         /// <param name="pushers">List of pushers to be used</param>
-        /// <param name="UAClient">UAClient to be used</param>
+        /// <param name="uaClient">UAClient to be used</param>
         public UAExtractor(FullConfig config, IEnumerable<IPusher> pushers, UAClient uaClient, IExtractionStateStore stateStore)
         {
             this.pushers = pushers ?? throw new ArgumentNullException(nameof(pushers));
@@ -471,7 +471,6 @@ namespace Cognite.OpcUa
             {
                 state.RestartHistory();
             }
-
             if (config.Events.Enabled)
             {
                 Streamer.AllowEvents = true;
@@ -479,6 +478,17 @@ namespace Cognite.OpcUa
                 foreach (var field in eventFields)
                 {
                     State.ActiveEvents[field.Key] = field.Value;
+                }
+                if (config.Events.EmitterIds != null && config.Events.EmitterIds.Any())
+                {
+                    var histEmitterIds = new HashSet<NodeId>((config.Events.HistorizingEmitterIds ?? Array.Empty<ProtoNodeId>())
+                        .Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)));
+                    foreach (var id in config.Events.EmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)))
+                    {
+                        var history = (histEmitterIds.Contains(id)) && config.Events.History;
+                        State.SetEmitterState(new EventExtractionState(this, id, history,
+                            history && config.History.Backfill, StateStorage != null && config.StateStorage.Interval > 0));
+                    }
                 }
                 var serverNode = uaClient.GetServerNode(token);
                 if ((serverNode.EventNotifier & EventNotifiers.SubscribeToEvents) != 0)
@@ -608,6 +618,7 @@ namespace Cognite.OpcUa
             foreach (var node in rawObjects.Concat(rawVariables))
             {
                 if ((node.EventNotifier & EventNotifiers.SubscribeToEvents) == 0) continue;
+                if (State.GetEmitterState(node.Id) != null) continue;
                 bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
                 var eventState = new EventExtractionState(this, node.Id, history, history && config.History.Backfill,
                     StateStorage != null && config.StateStorage.Interval > 0);
