@@ -16,7 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -36,6 +35,9 @@ namespace Cognite.OpcUa
 
         private readonly Queue<BufferedDataPoint> dataPointQueue = new Queue<BufferedDataPoint>();
         private readonly Queue<BufferedEvent> eventQueue = new Queue<BufferedEvent>();
+
+        private const int maxEventCount = 100_000;
+        private const int maxDpCount = 1_000_000;
 
         private readonly object dataPointMutex = new object();
         private readonly object eventMutex = new object();
@@ -59,6 +61,7 @@ namespace Cognite.OpcUa
             lock (dataPointMutex)
             {
                 dataPointQueue.Enqueue(dp);
+                if (dataPointQueue.Count > maxDpCount) extractor.Looper.TriggerPush();
             }
         }
         public void Enqueue(IEnumerable<BufferedDataPoint> dps)
@@ -67,6 +70,8 @@ namespace Cognite.OpcUa
             lock (dataPointMutex)
             {
                 foreach (var dp in dps) dataPointQueue.Enqueue(dp);
+                if (dataPointQueue.Count > maxDpCount) extractor.Looper.TriggerPush();
+
             }
         }
         public void Enqueue(BufferedEvent evt)
@@ -74,6 +79,7 @@ namespace Cognite.OpcUa
             lock (eventMutex)
             {
                 eventQueue.Enqueue(evt);
+                if (eventQueue.Count > maxEventCount) extractor.Looper.TriggerPush();
             }
         }
         public void Enqueue(IEnumerable<BufferedEvent> events)
@@ -82,6 +88,7 @@ namespace Cognite.OpcUa
             lock (eventMutex)
             {
                 foreach (var evt in events) eventQueue.Enqueue(evt);
+                if (eventQueue.Count > maxEventCount) extractor.Looper.TriggerPush();
             }
         }
         /// <summary>

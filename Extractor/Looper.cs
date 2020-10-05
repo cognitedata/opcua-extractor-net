@@ -43,6 +43,7 @@ namespace Cognite.OpcUa
         private readonly AutoResetEvent triggerUpdateOperations = new AutoResetEvent(false);
         private readonly ManualResetEvent triggerHistoryRestart = new ManualResetEvent(false);
         private readonly ManualResetEvent triggerGrowTaskList = new ManualResetEvent(false);
+        private readonly ManualResetEvent triggerPush = new ManualResetEvent(false);
 
         public Looper(UAExtractor extractor, FullConfig config, IEnumerable<IPusher> pushers)
         {
@@ -64,6 +65,13 @@ namespace Cognite.OpcUa
                 throw new TimeoutException("Waiting for push timed out");
             }
             log.Debug("Waited {s} milliseconds for push", time * 100);
+        }
+        /// <summary>
+        /// Trigger a push immediately, if one is not currently happening
+        /// </summary>
+        public void TriggerPush()
+        {
+            triggerPush.Set();
         }
         /// <summary>
         /// Main task loop, terminates on any task failure or if all tasks are finished.
@@ -161,6 +169,9 @@ namespace Cognite.OpcUa
         {
             var failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
             var passingPushers = pushers.Except(failingPushers).ToList();
+
+            var eventTask = Task.Run(() => WaitHandle.WaitAny(new[] { token.WaitHandle, triggerPush }));
+
             while (!token.IsCancellationRequested)
             {
                 if (failingPushers.Any())
@@ -212,8 +223,16 @@ namespace Cognite.OpcUa
                     passingPushers.Remove(pusher);
                 }
 
-                await waitTask;
+                if (triggerPush.WaitOne(0) && !token.IsCancellationRequested)
+                {
+                    triggerPush.Reset();
+                    eventTask = Task.Run(() => WaitHandle.WaitAny(new[] { token.WaitHandle, triggerPush }));
+                }
+
+                await Task.WhenAny(waitTask, eventTask);
                 nextPushFlag = true;
+
+                
             }
         }
 
