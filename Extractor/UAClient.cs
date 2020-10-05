@@ -365,19 +365,13 @@ namespace Cognite.OpcUa
                 throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadRootNode);
             }
             var refd = new ReferenceDescription();
-            var enumerator = results.GetEnumerator();
-            enumerator.MoveNext();
-            refd.NodeId = enumerator.Current.GetValue(NodeId.Null);
+            refd.NodeId = results[0].GetValue(NodeId.Null);
             if (refd.NodeId == NodeId.Null) return null;
-            enumerator.MoveNext();
-            refd.BrowseName = enumerator.Current.GetValue(QualifiedName.Null);
-            enumerator.MoveNext();
-            refd.DisplayName = enumerator.Current.GetValue(LocalizedText.Null);
-            enumerator.MoveNext();
-            refd.NodeClass = (NodeClass)enumerator.Current.GetValue(0);
+            refd.BrowseName = results[1].GetValue(QualifiedName.Null);
+            refd.DisplayName = results[2].GetValue(LocalizedText.Null);
+            refd.NodeClass = results[3].GetValue(NodeClass.Unspecified);
             refd.ReferenceTypeId = null;
             refd.IsForward = true;
-            enumerator.Dispose();
             return refd;
         }
         /// <summary>
@@ -473,12 +467,6 @@ namespace Cognite.OpcUa
                     catch (ServiceResultException ex)
                     {
                         throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.BrowseNext);
-                    }
-
-
-                    foreach (var d in diagnostics)
-                    {
-                        log.Warning("GetNodeChildren BrowseNext diagnostics {msg}", d);
                     }
 
                     int nindex = 0;
