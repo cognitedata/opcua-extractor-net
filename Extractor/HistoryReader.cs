@@ -469,7 +469,7 @@ namespace Cognite.OpcUa
             aborting = false;
             if (running > 0)
             {
-                Log.Warning("Failed to abort HistoryReader");
+                log.Warning("Failed to abort HistoryReader");
                 return false;
             }
             log.Debug("Aborted history read");

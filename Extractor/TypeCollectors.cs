@@ -73,9 +73,7 @@ namespace Cognite.OpcUa
                     }
                     catch
                     {
-
                     }
-                    Log.Debug("Bad enum value for {id}: {val}", id, value);
                 }
                 return new BufferedDataPoint(timestamp, id, extractor.ConvertToString(value));
             }

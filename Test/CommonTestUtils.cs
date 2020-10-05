@@ -672,7 +672,7 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
             if (influx)
             {
-                Log.Information("Clearing database: {db}", Config.Influx.Database);
+                log.Information("Clearing database: {db}", Config.Influx.Database);
                 await IfDbClient.DropDatabaseAsync(new InfluxDatabase(Config.Influx.Database));
                 await IfDbClient.CreateDatabaseAsync(Config.Influx.Database);
             }

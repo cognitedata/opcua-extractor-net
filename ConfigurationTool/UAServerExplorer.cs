@@ -600,7 +600,7 @@ namespace Cognite.OpcUa.Config
 
                 if (variable.DataType == null || variable.DataType.Raw == null || variable.DataType.Raw.IsNullNodeId)
                 {
-                    Log.Warning("Variable datatype is null on id: {id}", variable.Id);
+                    log.Warning("Variable datatype is null on id: {id}", variable.Id);
                     continue;
                 }
 
