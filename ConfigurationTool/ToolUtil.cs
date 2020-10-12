@@ -217,7 +217,7 @@ namespace Cognite.OpcUa.Config
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning(ex, "Error in list writer callback");
+                    log.Warning(ex, "Error in list writer callback");
                 }
 
             };

@@ -101,6 +101,48 @@ namespace Cognite.OpcUa
             IsVariable = isVariable;
             ParentId = parentId;
         }
+        public void CheckForUpdates(BufferedNode old, TypeUpdateConfig update, bool dataTypeMetadata)
+        {
+            if (update == null) throw new ArgumentNullException(nameof(update));
+            if (old == null) throw new ArgumentNullException(nameof(old));
+            if (update.Context && old.ParentId != ParentId)
+            {
+                Changed = true;
+                return;
+            }
+
+            if (update.Description && old.Description != Description && !string.IsNullOrWhiteSpace(Description))
+            {
+                Changed = true;
+                return;
+            }
+
+            if (update.Name && old.DisplayName != DisplayName && !string.IsNullOrWhiteSpace(DisplayName))
+            {
+                Changed = true;
+                return;
+            }
+
+            if (update.Metadata)
+            {
+                var oldProperties = old.Properties == null
+                    ? new Dictionary<string, BufferedDataPoint>()
+                    : old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
+                Changed = Properties != null && Properties.Any(prop =>
+                {
+                    if (!oldProperties.TryGetValue(prop.DisplayName, out var oldProp)) return true;
+                    return oldProp.IsString && oldProp.StringValue != prop.Value.StringValue
+                        && !string.IsNullOrWhiteSpace(oldProp.StringValue)
+                        || !oldProp.IsString && oldProp.DoubleValue != prop.Value.DoubleValue;
+                });
+                if (dataTypeMetadata
+                    && old is BufferedVariable oldVariable && this is BufferedVariable variable
+                    && oldVariable.DataType.Raw != variable.DataType.Raw)
+                {
+                    Changed = true;
+                }
+            }
+        }
     }
     
     /// <summary>

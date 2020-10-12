@@ -61,8 +61,8 @@ namespace Cognite.OpcUa
         private int subscribed;
         private bool subscribeFlag = false;
 
-        private Regex propertyNameFilter;
-        private Regex propertyIdFilter;
+        private readonly Regex propertyNameFilter;
+        private readonly Regex propertyIdFilter;
 
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
@@ -502,38 +502,6 @@ namespace Cognite.OpcUa
             }
         }
 
-
-        private void CheckForNodeUpdates(BufferedNode node, BufferedNode old, TypeUpdateConfig update)
-        {
-            if (update.Context && old.ParentId != node.ParentId) node.Changed = true;
-
-            if (!node.Changed && update.Description && old.Description != node.Description
-                && !string.IsNullOrWhiteSpace(node.Description)) node.Changed = true;
-
-            if (!node.Changed && update.Name && old.DisplayName != node.DisplayName
-                && !string.IsNullOrWhiteSpace(node.DisplayName)) node.Changed = true;
-
-            if (!node.Changed && update.Metadata)
-            {
-                var oldProperties = old.Properties == null
-                    ? new Dictionary<string, BufferedDataPoint>()
-                    : old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
-                node.Changed = node.Properties != null && node.Properties.Any(prop =>
-                {
-                    if (!oldProperties.TryGetValue(prop.DisplayName, out var oldProp)) return true;
-                    return oldProp.IsString && oldProp.StringValue != prop.Value.StringValue
-                        && !string.IsNullOrWhiteSpace(oldProp.StringValue)
-                        || !oldProp.IsString && oldProp.DoubleValue != prop.Value.DoubleValue;
-                });
-                if (config.Extraction.DataTypes.DataTypeMetadata
-                    && old is BufferedVariable oldVariable && node is BufferedVariable variable
-                    && oldVariable.DataType.Raw != variable.DataType.Raw)
-                {
-                    node.Changed = true;
-                }
-            }
-
-        }
         /// <summary>
         /// Read nodes from commonQueue and sort them into lists of context objects, destination timeseries and source variables
         /// </summary>
@@ -605,7 +573,7 @@ namespace Cognite.OpcUa
                     var old = State.GetActiveNode(node.Id);
                     if (old != null)
                     {
-                        CheckForNodeUpdates(node, old, update.Objects);
+                        node.CheckForUpdates(old, update.Objects, config.Extraction.DataTypes.DataTypeMetadata);
                         if (node.Changed)
                         {
                             State.AddActiveNode(node);
@@ -627,8 +595,7 @@ namespace Cognite.OpcUa
                     var old = State.GetActiveNode(node.Id);
                     if (old != null && old is BufferedVariable variable)
                     {
-
-                        CheckForNodeUpdates(node, old, update.Variables);
+                        node.CheckForUpdates(old, update.Variables, config.Extraction.DataTypes.DataTypeMetadata);
 
                         if (node.Changed)
                         {

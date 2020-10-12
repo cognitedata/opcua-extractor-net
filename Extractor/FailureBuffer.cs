@@ -263,7 +263,7 @@ namespace Cognite.OpcUa
                     catch (Exception e)
                     {
                         success = false;
-                        Log.Error(e, "Failed to read points from influxdb");
+                        log.Error(e, "Failed to read points from influxdb");
                     }
                 }
             }
@@ -351,7 +351,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "Failed to write events to file");
+                    log.Error(ex, "Failed to write events to file");
                     success = false;
                 }
             }
@@ -400,7 +400,7 @@ namespace Cognite.OpcUa
                     catch (Exception e)
                     {
                         success = false;
-                        Log.Error(e, "Failed to read events from influxdb");
+                        log.Error(e, "Failed to read events from influxdb");
                     }
                 }
             }
@@ -546,7 +546,7 @@ namespace Cognite.OpcUa
                     }
                     catch (Exception ex)
                     {
-                        Log.Error(ex, "Failed to read events from file");
+                        log.Error(ex, "Failed to read events from file");
                         success = false;
                         break;
                     }
