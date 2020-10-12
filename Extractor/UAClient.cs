@@ -1560,7 +1560,8 @@ namespace Cognite.OpcUa
             {
                 // Modifying buffer.Length effectively removes the last few elements, but more efficiently than modifying strings,
                 // StringBuilder is just a char array.
-                buffer.Length = Math.Min(buffer.Length, 255 - index / 10 + 3);
+                // 255 is max length, Log10(Max(1, index)) + 3 is the length of the index suffix ("[123]").
+                buffer.Length = Math.Min(buffer.Length, 255 - ((int)Math.Log10(Math.Max(1, index)) + 3));
                 buffer.AppendFormat(CultureInfo.InvariantCulture, "[{0}]", index);
             }
             return buffer.ToString();
