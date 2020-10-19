@@ -361,7 +361,7 @@ namespace Test
             {
                 await tester.ClearPersistentData();
 
-                tester.Config.Events.HistorizingEmitterIds = new List<ProtoNodeId>();
+                tester.Config.Events.History = false;
 
                 await tester.StartServer();
 
@@ -408,7 +408,7 @@ namespace Test
                 StoreDatapoints = true,
                 StateInflux = true
             });
-            tester2.Config.Events.HistorizingEmitterIds = new List<ProtoNodeId>();
+            tester2.Config.Events.History = false;
 
             await tester2.StartServer();
 
@@ -648,7 +648,7 @@ namespace Test
             var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());
 
-            Assert.Equal(27, events.Count);
+            Assert.Equal(30, events.Count);
 
             var countregex = new Regex("\\d+$");
             var propNumbers = events

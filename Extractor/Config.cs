@@ -240,12 +240,16 @@ namespace Cognite.OpcUa
     {
         public IEnumerable<ProtoNodeId> EventIds { get; set; }
         public IEnumerable<ProtoNodeId> EmitterIds { get; set; }
+        public IEnumerable<ProtoNodeId> HistorizingEmitterIds { get; set; }
+        public bool Enabled { get; set; }
+        public bool AllEvents { get; set; } = true;
+        public bool History { get; set; }
+        public string ExcludeEventFilter { get; set; }
         public IEnumerable<string> ExcludeProperties { get => excludeProperties; set => excludeProperties = value ?? excludeProperties; }
         private IEnumerable<string> excludeProperties = new List<string>();
         public IEnumerable<string> BaseExcludeProperties { get; } = new List<string> { "LocalTime", "ReceiveTime", "SourceName" };
         public Dictionary<string, string> DestinationNameMap { get => destinationNameMap; set => destinationNameMap = value ?? destinationNameMap; }
         private Dictionary<string, string> destinationNameMap = new Dictionary<string, string>();
-        public IEnumerable<ProtoNodeId> HistorizingEmitterIds { get; set; }
     }
     public class HistoryConfig
     {

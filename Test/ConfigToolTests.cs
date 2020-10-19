@@ -132,15 +132,8 @@ namespace Test
             await explorer.GetEventConfig(source.Token);
             if (serverName == ServerName.Events)
             {
-                Assert.Contains(baseConfig.Events.EventIds, proto => proto.NodeId == "i=7");
-                Assert.Contains(baseConfig.Events.EventIds, proto => proto.NodeId == "i=11");
-                Assert.Contains(baseConfig.Events.EventIds, proto => proto.NodeId == "i=12");
-                Assert.Contains(baseConfig.Events.EventIds, proto => proto.NodeId == "i=13");
-                Assert.Contains(baseConfig.Events.EmitterIds, proto => proto.NodeId == "i=2253");
-                Assert.Contains(baseConfig.Events.EmitterIds, proto => proto.NodeId == "i=2");
-                Assert.Contains(baseConfig.Events.EmitterIds, proto => proto.NodeId == "i=3");
-                Assert.Contains(baseConfig.Events.HistorizingEmitterIds, proto => proto.NodeId == "i=2253");
-                Assert.Contains(baseConfig.Events.HistorizingEmitterIds, proto => proto.NodeId == "i=2");
+                Assert.True(baseConfig.Events.Enabled);
+                Assert.True(baseConfig.Events.History);
                 Assert.True(baseConfig.History.Enabled);
             }
             else if (serverName == ServerName.Audit)

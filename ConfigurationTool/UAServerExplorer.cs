@@ -34,7 +34,6 @@ namespace Cognite.OpcUa.Config
         private List<BufferedNode> dataTypes;
         private List<ProtoDataType> customNumericTypes;
         private List<BufferedNode> nodeList;
-        private List<NodeId> emitterIds;
         private List<NodeId> emittedEvents;
         private List<BufferedNode> eventTypes;
         private Dictionary<string, string> namespaceMap;
@@ -101,10 +100,10 @@ namespace Cognite.OpcUa.Config
             public int HistoryChunkSize;
             public bool NoHistorizingNodes;
             public bool BackfillRecommended;
+            public bool HistoricalEvents;
+            public bool GenericEvents;
             public int NumEventTypes;
-            public int NumEmitters;
             public bool BaseEventWarning;
-            public int NumHistorizingEmitters;
             public List<string> NamespaceMap;
             public TimeSpan HistoryGranularity;
             public bool Enums;
@@ -1107,7 +1106,8 @@ namespace Cognite.OpcUa.Config
             }
             catch (Exception ex)
             {
-                log.Warning(ex, "Failed to read EventNotifier property, this tool will not be able to identify non-server emitters this way");
+                log.Warning(ex, "Failed to read EventNotifier property, the server most likely does not support events");
+                return;
             }
 
             var emitters = notifierPairs.Where(pair => (pair.notifier & EventNotifiers.SubscribeToEvents) != 0);
@@ -1116,12 +1116,17 @@ namespace Cognite.OpcUa.Config
             if (emitters.Any())
             {
                 log.Information("Discovered {cnt} emitters, of which {cnt2} are historizing", emitters.Count(), historizingEmitters.Count());
+                if (historizingEmitters.Any())
+                {
+                    summary.HistoricalEvents = true;
+                    baseConfig.History.Enabled = true;
+                    baseConfig.Events.History = true;
+                }
             }
 
             log.Information("Scan hierarchy for GeneratesEvent references");
 
             var emitterReferences = new List<BufferedNode>();
-
             try
             {
                 VisitedNodes.Clear();
@@ -1132,7 +1137,7 @@ namespace Cognite.OpcUa.Config
             }
             catch (Exception ex)
             {
-                log.Warning(ex, "Failed to look for GeneratesEvent references, this tool will not be able to identify non-server emitters this way");
+                log.Warning(ex, "Failed to look for GeneratesEvent references, this tool will not be able to identify emitted event types this way");
             }
 
             VisitedNodes.Clear();
@@ -1144,41 +1149,10 @@ namespace Cognite.OpcUa.Config
             emittedEvents = referencedEvents.ToList();
 
 
-            log.Information("Identified {cnt} emitters and {cnt2} events by looking at GeneratesEvent references",
-                emitterReferences.DistinctBy(reference => reference.ParentId).Count(), emittedEvents.Count);
+            log.Information("Identified {cnt} events by looking at GeneratesEvent references", emittedEvents.Count);
 
-            if (emitterReferences.Any() && emitters.Any())
-            {
-                emitterIds = emitters.Select(pair => pair.id).Append(ObjectIds.Server)
-                    .Intersect(emitterReferences.Where(evt => referencedEvents.Contains(evt.Id)).Select(evt => evt.ParentId))
-                    .Distinct()
-                    .ToList();
-                log.Information("{cnt} emitters were detected that generate relevant events and can be subscribed to", emitterIds.Count);
-            }
-            else if (emitterReferences.Any() && !emitters.Any())
-            {
-                emitterIds = emitterReferences
-                    .Where(evt => referencedEvents.Contains(evt.Id))
-                    .Select(evt => evt.ParentId)
-                    .Distinct()
-                    .ToList();
-
-                log.Information("{cnt} emitters were detected that generate relevant events", emitterIds.Count);
-            }
-            else if (!emitterReferences.Any() && emitters.Any())
-            {
-                emitterIds = emitters.Select(pair => pair.id).Distinct().ToList();
-
-                log.Information("{cnt} subscribable emitters were detected", emitterIds.Count);
-            }
-            else
-            {
-                emitterIds = new List<NodeId>();
-                log.Information("No emitters were found");
-            }
-
-            bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server && (
-                    evt.Id == ObjectTypeIds.AuditAddNodesEventType || evt.Id == ObjectTypeIds.AuditAddReferencesEventType));
+            bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server
+                && (evt.Id == ObjectTypeIds.AuditAddNodesEventType || evt.Id == ObjectTypeIds.AuditAddReferencesEventType));
 
             baseConfig.Extraction.EnableAuditDiscovery |= auditReferences;
             summary.Auditing = auditReferences;
@@ -1190,12 +1164,10 @@ namespace Cognite.OpcUa.Config
 
             log.Information("Listening to events on the server node a little while in order to find further events");
 
-            var eventsToListenFor = eventTypes.Where(evt =>
-                IsCustomObject(evt.Id)
-                || evt.Id == ObjectTypeIds.BaseEventType)
-                .Select(evt => evt.Id);
+            config.Events.AllEvents = true;
+            config.Events.Enabled = true;
 
-            activeEventFields = GetEventFields(eventsToListenFor, token);
+            activeEventFields = GetEventFields(token);
 
             var events = new List<BufferedEvent>();
 
@@ -1295,11 +1267,6 @@ namespace Cognite.OpcUa.Config
                     .Distinct()
                     .Where(id => !ToolUtil.IsChildOf(eventTypes, eventTypes.Find(type => type.Id == id), ObjectTypeIds.AuditEventType))
                     .ToList();
-
-                if (!emitterIds.Contains(ObjectIds.Server))
-                {
-                    emitterIds.Add(ObjectIds.Server);
-                }
             }
 
             if (emittedEvents.Any(id => id == ObjectTypeIds.BaseEventType))
@@ -1308,8 +1275,20 @@ namespace Cognite.OpcUa.Config
                 summary.BaseEventWarning = true;
             }
 
-            log.Information("Detected a total of {cnt} event emitters and {cnt2} event types",
-                emitterIds.Count, emittedEvents.Count);
+            log.Information("Detected a total of {cnt} event types", emittedEvents.Count);
+
+            if (emittedEvents.Count > 0)
+            {
+                log.Information("Detected potential events, the server should discover events");
+                baseConfig.Events.Enabled = true;
+                summary.NumEventTypes = emittedEvents.Count;
+                if (emittedEvents.Any(id => id.NamespaceIndex == 0))
+                {
+                    log.Information("Detected non-custom events");
+                    baseConfig.Events.AllEvents = true;
+                    summary.GenericEvents = true;
+                }
+            }
 
             try
             {
@@ -1333,28 +1312,7 @@ namespace Cognite.OpcUa.Config
                 log.Warning(ex, "Failed to read auditing server configuration");
             }
 
-
-
-
-            summary.NumEmitters = emitterIds.Count;
             summary.NumEventTypes = emittedEvents.Count;
-
-            if (!emitterIds.Any()) return;
-
-            historizingEmitters = emitters.Where(emitter => emitterIds.Contains(emitter.id));
-
-            log.Information("Detected {cnt} historizing emitters", historizingEmitters.Count());
-            summary.NumHistorizingEmitters = historizingEmitters.Count();
-
-            baseConfig.History.Enabled = true;
-            baseConfig.Events.EventIds = emittedEvents.Distinct().Select(NodeIdToProto).ToList();
-            baseConfig.Events.EmitterIds = emitterIds.Distinct().Select(NodeIdToProto).ToList();
-            baseConfig.Events.HistorizingEmitterIds = historizingEmitters.Distinct().Select(pair => NodeIdToProto(pair.id)).ToList();
-
-            if (!baseConfig.Events.EventIds.Any())
-            {
-                baseConfig.Events.EmitterIds = Enumerable.Empty<ProtoNodeId>();
-            }
         }
 
         public static Dictionary<string, string> GenerateNamespaceMap(IEnumerable<string> namespaces)
@@ -1543,11 +1501,10 @@ namespace Cognite.OpcUa.Config
             if (summary.NumEventTypes > 0)
             {
                 log.Information("Successfully found support for events on the server");
-                log.Information("{types} different event types were found, emitted from {em} nodes acting as emitters",
-                    summary.NumEventTypes, summary.NumEmitters);
-                if (summary.NumHistorizingEmitters > 0)
+                log.Information("{types} different event types were found", summary.NumEventTypes);
+                if (summary.HistoricalEvents)
                 {
-                    log.Information("{cnt} historizing event emitters were found and successfully read from", summary.NumHistorizingEmitters);
+                    log.Information("Historizing event emitters were found and successfully read from");
                 }
 
                 if (summary.BaseEventWarning)

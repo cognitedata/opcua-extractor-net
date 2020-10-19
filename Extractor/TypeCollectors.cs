@@ -21,6 +21,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -379,24 +380,29 @@ namespace Cognite.OpcUa
 
 
     /// <summary>
-    /// Collects the fields of a given list of eventIds. It does this by mapping out the entire event type hierarchy,
+    /// Collects the fields of events. It does this by mapping out the entire event type hierarchy,
     /// and collecting the fields of each node on the way.
     /// </summary>
     public class EventFieldCollector
     {
-        readonly UAClient uaClient;
-        readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> properties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
-        readonly Dictionary<NodeId, IEnumerable<ReferenceDescription>> localProperties = new Dictionary<NodeId, IEnumerable<ReferenceDescription>>();
-        readonly IEnumerable<NodeId> targetEventIds;
+        private readonly UAClient uaClient;
+        private readonly Dictionary<NodeId, BufferedEventType> types = new Dictionary<NodeId, BufferedEventType>();
+        private readonly EventConfig config;
+        private readonly Regex ignoreFilter;
         /// <summary>
         /// Construct the collector.
         /// </summary>
         /// <param name="parent">UAClient to be used for browse calls.</param>
         /// <param name="targetEventIds">Target event ids</param>
-        public EventFieldCollector(UAClient parent, IEnumerable<NodeId> targetEventIds)
+        public EventFieldCollector(UAClient parent, EventConfig config)
         {
+            if (config == null) throw new ArgumentNullException(nameof(config));
             uaClient = parent;
-            this.targetEventIds = targetEventIds;
+            this.config = config;
+            if (!string.IsNullOrEmpty(config.ExcludeEventFilter))
+            {
+                ignoreFilter = new Regex(config.ExcludeEventFilter, RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.CultureInvariant);
+            }
         }
         /// <summary>
         /// Main collection function. Calls BrowseDirectory on BaseEventType, waits for it to complete, which should populate properties and localProperties,
@@ -405,27 +411,58 @@ namespace Cognite.OpcUa
         /// <returns>The collected fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).</returns>
         public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventIdFields(CancellationToken token)
         {
-            properties[ObjectTypeIds.BaseEventType] = new List<ReferenceDescription>();
-            localProperties[ObjectTypeIds.BaseEventType] = new List<ReferenceDescription>();
+            types[ObjectTypeIds.BaseEventType] = new BufferedEventType
+            {
+                Id = ObjectTypeIds.BaseEventType,
+                CollectedFields = new List<ReferenceDescription>(),
+                Properties = new List<ReferenceDescription>(),
+                DisplayName = "BaseEventType",
+                ParentId = NodeId.Null
+            };
 
             uaClient.BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType },
                 EventTypeCallback, token, ReferenceTypeIds.HierarchicalReferences, (uint)NodeClass.ObjectType | (uint)NodeClass.Variable);
-            var propVariables = new Dictionary<ExpandedNodeId, (NodeId, QualifiedName)>();
-            foreach (var kvp in localProperties)
+
+            var result = new Dictionary<NodeId, List<(NodeId, QualifiedName)>>();
+
+            var excludeProperties = new HashSet<string>(config.ExcludeProperties);
+            var baseExcludeProperties = new HashSet<string>(config.BaseExcludeProperties);
+
+            var propVariables = new Dictionary<NodeId, (NodeId, QualifiedName)>();
+            // Find reverse mappings from properties to their parents, along with their browse name
+            foreach (var type in types.Values)
             {
-                foreach (var description in kvp.Value)
+                foreach (var description in type.Properties)
                 {
-                    if (!propVariables.ContainsKey(description.NodeId))
+
+                    if (!propVariables.ContainsKey(uaClient.ToNodeId(description.NodeId)))
                     {
-                        propVariables[description.NodeId] = (kvp.Key, description.BrowseName);
+                        propVariables[uaClient.ToNodeId(description.NodeId)] = (type.Id, description.BrowseName);
                     }
                 }
             }
-            return targetEventIds
-                .Where(id => properties.ContainsKey(id))
-                .ToDictionary(id => id, id => properties[id]
-                    .Where(desc => propVariables.ContainsKey(desc.NodeId))
-                    .Select(desc => propVariables[desc.NodeId]));
+
+            HashSet<NodeId> whitelist = null;
+            if (config.EventIds != null && config.EventIds.Any())
+            {
+                whitelist = new HashSet<NodeId>(config.EventIds.Select(proto => proto.ToNodeId(uaClient, ObjectTypeIds.BaseEventType)));
+            }
+            // Add mappings to result
+            foreach (var type in types.Values)
+            {
+                if (ignoreFilter != null && ignoreFilter.IsMatch(type.DisplayName.Text)) continue;
+                if (!config.AllEvents && type.Id.NamespaceIndex == 0) continue;
+                if (whitelist != null && whitelist.Any() && !whitelist.Contains(type.Id)) continue;
+                result[type.Id] = new List<(NodeId, QualifiedName)>();
+                foreach (var desc in type.CollectedFields)
+                {
+                    if (excludeProperties.Contains(desc.BrowseName.Name)
+                        || baseExcludeProperties.Contains(desc.BrowseName.Name) && type.Id == ObjectTypeIds.BaseEventType) continue;
+                    result[type.Id].Add(propVariables[uaClient.ToNodeId(desc.NodeId)]);
+                }
+            }
+
+            return result.ToDictionary(kvp => kvp.Key, kvp => (IEnumerable<(NodeId, QualifiedName)>)kvp.Value);
         }
         /// <summary>
         /// HandleNode callback for the event type mapping.
@@ -435,22 +472,33 @@ namespace Cognite.OpcUa
         private void EventTypeCallback(ReferenceDescription child, NodeId parent)
         {
             var id = uaClient.ToNodeId(child.NodeId);
-            if (child.NodeClass == NodeClass.ObjectType && !properties.ContainsKey(id))
+            var parentType = types.GetValueOrDefault(parent);
+
+            if (child.NodeClass == NodeClass.ObjectType)
             {
-                var parentProperties = new List<ReferenceDescription>();
-                if (properties.TryGetValue(parent, out var pProps))
+                types[id] = new BufferedEventType
                 {
-                    parentProperties.AddRange(pProps);
-                }
-                properties[id] = parentProperties;
-                localProperties[id] = new List<ReferenceDescription>();
+                    Id = id,
+                    ParentId = parent,
+                    Properties = new List<ReferenceDescription>(),
+                    CollectedFields = parentType?.CollectedFields?.ToList() ?? new List<ReferenceDescription>(),
+                    DisplayName = child.DisplayName
+                };
             }
             if (child.ReferenceTypeId == ReferenceTypeIds.HasProperty)
             {
-                properties[parent] = properties[parent].Append(child);
-                localProperties[parent] = localProperties[parent].Append(child);
+                if (parentType == null) return;
+                parentType.Properties.Add(child);
+                parentType.CollectedFields.Add(child);
             }
         }
-
+        private class BufferedEventType
+        {
+            public NodeId Id { get; set; }
+            public LocalizedText DisplayName { get; set; }
+            public NodeId ParentId { get; set; }
+            public List<ReferenceDescription> Properties { get; set; }
+            public List<ReferenceDescription> CollectedFields { get; set; }
+        }
     }
 }
