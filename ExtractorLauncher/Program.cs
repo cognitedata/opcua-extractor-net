@@ -197,8 +197,6 @@ namespace Cognite.OpcUa
                 }
                 catch (TaskCanceledException)
                 {
-                    log.Warning("Extractor stopped manually");
-                    break;
                 }
                 catch (AggregateException aex)
                 {
@@ -207,12 +205,10 @@ namespace Cognite.OpcUa
                         log.Error("Invalid configuration, stopping");
                         break;
                     }
-                    if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) != null)
+                    if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) == null)
                     {
-                        log.Warning("Extractor stopped manually");
-                        break;
+                        log.Error(aex, "Extractor crashed");
                     }
-                    log.Error(aex, "Extractor crashed");
                 }
                 catch (ConfigurationException)
                 {
@@ -238,7 +234,11 @@ namespace Cognite.OpcUa
                     waitRepeats = 0;
                 }
 
-                if (source.IsCancellationRequested) break;
+                if (source.IsCancellationRequested)
+                {
+                    log.Warning("Extractor stopped manually");
+                    break;
+                }
 
                 try
                 {
@@ -246,7 +246,7 @@ namespace Cognite.OpcUa
                     log.Information("Sleeping for {time}", sleepTime);
                     Task.Delay(sleepTime, source.Token).Wait();
                 }
-                catch (TaskCanceledException)
+                catch (Exception)
                 {
                     log.Warning("Extractor stopped manually");
                     break;
