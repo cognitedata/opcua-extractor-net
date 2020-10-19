@@ -140,7 +140,6 @@ namespace Cognite.OpcUa
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
             {
-                Appconfig.SecurityConfiguration.ApplicationCertificate.StorePath = $"{certificateDir}/instance";
                 Appconfig.SecurityConfiguration.TrustedIssuerCertificates.StorePath = $"{certificateDir}/pki/issuer";
                 Appconfig.SecurityConfiguration.TrustedPeerCertificates.StorePath = $"{certificateDir}/pki/trusted";
                 Appconfig.SecurityConfiguration.RejectedCertificateStore.StorePath = $"{certificateDir}/pki/rejected";
