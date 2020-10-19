@@ -374,7 +374,7 @@ namespace Cognite.OpcUa
                 token,
                 ReferenceTypeIds.HasSubtype,
                 (uint)NodeClass.DataType,
-                false));
+                false), CancellationToken.None);
         }
     }
 

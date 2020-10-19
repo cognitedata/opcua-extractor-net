@@ -208,7 +208,7 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    await Task.Run(() => WriteDatapointsToFile(config.DatapointPath, points, token));
+                    await Task.Run(() => WriteDatapointsToFile(config.DatapointPath, points, token), CancellationToken.None);
                     fileAnyPoints |= points.Any();
                 }
                 catch (Exception ex)
@@ -346,7 +346,7 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    await Task.Run(() => WriteEventsToFile(config.EventPath, events, extractor, token));
+                    await Task.Run(() => WriteEventsToFile(config.EventPath, events, extractor, token), CancellationToken.None);
                     fileAnyEvents |= events.Any();
                 }
                 catch (Exception ex)
@@ -573,23 +573,25 @@ namespace Cognite.OpcUa
         {
             if (dps == null) throw new ArgumentNullException(nameof(dps));
             if (file == null) throw new ArgumentNullException(nameof(file));
-            using var fs = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.None);
-
             int count = 0;
 
-            foreach (var dp in dps)
+            using (var fs = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.None))
             {
-                if (token.IsCancellationRequested) break;
-                var bytes = dp.ToStorableBytes();
-                fs.Write(bytes, 0, bytes.Length);
-                count++;
+                foreach (var dp in dps)
+                {
+                    if (token.IsCancellationRequested) break;
+                    var bytes = dp.ToStorableBytes();
+                    fs.Write(bytes, 0, bytes.Length);
+                    count++;
+                }
+                fs.Flush();
             }
+
             if (count > 0)
             {
                 log.Debug("Write {cnt} points to file", count);
                 numPointsInBuffer.Inc(count);
             }
-            fs.Flush();
         }
         /// <summary>
         /// Write events to a binary file
@@ -602,16 +604,17 @@ namespace Cognite.OpcUa
             if (evts == null) throw new ArgumentNullException(nameof(evts));
             if (file == null) throw new ArgumentNullException(nameof(file));
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
-            using var fs = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.None);
-
             int count = 0;
-
-            foreach (var evt in evts)
+            using (var fs = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.None))
             {
-                if (token.IsCancellationRequested) break;
-                var bytes = evt.ToStorableBytes(extractor);
-                fs.Write(bytes, 0, bytes.Length);
-                count++;
+                foreach (var evt in evts)
+                {
+                    if (token.IsCancellationRequested) break;
+                    var bytes = evt.ToStorableBytes(extractor);
+                    fs.Write(bytes, 0, bytes.Length);
+                    count++;
+                }
+                fs.Flush();
             }
 
             if (count > 0)
@@ -619,7 +622,6 @@ namespace Cognite.OpcUa
                 log.Debug("Write {cnt} events to file", count);
                 numEventsInBuffer.Inc();
             }
-            fs.Flush();
         }
         public void Dispose()
         {

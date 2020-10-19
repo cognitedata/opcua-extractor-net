@@ -59,7 +59,7 @@ namespace Cognite.OpcUa
         public bool Pushing { get; private set; }
 
         private int subscribed;
-        private bool subscribeFlag = false;
+        private bool subscribeFlag;
 
         private readonly Regex propertyNameFilter;
         private readonly Regex propertyIdFilter;
@@ -950,65 +950,71 @@ namespace Cognite.OpcUa
             if (eventType == ObjectTypeIds.AuditAddNodesEventType)
             {
                 // This is a neat way to get the contents of the event, which may be fairly complicated (variant of arrays of extensionobjects)
-                using var e = new AuditAddNodesEventState(null);
-                e.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
-                if (e.NodesToAdd?.Value == null)
+                using (var e = new AuditAddNodesEventState(null))
                 {
-                    log.Warning("Missing NodesToAdd object on AddNodes event");
-                    return;
+                    e.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
+                    if (e.NodesToAdd?.Value == null)
+                    {
+                        log.Warning("Missing NodesToAdd object on AddNodes event");
+                        return;
+                    }
+
+                    var addedNodes = e.NodesToAdd.Value;
+
+                    var relevantIds = addedNodes.Where(added => added != null &&
+                        (added.NodeClass == NodeClass.Variable || added.NodeClass == NodeClass.Object)
+                        && (added.TypeDefinition != VariableTypeIds.PropertyType)
+                        && (State.IsMappedNode(uaClient.ToNodeId(added.ParentNodeId))))
+                        .Select(added => uaClient.ToNodeId(added.ParentNodeId))
+                        .Distinct();
+                    if (!relevantIds.Any())
+                    {
+                        log.Debug("No relevant nodes in addNodes audit event");
+                        return;
+                    }
+                    log.Information("Trigger rebrowse on {numnodes} node ids due to addNodes event", relevantIds.Count());
+
+                    foreach (var id in relevantIds)
+                    {
+                        extraNodesToBrowse.Enqueue(id);
+                    }
                 }
 
-                var addedNodes = e.NodesToAdd.Value;
-
-                var relevantIds = addedNodes.Where(added => added != null &&
-                    (added.NodeClass == NodeClass.Variable || added.NodeClass == NodeClass.Object)
-                    && (added.TypeDefinition != VariableTypeIds.PropertyType)
-                    && (State.IsMappedNode(uaClient.ToNodeId(added.ParentNodeId))))
-                    .Select(added => uaClient.ToNodeId(added.ParentNodeId))
-                    .Distinct();
-                if (!relevantIds.Any())
-                {
-                    log.Debug("No relevant nodes in addNodes audit event");
-                    return;
-                }
-                log.Information("Trigger rebrowse on {numnodes} node ids due to addNodes event", relevantIds.Count());
-
-                foreach (var id in relevantIds)
-                {
-                    extraNodesToBrowse.Enqueue(id);
-                }
                 Looper.ScheduleUpdate();
                 return;
             }
 
-            using var ev = new AuditAddReferencesEventState(null);
-            ev.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
-
-            if (ev.ReferencesToAdd?.Value == null)
+            using (var ev = new AuditAddReferencesEventState(null))
             {
-                log.Warning("Missing ReferencesToAdd object on AddReferences event");
-                return;
+                ev.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
+
+                if (ev.ReferencesToAdd?.Value == null)
+                {
+                    log.Warning("Missing ReferencesToAdd object on AddReferences event");
+                    return;
+                }
+
+                var addedReferences = ev.ReferencesToAdd.Value;
+
+                var relevantRefIds = addedReferences.Where(added =>
+                    (added.IsForward && State.IsMappedNode(uaClient.ToNodeId(added.SourceNodeId))))
+                    .Select(added => uaClient.ToNodeId(added.SourceNodeId))
+                    .Distinct();
+
+                if (!relevantRefIds.Any())
+                {
+                    log.Debug("No relevant nodes in addReferences audit event");
+                    return;
+                }
+
+                log.Information("Trigger rebrowse on {numnodes} node ids due to addReference event", relevantRefIds.Count());
+
+                foreach (var id in relevantRefIds)
+                {
+                    extraNodesToBrowse.Enqueue(id);
+                }
             }
 
-            var addedReferences = ev.ReferencesToAdd.Value;
-
-            var relevantRefIds = addedReferences.Where(added =>
-                (added.IsForward && State.IsMappedNode(uaClient.ToNodeId(added.SourceNodeId))))
-                .Select(added => uaClient.ToNodeId(added.SourceNodeId))
-                .Distinct();
-
-            if (!relevantRefIds.Any())
-            {
-                log.Debug("No relevant nodes in addReferences audit event");
-                return;
-            }
-
-            log.Information("Trigger rebrowse on {numnodes} node ids due to addReference event", relevantRefIds.Count());
-
-            foreach (var id in relevantRefIds)
-            {
-                extraNodesToBrowse.Enqueue(id);
-            }
             Looper.ScheduleUpdate();
         }
         #endregion

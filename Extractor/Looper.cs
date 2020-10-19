@@ -86,12 +86,12 @@ namespace Cognite.OpcUa
 
             if (config.Extraction.AutoRebrowsePeriod > 0)
             {
-                tasks = tasks.Append(Task.Run(() => RebrowseLoop(token)));
+                tasks = tasks.Append(Task.Run(() => RebrowseLoop(token), CancellationToken.None));
             }
 
             if (extractor.StateStorage != null && config.StateStorage.Interval > 0)
             {
-                tasks = tasks.Append(Task.Run(() => StoreStateLoop(token)));
+                tasks = tasks.Append(Task.Run(() => StoreStateLoop(token), CancellationToken.None));
             }
 
             tasks = tasks.Append(Task.Run(() => WaitHandle.WaitAny(
@@ -137,7 +137,7 @@ namespace Cognite.OpcUa
                     log.Information("Restarting history");
                     triggerHistoryRestart.Reset();
                     tasks = tasks
-                        .Append(Task.Run(async () => await extractor.RestartHistory()))
+                        .Append(Task.Run(async () => await extractor.RestartHistory(), token))
                         .Append(Task.Run(() => WaitHandle.WaitAny(new[] { triggerHistoryRestart, token.WaitHandle }))).ToList();
                 }
 

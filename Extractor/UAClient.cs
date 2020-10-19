@@ -337,7 +337,7 @@ namespace Cognite.OpcUa
                 {
                     var rootNode = GetRootNode(root);
                     if (rootNode == null) throw new ExtractorFailureException($"Root node does not exist: {root}");
-                    callback(rootNode, null);
+                    callback?.Invoke(rootNode, null);
                 }
             }
             await Task.Run(() => BrowseDirectory(roots, callback, token, null,
@@ -592,7 +592,7 @@ namespace Cognite.OpcUa
                         if (docb)
                         {
                             log.Verbose("Discovered new node {nodeid}", nodeId);
-                            callback(rd, parentId);
+                            callback?.Invoke(rd, parentId);
                         }
                         if (rd.NodeClass == NodeClass.Variable) continue;
                         if (localVisitedNodes.Add(nodeId) || !ignoreVisited)
@@ -1511,7 +1511,7 @@ namespace Cognite.OpcUa
                         builder.Append(((count++ > 0) ? ", " : "") + ConvertToString(dvalue));
                     }
                 }
-                builder.Append("]");
+                builder.Append(']');
                 return builder.ToString();
             }
             if (value.GetType() == typeof(NodeId))

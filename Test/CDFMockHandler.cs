@@ -53,11 +53,11 @@ namespace Test
         long eventIdCounter = 1;
         private long requestIdCounter = 1;
         public long RequestCount { get; private set; }
-        public bool BlockAllConnections { get; set; } = false;
+        public bool BlockAllConnections { get; set; }
         public bool AllowPush { get; set; } = true;
         public bool AllowEvents { get; set; } = true;
         public bool AllowConnectionTest { get; set; } = true;
-        public bool StoreDatapoints { get; set; } = false;
+        public bool StoreDatapoints { get; set; }
         public MockMode mode { get; set; }
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFMockHandler));
@@ -268,7 +268,7 @@ namespace Test
                 {
                     error = new ErrorContent
                     {
-                        missing = finalMissing.Select(id => new Identity { externalId = id }),
+                        missing = finalMissing.Select(id => new CdfIdentity { externalId = id }),
                         code = 400,
                         message = "missing"
                     }
@@ -391,7 +391,7 @@ namespace Test
                 {
                     error = new ErrorContent
                     {
-                        missing = finalMissing.Select(id => new Identity { externalId = id }),
+                        missing = finalMissing.Select(id => new CdfIdentity { externalId = id }),
                         code = 400,
                         message = "missing"
                     }
@@ -497,13 +497,13 @@ namespace Test
                 };
             }
             var newEvents = JsonConvert.DeserializeObject<EventWrapper>(content);
-            var duplicated = new List<Identity>();
+            var duplicated = new List<CdfIdentity>();
             var created = new List<(string Id, EventDummy Event)>();
             foreach (var ev in newEvents.items)
             {
                 if (Events.ContainsKey(ev.externalId) || created.Any(ct => ct.Id == ev.externalId))
                 {
-                    duplicated.Add(new Identity { externalId = ev.externalId });
+                    duplicated.Add(new CdfIdentity { externalId = ev.externalId });
                     continue;
                 }
                 if (duplicated.Any()) continue;
@@ -580,7 +580,7 @@ namespace Test
             // Ignore query for now, this is only used to read the first point, so we just respond with that.
             var ids = JsonConvert.DeserializeObject<IdentityListWrapper>(content);
             var ret = new DataPointListResponse();
-            var missing = new List<Identity>();
+            var missing = new List<CdfIdentity>();
             foreach (var id in ids.items)
             {
                 if (!Timeseries.ContainsKey(id.externalId))
@@ -680,7 +680,7 @@ namespace Test
                 {
                     error = new ErrorContent
                     {
-                        missing = missing.Select(id => new Identity { externalId = id }),
+                        missing = missing.Select(id => new CdfIdentity { externalId = id }),
                         message = "missing",
                         code = 400
                     }
@@ -759,7 +759,7 @@ namespace Test
                 {
                     error = new ErrorContent
                     {
-                        missing = missing.Select(id => new Identity { externalId = id }),
+                        missing = missing.Select(id => new CdfIdentity { externalId = id }),
                         message = "missing",
                         code = 400
                     }
@@ -910,21 +910,21 @@ namespace Test
         public string externalId { get; set; }
         public TimeseriesUpdate update { get; set; }
     }
-    public class Identity
+    public class CdfIdentity
     {
         public string externalId { get; set; }
     }
     public class IdentityListWrapper
     {
-        public IEnumerable<Identity> items { get; set; }
+        public IEnumerable<CdfIdentity> items { get; set; }
         public bool ignoreUnknownIds { get; set; }
     }
     public class ErrorContent
     {
         public int code { get; set; }
         public string message { get; set; }
-        public IEnumerable<Identity> missing { get; set; }
-        public IEnumerable<Identity> duplicated { get; set; } = new List<Identity>();
+        public IEnumerable<CdfIdentity> missing { get; set; }
+        public IEnumerable<CdfIdentity> duplicated { get; set; } = new List<CdfIdentity>();
     }
     public class ErrorWrapper
     {

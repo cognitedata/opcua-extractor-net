@@ -29,6 +29,7 @@ using Serilog;
 using Cognite.Extractor.Utils;
 using TimeRange = Cognite.Extractor.Common.TimeRange;
 using System.Text.Json;
+using Cognite.Extensions;
 
 namespace Cognite.OpcUa.Pushers
 {
@@ -180,12 +181,17 @@ namespace Cognite.OpcUa.Pushers
 
             try
             {
-                await destination.EnsureEventsExistsAsync(eventList
+                var result = await destination.EnsureEventsExistsAsync(eventList
                     .Select(evt => PusherUtils.EventToCDFEvent(evt, Extractor, config.DataSetId, nodeToAssetIds))
-                    .Where(evt => evt != null), true, token);
+                    .Where(evt => evt != null), RetryMode.OnError, SanitationMode.Clean, token);
                 eventCounter.Inc(count);
                 eventPushCounter.Inc();
                 log.Debug("Successfully pushed {count} events to CDF", count);
+
+                var skipped = result.Errors.Aggregate(0, (seed, err) =>
+                    seed + (err.Skipped?.Count() ?? 0));
+
+                skippedEvents.Inc(skipped);
             }
             catch (Exception exc)
             {
@@ -425,12 +431,12 @@ namespace Cognite.OpcUa.Pushers
                         return assets
                             .Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId, metaMap))
                             .Where(asset => asset != null);
-                    }, token);
-                    foreach (var asset in assetChunk)
+                    }, RetryMode.None, SanitationMode.Clean, token);
+                    foreach (var asset in assetChunk.Results)
                     {
                         nodeToAssetIds[assetIds[asset.ExternalId].Id] = asset.Id;
                     }
-                    assets.AddRange(assetChunk);
+                    assets.AddRange(assetChunk.Results);
                 }
                 
                 if (update.AnyUpdate)
@@ -509,10 +515,12 @@ namespace Cognite.OpcUa.Pushers
                 }
                 return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, metaMap, useRawTimeseries))
                     .Where(ts => ts != null);
-            }, token);
+            }, RetryMode.None, SanitationMode.Clean, token);
+
+
 
             var foundBadTimeseries = new List<string>();
-            foreach (var ts in timeseries)
+            foreach (var ts in timeseries.Results)
             {
                 var loc = tsIds[ts.ExternalId];
                 if (nodeToAssetIds.TryGetValue(loc.ParentId, out var parentId))
@@ -533,51 +541,18 @@ namespace Cognite.OpcUa.Pushers
             if (update.AnyUpdate && !useRawTimeseries)
             {
                 var updates = new List<TimeSeriesUpdateItem>();
-                var existing = timeseries.ToDictionary(asset => asset.ExternalId);
+                var existing = timeseries.Results.ToDictionary(asset => asset.ExternalId);
                 foreach (var kvp in tsIds)
                 {
                     if (existing.TryGetValue(kvp.Key, out var ts))
                     {
-                        var tsUpdate = new TimeSeriesUpdate();
-                        if (update.Context)
-                        {
-                            if (kvp.Value.ParentId != null && !kvp.Value.ParentId.IsNullNodeId
-                                && nodeToAssetIds.TryGetValue(kvp.Value.ParentId, out long assetId))
-                            {
-                                if (assetId != ts.AssetId && assetId > 0)
-                                {
-                                    tsUpdate.AssetId = new UpdateNullable<long?>(assetId);
-                                }
-                            }
-                        }
-
-                        if (update.Description && !string.IsNullOrEmpty(kvp.Value.Description) && kvp.Value.Description != ts.Description)
-                            tsUpdate.Description = new UpdateNullable<string>(kvp.Value.Description);
-
-                        if (update.Name && !string.IsNullOrEmpty(kvp.Value.DisplayName) && kvp.Value.DisplayName != ts.Name)
-                            tsUpdate.Name = new UpdateNullable<string>(kvp.Value.DisplayName);
-
-                        var extra = Extractor.DataTypeManager.GetAdditionalMetadata(kvp.Value);
-                        if (update.Metadata && kvp.Value.Properties != null && kvp.Value.Properties.Any()
-                            || (extra?.Any() ?? false))
-                        {
-                            var newMetaData = PusherUtils.PropertiesToMetadata(kvp.Value.Properties, extra)
-                                .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
-                                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                            if (ts.Metadata == null
-                                || newMetaData.Any(meta => !ts.Metadata.ContainsKey(meta.Key) || ts.Metadata[meta.Key] != meta.Value))
-                            {
-                                tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
-                            }
-                        }
+                        var tsUpdate = PusherUtils.GetTSUpdate(ts, kvp.Value, update, nodeToAssetIds,
+                            Extractor.DataTypeManager.GetAdditionalMetadata(kvp.Value));
+                        if (tsUpdate == null) continue;
                         if (tsUpdate.AssetId != null || tsUpdate.Description != null
                             || tsUpdate.Name != null || tsUpdate.Metadata != null)
                         {
-                            updates.Add(
-                                new TimeSeriesUpdateItem(ts.ExternalId)
-                                {
-                                    Update = tsUpdate
-                                });
+                            updates.Add(new TimeSeriesUpdateItem(ts.ExternalId) { Update = tsUpdate });
                         }
                     }
                 }

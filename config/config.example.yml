@@ -136,8 +136,18 @@ cognite:
         tenant:
         # Client secret
         secret:
-        # Resource scope
-        scope:
+        # List of resource scopes, ex:
+        # scopes:
+        #   - scopeA
+        #   - scopeB
+        scopes:
+        # Which implementation to use in the authenticator. One of
+        # MSAL (recommended) - Microsoft Authentication Library
+        # Basic - Post to authentication endpoint and parse JSON response
+        # Default is MSAL
+        implementation: MSAL
+        # Identity provider authority endpoint (optional)
+        authority: "https://login.microsoftonline.com/"
         # Minimum time-to-live in seconds for the token (optional)
         min-ttl: 30
     # Configure automatic retries on requests to CDF. Can be left out to keep default values.

@@ -18,7 +18,7 @@ namespace OpcUaService
     public static class ExtractorServiceStarter
     {
         private static CancellationTokenSource _sourceProgram;
-        private static bool _isRunning = false;
+        private static bool _isRunning;
         private static FullConfig _config;
 
         private static ILogger _log;

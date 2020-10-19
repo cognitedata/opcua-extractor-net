@@ -21,6 +21,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using Cognite.Extensions;
 using Cognite.Extractor.Utils;
 using Opc.Ua;
 
@@ -50,7 +51,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// True if the properties of this object has been read.
         /// </summary>
-        public bool PropertiesRead { get; set; } = false;
+        public bool PropertiesRead { get; set; }
         /// <summary>
         /// Description in OPC-UA
         /// </summary>
@@ -184,7 +185,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// True if attributes have been read from OPC-UA for this variable
         /// </summary>
-        public bool DataRead { get; set; } = false;
+        public bool DataRead { get; set; }
         public override string ToDebugDescription()
         {
             string propertyString = "properties: {" + (Properties != null && Properties.Any() ? "\n" : "");
