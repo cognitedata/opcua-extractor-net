@@ -321,11 +321,11 @@ namespace Test
                 ServerName = ServerName.Events,
                 ConfigName = ConfigName.Events,
                 InfluxOverride = true,
-                Builder = (cfg, pusher, client) =>
+                Builder = (cfg, pusher, client, source) =>
                 {
                     var pushers = pusher.Append(new InfluxPusher(cfg.Influx));
 
-                    return new UAExtractor(cfg, pushers, client, null);
+                    return new UAExtractor(cfg, pushers, client, null, source.Token);
                 }
             });
             tester.Config.History.EventChunk = 100;

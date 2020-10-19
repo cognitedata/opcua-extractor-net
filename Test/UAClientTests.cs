@@ -16,10 +16,12 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cognite.OpcUa;
+using Opc.Ua;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -167,7 +169,7 @@ namespace Test
             await tester.TerminateRunTask(ex =>
                 ex is ExtractorFailureException || ex is AggregateException aex && aex.InnerException is ExtractorFailureException);
         }
-        [Trait("Server", "custom")]
+        [Trait("Server", "wrong")]
         [Trait("Target", "UAExtractor")]
         [Trait("Test", "arraysizemismatch")]
         [Fact]
@@ -217,6 +219,55 @@ namespace Test
                 && CommonTestUtils.TestMetricValue("opcua_array_points_missed", 5), 10);
             Assert.False(tester.Handler.Datapoints.ContainsKey("gp.tl:i=3[0]"));
         }
+        [Trait("Server", "wrong")]
+        [Trait("Target", "UAExtractor")]
+        [Trait("Test", "updatenullproperty")]
+        [Fact]
+        public async Task TestUpdateNullPropertyValue()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Wrong
+            });
+            await tester.ClearPersistentData();
+            await tester.StartServer();
+
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+            tester.Config.Extraction.Update = new UpdateConfig
+            {
+                Objects = new TypeUpdateConfig
+                {
+                    Metadata = true
+                },
+                Variables = new TypeUpdateConfig
+                {
+                    Metadata = true
+                }
+            };
+
+            tester.StartExtractor();
+
+            await tester.Extractor.WaitForSubscriptions();
+
+            Assert.True(string.IsNullOrEmpty(tester.Handler.Assets["gp.tl:i=2"].metadata["TooLargeDim"]));
+
+            await tester.Extractor.Rebrowse();
+
+            Assert.True(string.IsNullOrEmpty(tester.Handler.Assets["gp.tl:i=2"].metadata["TooLargeDim"]));
+
+            tester.Server.Server.MutateNode(tester.Server.Ids.Wrong.TooLargeProp, state =>
+            {
+                var varState = state as PropertyState;
+                varState.ArrayDimensions = new ReadOnlyList<uint>(new List<uint> { 5 });
+                varState.Value = Enumerable.Range(0, 5).ToArray();
+            });
+
+            await tester.Extractor.Rebrowse();
+
+            Assert.Equal("[0, 1, 2, 3, 4]", tester.Handler.Assets["gp.tl:i=2"].metadata["TooLargeDim"]);
+
+            await tester.TerminateRunTask();
+        }
 
         [Trait("Server", "custom")]
         [Trait("Target", "UAClient")]
@@ -227,10 +278,10 @@ namespace Test
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
                 ServerName = ServerName.Array,
-                Builder = (config, pushers, client) =>
+                Builder = (config, pushers, client, source) =>
                 {
                     config.Extraction.PropertyNameFilter = "ble Strin|ble Arr";
-                    return new UAExtractor(config, pushers, client, null);
+                    return new UAExtractor(config, pushers, client, null, source.Token);
                 },
                 QuitAfterMap = true
             });

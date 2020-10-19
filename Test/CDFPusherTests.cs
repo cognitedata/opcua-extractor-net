@@ -98,9 +98,9 @@ namespace Test
         public async Task TestDebugMode()
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters(){
-                Builder = (config, pushers, client) =>
+                Builder = (config, pushers, client, source) =>
                 {
-                    return new UAExtractor(config, pushers.Append(config.Influx.ToPusher(null)).Append(config.Mqtt.ToPusher(null)), client, null);
+                    return new UAExtractor(config, pushers.Append(config.Influx.ToPusher(null)).Append(config.Mqtt.ToPusher(null)), client, null, source.Token);
                 }
             });
             await tester.ClearPersistentData();
@@ -726,7 +726,7 @@ namespace Test
 
             tester.Server.ModifyCustomServer();
 
-            var rebrowseTask = tester.Extractor.Rebrowse(tester.Source.Token);
+            var rebrowseTask = tester.Extractor.Rebrowse();
             await Task.WhenAny(rebrowseTask, Task.Delay(10000));
             Assert.True(rebrowseTask.IsCompleted);
 
@@ -784,7 +784,7 @@ namespace Test
 
             tester.Server.ModifyCustomServer();
 
-            await tester.Extractor.Rebrowse(tester.Source.Token);
+            await tester.Extractor.Rebrowse();
 
             CommonTestUtils.VerifyStartingConditions(tester.Handler.AssetRaw, tester.Handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, true);

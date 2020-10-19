@@ -50,9 +50,9 @@ namespace Cognite.OpcUa
         /// Start the extractor. This creates pushers and tests their connection
         /// </summary>
         /// <param name="source">CancellationTokenSource used to create tokens and terminate the run-task on failure</param>
-        public async Task Run(CancellationTokenSource source)
+        public async Task Run(CancellationToken token)
         {
-            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (token == null) throw new ArgumentNullException(nameof(token));
 
             var client = new UAClient(config);
             var pushers = new List<IPusher>();
@@ -72,7 +72,7 @@ namespace Cognite.OpcUa
 
             await Task.WhenAll(pushers.Select(async pusher =>
             {
-                var res = await pusher.TestConnection(config, source.Token);
+                var res = await pusher.TestConnection(config, token);
                 if (!(res ?? false))
                 {
                     pusher.NoInit = true;
@@ -80,12 +80,11 @@ namespace Cognite.OpcUa
             }));
 
             log.Information("Building extractor");
-            using var extractor = new UAExtractor(config, pushers, client, provider.GetService<IExtractionStateStore>());
+            using var extractor = new UAExtractor(config, pushers, client, provider.GetService<IExtractionStateStore>(), token);
 
             try
             {
-                await extractor.RunExtractor(source.Token);
-                source.Cancel();
+                await extractor.RunExtractor();
             }
             catch
             {
@@ -94,7 +93,6 @@ namespace Cognite.OpcUa
             }
             finally
             {
-                source.Cancel();
                 foreach (var pusher in pushers)
                 {
                     pusher.Dispose();

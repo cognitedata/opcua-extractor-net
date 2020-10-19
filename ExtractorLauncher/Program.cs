@@ -170,91 +170,86 @@ namespace Cognite.OpcUa
 
             int waitRepeats = 0;
 
-            using var manualSource = new CancellationTokenSource();
-            CancellationTokenSource source = null;
-            using (var quitEvent = new ManualResetEvent(false))
+            using var source = new CancellationTokenSource();
+            using var quitEvent = new ManualResetEvent(false);
+            bool canceled = false;
+            Console.CancelKeyPress += (sender, eArgs) =>
             {
-                bool canceled = false;
-                Console.CancelKeyPress += (sender, eArgs) =>
+                quitEvent?.Set();
+                eArgs.Cancel = true;
+                source?.Cancel();
+                canceled = true;
+            };
+            while (true)
+            {
+                if (canceled)
                 {
-                    quitEvent?.Set();
-                    eArgs.Cancel = true;
-                    source?.Cancel();
-                    canceled = true;
-                    manualSource?.Cancel();
-                };
-                while (true)
+                    log.Warning("Extractor stopped manually");
+                    break;
+                }
+
+                DateTime startTime = DateTime.UtcNow;
+                try
                 {
-                    using (source = new CancellationTokenSource())
+                    log.Information("Starting extractor");
+                    runTime.Run(source.Token).Wait();
+                    log.Information("Extractor closed without error");
+                }
+                catch (TaskCanceledException)
+                {
+                    log.Warning("Extractor stopped manually");
+                    break;
+                }
+                catch (AggregateException aex)
+                {
+                    if (ExtractorUtils.GetRootExceptionOfType<ConfigurationException>(aex) != null)
                     {
-                        if (canceled)
-                        {
-                            log.Warning("Extractor stopped manually");
-                            break;
-                        }
-
-                        DateTime startTime = DateTime.UtcNow;
-                        try
-                        {
-                            log.Information("Starting extractor");
-                            runTime.Run(source).Wait();
-                            log.Information("Extractor closed without error");
-                        }
-                        catch (TaskCanceledException)
-                        {
-                            log.Warning("Extractor stopped manually");
-                            break;
-                        }
-                        catch (AggregateException aex)
-                        {
-                            if (ExtractorUtils.GetRootExceptionOfType<ConfigurationException>(aex) != null)
-                            {
-                                log.Error("Invalid configuration, stopping");
-                                break;
-                            }
-                            if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) != null)
-                            {
-                                log.Warning("Extractor stopped manually");
-                                break;
-                            }
-                            log.Error(aex, "Extractor crashed");
-                        }
-                        catch (ConfigurationException)
-                        {
-                            log.Error("Invalid configuration, stopping");
-                            break;
-                        }
-                        catch
-                        {
-                            log.Error("Extractor crashed, restarting");
-                        }
-
-                        if (config.Source.ExitOnFailure)
-                        {
-                            break;
-                        }
-
-                        if (startTime > DateTime.UtcNow - TimeSpan.FromSeconds(600))
-                        {
-                            waitRepeats++;
-                        }
-                        else
-                        {
-                            waitRepeats = 0;
-                        }
-
-                        try
-                        {
-                            var sleepTime = TimeSpan.FromSeconds(Math.Pow(2, Math.Min(waitRepeats, 9)));
-                            log.Information("Sleeping for {time}", sleepTime);
-                            Task.Delay(sleepTime, manualSource.Token).Wait();
-                        }
-                        catch (TaskCanceledException)
-                        {
-                            log.Warning("Extractor stopped manually");
-                            break;
-                        }
+                        log.Error("Invalid configuration, stopping");
+                        break;
                     }
+                    if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) != null)
+                    {
+                        log.Warning("Extractor stopped manually");
+                        break;
+                    }
+                    log.Error(aex, "Extractor crashed");
+                }
+                catch (ConfigurationException)
+                {
+                    log.Error("Invalid configuration, stopping");
+                    break;
+                }
+                catch
+                {
+                    log.Error("Extractor crashed, restarting");
+                }
+
+                if (config.Source.ExitOnFailure)
+                {
+                    break;
+                }
+
+                if (startTime > DateTime.UtcNow - TimeSpan.FromSeconds(600))
+                {
+                    waitRepeats++;
+                }
+                else
+                {
+                    waitRepeats = 0;
+                }
+
+                if (source.IsCancellationRequested) break;
+
+                try
+                {
+                    var sleepTime = TimeSpan.FromSeconds(Math.Pow(2, Math.Min(waitRepeats, 9)));
+                    log.Information("Sleeping for {time}", sleepTime);
+                    Task.Delay(sleepTime, source.Token).Wait();
+                }
+                catch (TaskCanceledException)
+                {
+                    log.Warning("Extractor stopped manually");
+                    break;
                 }
             }
             Log.CloseAndFlush();

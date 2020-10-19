@@ -252,7 +252,7 @@ namespace Cognite.OpcUa.Pushers
 
             }
             if (!objects.Any() && !variables.Any()) return true;
-            await Extractor.ReadProperties(objects.Concat(variables), token);
+            await Extractor.ReadProperties(objects.Concat(variables));
 
             log.Information("Pushing {cnt} assets and {cnt2} timeseries over MQTT", objects.Count(), variables.Count());
 

@@ -131,13 +131,16 @@ namespace Cognite.OpcUa
             {
                 var oldProperties = old.Properties == null
                     ? new Dictionary<string, BufferedDataPoint>()
-                    : old.Properties.ToDictionary(prop => prop.DisplayName, prop => prop.Value);
+                    : old.Properties.Where(prop => prop.DisplayName != null).ToDictionary(prop => prop.DisplayName, prop => prop.Value);
                 Changed = Properties != null && Properties.Any(prop =>
                 {
+                    if (prop.DisplayName == null) return false;
+                    if (prop.Value == null) return false;
+                    if (string.IsNullOrWhiteSpace(prop.Value.StringValue) && prop.Value.DoubleValue == null) return false;
                     if (!oldProperties.TryGetValue(prop.DisplayName, out var oldProp)) return true;
-                    return oldProp.IsString && oldProp.StringValue != prop.Value.StringValue
-                        && !string.IsNullOrWhiteSpace(oldProp.StringValue)
-                        || !oldProp.IsString && oldProp.DoubleValue != prop.Value.DoubleValue;
+                    if (oldProp == null) return true;
+                    return prop.Value.IsString && oldProp.StringValue != prop.Value.StringValue
+                        || !prop.Value.IsString && oldProp.DoubleValue != prop.Value.DoubleValue;
                 });
                 if (dataTypeMetadata
                     && old is BufferedVariable oldVariable && this is BufferedVariable variable

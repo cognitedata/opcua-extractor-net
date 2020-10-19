@@ -238,7 +238,7 @@ namespace Test
             tester.Server.ModifyCustomServer();
 
             waitTask = tester.Bridge.WaitForNextMessage();
-            var rebrowseTask = tester.Extractor.Rebrowse(tester.Source.Token);
+            var rebrowseTask = tester.Extractor.Rebrowse();
             await Task.WhenAny(rebrowseTask, Task.Delay(10000));
             Assert.True(rebrowseTask.IsCompleted);
             await waitTask;
@@ -302,7 +302,7 @@ namespace Test
             tester.Server.ModifyCustomServer();
 
             waitTask = tester.Bridge.WaitForNextMessage();
-            await tester.Extractor.Rebrowse(tester.Source.Token);
+            await tester.Extractor.Rebrowse();
             await waitTask;
             await Task.Delay(200);
 

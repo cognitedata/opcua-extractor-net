@@ -245,12 +245,14 @@ namespace Cognite.OpcUa
                 try
                 {
                     Session.Close();
-                    Extractor?.QuitExtractorInternally();
                 }
                 catch
                 {
-                    log.Warning("Client failed to close");
-                    Extractor?.QuitExtractorInternally();
+                    log.Warning("Client failed to close, quitting");
+                }
+                finally
+                {
+                    Extractor?.Close();
                 }
             }
         }

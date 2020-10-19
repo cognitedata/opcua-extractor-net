@@ -82,7 +82,7 @@ namespace OpcUaService
             try
             {
                 _log.Information("Starting extractor");
-                runTime.Run(_sourceProgram).Wait();
+                runTime.Run(_sourceProgram.Token).Wait();
             }
             catch (TaskCanceledException)
             {
