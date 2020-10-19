@@ -748,13 +748,16 @@ namespace Test
             await WaitForCondition(condition, seconds, () => assertion);
         }
 
-        public async Task TerminateRunTask(Func<Exception, bool> testResult = null)
+        public async Task TerminateRunTask(bool waitForPush, Func<Exception, bool> testResult = null)
         {
             if (RunTask == null) throw new FatalException("Run task is not started");
+
             if (!testParams.QuitAfterMap)
             {
-                await Extractor.Looper.WaitForNextPush();
-                await Task.Delay(100);
+                if (waitForPush)
+                {
+                    await Extractor.Looper.WaitForNextPush();
+                }
                 Extractor.Close();
             }
             try

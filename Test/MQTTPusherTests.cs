@@ -47,7 +47,7 @@ namespace Test
             await tester.Extractor.Looper.WaitForNextPush();
             await waitTask;
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             Assert.Equal(7, tester.Handler.Assets.Count);
             Assert.Equal(16, tester.Handler.Timeseries.Count);
@@ -86,7 +86,7 @@ namespace Test
 
             await tester.WaitForCondition(() => tester.Handler.Events.Count >= 7, 10);
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             var eventTypes = tester.Handler.Events.Select(evt => evt.Value.type).Distinct();
             Assert.Equal(3, eventTypes.Count());
@@ -139,7 +139,7 @@ namespace Test
             await tester.Extractor.Looper.WaitForNextPush();
             await waitTask;
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 0));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 0));
@@ -181,7 +181,7 @@ namespace Test
             await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=2[0]")
                 && tester.Handler.Datapoints["gp.tl:i=2[0]"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count() == 1000, 10);
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 7));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 16));

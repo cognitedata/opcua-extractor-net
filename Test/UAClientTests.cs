@@ -49,7 +49,7 @@ namespace Test
 
             await tester.WaitForCondition(() => tester.RunTask.IsFaulted, 20, "Expected run task to fail");
 
-            await tester.TerminateRunTask(e =>
+            await tester.TerminateRunTask(false, e =>
             {
                 SilentServiceException silent = null;
                 if (e is SilentServiceException silentEx)
@@ -88,7 +88,7 @@ namespace Test
             await tester.WaitForCondition(() => (int)CommonTestUtils.GetMetricValue("opcua_history_reads") == expectedReads, 20,
                 () => $"Expected history to be read {expectedReads} times, got {CommonTestUtils.GetMetricValue("opcua_history_reads")}");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
         }
         [Trait("Server", "basic")]
         [Trait("Target", "UAClient")]
@@ -129,7 +129,7 @@ namespace Test
             await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
                 "Excpected client to reconnect");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
             CommonTestUtils.StopProxyProcess();
         }
         [Trait("Server", "basic")]
@@ -166,8 +166,8 @@ namespace Test
 
             await tester.WaitForCondition(() => tester.RunTask.IsCompleted, 20, "Expected runtask to terminate");
 
-            await tester.TerminateRunTask(ex =>
-                ex is ExtractorFailureException || ex is AggregateException aex && aex.InnerException is ExtractorFailureException);
+            await tester.TerminateRunTask(false, ex =>
+                ex is TaskCanceledException || ex is AggregateException aex && aex.InnerException is TaskCanceledException);
         }
         [Trait("Server", "wrong")]
         [Trait("Target", "UAExtractor")]
@@ -266,7 +266,7 @@ namespace Test
 
             Assert.Equal("[0, 1, 2, 3, 4]", tester.Handler.Assets["gp.tl:i=2"].metadata["TooLargeDim"]);
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
         }
 
         [Trait("Server", "custom")]
@@ -293,7 +293,7 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
 
             var asset = Assert.Single(tester.Handler.Assets.Values, x => x.name == "CustomRoot");
 
