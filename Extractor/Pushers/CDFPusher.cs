@@ -184,13 +184,21 @@ namespace Cognite.OpcUa.Pushers
                 var result = await destination.EnsureEventsExistsAsync(eventList
                     .Select(evt => PusherUtils.EventToCDFEvent(evt, Extractor, config.DataSetId, nodeToAssetIds))
                     .Where(evt => evt != null), RetryMode.OnError, SanitationMode.Clean, token);
-                eventCounter.Inc(count);
-                eventPushCounter.Inc();
-                log.Debug("Successfully pushed {count} events to CDF", count);
 
                 var skipped = result.Errors.Aggregate(0, (seed, err) =>
                     seed + (err.Skipped?.Count() ?? 0));
 
+                var fatalError = result.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
+                if (fatalError != null)
+                {
+                    log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", count, fatalError.Exception.Message);
+                    eventPushFailures.Inc();
+                    return fatalError.Exception is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
+                }
+
+                eventCounter.Inc(count - skipped);
+                eventPushCounter.Inc();
+                log.Debug("Successfully pushed {count} events to CDF", count - skipped);
                 skippedEvents.Inc(skipped);
             }
             catch (Exception exc)
@@ -432,6 +440,10 @@ namespace Cognite.OpcUa.Pushers
                             .Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId, metaMap))
                             .Where(asset => asset != null);
                     }, RetryMode.None, SanitationMode.Clean, token);
+
+                    var fatalError = assetChunk.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
+                    if (fatalError != null) throw fatalError.Exception;
+
                     foreach (var asset in assetChunk.Results)
                     {
                         nodeToAssetIds[assetIds[asset.ExternalId].Id] = asset.Id;
@@ -517,6 +529,8 @@ namespace Cognite.OpcUa.Pushers
                     .Where(ts => ts != null);
             }, RetryMode.None, SanitationMode.Clean, token);
 
+            var fatalError = timeseries.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
+            if (fatalError != null) throw fatalError.Exception;
 
 
             var foundBadTimeseries = new List<string>();

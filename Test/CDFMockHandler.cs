@@ -531,6 +531,7 @@ namespace Test
             }
             foreach ((string id, var eventDummy) in created)
             {
+                log.Information(id);
                 Events.Add(id, eventDummy);
             }
             string result = JsonConvert.SerializeObject(newEvents);
