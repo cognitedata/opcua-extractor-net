@@ -47,6 +47,7 @@ namespace Test
 
         public Dictionary<string, AssetDummy> AssetRaw { get; } = new Dictionary<string, AssetDummy>();
         public Dictionary<string, StatelessTimeseriesDummy> TimeseriesRaw { get; } = new Dictionary<string, StatelessTimeseriesDummy>();
+        public Dictionary<string, RelationshipDummy> Relationships { get; } = new Dictionary<string, RelationshipDummy>();
 
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
@@ -173,6 +174,9 @@ namespace Test
                             res = req.Method == HttpMethod.Get
                                 ? HandleGetRawTimeseries()
                                 : HandleCreateRawTimeseries(content);
+                            break;
+                        case "/relationships":
+                            res = HandleCreateRelationships(content);
                             break;
                         default:
                             log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
@@ -855,6 +859,51 @@ namespace Test
             Timeseries.Add(externalId, ts);
             return ts;
         }
+
+        private HttpResponseMessage HandleCreateRelationships(string content)
+        {
+            var newRelationships = JsonConvert.DeserializeObject<RelationshipsReadWrapper>(content);
+
+            var duplicated = new List<CdfIdentity>();
+            var created = new List<(string Id, RelationshipDummy Rel)>();
+            foreach (var rel in newRelationships.items)
+            {
+                if (Relationships.ContainsKey(rel.externalId) || created.Any(ct => ct.Id == rel.externalId))
+                {
+                    duplicated.Add(new CdfIdentity { externalId = rel.externalId });
+                    continue;
+                }
+                if (duplicated.Any()) continue;
+                rel.createdTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+                rel.lastUpdatedTime = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+                created.Add((rel.externalId, rel));
+            }
+            if (duplicated.Any())
+            {
+                string errResult = JsonConvert.SerializeObject(new ErrorWrapper
+                {
+                    error = new ErrorContent
+                    {
+                        duplicated = duplicated,
+                        code = 409,
+                        message = "duplicated"
+                    }
+                });
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                {
+                    Content = new StringContent(errResult)
+                };
+            }
+            foreach ((string id, var relDummy) in created)
+            {
+                Relationships.Add(id, relDummy);
+            }
+            string result = JsonConvert.SerializeObject(newRelationships);
+            return new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent(result)
+            };
+        }
     }
     public class AssetDummy
     {
@@ -1043,6 +1092,20 @@ namespace Test
         {
             return await _sendAsync(request, cancellationToken);
         }
+    }
+    public class RelationshipDummy
+    {
+        public string externalId { get; set; }
+        public string sourceExternalId { get; set; }
+        public string sourceType { get; set; }
+        public string targetExternalId { get; set; }
+        public string targetType { get; set; }
+        public long createdTime { get; set; }
+        public long lastUpdatedTime { get; set; }
+    }
+    public class RelationshipsReadWrapper
+    {
+        public IEnumerable<RelationshipDummy> items { get; set; }
     }
 }
 #pragma warning restore IDE1006 // Naming Styles

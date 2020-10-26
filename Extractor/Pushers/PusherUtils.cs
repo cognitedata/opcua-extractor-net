@@ -395,7 +395,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 DataSetId = dataSetId,
                 SourceExternalId = extractor.GetUniqueId(reference.Source.Id),
-                TargetExternalId = extractor.GetUniqueId(reference.Source.Id),
+                TargetExternalId = extractor.GetUniqueId(reference.Target.Id),
                 SourceType = GetVertexType(reference.Source),
                 TargetType = GetVertexType(reference.Target),
                 ExternalId = extractor.GetRelationshipId(reference)

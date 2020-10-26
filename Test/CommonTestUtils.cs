@@ -580,6 +580,11 @@ namespace Test
                 Config.FailureBuffer.InfluxStateStore = testParams.StateInflux;
             }
 
+            if (testParams.References)
+            {
+                Config.Extraction.Relationships.Enabled = true;
+            }
+
 
             switch (testParams.Pusher)
             {
@@ -934,5 +939,6 @@ namespace Test
         public bool MqttState { get; set; }
         public string DataBufferPath { get; set; }
         public string EventBufferPath { get; set; }
+        public bool References { get; set; }
     }
 }

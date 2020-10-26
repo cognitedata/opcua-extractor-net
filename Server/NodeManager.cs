@@ -564,13 +564,33 @@ namespace Server
                 enumVar3.Value = new[] { 123, 123, 321, 123 };
                 AddNodeRelation(enumVar3, root, ReferenceTypeIds.HasComponent);
 
+                // Custom references
+                var refType1 = CreateReferenceType("HasCustomRelation", "IsCustomRelationOf",
+                    ReferenceTypeIds.NonHierarchicalReferences, externalReferences);
+                var refType2 = CreateReferenceType("HasSymmetricRelation", null,
+                    ReferenceTypeIds.NonHierarchicalReferences, externalReferences);
 
+                // object, array (asset-asset)
+                AddNodeRelation(root, myarray, refType1.NodeId);
+                // array, array (asset-asset)
+                AddNodeRelation(myarray, mystrarray, refType2.NodeId);
+                // object, variable (asset-timeseries)
+                AddNodeRelation(root, stringyVar, refType1.NodeId);
+                // variable, variable (timeseries-timeseries)
+                AddNodeRelation(numberVar, stringyVar, refType2.NodeId);
+                // variable, ignored (asset-none, ignored)
+                AddNodeRelation(stringyVar, ignoreVar, refType2.NodeId);
+
+                AddTypesToTypeTree(refType1);
+                AddTypesToTypeTree(refType2);
+
+                log.Information("Type: {id}, {isnon}", refType1.NodeId, SystemContext.TypeTable.IsTypeOf(refType1.NodeId, ReferenceTypeIds.NonHierarchicalReferences));
                 store.AddHistorizingNode(myarray);
                 store.AddHistorizingNode(numberVar);
 
                 AddPredefinedNodes(SystemContext, root, myarray, mystrarray, stringyType, ignoreType, numberType, numberType2, stringyVar,
                     ignoreVar, numberVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2, arrprop, arrprop2,
-                    enumType1, enumType2, enumProp1, enumProp2, enumVar1, enumVar2, enumVar3);
+                    enumType1, enumType2, enumProp1, enumProp2, enumVar1, enumVar2, enumVar3, refType1, refType2);
 
                 Ids.Custom.Root = root.NodeId;
                 Ids.Custom.Array = myarray.NodeId;
@@ -594,6 +614,8 @@ namespace Server
                 Ids.Custom.EnumVar1 = enumVar1.NodeId;
                 Ids.Custom.EnumVar2 = enumVar2.NodeId;
                 Ids.Custom.EnumVar3 = enumVar3.NodeId;
+                Ids.Custom.RefType1 = refType1.NodeId;
+                Ids.Custom.RefType2 = refType2.NodeId;
             }
         }
         
@@ -822,6 +844,29 @@ namespace Server
                 BrowseName = new QualifiedName(name, NamespaceIndex)
             };
             type.DisplayName = type.BrowseName.Name;
+            if (!externalReferences.TryGetValue(parent, out var references))
+            {
+                externalReferences[parent] = references = new List<IReference>();
+            }
+
+            type.AddReference(ReferenceTypeIds.HasSubtype, true, parent);
+            references.Add(new NodeStateReference(ReferenceTypeIds.HasSubtype, false, type.NodeId));
+
+            return type;
+        }
+
+        private ReferenceTypeState CreateReferenceType(string name, string inverseName,
+            NodeId parent, IDictionary<NodeId, IList<IReference>> externalReferences)
+        {
+            var type = new ReferenceTypeState
+            {
+                NodeId = GenerateNodeId(),
+                BrowseName = new QualifiedName(name, NamespaceIndex),
+                DisplayName = name,
+                InverseName = inverseName,
+                Symmetric = inverseName == null,
+                SuperTypeId = parent
+            };
             if (!externalReferences.TryGetValue(parent, out var references))
             {
                 externalReferences[parent] = references = new List<IReference>();
@@ -1315,6 +1360,8 @@ namespace Server
         public NodeId EnumVar1 { get; set; }
         public NodeId EnumVar2 { get; set; }
         public NodeId EnumVar3 { get; set; }
+        public NodeId RefType1 { get; set; }
+        public NodeId RefType2 { get; set; }
     }
 
     public class EventNodeReference
