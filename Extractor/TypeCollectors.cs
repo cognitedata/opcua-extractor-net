@@ -530,6 +530,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public class ReferenceTypeManager
     {
+        private ILogger log = Log.Logger.ForContext<ReferenceTypeManager>();
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly Dictionary<NodeId, BufferedReferenceType> mappedTypes = new Dictionary<NodeId, BufferedReferenceType>();
@@ -552,6 +553,7 @@ namespace Cognite.OpcUa
         public async Task GetReferenceTypeDataAsync(CancellationToken token)
         {
             var toRead = mappedTypes.Values.Where(type => !type.HasName && !type.Id.IsNullNodeId).ToList();
+            log.Information("Get reference type metadata for {cnt} types", toRead.Count);
             if (!toRead.Any()) return;
 
             var readValueIds = toRead.SelectMany(type => new[] {
@@ -577,6 +579,7 @@ namespace Cognite.OpcUa
 
             // We only care about references to objects or variables, at least for now.
             // Only references between objects represented in the extracted hierarchy are relevant.
+            log.Information("Get extra references from the server");
             var references = await Task.Run(() => uaClient.GetNodeChildren(
                 nodes,
                 referenceTypes,
@@ -597,6 +600,8 @@ namespace Cognite.OpcUa
                     results.Add(new BufferedReference(child, parentNode, childNode, this));
                 }
             }
+
+            log.Information("Found {cnt} extra references", results.Count);
 
             return results;
         }

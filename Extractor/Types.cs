@@ -24,6 +24,7 @@ using System.Linq;
 using Cognite.Extensions;
 using Cognite.Extractor.Utils;
 using Opc.Ua;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -547,6 +548,7 @@ namespace Cognite.OpcUa
         {
             if (desc == null) throw new ArgumentNullException(nameof(desc));
             if (source == null) throw new ArgumentNullException(nameof(source));
+            if (target == null) throw new ArgumentNullException(nameof(target));
             if (manager == null) throw new ArgumentNullException(nameof(manager));
             Type = manager.GetReferenceType(desc.ReferenceTypeId);
             IsForward = desc.IsForward;

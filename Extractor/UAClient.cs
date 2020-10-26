@@ -422,7 +422,7 @@ namespace Cognite.OpcUa
                     IncludeSubtypes = true,
                     NodeClassMask = nodeClassMask,
                     BrowseDirection = direction,
-                    ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
+                    ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName | (uint)BrowseResultMask.IsForward
                         | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition | (uint)BrowseResultMask.BrowseName
                 }
             ));
@@ -458,7 +458,7 @@ namespace Cognite.OpcUa
                 foreach (var result in results)
                 {
                     var nodeId = parents.ElementAt(bindex++);
-                    log.Verbose("GetNodeChildren Browse result {nodeId}", nodeId);
+                    log.Verbose("GetNodeChildren Browse result {nodeId}: {cnt}", nodeId, result.References.Count);
                     finalResults[nodeId] = result.References;
                     if (result.ContinuationPoint != null)
                     {
