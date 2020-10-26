@@ -67,7 +67,7 @@ namespace Test
             log.Information("Testing with MockMode {TestBasicPushingMockMode}", mode.ToString());
             await tester.StartServer();
             tester.StartExtractor();
-            await tester.TerminateRunTask(ex => mode == CDFMockHandler.MockMode.FailAsset || CommonTestUtils.TestRunResult(ex));
+            await tester.TerminateRunTask(true, ex => mode == CDFMockHandler.MockMode.FailAsset || CommonTestUtils.TestRunResult(ex));
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.Equal(mode == CDFMockHandler.MockMode.FailAsset ? 1 : 0, (int)CommonTestUtils.GetMetricValue("opcua_node_ensure_failures_cdf"));
@@ -98,9 +98,9 @@ namespace Test
         public async Task TestDebugMode()
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters(){
-                Builder = (config, pushers, client) =>
+                Builder = (config, pushers, client, source) =>
                 {
-                    return new UAExtractor(config, pushers.Append(config.Influx.ToPusher(null)).Append(config.Mqtt.ToPusher(null)), client, null);
+                    return new UAExtractor(config, pushers.Append(config.Influx.ToPusher(null)).Append(config.Mqtt.ToPusher(null)), client, null, source.Token);
                 }
             });
             await tester.ClearPersistentData();
@@ -115,7 +115,7 @@ namespace Test
 
             await tester.WaitForCondition(() => tester.Extractor.Pushing, 10, "Expected extractor to start pushing");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             Assert.Equal(0, tester.Handler.RequestCount);
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
@@ -160,7 +160,7 @@ namespace Test
                     tester.Handler.Datapoints[arrId].NumericDatapoints.Count > lastData, 20,
                 "Expected data to increase");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
             
             tester.TestContinuity(arrId);
 
@@ -220,7 +220,7 @@ namespace Test
                     && tester.Handler.Datapoints[strId].StringDatapoints.Any(), 20,
                 "Expected to get some data");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             Assert.Equal(1000, tester.Handler.Datapoints[mystId].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count());
 
@@ -266,7 +266,7 @@ namespace Test
             await tester.WaitForCondition(() => tester.Extractor.Started, 20,
                 "Expected extractor to start up after restart");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
         }
         [Fact]
         [Trait("Server", "basic")]
@@ -323,7 +323,7 @@ namespace Test
                 tester.Handler.Datapoints[intVar].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count() == 1010, 5,
                 "Expected to get the next 10 points");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             tester.TestContinuity(intVar);
 
@@ -357,7 +357,7 @@ namespace Test
             await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("Map1"), 20,
                 "Expected the overriden timeseries to create data");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             Assert.True(tester.Handler.Datapoints.ContainsKey("Map1"));
             Assert.True(tester.Handler.Timeseries.ContainsKey("Map1"));
@@ -382,7 +382,7 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             var pusher = tester.Pusher;
 
@@ -461,7 +461,7 @@ namespace Test
 
 
             tester.StartExtractor();
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             var pusher = tester.Pusher;
             Assert.False(tester.Handler.Datapoints.ContainsKey(numId));
@@ -535,7 +535,7 @@ namespace Test
                     && tester.Handler.Datapoints[intVar].NumericDatapoints.Any(pt => pt.Timestamp < startTime), 20,
                 "Expected integer datapoint to finish backfill and frontfill");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             tester.TestContinuity(intVar);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
@@ -591,7 +591,7 @@ namespace Test
                     && !tester.Extractor.State.GetNodeState(intVar).IsFrontfilling, 20,
                 "Expected integer datapoint to finish backfill and frontfill");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 1));
@@ -636,7 +636,7 @@ namespace Test
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 7));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 16));
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
         }
         [Fact]
         [Trait("Server", "array")]
@@ -672,7 +672,7 @@ namespace Test
             await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=2[0]")
                 && tester.Handler.Datapoints["gp.tl:i=2[0]"].NumericDatapoints.DistinctBy(pt => pt.Timestamp).Count() == 1000, 10);
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_assets", 7));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tracked_timeseries", 16));
@@ -726,7 +726,7 @@ namespace Test
 
             tester.Server.ModifyCustomServer();
 
-            var rebrowseTask = tester.Extractor.Rebrowse(tester.Source.Token);
+            var rebrowseTask = tester.Extractor.Rebrowse();
             await Task.WhenAny(rebrowseTask, Task.Delay(10000));
             Assert.True(rebrowseTask.IsCompleted);
 
@@ -784,7 +784,7 @@ namespace Test
 
             tester.Server.ModifyCustomServer();
 
-            await tester.Extractor.Rebrowse(tester.Source.Token);
+            await tester.Extractor.Rebrowse();
 
             CommonTestUtils.VerifyStartingConditions(tester.Handler.AssetRaw, tester.Handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, true);

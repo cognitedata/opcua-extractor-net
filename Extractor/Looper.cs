@@ -35,7 +35,6 @@ namespace Cognite.OpcUa
 
         private bool nextPushFlag;
         private bool restart;
-        private bool quit;
 
         private IEnumerable<Task> tasks;
         private readonly IEnumerable<IPusher> pushers;
@@ -138,7 +137,7 @@ namespace Cognite.OpcUa
                     log.Information("Restarting history");
                     triggerHistoryRestart.Reset();
                     tasks = tasks
-                        .Append(Task.Run(async () => await extractor.RestartHistory(token)))
+                        .Append(Task.Run(async () => await extractor.RestartHistory()))
                         .Append(Task.Run(() => WaitHandle.WaitAny(new[] { triggerHistoryRestart, token.WaitHandle }))).ToList();
                 }
 
@@ -188,7 +187,7 @@ namespace Cognite.OpcUa
 
                         var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);
                         var (nodes, timeseries) = ExtractorUtils.SortNodes(extractor.State.ActiveNodes);
-                        await Task.WhenAll(toInit.Select(pusher => extractor.PushNodes(nodes, timeseries, pusher, true, true, token)));
+                        await Task.WhenAll(toInit.Select(pusher => extractor.PushNodes(nodes, timeseries, pusher, true, true)));
                     }
                     foreach (var pair in recovered)
                     {
@@ -275,7 +274,7 @@ namespace Cognite.OpcUa
                     return;
                 }
 
-                await extractor.Rebrowse(token);
+                await extractor.Rebrowse();
             }
         }
         /// <summary>
@@ -288,22 +287,16 @@ namespace Cognite.OpcUa
                 WaitHandle.WaitAny(new[] { triggerUpdateOperations, token.WaitHandle });
                 if (token.IsCancellationRequested) break;
                 var newTasks = new List<Task>();
-                if (quit)
-                {
-                    log.Warning("Manually quitting extractor due to error in subsystem");
-                    quit = false;
-                    throw new ExtractorFailureException("Manual exit due to error in subsystem");
-                }
 
                 bool restarted = false;
                 if (restart)
                 {
                     restarted = true;
-                    newTasks.Add(extractor.FinishExtractorRestart(token));
+                    newTasks.Add(extractor.FinishExtractorRestart());
                 }
                 else
                 {
-                    newTasks.Add(extractor.PushExtraNodes(token));
+                    newTasks.Add(extractor.PushExtraNodes());
                 }
                 await Task.WhenAll(newTasks);
                 if (restarted)
@@ -319,14 +312,6 @@ namespace Cognite.OpcUa
             triggerHistoryRestart?.Dispose();
             triggerGrowTaskList?.Dispose();
             triggerPush?.Dispose();
-        }
-        /// <summary>
-        /// Schedule quitting the extractor.
-        /// </summary>
-        public void Quit()
-        {
-            quit = true;
-            triggerUpdateOperations.Set();
         }
         /// <summary>
         /// Schedule a restart of the extractor.

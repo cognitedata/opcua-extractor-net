@@ -75,7 +75,7 @@ namespace Test
                        && events.Count == 910;
             }, 10, "Expected remaining event subscriptions to trigger");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             events = tester.Handler.Events.Values.ToList();
 
@@ -129,7 +129,7 @@ namespace Test
             CommonTestUtils.TestEventCollection(events);
             Assert.Equal(910, events.Count);
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             foreach (var ev in events)
             {
@@ -192,7 +192,7 @@ namespace Test
             Assert.Equal(refRoot.id, refTs.assetId);
             Assert.Equal(refRoot.externalId, refAsset.parentExternalId);
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
         }
         [Fact]
         [Trait("Server", "events")]
@@ -240,7 +240,7 @@ namespace Test
             await tester.WaitForCondition(() => tester.Handler.Events.Count == 920, 10,
                 "Expected to receive some events");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             var events = tester.Handler.Events.Values.ToList();
 
@@ -297,7 +297,7 @@ namespace Test
 
             ExtractorTester.TestContinuity(suffixes.ToList());
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             events = tester.Handler.Events.Values.ToList();
 
@@ -321,11 +321,11 @@ namespace Test
                 ServerName = ServerName.Events,
                 ConfigName = ConfigName.Events,
                 InfluxOverride = true,
-                Builder = (cfg, pusher, client) =>
+                Builder = (cfg, pusher, client, source) =>
                 {
                     var pushers = pusher.Append(new InfluxPusher(cfg.Influx));
 
-                    return new UAExtractor(cfg, pushers, client, null);
+                    return new UAExtractor(cfg, pushers, client, null, source.Token);
                 }
             });
             tester.Config.History.EventChunk = 100;
@@ -373,7 +373,7 @@ namespace Test
                     tester.Extractor.State.EmitterStates.All(state => !state.IsBackfilling),
                 20, "Expected backfill to finish");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 1));

@@ -603,11 +603,11 @@ namespace Test
             Source = new CancellationTokenSource();
             if (testParams.Builder != null)
             {
-                Extractor = testParams.Builder(Config, Pushers, UAClient);
+                Extractor = testParams.Builder(Config, Pushers, UAClient, Source);
             }
             else
             {
-                Extractor = new UAExtractor(Config, Pushers, UAClient, provider.GetService<IExtractionStateStore>());
+                Extractor = new UAExtractor(Config, Pushers, UAClient, provider.GetService<IExtractionStateStore>(), Source.Token);
             }
 
             Server = new ServerController(new[] { SetupMap[testParams.ServerName] });
@@ -638,11 +638,11 @@ namespace Test
             Extractor?.Dispose();
             if (testParams.Builder != null)
             {
-                Extractor = testParams.Builder(Config, Pushers, UAClient);
+                Extractor = testParams.Builder(Config, Pushers, UAClient, Source);
             }
             else
             {
-                Extractor = new UAExtractor(Config, Pushers, UAClient, provider.GetService<IExtractionStateStore>());
+                Extractor = new UAExtractor(Config, Pushers, UAClient, provider.GetService<IExtractionStateStore>(), Source.Token);
             }
         }
 
@@ -702,7 +702,7 @@ namespace Test
         }
         public void StartExtractor()
         {
-            RunTask = Extractor.RunExtractor(Source.Token, testParams.QuitAfterMap);
+            RunTask = Extractor.RunExtractor(testParams.QuitAfterMap);
         }
         public async Task WaitForCondition(Func<Task<bool>> condition, int seconds, Func<string> assertion)
         {
@@ -748,21 +748,24 @@ namespace Test
             await WaitForCondition(condition, seconds, () => assertion);
         }
 
-        public async Task TerminateRunTask(Func<Exception, bool> testResult = null)
+        public async Task TerminateRunTask(bool waitForPush, Func<Exception, bool> testResult = null)
         {
             if (RunTask == null) throw new FatalException("Run task is not started");
+
             if (!testParams.QuitAfterMap)
             {
-                await Extractor.Looper.WaitForNextPush();
-                await Task.Delay(100);
-                Source.Cancel();
+                if (waitForPush)
+                {
+                    await Extractor.Looper.WaitForNextPush();
+                }
+                Extractor.Close();
             }
             try
             {
                 await RunTask;
                 if (testParams.QuitAfterMap)
                 {
-                    Source.Cancel();
+                    Extractor.Close();
                 }
             }
             catch (Exception e)
@@ -770,7 +773,6 @@ namespace Test
                 if (testResult != null && !testResult(e)) throw;
                 if (testResult == null && !CommonTestUtils.TestRunResult(e)) throw;
             }
-            Extractor.Close();
             if (Bridge != null)
             {
                 await Bridge.Disconnect();
@@ -871,7 +873,7 @@ namespace Test
         public int? HistoryGranularity { get; set; } = null;
         public bool FailureInflux { get; set; } = false;
         public bool InfluxOverride { get; set; } = false;
-        public Func<FullConfig, IEnumerable<IPusher>, UAClient, UAExtractor> Builder { get; set; } = null;
+        public Func<FullConfig, IEnumerable<IPusher>, UAClient, CancellationTokenSource, UAExtractor> Builder { get; set; } = null;
         public bool StateStorage { get; set; } = false;
         public bool StateInflux { get; set; } = false;
         public bool MqttState { get; set; } = false;

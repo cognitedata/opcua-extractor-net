@@ -180,7 +180,7 @@ namespace Test
 
             using var source = new CancellationTokenSource();
 
-            var runTask = runTime.Run(source);
+            var runTask = runTime.Run(source.Token);
 
             await Task.Delay(2000);
 

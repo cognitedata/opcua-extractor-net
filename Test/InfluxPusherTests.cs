@@ -64,7 +64,7 @@ namespace Test
             var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Base.DoubleVar1);
             Assert.Equal(2, dps.Count());
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 0));
         }
         [Trait("Server", "array")]
@@ -100,7 +100,7 @@ namespace Test
             var dps = await tester.GetAllInfluxPoints(tester.Server.Ids.Custom.Array, false, 3);
             Assert.Equal(2, dps.Count());
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 0));
         }
@@ -123,7 +123,7 @@ namespace Test
 
             tester.StartExtractor();
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
 
             var values = new List<double>
             {
@@ -189,7 +189,7 @@ namespace Test
                 return evts.Count() == 2 && evts2.Count() == 7;
             }, 5, "Expected to get some events in influxdb");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
         }
 
         [Trait("Server", "basic")]
@@ -241,7 +241,7 @@ namespace Test
             
             await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("gp.tl:i=10")
                 && tester.Handler.Datapoints["gp.tl:i=10"].NumericDatapoints.DistinctBy(dp => dp.Timestamp).Count() == 1002, 20);
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
             
             tester.TestContinuity("gp.tl:i=10");
 
@@ -289,7 +289,7 @@ namespace Test
                 return dps.Count() == 1001;
             }, 20, "Expected points to arrive in influxdb");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_data_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
         }
@@ -345,7 +345,7 @@ namespace Test
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1));
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
         }
         [Trait("Server", "events")]
         [Trait("Target", "InfluxPusher")]
@@ -379,7 +379,7 @@ namespace Test
                 return evts.Count() == 700;
             }, 5, "Expected to get some events in influxdb");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
 
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
@@ -440,7 +440,7 @@ namespace Test
                 return evts.Count() == 707;
             }, 5, "Expected to get some events in influxdb");
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));

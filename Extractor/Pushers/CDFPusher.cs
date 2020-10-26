@@ -222,7 +222,7 @@ namespace Cognite.OpcUa.Pushers
             log.Information("Testing {TotalNodesToTest} nodes against CDF", variables.Count() + objects.Count());
             if (config.Debug)
             {
-                await Extractor.ReadProperties(objects.Concat(variables), token);
+                await Extractor.ReadProperties(objects.Concat(variables));
                 foreach (var node in objects.Concat(variables))
                 {
                     log.Verbose(node.ToDebugDescription());
@@ -389,7 +389,7 @@ namespace Cognite.OpcUa.Pushers
                         var rowDict = rows.ToDictionary(row => row.Key);
 
                         var toReadProperties = assetIds.Select(kvp => kvp.Value);
-                        await Extractor.ReadProperties(toReadProperties, token);
+                        await Extractor.ReadProperties(toReadProperties);
 
                         var updates = assetIds
                             .Select(kvp => (kvp.Key, PusherUtils.CreateRawAssetUpdate(kvp.Value, Extractor,
@@ -405,7 +405,7 @@ namespace Cognite.OpcUa.Pushers
                     await EnsureRawRows<AssetCreate>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetIds.Keys, async ids =>
                     {
                         var assets = ids.Select(id => assetIds[id]);
-                        await Extractor.ReadProperties(assets, token);
+                        await Extractor.ReadProperties(assets);
                         return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, null, metaMap))
                             .Where(asset => asset != null)
                             .ToDictionary(asset => asset.ExternalId);
@@ -421,7 +421,7 @@ namespace Cognite.OpcUa.Pushers
                     var assetChunk = await destination.GetOrCreateAssetsAsync(chunk, async ids =>
                     {
                         var assets = ids.Select(id => assetIds[id]);
-                        await Extractor.ReadProperties(assets, token);
+                        await Extractor.ReadProperties(assets);
                         return assets
                             .Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId, metaMap))
                             .Where(asset => asset != null);
@@ -505,7 +505,7 @@ namespace Cognite.OpcUa.Pushers
                 var tss = ids.Select(id => tsIds[id]);
                 if (!useRawTimeseries)
                 {
-                    await Extractor.ReadProperties(tss, token);
+                    await Extractor.ReadProperties(tss);
                 }
                 return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, metaMap, useRawTimeseries))
                     .Where(ts => ts != null);
@@ -599,7 +599,7 @@ namespace Cognite.OpcUa.Pushers
                         var rowDict = rows.ToDictionary(row => row.Key);
 
                         var toReadProperties = tsIds.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
-                        await Extractor.ReadProperties(toReadProperties, token);
+                        await Extractor.ReadProperties(toReadProperties);
 
                         var updates = tsIds
                             .Select(kvp => (kvp.Key, PusherUtils.CreateRawTsUpdate(kvp.Value, Extractor,
@@ -615,7 +615,7 @@ namespace Cognite.OpcUa.Pushers
                     await EnsureRawRows<StatelessTimeSeriesCreate>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsIds.Keys, async ids =>
                     {
                         var timeseries = ids.Select(id => tsIds[id]);
-                        await Extractor.ReadProperties(timeseries, token);
+                        await Extractor.ReadProperties(timeseries);
                         return timeseries.Select(node => PusherUtils.VariableToStatelessTimeSeries(node, Extractor, null, metaMap))
                             .Where(ts => ts != null)
                             .ToDictionary(ts => ts.ExternalId);

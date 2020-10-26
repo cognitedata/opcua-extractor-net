@@ -713,12 +713,18 @@ namespace Server
                 var wrongDim = CreateVariable("WrongDim", DataTypes.Double, 4);
                 AddNodeRelation(wrongDim, root, ReferenceTypeIds.HasComponent);
 
-                AddPredefinedNodes(SystemContext, root, rankImp, rankImpNoDim, wrongDim);
+                var tooLargeDimProp = rankImp.AddProperty<int[]>("TooLargeDim", DataTypes.Int32, ValueRanks.OneDimension);
+                tooLargeDimProp.Value = Enumerable.Range(0, 20).ToArray();
+                tooLargeDimProp.NodeId = GenerateNodeId();
+                tooLargeDimProp.ArrayDimensions = new ReadOnlyList<uint>(new List<uint> { 20 });
+
+                AddPredefinedNodes(SystemContext, root, rankImp, rankImpNoDim, wrongDim, tooLargeDimProp);
 
                 Ids.Wrong.Root = root.NodeId;
                 Ids.Wrong.RankImprecise = rankImp.NodeId;
                 Ids.Wrong.RankImpreciseNoDim = rankImpNoDim.NodeId;
                 Ids.Wrong.WrongDim = wrongDim.NodeId;
+                Ids.Wrong.TooLargeProp = tooLargeDimProp.NodeId;
             }
         }
 
@@ -1319,6 +1325,7 @@ namespace Server
         public NodeId RankImprecise { get; set; }
         public NodeId RankImpreciseNoDim { get; set; }
         public NodeId WrongDim { get; set; }
+        public NodeId TooLargeProp { get; set; }
     }
     #endregion
 }

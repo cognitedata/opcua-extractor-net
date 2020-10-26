@@ -67,7 +67,7 @@ namespace Test
 
             await tester.Extractor.Looper.WaitForNextPush();
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_influx"));
@@ -112,7 +112,7 @@ namespace Test
                 await tester.Extractor.Looper.WaitForNextPush();
                 await tester.Extractor.Looper.StoreState(tester.Source.Token);
 
-                await tester.TerminateRunTask();
+                await tester.TerminateRunTask(true);
 
                 var dummyStates = tester.Extractor.State.NodeStates.Select(state => new InfluxBufferState(state))
                     .ToList();
@@ -210,7 +210,7 @@ namespace Test
                 false,
                 CancellationToken.None);
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
 
             Assert.True(dummyStates.All(state => !state.Historizing
@@ -305,7 +305,7 @@ namespace Test
                     state.DestinationExtractedRange.First <= state.DestinationExtractedRange.Last
                     && state.DestinationExtractedRange.Last != DateTime.MaxValue));
 
-                await tester.TerminateRunTask();
+                await tester.TerminateRunTask(false);
             }
 
             using var tester2 = new ExtractorTester(new ExtractorTestParameters
@@ -341,7 +341,7 @@ namespace Test
             Assert.True(states.All(state =>
                 state.DestinationExtractedRange == TimeRange.Empty));
 
-            await tester2.TerminateRunTask();
+            await tester2.TerminateRunTask(false);
         }
         [Trait("Server", "basic")]
         [Trait("Target", "StateStorage")]
@@ -397,7 +397,7 @@ namespace Test
                                                 || state.DestinationExtractedRange.First <= state.DestinationExtractedRange.Last
                                                 && state.DestinationExtractedRange.Last != DateTime.MaxValue));
 
-                await tester.TerminateRunTask();
+                await tester.TerminateRunTask(false);
             }
 
             using var tester2 = new ExtractorTester(new ExtractorTestParameters
@@ -434,7 +434,7 @@ namespace Test
 
             Assert.True(states.All(state => state.DestinationExtractedRange == TimeRange.Empty));
 
-            await tester2.TerminateRunTask();
+            await tester2.TerminateRunTask(false);
         }
         [Fact]
         [Trait("Server", "events")]
@@ -509,7 +509,7 @@ namespace Test
             EventsEqual(evt, converted);
             EventsEqual(evt2, converted2);
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(false);
         }
         [Fact]
         [Trait("Target", "OldBuffer")]
@@ -584,7 +584,7 @@ namespace Test
             await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling), 20);
             await tester.Extractor.Looper.WaitForNextPush();
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             tester.TestContinuity("gp.tl:i=10");
             tester.TestContinuity("gp.tl:i=3");
@@ -643,7 +643,7 @@ namespace Test
 
             await tester.Extractor.Looper.WaitForNextPush();
 
-            await tester.TerminateRunTask();
+            await tester.TerminateRunTask(true);
 
             var events = tester.Handler.Events.Values.ToList();
             Assert.True(events.Any());

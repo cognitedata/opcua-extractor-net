@@ -91,7 +91,7 @@ namespace Cognite.OpcUa
         {
             SelectEndpoint, CreateSession, Browse, BrowseNext,
             CreateSubscription, CreateMonitoredItems, ReadAttributes, HistoryRead,
-            HistoryReadEvents, ReadRootNode, DefaultOperation
+            HistoryReadEvents, ReadRootNode, DefaultOperation, CloseSession
         }
         /// <summary>
         /// Recursively browse through aggregateException to find a root exception of given type.
@@ -137,7 +137,7 @@ namespace Cognite.OpcUa
                     log.Debug(failure, message);
                     return;
                 }
-                log.Error(message + " - {msg}", aex?.InnerException.Message ?? aex.Message);
+                log.Error(e, message + " - {msg}", aex?.InnerException.Message ?? aex.Message);
             } 
             else if (e is SilentServiceException silent)
             {
@@ -385,6 +385,9 @@ namespace Cognite.OpcUa
                                     return new SilentServiceException($"Too many operations for {op.ToString()}", ex, op);
                             }
                             break;
+                        case SourceOp.CloseSession:
+                            log.Error("Failed to close session, this is almost always due to the session already being closed: {code}", symId);
+                            return new SilentServiceException("Failed to close session", ex, op);
                     }
                     return ex;
             }
