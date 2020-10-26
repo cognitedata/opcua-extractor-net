@@ -501,4 +501,104 @@ namespace Cognite.OpcUa
             public List<ReferenceDescription> CollectedFields { get; set; }
         }
     }
+
+
+
+    public class BufferedReferenceType
+    {
+        public NodeId Id { get; }
+        private string name;
+        private string inverseName;
+        public bool HasName => name != null;
+        public BufferedReferenceType(NodeId id)
+        {
+            Id = id;
+        }
+        public void SetNames(string name, string inverseName)
+        {
+            this.name = name;
+            this.inverseName = inverseName;
+        }
+        public string GetName(bool isInverse)
+        {
+            if (isInverse && !string.IsNullOrEmpty(inverseName)) return inverseName;
+            return name;
+        }
+    }
+    /// <summary>
+    /// Maps out reference types, in order to find their names and inverse names
+    /// </summary>
+    public class ReferenceTypeManager
+    {
+        private readonly UAClient uaClient;
+        private readonly UAExtractor extractor;
+        private readonly Dictionary<NodeId, BufferedReferenceType> mappedTypes = new Dictionary<NodeId, BufferedReferenceType>();
+        public ReferenceTypeManager(UAClient client, UAExtractor extractor)
+        {
+            if (client == null) throw new ArgumentNullException(nameof(client));
+            uaClient = client;
+            this.extractor = extractor;
+        }
+
+        public BufferedReferenceType GetReferenceType(NodeId id)
+        {
+            if (id == null) id = NodeId.Null;
+            if (mappedTypes.TryGetValue(id, out var type)) return type;
+            type = new BufferedReferenceType(id);
+            mappedTypes[id] = type;
+            return type;
+        }
+
+        public async Task GetReferenceTypeDataAsync(CancellationToken token)
+        {
+            var toRead = mappedTypes.Values.Where(type => !type.HasName && !type.Id.IsNullNodeId).ToList();
+            if (!toRead.Any()) return;
+
+            var readValueIds = toRead.SelectMany(type => new[] {
+                new ReadValueId { AttributeId = Attributes.DisplayName, NodeId = type.Id },
+                new ReadValueId { AttributeId = Attributes.InverseName, NodeId = type.Id }
+            });
+
+            var values = await Task.Run(() => uaClient.ReadAttributes(new ReadValueIdCollection(readValueIds), toRead.Count, token), token);
+
+            for (int i = 0; i < toRead.Count; i++)
+            {
+                var type = toRead[i];
+                type.SetNames(
+                    (values[i * 2].Value as LocalizedText)?.Text,
+                    (values[i * 2 + 1].Value as LocalizedText)?.Text
+                );
+            }
+        }
+
+        public async Task<IEnumerable<BufferedReference>> GetReferencesAsync(IEnumerable<NodeId> nodes, NodeId referenceTypes, CancellationToken token)
+        {
+            if (!nodes.Any()) return Array.Empty<BufferedReference>();
+
+            // We only care about references to objects or variables, at least for now.
+            // Only references between objects represented in the extracted hierarchy are relevant.
+            var references = await Task.Run(() => uaClient.GetNodeChildren(
+                nodes,
+                referenceTypes,
+                (uint)NodeClass.Object | (uint)NodeClass.Variable,
+                token,
+                BrowseDirection.Both));
+
+            var results = new List<BufferedReference>();
+
+            foreach (var (parentId, children) in references)
+            {
+                var parentNode = extractor.State.GetActiveNode(parentId);
+                if (parentNode == null) continue;
+                foreach (var child in children)
+                {
+                    var childNode = extractor.State.GetActiveNode(uaClient.ToNodeId(child.NodeId));
+                    if (childNode == null) continue;
+                    results.Add(new BufferedReference(child, parentNode, childNode, this));
+                }
+            }
+
+            return results;
+        }
+    }
 }
