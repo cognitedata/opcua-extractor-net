@@ -214,11 +214,22 @@ namespace Cognite.OpcUa.Pushers
 
             if (!string.IsNullOrEmpty(config.LocalState))
             {
-                var states = objects
-                    .Select(node => Extractor.GetUniqueId(node.Id))
-                    .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
-                    .Select(id => new ExistingState { Id = id })
-                    .ToDictionary(state => state.Id);
+                Dictionary<string, ExistingState> states;
+                if (config.SkipMetadata)
+                {
+                    states = variables
+                        .Select(node => Extractor.GetUniqueId(node.Id))
+                        .Select(id => new ExistingState { Id = id })
+                        .ToDictionary(state => state.Id);
+                }
+                else
+                {
+                    states = objects
+                       .Select(node => Extractor.GetUniqueId(node.Id))
+                       .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
+                       .Select(id => new ExistingState { Id = id })
+                       .ToDictionary(state => state.Id);
+                }
 
                 await Extractor.StateStorage.RestoreExtractionState<MqttState, ExistingState>(
                     states,
@@ -253,13 +264,16 @@ namespace Cognite.OpcUa.Pushers
 
             }
             if (!objects.Any() && !variables.Any()) return true;
-            await Extractor.ReadProperties(objects.Concat(variables));
+            if (!config.SkipMetadata)
+            {
+                await Extractor.ReadProperties(objects.Concat(variables));
+            }
 
             log.Information("Pushing {cnt} assets and {cnt2} timeseries over MQTT", objects.Count(), variables.Count());
 
             if (config.Debug) return true;
 
-            if (objects.Any())
+            if (objects.Any() && !config.SkipMetadata)
             {
                 var results = await Task.WhenAll(objects.ChunkBy(1000).Select(chunk => PushAssets(chunk, update.Objects, token)));
                 if (!results.All(res => res)) return false;
@@ -494,7 +508,9 @@ namespace Cognite.OpcUa.Pushers
 
             var timeseries = ConvertVariables(variables, update);
 
-            if (useRawStore)
+            bool useMinimalTs = useRawStore || config.SkipMetadata;
+
+            if (useMinimalTs)
             {
                 var minimalTimeseries = variables
                     .Where(variable => !update.AnyUpdate || !variable.Changed)
@@ -522,7 +538,12 @@ namespace Cognite.OpcUa.Pushers
                         return false;
                     }
                 }
+            }
 
+            if (config.SkipMetadata) return true;
+
+            if (useRawStore)
+            {
                 var rawObj = new RawRequestWrapper<StatelessTimeSeriesCreate>
                 {
                     Database = config.RawMetadata.Database,
@@ -551,6 +572,7 @@ namespace Cognite.OpcUa.Pushers
 
                 return true;
             }
+
 
             var data = JsonSerializer.SerializeToUtf8Bytes(timeseries, null);
             var msg = baseBuilder

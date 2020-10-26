@@ -387,6 +387,8 @@ namespace Cognite.OpcUa.Pushers
             TypeUpdateConfig update,
             CancellationToken token)
         {
+            if (config.SkipMetadata) return;
+
             var assetIds = new ConcurrentDictionary<string, BufferedNode>(objects.ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
             var metaMap = config.MetadataMapping?.Assets;
             bool useRawAssets = config.RawMetadata != null
@@ -518,20 +520,21 @@ namespace Cognite.OpcUa.Pushers
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
 
+            bool simpleTimeseries = useRawTimeseries || config.SkipMetadata;
+
             var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsIds.Keys, async ids =>
             {
                 var tss = ids.Select(id => tsIds[id]);
-                if (!useRawTimeseries)
+                if (!simpleTimeseries)
                 {
                     await Extractor.ReadProperties(tss);
                 }
-                return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, metaMap, useRawTimeseries))
+                return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, metaMap, simpleTimeseries))
                     .Where(ts => ts != null);
             }, RetryMode.None, SanitationMode.Clean, token);
 
             var fatalError = timeseries.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
             if (fatalError != null) throw fatalError.Exception;
-
 
             var foundBadTimeseries = new List<string>();
             foreach (var ts in timeseries.Results)
@@ -551,6 +554,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 log.Debug("Found mismatched timeseries when ensuring: {tss}", string.Join(", ", foundBadTimeseries));
             }
+
+            if (config.SkipMetadata) return;
 
             if (update.AnyUpdate && !useRawTimeseries)
             {
