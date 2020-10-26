@@ -45,6 +45,7 @@ namespace Cognite.OpcUa
         public DataTypeManager DataTypeManager { get; }
 
         private readonly HistoryReader historyReader;
+        private readonly ReferenceTypeManager referenceTypeManager;
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
@@ -103,6 +104,10 @@ namespace Cognite.OpcUa
             Streamer = new Streamer(this, config);
             DataTypeManager = new DataTypeManager(uaClient, config.Extraction.DataTypes);
             StateStorage = stateStore;
+            if (config.Extraction.Relationships.Enabled)
+            {
+                referenceTypeManager = new ReferenceTypeManager(uaClient, this);
+            }
 
             source = CancellationTokenSource.CreateLinkedTokenSource(token);
 
@@ -446,6 +451,14 @@ namespace Cognite.OpcUa
                 log.Information("Mapping resulted in no new nodes");
                 return Array.Empty<Task>();
             }
+            IEnumerable<BufferedReference> references = null;
+            if (config.Extraction.Relationships.Enabled)
+            {
+                references = await referenceTypeManager.GetReferencesAsync(nodes.RawObjects.Concat(nodes.RawVariables).Select(node => node.Id),
+                    ReferenceTypeIds.NonHierarchicalReferences, source.Token);
+                await referenceTypeManager.GetReferenceTypeDataAsync(source.Token);
+                State.AddReferences(references);
+            }
 
             nodes.ClearRaw();
 
@@ -454,7 +467,7 @@ namespace Cognite.OpcUa
 
             Streamer.AllowData = State.NodeStates.Any();
 
-            await PushNodes(nodes.Objects, nodes.Timeseries);
+            await PushNodes(nodes.Objects, nodes.Timeseries, references);
 
             foreach (var node in nodes.Variables.Concat(nodes.Objects).Select(node => node.Id))
             {
@@ -521,7 +534,6 @@ namespace Cognite.OpcUa
             }
         }
 
-
         private class BrowseResult
         {
             /// <summary>
@@ -577,7 +589,7 @@ namespace Cognite.OpcUa
             await DataTypeManager.GetDataTypeMetadataAsync(result.RawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token);
         }
 
-        private IEnumerable<BufferedNode> FilterObjects(TypeUpdateConfig update, IEnumerable<BufferedNode> rawObjects)
+        private IEnumerable<BufferedNode> FilterObjects(UpdateConfig update, IEnumerable<BufferedNode> rawObjects)
         {
             foreach (var node in rawObjects)
             {
@@ -586,7 +598,7 @@ namespace Cognite.OpcUa
                     var old = State.GetActiveNode(node.Id);
                     if (old != null)
                     {
-                        node.CheckForUpdates(old, update, config.Extraction.DataTypes.DataTypeMetadata);
+                        node.CheckForUpdates(old, update.Objects, config.Extraction.DataTypes.DataTypeMetadata);
                         if (node.Changed)
                         {
                             State.AddActiveNode(node);
@@ -614,7 +626,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        private void FilterVariables(TypeUpdateConfig update, BrowseResult result)
+        private void FilterVariables(UpdateConfig update, BrowseResult result)
         {
             foreach (var node in result.RawVariables)
             {
@@ -624,7 +636,7 @@ namespace Cognite.OpcUa
                     var old = State.GetActiveNode(node.Id);
                     if (old != null && old is BufferedVariable variable)
                     {
-                        node.CheckForUpdates(old, update, config.Extraction.DataTypes.DataTypeMetadata);
+                        node.CheckForUpdates(old, update.Variables, config.Extraction.DataTypes.DataTypeMetadata);
 
                         if (node.Changed)
                         {
@@ -632,7 +644,7 @@ namespace Cognite.OpcUa
                             State.AddActiveNode(node);
                             if (oldState.IsArray)
                             {
-                                if (update.Name && old.DisplayName != node.DisplayName && !string.IsNullOrWhiteSpace(node.DisplayName))
+                                if (update.Variables.Name && old.DisplayName != node.DisplayName && !string.IsNullOrWhiteSpace(node.DisplayName))
                                 {
                                     for (int i = 0; i < oldState.ArrayDimensions[0]; i++)
                                     {
@@ -719,9 +731,9 @@ namespace Cognite.OpcUa
             
             await GetNodeData(update, result);
 
-            result.Objects.AddRange(FilterObjects(update.Objects, result.RawObjects));
+            result.Objects.AddRange(FilterObjects(update, result.RawObjects));
             InitEventStates(result);
-            FilterVariables(update.Variables, result);
+            FilterVariables(update, result);
 
             return result;
         }
@@ -733,7 +745,10 @@ namespace Cognite.OpcUa
         /// <param name="pusher">Destination to push to</param>
         /// <param name="initial">True if this counts as initialization of the pusher</param>
         /// <param name="initMissing">Whether or not to initialize nodes with missing ranges to empty</param>
-        public async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries,
+        public async Task PushNodes(
+            IEnumerable<BufferedNode> objects,
+            IEnumerable<BufferedVariable> timeseries,
+            IEnumerable<BufferedReference> references,
             IPusher pusher, bool initial, bool initMissing)
         {
             if (pusher == null) throw new ArgumentNullException(nameof(pusher));
@@ -744,7 +759,19 @@ namespace Cognite.OpcUa
                 pusher.NoInit = false;
                 return;
             }
-            var result = await pusher.PushNodes(objects, timeseries, config.Extraction.Update, source.Token);
+
+            var tasks = new List<Task<bool>>();
+            if (objects.Any() || timeseries.Any())
+            {
+                tasks.Add(pusher.PushNodes(objects, timeseries, config.Extraction.Update, source.Token));
+            }
+            if (references != null && references.Any())
+            {
+                tasks.Add(pusher.PushReferences(references, source.Token));
+            }
+
+            var results = await Task.WhenAll(tasks);
+            var result = results.All(res => res);
             if (!result)
             {
                 log.Error("Failed to push nodes on pusher {name}", pusher.GetType());
@@ -761,12 +788,12 @@ namespace Cognite.OpcUa
                     .Distinct()
                     .Select(id => State.GetNodeState(id))
                     .Where(state => state.FrontfillEnabled);
-                var results = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, initMissing, source.Token), 
+                var initResults = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, initMissing, source.Token), 
                     pusher.InitExtractedEventRanges(State.EmitterStates.Where(state => state.FrontfillEnabled),
                         config.History.Backfill,
                         initMissing,
                         source.Token));
-                if (!results.All(res => res))
+                if (!initResults.All(res => res))
                 {
                     log.Error("Initialization of extracted ranges failed for pusher {name}", pusher.GetType());
                     pusher.Initialized = false;
@@ -783,7 +810,10 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="objects">Objects to synchronize with destinations</param>
         /// <param name="timeseries">Variables to synchronize with destinations</param>
-        private async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries)
+        /// <param name="references">References to synchronize with destinations</param>
+        private async Task PushNodes(IEnumerable<BufferedNode> objects,
+            IEnumerable<BufferedVariable> timeseries,
+            IEnumerable<BufferedReference> references)
         {
             var newStates = timeseries
                 .Select(ts => ts.Id)
@@ -792,7 +822,7 @@ namespace Cognite.OpcUa
 
             bool initial = objects.Count() + timeseries.Count() == State.ActiveNodes.Count();
 
-            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, pusher, initial, false));
+            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, references, pusher, initial, false));
 
             if (StateStorage != null && config.StateStorage.Interval > 0)
             {

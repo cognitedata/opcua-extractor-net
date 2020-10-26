@@ -557,5 +557,17 @@ namespace Cognite.OpcUa
         {
             return Type.GetName(!IsForward);
         }
+        public override bool Equals(object obj)
+        {
+            if (!(obj is BufferedReference other)) return false;
+            return other.Source.Id == Source.Id
+                && other.Target.Id == Target.Id
+                && other.Type.Id == Type.Id;
+        }
+
+        public override int GetHashCode()
+        {
+            return (Source.Id, Target.Id, Type.Id).GetHashCode();
+        }
     }
 }
