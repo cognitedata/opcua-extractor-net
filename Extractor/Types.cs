@@ -570,5 +570,9 @@ namespace Cognite.OpcUa
             Source = source;
             Target = target;
         }
+        public string GetName()
+        {
+            return Type.GetName(!IsForward);
+        }
     }
 }

@@ -1505,6 +1505,7 @@ namespace Cognite.OpcUa
             }
             return value.ToString();
         }
+
         /// <summary>
         /// Returns consistent unique string representation of a <see cref="NodeId"/> given its namespaceUri
         /// </summary>
@@ -1572,6 +1573,67 @@ namespace Cognite.OpcUa
                 sb.Length = i + 1;
 
             return;
+        }
+
+        private void AppendNodeId(StringBuilder buffer, NodeId nodeId)
+        {
+            if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride))
+            {
+                buffer.Append(nodeOverride);
+                return;
+            }
+
+            if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
+            {
+                var namespaceUri = Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
+                string newPrefix = extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
+                nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
+            }
+
+            buffer.Append(prefix);
+
+            NodeId.Format(buffer, nodeId.Identifier, nodeId.IdType, 0);
+
+            TrimEnd(buffer);
+        }
+
+        private string GetNodeIdString(NodeId id)
+        {
+            var buffer = new StringBuilder();
+            AppendNodeId(buffer, id);
+            return buffer.ToString();
+        }
+
+        /// <summary>
+        /// Get the unique reference id, on the form [prefix][reference-name];[sourceId];[targetId]
+        /// </summary>
+        /// <param name="reference">Reference to get id for</param>
+        /// <returns>String reference id</returns>
+        public string GetRelationshipId(BufferedReference reference)
+        {
+            if (reference == null) throw new ArgumentNullException(nameof(reference));
+            var buffer = new StringBuilder(extractionConfig.IdPrefix, 64);
+            buffer.Append(reference.GetName());
+            buffer.Append(';');
+            AppendNodeId(buffer, reference.Source.Id);
+            buffer.Append(';');
+            AppendNodeId(buffer, reference.Target.Id);
+
+            if (buffer.Length > 255)
+            {
+                // This is an edge-case. If the id overflows, it is most sensible to cut from the
+                // start of the id, as long ids are likely (from experience) to be similar to
+                // system.subsystem.sensor.measurement...
+                // so cutting from the start is less likely to cause conflicts
+                var overflow = (int)Math.Ceiling((buffer.Length - 255) / 2.0);
+                buffer = new StringBuilder(extractionConfig.IdPrefix, 255);
+                buffer.Append(reference.GetName());
+                buffer.Append(';');
+                buffer.Append(GetNodeIdString(reference.Source.Id).Substring(overflow));
+                buffer.Append(';');
+                buffer.Append(GetNodeIdString(reference.Target.Id).Substring(overflow));
+            }
+            return buffer.ToString();
         }
 
         public void Dispose()
