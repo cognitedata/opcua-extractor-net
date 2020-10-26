@@ -131,7 +131,7 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
 
             tester.Extractor.RestartExtractor();
-
+            await tester.Extractor.WaitForSubscriptions();
             await tester.Extractor.Looper.WaitForNextPush();
 
             waitTask = tester.Bridge.WaitForNextMessage();

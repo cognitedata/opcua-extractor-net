@@ -584,7 +584,7 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor();
 
-            await Task.Delay(500);
+            await tester.Extractor.WaitForSubscriptions();
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState(intVar) != null
