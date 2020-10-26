@@ -319,6 +319,16 @@ namespace Cognite.OpcUa
 
             return uaClient.GetUniqueId(id, index);
         }
+
+        /// <summary>
+        /// Get the unique reference id, on the form [prefix][reference-name];[sourceId];[targetId]
+        /// </summary>
+        /// <param name="reference">Reference to get id for</param>
+        /// <returns>String reference id</returns>
+        public string GetRelationshipId(BufferedReference reference)
+        {
+            return uaClient.GetRelationshipId(reference);
+        }
         /// <summary>
         /// Calls the ConvertToString method on UAClient. This uses the namespaceTable, so it cannot be static.
         /// </summary>

@@ -91,6 +91,12 @@ namespace Cognite.OpcUa
         {
             return Task.FromResult((bool?)true);
         }
+
+        Task<bool> PushReferences(IEnumerable<BufferedReference> references, CancellationToken token)
+        {
+            return Task.FromResult(true);
+        }
+
         /// <summary>
         /// Reset relevant persistent information in the pusher, preparing it to be restarted
         /// </summary>

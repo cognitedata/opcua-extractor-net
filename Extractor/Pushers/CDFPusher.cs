@@ -30,6 +30,7 @@ using Cognite.Extractor.Utils;
 using TimeRange = Cognite.Extractor.Common.TimeRange;
 using System.Text.Json;
 using Cognite.Extensions;
+using Cognite.Extractor.Common;
 
 namespace Cognite.OpcUa.Pushers
 {
@@ -703,6 +704,58 @@ namespace Cognite.OpcUa.Pushers
             log.Information("Creating or updating {cnt} raw rows in CDF", toCreate.Count);
 
             await destination.InsertRawRowsAsync(dbName, tableName, toCreate, options, token);
+        }
+
+        public async Task<bool> PushReferences(IEnumerable<BufferedReference> references, CancellationToken token)
+        {
+            var relationships = references
+                .Select(reference => PusherUtils.ReferenceToRelationship(reference, config.DataSetId, Extractor))
+                .DistinctBy(rel => rel.ExternalId)
+                .ChunkBy(1000);
+
+            log.Information("Test {cnt} relationships against CDF", references.Count());
+            try
+            {
+                await Task.WhenAll(relationships.Select(chunk => PushReferencesChunk(chunk, token)));
+            }
+            catch (Exception e)
+            {
+                log.Error(e, "Failed to ensure relationships");
+                nodeEnsuringFailures.Inc();
+                return false;
+            }
+            log.Information("Sucessfully pushed relationships to CDF");
+            return true;
+        }
+
+        private async Task PushReferencesChunk(IEnumerable<CogniteSdk.Beta.RelationshipCreate> relationships, CancellationToken token)
+        {
+            try
+            {
+                await destination.CogniteClient.Beta.Relationships.CreateAsync(relationships, token);
+            }
+            catch (ResponseException ex)
+            {
+                if (ex.Duplicated.Any())
+                {
+                    var existing = new HashSet<string>();
+                    foreach (var dict in ex.Duplicated)
+                    {
+                        if (dict.TryGetValue("externalId", out var value))
+                        {
+                            existing.Add((value as MultiValue.String).Value);
+                        }
+                    }
+                    if (!existing.Any()) throw;
+
+                    relationships = relationships.Where(rel => !existing.Contains(rel.ExternalId)).ToList();
+                    await PushReferencesChunk(relationships, token);
+                }
+                else
+                {
+                    throw;
+                }
+            }
         }
 
         public void Dispose() { }
