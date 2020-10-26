@@ -51,12 +51,16 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<NodeId, BufferedNode> activeNodes =
             new ConcurrentDictionary<NodeId, BufferedNode>();
 
+        private readonly HashSet<BufferedReference> references = new HashSet<BufferedReference>();
+        private object referenceLock = new object();
+
         public IEnumerable<NodeExtractionState> NodeStates => nodeStates.Values;
         public IEnumerable<EventExtractionState> EmitterStates => emitterStates.Values;
         public IEnumerable<NodeId> AllActiveIds => managedNodes.Keys;
         public IEnumerable<string> AllActiveExternalIds => managedNodes.Values;
 
         public IEnumerable<BufferedNode> ActiveNodes => activeNodes.Values;
+        public IEnumerable<BufferedReference> ActiveReferences => references;
 
         private readonly UAExtractor extractor;
 
@@ -205,6 +209,18 @@ namespace Cognite.OpcUa
         {
             if (id == null || id.IsNullNodeId) return null;
             return activeNodes.GetValueOrDefault(id);
+        }
+
+        public void AddReferences(IEnumerable<BufferedReference> newReferences)
+        {
+            if (newReferences == null) return;
+            lock (referenceLock)
+            {
+                foreach (var reference in newReferences)
+                {
+                    references.Add(reference);
+                }
+            }
         }
     }
 }
