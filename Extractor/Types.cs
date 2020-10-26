@@ -522,4 +522,36 @@ namespace Cognite.OpcUa
             return evt;
         }
     }
+    /// <summary>
+    /// Represents a non-hierarchical reference between two nodes in the hierarchy
+    /// </summary>
+    public class BufferedReference
+    {
+        /// <summary>
+        /// NodeId of the OPC-UA reference type
+        /// </summary>
+        public BufferedReferenceType Type { get; }
+        /// <summary>
+        /// True if this is a forward reference, false otherwise
+        /// </summary>
+        public bool IsForward { get; }
+        /// <summary>
+        /// NodeId of the source node
+        /// </summary>
+        public BufferedNode Source { get; }
+        /// <summary>
+        /// NodeId of the target node
+        /// </summary>
+        public BufferedNode Target { get; }
+        public BufferedReference(ReferenceDescription desc, BufferedNode source, BufferedNode target, ReferenceTypeManager manager)
+        {
+            if (desc == null) throw new ArgumentNullException(nameof(desc));
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (manager == null) throw new ArgumentNullException(nameof(manager));
+            Type = manager.GetReferenceType(desc.ReferenceTypeId);
+            IsForward = desc.IsForward;
+            Source = source;
+            Target = target;
+        }
+    }
 }

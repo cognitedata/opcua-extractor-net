@@ -409,7 +409,8 @@ namespace Cognite.OpcUa
             IEnumerable<NodeId> parents,
             NodeId referenceTypes,
             uint nodeClassMask,
-            CancellationToken token)
+            CancellationToken token,
+            BrowseDirection direction = BrowseDirection.Forward)
         {
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             IncOperations();
@@ -420,7 +421,7 @@ namespace Cognite.OpcUa
                     ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
                     IncludeSubtypes = true,
                     NodeClassMask = nodeClassMask,
-                    BrowseDirection = BrowseDirection.Forward,
+                    BrowseDirection = direction,
                     ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
                         | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition | (uint)BrowseResultMask.BrowseName
                 }
@@ -605,9 +606,57 @@ namespace Cognite.OpcUa
             log.Information("Found {NumUANodes} nodes in {NumNodeLevels} levels", nodeCnt, levelCnt);
             depth.Set(levelCnt);
         }
+
         #endregion
 
         #region Get node data
+        public IList<DataValue> ReadAttributes(ReadValueIdCollection readValueIds, int distinctNodeCount, CancellationToken token)
+        {
+            var values = new List<DataValue>();
+            if (readValueIds == null || !readValueIds.Any()) return values;
+            IncOperations();
+            int total = readValueIds.Count;
+            int attrCount = 0;
+            try
+            {
+                int count = 0;
+                foreach (var nextValues in readValueIds.ChunkBy(config.AttributesChunk))
+                {
+                    if (token.IsCancellationRequested) break;
+                    count++;
+                    Session.Read(
+                        null,
+                        0,
+                        TimestampsToReturn.Source,
+                        new ReadValueIdCollection(nextValues),
+                        out DataValueCollection lvalues,
+                        out _
+                    );
+                    attributeRequests.Inc();
+                    values.AddRange(lvalues);
+                    attrCount += lvalues.Count;
+                    log.Debug("Read {NumAttributesRead} / {total} attributes", attrCount, total);
+                }
+                log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {nodeCount} nodes",
+                    values.Count, count, distinctNodeCount);
+            }
+            catch (Exception ex)
+            {
+                attributeRequestFailures.Inc();
+                if (ex is ServiceResultException serviceEx)
+                {
+                    throw ExtractorUtils.HandleServiceResult(serviceEx, ExtractorUtils.SourceOp.ReadAttributes);
+                }
+                throw;
+            }
+            finally
+            {
+                DecOperations();
+            }
+            return values;
+        }
+
+
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
         /// </summary>
@@ -639,42 +688,7 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            var values = new List<DataValue>();
-            IncOperations();
-            int total = readValueIds.Count;
-            int attrCount = 0;
-            try
-            {
-                int count = 0;
-                foreach (var nextValues in readValueIds.ChunkBy(config.AttributesChunk))
-                {
-                    if (token.IsCancellationRequested) break;
-                    count++;
-                    Session.Read(
-                        null,
-                        0,
-                        TimestampsToReturn.Source,
-                        new ReadValueIdCollection(nextValues),
-                        out DataValueCollection lvalues,
-                        out _
-                    );
-                    attributeRequests.Inc();
-                    values.AddRange(lvalues);
-                    attrCount += lvalues.Count;
-                    log.Debug("Read {NumAttributesRead} / {total} attributes", attrCount, total);
-                }
-                log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
-                    values.Count, count, nodes.Count());
-            }
-            catch
-            {
-                attributeRequestFailures.Inc();
-                throw;
-            }
-            finally
-            {
-                DecOperations();
-            }
+            var values = ReadAttributes(readValueIds, nodes.Count(), token);
             return values;
         }
         /// <summary>
@@ -788,46 +802,7 @@ namespace Cognite.OpcUa
         {
             var readValueIds = ids.Distinct().Select(id => new ReadValueId { AttributeId = Attributes.Value, NodeId = id }).ToList();
 
-            IncOperations();
-            var values = new List<DataValue>();
-            int total = readValueIds.Count;
-            int attrCount = 0;
-            int count = 0;
-            try
-            {
-                foreach (var chunk in readValueIds.ChunkBy(config.AttributesChunk))
-                {
-                    if (token.IsCancellationRequested) break;
-                    Session.Read(
-                        null,
-                        0,
-                        TimestampsToReturn.Neither,
-                        new ReadValueIdCollection(chunk),
-                        out DataValueCollection lvalues,
-                        out _
-                    );
-                    count++;
-                    attrCount += lvalues.Count;
-                    attributeRequests.Inc();
-                    values.AddRange(lvalues);
-                    log.Debug("Read {NumAttributesRead} / {total} values", attrCount, total);
-                }
-                log.Information("Read {TotalAttributesRead} values with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
-                                    values.Count, count, ids.Count());
-            }
-            catch (Exception ex)
-            {
-                attributeRequestFailures.Inc();
-                if (ex is ServiceResultException serviceEx)
-                {
-                    throw ExtractorUtils.HandleServiceResult(serviceEx, ExtractorUtils.SourceOp.ReadAttributes);
-                }
-                throw;
-            }
-            finally
-            {
-                DecOperations();
-            }
+            var values = ReadAttributes(new ReadValueIdCollection(readValueIds), ids.Count(), token);
             return values.Select((dv, index) => (ids.ElementAt(index), dv)).ToDictionary(pair => pair.Item1, pair => pair.dv);
         }
 
