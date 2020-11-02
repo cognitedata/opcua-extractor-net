@@ -689,9 +689,12 @@ namespace Test
 
             if (Config.StateStorage.Location != null)
             {
-                File.Delete(Config.StateStorage.Location);
-                var db = new LiteDatabase(Config.StateStorage.Location);
-                db.Dispose();
+                var db = (Extractor.StateStorage as LiteDBStateStore).GetDatabase();
+                var cols = db.GetCollectionNames();
+                foreach (var col in cols)
+                {
+                    db.DropCollection(col);
+                }
             }
         }
 
@@ -850,6 +853,8 @@ namespace Test
             Source?.Cancel();
             Source?.Dispose();
             IfDbClient?.Dispose();
+            // Disposing singletons is usually bad, but we really have no choice.
+            Extractor?.StateStorage?.Dispose();
             if (Extractor != null)
             {
                 IEnumerable<IPusher> pushers = Extractor.GetType().GetField("pushers", BindingFlags.NonPublic | BindingFlags.Instance)
