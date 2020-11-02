@@ -15,6 +15,8 @@ using Cognite.Extractor.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Cognite.Extractor.Common;
 using System.Buffers;
+using Cognite.Extensions;
+using System.ComponentModel;
 
 namespace Cognite.Bridge
 {
@@ -104,7 +106,7 @@ namespace Cognite.Bridge
 
             var createdIds = new ConcurrentBag<string>();
 
-            IEnumerable<Asset> found;
+            CogniteResult<Asset> found;
             try
             {
                 found = await destination.GetOrCreateAssetsAsync(idsToTest, ids =>
@@ -112,8 +114,8 @@ namespace Cognite.Bridge
                     var idsSet = new HashSet<string>(ids);
                     foreach (var id in ids) createdIds.Add(id);
                     return assets.Where(asset => idsSet.Contains(asset.ExternalId));
-                }, token);
-                foreach (var asset in found)
+                }, RetryMode.OnError, SanitationMode.Clean, token);
+                foreach (var asset in found.Results)
                 {
                     assetIds[asset.ExternalId] = asset.Id;
                 }
@@ -128,7 +130,7 @@ namespace Cognite.Bridge
                 var createdIdsSet = new HashSet<string>(createdIds);
 
                 var newAssetsMap = assets.ToDictionary(asset => asset.ExternalId);
-                var toUpdate = found
+                var toUpdate = found.Results
                     .Where(asset => !createdIdsSet.Contains(asset.ExternalId))
                     .Select(old => GetAssetUpdate(newAssetsMap.GetValueOrDefault(old.ExternalId), old))
                     .Where(update => update != null)
@@ -239,7 +241,7 @@ namespace Cognite.Bridge
 
             var createdIds = new ConcurrentBag<string>();
 
-            IEnumerable<TimeSeries> found;
+            CogniteResult<TimeSeries> found;
 
             try
             {
@@ -248,8 +250,8 @@ namespace Cognite.Bridge
                     var idsSet = new HashSet<string>(ids);
                     foreach (var id in ids) createdIds.Add(id);
                     return testSeries.Where(ts => idsSet.Contains(ts.ExternalId));
-                }, token);
-                foreach (var ts in found)
+                }, RetryMode.OnError, SanitationMode.Clean, token);
+                foreach (var ts in found.Results)
                 {
                     tsIsString[ts.ExternalId] = ts.IsString;
                 }
@@ -265,7 +267,7 @@ namespace Cognite.Bridge
                 var createdIdsSet = new HashSet<string>(createdIds);
 
                 var newTsMap = timeseries.ToDictionary(ts => ts.ExternalId);
-                var toUpdate = found
+                var toUpdate = found.Results
                     .Where(asset => !createdIdsSet.Contains(asset.ExternalId))
                     .Select(old => GetTimeSeriesUpdate(newTsMap.GetValueOrDefault(old.ExternalId), old))
                     .Where(update => update != null)
@@ -377,7 +379,7 @@ namespace Cognite.Bridge
 
             try
             {
-                await destination.EnsureEventsExistsAsync(events, true, token);
+                await destination.EnsureEventsExistsAsync(events, RetryMode.OnError, SanitationMode.Clean, token);
             }
             catch (ResponseException ex)
             {

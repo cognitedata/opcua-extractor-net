@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using CogniteSdk;
@@ -64,7 +65,7 @@ namespace Cognite.OpcUa.Pushers
                     if (prop != null && !string.IsNullOrEmpty(prop.DisplayName))
                     {
                         raw.Add(new KeyValuePair<string, string>(
-                            ExtractorUtils.LimitUtf8ByteCount(prop.DisplayName, 128), ExtractorUtils.LimitUtf8ByteCount(prop.Value?.StringValue, 256)
+                            prop.DisplayName, prop.Value?.StringValue
                         ));
 
                         // Handles one layer of nested properties. This only happens if variables that have their own properties are mapped
@@ -74,8 +75,8 @@ namespace Cognite.OpcUa.Pushers
                             raw.AddRange(prop.Properties
                                 .Where(prop => prop != null && !string.IsNullOrEmpty(prop.DisplayName))
                                 .Select(nestedProp => new KeyValuePair<string, string>(
-                                    ExtractorUtils.LimitUtf8ByteCount($"{prop.DisplayName}_{nestedProp.DisplayName}", 128),
-                                    ExtractorUtils.LimitUtf8ByteCount(nestedProp.Value?.StringValue, 256)))
+                                    $"{prop.DisplayName}_{nestedProp.DisplayName}",
+                                    nestedProp.Value?.StringValue))
                             );
                         }
 
@@ -106,10 +107,10 @@ namespace Cognite.OpcUa.Pushers
             if (extractor == null || node == null) return null;
             var writePoco = new AssetCreate
             {
-                Description = ExtractorUtils.Truncate(node.Description, 500),
+                Description = node.Description,
                 ExternalId = extractor.GetUniqueId(node.Id),
                 Name = string.IsNullOrEmpty(node.DisplayName)
-                    ? ExtractorUtils.Truncate(extractor.GetUniqueId(node.Id), 140) : ExtractorUtils.Truncate(node.DisplayName, 140),
+                    ? extractor.GetUniqueId(node.Id) : node.DisplayName,
                 DataSetId = dataSetId
             };
 
@@ -154,7 +155,7 @@ namespace Cognite.OpcUa.Pushers
             var parent = evt.SourceNode == null || evt.SourceNode.IsNullNodeId ? null : extractor.State.GetActiveNode(evt.SourceNode);
             var entity = new StatelessEventCreate
             {
-                Description = ExtractorUtils.Truncate(evt.Message, 500),
+                Description = evt.Message,
                 StartTime = evt.MetaData.TryGetValue("StartTime", out var rawStartTime)
                     ? GetTimestampValue(rawStartTime)
                     : evt.Time.ToUnixTimeMilliseconds(),
@@ -164,10 +165,10 @@ namespace Cognite.OpcUa.Pushers
                 AssetExternalIds = parent == null
                     ? (IEnumerable<string>)Array.Empty<string>()
                     : new List<string> { extractor.GetUniqueId(parent.IsVariable ? parent.ParentId : parent.Id) },
-                ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
-                Type = ExtractorUtils.Truncate(evt.MetaData.TryGetValue("Type", out var rawType)
+                ExternalId = evt.EventId,
+                Type = evt.MetaData.TryGetValue("Type", out var rawType)
                     ? extractor.ConvertToString(rawType)
-                    : extractor.GetUniqueId(evt.EventType), 64),
+                    : extractor.GetUniqueId(evt.EventType),
                 DataSetId = dataSetId
             };
             var finalMetaData = new Dictionary<string, string>();
@@ -180,15 +181,14 @@ namespace Cognite.OpcUa.Pushers
             }
             if (evt.MetaData.ContainsKey("SubType"))
             {
-                entity.Subtype = ExtractorUtils.Truncate(extractor.ConvertToString(evt.MetaData["SubType"]), 64);
+                entity.Subtype = extractor.ConvertToString(evt.MetaData["SubType"]);
             }
 
             foreach (var dt in evt.MetaData)
             {
                 if (!excludeMetaData.Contains(dt.Key))
                 {
-                    finalMetaData[ExtractorUtils.Truncate(dt.Key, 32)] =
-                        ExtractorUtils.Truncate(extractor.ConvertToString(dt.Value), 256);
+                    finalMetaData[dt.Key] = extractor.ConvertToString(dt.Value);
                 }
 
                 if (len++ == 15) break;
@@ -213,17 +213,17 @@ namespace Cognite.OpcUa.Pushers
             EventCreate entity;
             entity = new EventCreate
             {
-                Description = ExtractorUtils.Truncate(evt.Message, 500),
+                Description = evt.Message,
                 StartTime = evt.MetaData.TryGetValue("StartTime", out var rawStartTime)
                     ? GetTimestampValue(rawStartTime)
                     : evt.Time.ToUnixTimeMilliseconds(),
                 EndTime = evt.MetaData.TryGetValue("EndTime", out var rawEndTime)
                     ? GetTimestampValue(rawEndTime)
                     : evt.Time.ToUnixTimeMilliseconds(),
-                ExternalId = ExtractorUtils.Truncate(evt.EventId, 255),
-                Type = ExtractorUtils.Truncate(evt.MetaData.TryGetValue("Type", out var rawType)
+                ExternalId = evt.EventId,
+                Type = evt.MetaData.TryGetValue("Type", out var rawType)
                     ? extractor.ConvertToString(rawType)
-                    : extractor.GetUniqueId(evt.EventType), 64),
+                    : extractor.GetUniqueId(evt.EventType),
                 DataSetId = dataSetId
             };
 
@@ -242,15 +242,14 @@ namespace Cognite.OpcUa.Pushers
             }
             if (evt.MetaData.TryGetValue("SubType", out var rawSubType))
             {
-                entity.Subtype = ExtractorUtils.Truncate(extractor.ConvertToString(rawSubType), 64);
+                entity.Subtype = extractor.ConvertToString(rawSubType);
             }
 
             foreach (var dt in evt.MetaData)
             {
                 if (!excludeMetaData.Contains(dt.Key))
                 {
-                    finalMetaData[ExtractorUtils.Truncate(dt.Key, 32)] =
-                        ExtractorUtils.Truncate(extractor.ConvertToString(dt.Value), 256);
+                    finalMetaData[dt.Key] = extractor.ConvertToString(dt.Value);
                 }
 
                 if (len++ == 15) break;
@@ -274,10 +273,10 @@ namespace Cognite.OpcUa.Pushers
             string externalId = extractor.GetUniqueId(variable.Id, variable.Index);
             var writePoco = new StatelessTimeSeriesCreate
             {
-                Description = ExtractorUtils.Truncate(variable.Description, 1000),
+                Description = variable.Description,
                 ExternalId = externalId,
                 AssetExternalId = extractor.GetUniqueId(variable.ParentId),
-                Name = ExtractorUtils.Truncate(variable.DisplayName, 255),
+                Name = variable.DisplayName,
                 LegacyName = externalId,
                 IsString = variable.DataType.IsString,
                 IsStep = variable.DataType.IsStep,
@@ -331,9 +330,9 @@ namespace Cognite.OpcUa.Pushers
 
             var writePoco = new TimeSeriesCreate
             {
-                Description = ExtractorUtils.Truncate(variable.Description, 1000),
+                Description = variable.Description,
                 ExternalId = externalId,
-                Name = ExtractorUtils.Truncate(variable.DisplayName, 255),
+                Name = variable.DisplayName,
                 LegacyName = externalId,
                 IsString = variable.DataType.IsString,
                 IsStep = variable.DataType.IsStep,
@@ -403,13 +402,13 @@ namespace Cognite.OpcUa.Pushers
         {
             if (update.Description)
             {
-                string newDescription = ExtractorUtils.Truncate(node.Description, 1000);
+                string newDescription = node.Description;
                 UpdateIfModified(ret, raw, newDescription, "description");
             }
 
             if (update.Name)
             {
-                string newName = ExtractorUtils.Truncate(node.DisplayName, 255);
+                string newName = node.DisplayName;
                 UpdateIfModified(ret, raw, newName, "name");
             }
 
@@ -530,6 +529,54 @@ namespace Cognite.OpcUa.Pushers
                 }
             } while (changed);
             return objects.GroupBy(obj => level[obj.Value.Id]).OrderByDescending(group => group.Key).Select(group => group.Select(kvp => kvp.Key));
+        }
+        public static TimeSeriesUpdate GetTSUpdate(
+            TimeSeries old,
+            BufferedVariable newTs,
+            TypeUpdateConfig update,
+            IDictionary<NodeId, long> nodeToAssetIds,
+            Dictionary<string, string> extra)
+        {
+            if (update == null || newTs == null || nodeToAssetIds == null || old == null) return null;
+            var tsUpdate = new TimeSeriesUpdate();
+            if (update.Context)
+            {
+                if (newTs.ParentId != null && !newTs.ParentId.IsNullNodeId
+                    && nodeToAssetIds.TryGetValue(newTs.ParentId, out long assetId))
+                {
+                    if (assetId != old.AssetId && assetId > 0)
+                    {
+                        tsUpdate.AssetId = new UpdateNullable<long?>(assetId);
+                    }
+                }
+            }
+
+            var newDesc = Sanitation.Truncate(newTs.Description, Sanitation.TimeSeriesDescriptionMax);
+            if (update.Description && !string.IsNullOrEmpty(newDesc) && newDesc != old.Description)
+                tsUpdate.Description = new UpdateNullable<string>(newDesc);
+
+            var newName = Sanitation.Truncate(newTs.DisplayName, Sanitation.TimeSeriesNameMax);
+            if (update.Name && !string.IsNullOrEmpty(newName) && newName != old.Name)
+                tsUpdate.Name = new UpdateNullable<string>(newName);
+
+            if (update.Metadata && newTs.Properties != null && newTs.Properties.Any()
+                || (extra?.Any() ?? false))
+            {
+                var newMetaData = PropertiesToMetadata(newTs.Properties, extra)
+                    .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                    .SanitizeMetadata(
+                        Sanitation.TimeSeriesMetadataMaxPerKey,
+                        Sanitation.TimeSeriesMetadataMaxPerKey,
+                        Sanitation.TimeSeriesMetadataMaxPerValue,
+                        Sanitation.TimeSeriesMetadataMaxBytes);
+
+                if (old.Metadata == null || newMetaData.Any(meta => !old.Metadata.ContainsKey(meta.Key) || old.Metadata[meta.Key] != meta.Value))
+                {
+                    tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
+                }
+            }
+            return tsUpdate;
         }
     }
 

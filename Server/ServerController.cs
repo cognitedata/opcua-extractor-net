@@ -68,6 +68,7 @@ namespace Server
 
         public async Task UpdateNodeMultiple(NodeId id, int count, Func<int, object> generator, int delayms = 50)
         {
+            if (generator == null) throw new ArgumentNullException(nameof(generator));
             for (int i = 0; i < count; i++)
             {
                 Server.UpdateNode(id, generator(i));

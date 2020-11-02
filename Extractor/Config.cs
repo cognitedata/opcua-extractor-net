@@ -24,6 +24,7 @@ using Cognite.Extractor.Logging;
 using Cognite.Extractor.Metrics;
 using Cognite.Extractor.Utils;
 using Cognite.Extractor.StateStorage;
+using Cognite.Extensions;
 
 namespace Cognite.OpcUa
 {
@@ -38,9 +39,9 @@ namespace Cognite.OpcUa
         public int QueueLength { get; set; } = 10;
         public string Username { get; set; }
         public string Password { get; set; }
-        public bool Secure { get; set; } = false;
-        public bool ForceRestart { get; set; } = false;
-        public bool ExitOnFailure { get; set; } = false;
+        public bool Secure { get; set; }
+        public bool ForceRestart { get; set; }
+        public bool ExitOnFailure { get; set; }
         public int BrowseNodesChunk { get => browseNodesChunk; set => browseNodesChunk = Math.Max(1, value); }
         private int browseNodesChunk = 1000;
         public int BrowseChunk { get => browseChunk; set => browseChunk = Math.Max(0, value); }
@@ -51,7 +52,7 @@ namespace Cognite.OpcUa
         public int SubscriptionChunk { get => subscriptionChunk; set => subscriptionChunk = Math.Max(1, value); }
         private int subscriptionChunk = 1000;
         public int KeepAliveInterval { get; set; } = 5000;
-        public bool RestartOnReconnect { get; set; } = false;
+        public bool RestartOnReconnect { get; set; }
     }
     public class ExtractionConfig
     {
@@ -63,8 +64,8 @@ namespace Cognite.OpcUa
         public Dictionary<string, ProtoNodeId> NodeMap { get; set; }
         public Dictionary<string, string> NamespaceMap { get => namespaceMap; set => namespaceMap = value ?? namespaceMap; }
         private Dictionary<string, string> namespaceMap = new Dictionary<string, string>();
-        public int AutoRebrowsePeriod { get; set; } = 0;
-        public bool EnableAuditDiscovery { get; set; } = false;
+        public int AutoRebrowsePeriod { get; set; }
+        public bool EnableAuditDiscovery { get; set; }
         public int DataPushDelay { get; set; } = 1000;
         public UpdateConfig Update { get => update; set => update = value ?? update; }
         private UpdateConfig update = new UpdateConfig();
@@ -80,7 +81,7 @@ namespace Cognite.OpcUa
         public bool UnknownAsScalar { get; set; }
         public int MaxArraySize { get; set; }
         public bool AllowStringVariables { get; set; }
-        public bool AutoIdentifyTypes { get; set; } = false;
+        public bool AutoIdentifyTypes { get; set; }
         public bool EnumsAsStrings { get; set; }
         public bool DataTypeMetadata { get; set; }
         public bool NullAsNumeric { get; set; }
@@ -97,10 +98,10 @@ namespace Cognite.OpcUa
     public class TypeUpdateConfig
     {
         public bool AnyUpdate => Description || Name || Metadata || Context;
-        public bool Description { get; set; } = false;
-        public bool Name { get; set; } = false;
-        public bool Metadata { get; set; } = false;
-        public bool Context { get; set; } = false;
+        public bool Description { get; set; }
+        public bool Name { get; set; }
+        public bool Metadata { get; set; }
+        public bool Context { get; set; }
 
     }
     public interface IPusherConfig
@@ -113,7 +114,7 @@ namespace Cognite.OpcUa
     public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
         public long? DataSetId { get; set; }
-        public bool Debug { get; set; } = false;
+        public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; } = true;
         public RawMetadataConfig RawMetadata { get; set; }
         public MetadataMapConfig MetadataMapping { get; set; }
@@ -150,7 +151,7 @@ namespace Cognite.OpcUa
         public string Password { get; set; }
         public string Database { get; set; }
         public int PointChunkSize { get; set; } = 100000;
-        public bool Debug { get; set; } = false;
+        public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; } = true;
         public double? NonFiniteReplacement
         {
@@ -198,8 +199,8 @@ namespace Cognite.OpcUa
 
     public class FailureBufferConfig
     {
-        public bool Enabled { get; set; } = false;
-        public bool InfluxStateStore { get; set; } = false;
+        public bool Enabled { get; set; }
+        public bool InfluxStateStore { get; set; }
         public bool Influx { get; set; }
         public string DatapointPath { get; set; }
         public string EventPath { get; set; }
@@ -253,9 +254,9 @@ namespace Cognite.OpcUa
     }
     public class HistoryConfig
     {
-        public bool Enabled { get; set; } = false;
+        public bool Enabled { get; set; }
         public bool Data { get; set; } = true;
-        public bool Backfill { get; set; } = false;
+        public bool Backfill { get; set; }
         public int DataChunk { get => dataChunk; set => dataChunk = Math.Max(0, value); }
         private int dataChunk = 1000;
         public int DataNodesChunk { get => dataNodesChunk; set => dataNodesChunk = Math.Max(1, value); }
@@ -264,7 +265,7 @@ namespace Cognite.OpcUa
         private int eventPointsChunk = 1000;
         public int EventNodesChunk { get => eventNodesChunk; set => eventNodesChunk = Math.Max(1, value); }
         private int eventNodesChunk = 100;
-        public long StartTime { get; set; } = 0;
+        public long StartTime { get; set; }
         public int Granularity { get; set; } = 600;
     }
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:Uri properties should not be strings", Justification = "Yaml Deserialization")]
@@ -286,8 +287,8 @@ namespace Cognite.OpcUa
     public class ProtoDataType
     {
         public ProtoNodeId NodeId { get; set; }
-        public bool IsStep { get; set; } = false;
-        public bool Enum { get; set; } = false;
+        public bool IsStep { get; set; }
+        public bool Enum { get; set; }
     }
 
     public class StateStorageConfig : StateStoreConfig

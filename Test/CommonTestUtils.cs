@@ -246,8 +246,10 @@ namespace Test
 
         public static void StopProxyProcess()
         {
-            using var process = Bash("kill $(ps aux | grep '[n]cat' | awk '{print $2}')");
-            process.WaitForExit();
+            using (var process = Bash("kill $(ps aux | grep '[n]cat' | awk '{print $2}')"))
+            {
+                process.WaitForExit();
+            }
         }
 
         /// <summary>
@@ -687,8 +689,12 @@ namespace Test
 
             if (Config.StateStorage.Location != null)
             {
-                File.Delete(Config.StateStorage.Location);
-                using var db = new LiteDatabase(Config.StateStorage.Location);
+                var db = (Extractor.StateStorage as LiteDBStateStore).GetDatabase();
+                var cols = db.GetCollectionNames();
+                foreach (var col in cols)
+                {
+                    db.DropCollection(col);
+                }
             }
         }
 
@@ -706,6 +712,8 @@ namespace Test
         }
         public async Task WaitForCondition(Func<Task<bool>> condition, int seconds, Func<string> assertion)
         {
+            if (condition == null) throw new ArgumentNullException(nameof(condition));
+            if (assertion == null) throw new ArgumentNullException(nameof(assertion));
             bool triggered = false;
             int i;
             for (i = 0; i < seconds * 5; i++)
@@ -845,6 +853,8 @@ namespace Test
             Source?.Cancel();
             Source?.Dispose();
             IfDbClient?.Dispose();
+            // Disposing singletons is usually bad, but we really have no choice.
+            Extractor?.StateStorage?.Dispose();
             if (Extractor != null)
             {
                 IEnumerable<IPusher> pushers = Extractor.GetType().GetField("pushers", BindingFlags.NonPublic | BindingFlags.Instance)
@@ -868,15 +878,15 @@ namespace Test
         public ConfigName ConfigName { get; set; } = ConfigName.Test;
         public string Pusher { get; set; } = "cdf";
         public CDFMockHandler.MockMode MockMode { get; set; } = CDFMockHandler.MockMode.None;
-        public bool QuitAfterMap { get; set; } = false;
-        public bool StoreDatapoints { get; set; } = false;
-        public int? HistoryGranularity { get; set; } = null;
-        public bool FailureInflux { get; set; } = false;
-        public bool InfluxOverride { get; set; } = false;
-        public Func<FullConfig, IEnumerable<IPusher>, UAClient, CancellationTokenSource, UAExtractor> Builder { get; set; } = null;
-        public bool StateStorage { get; set; } = false;
-        public bool StateInflux { get; set; } = false;
-        public bool MqttState { get; set; } = false;
+        public bool QuitAfterMap { get; set; }
+        public bool StoreDatapoints { get; set; }
+        public int? HistoryGranularity { get; set; }
+        public bool FailureInflux { get; set; }
+        public bool InfluxOverride { get; set; }
+        public Func<FullConfig, IEnumerable<IPusher>, UAClient, CancellationTokenSource, UAExtractor> Builder { get; set; }
+        public bool StateStorage { get; set; }
+        public bool StateInflux { get; set; }
+        public bool MqttState { get; set; }
         public string DataBufferPath { get; set; }
         public string EventBufferPath { get; set; }
     }

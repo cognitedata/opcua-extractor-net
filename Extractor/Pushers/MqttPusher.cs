@@ -32,6 +32,7 @@ using MQTTnet.Client;
 using MQTTnet.Client.Options;
 using Prometheus;
 using Serilog;
+using Cognite.Extensions;
 
 namespace Cognite.OpcUa.Pushers
 {
@@ -53,7 +54,7 @@ namespace Cognite.OpcUa.Pushers
 
         private readonly DateTime minDateTime = new DateTime(1971, 1, 1);
 
-        private bool closed = false;
+        private bool closed;
 
         private HashSet<string> existingNodes;
 
@@ -184,7 +185,7 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-        public async Task<bool?> TestConnection(FullConfig _, CancellationToken token)
+        public async Task<bool?> TestConnection(FullConfig config, CancellationToken token)
         {
             if (client.IsConnected) return true;
             try

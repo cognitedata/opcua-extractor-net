@@ -145,19 +145,22 @@ namespace Cognite.OpcUa.Config
 
             var context = Appconfig.CreateMessageContext();
             var endpointConfig = EndpointConfiguration.Create(Appconfig);
-            using var channel = DiscoveryChannel.Create(new Uri(config.Source.EndpointUrl), endpointConfig, context);
-            using var disc = new DiscoveryClient(channel);
             var endpoints = new EndpointDescriptionCollection();
-            try
+            using (var channel = DiscoveryChannel.Create(new Uri(config.Source.EndpointUrl), endpointConfig, context))
             {
-                endpoints = disc.GetEndpoints(null);
-                summary.Endpoints = endpoints.Select(ep => $"{ep.EndpointUrl}: {ep.SecurityPolicyUri}").ToList();
+                using var disc = new DiscoveryClient(channel);
+                try
+                {
+                    endpoints = disc.GetEndpoints(null);
+                    summary.Endpoints = endpoints.Select(ep => $"{ep.EndpointUrl}: {ep.SecurityPolicyUri}").ToList();
+                }
+                catch (Exception e)
+                {
+                    log.Warning("Endpoint discovery failed, the given URL may not be a discovery server.");
+                    log.Debug(e, "Endpoint discovery failed");
+                }
             }
-            catch (Exception e)
-            {
-                log.Warning("Endpoint discovery failed, the given URL may not be a discovery server.");
-                log.Debug(e, "Endpoint discovery failed");
-            }
+            
 
             bool openExists = false;
             bool secureExists = false;
@@ -761,7 +764,7 @@ namespace Cognite.OpcUa.Config
             for (int i = 0; i < 50; i++)
             {
                 if (dps.Any()) break;
-                await Task.Delay(200);
+                await Task.Delay(200, token);
             }
 
             if (dps.Any())
@@ -1241,7 +1244,7 @@ namespace Cognite.OpcUa.Config
 
                 }), 120);
 
-            await Task.Delay(5000);
+            await Task.Delay(5000, token);
 
             Session.RemoveSubscriptions(Session.Subscriptions.ToList());
 

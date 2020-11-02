@@ -98,7 +98,13 @@ namespace Cognite.OpcUa
 
             string uniqueId = uaClient.GetUniqueId(nodeid);
 
-            var (first, last) = data.DataValues.MinMax(dp => dp.SourceTimestamp);
+            var last = DateTime.MinValue;
+            var first = DateTime.MaxValue;
+
+            if (data.DataValues.Any())
+            {
+                (first, last) = data.DataValues.MinMax(dp => dp.SourceTimestamp);
+            }
 
             if (frontfill)
             {

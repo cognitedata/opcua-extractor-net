@@ -81,7 +81,6 @@ namespace Cognite.OpcUa
 
             log.Information("Building extractor");
             using var extractor = new UAExtractor(config, pushers, client, provider.GetService<IExtractionStateStore>(), token);
-
             try
             {
                 await extractor.RunExtractor();

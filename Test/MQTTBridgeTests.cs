@@ -387,11 +387,13 @@ namespace Test
             using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
             var assetOne = new AssetCreate
             {
-                ExternalId = "test-asset-1"
+                ExternalId = "test-asset-1",
+                Name = "test-asset-1"
             };
             var assetTwo = new AssetCreate
             {
-                ExternalId = "test-asset-2"
+                ExternalId = "test-asset-2",
+                Name = "test-asset-2"
             };
             await tester.PublishAssets(new[] { assetOne, assetTwo });
 

@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Metrics;
@@ -583,7 +584,7 @@ namespace Test
             CommonTestUtils.ResetTestMetrics();
             tester.Extractor.RestartExtractor();
 
-            await Task.Delay(500);
+            await tester.Extractor.WaitForSubscriptions();
 
             await tester.WaitForCondition(() =>
                     tester.Extractor.State.GetNodeState(intVar) != null

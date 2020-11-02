@@ -67,6 +67,9 @@ namespace Server
         {
             custom.TriggerEvent<T>(eventId, emitter, source, message, builder);
         }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1062:Validate arguments of public methods",
+            Justification = "valueBuilder is not used here")]
         public void PopulateHistory(NodeId id, int count, string type = "int", int msdiff = 10, Func<int, object> valueBuilder = null)
         {
             custom.PopulateHistory(id, count, type, msdiff, valueBuilder);
