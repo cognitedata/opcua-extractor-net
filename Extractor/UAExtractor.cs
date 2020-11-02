@@ -782,7 +782,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">Nodes to subscribe to events for</param>
         private async Task SynchronizeEvents()
         {
-            await Task.Run(() => uaClient.SubscribeToEvents(State.EmitterStates.Select(state => state.SourceId), 
+            await Task.Run(() => uaClient.SubscribeToEvents(State.EmitterStates,
                 Streamer.EventSubscriptionHandler, source.Token));
             Interlocked.Increment(ref subscribed);
             if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;

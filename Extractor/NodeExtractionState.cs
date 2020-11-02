@@ -181,6 +181,15 @@ namespace Cognite.OpcUa
             }
         }
 
+        public EventExtractionState(UAClient client, NodeId emitterId, bool frontfill, bool backfill, bool stateStore)
+            : base(client, emitterId, frontfill, backfill)
+        {
+            if (stateStore)
+            {
+                buffer = new List<BufferedEvent>();
+            }
+        }
+
         /// <summary>
         /// Update timestamp and buffer from stream.
         /// </summary>
