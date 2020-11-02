@@ -578,6 +578,43 @@ namespace Cognite.OpcUa.Pushers
             }
             return tsUpdate;
         }
+
+        public static AssetUpdate GetAssetUpdate(
+            Asset old,
+            BufferedNode newAsset,
+            UAExtractor extractor,
+            TypeUpdateConfig update)
+        {
+            if (old == null || newAsset == null || extractor == null || update == null) return null;
+            var assetUpdate = new AssetUpdate();
+            if (update.Context && newAsset.ParentId != null && !newAsset.ParentId.IsNullNodeId)
+            {
+                var parentId = extractor.GetUniqueId(newAsset.ParentId);
+                if (parentId != old.ParentExternalId)
+                {
+                    assetUpdate.ParentExternalId = new UpdateNullable<string>(extractor.GetUniqueId(newAsset.ParentId));
+                }
+            }
+
+            if (update.Description && !string.IsNullOrEmpty(newAsset.Description) && newAsset.Description != old.Description)
+                assetUpdate.Description = new UpdateNullable<string>(newAsset.Description);
+
+            if (update.Name && !string.IsNullOrEmpty(newAsset.DisplayName) && newAsset.DisplayName != old.Name)
+                assetUpdate.Name = new UpdateNullable<string>(newAsset.DisplayName);
+
+            if (update.Metadata && newAsset.Properties != null && newAsset.Properties.Any())
+            {
+                var newMetaData = PropertiesToMetadata(newAsset.Properties)
+                    .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                if (old.Metadata == null
+                    || newMetaData.Any(meta => !old.Metadata.ContainsKey(meta.Key) || old.Metadata[meta.Key] != meta.Value))
+                {
+                    assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
+                }
+            }
+            return assetUpdate;
+        }
     }
 
     public class StatelessEventCreate : EventCreate
