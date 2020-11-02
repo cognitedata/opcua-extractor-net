@@ -267,7 +267,6 @@ namespace Cognite.OpcUa.Pushers
                         foreach (var node in variables) node.Changed = existingNodes.Contains(Extractor.GetUniqueId(node.Id, node.Index));
                     }
                 }
-
             }
             if (!objects.Any() && !variables.Any()) return true;
             if (!config.SkipMetadata)
@@ -605,7 +604,7 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
 
-        public async Task<bool> PushEventsChunk(IEnumerable<UAEvent> evts, CancellationToken token)
+        private async Task<bool> PushEventsChunk(IEnumerable<UAEvent> evts, CancellationToken token)
         {
             if (config.Debug) return true;
             var events = evts
@@ -634,10 +633,77 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
 
+        public async Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
+        {
+            if (config.SkipMetadata) return true;
+
+            var relationships = references.Select(rel => PusherUtils.ReferenceToRelationship(rel, config.DataSetId, Extractor));
+
+            if (!string.IsNullOrEmpty(config.LocalState))
+            {
+                var states = relationships
+                    .Select(rel => rel.ExternalId)
+                    .Select(id => new ExistingState { Id = id })
+                    .ToDictionary(state => state.Id);
+
+                await Extractor.StateStorage.RestoreExtractionState<MqttState, ExistingState>(
+                    states,
+                    config.LocalState,
+                    (state, poco) => state.Existing = true,
+                    token);
+
+                existingNodes = new HashSet<string>(states.Where(state => state.Value.Existing).Select(state => state.Key));
+
+                relationships = relationships.Where(rel => !existingNodes.Contains(rel.ExternalId)).ToList();
+            }
+
+            if (!relationships.Any()) return true;
+
+            log.Information("Pushing {cnt} relationships to CDF over MQTT", relationships.Count());
+
+            var tasks = relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token));
+            var results = await Task.WhenAll(tasks);
+
+            if (!results.All(res => res)) return false;
+
+            if (!string.IsNullOrEmpty(config.LocalState))
+            {
+                var newStates = relationships
+                    .Select(rel => rel.ExternalId)
+                    .Select(id => new ExistingState { Id = id, Existing = true, LastTimeModified = DateTime.UtcNow })
+                    .ToList();
+
+                await Extractor.StateStorage.StoreExtractionState(
+                    newStates,
+                    config.LocalState,
+                    state => new MqttState { Id = state.Id, CreatedAt = DateTime.UtcNow },
+                    token);
+            }
+            return true;
+        }
+
+        private async Task<bool> PushReferencesChunk(IEnumerable<CogniteSdk.Beta.RelationshipCreate> references, CancellationToken token)
+        {
+            var data = JsonSerializer.SerializeToUtf8Bytes(references, null);
+
+            var msg = baseBuilder
+                .WithPayload(data)
+                .WithTopic(config.RelationshipTopic)
+                .Build();
+
+            try
+            {
+                await client.PublishAsync(msg, token);
+            }
+            catch (Exception e)
+            {
+                log.Error("Failed to write relationships to MQTT: {msg}", e.Message);
+                return false;
+            }
+            return true;
+        }
+
         #endregion
-
-
-
 
         class MqttState : BaseStorableState
         {

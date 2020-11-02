@@ -200,6 +200,7 @@ namespace Cognite.OpcUa
         public string EventTopic { get; set; } = "cognite/opcua/events";
         public string DatapointTopic { get; set; } = "cognite/opcua/datapoints";
         public string RawTopic { get; set; } = "cognite/opcua/raw";
+        public string RelationshipTopic { get; set; } = "cognite/opcua/relationships";
         public string LocalState { get; set; }
         public long InvalidateBefore { get; set; }
         public bool Debug { get; set; }
