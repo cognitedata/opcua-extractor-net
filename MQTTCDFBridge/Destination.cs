@@ -29,15 +29,14 @@ namespace Cognite.Bridge
         private readonly ConcurrentDictionary<string, bool> tsIsString = new ConcurrentDictionary<string, bool>();
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(Destination));
+
+        private readonly CogniteDestination destination;
+
         public Destination(CogniteDestConfig config, IServiceProvider provider)
         {
             this.config = config;
             this.provider = provider;
-        }
-
-        private CogniteDestination GetDestination()
-        {
-            return provider.GetRequiredService<CogniteDestination>();
+            destination = provider.GetRequiredService<CogniteDestination>();
         }
 
         private static AssetUpdateItem GetAssetUpdate(AssetCreate update, Asset old)
@@ -100,7 +99,6 @@ namespace Cognite.Bridge
             }
             var assets = JsonSerializer.Deserialize<IEnumerable<AssetCreate>>(Encoding.UTF8.GetString(msg.Payload));
             if (!assets.Any()) return true;
-            var destination = GetDestination();
 
             var idsToTest = assets.Select(asset => asset.ExternalId).ToList();
 
@@ -157,8 +155,6 @@ namespace Cognite.Bridge
         private async Task<bool> RetrieveMissingAssets(IEnumerable<string> ids, CancellationToken token)
         {
             if (!ids.Any()) return true;
-            var destination = GetDestination();
-
             try
             {
                 var assets = await destination.CogniteClient.Assets.RetrieveAsync(ids.Distinct().Select(Identity.Create), true, token);
@@ -178,8 +174,6 @@ namespace Cognite.Bridge
         private async Task<bool> RetrieveMissingTimeSeries(IEnumerable<string> ids, CancellationToken token)
         {
             if (!ids.Any()) return true;
-            var destination = GetDestination();
-
             try
             {
                 var tss = await destination.CogniteClient.TimeSeries.RetrieveAsync(ids.Distinct().Select(Identity.Create), true, token);
@@ -215,8 +209,6 @@ namespace Cognite.Bridge
             var assetExternalIds = timeseries.Select(ts => ts.AssetExternalId).Where(id => id != null).ToHashSet();
 
             var missingAssetIds = assetExternalIds.Except(assetIds.Keys);
-
-            var destination = GetDestination();
 
             if (missingAssetIds.Any())
             {
@@ -320,8 +312,6 @@ namespace Cognite.Bridge
                 if (!await RetrieveMissingTimeSeries(missingTsIds, token)) return false;
             }
 
-            var destination = GetDestination();
-
             var req = new DataPointInsertionRequest();
             req.Items.AddRange(datapoints.Items.Where(
                 pts => tsIsString.ContainsKey(pts.ExternalId)
@@ -363,7 +353,6 @@ namespace Cognite.Bridge
             var assetExternalIds = events.SelectMany(evt => evt.AssetExternalIds).Where(id => id != null);
             var missingAssetIds = assetExternalIds.Except(assetIds.Keys);
 
-            var destination = GetDestination();
             if (missingAssetIds.Any())
             {
                 if (!await RetrieveMissingAssets(missingAssetIds, token))
@@ -397,6 +386,65 @@ namespace Cognite.Bridge
 
             return true;
         }
+        /// <summary>
+        /// Try to push relationships to CDF, then remove duplicates. 
+        /// </summary>
+        /// <param name="msg"></param>
+        /// <param name="token"></param>
+        /// <returns></returns>
+        public async Task<bool> PushRelationships(MqttApplicationMessage msg, CancellationToken token)
+        {
+            if (msg == null) throw new ArgumentNullException(nameof(msg));
+            if (msg.Payload == null)
+            {
+                log.Warning("Null payload in relationships");
+                return true;
+            }
+            var relationships = JsonSerializer.Deserialize<IEnumerable<CogniteSdk.Beta.RelationshipCreate>>(Encoding.UTF8.GetString(msg.Payload));
+
+            var tasks = relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token));
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception ex)
+            {
+                log.Error("Failed to push relationships to CDF: {msg}", ex.Message);
+                return false;
+            }
+            return true;
+        }
+
+        private async Task PushReferencesChunk(IEnumerable<CogniteSdk.Beta.RelationshipCreate> relationships, CancellationToken token)
+        {
+            try
+            {
+                await destination.CogniteClient.Beta.Relationships.CreateAsync(relationships, token);
+            }
+            catch (ResponseException ex)
+            {
+                if (ex.Duplicated.Any())
+                {
+                    var existing = new HashSet<string>();
+                    foreach (var dict in ex.Duplicated)
+                    {
+                        if (dict.TryGetValue("externalId", out var value))
+                        {
+                            existing.Add((value as MultiValue.String).Value);
+                        }
+                    }
+                    if (!existing.Any()) throw;
+
+                    relationships = relationships.Where(rel => !existing.Contains(rel.ExternalId)).ToList();
+                    await PushReferencesChunk(relationships, token);
+                }
+                else
+                {
+                    throw;
+                }
+            }
+        }
+
         public async Task<bool> PushRaw(MqttApplicationMessage msg, CancellationToken token)
         {
             if (msg == null) throw new ArgumentNullException(nameof(msg));
@@ -409,8 +457,6 @@ namespace Cognite.Bridge
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             });
-
-            var destination = GetDestination();
 
             try
             {
@@ -441,7 +487,6 @@ namespace Cognite.Bridge
             CancellationToken token)
         {
             if (!toUpsert.Any()) return;
-            var destination = GetDestination();
             string cursor = null;
             var existing = new List<RawRow>();
             do

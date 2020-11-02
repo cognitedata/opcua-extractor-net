@@ -89,6 +89,7 @@ namespace Cognite.Bridge
                     .WithTopicFilter(config.Mqtt.DatapointTopic, MqttQualityOfServiceLevel.AtLeastOnce)
                     .WithTopicFilter(config.Mqtt.EventTopic, MqttQualityOfServiceLevel.AtLeastOnce)
                     .WithTopicFilter(config.Mqtt.RawTopic, MqttQualityOfServiceLevel.AtLeastOnce)
+                    .WithTopicFilter(config.Mqtt.RelationshipTopic, MqttQualityOfServiceLevel.AtLeastOnce)
                     .Build(), token);
                 log.Information("Subscribed to topics");
             });
@@ -160,6 +161,20 @@ namespace Cognite.Bridge
                         log.Error(ex, "Unexpected failure while pushing raw to CDF: {msg}", ex.Message);
                         success = false;
                     }
+                }
+                else if (msg.ApplicationMessage.Topic == config.Mqtt.RelationshipTopic)
+                {
+                    log.Verbose("Relationships message from: {src}", msg.ClientId);
+                    try
+                    {
+                        success = await destination.PushRelationships(msg.ApplicationMessage, token);
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Error(ex, "Unexpected failure while pushing relationships to CDF: {msg}", ex.Message);
+                        success = false;
+                    }
+
                 }
                 else
                 {
