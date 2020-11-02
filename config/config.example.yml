@@ -486,6 +486,14 @@ extraction:
     property-name-filter:
     # Equivalent filter, but on node id if the node has a string identifier
     property-id-filter:
+    # Map OPC-UA non-hierarchical references to relationships in CDF.
+    # The generated relationships will have external-id
+    # [prefix][reference type name (or inverse-name)];[namespace source][id source];[namespace target][id target]
+    # Only relationships between mapped nodes will be added.
+    # This may be relevant if the server contains functional relationships, like connected components,
+    # a non-hierarchical reference based system for location, etc.
+    relationships:
+        enabled: false
 
 events:
     # Events are extracted with the following rules: By default all events are extracted.
