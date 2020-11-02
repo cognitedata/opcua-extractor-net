@@ -144,6 +144,7 @@ namespace Cognite.OpcUa
         public string Database { get; set; }
         public string AssetsTable { get; set; }
         public string TimeseriesTable { get; set; }
+        public string RelationshipsTable { get; set; }
     }
 
     public class MetadataMapConfig
