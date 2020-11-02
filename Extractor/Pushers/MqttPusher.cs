@@ -185,7 +185,7 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-        public async Task<bool?> TestConnection(FullConfig _, CancellationToken token)
+        public async Task<bool?> TestConnection(FullConfig config, CancellationToken token)
         {
             if (client.IsConnected) return true;
             try

@@ -16,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Cognite.Extractor.Common;
 using System.Buffers;
 using Cognite.Extensions;
+using System.ComponentModel;
 
 namespace Cognite.Bridge
 {
