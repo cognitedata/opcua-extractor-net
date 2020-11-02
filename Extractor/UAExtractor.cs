@@ -446,11 +446,6 @@ namespace Cognite.OpcUa
         {
             var nodes = await GetNodesFromQueue();
 
-            if (!nodes.Objects.Any() && !nodes.Timeseries.Any() && !nodes.Variables.Any())
-            {
-                log.Information("Mapping resulted in no new nodes");
-                return Array.Empty<Task>();
-            }
             IEnumerable<BufferedReference> references = null;
             if (config.Extraction.Relationships.Enabled)
             {
@@ -458,6 +453,12 @@ namespace Cognite.OpcUa
                     ReferenceTypeIds.NonHierarchicalReferences, source.Token);
                 await referenceTypeManager.GetReferenceTypeDataAsync(source.Token);
                 State.AddReferences(references);
+            }
+
+            if (!nodes.Objects.Any() && !nodes.Timeseries.Any() && !nodes.Variables.Any())
+            {
+                log.Information("Mapping resulted in no new nodes");
+                return Array.Empty<Task>();
             }
 
             nodes.ClearRaw();
