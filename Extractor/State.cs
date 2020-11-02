@@ -211,16 +211,21 @@ namespace Cognite.OpcUa
             return activeNodes.GetValueOrDefault(id);
         }
 
-        public void AddReferences(IEnumerable<BufferedReference> newReferences)
+        public IEnumerable<BufferedReference> AddReferences(IEnumerable<BufferedReference> newReferences)
         {
-            if (newReferences == null) return;
+            if (newReferences == null) return Array.Empty<BufferedReference>();
+            var retReferences = new List<BufferedReference>();
             lock (referenceLock)
             {
                 foreach (var reference in newReferences)
                 {
-                    references.Add(reference);
+                    if (references.Add(reference))
+                    {
+                        retReferences.Add(reference);
+                    }
                 }
             }
+            return retReferences;
         }
     }
 }

@@ -451,7 +451,7 @@ namespace Cognite.OpcUa
                 references = await referenceTypeManager.GetReferencesAsync(nodes.RawObjects.Concat(nodes.RawVariables).Select(node => node.Id),
                     ReferenceTypeIds.NonHierarchicalReferences, source.Token);
                 await referenceTypeManager.GetReferenceTypeDataAsync(source.Token);
-                State.AddReferences(references);
+                references = State.AddReferences(references);
             }
 
             if (!nodes.Objects.Any() && !nodes.Timeseries.Any() && !nodes.Variables.Any())
