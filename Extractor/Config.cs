@@ -116,6 +116,7 @@ namespace Cognite.OpcUa
         public long? DataSetId { get; set; }
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; } = true;
+        public bool SkipMetadata { get; set; }
         public RawMetadataConfig RawMetadata { get; set; }
         public MetadataMapConfig MetadataMapping { get; set; }
         public double? NonFiniteReplacement
@@ -183,6 +184,7 @@ namespace Cognite.OpcUa
         public long InvalidateBefore { get; set; }
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; }
+        public bool SkipMetadata { get; set; }
         public RawMetadataConfig RawMetadata { get; set; }
         public MetadataMapConfig MetadataMapping { get; set; }
         public double? NonFiniteReplacement

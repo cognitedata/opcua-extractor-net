@@ -101,6 +101,11 @@ cognite:
     # Data set to use for new objects. Existing objects will not be updated
     data-set-id:
 
+    # Do not push any metadata at all. If this is true, plain timeseries without metadata will be created,
+    # similarly to raw-metadata, and datapoints will be pushed. Nothing will be written to raw, and no assets will be created.
+    # Events will be created, but without asset context.
+    skip-metadata: false
+
     # Default empty. Store assets and/or timeseries data in raw. Assets will not be created at all,
     # timeseries will be created with just externalId, isStep and isString.
     # Both timeseries and assets will be persisted in their entirety to raw.
@@ -264,6 +269,10 @@ mqtt:
     debug: false
     # Replace all instances of NaN, Infinity or values greater than 1E100 with this floating point number. If left empty, ignore instead.
     non-finite-replacement:
+    # Do not push any metadata at all. If this is true, plain timeseries without metadata will be created,
+    # similarly to raw-metadata, and datapoints will be pushed. Nothing will be written to raw, and no assets will be created.
+    # Events will be created, but without asset context.
+    skip-metadata: false
     # Default empty. Store assets and/or timeseries data in raw. Assets will not be created at all,
     # timeseries will be created with just externalId, isStep and isString.
     # Both timeseries and assets will be persisted in their entirety to raw.

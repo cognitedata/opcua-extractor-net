@@ -328,10 +328,10 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-        public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
+        public async Task<bool?> TestConnection(FullConfig config, CancellationToken token)
         {
-            if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
-            if (config.Debug) return true;
+            if (config == null) throw new ArgumentNullException(nameof(config));
+            if (this.config.Debug) return true;
             try
             {
                 await destination.TestCogniteConfig(token);
@@ -339,7 +339,7 @@ namespace Cognite.OpcUa.Pushers
             catch (Exception ex)
             {
                 log.Error("Failed to get CDF login status, this is likely a problem with the network or configuration. Project {project} at {url}: {msg}", 
-                    config.Project, config.Host, ex.Message);
+                    this.config.Project, this.config.Host, ex.Message);
                 return false;
             }
 
@@ -351,11 +351,11 @@ namespace Cognite.OpcUa.Pushers
             {
                 log.Error("Could not access CDF Time Series - most likely due " +
                           "to insufficient access rights on API key. Project {project} at {host}: {msg}",
-                    config.Project, config.Host, ex.Message);
+                    this.config.Project, this.config.Host, ex.Message);
                 return false;
             }
 
-            if (!fullConfig.Events.Enabled) return true;
+            if (!config.Events.Enabled) return true;
 
             try
             {
@@ -365,7 +365,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
                           "to insufficient acces rights on API key. Project {project} at {host}: {msg}",
-                    config.Project, config.Host, ex.Message);
+                    this.config.Project, this.config.Host, ex.Message);
                 return false;
             }
 
@@ -387,6 +387,8 @@ namespace Cognite.OpcUa.Pushers
             TypeUpdateConfig update,
             CancellationToken token)
         {
+            if (config.SkipMetadata) return;
+
             var assetIds = new ConcurrentDictionary<string, BufferedNode>(objects.ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
             var metaMap = config.MetadataMapping?.Assets;
             bool useRawAssets = config.RawMetadata != null
@@ -507,55 +509,17 @@ namespace Cognite.OpcUa.Pushers
             }
         }
 
-        private async Task PushTimeseries(
-            IEnumerable<BufferedVariable> tsList,
+        private async Task UpdateTimeseries(
+            bool useRawTimeseries,
+            IEnumerable<TimeSeries> existingTs,
             TypeUpdateConfig update,
+            IDictionary<string, BufferedVariable> tsIds,
             CancellationToken token)
         {
-            var tsIds = new ConcurrentDictionary<string, BufferedVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
-            var metaMap = config.MetadataMapping?.Timeseries;
-            bool useRawTimeseries = config.RawMetadata != null
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
-
-            var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsIds.Keys, async ids =>
-            {
-                var tss = ids.Select(id => tsIds[id]);
-                if (!useRawTimeseries)
-                {
-                    await Extractor.ReadProperties(tss);
-                }
-                return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, metaMap, useRawTimeseries))
-                    .Where(ts => ts != null);
-            }, RetryMode.None, SanitationMode.Clean, token);
-
-            var fatalError = timeseries.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
-            if (fatalError != null) throw fatalError.Exception;
-
-
-            var foundBadTimeseries = new List<string>();
-            foreach (var ts in timeseries.Results)
-            {
-                var loc = tsIds[ts.ExternalId];
-                if (nodeToAssetIds.TryGetValue(loc.ParentId, out var parentId))
-                {
-                    nodeToAssetIds[loc.Id] = parentId;
-                }
-                if (ts.IsString != loc.DataType.IsString)
-                {
-                    mismatchedTimeseries.Add(ts.ExternalId);
-                    foundBadTimeseries.Add(ts.ExternalId);
-                }
-            }
-            if (foundBadTimeseries.Any())
-            {
-                log.Debug("Found mismatched timeseries when ensuring: {tss}", string.Join(", ", foundBadTimeseries));
-            }
-
             if (update.AnyUpdate && !useRawTimeseries)
             {
                 var updates = new List<TimeSeriesUpdateItem>();
-                var existing = timeseries.Results.ToDictionary(asset => asset.ExternalId);
+                var existing = existingTs.ToDictionary(asset => asset.ExternalId);
                 foreach (var kvp in tsIds)
                 {
                     if (existing.TryGetValue(kvp.Key, out var ts))
@@ -579,25 +543,26 @@ namespace Cognite.OpcUa.Pushers
 
             if (useRawTimeseries)
             {
+                var metaMap = config.MetadataMapping?.Timeseries;
                 if (update.AnyUpdate)
                 {
                     string columns = BuildColumnString(update, false);
                     await UpsertRawRows<JsonElement>(config.RawMetadata.Database,
                         config.RawMetadata.TimeseriesTable, tsIds.Keys, async rows =>
-                    {
-                        var rowDict = rows.ToDictionary(row => row.Key);
+                        {
+                            var rowDict = rows.ToDictionary(row => row.Key);
 
-                        var toReadProperties = tsIds.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
-                        await Extractor.ReadProperties(toReadProperties);
+                            var toReadProperties = tsIds.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
+                            await Extractor.ReadProperties(toReadProperties);
 
-                        var updates = tsIds
-                            .Select(kvp => (kvp.Key, PusherUtils.CreateRawTsUpdate(kvp.Value, Extractor,
-                                rowDict.GetValueOrDefault(kvp.Key), update, metaMap)))
-                            .Where(elem => elem.Item2 != null)
-                            .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
+                            var updates = tsIds
+                                .Select(kvp => (kvp.Key, PusherUtils.CreateRawTsUpdate(kvp.Value, Extractor,
+                                    rowDict.GetValueOrDefault(kvp.Key), update, metaMap)))
+                                .Where(elem => elem.Item2 != null)
+                                .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
 
-                        return updates;
-                    }, null, columns, token);
+                            return updates;
+                        }, null, columns, token);
                 }
                 else
                 {
@@ -610,7 +575,58 @@ namespace Cognite.OpcUa.Pushers
                             .ToDictionary(ts => ts.ExternalId);
                     }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
                 }
+            }
+        }
 
+        private async Task PushTimeseries(
+            IEnumerable<BufferedVariable> tsList,
+            TypeUpdateConfig update,
+            CancellationToken token)
+        {
+            var tsIds = new ConcurrentDictionary<string, BufferedVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
+            var metaMap = config.MetadataMapping?.Timeseries;
+            bool useRawTimeseries = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
+
+            bool simpleTimeseries = useRawTimeseries || config.SkipMetadata;
+
+            var timeseries = await destination.GetOrCreateTimeSeriesAsync(tsIds.Keys, async ids =>
+            {
+                var tss = ids.Select(id => tsIds[id]);
+                if (!simpleTimeseries)
+                {
+                    await Extractor.ReadProperties(tss);
+                }
+                return tss.Select(ts => PusherUtils.VariableToTimeseries(ts, Extractor, config.DataSetId, nodeToAssetIds, metaMap, simpleTimeseries))
+                    .Where(ts => ts != null);
+            }, RetryMode.None, SanitationMode.Clean, token);
+
+            var fatalError = timeseries.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
+            if (fatalError != null) throw fatalError.Exception;
+
+            var foundBadTimeseries = new List<string>();
+            foreach (var ts in timeseries.Results)
+            {
+                var loc = tsIds[ts.ExternalId];
+                if (nodeToAssetIds.TryGetValue(loc.ParentId, out var parentId))
+                {
+                    nodeToAssetIds[loc.Id] = parentId;
+                }
+                if (ts.IsString != loc.DataType.IsString)
+                {
+                    mismatchedTimeseries.Add(ts.ExternalId);
+                    foundBadTimeseries.Add(ts.ExternalId);
+                }
+            }
+            if (foundBadTimeseries.Any())
+            {
+                log.Debug("Found mismatched timeseries when ensuring: {tss}", string.Join(", ", foundBadTimeseries));
+            }
+
+            if (!config.SkipMetadata)
+            {
+                await UpdateTimeseries(useRawTimeseries, timeseries.Results, update, tsIds, token);
             }
         }
 
