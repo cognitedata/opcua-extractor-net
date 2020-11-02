@@ -328,10 +328,10 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-        public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
+        public async Task<bool?> TestConnection(FullConfig config, CancellationToken token)
         {
-            if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
-            if (config.Debug) return true;
+            if (config == null) throw new ArgumentNullException(nameof(config));
+            if (this.config.Debug) return true;
             try
             {
                 await destination.TestCogniteConfig(token);
@@ -339,7 +339,7 @@ namespace Cognite.OpcUa.Pushers
             catch (Exception ex)
             {
                 log.Error("Failed to get CDF login status, this is likely a problem with the network or configuration. Project {project} at {url}: {msg}", 
-                    config.Project, config.Host, ex.Message);
+                    this.config.Project, this.config.Host, ex.Message);
                 return false;
             }
 
@@ -351,11 +351,11 @@ namespace Cognite.OpcUa.Pushers
             {
                 log.Error("Could not access CDF Time Series - most likely due " +
                           "to insufficient access rights on API key. Project {project} at {host}: {msg}",
-                    config.Project, config.Host, ex.Message);
+                    this.config.Project, this.config.Host, ex.Message);
                 return false;
             }
 
-            if (!fullConfig.Events.Enabled) return true;
+            if (!config.Events.Enabled) return true;
 
             try
             {
@@ -365,7 +365,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
                           "to insufficient acces rights on API key. Project {project} at {host}: {msg}",
-                    config.Project, config.Host, ex.Message);
+                    this.config.Project, this.config.Host, ex.Message);
                 return false;
             }
 
@@ -509,6 +509,75 @@ namespace Cognite.OpcUa.Pushers
             }
         }
 
+        private async Task UpdateTimeseries(
+            bool useRawTimeseries,
+            IEnumerable<TimeSeries> existingTs,
+            TypeUpdateConfig update,
+            IDictionary<string, BufferedVariable> tsIds,
+            CancellationToken token)
+        {
+            if (update.AnyUpdate && !useRawTimeseries)
+            {
+                var updates = new List<TimeSeriesUpdateItem>();
+                var existing = existingTs.ToDictionary(asset => asset.ExternalId);
+                foreach (var kvp in tsIds)
+                {
+                    if (existing.TryGetValue(kvp.Key, out var ts))
+                    {
+                        var tsUpdate = PusherUtils.GetTSUpdate(ts, kvp.Value, update, nodeToAssetIds,
+                            Extractor.DataTypeManager.GetAdditionalMetadata(kvp.Value));
+                        if (tsUpdate == null) continue;
+                        if (tsUpdate.AssetId != null || tsUpdate.Description != null
+                            || tsUpdate.Name != null || tsUpdate.Metadata != null)
+                        {
+                            updates.Add(new TimeSeriesUpdateItem(ts.ExternalId) { Update = tsUpdate });
+                        }
+                    }
+                }
+                if (updates.Any())
+                {
+                    log.Information("Updating {cnt} timeseries in CDF", updates.Count);
+                    await destination.CogniteClient.TimeSeries.UpdateAsync(updates, token);
+                }
+            }
+
+            if (useRawTimeseries)
+            {
+                var metaMap = config.MetadataMapping?.Timeseries;
+                if (update.AnyUpdate)
+                {
+                    string columns = BuildColumnString(update, false);
+                    await UpsertRawRows<JsonElement>(config.RawMetadata.Database,
+                        config.RawMetadata.TimeseriesTable, tsIds.Keys, async rows =>
+                        {
+                            var rowDict = rows.ToDictionary(row => row.Key);
+
+                            var toReadProperties = tsIds.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
+                            await Extractor.ReadProperties(toReadProperties);
+
+                            var updates = tsIds
+                                .Select(kvp => (kvp.Key, PusherUtils.CreateRawTsUpdate(kvp.Value, Extractor,
+                                    rowDict.GetValueOrDefault(kvp.Key), update, metaMap)))
+                                .Where(elem => elem.Item2 != null)
+                                .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
+
+                            return updates;
+                        }, null, columns, token);
+                }
+                else
+                {
+                    await EnsureRawRows<StatelessTimeSeriesCreate>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsIds.Keys, async ids =>
+                    {
+                        var timeseries = ids.Select(id => tsIds[id]);
+                        await Extractor.ReadProperties(timeseries);
+                        return timeseries.Select(node => PusherUtils.VariableToStatelessTimeSeries(node, Extractor, null, metaMap))
+                            .Where(ts => ts != null)
+                            .ToDictionary(ts => ts.ExternalId);
+                    }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
+                }
+            }
+        }
+
         private async Task PushTimeseries(
             IEnumerable<BufferedVariable> tsList,
             TypeUpdateConfig update,
@@ -555,67 +624,9 @@ namespace Cognite.OpcUa.Pushers
                 log.Debug("Found mismatched timeseries when ensuring: {tss}", string.Join(", ", foundBadTimeseries));
             }
 
-            if (config.SkipMetadata) return;
-
-            if (update.AnyUpdate && !useRawTimeseries)
+            if (!config.SkipMetadata)
             {
-                var updates = new List<TimeSeriesUpdateItem>();
-                var existing = timeseries.Results.ToDictionary(asset => asset.ExternalId);
-                foreach (var kvp in tsIds)
-                {
-                    if (existing.TryGetValue(kvp.Key, out var ts))
-                    {
-                        var tsUpdate = PusherUtils.GetTSUpdate(ts, kvp.Value, update, nodeToAssetIds,
-                            Extractor.DataTypeManager.GetAdditionalMetadata(kvp.Value));
-                        if (tsUpdate == null) continue;
-                        if (tsUpdate.AssetId != null || tsUpdate.Description != null
-                            || tsUpdate.Name != null || tsUpdate.Metadata != null)
-                        {
-                            updates.Add(new TimeSeriesUpdateItem(ts.ExternalId) { Update = tsUpdate });
-                        }
-                    }
-                }
-                if (updates.Any())
-                {
-                    log.Information("Updating {cnt} timeseries in CDF", updates.Count);
-                    await destination.CogniteClient.TimeSeries.UpdateAsync(updates, token);
-                }
-            }
-
-            if (useRawTimeseries)
-            {
-                if (update.AnyUpdate)
-                {
-                    string columns = BuildColumnString(update, false);
-                    await UpsertRawRows<JsonElement>(config.RawMetadata.Database,
-                        config.RawMetadata.TimeseriesTable, tsIds.Keys, async rows =>
-                    {
-                        var rowDict = rows.ToDictionary(row => row.Key);
-
-                        var toReadProperties = tsIds.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
-                        await Extractor.ReadProperties(toReadProperties);
-
-                        var updates = tsIds
-                            .Select(kvp => (kvp.Key, PusherUtils.CreateRawTsUpdate(kvp.Value, Extractor,
-                                rowDict.GetValueOrDefault(kvp.Key), update, metaMap)))
-                            .Where(elem => elem.Item2 != null)
-                            .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
-
-                        return updates;
-                    }, null, columns, token);
-                }
-                else
-                {
-                    await EnsureRawRows<StatelessTimeSeriesCreate>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsIds.Keys, async ids =>
-                    {
-                        var timeseries = ids.Select(id => tsIds[id]);
-                        await Extractor.ReadProperties(timeseries);
-                        return timeseries.Select(node => PusherUtils.VariableToStatelessTimeSeries(node, Extractor, null, metaMap))
-                            .Where(ts => ts != null)
-                            .ToDictionary(ts => ts.ExternalId);
-                    }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
-                }
-
+                await UpdateTimeseries(useRawTimeseries, timeseries.Results, update, tsIds, token);
             }
         }
 
