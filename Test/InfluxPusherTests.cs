@@ -150,11 +150,8 @@ namespace Test
             Assert.True(read.Count > 0);
             var readValues = read.First();
 
-            foreach (var value in values)
-            {
-                if (!double.IsFinite(value)) continue;
-                Assert.Contains(readValues.Entries, entry => Math.Abs(Convert.ToDouble(entry.Value) - value) < 1);
-            }
+            Assert.Equal(6, readValues.Entries.Count);
+
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 0));
         }
 
