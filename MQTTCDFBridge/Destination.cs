@@ -115,6 +115,9 @@ namespace Cognite.Bridge
                     foreach (var id in ids) createdIds.Add(id);
                     return assets.Where(asset => idsSet.Contains(asset.ExternalId));
                 }, RetryMode.OnError, SanitationMode.Clean, token);
+
+                if (found.Errors != null && found.Errors.Any(err => err.Type == ErrorType.FatalFailure)) return false;
+
                 foreach (var asset in found.Results)
                 {
                     assetIds[asset.ExternalId] = asset.Id;
@@ -251,6 +254,9 @@ namespace Cognite.Bridge
                     foreach (var id in ids) createdIds.Add(id);
                     return testSeries.Where(ts => idsSet.Contains(ts.ExternalId));
                 }, RetryMode.OnError, SanitationMode.Clean, token);
+
+                if (found.Errors != null && found.Errors.Any(err => err.Type == ErrorType.FatalFailure)) return false;
+
                 foreach (var ts in found.Results)
                 {
                     tsIsString[ts.ExternalId] = ts.IsString;
@@ -379,7 +385,9 @@ namespace Cognite.Bridge
 
             try
             {
-                await destination.EnsureEventsExistsAsync(events, RetryMode.OnError, SanitationMode.Clean, token);
+                var result = await destination.EnsureEventsExistsAsync(events, RetryMode.OnError, SanitationMode.Clean, token);
+
+                if (result.Errors != null && result.Errors.Any(err => err.Type == ErrorType.FatalFailure)) return false;
             }
             catch (ResponseException ex)
             {
