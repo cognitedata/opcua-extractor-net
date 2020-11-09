@@ -1044,6 +1044,91 @@ namespace Cognite.OpcUa
             return result;
         }
 
+        private Subscription AddSubscriptions(
+            IEnumerable<UAHistoryExtractionState> nodeList,
+            string subName,
+            MonitoredItemNotificationEventHandler handler,
+            Func<UAHistoryExtractionState, MonitoredItem> builder,
+            CancellationToken token)
+        {
+            lock (subscriptionLock)
+            {
+                var subscription = Session.Subscriptions.FirstOrDefault(sub =>
+                                       sub.DisplayName.StartsWith(subName, StringComparison.InvariantCulture));
+                if (subscription == null)
+                {
+#pragma warning disable CA2000 // Dispose objects before losing scope. The subscription is disposed properly or added to the client.
+                    subscription = new Subscription(Session.DefaultSubscription)
+                    {
+                        PublishingInterval = config.PublishingInterval,
+                        DisplayName = subName
+                    };
+#pragma warning restore CA2000 // Dispose objects before losing scope
+                }
+                int count = 0;
+                var hasSubscription = subscription.MonitoredItems.Select(sub => sub.ResolvedNodeId).ToHashSet();
+                int total = nodeList.Count();
+
+                IncOperations();
+                try
+                {
+                    foreach (var chunk in nodeList.ChunkBy(config.SubscriptionChunk))
+                    {
+                        if (token.IsCancellationRequested) break;
+                        int lcount = 0;
+                        subscription.AddItems(chunk
+                            .Where(node => !hasSubscription.Contains(node.SourceId))
+                            .Select(node =>
+                            {
+                                var monitor = builder(node);
+                                monitor.Notification += handler;
+                                count++;
+                                lcount++;
+                                return monitor;
+                            })
+                        );
+                        log.Debug("Add subscriptions for {numnodes} nodes, {subscribed} / {total} done.", lcount, count, total);
+
+                        if (lcount > 0 && subscription.Created)
+                        {
+                            try
+                            {
+                                subscription.CreateItems();
+                            }
+                            catch (ServiceResultException ex)
+                            {
+                                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
+                            }
+                        }
+                        else if (lcount > 0)
+                        {
+                            try
+                            {
+                                Session.AddSubscription(subscription);
+                                subscription.Create();
+                            }
+                            catch (ServiceResultException ex)
+                            {
+                                throw ExtractorUtils.HandleServiceResult(ex,
+                                    ExtractorUtils.SourceOp.CreateSubscription);
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    DecOperations();
+                    if (!subscription.Created)
+                    {
+                        subscription.Dispose();
+                    }
+                }
+                log.Information("Added {TotalAddedSubscriptions} / {total} subscriptions", count, total);
+                return subscription;
+            }
+        }
+
+
         /// <summary>
         /// Create datapoint subscriptions for given list of nodes
         /// </summary>
@@ -1056,194 +1141,54 @@ namespace Cognite.OpcUa
         {
             if (!nodeList.Any()) return;
 
-            lock (subscriptionLock)
-            {
-                var subscription = Session.Subscriptions.FirstOrDefault(sub =>
-                                       sub.DisplayName.StartsWith("DataChangeListener",
-                                           StringComparison.InvariantCulture))
-#pragma warning disable CA2000 // Dispose objects before losing scope. The subscription is disposed properly or added to the client.
-                                   ?? new Subscription(Session.DefaultSubscription)
-                                   {
-                                       PublishingInterval = config.PublishingInterval,
-                                       DisplayName = "DataChangeListener"
-                                   };
-#pragma warning restore CA2000 // Dispose objects before losing scope
-                int count = 0;
-                var hasSubscription = subscription.MonitoredItems
-                    .Select(sub => sub.ResolvedNodeId)
-                    .ToHashSet();
-
-                int total = nodeList.Count();
-                int subscribed = 0;
-
-                foreach (var chunk in nodeList.ChunkBy(config.SubscriptionChunk))
+#pragma warning disable CA2000 // Dispose objects before losing scope
+            var sub = AddSubscriptions(
+                nodeList,
+                "DataChangeListener",
+                subscriptionHandler,
+                node => new MonitoredItem
                 {
-                    if (token.IsCancellationRequested) break;
-                    int lcount = 0;
-                    subscription.AddItems(chunk
-                        .Where(node => !hasSubscription.Contains(node.SourceId))
-                        .Select(node =>
-                        {
-                            var monitor = new MonitoredItem(subscription.DefaultItem)
-                            {
-                                StartNodeId = node.SourceId,
-                                DisplayName = "Value: " + node.DisplayName,
-                                SamplingInterval = config.SamplingInterval,
-                                QueueSize = (uint)Math.Max(0, config.QueueLength)
-                            };
-                            monitor.Notification += subscriptionHandler;
-                            count++;
-                            lcount++;
-                            return monitor;
-                        }).ToList()
-                    );
+                    StartNodeId = node.SourceId,
+                    DisplayName = "Value: " + (node as NodeExtractionState).DisplayName,
+                    SamplingInterval = config.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, config.QueueLength),
+                    AttributeId = Attributes.Value
+                }, token);
+#pragma warning restore CA2000 // Dispose objects before losing scope
 
-                    subscribed += chunk.Count();
-
-                    log.Debug("Add subscriptions for {numnodes} nodes, {subscribed} / {total} done.", lcount, subscribed, total);
-
-                    IncOperations();
-                    try
-                    {
-                        if (count > 0)
-                        {
-                            if (subscription.Created)
-                            {
-                                try
-                                {
-                                    subscription.CreateItems();
-                                }
-                                catch (ServiceResultException ex)
-                                {
-                                    throw ExtractorUtils.HandleServiceResult(ex,
-                                        ExtractorUtils.SourceOp.CreateMonitoredItems);
-                                }
-                            }
-                            else
-                            {
-                                try
-                                {
-                                    Session.AddSubscription(subscription);
-                                    subscription.Create();
-                                }
-                                catch (ServiceResultException ex)
-                                {
-                                    throw ExtractorUtils.HandleServiceResult(ex,
-                                        ExtractorUtils.SourceOp.CreateSubscription);
-                                }
-                            }
-                        }
-                        else if (!subscription.Created)
-                        {
-                            subscription.Dispose();
-                        }
-                    }
-                    finally
-                    {
-                        DecOperations();
-                    }
-
-                    numSubscriptions.Set(subscription.MonitoredItemCount);
-                }
-                log.Information("Added {TotalAddedSubscriptions} / {total} subscriptions", count, total);
-            }
+            numSubscriptions.Set(sub.MonitoredItemCount);
         }
         /// <summary>
         /// Subscribe to events from the given list of emitters.
         /// </summary>
-        /// <param name="emitters">List of ids of nodes to serve as emitters. These are the actual targets of the subscription.</param>
+        /// <param name="emitters">List of emitters. These are the actual targets of the subscription.</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
         /// <returns>Map of fields, EventTypeId->(SourceTypeId, BrowseName)</returns>
-        public void SubscribeToEvents(IEnumerable<NodeId> emitters,
+        public void SubscribeToEvents(IEnumerable<EventExtractionState> emitters,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
             if (emitters == null) throw new ArgumentNullException(nameof(emitters));
-            lock (subscriptionLock)
-            {
-                var subscription = Session.Subscriptions.FirstOrDefault(sub =>
-                    sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture));
 
-                if (subscription == null)
-                {
+            var filter = BuildEventFilter();
+
 #pragma warning disable CA2000 // Dispose objects before losing scope
-                    subscription = new Subscription(Session.DefaultSubscription)
-                    {
-                        PublishingInterval = config.PublishingInterval,
-                        DisplayName = "EventListener"
-                    };
+            AddSubscriptions(
+                emitters,
+                "EventListener",
+                subscriptionHandler,
+                node => new MonitoredItem
+                {
+                    StartNodeId = node.SourceId,
+                    AttributeId = Attributes.EventNotifier,
+                    DisplayName = "Events: " + node.Id,
+                    SamplingInterval = config.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, config.QueueLength),
+                    Filter = filter
+                },
+                token);
 #pragma warning restore CA2000 // Dispose objects before losing scope
-
-                }
-                int count = 0;
-                var hasSubscription = subscription.MonitoredItems
-                    .Select(sub => sub.ResolvedNodeId)
-                    .ToHashSet();
-
-                if (eventFields == null) throw new ExtractorFailureException("EventFields not defined");
-                
-                var filter = BuildEventFilter();
-                foreach (var emitter in emitters)
-                {
-                    if (token.IsCancellationRequested) return;
-                    if (!hasSubscription.Contains(emitter))
-                    {
-                        var item = new MonitoredItem
-                        {
-                            StartNodeId = emitter,
-                            Filter = filter,
-                            AttributeId = Attributes.EventNotifier,
-                            SamplingInterval = config.SamplingInterval,
-                            QueueSize = (uint)Math.Max(0, config.QueueLength)
-                        };
-                        count++;
-                        item.Notification += subscriptionHandler;
-                        subscription.AddItem(item);
-                    }
-                }
-
-                IncOperations();
-                try
-                {
-                    if (count > 0)
-                    {
-                        if (subscription.Created)
-                        {
-                            try
-                            {
-                                subscription.CreateItems();
-                            }
-                            catch (ServiceResultException ex)
-                            {
-                                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
-                            }
-                        }
-                        else
-                        {
-                            try
-                            {
-                                Session.AddSubscription(subscription);
-                                subscription.Create();
-                            }
-                            catch (ServiceResultException ex)
-                            {
-                                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateSubscription);
-                            }
-
-                        }
-                    }
-                    else if (!subscription.Created)
-                    {
-                        subscription.Dispose();
-                    }
-                }
-                finally
-                {
-                    DecOperations();
-                }
-                log.Information("Created {EventSubCount} event subscriptions", count);
-            }
         }
         #endregion
 
