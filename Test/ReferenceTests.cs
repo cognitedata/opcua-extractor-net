@@ -1,4 +1,5 @@
 ﻿using Cognite.OpcUa;
+﻿using Cognite.Extractor.StateStorage;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -20,8 +21,6 @@ namespace Test
 
         private static async Task RunReferenceExtraction(ExtractorTester tester)
         {
-            await tester.ClearPersistentData();
-
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
 
@@ -161,6 +160,7 @@ namespace Test
                 QuitAfterMap = true,
                 References = true
             });
+            await tester.ClearPersistentData();
             await RunReferenceExtraction(tester);
 
             var rels = tester.Handler.Relationships.Values;
@@ -180,10 +180,54 @@ namespace Test
                 References = true,
                 Pusher = "mqtt"
             });
+            await tester.ClearPersistentData();
             await RunReferenceExtraction(tester);
 
             var rels = tester.Handler.Relationships.Values;
             TestRelationships(rels);
+        }
+
+        [Fact]
+        [Trait("Server", "array")]
+        [Trait("Target", "References")]
+        [Trait("Test", "mqttreferencesstate")]
+        public async Task TestMqttReferencesState()
+        {
+            using (var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Array,
+                QuitAfterMap = true,
+                References = true,
+                Pusher = "mqtt",
+                MqttState = true
+            }))
+            {
+                await tester.ClearPersistentData();
+                await RunReferenceExtraction(tester);
+
+                var rels = tester.Handler.Relationships.Values;
+                TestRelationships(rels);
+
+                tester.Handler.Relationships.Clear();
+
+                var stateStore = tester.Extractor.StateStorage as LiteDBStateStore;
+                await stateStore.DeleteExtractionState(new IExtractionState[] { new BaseExtractionState("gp.HasSymmetricRelation;tl:i=10;tl:i=8") },
+                    tester.Config.Mqtt.LocalState, tester.Source.Token);
+            }
+
+            using var tester2 = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Array,
+                QuitAfterMap = true,
+                References = true,
+                Pusher = "mqtt",
+                MqttState = true
+            });
+
+            await RunReferenceExtraction(tester2);
+
+            Assert.Single(tester2.Handler.Relationships);
+            Assert.Equal("gp.HasSymmetricRelation;tl:i=10;tl:i=8", tester2.Handler.Relationships.Keys.First());
         }
     }
 }
