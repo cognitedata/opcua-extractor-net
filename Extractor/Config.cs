@@ -92,6 +92,8 @@ namespace Cognite.OpcUa
     public class RelationshipConfig
     {
         public bool Enabled { get; set; }
+        public bool Hierarchical { get; set; }
+        public bool InverseHierarchical { get; set; }
     }
 
     public class UpdateConfig

@@ -494,6 +494,14 @@ extraction:
     # a non-hierarchical reference based system for location, etc.
     relationships:
         enabled: false
+        # True to enable also mapping the hierarchical references over. These are the ones that are normally
+        # mapped to assetId/parentId relations in CDF. In that case the type is lost.
+        # Requires relationships.enabled to be true.
+        hierarchical: false
+        # True to create inverse relationships for each of the hierarchical references.
+        # For efficiency these are not read, they will almost always be there in practice.
+        # Does nothing if hierarchical is false.
+        inverse-hierarchical: false
 
 events:
     # Events are extracted with the following rules: By default all events are extracted.
