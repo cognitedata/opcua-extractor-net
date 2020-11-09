@@ -402,20 +402,26 @@ namespace Cognite.Bridge
             }
             var relationships = JsonSerializer.Deserialize<IEnumerable<CogniteSdk.Beta.RelationshipCreate>>(Encoding.UTF8.GetString(msg.Payload));
 
-            var tasks = relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token));
+            var tasks = relationships.ChunkBy(1000).Select(chunk => PushRelationshipsChunk(chunk, token));
             try
             {
                 await Task.WhenAll(tasks);
             }
-            catch (Exception ex)
+            catch (ResponseException ex)
             {
                 log.Error("Failed to push relationships to CDF: {msg}", ex.Message);
-                return false;
+
+                return ex.Code == 400 || ex.Code == 409;
+            }
+            catch (AggregateException aex)
+            {
+                var ex = aex.InnerException as ResponseException;
+                return ex != null && (ex.Code == 400 || ex.Code == 409);
             }
             return true;
         }
 
-        private async Task PushReferencesChunk(IEnumerable<CogniteSdk.Beta.RelationshipCreate> relationships, CancellationToken token)
+        private async Task PushRelationshipsChunk(IEnumerable<CogniteSdk.Beta.RelationshipCreate> relationships, CancellationToken token)
         {
             try
             {
@@ -436,7 +442,7 @@ namespace Cognite.Bridge
                     if (!existing.Any()) throw;
 
                     relationships = relationships.Where(rel => !existing.Contains(rel.ExternalId)).ToList();
-                    await PushReferencesChunk(relationships, token);
+                    await PushRelationshipsChunk(relationships, token);
                 }
                 else
                 {
