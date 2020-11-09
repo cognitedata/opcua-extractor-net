@@ -692,7 +692,7 @@ namespace Test
         [InlineData(true, true, true, true, true, true, true, true)]
         [Trait("Server", "array")]
         [Trait("Target", "CDFPusher")]
-        [Trait("Test", "fieldsupdate")]
+        [Trait("Test", "fieldsupdatecdf")]
         public async Task TestUpdateFields(
             bool assetName, bool variableName, 
             bool assetDesc, bool variableDesc,
