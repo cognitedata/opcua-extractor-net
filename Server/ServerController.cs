@@ -208,5 +208,13 @@ namespace Server
                 prop.DisplayName = new LocalizedText("StringProp updated");
             });
         }
+        public void WipeHistory(NodeId id, object value)
+        {
+            Server.WipeHistory(id, value);
+        }
+        public void WipeEventHistory(NodeId id = null)
+        {
+            Server.WipeEventHistory(id);
+        }
     }
 }

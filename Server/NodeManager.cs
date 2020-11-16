@@ -50,6 +50,24 @@ namespace Server
             return store.GetFullHistory(id);
         }
 
+        public void WipeHistory(NodeId id, object value)
+        {
+            store.WipeHistory(id);
+            var state = PredefinedNodes[id] as BaseDataVariableState;
+            state.Value = value;
+        }
+        public void WipeEventHistory(NodeId id = null)
+        {
+            if (id == null)
+            {
+                store.WipeEventHistory();
+            }
+            else
+            {
+                store.WipeEventHistory(id);
+            }
+        }
+
         public IEnumerable<BaseEventState> FetchEventHistory(NodeId id)
         {
             return store.GetFullEventHistory(id);

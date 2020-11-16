@@ -42,7 +42,7 @@ namespace Cognite.OpcUa
         public IExtractionStateStore StateStorage { get; }
         public State State { get; }
         public Streamer Streamer { get; }
-        public DataTypeManager DataTypeManager { get; }
+        public DataTypeManager DataTypeManager => uaClient.DataTypeManager;
 
         private readonly HistoryReader historyReader;
         public NodeId RootNode { get; private set; }
@@ -101,7 +101,6 @@ namespace Cognite.OpcUa
 
             State = new State(this);
             Streamer = new Streamer(this, config);
-            DataTypeManager = new DataTypeManager(uaClient, config.Extraction.DataTypes);
             StateStorage = stateStore;
 
             source = CancellationTokenSource.CreateLinkedTokenSource(token);

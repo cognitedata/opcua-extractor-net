@@ -441,6 +441,52 @@ namespace Test
             Assert.Equal("°C: degree Celsius", nodes[3].Value.StringValue);
             Assert.Equal("(0, 100)", nodes[4].Value.StringValue);
         }
+
+        [Fact]
+        public void TestGetNodeProperties()
+        {
+            CommonTestUtils.ResetMetricValues("opcua_attribute_requests", "opcua_browse_operations");
+            var arrayVar = new BufferedVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root)
+            {
+                ArrayDimensions = new Collection<int> { 4 }
+            };
+            var nodes = new[]
+            {
+                // Normal variable
+                new BufferedVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar", tester.Server.Ids.Base.Root),
+                // Array root
+                arrayVar,
+                // Array element
+                arrayVar.CreateArrayChildren().First(),
+                // Variable with properties
+                new BufferedVariable(tester.Server.Ids.Custom.MysteryVar, "NumberVar", tester.Server.Ids.Custom.Root),
+                // object with no children
+                new BufferedNode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder),
+                // object with properties
+                new BufferedNode(tester.Server.Ids.Custom.Obj2, "Object", tester.Server.Ids.Custom.Root)
+                {
+                    Properties = new List<BufferedVariable>
+                    {
+                        new BufferedVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Obj2) { IsProperty = true },
+                        new BufferedVariable(tester.Server.Ids.Custom.RangeProp, "Range", tester.Server.Ids.Custom.Obj2) { IsProperty = true },
+                    }
+                }
+            };
+
+            tester.Client.GetNodeProperties(nodes, tester.Source.Token);
+            Assert.Equal(2, nodes[0].Properties.Count);
+            Assert.Equal(2, nodes[1].Properties.Count);
+            Assert.Equal(2, nodes[2].Properties.Count);
+            Assert.Equal(nodes[1].Properties, nodes[2].Properties);
+            Assert.Equal(2, nodes[3].Properties.Count);
+            Assert.Null(nodes[4].Properties);
+            Assert.Equal(2, nodes[5].Properties.Count);
+            Assert.NotNull(nodes[5].Properties.First().Value);
+            Assert.NotNull(nodes[5].Properties.Last().Value);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 2));
+        }
         #endregion
 
     }
