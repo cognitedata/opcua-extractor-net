@@ -98,14 +98,9 @@ podTemplate(
             stage('Install dependencies') {
                 sh('apt-get update && apt-get -y install gnupg curl procps gawk grep')
 				sh('curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -')
-<<<<<<< HEAD
                 sh('apt-get install -y nmap ncat mosquitto')
                 sh('dotnet tool restore')
                 sh('dotnet paket restore')
-=======
-                sh('apt-get update && apt-get install -y nmap ncat mosquitto')
-                sh('mono .paket/paket.exe restore -p ./Test/')
->>>>>>> Add some ua-client tests
             }
 
             stage('Build') {
