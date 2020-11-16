@@ -214,6 +214,10 @@ namespace Cognite.OpcUa
         /// </summary>
         public BufferedVariable ArrayParent { get; }
         /// <summary>
+        /// Children if this represents the parent in an array
+        /// </summary>
+        public IEnumerable<BufferedVariable> ArrayChildren { get; private set; }
+        /// <summary>
         /// Fixed dimensions of the array-type variable, if any
         /// </summary>
         public Collection<int> ArrayDimensions { get; set; }
@@ -259,7 +263,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="other">Parent variable</param>
         /// <param name="index">Index in the array</param>
-        public BufferedVariable(BufferedVariable other, int index)
+        private BufferedVariable(BufferedVariable other, int index)
             : base(OtherNonNull(other).Id, other.DisplayName + $"[{index}]", true, other.Id)
         {
             ArrayParent = other;
@@ -277,6 +281,19 @@ namespace Cognite.OpcUa
         {
             if (other == null) throw new ArgumentNullException(nameof(other));
             return other;
+        }
+        /// <summary>
+        /// Create array child nodes
+        /// </summary>
+        public IEnumerable<BufferedVariable> CreateArrayChildren()
+        {
+            var children = new List<BufferedVariable>();
+            for (int i = 0; i < ArrayDimensions[0]; i++)
+            {
+                children.Add(new BufferedVariable(this, i));
+            }
+            ArrayChildren = children;
+            return children;
         }
     }
     /// <summary>

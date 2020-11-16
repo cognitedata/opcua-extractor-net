@@ -958,12 +958,10 @@ namespace Cognite.OpcUa
                     if (arrayParent != null && arrayParent.Index == -1 && arrayParent.ArrayDimensions != null
                         && arrayParent.ArrayDimensions.Count == 1 && arrayParent.ArrayDimensions[0] > 0)
                     {
-                        for (int i = 0; i < arrayParent.ArrayDimensions[0]; i++)
+                        foreach (var child in arrayParent.ArrayChildren)
                         {
-                            var arrayChild = Extractor?.State?.GetActiveNode(parent.Id, i);
-                            if (arrayChild == null) continue;
-                            arrayChild.PropertiesRead = true;
-                            arrayChild.Properties = parent.Properties;
+                            child.PropertiesRead = true;
+                            child.Properties = parent.Properties;
                         }
                         arrayParent.PropertiesRead = true;
                         arrayParent.Properties = parent.Properties;

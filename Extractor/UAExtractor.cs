@@ -621,12 +621,11 @@ namespace Cognite.OpcUa
                             {
                                 if (update.Variables.Name && old.DisplayName != node.DisplayName && !string.IsNullOrWhiteSpace(node.DisplayName))
                                 {
-                                    for (int i = 0; i < oldState.ArrayDimensions[0]; i++)
+                                    var children = node.CreateArrayChildren();
+                                    foreach (var child in children)
                                     {
-                                        var ts = new BufferedVariable(node, i);
-                                        ts.Changed = true;
-                                        State.AddActiveNode(ts);
-                                        timeseries.Add(ts);
+                                        child.Changed = true;
+                                        timeseries.Add(child);
                                     }
                                 }
                                 objects.Add(node);
@@ -649,15 +648,15 @@ namespace Cognite.OpcUa
                 State.AddActiveNode(node);
                 if (state.IsArray)
                 {
-                    for (int i = 0; i < node.ArrayDimensions[0]; i++)
+                    var children = node.CreateArrayChildren();
+                    foreach (var child in children)
                     {
-                        var ts = new BufferedVariable(node, i);
-                        timeseries.Add(ts);
-                        State.AddActiveNode(ts);
-                        var uniqueId = GetUniqueId(node.Id, i);
+                        timeseries.Add(child);
+                        var uniqueId = GetUniqueId(child.Id, child.Index);
                         State.SetNodeState(state, uniqueId);
                         State.RegisterNode(node.Id, uniqueId);
                     }
+
                     objects.Add(node);
                 }
                 else
