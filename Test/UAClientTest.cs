@@ -142,8 +142,6 @@ namespace Test
                 CommonTestUtils.StopProxyProcess();
             }
         }
-
-
         #endregion
 
         #region browse
