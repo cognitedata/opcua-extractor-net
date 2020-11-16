@@ -357,6 +357,7 @@ namespace Server
                 AddNodeToExt(myobj, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
 
                 var myvar = CreateVariable("Variable 1", DataTypes.Double);
+                myvar.Value = 0.0;
                 AddNodeRelation(myvar, myobj, ReferenceTypeIds.HasComponent);
 
                 var myvar2 = CreateVariable("Variable 2", DataTypes.Double);
@@ -408,6 +409,7 @@ namespace Server
             lock (Lock)
             {
                 var root = CreateObject("FullRoot");
+                root.Description = "FullRoot Description";
                 AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
                 AddPredefinedNode(SystemContext, root);
 

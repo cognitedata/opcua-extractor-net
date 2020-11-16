@@ -6,6 +6,7 @@ using Opc.Ua;
 using Server;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -27,7 +28,8 @@ namespace Test
         public UAClientTestFixture()
         {
             Server = new ServerController(new[] {
-                PredefinedSetup.Full, PredefinedSetup.Auditing, PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, 62000);
+                PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
+                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, 62000);
             Server.Start().Wait();
 
             var services = new ServiceCollection();
@@ -76,8 +78,8 @@ namespace Test
         {
             Assert.True(tester.Client.Started);
             // base, server uri, node manager namespace, diagnostics
-            Assert.Equal(4, tester.Client.GetNamespaceTable().Count);
-            Assert.Equal("opc.tcp://test.localhost", tester.Client.GetNamespaceTable().GetString(2));
+            Assert.Equal(4, tester.Client.NamespaceTable.Count);
+            Assert.Equal("opc.tcp://test.localhost", tester.Client.NamespaceTable.GetString(2));
         }
         [Fact]
         public async Task TestConnectionFailure()
@@ -160,7 +162,7 @@ namespace Test
             var childrenDict = tester.Client.GetNodeChildren(new[] { ObjectIds.ObjectsFolder }, ReferenceTypeIds.HierarchicalReferences,
                 0, tester.Source.Token);
             var children = childrenDict[ObjectIds.ObjectsFolder];
-            Assert.Equal(6, children.Count);
+            Assert.Equal(7, children.Count);
 
             var nodes = children.ToDictionary(child => child.DisplayName.Text);
             var fullRoot = nodes["FullRoot"];
@@ -172,6 +174,7 @@ namespace Test
             Assert.True(nodes.ContainsKey("CustomRoot"));
             Assert.True(nodes.ContainsKey("GrowingRoot"));
             Assert.True(nodes.ContainsKey("WrongRoot"));
+            Assert.True(nodes.ContainsKey("BaseRoot"));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 1));
         }
         [Fact]
@@ -301,8 +304,144 @@ namespace Test
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 32 + 32 + 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 32));
         }
+        [Fact]
         #endregion
 
+        #region nodedata
+        public void TestReadNodeData()
+        {
+            CommonTestUtils.ResetMetricValues("opcua_attribute_requests");
+            var nodes = new BufferedNode[]
+            {
+                new BufferedNode(tester.Server.Ids.Full.Root, "FullRoot", ObjectIds.ObjectsFolder),
+                new BufferedNode(tester.Server.Ids.Event.Obj1, "Object 1", tester.Server.Ids.Event.Root),
+                new BufferedNode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder),
+                new BufferedVariable(tester.Server.Ids.Custom.StringyVar, "StringyVar", tester.Server.Ids.Custom.Root),
+                new BufferedVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root),
+                new BufferedVariable(tester.Server.Ids.Custom.ObjProp, "ObjProp", tester.Server.Ids.Custom.Obj2) { IsProperty = true }
+            };
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Data = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = -1;
+            tester.Config.Events.Enabled = true;
+            try
+            {
+                tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            }
+            finally
+            {
+                tester.Config.History.Enabled = false;
+                tester.Config.History.Data = false;
+                tester.Config.Extraction.DataTypes.MaxArraySize = 0;
+                tester.Config.Events.Enabled = false;
+            }
+
+            Assert.Equal("FullRoot Description", nodes[0].Description);
+            Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
+            Assert.Equal(tester.Server.Ids.Custom.StringyType, (nodes[3] as BufferedVariable).DataType.Raw);
+            Assert.Equal(4, (nodes[4] as BufferedVariable).ArrayDimensions[0]);
+            Assert.Single((nodes[4] as BufferedVariable).ArrayDimensions);
+            Assert.True((nodes[4] as BufferedVariable).Historizing);
+            Assert.Null((nodes[5] as BufferedVariable).ArrayDimensions);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 1));
+        }
+        [Fact]
+        public void TestReadNodeDataChunk()
+        {
+            CommonTestUtils.ResetMetricValues("opcua_attribute_requests");
+            int start = (int)(uint)tester.Server.Ids.Full.WideRoot.Identifier;
+            var nodes = Enumerable.Range(start + 1, 2000)
+                .Select(idf => new NodeId((uint)idf, 2))
+                .Select(id => new BufferedVariable(id, "subnode", tester.Server.Ids.Full.WideRoot))
+                .ToList();
+            tester.Config.Source.AttributesChunk = 100;
+            tester.Config.History.Enabled = true;
+            try
+            {
+                tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            }
+            finally
+            {
+                tester.Config.Source.AttributesChunk = 1000;
+                tester.Config.History.Enabled = false;
+            }
+            Assert.All(nodes, node => Assert.Equal(DataTypeIds.Double, node.DataType.Raw));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 80));
+        }
+        [Fact]
+        public void TestReadRawValues()
+        {
+            CommonTestUtils.ResetMetricValues("opcua_attribute_requests");
+            var ids = new[]
+            {
+                tester.Server.Ids.Custom.Array,
+                tester.Server.Ids.Custom.StringArray,
+                tester.Server.Ids.Custom.EUProp,
+                tester.Server.Ids.Custom.RangeProp
+            };
+            var values = tester.Client.ReadRawValues(ids, tester.Source.Token);
+            Assert.Equal(new[] { 0.0, 0.0, 0.0, 0.0 }, values[ids[0]].Value as double[]);
+            Assert.Equal(new[] { "test1", "test2" }, values[ids[1]].Value as string[]);
+            var ext1 = Assert.IsType<ExtensionObject>(values[ids[2]].Value);
+            var inf = Assert.IsType<EUInformation>(ext1.Body);
+            Assert.Equal("degree Celsius", inf.Description);
+            Assert.Equal("°C", inf.DisplayName.Text);
+            Assert.Equal(4408652, inf.UnitId);
+            var ext2 = Assert.IsType<ExtensionObject>(values[ids[3]].Value);
+            var range = Assert.IsType<Opc.Ua.Range>(ext2.Body);
+            Assert.Equal(0, range.Low);
+            Assert.Equal(100, range.High);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 1));
+        }
+        [Fact]
+        public void TestReadRawValuesChunk()
+        {
+            CommonTestUtils.ResetMetricValues("opcua_attribute_requests");
+            int start = (int)(uint)tester.Server.Ids.Full.WideRoot.Identifier;
+            var nodes = Enumerable.Range(start + 1, 2000)
+                .Select(idf => new NodeId((uint)idf, 2)).ToList();
+
+            tester.Config.Source.AttributesChunk = 100;
+            try
+            {
+                var values = tester.Client.ReadRawValues(nodes, tester.Source.Token);
+                Assert.All(nodes, node => {
+                    Assert.True(values.TryGetValue(node, out var dv));
+                    Assert.Null(dv.Value);
+                });
+            }
+            finally
+            {
+                tester.Config.Source.AttributesChunk = 1000;
+            }
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 20));
+        }
+
+        [Fact]
+        public void TestReadNodeValues()
+        {
+            var nodes = new[]
+            {
+                new BufferedVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar", tester.Server.Ids.Base.Root),
+                new BufferedVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root) { IsProperty = true },
+                new BufferedVariable(tester.Server.Ids.Custom.StringArray, "StringArray", tester.Server.Ids.Custom.Root) { IsProperty = true },
+                new BufferedVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Root) { IsProperty = true },
+                new BufferedVariable(tester.Server.Ids.Custom.RangeProp, "RangeProp", tester.Server.Ids.Custom.Root) { IsProperty = true }
+            };
+
+            // Need to read attributes first for this, to get proper conversion we need the datatype.
+            tester.Client.ReadNodeData(nodes, tester.Source.Token);
+            tester.Client.ReadNodeValues(nodes, tester.Source.Token);
+
+            Assert.Equal(0.0, nodes[0].Value.DoubleValue);
+            Assert.Equal("[0, 0, 0, 0]", nodes[1].Value.StringValue);
+            Assert.Equal("[test1, test2]", nodes[2].Value.StringValue);
+            Assert.Equal("°C: degree Celsius", nodes[3].Value.StringValue);
+            Assert.Equal("(0, 100)", nodes[4].Value.StringValue);
+        }
+        #endregion
 
     }
 }

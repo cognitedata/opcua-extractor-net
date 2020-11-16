@@ -825,7 +825,9 @@ namespace Cognite.OpcUa
             catch (Exception ex)
             {
                 attributeRequestFailures.Inc();
+#pragma warning disable CA1508 // Avoid dead conditional code. I have no idea whatsoever why it compains about this, it is wildly incorrect.
                 if (ex is ServiceResultException serviceEx)
+#pragma warning restore CA1508 // Avoid dead conditional code
                 {
                     throw ExtractorUtils.HandleServiceResult(serviceEx, ExtractorUtils.SourceOp.ReadAttributes);
                 }
@@ -845,7 +847,6 @@ namespace Cognite.OpcUa
         /// <remarks>
         /// Note that there is a fixed maximum message size, and we here fetch a large number of values at the same time.
         /// To avoid complications, avoid fetching data of unknown large size here.
-        /// Due to this, only nodes with ValueRank -1 (Scalar) will be fetched.
         /// </remarks>
         /// <param name="nodes">List of variables to be updated</param>
         public void ReadNodeValues(IEnumerable<BufferedVariable> nodes, CancellationToken token)
@@ -1204,10 +1205,7 @@ namespace Cognite.OpcUa
         /// Return systemContext. Can be used by SDK-tools for converting events.
         /// </summary>
         /// <returns>ISystemContext for given session, or null if no session exists</returns>
-        public ISystemContext GetSystemContext()
-        {
-            return Session?.SystemContext;
-        }
+        public ISystemContext SystemContext => Session?.SystemContext;
         public Dictionary<NodeId, IEnumerable<(NodeId root, QualifiedName browseName)>> GetEventFields(CancellationToken token)
         {
             if (eventFields != null) return eventFields;
@@ -1390,15 +1388,12 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        
+
         #endregion
 
         #region Utils
 
-        public NamespaceTable GetNamespaceTable()
-        {
-            return Session.NamespaceUris;
-        }
+        public NamespaceTable NamespaceTable => Session.NamespaceUris;
         /// <summary>
         /// Converts an ExpandedNodeId into a NodeId using the Session
         /// </summary>
@@ -1445,7 +1440,7 @@ namespace Cognite.OpcUa
             if (datavalue == null) return 0;
             if (datavalue.GetType().IsArray)
             {
-                return Convert.ToDouble((datavalue as IEnumerable<object>)?.First(), CultureInfo.InvariantCulture);
+                return Convert.ToDouble((datavalue as IEnumerable<object>).First(), CultureInfo.InvariantCulture);
             }
             return Convert.ToDouble(datavalue, CultureInfo.InvariantCulture);
         }

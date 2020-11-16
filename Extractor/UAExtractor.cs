@@ -952,7 +952,7 @@ namespace Cognite.OpcUa
                 // This is a neat way to get the contents of the event, which may be fairly complicated (variant of arrays of extensionobjects)
                 using (var e = new AuditAddNodesEventState(null))
                 {
-                    e.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
+                    e.Update(uaClient.SystemContext, filter.SelectClauses, triggeredEvent);
                     if (e.NodesToAdd?.Value == null)
                     {
                         log.Warning("Missing NodesToAdd object on AddNodes event");
@@ -986,7 +986,7 @@ namespace Cognite.OpcUa
 
             using (var ev = new AuditAddReferencesEventState(null))
             {
-                ev.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
+                ev.Update(uaClient.SystemContext, filter.SelectClauses, triggeredEvent);
 
                 if (ev.ReferencesToAdd?.Value == null)
                 {
