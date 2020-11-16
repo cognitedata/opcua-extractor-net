@@ -148,8 +148,14 @@ namespace Test
                 && TestMetricValue("opcua_history_read_failures", 0)
                 && TestMetricValue("opcua_browse_failures", 0);
         }
-
-        private static void ResetMetricValue(string name)
+        public static void ResetMetricValues(params string[] names)
+        {
+            foreach (var name in names)
+            {
+                ResetMetricValue(name);
+            }
+        }
+        public static void ResetMetricValue(string name)
         {
             var collector = GetCollector(name);
             switch (collector)
@@ -239,14 +245,14 @@ namespace Test
             return process;
         }
 
-        public static Process GetProxyProcess()
+        public static Process GetProxyProcess(int source, int target)
         {
-            return Bash("ncat -lk 4839 -c \"ncat localhost 62546\"");
+            return Bash($"ncat -lk {source} -c \"ncat localhost {target}\"");
         }
 
-        public static void StopProxyProcess()
+        public static void StopProxyProcess(int source, int target)
         {
-            using (var process = Bash("kill $(ps aux | grep '[n]cat' | awk '{print $2}')"))
+            using (var process = Bash($"kill $(ps aux | grep '[n]cat -lk {source} -c \"ncat localhost {target}\"' | awk '{{print $2}}')"))
             {
                 process.WaitForExit();
             }
@@ -443,6 +449,45 @@ namespace Test
                 Assert.Equal(3, timeseries["gp.tl:i=10"].metadata.Count);
                 Assert.Equal("(0, 200)", timeseries["gp.tl:i=10"].metadata["EURange"]);
             }
+        }
+        public static async Task WaitForCondition(Func<Task<bool>> condition, int seconds, Func<string> assertion)
+        {
+            if (condition == null) throw new ArgumentNullException(nameof(condition));
+            if (assertion == null) throw new ArgumentNullException(nameof(assertion));
+            bool triggered = false;
+            int i;
+            for (i = 0; i < seconds * 5; i++)
+            {
+                if (await condition())
+                {
+                    triggered = true;
+                    break;
+                }
+
+                await Task.Delay(200);
+            }
+
+            if (!triggered)
+            {
+                log.Error("Condition failed to appear within {sec} seconds", seconds);
+            }
+            log.Information("Waited for {cnt} seconds", i / 5.0);
+            Assert.True(triggered, assertion());
+        }
+        public static async Task WaitForCondition(Func<bool> condition, int seconds,
+            string assertion = "Expected condition to trigger")
+        {
+            await WaitForCondition(() => Task.FromResult(condition()), seconds, () => assertion);
+        }
+        public static async Task WaitForCondition(Func<bool> condition, int seconds,
+            Func<string> assertion)
+        {
+            await WaitForCondition(() => Task.FromResult(condition()), seconds, assertion);
+        }
+        public static async Task WaitForCondition(Func<Task<bool>> condition, int seconds,
+            string assertion = "Expected condition to trigger")
+        {
+            await WaitForCondition(condition, seconds, () => assertion);
         }
     }
     public enum ServerName { Basic, Full, Array, Events, Audit, Proxy, Wrong }

@@ -14,10 +14,12 @@ namespace Server
         private readonly ILogger log = Log.Logger.ForContext(typeof(ServerController));
         public TestServer Server { get; private set; }
         private IEnumerable<PredefinedSetup> setups;
+        private int port;
 
-        public ServerController(IEnumerable<PredefinedSetup> setups)
+        public ServerController(IEnumerable<PredefinedSetup> setups, int port = 62546)
         {
             this.setups = setups;
+            this.port = port;
         }
 
         public void Dispose()
@@ -33,7 +35,8 @@ namespace Server
             app.ConfigSectionName = "Server.Test";
             try
             {
-                await app.LoadApplicationConfiguration(Path.Join("config", "Server.Test.Config.xml"), false);
+                var cfg = await app.LoadApplicationConfiguration(Path.Join("config", "Server.Test.Config.xml"), false);
+                cfg.ServerConfiguration.BaseAddresses[0] = $"opc.tcp://localhost:{port}";
                 await app.CheckApplicationInstanceCertificate(false, 0);
                 Server = new TestServer(setups);
                 await app.Start(Server);

@@ -136,7 +136,14 @@ namespace Cognite.OpcUa
                 ConfigSectionName = "opc.ua.net.extractor"
             };
             log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.ConfigRoot);
-            Appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
+            try
+            {
+                Appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
+            }
+            catch (ServiceResultException exc)
+            {
+                throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
+            }
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
             {

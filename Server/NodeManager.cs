@@ -411,24 +411,24 @@ namespace Server
                 AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
                 AddPredefinedNode(SystemContext, root);
 
-                var myobj2 = CreateObject("Object 1");
-                AddNodeRelation(myobj2, root, ReferenceTypeIds.Organizes);
-                AddPredefinedNode(SystemContext, myobj2);
+                var wideroot = CreateObject("WideRoot");
+                AddNodeRelation(wideroot, root, ReferenceTypeIds.Organizes);
+                AddPredefinedNode(SystemContext, wideroot);
 
                 for (int i = 0; i < 2000; i++)
                 {
                     var varch = CreateVariable("SubVariable " + i, DataTypes.Double);
-                    AddNodeRelation(varch, myobj2, ReferenceTypeIds.HasComponent);
+                    AddNodeRelation(varch, wideroot, ReferenceTypeIds.HasComponent);
                     AddPredefinedNode(SystemContext, varch);
                 }
 
-                var myobj3 = CreateObject("Object 2");
-                AddNodeRelation(myobj3, root, ReferenceTypeIds.Organizes);
-                AddPredefinedNode(SystemContext, myobj3);
+                var deeproot = CreateObject("DeepRoot");
+                AddNodeRelation(deeproot, root, ReferenceTypeIds.Organizes);
+                AddPredefinedNode(SystemContext, deeproot);
 
                 for (int i = 0; i < 5; i++)
                 {
-                    var lastdeepobj = myobj3;
+                    var lastdeepobj = deeproot;
                     for (int j = 0; j < 30; j++)
                     {
                         var deepobj = CreateObject($"DeepObject {i}, {j}");
@@ -438,8 +438,8 @@ namespace Server
                     }
                 }
                 Ids.Full.Root = root.NodeId;
-                Ids.Full.WideRoot = myobj2.NodeId;
-                Ids.Full.DeepRoot = myobj3.NodeId;
+                Ids.Full.WideRoot = wideroot.NodeId;
+                Ids.Full.DeepRoot = deeproot.NodeId;
             }
         }
         
