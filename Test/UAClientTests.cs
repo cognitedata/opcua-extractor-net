@@ -119,7 +119,7 @@ namespace Test
                 "Expected the extractor to finish startup");
 
             await tester.Extractor.Looper.WaitForNextPush();
-            CommonTestUtils.StopProxyProcess(4839, 62546);
+            CommonTestUtils.StopProxyProcess();
 
             await tester.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0), 20,
                 "Expected client to disconnect");
@@ -130,7 +130,7 @@ namespace Test
                 "Excpected client to reconnect");
 
             await tester.TerminateRunTask(false);
-            CommonTestUtils.StopProxyProcess(4839, 62546);
+            CommonTestUtils.StopProxyProcess();
         }
         [Trait("Server", "basic")]
         [Trait("Target", "UAClient")]
@@ -161,7 +161,7 @@ namespace Test
                                                 && CommonTestUtils.TestMetricValue("opcua_connected", 1), 20,
                 "Expected the extractor to finish startup");
             await tester.Extractor.Looper.WaitForNextPush();
-            CommonTestUtils.StopProxyProcess(4839, 62546);
+            CommonTestUtils.StopProxyProcess();
 
 
             await tester.WaitForCondition(() => tester.RunTask.IsCompleted, 20, "Expected runtask to terminate");

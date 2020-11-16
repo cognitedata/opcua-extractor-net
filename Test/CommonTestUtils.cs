@@ -250,9 +250,9 @@ namespace Test
             return Bash($"ncat -lk {source} -c \"ncat localhost {target}\"");
         }
 
-        public static void StopProxyProcess(int source, int target)
+        public static void StopProxyProcess()
         {
-            using (var process = Bash($"kill $(ps aux | grep '[n]cat -lk {source} -c \"ncat localhost {target}\"' | awk '{{print $2}}')"))
+            using (var process = Bash($"kill $(ps aux | grep '[n]cat' | awk '{{print $2}}')"))
             {
                 process.WaitForExit();
             }
