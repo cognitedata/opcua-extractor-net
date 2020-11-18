@@ -89,6 +89,7 @@ namespace Cognite.OpcUa.Pushers
         {
             if (points == null) return null;
             var dataPointList = points
+                .Where(dp => dp.Timestamp > DateTime.UnixEpoch)
                 .GroupBy(dp => dp.Id)
                 .Where(group => !mismatchedTimeseries.Contains(group.Key) && !missingTimeseries.Contains(group.Key))
                 .ToDictionary(group => group.Key, group =>
