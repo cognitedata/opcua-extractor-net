@@ -1176,73 +1176,89 @@ namespace Cognite.OpcUa.Config
 
             object listLock = new object();
 
-            await ToolUtil.RunWithTimeout(() => SubscribeToEvents(new [] { new EventExtractionState(this, ObjectIds.Server, false, false, false) },
-                (item, args) =>
-                {
-                    if (!(args.NotificationValue is EventFieldList triggeredEvent))
+            try
+            {
+                await ToolUtil.RunWithTimeout(() => SubscribeToEvents(new[] { new EventExtractionState(this, ObjectIds.Server, false, false, false) },
+                    (item, args) =>
                     {
-                        log.Warning("No event in event subscription notification: {}", item.StartNodeId);
-                        return;
-                    }
-                    var eventFields = triggeredEvent.EventFields;
-                    if (!(item.Filter is EventFilter filter))
-                    {
-                        log.Warning("Triggered event without filter");
-                        return;
-                    }
-                    var buffEvent = ConstructEvent(filter, eventFields, item.ResolvedNodeId);
-                    if (buffEvent == null) return;
+                        if (!(args.NotificationValue is EventFieldList triggeredEvent))
+                        {
+                            log.Warning("No event in event subscription notification: {}", item.StartNodeId);
+                            return;
+                        }
+                        var eventFields = triggeredEvent.EventFields;
+                        if (!(item.Filter is EventFilter filter))
+                        {
+                            log.Warning("Triggered event without filter");
+                            return;
+                        }
+                        var buffEvent = ConstructEvent(filter, eventFields, item.ResolvedNodeId);
+                        if (buffEvent == null) return;
 
-                    lock (listLock)
-                    {
-                        events.Add(buffEvent);
-                    }
+                        lock (listLock)
+                        {
+                            events.Add(buffEvent);
+                        }
 
-                    log.Verbose(buffEvent.ToDebugDescription());
+                        log.Verbose(buffEvent.ToDebugDescription());
 
-                }, token), 120);
+                    }, token), 120);
+            }
+            catch (Exception ex)
+            {
+                log.Warning(ex, "Failed to subscribe to events. The extractor will not be able to support events.");
+                return;
+            }
 
-            await ToolUtil.RunWithTimeout(() => SubscribeToAuditEvents(
-                (item, args) =>
-                {
-                    if (!(args.NotificationValue is EventFieldList triggeredEvent))
+            try
+            {
+                await ToolUtil.RunWithTimeout(() => SubscribeToAuditEvents(
+                    (item, args) =>
                     {
-                        log.Warning("No event in event subscription notification: {}", item.StartNodeId);
-                        return;
-                    }
+                        if (!(args.NotificationValue is EventFieldList triggeredEvent))
+                        {
+                            log.Warning("No event in event subscription notification: {}", item.StartNodeId);
+                            return;
+                        }
 
-                    var eventFields = triggeredEvent.EventFields;
-                    if (!(item.Filter is EventFilter filter))
-                    {
-                        log.Warning("Triggered event without filter");
-                        return;
-                    }
-                    int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
-                                                                               && atr.BrowsePath[0] == BrowseNames.EventType);
-                    if (eventTypeIndex < 0)
-                    {
-                        log.Warning("Triggered event has no type, ignoring");
-                        return;
-                    }
-                    var eventType = eventFields[eventTypeIndex].Value as NodeId;
-                    if (eventType == null || eventType != ObjectTypeIds.AuditAddNodesEventType && eventType != ObjectTypeIds.AuditAddReferencesEventType)
-                    {
-                        log.Warning("Non-audit event triggered on audit event listener");
-                        return;
-                    }
+                        var eventFields = triggeredEvent.EventFields;
+                        if (!(item.Filter is EventFilter filter))
+                        {
+                            log.Warning("Triggered event without filter");
+                            return;
+                        }
+                        int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
+                                                                                    && atr.BrowsePath[0] == BrowseNames.EventType);
+                        if (eventTypeIndex < 0)
+                        {
+                            log.Warning("Triggered event has no type, ignoring");
+                            return;
+                        }
+                        var eventType = eventFields[eventTypeIndex].Value as NodeId;
+                        if (eventType == null || eventType != ObjectTypeIds.AuditAddNodesEventType && eventType != ObjectTypeIds.AuditAddReferencesEventType)
+                        {
+                            log.Warning("Non-audit event triggered on audit event listener");
+                            return;
+                        }
 
-                    var buffEvent = new BufferedEvent
-                    {
-                        EventType = eventType
-                    };
-                    lock (listLock)
-                    {
-                        events.Add(buffEvent);
-                    }
+                        var buffEvent = new BufferedEvent
+                        {
+                            EventType = eventType
+                        };
+                        lock (listLock)
+                        {
+                            events.Add(buffEvent);
+                        }
 
-                    log.Verbose(buffEvent.ToDebugDescription());
+                        log.Verbose(buffEvent.ToDebugDescription());
 
-                }), 120);
+                    }), 120);
+            }
+            catch (Exception ex)
+            {
+                log.Warning(ex, "Failed to subscribe to audit events. The extractor will not be able to support auditing.");
+            }
+
 
             await Task.Delay(5000, token);
 

@@ -1229,19 +1229,24 @@ namespace Cognite.OpcUa
              * using the internal query language in OPC-UA
              */
             var whereClause = new ContentFilter();
-            var eventListOperand = new SimpleAttributeOperand
-            {
-                TypeDefinitionId = ObjectTypeIds.BaseEventType,
-                AttributeId = Attributes.Value
-            };
-            eventListOperand.BrowsePath.Add(BrowseNames.EventType);
-            IEnumerable<FilterOperand> eventOperands = eventFields.Keys.Select(id =>
-                new LiteralOperand
-                {
-                    Value = id
-                });
 
-            whereClause.Push(FilterOperator.InList, eventOperands.Prepend(eventListOperand).ToArray<object>());
+            if (eventFields.Keys.Any())
+            {
+                var eventListOperand = new SimpleAttributeOperand
+                {
+                    TypeDefinitionId = ObjectTypeIds.BaseEventType,
+                    AttributeId = Attributes.Value
+                };
+                eventListOperand.BrowsePath.Add(BrowseNames.EventType);
+                IEnumerable<FilterOperand> eventOperands = eventFields.Keys.Select(id =>
+                    new LiteralOperand
+                    {
+                        Value = id
+                    });
+
+                whereClause.Push(FilterOperator.InList, eventOperands.Prepend(eventListOperand).ToArray<object>());
+            }
+
 
             var fieldList = eventFields
                 .Aggregate((IEnumerable<(NodeId Root, QualifiedName BrowseName)>)new List<(NodeId, QualifiedName)>(), (agg, kvp) => agg.Concat(kvp.Value))
