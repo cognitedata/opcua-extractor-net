@@ -1230,7 +1230,7 @@ namespace Cognite.OpcUa
              */
             var whereClause = new ContentFilter();
 
-            if (eventFields.Keys.Any())
+            if (eventFields.Keys.Any() && ((eventConfig.EventIds?.Any() ?? false) || !eventConfig.AllEvents))
             {
                 var eventListOperand = new SimpleAttributeOperand
                 {
