@@ -157,7 +157,11 @@ namespace Cognite.OpcUa
         public double? NonFiniteReplacement
         {
             get => nonFiniteReplacement;
-            set => nonFiniteReplacement = double.IsFinite(value.Value) ? value : null;
+            set
+            {
+                if (value == null) return;
+                nonFiniteReplacement = double.IsFinite(value.Value) ? value : null;
+            }
         }
         private double? nonFiniteReplacement;
         public IPusher ToPusher(IServiceProvider _)
@@ -190,7 +194,11 @@ namespace Cognite.OpcUa
         public double? NonFiniteReplacement
         {
             get => nonFiniteReplacement;
-            set => nonFiniteReplacement = double.IsFinite(value.Value) ? value : null;
+            set
+            {
+                if (value == null) return;
+                nonFiniteReplacement = double.IsFinite(value.Value) ? value : null;
+            }
         }
         private double? nonFiniteReplacement;
         public IPusher ToPusher(IServiceProvider _)

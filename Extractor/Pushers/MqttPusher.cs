@@ -212,7 +212,7 @@ namespace Cognite.OpcUa.Pushers
             if (objects == null) throw new ArgumentNullException(nameof(objects));
             if (update == null) throw new ArgumentNullException(nameof(update));
 
-            if (!string.IsNullOrEmpty(config.LocalState))
+            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
                 Dictionary<string, ExistingState> states;
                 if (config.SkipMetadata)
@@ -285,7 +285,7 @@ namespace Cognite.OpcUa.Pushers
                 if (!results.All(res => res)) return false;
             }
 
-            if (!string.IsNullOrEmpty(config.LocalState))
+            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
                 var newStates = objects
                     .Select(node => Extractor.GetUniqueId(node.Id))
