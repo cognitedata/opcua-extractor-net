@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -142,6 +143,29 @@ namespace Test
                 tester.Config.Source.KeepAliveInterval = 5000;
                 await tester.Client.Run(tester.Source.Token);
                 CommonTestUtils.StopProxyProcess();
+            }
+        }
+        [Fact]
+        public async Task TestCertificatePath()
+        {
+            if (File.Exists("./Certificates-test/"))
+            {
+                Directory.Delete("./certificates-test/", true);
+            }
+            tester.Client.Close();
+            try
+            {
+                Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", "certificates-test");
+                await tester.Client.Run(tester.Source.Token);
+                var dir = new DirectoryInfo("./certificates-test/pki/trusted/certs/");
+                Assert.Single(dir.GetFiles());
+            }
+            finally
+            {
+                tester.Client.Close();
+                Environment.SetEnvironmentVariable("OPCUA_CERTIFICATE_DIR", null);
+                Directory.Delete("./certificates-test/", true);
+                await tester.Client.Run(tester.Source.Token);
             }
         }
         #endregion
