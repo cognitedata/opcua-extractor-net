@@ -20,8 +20,8 @@ podTemplate(
         resourceLimitCpu: '1000m',
         resourceLimitMemory: '500Mi',
         ttyEnabled: true),
-    containerTemplate(name: 'dotnet-mono',
-        image: 'eu.gcr.io/cognitedata/dotnet-mono:3.0-sdk',
+    containerTemplate(name: 'dotnet',
+        image: 'mcr.microsoft.com/dotnet/sdk:5.0',
         envVars: [
             secretEnvVar(key: 'CODECOV_TOKEN', secretName: 'codecov-tokens', secretKey: 'opcua-extractor-net'),
             // /codecov-script/upload-report.sh relies on the following
@@ -94,11 +94,13 @@ podTemplate(
                 sh("influx --execute 'CREATE DATABASE testdb'")
             }
         }
-        container('dotnet-mono') {
+        container('dotnet') {
             stage('Install dependencies') {
+                sh('apt-get update && apt-get -y install gnupg curl procps gawk grep')
 				sh('curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -')
-                sh('apt-get update && apt-get install -y nmap ncat mosquitto')
-                sh('mono .paket/paket.exe restore')
+                sh('apt-get install -y nmap ncat mosquitto')
+                sh('dotnet tool restore')
+                sh('dotnet paket restore')
             }
 
             stage('Build') {

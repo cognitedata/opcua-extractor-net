@@ -30,6 +30,7 @@ using Cognite.Extractor.Utils;
 using TimeRange = Cognite.Extractor.Common.TimeRange;
 using System.Text.Json;
 using Cognite.Extensions;
+using Cognite.Extractor.Common;
 
 namespace Cognite.OpcUa.Pushers
 {
@@ -89,6 +90,7 @@ namespace Cognite.OpcUa.Pushers
         {
             if (points == null) return null;
             var dataPointList = points
+                .Where(dp => dp.Timestamp > DateTime.UnixEpoch)
                 .GroupBy(dp => dp.Id)
                 .Where(group => !mismatchedTimeseries.Contains(group.Key) && !missingTimeseries.Contains(group.Key))
                 .ToDictionary(group => group.Key, group =>
@@ -419,9 +421,9 @@ namespace Cognite.OpcUa.Pushers
         private async Task<IEnumerable<Asset>> CreateAssets(IDictionary<string, BufferedNode> assetMap, CancellationToken token)
         {
             var assets = new List<Asset>();
-            foreach (var chunk in PusherUtils.ChunkByHierarchy(assetMap))
+            foreach (var chunk in Chunking.ChunkByHierarchy(assetMap.Values, config.CdfChunking.Assets, node => node.Id, node => node.ParentId))
             {
-                var assetChunk = await destination.GetOrCreateAssetsAsync(chunk, async ids =>
+                var assetChunk = await destination.GetOrCreateAssetsAsync(chunk.Select(node => Extractor.GetUniqueId(node.Id)), async ids =>
                 {
                     var assets = ids.Select(id => assetMap[id]);
                     await Extractor.ReadProperties(assets);

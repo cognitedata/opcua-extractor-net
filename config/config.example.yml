@@ -328,9 +328,9 @@ failure-buffer:
 # If the OPC-UA server does not support history this does nothing.
 state-storage:
     # Path to .db file used by the state storage, or database in CDF raw.
-    location: "buffer.db"
+    location: # ex: "buffer.db"
     # Which type of database to use. One of "None", "Raw", "LiteDb"
-    database: "Raw"
+    database: "None"
     # Names of the stores to use for each type of range. Raw tables or collections in litedb.
     variable-store: variable_states
     event-store: event_states
@@ -371,7 +371,7 @@ metrics:
 extraction:
     # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.
     # The externalId is: IdPrefix + NamespaceMap[nodeId.NamespaceUri] + nodeId.Identifier
-    id-prefix: "gp:"
+    id-prefix: # ex: "gp:"
     
     # Specify prefixes on DisplayName to ignore.
     ignore-name-prefix:

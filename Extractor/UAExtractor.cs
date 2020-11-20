@@ -129,7 +129,7 @@ namespace Cognite.OpcUa
 
         private static Regex CreatePropertyFilterRegex(string regex)
         {
-            if (regex == null)
+            if (string.IsNullOrEmpty(regex))
             {
                 return null;
             }
