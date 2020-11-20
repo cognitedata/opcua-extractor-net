@@ -177,6 +177,8 @@ podTemplate(
 
             try {
                 stage ('Build MSI') {
+                    powershell('dotnet tool restore')
+                    powershell('dotnet paket restore')
                     powershell('dotnet build --configuration Release .\\OpcUaService\\')
                     powershell(".\\MsiVersionUpdate.ps1 .\\OpcUaExtractorSetup\\OpcUaExtractor.wxs ${version}")
                     buildStatus = bat(returnStatus: true, script: "${msbuild} /t:rebuild /p:Configuration=Release .\\OpcUaExtractorSetup\\OpcUaExtractorSetup.wixproj")
