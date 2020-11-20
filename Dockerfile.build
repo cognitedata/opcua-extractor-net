@@ -1,9 +1,10 @@
-FROM eu.gcr.io/cognitedata/dotnet-mono:3.0-sdk
+FROM mcr.microsoft.com/dotnet/sdk:5.0
 
 WORKDIR /build
 COPY . .
 
-RUN mono .paket/paket.exe restore
+RUN dotnet tool restore
+RUN dotnet paket restore
 RUN dotnet build ExtractorLauncher/
 
 RUN dotnet publish -c Release -o /build/deploy /p:PublishTrimmed="false" ExtractorLauncher

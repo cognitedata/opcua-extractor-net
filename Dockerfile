@@ -1,4 +1,4 @@
-FROM eu.gcr.io/cognitedata/dotnet-mono:3.0-sdk
+FROM mcr.microsoft.com/dotnet/sdk:5.0
 VOLUME /config
 VOLUME /logs
 VOLUME /certificates
