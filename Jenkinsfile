@@ -135,7 +135,7 @@ podTemplate(
                         sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version "
                             + "opcua-extractor.win-x64.${version}.zip opcua-extractor.win81-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip "
                             + "mqtt-cdf-bridge.win-x64.${version}.zip mqtt-cdf-bridge.win81-x64.${version}.zip mqtt-cdf-bridge.linux-x64.${version}.zip")
-                    }               
+                    }
                 }
             }
         }
