@@ -210,7 +210,7 @@ podTemplate(
 void packBridge(String configuration, String version, boolean linux) {
     sh("dotnet publish -c Release -r $configuration --self-contained true /p:PublishSingleFile=\"true\" MQTTCDFBridge/")
     sh("mkdir -p ./${configuration}")
-    sh("mv MQTTCDFBridge/bin/Release/netcoreapp3.0/${configuration}/publish/* ./${configuration}/")
+    sh("mv MQTTCDFBridge/bin/Release/net5.0/${configuration}/publish/* ./${configuration}/")
     sh("mkdir -p ./${configuration}/config")
     sh("cp ./config/config.bridge.example.yml ./${configuration}/config/")
     sh("cp ./LICENSE.md ./${configuration}/")
@@ -226,7 +226,7 @@ void packBridge(String configuration, String version, boolean linux) {
 void packProject(String configuration, String version, boolean linux) {
     sh("dotnet publish -c Release -r $configuration --self-contained true /p:PublishSingleFile=\"true\" ExtractorLauncher/")
     sh("mkdir -p ./${configuration}/")
-    sh("mv ExtractorLauncher/bin/Release/netcoreapp3.0/${configuration}/publish/* ./${configuration}/")
+    sh("mv ExtractorLauncher/bin/Release/net5.0/${configuration}/publish/* ./${configuration}/")
     sh("cp -r ./config ./${configuration}/")
     sh("cp ./LICENSE.md ./${configuration}/")
     if (linux) {
