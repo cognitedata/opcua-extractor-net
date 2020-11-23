@@ -29,6 +29,7 @@ using System.Threading;
 using Serilog;
 using Cognite.Extractor.Common;
 using System.Text;
+using System.Collections;
 
 namespace Cognite.OpcUa
 {
@@ -1460,10 +1461,15 @@ namespace Cognite.OpcUa
         public static double ConvertToDouble(object datavalue)
         {
             if (datavalue == null) return 0;
-            if (datavalue.GetType().IsArray)
+            // Check if the value is somehow an array
+            if (typeof(IEnumerable).IsAssignableFrom(datavalue.GetType()))
             {
-                return Convert.ToDouble((datavalue as IEnumerable<object>).First(), CultureInfo.InvariantCulture);
+                var enumerator = (datavalue as IEnumerable).GetEnumerator();
+                enumerator.MoveNext();
+                return ConvertToDouble(enumerator.Current);
             }
+            // Give up if there is no clear way to convert it
+            if (!typeof(IConvertible).IsAssignableFrom(datavalue.GetType())) return 0;
             return Convert.ToDouble(datavalue, CultureInfo.InvariantCulture);
         }
         /// <summary>
@@ -1474,16 +1480,17 @@ namespace Cognite.OpcUa
         public string ConvertToString(object value)
         {
             if (value == null) return "";
-            if (value.GetType().IsArray)
+            if (value is string strValue)
+            {
+                return strValue;
+            }
+            if (typeof(IEnumerable).IsAssignableFrom(value.GetType()))
             {
                 var builder = new StringBuilder("[");
-                if (value is Array values)
+                int count = 0;
+                foreach (var dvalue in value as IEnumerable)
                 {
-                    int count = 0;
-                    foreach (var dvalue in values)
-                    {
-                        builder.Append(((count++ > 0) ? ", " : "") + ConvertToString(dvalue));
-                    }
+                    builder.Append(((count++ > 0) ? ", " : "") + ConvertToString(dvalue));
                 }
                 builder.Append(']');
                 return builder.ToString();
@@ -1494,7 +1501,7 @@ namespace Cognite.OpcUa
             }
             if (value.GetType() == typeof(ExpandedNodeId))
             {
-                return GetUniqueId((NodeId)value);
+                return GetUniqueId(ToNodeId((ExpandedNodeId)value));
             }
             if (value.GetType() == typeof(LocalizedText))
             {
@@ -1560,6 +1567,10 @@ namespace Cognite.OpcUa
                 // 255 is max length, Log10(Max(1, index)) + 3 is the length of the index suffix ("[123]").
                 buffer.Length = Math.Min(buffer.Length, 255 - ((int)Math.Log10(Math.Max(1, index)) + 3));
                 buffer.AppendFormat(CultureInfo.InvariantCulture, "[{0}]", index);
+            }
+            else
+            {
+                buffer.Length = Math.Min(buffer.Length, 255);
             }
             return buffer.ToString();
         }

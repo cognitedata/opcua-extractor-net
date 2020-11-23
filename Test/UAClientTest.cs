@@ -2,6 +2,7 @@
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Server;
@@ -527,16 +528,39 @@ namespace Test
                     IsReadModified = false,
                     StartTime = DateTime.UtcNow.Subtract(TimeSpan.FromSeconds(200)),
                     EndTime = DateTime.UtcNow,
-                    NumValuesPerNode = 100
+                    NumValuesPerNode = 600
                 });
+
             tester.Server.PopulateArrayHistory();
             tester.Server.Server.PopulateHistory(tester.Server.Ids.Base.StringVar, 1000, "string");
 
 
-            IEnumerable<(NodeId Id, IEncodeable RawData)> results;
+
             try
             {
+                var results = tester.Client.DoHistoryRead(req);
+
+                Assert.Equal(3, results.Count());
+                Assert.True(CommonTestUtils.TestMetricValue("opcua_history_reads", 1));
+
+                foreach (var result in results)
+                {
+                    var historyData = result.RawData as HistoryData;
+                    Assert.Equal(600, historyData.DataValues.Count);
+                    Assert.False(req.Completed[result.Id]);
+                    Assert.NotNull(req.ContinuationPoints[result.Id]);
+                }
+
                 results = tester.Client.DoHistoryRead(req);
+
+                Assert.Equal(3, results.Count());
+
+                foreach (var result in results)
+                {
+                    var historyData = result.RawData as HistoryData;
+                    Assert.Equal(401, historyData.DataValues.Count);
+                    Assert.True(req.Completed[result.Id]);
+                }
             }
             finally
             {
@@ -544,16 +568,7 @@ namespace Test
                 tester.Server.WipeHistory(tester.Server.Ids.Custom.MysteryVar, null);
                 tester.Server.WipeHistory(tester.Server.Ids.Base.StringVar, null);
             }
-            Assert.Equal(3, results.Count());
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_history_reads", 1));
-
-            foreach (var result in results)
-            {
-                var historyData = result.RawData as HistoryData;
-                Assert.Equal(100, historyData.DataValues.Count);
-                Assert.False(req.Completed[result.Id]);
-                Assert.NotNull(req.ContinuationPoints[result.Id]);
-            }
+            
 
         }
         [Fact]
@@ -566,12 +581,17 @@ namespace Test
                 .Select(id => new NodeExtractionState(tester.Client, new BufferedVariable(id, "somvar", tester.Server.Ids.Full.WideRoot), true, true, false))
                 .ToList();
 
+            var lck = new object();
+
             var dps = new List<DataValue>();
 
             void handler(MonitoredItem item, MonitoredItemNotificationEventArgs _)
             {
                 var values = item.DequeueValues();
-                dps.AddRange(values);
+                lock (lck)
+                {
+                    dps.AddRange(values);
+                }
             }
 
             tester.Config.Source.SubscriptionChunk = 100;
@@ -581,7 +601,7 @@ namespace Test
                 tester.Client.SubscribeToNodes(nodes.Take(1000), handler, tester.Source.Token);
                 tester.Client.SubscribeToNodes(nodes.Skip(1000), handler, tester.Source.Token);
 
-                await CommonTestUtils.WaitForCondition(() => dps.Count == 2000, 10, 
+                await CommonTestUtils.WaitForCondition(() => dps.Count == 2000, 5, 
                     () => $"Expected to get 2000 datapoints, but got {dps.Count}");
 
                 foreach (var node in nodes)
@@ -589,7 +609,7 @@ namespace Test
                     tester.Server.UpdateNode(node.SourceId, 1.0);
                 }
 
-                await CommonTestUtils.WaitForCondition(() => dps.Count == 4000, 10,
+                await CommonTestUtils.WaitForCondition(() => dps.Count == 4000, 5,
                     () => $"Expected to get 4000 datapoints, but got {dps.Count}");
             }
             finally
@@ -697,6 +717,73 @@ namespace Test
                 tester.Client.RemoveSubscription("AuditListener");
             }
         }
+        [Fact]
+        public void TestExpandedNodeIdConversion()
+        {
+            var nodeId = new ExpandedNodeId("string-ns", tester.Client.NamespaceTable.GetString(2));
+            Assert.Equal(new NodeId("string-ns", 2), tester.Client.ToNodeId(nodeId));
+            nodeId = new ExpandedNodeId(new byte[] { 12, 12, 6 }, 1);
+            Assert.Equal(new NodeId(new byte[] { 12, 12, 6 }, 1), tester.Client.ToNodeId(nodeId));
+            nodeId = new ExpandedNodeId("other-server", "opc.tcp://some-other-server.test", 1);
+            Assert.Null(tester.Client.ToNodeId(nodeId));
+        }
+        [Fact]
+        public void TestNodeIdConversion()
+        {
+            var nodeId = tester.Client.ToNodeId("i=123", tester.Client.NamespaceTable.GetString(2));
+            Assert.Equal(new NodeId(123u, 2), nodeId);
+            nodeId = tester.Client.ToNodeId("s=abc", tester.Client.NamespaceTable.GetString(1));
+            Assert.Equal(new NodeId("abc", 1), nodeId);
+            nodeId = tester.Client.ToNodeId("s=abcd", "some-namespaces-that-doesnt-exist");
+            Assert.Equal(NodeId.Null, nodeId);
+            nodeId = tester.Client.ToNodeId("s=bcd", "tl:");
+            Assert.Equal(new NodeId("bcd", 2), nodeId);
+            Assert.Equal(NodeId.Null, tester.Client.ToNodeId("i=123", null));
+        }
+        [Fact]
+        public static void TestConvertToDouble()
+        {
+            Assert.Equal(0, UAClient.ConvertToDouble(null));
+            Assert.Equal(1, UAClient.ConvertToDouble(1.0));
+            Assert.Equal(2, UAClient.ConvertToDouble(2f));
+            Assert.Equal(3, UAClient.ConvertToDouble(3u));
+            Assert.Equal(4, UAClient.ConvertToDouble(new[] { 4, 5 }));
+            Assert.Equal(5, UAClient.ConvertToDouble(new[] { 4, 5, 6 }.Where(val => val >= 5)));
+            Assert.Equal(0, UAClient.ConvertToDouble(new object()));
+        }
+        [Fact]
+        public void TestConvertToString()
+        {
+            Assert.Equal("", tester.Client.ConvertToString(null));
+            Assert.Equal("gp.tl:s=abc", tester.Client.ConvertToString(new NodeId("abc", 2)));
+            Assert.Equal("gp.tl:s=abc", tester.Client.ConvertToString(new ExpandedNodeId("abc", tester.Client.NamespaceTable.GetString(2))));
+            Assert.Equal("test", tester.Client.ConvertToString(new LocalizedText("EN-US", "test")));
+            Assert.Equal("(0, 100)", tester.Client.ConvertToString(new Opc.Ua.Range(100, 0)));
+            Assert.Equal("N: Newton", tester.Client.ConvertToString(new EUInformation { DisplayName = "N", Description = "Newton" }));
+            Assert.Equal("N: Newton", tester.Client.ConvertToString(new ExtensionObject(new EUInformation { DisplayName = "N", Description = "Newton" })));
+            Assert.Equal("key: 1", tester.Client.ConvertToString(new EnumValueType { DisplayName = "key", Value = 1 }));
+            Assert.Equal("1234", tester.Client.ConvertToString(1234));
+            Assert.Equal("[123, 1234]", tester.Client.ConvertToString(new[] { 123, 1234 }));
+            Assert.Equal("[gp.tl:i=123, gp.tl:i=1234, gp.tl:s=abc]", tester.Client.ConvertToString(new[]
+            {
+                new NodeId(123u, 2), new NodeId(1234u, 2), new NodeId("abc", 2)
+            }));
+        }
+        [Fact]
+        public void TestGetUniqueId()
+        {
+            Assert.Equal("gp.tl:i=123", tester.Client.GetUniqueId(new NodeId(123u, 2)));
+            Assert.Equal("gp.http://opcfoundation.org/UA/:i=123", tester.Client.GetUniqueId(new NodeId(123u)));
+            var id = tester.Client.GetUniqueId(new NodeId(new string('s', 400), 2));
+            Assert.Equal($"gp.tl:s={new string('s', 247)}", id);
+            Assert.Equal(255, id.Length);
+            id = tester.Client.GetUniqueId(new NodeId(new string('s', 400), 2), 123);
+            Assert.Equal($"gp.tl:s={new string('s', 242)}[123]", id);
+            Assert.Equal(255, id.Length);
+            Assert.Equal("gp.tl:s=", tester.Client.GetUniqueId(new NodeId(new string(' ', 400), 2)));
+            Assert.Equal("gp.tl:s=[123]", tester.Client.GetUniqueId(new NodeId(new string(' ', 400), 2), 123));
+        }
+
         #endregion
 
     }
