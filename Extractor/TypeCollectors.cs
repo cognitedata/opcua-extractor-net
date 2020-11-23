@@ -124,14 +124,14 @@ namespace Cognite.OpcUa
     public class DataTypeManager
     {
         private readonly ILogger log = Log.Logger.ForContext<DataTypeManager>();
-        private readonly IUAClient uaClient;
+        private readonly UAClient uaClient;
         private readonly Dictionary<NodeId, NodeId> parentIds = new Dictionary<NodeId, NodeId>();
         private readonly Dictionary<NodeId, BufferedDataType> dataTypes = new Dictionary<NodeId, BufferedDataType>();
         private readonly Dictionary<NodeId, string> customTypeNames = new Dictionary<NodeId, string>();
         private readonly HashSet<NodeId> ignoreDataTypes = new HashSet<NodeId>();
         private readonly DataTypeConfig config;
 
-        public DataTypeManager(IUAClient client, DataTypeConfig config)
+        public DataTypeManager(UAClient client, DataTypeConfig config)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (config == null) throw new ArgumentNullException(nameof(config));
@@ -385,7 +385,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public class EventFieldCollector
     {
-        private readonly IUAClient uaClient;
+        private readonly UAClient uaClient;
         private readonly Dictionary<NodeId, BufferedEventType> types = new Dictionary<NodeId, BufferedEventType>();
         private readonly EventConfig config;
         private readonly Regex ignoreFilter;
@@ -394,7 +394,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="parent">UAClient to be used for browse calls.</param>
         /// <param name="targetEventIds">Target event ids</param>
-        public EventFieldCollector(IUAClient parent, EventConfig config)
+        public EventFieldCollector(UAClient parent, EventConfig config)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             uaClient = parent;

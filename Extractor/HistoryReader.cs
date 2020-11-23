@@ -49,7 +49,7 @@ namespace Cognite.OpcUa
         private static readonly Counter numBackfillEvent = Metrics
             .CreateCounter("opcua_backfill_events_count", "Number of times backfill has been run on events");
 
-        private readonly IUAClient uaClient;
+        private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly HistoryConfig config;
         private readonly DateTime historyStartTime;
@@ -65,7 +65,7 @@ namespace Cognite.OpcUa
         /// <param name="uaClient">UAClient to use for history read</param>
         /// <param name="extractor">Parent extractor to enqueue points and events in</param>
         /// <param name="config">Configuration to use</param>
-        public HistoryReader(IUAClient uaClient, UAExtractor extractor, HistoryConfig config)
+        public HistoryReader(UAClient uaClient, UAExtractor extractor, HistoryConfig config)
         {
             this.config = config;
             this.uaClient = uaClient;

@@ -230,7 +230,7 @@ namespace Cognite.OpcUa
         /// <param name="value">Value to set</param>
         /// <param name="sourceTimestamp">Timestamp from source</param>
         /// <param name="client">Current client context</param>
-        public void SetDataPoint(object value, DateTime sourceTimestamp, IUAClient client)
+        public void SetDataPoint(object value, DateTime sourceTimestamp, UAClient client)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (value == null) return;

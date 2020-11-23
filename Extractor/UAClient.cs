@@ -36,7 +36,7 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Client managing the connection to the opcua server, and providing wrapper methods to simplify interaction with the server.
     /// </summary>
-    public class UAClient : IUAClient
+    public class UAClient : IDisposable
     {
         private readonly UAClientConfig config;
         private readonly ExtractionConfig extractionConfig;
@@ -58,8 +58,8 @@ namespace Cognite.OpcUa
 
         private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
-        public event EventHandler<IUAClient> OnServerDisconnect;
-        public event EventHandler<IUAClient> OnServerReconnect;
+        public event EventHandler<UAClient> OnServerDisconnect;
+        public event EventHandler<UAClient> OnServerReconnect;
 
         private int pendingOperations;
 
@@ -124,6 +124,7 @@ namespace Cognite.OpcUa
                 Session = null;
             }
             connected.Set(0);
+            Started = false;
         }
         /// <summary>
         /// Load security configuration for the Session, then start the server.
