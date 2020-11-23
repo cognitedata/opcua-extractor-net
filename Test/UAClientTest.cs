@@ -202,6 +202,7 @@ namespace Test
             Assert.True(nodes.ContainsKey("WrongRoot"));
             Assert.True(nodes.ContainsKey("BaseRoot"));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 1));
+            tester.Client.ResetVisitedNodes();
         }
         [Fact]
         public void TestGetNodeChildrenChunking()
@@ -223,6 +224,7 @@ namespace Test
             }
             finally
             {
+                tester.Client.ResetVisitedNodes();
                 tester.Config.Source.BrowseChunk = 1000;
             }
             Assert.All(nums, cnt => Assert.Equal(1, cnt));
@@ -239,6 +241,7 @@ namespace Test
             Assert.Equal(151, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 31));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 31));
+            tester.Client.ResetVisitedNodes();
         }
         [Fact]
         public async Task TestBrowseNodesChunk()
@@ -253,6 +256,7 @@ namespace Test
             }
             finally
             {
+                tester.Client.ResetVisitedNodes();
                 tester.Config.Source.BrowseNodesChunk = 100;
             }
             Assert.Equal(147, nodes.Count);
@@ -274,6 +278,7 @@ namespace Test
             }
             finally
             {
+                tester.Client.ResetVisitedNodes();
                 tester.Config.Extraction.IgnoreName = null;
             }
             Assert.False(nodes.ContainsKey(tester.Server.Ids.Full.WideRoot));
@@ -295,6 +300,7 @@ namespace Test
             }
             finally
             {
+                tester.Client.ResetVisitedNodes();
                 tester.Config.Extraction.IgnoreNamePrefix = null;
             }
             Assert.Equal(2, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
@@ -329,6 +335,7 @@ namespace Test
             Assert.Equal(2001, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 32 + 32 + 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 32));
+            tester.Client.ResetVisitedNodes();
         }
         [Fact]
         #endregion
@@ -639,10 +646,12 @@ namespace Test
             }
             finally
             {
+                tester.Client.ResetVisitedNodes();
                 tester.Config.Events.Enabled = false;
                 tester.Client.ClearEventFields();
             }
         }
+
         [Fact]
         public async Task TestEventSubscriptions()
         {
@@ -682,12 +691,59 @@ namespace Test
             }
             finally
             {
+                tester.Client.ResetVisitedNodes();
                 tester.Config.Source.SubscriptionChunk = 1000;
+                tester.Config.Events.Enabled = false;
                 tester.Client.ClearEventFields();
                 tester.Client.RemoveSubscription("EventListener");
                 tester.Server.WipeEventHistory();
             }
         }
+        [Fact]
+        public async Task TestEventSubscriptionsFiltered()
+        {
+            tester.Config.Events.Enabled = true;
+            tester.Config.Events.EventIds = new[]
+            {
+                new ProtoNodeId { NamespaceUri = tester.Client.NamespaceTable.GetString(2), NodeId = $"i={tester.Server.Ids.Event.BasicType1.Identifier}" },
+                new ProtoNodeId { NamespaceUri = "http://opcfoundation.org/UA/", NodeId = $"i={ObjectTypeIds.AuditChannelEventType.Identifier}" }
+            };
+            var emitters = new[]
+            {
+                new EventExtractionState(tester.Client, ObjectIds.Server, true, true, false),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true, false),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true, false)
+            };
+            int count = 0;
+
+            void handler(MonitoredItem _, MonitoredItemNotificationEventArgs __)
+            {
+                count++;
+            }
+            try
+            {
+                tester.Client.GetEventFields(tester.Source.Token);
+                tester.Client.SubscribeToEvents(emitters, handler, tester.Source.Token);
+
+                tester.Server.TriggerEvents(0);
+
+                await CommonTestUtils.WaitForCondition(() => count == 6, 10,
+                    () => $"Expected to get 6 events, but got {count}");
+            }
+            finally
+            {
+                tester.Client.ResetVisitedNodes();
+                tester.Config.Source.SubscriptionChunk = 1000;
+                tester.Config.Events.Enabled = false;
+                tester.Config.Events.EventIds = null;
+                tester.Client.ClearEventFields();
+                tester.Client.RemoveSubscription("EventListener");
+                tester.Server.WipeEventHistory();
+            }
+
+        }
+
+
         [Fact]
         public async Task TestAuditSubscription()
         {

@@ -1217,9 +1217,8 @@ namespace Cognite.OpcUa
         {
             var subscription = Session.Subscriptions.FirstOrDefault(sub =>
                                        sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
-            if (subscription == null) return;
-
-            subscription.Delete(false);
+            if (subscription == null || !subscription.Created) return;
+            Session.RemoveSubscription(subscription);
         }
         #endregion
 
@@ -1267,6 +1266,7 @@ namespace Cognite.OpcUa
 
             if (eventFields.Keys.Any() && ((eventConfig.EventIds?.Any() ?? false) || !eventConfig.AllEvents))
             {
+                log.Debug("Limit event results to the following ids: {ids}", string.Join(", ", eventFields.Keys));
                 var eventListOperand = new SimpleAttributeOperand
                 {
                     TypeDefinitionId = ObjectTypeIds.BaseEventType,
