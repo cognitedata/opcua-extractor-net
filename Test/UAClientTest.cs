@@ -782,6 +782,12 @@ namespace Test
             Assert.Equal(255, id.Length);
             Assert.Equal("gp.tl:s=", tester.Client.GetUniqueId(new NodeId(new string(' ', 400), 2)));
             Assert.Equal("gp.tl:s=[123]", tester.Client.GetUniqueId(new NodeId(new string(' ', 400), 2), 123));
+
+            tester.Client.AddNodeOverride(new NodeId(1234, 2), "override");
+            Assert.Equal("override", tester.Client.GetUniqueId(new NodeId(1234, 2)));
+            Assert.Equal("override[123]", tester.Client.GetUniqueId(new NodeId(1234, 2), 123));
+            tester.Client.ClearNodeOverrides();
+
         }
 
         #endregion

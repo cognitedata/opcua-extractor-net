@@ -409,6 +409,13 @@ namespace Cognite.OpcUa
             nodeOverrides[nodeId] = externalId;
         }
         /// <summary>
+        /// Remove all externalId overrides
+        /// </summary>
+        public void ClearNodeOverrides()
+        {
+            nodeOverrides.Clear();
+        }
+        /// <summary>
         /// Get all children of the given list of parents as a map from parentId to list of children descriptions
         /// </summary>
         /// <param name="parents">List of parents to browse</param>
@@ -1540,7 +1547,11 @@ namespace Cognite.OpcUa
             if (rNodeId == null || rNodeId.IsNull) return null;
             var nodeId = ToNodeId(rNodeId);
             if (nodeId == null || nodeId.IsNullNodeId) return null;
-            if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride)) return nodeOverride;
+            if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride))
+            {
+                if (index <= -1) return nodeOverride;
+                return $"{nodeOverride}[{index}]";
+            }
 
             // ExternalIds shorter than 32 chars are unlikely, this will generally avoid at least 1 re-allocation of the buffer,
             // and usually boost performance.
