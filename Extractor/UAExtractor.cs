@@ -36,7 +36,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public class UAExtractor : IDisposable
     {
-        private readonly UAClient uaClient;
+        private readonly IUAClient uaClient;
         private readonly FullConfig config;
         public Looper Looper { get; }
         public FailureBuffer FailureBuffer { get; }
@@ -93,13 +93,16 @@ namespace Cognite.OpcUa
         /// <param name="uaClient">UAClient to be used</param>
         public UAExtractor(FullConfig config,
             IEnumerable<IPusher> pushers,
-            UAClient uaClient,
+            IUAClient uaClient,
             IExtractionStateStore stateStore,
             CancellationToken token)
         {
             this.pushers = pushers ?? throw new ArgumentNullException(nameof(pushers));
             this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
+
+            this.uaClient.OnServerReconnect += UaClient_OnServerReconnect;
+            this.uaClient.OnServerDisconnect += UaClient_OnServerDisconnect;
 
             State = new State();
             Streamer = new Streamer(this, config);
@@ -115,7 +118,6 @@ namespace Cognite.OpcUa
             {
                 FailureBuffer = new FailureBuffer(config, this, pushers.FirstOrDefault(pusher => pusher is InfluxPusher) as InfluxPusher);
             }
-            this.uaClient.Extractor = this;
             historyReader = new HistoryReader(uaClient, this, config.History);
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
             if (config.Extraction.IdPrefix == "events.")
@@ -130,6 +132,26 @@ namespace Cognite.OpcUa
 
             propertyNameFilter = CreatePropertyFilterRegex(config.Extraction.PropertyNameFilter);
             propertyIdFilter = CreatePropertyFilterRegex(config.Extraction.PropertyIdFilter);
+        }
+
+        private void UaClient_OnServerDisconnect(object sender, IUAClient e)
+        {
+            if (config.Source.ForceRestart)
+            {
+                Close();
+            }
+        }
+
+        private void UaClient_OnServerReconnect(object sender, IUAClient client)
+        {
+            if (config.Source.RestartOnReconnect)
+            {
+                client.DataTypeManager.Configure();
+                client.ClearNodeOverrides();
+                client.ClearEventFields();
+                client.ResetVisitedNodes();
+                RestartExtractor();
+            }
         }
 
         private static Regex CreatePropertyFilterRegex(string regex)
@@ -149,7 +171,7 @@ namespace Cognite.OpcUa
         /// <param name="uaClient">UAClient to use</param>
         public UAExtractor(FullConfig config,
             IPusher pusher,
-            UAClient uaClient,
+            IUAClient uaClient,
             IExtractionStateStore stateStore,
             CancellationToken token)
             : this(config, new List<IPusher> { pusher }, uaClient, stateStore, token) { }

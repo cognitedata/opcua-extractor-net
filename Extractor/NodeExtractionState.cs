@@ -33,7 +33,7 @@ namespace Cognite.OpcUa
         {
             SourceId = id;
         }
-        public UAHistoryExtractionState(UAClient client, NodeId id, bool frontfill, bool backfill)
+        public UAHistoryExtractionState(IUAClient client, NodeId id, bool frontfill, bool backfill)
             : base(client?.GetUniqueId(id), frontfill, backfill)
         {
             SourceId = id;
@@ -96,7 +96,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        public NodeExtractionState(UAClient client, BufferedVariable variable, bool frontfill, bool backfill, bool stateStore)
+        public NodeExtractionState(IUAClient client, BufferedVariable variable, bool frontfill, bool backfill, bool stateStore)
             : base(client, variable?.Id, frontfill, backfill)
         {
             if (variable == null) throw new ArgumentNullException(nameof(variable));
@@ -181,7 +181,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        public EventExtractionState(UAClient client, NodeId emitterId, bool frontfill, bool backfill, bool stateStore)
+        public EventExtractionState(IUAClient client, NodeId emitterId, bool frontfill, bool backfill, bool stateStore)
             : base(client, emitterId, frontfill, backfill)
         {
             if (stateStore)
