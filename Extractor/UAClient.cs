@@ -1198,6 +1198,21 @@ namespace Cognite.OpcUa
                 token);
 #pragma warning restore CA2000 // Dispose objects before losing scope
         }
+
+        /// <summary>
+        /// Deletes a subscription starting with the given name.
+        /// The client manages three subscriptions: EventListener, DataChangeListener and AuditListener,
+        /// if the subscription does not exist, nothing happens.
+        /// </summary>
+        /// <param name="name"></param>
+        public void RemoveSubscription(string name)
+        {
+            var subscription = Session.Subscriptions.FirstOrDefault(sub =>
+                                       sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
+            if (subscription == null) return;
+
+            subscription.Delete(false);
+        }
         #endregion
 
         #region Events
@@ -1220,6 +1235,13 @@ namespace Cognite.OpcUa
                 }
             }
             return eventFields;
+        }
+        /// <summary>
+        /// Remove collected event fields
+        /// </summary>
+        public void ClearEventFields()
+        {
+            eventFields = null;
         }
         /// <summary>
         /// Constructs a filter from the given list of permitted eventids, the already constructed field map and an optional receivedAfter property.

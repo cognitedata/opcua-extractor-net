@@ -3,6 +3,7 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
+using Opc.Ua.Client;
 using Server;
 using System;
 using System.Collections.Generic;
@@ -510,6 +511,191 @@ namespace Test
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 2));
+        }
+        #endregion
+
+        #region synchronization
+        // This just tests the actual history-read method in UAClient, further tests should use the HistoryReader
+        [Fact]
+        public void TestHistoryReadData()
+        {
+            CommonTestUtils.ResetMetricValues("opcua_history_reads");
+
+            var req = new HistoryReadParams(new[] { tester.Server.Ids.Custom.Array, tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Base.StringVar },
+                new ReadRawModifiedDetails
+                {
+                    IsReadModified = false,
+                    StartTime = DateTime.UtcNow.Subtract(TimeSpan.FromSeconds(200)),
+                    EndTime = DateTime.UtcNow,
+                    NumValuesPerNode = 100
+                });
+            tester.Server.PopulateArrayHistory();
+            tester.Server.Server.PopulateHistory(tester.Server.Ids.Base.StringVar, 1000, "string");
+
+
+            IEnumerable<(NodeId Id, IEncodeable RawData)> results;
+            try
+            {
+                results = tester.Client.DoHistoryRead(req);
+            }
+            finally
+            {
+                tester.Server.WipeHistory(tester.Server.Ids.Custom.Array, new double[] { 0, 0, 0, 0 });
+                tester.Server.WipeHistory(tester.Server.Ids.Custom.MysteryVar, null);
+                tester.Server.WipeHistory(tester.Server.Ids.Base.StringVar, null);
+            }
+            Assert.Equal(3, results.Count());
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_history_reads", 1));
+
+            foreach (var result in results)
+            {
+                var historyData = result.RawData as HistoryData;
+                Assert.Equal(100, historyData.DataValues.Count);
+                Assert.False(req.Completed[result.Id]);
+                Assert.NotNull(req.ContinuationPoints[result.Id]);
+            }
+
+        }
+        [Fact]
+        public async Task TestDataSubscriptions()
+        {
+            CommonTestUtils.ResetMetricValues("opcua_subscriptions");
+            int start = (int)(uint)tester.Server.Ids.Full.WideRoot.Identifier;
+            var nodes = Enumerable.Range(start + 1, 2000)
+                .Select(idf => new NodeId((uint)idf, 2))
+                .Select(id => new NodeExtractionState(tester.Client, new BufferedVariable(id, "somvar", tester.Server.Ids.Full.WideRoot), true, true, false))
+                .ToList();
+
+            var dps = new List<DataValue>();
+
+            void handler(MonitoredItem item, MonitoredItemNotificationEventArgs _)
+            {
+                var values = item.DequeueValues();
+                dps.AddRange(values);
+            }
+
+            tester.Config.Source.SubscriptionChunk = 100;
+
+            try
+            {
+                tester.Client.SubscribeToNodes(nodes.Take(1000), handler, tester.Source.Token);
+                tester.Client.SubscribeToNodes(nodes.Skip(1000), handler, tester.Source.Token);
+
+                await CommonTestUtils.WaitForCondition(() => dps.Count == 2000, 10, 
+                    () => $"Expected to get 2000 datapoints, but got {dps.Count}");
+
+                foreach (var node in nodes)
+                {
+                    tester.Server.UpdateNode(node.SourceId, 1.0);
+                }
+
+                await CommonTestUtils.WaitForCondition(() => dps.Count == 4000, 10,
+                    () => $"Expected to get 4000 datapoints, but got {dps.Count}");
+            }
+            finally
+            {
+                tester.Client.RemoveSubscription("DataChangeListener");
+                foreach (var node in nodes)
+                {
+                    tester.Server.UpdateNode(node.SourceId, null);
+                }
+                tester.Config.Source.SubscriptionChunk = 1000;
+            }
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_subscriptions", 2000));
+        }
+        #endregion
+        #region events
+        // Just basic testing here, separate tests should be written for the event field collector itself.
+        [Fact]
+        public void TestGetEventFields()
+        {
+            tester.Config.Events.Enabled = true;
+
+            try
+            {
+                var fields = tester.Client.GetEventFields(tester.Source.Token);
+                Assert.True(fields.ContainsKey(tester.Server.Ids.Event.CustomType));
+                Assert.True(fields.ContainsKey(ObjectTypeIds.AuditActivateSessionEventType));
+            }
+            finally
+            {
+                tester.Config.Events.Enabled = false;
+                tester.Client.ClearEventFields();
+            }
+        }
+        [Fact]
+        public async Task TestEventSubscriptions()
+        {
+            tester.Config.Events.Enabled = true;
+
+            var emitters = new[]
+            {
+                new EventExtractionState(tester.Client, ObjectIds.Server, true, true, false),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true, false),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true, false)
+            };
+            tester.Config.Source.SubscriptionChunk = 1;
+
+            int count = 0;
+
+            void handler(MonitoredItem _, MonitoredItemNotificationEventArgs __)
+            {
+                count++;
+            }
+
+            try
+            {
+                tester.Client.GetEventFields(tester.Source.Token);
+
+                tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.Source.Token);
+                tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.Source.Token);
+
+                tester.Server.TriggerEvents(0);
+
+                await CommonTestUtils.WaitForCondition(() => count == 11, 10,
+                    () => $"Expected to get 11 events, but got {count}");
+
+                tester.Server.TriggerEvents(1);
+
+                await CommonTestUtils.WaitForCondition(() => count == 22, 10,
+                    () => $"Expected to get 22 events, but got {count}");
+            }
+            finally
+            {
+                tester.Config.Source.SubscriptionChunk = 1000;
+                tester.Client.ClearEventFields();
+                tester.Client.RemoveSubscription("EventListener");
+                tester.Server.WipeEventHistory();
+            }
+        }
+        [Fact]
+        public async Task TestAuditSubscription()
+        {
+            int count = 0;
+
+            void handler(MonitoredItem _, MonitoredItemNotificationEventArgs __)
+            {
+                count++;
+            }
+
+            try
+            {
+                tester.Client.SubscribeToAuditEvents(handler);
+
+                tester.Server.DirectGrowth();
+
+                await CommonTestUtils.WaitForCondition(() => count == 2, 10,
+                    () => $"Expected to get 2 events, but got {count}");
+
+                tester.Server.ReferenceGrowth();
+
+                await CommonTestUtils.WaitForCondition(() => count == 6, 10,
+                    () => $"Expected to get 6 events, but got {count}");
+            }
+            finally
+            {
+                tester.Client.RemoveSubscription("AuditListener");
+            }
         }
         #endregion
 
