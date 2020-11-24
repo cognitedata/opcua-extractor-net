@@ -54,7 +54,7 @@ namespace Cognite.OpcUa
         {
             if (token == null) throw new ArgumentNullException(nameof(token));
 
-            var client = new UAClient(config);
+            using var client = new UAClient(config);
             var pushers = new List<IPusher>();
 
             if (config.Cognite != null)
@@ -85,17 +85,13 @@ namespace Cognite.OpcUa
             {
                 await extractor.RunExtractor();
             }
-            catch
-            {
-                extractor.Close();
-                throw;
-            }
             finally
             {
+                extractor.Close();
                 foreach (var pusher in pushers)
                 {
                     pusher.Dispose();
-                }
+                }                
             }
         }
     }
