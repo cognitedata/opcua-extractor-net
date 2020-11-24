@@ -91,7 +91,7 @@ namespace Cognite.OpcUa
                 foreach (var pusher in pushers)
                 {
                     pusher.Dispose();
-                }                
+                }
             }
         }
     }

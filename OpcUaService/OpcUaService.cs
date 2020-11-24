@@ -75,9 +75,6 @@ namespace OpcUaService
             _configFile = $@"{_path}\{_configFileName}";
 
             // Validates the config file, and that it can be loaded and used. 
-            ConfigurationUtils.AddTagMapping<CognitePusherConfig>("!cdf");
-            ConfigurationUtils.AddTagMapping<InfluxPusherConfig>("!influx");
-            ConfigurationUtils.AddTagMapping<MqttPusherConfig>("!mqtt");
             string configFileTest = ExtractorServiceStarter.ValidateConfigurationFile(_configFile);
 
             if (configFileTest != "OK")
