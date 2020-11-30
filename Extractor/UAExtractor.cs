@@ -101,7 +101,7 @@ namespace Cognite.OpcUa
             this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
 
-            State = new State(this);
+            State = new State();
             Streamer = new Streamer(this, config);
             StateStorage = stateStore;
             if (config.Extraction.Relationships.Enabled)
@@ -310,18 +310,13 @@ namespace Cognite.OpcUa
             log.Information("Extractor closed");
         }
         /// <summary>
-        /// Get uniqueId either from the uaClient or from the state
+        /// Get uniqueId from uaClient
         /// </summary>
         /// <param name="id">NodeId to convert</param>
         /// <param name="index">Index to use for uniqueId</param>
         /// <returns>Converted uniqueId</returns>
         public string GetUniqueId(NodeId id, int index = -1)
         {
-            if (index == -1)
-            {
-                return State.GetUniqueId(id) ?? uaClient.GetUniqueId(id, -1);
-            }
-
             return uaClient.GetUniqueId(id, index);
         }
 
@@ -469,11 +464,6 @@ namespace Cognite.OpcUa
             Streamer.AllowData = State.NodeStates.Any();
 
             await PushNodes(nodes.Objects, nodes.Timeseries, references);
-
-            foreach (var node in nodes.Variables.Concat(nodes.Objects).Select(node => node.Id))
-            {
-                State.AddManagedNode(node);
-            }
 
             // Changed flag means that it already existed, so we avoid synchronizing these.
             var historyTasks = Synchronize(nodes.Variables.Where(var => !var.Changed));

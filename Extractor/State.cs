@@ -42,9 +42,6 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<string, EventExtractionState> emitterStatesByExtId =
             new ConcurrentDictionary<string, EventExtractionState>();
 
-        private readonly ConcurrentDictionary<NodeId, string> managedNodes =
-            new ConcurrentDictionary<NodeId, string>();
-
         public ConcurrentDictionary<NodeId, IEnumerable<(NodeId Root, QualifiedName BrowseName)>> ActiveEvents { get; }
             = new ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>>();
 
@@ -56,16 +53,9 @@ namespace Cognite.OpcUa
 
         public IEnumerable<NodeExtractionState> NodeStates => nodeStates.Values;
         public IEnumerable<EventExtractionState> EmitterStates => emitterStates.Values;
-        public IEnumerable<NodeId> AllActiveIds => managedNodes.Keys;
-        public IEnumerable<string> AllActiveExternalIds => managedNodes.Values;
+
         public IEnumerable<BufferedReference> ActiveReferences => references;
 
-        private readonly UAExtractor extractor;
-
-        public State(UAExtractor extractor)
-        {
-            this.extractor = extractor;
-        }
         /// <summary>
         /// Return a NodeExtractionState by externalId
         /// </summary>
@@ -129,15 +119,7 @@ namespace Cognite.OpcUa
             emitterStates[state.SourceId] = state;
             emitterStatesByExtId[state.Id] = state;
         }
-        /// <summary>
-        /// Indicate that the given node is managed by the extractor.
-        /// </summary>
-        /// <param name="id">Id to add</param>
-        public void AddManagedNode(NodeId id)
-        {
-            if (id == null || id.IsNullNodeId) throw new ArgumentNullException(nameof(id));
-            managedNodes[id] = extractor.GetUniqueId(id);
-        }
+
         /// <summary>
         /// Returns corresponding NodeId to given uniqueId if it exists.
         /// </summary>
@@ -166,17 +148,7 @@ namespace Cognite.OpcUa
         public bool IsMappedNode(NodeId id)
         {
             if (id == null || id.IsNullNodeId) return false;
-            return managedNodes.ContainsKey(id);
-        }
-        /// <summary>
-        /// Returns mapping from uniqueId to managed node if one exists.
-        /// </summary>
-        /// <param name="id">Id to look up</param>
-        /// <returns>UniqueId or null</returns>
-        public string GetUniqueId(NodeId id)
-        {
-            if (id == null || id.IsNullNodeId) return null;
-            return managedNodes.GetValueOrDefault(id);
+            return nodeChecksums.ContainsKey(id);
         }
         /// <summary>
         /// Add node to overview of known mapped nodes
