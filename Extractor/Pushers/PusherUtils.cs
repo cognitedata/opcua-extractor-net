@@ -149,11 +149,24 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="evt">Event to be transformed.</param>
         /// <returns>Final EventEntity object</returns>
-        public static StatelessEventCreate EventToStatelessCDFEvent(BufferedEvent evt, UAExtractor extractor, long? dataSetId)
+        public static StatelessEventCreate EventToStatelessCDFEvent(BufferedEvent evt, UAExtractor extractor, long? dataSetId,
+            IDictionary<NodeId, string> parentIdMap)
         {
             if (evt == null || extractor == null) return null;
 
-            var parent = evt.SourceNode == null || evt.SourceNode.IsNullNodeId ? null : extractor.State.GetActiveNode(evt.SourceNode);
+            string sourceId = null;
+            if (evt.SourceNode != null && !evt.SourceNode.IsNullNodeId && parentIdMap != null)
+            {
+                if (parentIdMap.TryGetValue(evt.SourceNode, out var parentId))
+                {
+                    sourceId = parentId;
+                }
+                else
+                {
+                    sourceId = extractor.GetUniqueId(parentId);
+                }
+            }
+
             var entity = new StatelessEventCreate
             {
                 Description = evt.Message,
@@ -163,9 +176,9 @@ namespace Cognite.OpcUa.Pushers
                 EndTime = evt.MetaData.TryGetValue("EndTime", out var rawEndTime)
                     ? GetTimestampValue(rawEndTime)
                     : evt.Time.ToUnixTimeMilliseconds(),
-                AssetExternalIds = parent == null
-                    ? (IEnumerable<string>)Array.Empty<string>()
-                    : new List<string> { extractor.GetUniqueId(parent.IsVariable ? parent.ParentId : parent.Id) },
+                AssetExternalIds = sourceId == null
+                    ? Enumerable.Empty<string>()
+                    : new string[] { sourceId },
                 ExternalId = evt.EventId,
                 Type = evt.MetaData.TryGetValue("Type", out var rawType)
                     ? extractor.ConvertToString(rawType)

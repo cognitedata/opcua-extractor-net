@@ -34,6 +34,10 @@ namespace Cognite.OpcUa
         /// Parent extractor
         /// </summary>
         UAExtractor Extractor { get; set; }
+        /// <summary>
+        /// Nodes not yet pushed due to pusher failure, should be cleared to free up memory after a successfull push.
+        /// </summary>
+        List<BufferedNode> PendingNodes { get; }
 
         /// <summary>
         /// Push nodes, emptying the queue

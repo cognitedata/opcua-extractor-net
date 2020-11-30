@@ -374,7 +374,7 @@ namespace Cognite.Bridge
 
             foreach (var evt in events)
             {
-                evt.AssetIds = evt.AssetExternalIds.Where(id => assetIds.ContainsKey(id) && assetIds[id] != null)
+                evt.AssetIds = evt.AssetExternalIds.Where(id => id != null && assetIds.ContainsKey(id) && assetIds[id] != null)
                     .Select(id => assetIds[id] ?? 0);
             }
 

@@ -40,6 +40,7 @@ namespace Cognite.OpcUa
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
+        public List<BufferedNode> PendingNodes { get; } = new List<BufferedNode>();
 
 
         private readonly InfluxPusherConfig config;

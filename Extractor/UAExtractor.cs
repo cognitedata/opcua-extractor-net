@@ -22,6 +22,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Opc.Ua;
 using Opc.Ua.Client;
@@ -595,20 +596,22 @@ namespace Cognite.OpcUa
             {
                 if (update.AnyUpdate)
                 {
-                    var old = State.GetActiveNode(node.Id);
-                    if (old != null)
+                    var oldChecksum = State.GetNodeChecksum(node.Id);
+                    if (oldChecksum != null)
                     {
-                        node.CheckForUpdates(old, update.Objects, config.Extraction.DataTypes.DataTypeMetadata);
+                        node.Changed = oldChecksum != node.GetUpdateChecksum(update.Objects, config.Extraction.DataTypes.DataTypeMetadata);
                         if (node.Changed)
                         {
-                            State.AddActiveNode(node);
+
+                            State.AddActiveNode(node, update.Objects, config.Extraction.DataTypes.DataTypeMetadata);
                             yield return node;
                         }
                         continue;
                     }
                 }
                 log.Verbose(node.ToDebugDescription());
-                State.AddActiveNode(node);
+
+                State.AddActiveNode(node, update.Objects, config.Extraction.DataTypes.DataTypeMetadata);
                 yield return node;
             }
         }
@@ -633,25 +636,22 @@ namespace Cognite.OpcUa
                 if (!DataTypeManager.AllowTSMap(node)) continue;
                 if (update.AnyUpdate)
                 {
-                    var old = State.GetActiveNode(node.Id);
-                    if (old != null && old is BufferedVariable variable)
+                    var oldChecksum = State.GetNodeChecksum(node.Id);
+                    if (oldChecksum != null)
                     {
-                        node.CheckForUpdates(old, update.Variables, config.Extraction.DataTypes.DataTypeMetadata);
+                        node.Changed = oldChecksum != node.GetUpdateChecksum(update.Variables, config.Extraction.DataTypes.DataTypeMetadata);
 
                         if (node.Changed)
                         {
                             var oldState = State.GetNodeState(node.Id);
-                            State.AddActiveNode(node);
+                            State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata);
                             if (oldState.IsArray)
                             {
-                                if (update.Variables.Name && old.DisplayName != node.DisplayName && !string.IsNullOrWhiteSpace(node.DisplayName))
+                                var children = node.CreateArrayChildren();
+                                foreach (var child in children)
                                 {
-                                    var children = node.CreateArrayChildren();
-                                    foreach (var child in children)
-                                    {
-                                        child.Changed = true;
-                                        result.Timeseries.Add(child);
-                                    }
+                                    child.Changed = true;
+                                    result.Timeseries.Add(child);
                                 }
                                 result.Objects.Add(node);
                             }
@@ -661,7 +661,6 @@ namespace Cognite.OpcUa
                                 result.Variables.Add(node);
                             }
                         }
-
                         continue;
                     }
                 }
@@ -670,7 +669,7 @@ namespace Cognite.OpcUa
                 var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,
                     StateStorage != null && config.StateStorage.Interval > 0);
 
-                State.AddActiveNode(node);
+                State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata);
                 if (state.IsArray)
                 {
                     var children = node.CreateArrayChildren();
@@ -755,6 +754,8 @@ namespace Cognite.OpcUa
                 log.Warning("Skipping pushing on pusher {name}", pusher.GetType());
                 pusher.Initialized = false;
                 pusher.NoInit = false;
+                pusher.PendingNodes.AddRange(objects);
+                pusher.PendingNodes.AddRange(timeseries);
                 return;
             }
 
@@ -776,6 +777,8 @@ namespace Cognite.OpcUa
                 pusher.Initialized = false;
                 pusher.DataFailing = true;
                 pusher.EventsFailing = true;
+                pusher.PendingNodes.AddRange(objects);
+                pusher.PendingNodes.AddRange(timeseries);
                 return;
             }
 
@@ -797,6 +800,9 @@ namespace Cognite.OpcUa
                     pusher.Initialized = false;
                     pusher.DataFailing = true;
                     pusher.EventsFailing = true;
+                    pusher.PendingNodes.AddRange(timeseries
+                        .DistinctBy(ts => ts.Id)
+                        .Where(ts => State.GetNodeState(ts.Id)?.FrontfillEnabled ?? false));
                     return;
                 }
             }
@@ -818,7 +824,7 @@ namespace Cognite.OpcUa
                 .Distinct()
                 .Select(id => State.GetNodeState(id));
 
-            bool initial = objects.Count() + timeseries.Count() == State.ActiveNodes.Count();
+            bool initial = objects.Count() + timeseries.Count() == State.NumActiveNodes;
 
             var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, references, pusher, initial, false));
 
