@@ -6,15 +6,12 @@ using Cognite.OpcUa;
 using Microsoft.Extensions.DependencyInjection;
 using Server;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Test
+namespace Test.Unit
 {
 
     public sealed class ExtractorTestFixture : IDisposable
@@ -77,6 +74,11 @@ namespace Test
                 tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62100";
                 await tester.Client.Run(tester.Source.Token);
             }
+        }
+        [Fact]
+        public async Task TestMapping()
+        {
+            using var extractor = tester.BuildExtractor();
         }
     }
 }

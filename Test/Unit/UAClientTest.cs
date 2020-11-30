@@ -19,7 +19,7 @@ using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Test
+namespace Test.Unit
 {
     public sealed class UAClientTestFixture : IDisposable
     {
