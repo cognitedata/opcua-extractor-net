@@ -5,6 +5,6 @@ COPY . .
 
 RUN dotnet tool restore
 RUN dotnet paket restore
-RUN dotnet build ExtractorLauncher/
+RUN dotnet build
 
-RUN dotnet publish -c Release -o /build/deploy /p:PublishTrimmed="false" ExtractorLauncher
+RUN dotnet publish -c Release -o /build/deploy /p:PublishTrimmed="false"

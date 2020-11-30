@@ -80,6 +80,8 @@ podTemplate(
                 ])
                 dockerImageName = "eu.gcr.io/cognitedata/opcua-extractor-net"
                 dockerImageName2 = "eu.gcr.io/cognite-registry/opcua-extractor-net"
+                bridgeDockerImageName = "eu.gcr.io/cognitedata/mqtt-cdf-bridge"
+                bridgeDockerImageName2 = "eu.gcr.io/cognite-registry/mqtt-cdf-bridge"
                 version = sh(returnStdout: true, script: "git describe --tags HEAD || true").trim()
                 version = version.replaceFirst(/-(\d+)-.*/, '-pre.$1')
                 lastTag = sh(returnStdout: true, script: "git describe --tags --abbrev=0").trim()
@@ -139,25 +141,38 @@ podTemplate(
                 }
             }
         }
-        if (env.BRANCH_NAME == 'master') {
+        if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
             container('docker') {
                 stage("Build Docker images") {
                     sh('docker images | head')
+                    sh('cp Dockerfile.Build ExtractorLauncher/Dockerfile.Build')
+                    sh('cp Dockerfile.Build MQTTCDFBridge/Dockerfile.Build')
                     sh('#!/bin/sh -e\n'
                             + 'docker login -u _json_key -p "$(cat /jenkins-docker-builder/credentials.json)" https://eu.gcr.io')
 
-                    sh('cp /nuget-credentials/nuget.config ./nuget.config')
-                    // Building twice to get sensible output. The second build will be quick.
-                    sh("image=\$(docker build -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
-                           + "&& id=\$(docker create \$image)"
-                           + "&& docker cp \$id:/build/deploy ."
-                           + "&& docker rm -v \$id"
-                           + "&& docker build -t ${dockerImageName}:${version} -t ${dockerImageName2}:${version} .")
+                    dir("ExtractorLauncher/") {
+                        // Building twice to get sensible output. The second build will be quick.
+                        sh("image=\$(docker build -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
+                            + "&& id=\$(docker create \$image)"
+                            + "&& docker cp \$id:/build/deploy ."
+                            + "&& docker rm -v \$id"
+                            + "&& docker build -t ${dockerImageName}:${version} -t ${dockerImageName2}:${version} .")
+                    }
+
+                    dir("MQTTCDFBridge/") {
+                        sh("image=\$(docker build -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
+                            + "&& id=\$(docker create \$image)"
+                            + "&& docker cp \$id:/build/deploy ."
+                            + "&& docker rm -v \$id"
+                            + "&& docker build -t ${bridgeDockerImageName}:${version} -t ${bridgeDockerImageName2}:${version} .")
+                    }
                     sh('docker images | head')
                 }
                 stage('Push Docker images') {
                     sh("docker push ${dockerImageName}:${version}")
                     sh("docker push ${dockerImageName2}:${version}")
+                    sh("docker push ${bridgeDockerImageName}:${version}")
+                    sh("docker push ${bridgeDockerImageName2}:${version}")
                 }
             }
         }
