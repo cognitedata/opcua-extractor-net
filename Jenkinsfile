@@ -98,21 +98,21 @@ podTemplate(
         }
         container('dotnet') {
             stage('Install dependencies') {
-                sh('apt-get update && apt-get -y install gnupg curl procps gawk grep')
-				sh('curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -')
-                sh('apt-get install -y nmap ncat mosquitto')
-                sh('dotnet tool restore')
-                sh('dotnet paket restore')
+                // sh('apt-get update && apt-get -y install gnupg curl procps gawk grep')
+				// sh('curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -')
+                // sh('apt-get install -y nmap ncat mosquitto')
+                // sh('dotnet tool restore')
+                // sh('dotnet paket restore')
             }
 
             stage('Build') {
-                sh('dotnet build ExtractorLauncher/')
+                // sh('dotnet build ExtractorLauncher/')
             }
             timeout(20) {
                 stage('Run tests') {
-                    sh('mosquitto -p 4060 &')
-                    sh('./test.sh')
-                    archiveArtifacts artifacts: 'coverage.lcov', fingerprint: true
+                    // sh('mosquitto -p 4060 &')
+                    // sh('./test.sh')
+                    // archiveArtifacts artifacts: 'coverage.lcov', fingerprint: true
                 }
             }
             stage("Upload report to codecov.io") {
@@ -141,41 +141,34 @@ podTemplate(
                 }
             }
         }
-        if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
+        //if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
             container('docker') {
                 stage("Build Docker images") {
                     sh('docker images | head')
-                    sh('cp Dockerfile.Build ExtractorLauncher/Dockerfile.Build')
-                    sh('cp Dockerfile.Build MQTTCDFBridge/Dockerfile.Build')
                     sh('#!/bin/sh -e\n'
                             + 'docker login -u _json_key -p "$(cat /jenkins-docker-builder/credentials.json)" https://eu.gcr.io')
 
-                    dir("ExtractorLauncher/") {
-                        // Building twice to get sensible output. The second build will be quick.
-                        sh("image=\$(docker build -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
-                            + "&& id=\$(docker create \$image)"
-                            + "&& docker cp \$id:/build/deploy ."
-                            + "&& docker rm -v \$id"
-                            + "&& docker build -t ${dockerImageName}:${version} -t ${dockerImageName2}:${version} .")
-                    }
+                    sh("image=\$(docker build -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
+                        + "&& id=\$(docker create \$image)"
+                        + "&& docker cp \$id:/build/deploy ."
+                        + "&& docker rm -v \$id"
+                        + "&& docker build -t ${dockerImageName}:${version} -t ${dockerImageName2}:${version} .")
 
-                    dir("MQTTCDFBridge/") {
-                        sh("image=\$(docker build -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
-                            + "&& id=\$(docker create \$image)"
-                            + "&& docker cp \$id:/build/deploy ."
-                            + "&& docker rm -v \$id"
-                            + "&& docker build -t ${bridgeDockerImageName}:${version} -t ${bridgeDockerImageName2}:${version} .")
-                    }
+                    sh("image=\$(docker build -f Dockerfile.bridge.build . | awk '/Successfully built/ {print \$3}')"
+                        + "&& id=\$(docker create \$image)"
+                        + "&& docker cp \$id:/build/deploy ."
+                        + "&& docker rm -v \$id"
+                        + "&& docker build -f Dockerfile.bridge -t ${bridgeDockerImageName}:${version} -t ${bridgeDockerImageName2}:${version} .")
                     sh('docker images | head')
                 }
-                stage('Push Docker images') {
-                    sh("docker push ${dockerImageName}:${version}")
-                    sh("docker push ${dockerImageName2}:${version}")
-                    sh("docker push ${bridgeDockerImageName}:${version}")
-                    sh("docker push ${bridgeDockerImageName2}:${version}")
-                }
+                //stage('Push Docker images') {
+                //    sh("docker push ${dockerImageName}:${version}")
+                //    sh("docker push ${dockerImageName2}:${version}")
+                //    sh("docker push ${bridgeDockerImageName}:${version}")
+                //    sh("docker push ${bridgeDockerImageName2}:${version}")
+                //}
             }
-        }
+        //}
     }
     if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
         node('windows') {
