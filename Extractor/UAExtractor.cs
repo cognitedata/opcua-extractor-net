@@ -134,17 +134,18 @@ namespace Cognite.OpcUa
             propertyIdFilter = CreatePropertyFilterRegex(config.Extraction.PropertyIdFilter);
         }
 
-        private void UaClient_OnServerDisconnect(object sender, UAClient e)
+        private void UaClient_OnServerDisconnect(object sender, EventArgs e)
         {
-            if (config.Source.ForceRestart)
+            if (config.Source.ForceRestart && !source.IsCancellationRequested)
             {
                 Close();
             }
         }
 
-        private void UaClient_OnServerReconnect(object sender, UAClient client)
+        private void UaClient_OnServerReconnect(object sender, EventArgs e)
         {
-            if (config.Source.RestartOnReconnect)
+            var client = sender as UAClient;
+            if (config.Source.RestartOnReconnect && !source.IsCancellationRequested)
             {
                 client.DataTypeManager.Configure();
                 client.ClearNodeOverrides();

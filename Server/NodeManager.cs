@@ -291,9 +291,6 @@ namespace Server
 
         #region address_space
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-            Justification =
-                "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public override void CreateAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             log.Information("Create address space");
@@ -365,8 +362,6 @@ namespace Server
             }
         }
         
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
-            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateBaseSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)
@@ -463,8 +458,6 @@ namespace Server
             }
         }
         
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
-            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateCustomAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)
@@ -619,8 +612,6 @@ namespace Server
             }
         }
         
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
-            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateEventAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)

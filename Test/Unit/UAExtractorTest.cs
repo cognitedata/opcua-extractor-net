@@ -10,6 +10,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
+using Test.Utils;
+using System.Runtime.InteropServices;
+using System.Linq;
 
 namespace Test.Unit
 {
@@ -46,8 +49,14 @@ namespace Test.Unit
             Source.Dispose();
         }
 
-        public UAExtractor BuildExtractor(IExtractionStateStore stateStore = null, params IPusher[] pushers)
+        public UAExtractor BuildExtractor(bool clear = true, IExtractionStateStore stateStore = null, params IPusher[] pushers)
         {
+            if (clear)
+            {
+                Client.ClearNodeOverrides();
+                Client.ClearEventFields();
+                Client.ResetVisitedNodes();
+            }
             return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
         }
     }
@@ -78,7 +87,89 @@ namespace Test.Unit
         [Fact]
         public async Task TestMapping()
         {
-            using var extractor = tester.BuildExtractor();
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Full.Root.ToProtoNodeId(tester.Client);
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(pushers: pusher);
+
+            try
+            {
+                await extractor.RunExtractor(true);
+
+                Assert.Equal(153, pusher.PushedNodes.Count);
+                Assert.Equal(2000, pusher.PushedVariables.Count);
+
+                Assert.Contains(pusher.PushedNodes.Values, node => node.DisplayName == "DeepObject 4, 25");
+                Assert.Contains(pusher.PushedVariables.Values, node => node.DisplayName == "SubVariable 1234");
+            }
+            finally
+            {
+                tester.Config.Extraction.RootNode = null;
+            }
+
+        }
+        private static void TriggerEventExternally(string field, object parent)
+        {
+            var dg = parent.GetType()
+                .GetField(field, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .GetValue(parent) as MulticastDelegate;
+            foreach (var handler in dg.GetInvocationList())
+            {
+                handler.Method.Invoke(
+                    handler.Target,
+                    new object[] { parent, EventArgs.Empty });
+            }
+        }
+
+        [Fact]
+        public async Task TestForceRestart()
+        {
+            tester.Config.Source.ForceRestart = true;
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(pushers: pusher);
+
+            try
+            {
+                var task = extractor.RunExtractor();
+                await extractor.WaitForSubscriptions();
+
+                Assert.False(task.IsCompleted);
+
+                TriggerEventExternally("OnServerDisconnect", tester.Client);
+
+                await Task.WhenAny(task, Task.Delay(10000));
+                Assert.True(task.IsCompleted);
+            }
+            finally
+            {
+                tester.Config.Source.ForceRestart = false;
+            }
+        }
+        [Fact]
+        public async Task TestRestartOnReconnect()
+        {
+            tester.Config.Source.RestartOnReconnect = true;
+
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(pushers: pusher);
+
+            try
+            {
+                var task = extractor.RunExtractor();
+                await extractor.WaitForSubscriptions();
+                Assert.True(pusher.PushedNodes.Any());
+                pusher.PushedNodes.Clear();
+                TriggerEventExternally("OnServerReconnect", tester.Client);
+
+                Assert.True(pusher.OnReset.WaitOne(10000));
+
+                await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
+
+                extractor.Close();
+            }
+            finally
+            {
+                tester.Config.Source.RestartOnReconnect = false;
+            }
         }
     }
 }

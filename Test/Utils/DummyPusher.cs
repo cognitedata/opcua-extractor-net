@@ -21,7 +21,7 @@ namespace Test.Utils
             return new DummyPusher(this);
         }
     }
-    class DummyPusher : IPusher
+    public sealed class DummyPusher : IPusher
     {
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
@@ -34,6 +34,8 @@ namespace Test.Utils
         public bool InitEventRangesResult { get; set; } = true;
         public bool? PushDataPointResult { get; set; } = true;
         public bool? PushEventResult { get; set; } = true;
+
+        public ManualResetEvent OnReset { get; } = new ManualResetEvent(false);
 
         public Dictionary<NodeId, TimeRange> EventTimeRange { get; set; }
 
@@ -113,13 +115,14 @@ namespace Test.Utils
         {
             if (!config.ReadExtractedRanges) return Task.FromResult(true);
             if (!InitDpRangesResult) return Task.FromResult(InitDpRangesResult);
+            if (states == null || !states.Any()) return Task.FromResult(InitDpRangesResult);
             lock (dpLock)
             {
                 foreach (var state in states)
                 {
                     int idx = state.IsArray ? 0 : -1;
 
-                    if (DataPoints.TryGetValue((state.SourceId, idx), out var dps))
+                    if (DataPoints.TryGetValue((state.SourceId, idx), out var dps) && dps.Any())
                     {
                         var (min, max) = dps.MinMax(dp => dp.Timestamp);
                         if (backfillEnabled)
@@ -148,6 +151,7 @@ namespace Test.Utils
         {
             if (!config.ReadExtractedRanges) return Task.FromResult(true);
             if (!InitEventRangesResult) return Task.FromResult(InitEventRangesResult);
+            if (states == null || !states.Any()) return Task.FromResult(InitEventRangesResult);
             lock (eventLock)
             {
                 foreach (var state in states)
@@ -175,6 +179,7 @@ namespace Test.Utils
         public Task<bool?> PushEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
             if (!PushEventResult ?? false) return Task.FromResult(PushEventResult);
+            if (events == null || !events.Any()) return Task.FromResult(PushEventResult);
             lock (eventLock)
             {
                 var groups = events.GroupBy(evt => evt.EmittingNode);
@@ -195,6 +200,7 @@ namespace Test.Utils
         public Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
         {
             if (!PushDataPointResult ?? false) return Task.FromResult(PushDataPointResult);
+            if (points == null || !points.Any()) return Task.FromResult(PushDataPointResult);
             lock (dpLock)
             {
                 // Missing nodes here is unacceptable
@@ -209,6 +215,7 @@ namespace Test.Utils
 
         public void Reset()
         {
+            OnReset.Set();
         }
     }
 }
