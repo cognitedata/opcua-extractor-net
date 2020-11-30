@@ -4,6 +4,6 @@ VOLUME /logs
 COPY /deploy /bridge
 WORKDIR /bridge
 
-ENV OPCUA_CONFIG_DIR="/config"
+ENV MQTT_BRIDGE_CONFIG_DIR="/config"
 
 ENTRYPOINT ["dotnet", "/bridge/MQTTCDFBridge.dll"]
