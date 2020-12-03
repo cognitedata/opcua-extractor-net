@@ -309,18 +309,22 @@ namespace Cognite.OpcUa
         public void DataSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
         {
             if (item == null || eventArgs == null) return;
-            string uniqueId = extractor.GetUniqueId(item.ResolvedNodeId);
             var node = extractor.State.GetNodeState(item.ResolvedNodeId);
+            if (node == null)
+            {
+                log.Warning("Subscription to unknown node: {id}", item.ResolvedNodeId);
+                return;
+            }
 
             foreach (var datapoint in item.DequeueValues())
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
                     UAExtractor.BadDataPoints.Inc();
-                    log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
+                    log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", node.Id, datapoint.SourceTimestamp);
                     continue;
                 }
-                var buffDps = ToDataPoint(datapoint, node, uniqueId);
+                var buffDps = ToDataPoint(datapoint, node);
                 node.UpdateFromStream(buffDps);
                 if (node.IsFrontfilling && (extractor.StateStorage == null || config.StateStorage.Interval <= 0)) return;
                 foreach (var buffDp in buffDps)
@@ -330,6 +334,13 @@ namespace Cognite.OpcUa
                 Enqueue(buffDps);
             }
         }
+        private static string GetArrayUniqueId(string baseId, int index)
+        {
+            if (index < 0) return baseId;
+            int idxLength = (int)Math.Log10(Math.Max(1, index)) + 3;
+            if (baseId.Length + idxLength < 255) return baseId + $"[{index}]";
+            return baseId.Substring(0, 255 - idxLength) + $"[{index}]";
+        }
         /// <summary>
         /// Transform a given DataValue into a datapoint or a list of datapoints if the variable in question has array type.
         /// </summary>
@@ -337,10 +348,12 @@ namespace Cognite.OpcUa
         /// <param name="variable">NodeExtractionState for variable the datavalue belongs to</param>
         /// <param name="uniqueId"></param>
         /// <returns>UniqueId to be used, for efficiency</returns>
-        public IEnumerable<BufferedDataPoint> ToDataPoint(DataValue value, NodeExtractionState variable, string uniqueId)
+        public IEnumerable<BufferedDataPoint> ToDataPoint(DataValue value, NodeExtractionState variable)
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
             if (variable == null) throw new ArgumentNullException(nameof(value));
+
+            string uniqueId = variable.Id;
 
             if (value.Value is Array values)
             {
@@ -366,14 +379,14 @@ namespace Cognite.OpcUa
                 var ret = new List<BufferedDataPoint>();
                 for (int i = 0; i < dim; i++)
                 {
-                    var id = variable.IsArray ? $"{uniqueId}[{i}]" : uniqueId;
+                    var id = variable.IsArray ? GetArrayUniqueId(uniqueId, i) : uniqueId;
                     ret.Add(variable.DataType.ToDataPoint(extractor, values.GetValue(i), value.SourceTimestamp, id));
                 }
                 return ret;
             }
             if (variable.IsArray)
             {
-                uniqueId = $"{uniqueId}[0]";
+                uniqueId = GetArrayUniqueId(uniqueId, 0);
             }
 
             var sdp = variable.DataType.ToDataPoint(extractor, value.Value, value.SourceTimestamp, uniqueId);

@@ -96,7 +96,11 @@ namespace Cognite.OpcUa
             if (data.DataValues == null) return 0;
             var nodeState = extractor.State.GetNodeState(nodeid);
 
-            string uniqueId = uaClient.GetUniqueId(nodeid);
+            if (nodeState == null)
+            {
+                log.Warning("History data for unknown node received: {id}", nodeid);
+                return 0;
+            }
 
             var last = DateTime.MinValue;
             var first = DateTime.MaxValue;
@@ -109,12 +113,12 @@ namespace Cognite.OpcUa
             if (frontfill)
             {
                 nodeState.UpdateFromFrontfill(last, final);
-                log.Debug("Frontfill of data for {id} at {ts}", uniqueId, last);
+                log.Debug("Frontfill of data for {id} at {ts}", nodeState.Id, last);
             }
             else
             {
                 nodeState.UpdateFromBackfill(first, final);
-                log.Debug("Backfill of data for {id} at {ts}", uniqueId, first);
+                log.Debug("Backfill of data for {id} at {ts}", nodeState.Id, first);
             }
 
             int cnt = 0;
@@ -123,11 +127,11 @@ namespace Cognite.OpcUa
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
                     UAExtractor.BadDataPoints.Inc();
-                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId, datapoint.SourceTimestamp);
+                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", nodeState.Id, datapoint.SourceTimestamp);
                     continue;
                 }
 
-                var buffDps = extractor.Streamer.ToDataPoint(datapoint, nodeState, uniqueId);
+                var buffDps = extractor.Streamer.ToDataPoint(datapoint, nodeState);
                 foreach (var buffDp in buffDps)
                 {
                     log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
