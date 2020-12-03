@@ -113,5 +113,13 @@ namespace Server
         {
             custom.ReContextualize(id, oldParentId, newParentId, referenceType);
         }
+        public void WipeHistory(NodeId id, object value)
+        {
+            custom.WipeHistory(id, value);
+        }
+        public void WipeEventHistory(NodeId id = null)
+        {
+            custom.WipeEventHistory(id);
+        }
     }
 }

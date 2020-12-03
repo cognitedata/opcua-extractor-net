@@ -29,6 +29,7 @@ using System.Threading;
 using Serilog;
 using Cognite.Extractor.Common;
 using System.Text;
+using System.Collections;
 
 namespace Cognite.OpcUa
 {
@@ -45,6 +46,7 @@ namespace Cognite.OpcUa
         protected ApplicationConfiguration Appconfig { get; set; }
         private SessionReconnectHandler reconnectHandler;
         public UAExtractor Extractor { get; set; }
+        public DataTypeManager DataTypeManager { get; }
         private readonly object visitedNodesLock = new object();
         protected ISet<NodeId> VisitedNodes { get; }= new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
@@ -88,6 +90,7 @@ namespace Cognite.OpcUa
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             this.config = config.Source;
+            DataTypeManager = new DataTypeManager(this, config.Extraction.DataTypes);
             extractionConfig = config.Extraction;
             eventConfig = config.Events;
             historyConfig = config.History;
@@ -136,7 +139,14 @@ namespace Cognite.OpcUa
                 ConfigSectionName = "opc.ua.net.extractor"
             };
             log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.ConfigRoot);
-            Appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
+            try
+            {
+                Appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
+            }
+            catch (ServiceResultException exc)
+            {
+                throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
+            }
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
             {
@@ -397,6 +407,13 @@ namespace Cognite.OpcUa
         {
             if (nodeId == null || nodeId == NodeId.Null) return;
             nodeOverrides[nodeId] = externalId;
+        }
+        /// <summary>
+        /// Remove all externalId overrides
+        /// </summary>
+        public void ClearNodeOverrides()
+        {
+            nodeOverrides.Clear();
         }
         /// <summary>
         /// Get all children of the given list of parents as a map from parentId to list of children descriptions
@@ -818,7 +835,9 @@ namespace Cognite.OpcUa
             catch (Exception ex)
             {
                 attributeRequestFailures.Inc();
+#pragma warning disable CA1508 // Avoid dead conditional code. I have no idea whatsoever why it compains about this, it is wildly incorrect.
                 if (ex is ServiceResultException serviceEx)
+#pragma warning restore CA1508 // Avoid dead conditional code
                 {
                     throw ExtractorUtils.HandleServiceResult(serviceEx, ExtractorUtils.SourceOp.ReadAttributes);
                 }
@@ -838,7 +857,6 @@ namespace Cognite.OpcUa
         /// <remarks>
         /// Note that there is a fixed maximum message size, and we here fetch a large number of values at the same time.
         /// To avoid complications, avoid fetching data of unknown large size here.
-        /// Due to this, only nodes with ValueRank -1 (Scalar) will be fetched.
         /// </remarks>
         /// <param name="nodes">List of variables to be updated</param>
         public void ReadNodeValues(IEnumerable<BufferedVariable> nodes, CancellationToken token)
@@ -950,12 +968,10 @@ namespace Cognite.OpcUa
                     if (arrayParent != null && arrayParent.Index == -1 && arrayParent.ArrayDimensions != null
                         && arrayParent.ArrayDimensions.Count == 1 && arrayParent.ArrayDimensions[0] > 0)
                     {
-                        for (int i = 0; i < arrayParent.ArrayDimensions[0]; i++)
+                        foreach (var child in arrayParent.ArrayChildren)
                         {
-                            var arrayChild = Extractor?.State?.GetActiveNode(parent.Id, i);
-                            if (arrayChild == null) continue;
-                            arrayChild.PropertiesRead = true;
-                            arrayChild.Properties = parent.Properties;
+                            child.PropertiesRead = true;
+                            child.Properties = parent.Properties;
                         }
                         arrayParent.PropertiesRead = true;
                         arrayParent.Properties = parent.Properties;
@@ -964,7 +980,7 @@ namespace Cognite.OpcUa
             }
 
             ReadNodeData(properties, token);
-            var toGetValue = properties.Where(node => Extractor.DataTypeManager.AllowTSMap(node, 10, true));
+            var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true));
             ReadNodeValues(toGetValue, token);
         }
         #endregion
@@ -1190,6 +1206,20 @@ namespace Cognite.OpcUa
                 token);
 #pragma warning restore CA2000 // Dispose objects before losing scope
         }
+
+        /// <summary>
+        /// Deletes a subscription starting with the given name.
+        /// The client manages three subscriptions: EventListener, DataChangeListener and AuditListener,
+        /// if the subscription does not exist, nothing happens.
+        /// </summary>
+        /// <param name="name"></param>
+        public void RemoveSubscription(string name)
+        {
+            var subscription = Session.Subscriptions.FirstOrDefault(sub =>
+                                       sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
+            if (subscription == null || !subscription.Created) return;
+            Session.RemoveSubscription(subscription);
+        }
         #endregion
 
         #region Events
@@ -1197,10 +1227,7 @@ namespace Cognite.OpcUa
         /// Return systemContext. Can be used by SDK-tools for converting events.
         /// </summary>
         /// <returns>ISystemContext for given session, or null if no session exists</returns>
-        public ISystemContext GetSystemContext()
-        {
-            return Session?.SystemContext;
-        }
+        public ISystemContext SystemContext => Session?.SystemContext;
         public Dictionary<NodeId, IEnumerable<(NodeId root, QualifiedName browseName)>> GetEventFields(CancellationToken token)
         {
             if (eventFields != null) return eventFields;
@@ -1215,6 +1242,13 @@ namespace Cognite.OpcUa
                 }
             }
             return eventFields;
+        }
+        /// <summary>
+        /// Remove collected event fields
+        /// </summary>
+        public void ClearEventFields()
+        {
+            eventFields = null;
         }
         /// <summary>
         /// Constructs a filter from the given list of permitted eventids, the already constructed field map and an optional receivedAfter property.
@@ -1232,6 +1266,7 @@ namespace Cognite.OpcUa
 
             if (eventFields.Keys.Any() && ((eventConfig.EventIds?.Any() ?? false) || !eventConfig.AllEvents))
             {
+                log.Debug("Limit event results to the following ids: {ids}", string.Join(", ", eventFields.Keys));
                 var eventListOperand = new SimpleAttributeOperand
                 {
                     TypeDefinitionId = ObjectTypeIds.BaseEventType,
@@ -1383,15 +1418,12 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        
+
         #endregion
 
         #region Utils
 
-        public NamespaceTable GetNamespaceTable()
-        {
-            return Session.NamespaceUris;
-        }
+        public NamespaceTable NamespaceTable => Session.NamespaceUris;
         /// <summary>
         /// Converts an ExpandedNodeId into a NodeId using the Session
         /// </summary>
@@ -1436,10 +1468,15 @@ namespace Cognite.OpcUa
         public static double ConvertToDouble(object datavalue)
         {
             if (datavalue == null) return 0;
-            if (datavalue.GetType().IsArray)
+            // Check if the value is somehow an array
+            if (typeof(IEnumerable).IsAssignableFrom(datavalue.GetType()))
             {
-                return Convert.ToDouble((datavalue as IEnumerable<object>)?.First(), CultureInfo.InvariantCulture);
+                var enumerator = (datavalue as IEnumerable).GetEnumerator();
+                enumerator.MoveNext();
+                return ConvertToDouble(enumerator.Current);
             }
+            // Give up if there is no clear way to convert it
+            if (!typeof(IConvertible).IsAssignableFrom(datavalue.GetType())) return 0;
             return Convert.ToDouble(datavalue, CultureInfo.InvariantCulture);
         }
         /// <summary>
@@ -1450,16 +1487,17 @@ namespace Cognite.OpcUa
         public string ConvertToString(object value)
         {
             if (value == null) return "";
-            if (value.GetType().IsArray)
+            if (value is string strValue)
+            {
+                return strValue;
+            }
+            if (typeof(IEnumerable).IsAssignableFrom(value.GetType()))
             {
                 var builder = new StringBuilder("[");
-                if (value is Array values)
+                int count = 0;
+                foreach (var dvalue in value as IEnumerable)
                 {
-                    int count = 0;
-                    foreach (var dvalue in values)
-                    {
-                        builder.Append(((count++ > 0) ? ", " : "") + ConvertToString(dvalue));
-                    }
+                    builder.Append(((count++ > 0) ? ", " : "") + ConvertToString(dvalue));
                 }
                 builder.Append(']');
                 return builder.ToString();
@@ -1470,7 +1508,7 @@ namespace Cognite.OpcUa
             }
             if (value.GetType() == typeof(ExpandedNodeId))
             {
-                return GetUniqueId((NodeId)value);
+                return GetUniqueId(ToNodeId((ExpandedNodeId)value));
             }
             if (value.GetType() == typeof(LocalizedText))
             {
@@ -1509,7 +1547,11 @@ namespace Cognite.OpcUa
             if (rNodeId == null || rNodeId.IsNull) return null;
             var nodeId = ToNodeId(rNodeId);
             if (nodeId == null || nodeId.IsNullNodeId) return null;
-            if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride)) return nodeOverride;
+            if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride))
+            {
+                if (index <= -1) return nodeOverride;
+                return $"{nodeOverride}[{index}]";
+            }
 
             // ExternalIds shorter than 32 chars are unlikely, this will generally avoid at least 1 re-allocation of the buffer,
             // and usually boost performance.
@@ -1536,6 +1578,10 @@ namespace Cognite.OpcUa
                 // 255 is max length, Log10(Max(1, index)) + 3 is the length of the index suffix ("[123]").
                 buffer.Length = Math.Min(buffer.Length, 255 - ((int)Math.Log10(Math.Max(1, index)) + 3));
                 buffer.AppendFormat(CultureInfo.InvariantCulture, "[{0}]", index);
+            }
+            else
+            {
+                buffer.Length = Math.Min(buffer.Length, 255);
             }
             return buffer.ToString();
         }

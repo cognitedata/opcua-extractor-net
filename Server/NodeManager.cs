@@ -50,6 +50,24 @@ namespace Server
             return store.GetFullHistory(id);
         }
 
+        public void WipeHistory(NodeId id, object value)
+        {
+            store.WipeHistory(id);
+            var state = PredefinedNodes[id] as BaseDataVariableState;
+            state.Value = value;
+        }
+        public void WipeEventHistory(NodeId id = null)
+        {
+            if (id == null)
+            {
+                store.WipeEventHistory();
+            }
+            else
+            {
+                store.WipeEventHistory(id);
+            }
+        }
+
         public IEnumerable<BaseEventState> FetchEventHistory(NodeId id)
         {
             return store.GetFullEventHistory(id);
@@ -357,6 +375,7 @@ namespace Server
                 AddNodeToExt(myobj, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
 
                 var myvar = CreateVariable("Variable 1", DataTypes.Double);
+                myvar.Value = 0.0;
                 AddNodeRelation(myvar, myobj, ReferenceTypeIds.HasComponent);
 
                 var myvar2 = CreateVariable("Variable 2", DataTypes.Double);
@@ -408,27 +427,28 @@ namespace Server
             lock (Lock)
             {
                 var root = CreateObject("FullRoot");
+                root.Description = "FullRoot Description";
                 AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
                 AddPredefinedNode(SystemContext, root);
 
-                var myobj2 = CreateObject("Object 1");
-                AddNodeRelation(myobj2, root, ReferenceTypeIds.Organizes);
-                AddPredefinedNode(SystemContext, myobj2);
+                var wideroot = CreateObject("WideRoot");
+                AddNodeRelation(wideroot, root, ReferenceTypeIds.Organizes);
+                AddPredefinedNode(SystemContext, wideroot);
 
                 for (int i = 0; i < 2000; i++)
                 {
                     var varch = CreateVariable("SubVariable " + i, DataTypes.Double);
-                    AddNodeRelation(varch, myobj2, ReferenceTypeIds.HasComponent);
+                    AddNodeRelation(varch, wideroot, ReferenceTypeIds.HasComponent);
                     AddPredefinedNode(SystemContext, varch);
                 }
 
-                var myobj3 = CreateObject("Object 2");
-                AddNodeRelation(myobj3, root, ReferenceTypeIds.Organizes);
-                AddPredefinedNode(SystemContext, myobj3);
+                var deeproot = CreateObject("DeepRoot");
+                AddNodeRelation(deeproot, root, ReferenceTypeIds.Organizes);
+                AddPredefinedNode(SystemContext, deeproot);
 
                 for (int i = 0; i < 5; i++)
                 {
-                    var lastdeepobj = myobj3;
+                    var lastdeepobj = deeproot;
                     for (int j = 0; j < 30; j++)
                     {
                         var deepobj = CreateObject($"DeepObject {i}, {j}");
@@ -438,8 +458,8 @@ namespace Server
                     }
                 }
                 Ids.Full.Root = root.NodeId;
-                Ids.Full.WideRoot = myobj2.NodeId;
-                Ids.Full.DeepRoot = myobj3.NodeId;
+                Ids.Full.WideRoot = wideroot.NodeId;
+                Ids.Full.DeepRoot = deeproot.NodeId;
             }
         }
         

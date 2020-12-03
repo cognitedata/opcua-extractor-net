@@ -48,8 +48,8 @@ namespace Cognite.OpcUa
         public ConcurrentDictionary<NodeId, IEnumerable<(NodeId Root, QualifiedName BrowseName)>> ActiveEvents { get; }
             = new ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>>();
 
-        private readonly ConcurrentDictionary<(NodeId Id, int Index), BufferedNode> activeNodes =
-            new ConcurrentDictionary<(NodeId, int), BufferedNode>();
+        private readonly ConcurrentDictionary<NodeId, BufferedNode> activeNodes =
+            new ConcurrentDictionary<NodeId, BufferedNode>();
 
         public IEnumerable<NodeExtractionState> NodeStates => nodeStates.Values;
         public IEnumerable<EventExtractionState> EmitterStates => emitterStates.Values;
@@ -183,7 +183,7 @@ namespace Cognite.OpcUa
         public void AddActiveNode(BufferedNode node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
-            activeNodes[(node.Id, -1)] = node;
+            activeNodes[node.Id] = node;
         }
         /// <summary>
         /// Add variable to overview of known mapped nodes
@@ -192,7 +192,8 @@ namespace Cognite.OpcUa
         public void AddActiveNode(BufferedVariable node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
-            activeNodes[(node.Id, node.Index)] = node;
+            if (node.Index != -1) throw new InvalidOperationException();
+            activeNodes[node.Id] = node;
         }
         /// <summary>
         /// Get active node by NodeId and index if it exists
@@ -200,10 +201,10 @@ namespace Cognite.OpcUa
         /// <param name="id">NodeId to use for lookup</param>
         /// <param name="index">Index of node, default is -1</param>
         /// <returns></returns>
-        public BufferedNode GetActiveNode(NodeId id, int index = -1)
+        public BufferedNode GetActiveNode(NodeId id)
         {
             if (id == null || id.IsNullNodeId) return null;
-            return activeNodes.GetValueOrDefault((id, index));
+            return activeNodes.GetValueOrDefault(id);
         }
     }
 }

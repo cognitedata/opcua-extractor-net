@@ -42,7 +42,7 @@ namespace Cognite.OpcUa
         public IExtractionStateStore StateStorage { get; }
         public State State { get; }
         public Streamer Streamer { get; }
-        public DataTypeManager DataTypeManager { get; }
+        public DataTypeManager DataTypeManager => uaClient.DataTypeManager;
 
         private readonly HistoryReader historyReader;
         public NodeId RootNode { get; private set; }
@@ -101,7 +101,6 @@ namespace Cognite.OpcUa
 
             State = new State(this);
             Streamer = new Streamer(this, config);
-            DataTypeManager = new DataTypeManager(uaClient, config.Extraction.DataTypes);
             StateStorage = stateStore;
 
             source = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -621,12 +620,11 @@ namespace Cognite.OpcUa
                             {
                                 if (update.Variables.Name && old.DisplayName != node.DisplayName && !string.IsNullOrWhiteSpace(node.DisplayName))
                                 {
-                                    for (int i = 0; i < oldState.ArrayDimensions[0]; i++)
+                                    var children = node.CreateArrayChildren();
+                                    foreach (var child in children)
                                     {
-                                        var ts = new BufferedVariable(node, i);
-                                        ts.Changed = true;
-                                        State.AddActiveNode(ts);
-                                        timeseries.Add(ts);
+                                        child.Changed = true;
+                                        timeseries.Add(child);
                                     }
                                 }
                                 objects.Add(node);
@@ -649,15 +647,15 @@ namespace Cognite.OpcUa
                 State.AddActiveNode(node);
                 if (state.IsArray)
                 {
-                    for (int i = 0; i < node.ArrayDimensions[0]; i++)
+                    var children = node.CreateArrayChildren();
+                    foreach (var child in children)
                     {
-                        var ts = new BufferedVariable(node, i);
-                        timeseries.Add(ts);
-                        State.AddActiveNode(ts);
-                        var uniqueId = GetUniqueId(node.Id, i);
+                        timeseries.Add(child);
+                        var uniqueId = GetUniqueId(child.Id, child.Index);
                         State.SetNodeState(state, uniqueId);
                         State.RegisterNode(node.Id, uniqueId);
                     }
+
                     objects.Add(node);
                 }
                 else
@@ -952,7 +950,7 @@ namespace Cognite.OpcUa
                 // This is a neat way to get the contents of the event, which may be fairly complicated (variant of arrays of extensionobjects)
                 using (var e = new AuditAddNodesEventState(null))
                 {
-                    e.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
+                    e.Update(uaClient.SystemContext, filter.SelectClauses, triggeredEvent);
                     if (e.NodesToAdd?.Value == null)
                     {
                         log.Warning("Missing NodesToAdd object on AddNodes event");
@@ -986,7 +984,7 @@ namespace Cognite.OpcUa
 
             using (var ev = new AuditAddReferencesEventState(null))
             {
-                ev.Update(uaClient.GetSystemContext(), filter.SelectClauses, triggeredEvent);
+                ev.Update(uaClient.SystemContext, filter.SelectClauses, triggeredEvent);
 
                 if (ev.ReferencesToAdd?.Value == null)
                 {

@@ -106,7 +106,7 @@ namespace Test
 
             await tester.StartServer();
 
-            using var process = CommonTestUtils.GetProxyProcess();
+            using var process = CommonTestUtils.GetProxyProcess(4839, 62546);
             process.Start();
             await tester.ClearPersistentData();
 
@@ -147,7 +147,7 @@ namespace Test
 
             await tester.StartServer();
 
-            using var process = CommonTestUtils.GetProxyProcess();
+            using var process = CommonTestUtils.GetProxyProcess(4839, 62546);
             process.Start();
             tester.Config.Source.ForceRestart = true;
             tester.Config.History.Enabled = false;

@@ -204,5 +204,27 @@ namespace Server
 
             return (result, final);
         }
+        public void WipeHistory(NodeId id)
+        {
+            historyStorage[id].Clear();
+        }
+        public void WipeHistory()
+        {
+            foreach (var kvp in historyStorage)
+            {
+                kvp.Value.Clear();
+            }
+        }
+        public void WipeEventHistory(NodeId id)
+        {
+            eventHistoryStorage[id].Clear();
+        }
+        public void WipeEventHistory()
+        {
+            foreach (var kvp in eventHistoryStorage)
+            {
+                kvp.Value.Clear();
+            }
+        }
     }
 }
