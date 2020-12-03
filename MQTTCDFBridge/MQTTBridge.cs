@@ -5,6 +5,7 @@ using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
 using MQTTnet.Client.Subscribing;
+using MQTTnet.Protocol;
 using Polly;
 using Serilog;
 
@@ -83,12 +84,12 @@ namespace Cognite.Bridge
             {
                 log.Information("MQTT client connected");
                 await client.SubscribeAsync(new MqttClientSubscribeOptionsBuilder()
-                    .WithTopicFilter(config.Mqtt.AssetTopic)
-                    .WithTopicFilter(config.Mqtt.TsTopic)
-                    .WithTopicFilter(config.Mqtt.DatapointTopic)
-                    .WithTopicFilter(config.Mqtt.EventTopic)
-                    .WithTopicFilter(config.Mqtt.RawTopic)
-                    .Build());
+                    .WithTopicFilter(config.Mqtt.AssetTopic, MqttQualityOfServiceLevel.AtLeastOnce)
+                    .WithTopicFilter(config.Mqtt.TsTopic, MqttQualityOfServiceLevel.AtLeastOnce)
+                    .WithTopicFilter(config.Mqtt.DatapointTopic, MqttQualityOfServiceLevel.AtLeastOnce)
+                    .WithTopicFilter(config.Mqtt.EventTopic, MqttQualityOfServiceLevel.AtLeastOnce)
+                    .WithTopicFilter(config.Mqtt.RawTopic, MqttQualityOfServiceLevel.AtLeastOnce)
+                    .Build(), token);
                 log.Information("Subscribed to topics");
             });
             client.UseApplicationMessageReceivedHandler(async msg =>
