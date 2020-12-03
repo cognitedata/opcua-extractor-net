@@ -114,6 +114,7 @@ namespace Cognite.OpcUa
             if (Session != null && !Session.Disposed)
             {
                 Session.Close(1000);
+                Session.Dispose();
                 Session = null;
             }
             connected.Set(0);
@@ -1609,9 +1610,23 @@ namespace Cognite.OpcUa
 
         protected virtual void Dispose(bool disposing)
         {
-            Session?.Dispose();
+            try
+            {
+                Close();
+            }
+            catch (Exception ex)
+            {
+                log.Warning("Failed to close UAClient: {msg}", ex.Message);
+            }
             reconnectHandler?.Dispose();
-
+            if (Appconfig != null)
+            {
+                Appconfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
+            }
+            if (Session != null)
+            {
+                Session.KeepAlive -= ClientKeepAlive;
+            }
         }
         #endregion
     }
