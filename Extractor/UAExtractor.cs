@@ -677,7 +677,6 @@ namespace Cognite.OpcUa
                     foreach (var child in children)
                     {
                         result.Timeseries.Add(child);
-                        State.AddActiveNode(child);
                         var uniqueId = GetUniqueId(child.Id, child.Index);
                         State.SetNodeState(state, uniqueId);
                         State.RegisterNode(node.Id, uniqueId);
