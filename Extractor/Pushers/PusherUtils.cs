@@ -163,7 +163,7 @@ namespace Cognite.OpcUa.Pushers
                 }
                 else
                 {
-                    sourceId = extractor.GetUniqueId(parentId);
+                    sourceId = extractor.GetUniqueId(evt.SourceNode);
                 }
             }
 
