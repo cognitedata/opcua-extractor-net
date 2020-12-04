@@ -73,6 +73,8 @@ namespace Cognite.OpcUa
         private DataTypeConfig dataTypes = new DataTypeConfig();
         public string PropertyNameFilter { get; set; }
         public string PropertyIdFilter { get; set; }
+        public RelationshipConfig Relationships { get => relationships; set => relationships = value ?? relationships; }
+        private RelationshipConfig relationships = new RelationshipConfig();
     }
     public class DataTypeConfig
     {
@@ -85,6 +87,11 @@ namespace Cognite.OpcUa
         public bool EnumsAsStrings { get; set; }
         public bool DataTypeMetadata { get; set; }
         public bool NullAsNumeric { get; set; }
+    }
+
+    public class RelationshipConfig
+    {
+        public bool Enabled { get; set; }
     }
 
     public class UpdateConfig

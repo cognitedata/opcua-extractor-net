@@ -24,6 +24,7 @@ using System.Linq;
 using Cognite.Extensions;
 using Cognite.Extractor.Utils;
 using Opc.Ua;
+using Serilog;
 
 namespace Cognite.OpcUa
 {
@@ -537,6 +538,55 @@ namespace Cognite.OpcUa
             }
 
             return evt;
+        }
+    }
+    /// <summary>
+    /// Represents a non-hierarchical reference between two nodes in the hierarchy
+    /// </summary>
+    public class BufferedReference
+    {
+        /// <summary>
+        /// NodeId of the OPC-UA reference type
+        /// </summary>
+        public BufferedReferenceType Type { get; }
+        /// <summary>
+        /// True if this is a forward reference, false otherwise
+        /// </summary>
+        public bool IsForward { get; }
+        /// <summary>
+        /// NodeId of the source node
+        /// </summary>
+        public BufferedNode Source { get; }
+        /// <summary>
+        /// NodeId of the target node
+        /// </summary>
+        public BufferedNode Target { get; }
+        public BufferedReference(ReferenceDescription desc, BufferedNode source, BufferedNode target, ReferenceTypeManager manager)
+        {
+            if (desc == null) throw new ArgumentNullException(nameof(desc));
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (target == null) throw new ArgumentNullException(nameof(target));
+            if (manager == null) throw new ArgumentNullException(nameof(manager));
+            Type = manager.GetReferenceType(desc.ReferenceTypeId);
+            IsForward = desc.IsForward;
+            Source = source;
+            Target = target;
+        }
+        public string GetName()
+        {
+            return Type.GetName(!IsForward);
+        }
+        public override bool Equals(object obj)
+        {
+            if (!(obj is BufferedReference other)) return false;
+            return other.Source.Id == Source.Id
+                && other.Target.Id == Target.Id
+                && other.Type.Id == Type.Id;
+        }
+
+        public override int GetHashCode()
+        {
+            return (Source.Id, Target.Id, Type.Id).GetHashCode();
         }
     }
 }

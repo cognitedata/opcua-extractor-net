@@ -20,6 +20,7 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using CogniteSdk;
 using Opc.Ua;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -371,6 +372,35 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
             return writePoco;
+        }
+
+        private static CogniteSdk.Beta.RelationshipVertexType GetVertexType(BufferedNode node)
+        {
+            if (node.IsVariable && node is BufferedVariable variable)
+            {
+                if (variable.IsArray && variable.Index == -1)
+                {
+                    return CogniteSdk.Beta.RelationshipVertexType.Asset;
+                }
+                return CogniteSdk.Beta.RelationshipVertexType.TimeSeries;
+            }
+            return CogniteSdk.Beta.RelationshipVertexType.Asset;
+        }
+
+        public static CogniteSdk.Beta.RelationshipCreate ReferenceToRelationship(BufferedReference reference, long? dataSetId, UAExtractor extractor)
+        {
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
+            if (reference == null) throw new ArgumentNullException(nameof(reference));
+            var relationship = new CogniteSdk.Beta.RelationshipCreate
+            {
+                DataSetId = dataSetId,
+                SourceExternalId = extractor.GetUniqueId(reference.Source.Id),
+                TargetExternalId = extractor.GetUniqueId(reference.Target.Id),
+                SourceType = GetVertexType(reference.Source),
+                TargetType = GetVertexType(reference.Target),
+                ExternalId = extractor.GetRelationshipId(reference)
+            };
+            return relationship;
         }
 
         private static void UpdateIfModified(Dictionary<string, object> ret, RawRow raw, string newValue, string key)

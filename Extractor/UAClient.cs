@@ -427,7 +427,8 @@ namespace Cognite.OpcUa
             IEnumerable<NodeId> parents,
             NodeId referenceTypes,
             uint nodeClassMask,
-            CancellationToken token)
+            CancellationToken token,
+            BrowseDirection direction = BrowseDirection.Forward)
         {
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             IncOperations();
@@ -438,8 +439,8 @@ namespace Cognite.OpcUa
                     ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
                     IncludeSubtypes = true,
                     NodeClassMask = nodeClassMask,
-                    BrowseDirection = BrowseDirection.Forward,
-                    ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName
+                    BrowseDirection = direction,
+                    ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName | (uint)BrowseResultMask.IsForward
                         | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition | (uint)BrowseResultMask.BrowseName
                 }
             ));
@@ -475,7 +476,7 @@ namespace Cognite.OpcUa
                 foreach (var result in results)
                 {
                     var nodeId = parents.ElementAt(bindex++);
-                    log.Verbose("GetNodeChildren Browse result {nodeId}", nodeId);
+                    log.Verbose("GetNodeChildren Browse result {nodeId}: {cnt}", nodeId, result.References.Count);
                     finalResults[nodeId] = result.References;
                     if (result.ContinuationPoint != null)
                     {
@@ -623,9 +624,57 @@ namespace Cognite.OpcUa
             log.Information("Found {NumUANodes} nodes in {NumNodeLevels} levels", nodeCnt, levelCnt);
             depth.Set(levelCnt);
         }
+
         #endregion
 
         #region Get node data
+        public IList<DataValue> ReadAttributes(ReadValueIdCollection readValueIds, int distinctNodeCount, CancellationToken token)
+        {
+            var values = new List<DataValue>();
+            if (readValueIds == null || !readValueIds.Any()) return values;
+            IncOperations();
+            int total = readValueIds.Count;
+            int attrCount = 0;
+            try
+            {
+                int count = 0;
+                foreach (var nextValues in readValueIds.ChunkBy(config.AttributesChunk))
+                {
+                    if (token.IsCancellationRequested) break;
+                    count++;
+                    Session.Read(
+                        null,
+                        0,
+                        TimestampsToReturn.Source,
+                        new ReadValueIdCollection(nextValues),
+                        out DataValueCollection lvalues,
+                        out _
+                    );
+                    attributeRequests.Inc();
+                    values.AddRange(lvalues);
+                    attrCount += lvalues.Count;
+                    log.Debug("Read {NumAttributesRead} / {total} attributes", attrCount, total);
+                }
+                log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {nodeCount} nodes",
+                    values.Count, count, distinctNodeCount);
+            }
+            catch (Exception ex)
+            {
+                attributeRequestFailures.Inc();
+                if (ex is ServiceResultException serviceEx)
+                {
+                    throw ExtractorUtils.HandleServiceResult(serviceEx, ExtractorUtils.SourceOp.ReadAttributes);
+                }
+                throw;
+            }
+            finally
+            {
+                DecOperations();
+            }
+            return values;
+        }
+
+
         /// <summary>
         /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
         /// </summary>
@@ -657,42 +706,7 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            var values = new List<DataValue>();
-            IncOperations();
-            int total = readValueIds.Count;
-            int attrCount = 0;
-            try
-            {
-                int count = 0;
-                foreach (var nextValues in readValueIds.ChunkBy(config.AttributesChunk))
-                {
-                    if (token.IsCancellationRequested) break;
-                    count++;
-                    Session.Read(
-                        null,
-                        0,
-                        TimestampsToReturn.Source,
-                        new ReadValueIdCollection(nextValues),
-                        out DataValueCollection lvalues,
-                        out _
-                    );
-                    attributeRequests.Inc();
-                    values.AddRange(lvalues);
-                    attrCount += lvalues.Count;
-                    log.Debug("Read {NumAttributesRead} / {total} attributes", attrCount, total);
-                }
-                log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
-                    values.Count, count, nodes.Count());
-            }
-            catch
-            {
-                attributeRequestFailures.Inc();
-                throw;
-            }
-            finally
-            {
-                DecOperations();
-            }
+            var values = ReadAttributes(readValueIds, nodes.Count(), token);
             return values;
         }
         /// <summary>
@@ -805,49 +819,7 @@ namespace Cognite.OpcUa
         public Dictionary<NodeId, DataValue> ReadRawValues(IEnumerable<NodeId> ids, CancellationToken token)
         {
             var readValueIds = ids.Distinct().Select(id => new ReadValueId { AttributeId = Attributes.Value, NodeId = id }).ToList();
-
-            IncOperations();
-            var values = new List<DataValue>();
-            int total = readValueIds.Count;
-            int attrCount = 0;
-            int count = 0;
-            try
-            {
-                foreach (var chunk in readValueIds.ChunkBy(config.AttributesChunk))
-                {
-                    if (token.IsCancellationRequested) break;
-                    Session.Read(
-                        null,
-                        0,
-                        TimestampsToReturn.Neither,
-                        new ReadValueIdCollection(chunk),
-                        out DataValueCollection lvalues,
-                        out _
-                    );
-                    count++;
-                    attrCount += lvalues.Count;
-                    attributeRequests.Inc();
-                    values.AddRange(lvalues);
-                    log.Debug("Read {NumAttributesRead} / {total} values", attrCount, total);
-                }
-                log.Information("Read {TotalAttributesRead} values with {NumAttributeReadOperations} operations for {numNodesRead} nodes",
-                                    values.Count, count, ids.Count());
-            }
-            catch (Exception ex)
-            {
-                attributeRequestFailures.Inc();
-#pragma warning disable CA1508 // Avoid dead conditional code. I have no idea whatsoever why it compains about this, it is wildly incorrect.
-                if (ex is ServiceResultException serviceEx)
-#pragma warning restore CA1508 // Avoid dead conditional code
-                {
-                    throw ExtractorUtils.HandleServiceResult(serviceEx, ExtractorUtils.SourceOp.ReadAttributes);
-                }
-                throw;
-            }
-            finally
-            {
-                DecOperations();
-            }
+            var values = ReadAttributes(new ReadValueIdCollection(readValueIds), ids.Count(), token);
             return values.Select((dv, index) => (ids.ElementAt(index), dv)).ToDictionary(pair => pair.Item1, pair => pair.dv);
         }
 
@@ -1533,6 +1505,7 @@ namespace Cognite.OpcUa
             }
             return value.ToString();
         }
+
         /// <summary>
         /// Returns consistent unique string representation of a <see cref="NodeId"/> given its namespaceUri
         /// </summary>
@@ -1600,6 +1573,67 @@ namespace Cognite.OpcUa
                 sb.Length = i + 1;
 
             return;
+        }
+
+        private void AppendNodeId(StringBuilder buffer, NodeId nodeId)
+        {
+            if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride))
+            {
+                buffer.Append(nodeOverride);
+                return;
+            }
+
+            if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
+            {
+                var namespaceUri = Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
+                string newPrefix = extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
+                nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
+            }
+
+            buffer.Append(prefix);
+
+            NodeId.Format(buffer, nodeId.Identifier, nodeId.IdType, 0);
+
+            TrimEnd(buffer);
+        }
+
+        private string GetNodeIdString(NodeId id)
+        {
+            var buffer = new StringBuilder();
+            AppendNodeId(buffer, id);
+            return buffer.ToString();
+        }
+
+        /// <summary>
+        /// Get the unique reference id, on the form [prefix][reference-name];[sourceId];[targetId]
+        /// </summary>
+        /// <param name="reference">Reference to get id for</param>
+        /// <returns>String reference id</returns>
+        public string GetRelationshipId(BufferedReference reference)
+        {
+            if (reference == null) throw new ArgumentNullException(nameof(reference));
+            var buffer = new StringBuilder(extractionConfig.IdPrefix, 64);
+            buffer.Append(reference.GetName());
+            buffer.Append(';');
+            AppendNodeId(buffer, reference.Source.Id);
+            buffer.Append(';');
+            AppendNodeId(buffer, reference.Target.Id);
+
+            if (buffer.Length > 255)
+            {
+                // This is an edge-case. If the id overflows, it is most sensible to cut from the
+                // start of the id, as long ids are likely (from experience) to be similar to
+                // system.subsystem.sensor.measurement...
+                // so cutting from the start is less likely to cause conflicts
+                var overflow = (int)Math.Ceiling((buffer.Length - 255) / 2.0);
+                buffer = new StringBuilder(extractionConfig.IdPrefix, 255);
+                buffer.Append(reference.GetName());
+                buffer.Append(';');
+                buffer.Append(GetNodeIdString(reference.Source.Id).Substring(overflow));
+                buffer.Append(';');
+                buffer.Append(GetNodeIdString(reference.Target.Id).Substring(overflow));
+            }
+            return buffer.ToString();
         }
 
         public void Dispose()

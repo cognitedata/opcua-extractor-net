@@ -45,6 +45,7 @@ namespace Cognite.OpcUa
         public DataTypeManager DataTypeManager => uaClient.DataTypeManager;
 
         private readonly HistoryReader historyReader;
+        private readonly ReferenceTypeManager referenceTypeManager;
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
@@ -102,6 +103,10 @@ namespace Cognite.OpcUa
             State = new State(this);
             Streamer = new Streamer(this, config);
             StateStorage = stateStore;
+            if (config.Extraction.Relationships.Enabled)
+            {
+                referenceTypeManager = new ReferenceTypeManager(uaClient, this);
+            }
 
             source = CancellationTokenSource.CreateLinkedTokenSource(token);
 
@@ -318,6 +323,16 @@ namespace Cognite.OpcUa
 
             return uaClient.GetUniqueId(id, index);
         }
+
+        /// <summary>
+        /// Get the unique reference id, on the form [prefix][reference-name];[sourceId];[targetId]
+        /// </summary>
+        /// <param name="reference">Reference to get id for</param>
+        /// <returns>String reference id</returns>
+        public string GetRelationshipId(BufferedReference reference)
+        {
+            return uaClient.GetRelationshipId(reference);
+        }
         /// <summary>
         /// Calls the ConvertToString method on UAClient. This uses the namespaceTable, so it cannot be static.
         /// </summary>
@@ -428,28 +443,39 @@ namespace Cognite.OpcUa
         /// <returns>A list of history tasks</returns>
         private async Task<IEnumerable<Task>> MapUAToDestinations()
         {
-            GetNodesFromQueue(out var objects, out var timeseries, out var variables);
+            var nodes = await GetNodesFromQueue();
 
-            if (!objects.Any() && !timeseries.Any() && !variables.Any())
+            IEnumerable<BufferedReference> references = null;
+            if (config.Extraction.Relationships.Enabled)
+            {
+                references = await referenceTypeManager.GetReferencesAsync(nodes.RawObjects.Concat(nodes.RawVariables).Select(node => node.Id),
+                    ReferenceTypeIds.NonHierarchicalReferences, source.Token);
+                await referenceTypeManager.GetReferenceTypeDataAsync(source.Token);
+                references = State.AddReferences(references);
+            }
+
+            if (!nodes.Objects.Any() && !nodes.Timeseries.Any() && !nodes.Variables.Any())
             {
                 log.Information("Mapping resulted in no new nodes");
                 return Array.Empty<Task>();
             }
 
+            nodes.ClearRaw();
+
             log.Information("Map {obj} objects, and {ts} destination timeseries, representing {var} variables, to destinations",
-                objects.Count, timeseries.Count, variables.Count);
+                nodes.Objects.Count, nodes.Timeseries.Count, nodes.Variables.Count);
 
             Streamer.AllowData = State.NodeStates.Any();
 
-            await PushNodes(objects, timeseries);
+            await PushNodes(nodes.Objects, nodes.Timeseries, references);
 
-            foreach (var node in variables.Concat(objects).Select(node => node.Id))
+            foreach (var node in nodes.Variables.Concat(nodes.Objects).Select(node => node.Id))
             {
                 State.AddManagedNode(node);
             }
 
             // Changed flag means that it already existed, so we avoid synchronizing these.
-            var historyTasks = Synchronize(variables.Where(var => !var.Changed));
+            var historyTasks = Synchronize(nodes.Variables.Where(var => !var.Changed));
             Starting.Set(0);
             return historyTasks;
         }
@@ -507,54 +533,45 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        /// <summary>
-        /// Read nodes from commonQueue and sort them into lists of context objects, destination timeseries and source variables
-        /// </summary>
-        /// <param name="objects">List of destination context objects</param>
-        /// <param name="timeseries">List of destination timeseries</param>
-        /// <param name="variables">List of source variables</param>
-        private void GetNodesFromQueue(out List<BufferedNode> objects,
-            out List<BufferedVariable> timeseries, out List<BufferedVariable> variables)
+
+        private class BrowseResult
         {
-            objects = new List<BufferedNode>();
-            timeseries = new List<BufferedVariable>();
-            variables = new List<BufferedVariable>();
-            var rawObjects = new List<BufferedNode>();
-            var rawVariables = new List<BufferedVariable>();
-            var nodeMap = new Dictionary<string, BufferedNode>();
-
-            while (commonQueue.TryDequeue(out BufferedNode buffer))
+            /// <summary>
+            /// All nodes that should be mapped to destination objects
+            /// </summary>
+            public List<BufferedNode> Objects { get;} = new List<BufferedNode>();
+            /// <summary>
+            /// All nodes that should be mapped to destination variables
+            /// </summary>
+            public List<BufferedVariable> Timeseries { get; } = new List<BufferedVariable>();
+            /// <summary>
+            /// All source system variables that should be read from
+            /// </summary>
+            public List<BufferedVariable> Variables { get; } = new List<BufferedVariable>();
+            /// <summary>
+            /// All source system objects
+            /// </summary>
+            public List<BufferedNode> RawObjects { get; private set; } = new List<BufferedNode>();
+            /// <summary>
+            /// All source system variables
+            /// </summary>
+            public List<BufferedVariable> RawVariables { get; private set; } = new List<BufferedVariable>();
+            /// <summary>
+            /// Helps free up memory, especially on re-browse
+            /// </summary>
+            public void ClearRaw()
             {
-                if (buffer.IsVariable && buffer is BufferedVariable buffVar)
-                {
-                    if (buffVar.IsProperty)
-                    {
-                        nodeMap.TryGetValue(uaClient.GetUniqueId(buffVar.ParentId), out BufferedNode parent);
-                        if (parent == null) continue;
-                        if (parent.Properties == null)
-                        {
-                            parent.Properties = new List<BufferedVariable>();
-                        }
-                        parent.Properties.Add(buffVar);
-                    }
-                    else
-                    {
-                        rawVariables.Add(buffVar);
-                    }
-                }
-                else
-                {
-                    rawObjects.Add(buffer);
-                }
-                nodeMap.Add(GetUniqueId(buffer.Id), buffer);
+                RawObjects = null;
+                RawVariables = null;
             }
+        }
 
-            log.Information("Getting data for {NumVariables} variables and {NumObjects} objects", 
-                rawVariables.Count, rawObjects.Count);
+        private async Task GetNodeData(UpdateConfig update, BrowseResult result)
+        {
+            log.Information("Getting data for {NumVariables} variables and {NumObjects} objects",
+                result.RawVariables.Count, result.RawObjects.Count);
 
-            var nodes = rawObjects.Concat(rawVariables);
-
-            var update = config.Extraction.Update;
+            var nodes = result.RawObjects.Concat(result.RawVariables);
 
             if (update.Objects.Metadata || update.Variables.Metadata)
             {
@@ -565,12 +582,15 @@ namespace Cognite.OpcUa
                     .ToList();
                 if (toReadProperties.Any())
                 {
-                    ReadProperties(toReadProperties).Wait();
+                    await ReadProperties(toReadProperties);
                 }
             }
-            uaClient.ReadNodeData(nodes, source.Token);
-            DataTypeManager.GetDataTypeMetadataAsync(rawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token).Wait();
+            await Task.Run(() => uaClient.ReadNodeData(nodes, source.Token));
+            await DataTypeManager.GetDataTypeMetadataAsync(result.RawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token);
+        }
 
+        private IEnumerable<BufferedNode> FilterObjects(UpdateConfig update, IEnumerable<BufferedNode> rawObjects)
+        {
             foreach (var node in rawObjects)
             {
                 if (update.AnyUpdate)
@@ -582,17 +602,20 @@ namespace Cognite.OpcUa
                         if (node.Changed)
                         {
                             State.AddActiveNode(node);
-                            objects.Add(node);
+                            yield return node;
                         }
                         continue;
                     }
                 }
                 log.Verbose(node.ToDebugDescription());
                 State.AddActiveNode(node);
-                objects.Add(node);
+                yield return node;
             }
+        }
 
-            foreach (var node in rawObjects.Concat(rawVariables))
+        private void InitEventStates(BrowseResult result)
+        {
+            foreach (var node in result.RawObjects.Concat(result.RawVariables))
             {
                 if ((node.EventNotifier & EventNotifiers.SubscribeToEvents) == 0) continue;
                 if (State.GetEmitterState(node.Id) != null) continue;
@@ -601,8 +624,11 @@ namespace Cognite.OpcUa
                     StateStorage != null && config.StateStorage.Interval > 0);
                 State.SetEmitterState(eventState);
             }
+        }
 
-            foreach (var node in rawVariables)
+        private void FilterVariables(UpdateConfig update, BrowseResult result)
+        {
+            foreach (var node in result.RawVariables)
             {
                 if (!DataTypeManager.AllowTSMap(node)) continue;
                 if (update.AnyUpdate)
@@ -624,15 +650,15 @@ namespace Cognite.OpcUa
                                     foreach (var child in children)
                                     {
                                         child.Changed = true;
-                                        timeseries.Add(child);
+                                        result.Timeseries.Add(child);
                                     }
                                 }
-                                objects.Add(node);
+                                result.Objects.Add(node);
                             }
                             else
                             {
-                                timeseries.Add(node);
-                                variables.Add(node);
+                                result.Timeseries.Add(node);
+                                result.Variables.Add(node);
                             }
                         }
 
@@ -640,7 +666,7 @@ namespace Cognite.OpcUa
                     }
                 }
                 log.Verbose(node.ToDebugDescription());
-                variables.Add(node);
+                result.Variables.Add(node);
                 var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,
                     StateStorage != null && config.StateStorage.Interval > 0);
 
@@ -650,20 +676,64 @@ namespace Cognite.OpcUa
                     var children = node.CreateArrayChildren();
                     foreach (var child in children)
                     {
-                        timeseries.Add(child);
+                        result.Timeseries.Add(child);
                         var uniqueId = GetUniqueId(child.Id, child.Index);
                         State.SetNodeState(state, uniqueId);
                         State.RegisterNode(node.Id, uniqueId);
                     }
-
-                    objects.Add(node);
+                    result.Objects.Add(node);
                 }
                 else
                 {
                     State.SetNodeState(state);
-                    timeseries.Add(node);
+                    result.Timeseries.Add(node);
                 }
             }
+        }
+
+        /// <summary>
+        /// Read nodes from commonQueue and sort them into lists of context objects, destination timeseries and source variables
+        /// </summary>
+        private async Task<BrowseResult> GetNodesFromQueue()
+        {
+            var result = new BrowseResult();
+            var nodeMap = new Dictionary<NodeId, BufferedNode>();
+
+            while (commonQueue.TryDequeue(out BufferedNode buffer))
+            {
+                if (buffer.IsVariable && buffer is BufferedVariable buffVar)
+                {
+                    if (buffVar.IsProperty)
+                    {
+                        nodeMap.TryGetValue(buffVar.ParentId, out BufferedNode parent);
+                        if (parent == null) continue;
+                        if (parent.Properties == null)
+                        {
+                            parent.Properties = new List<BufferedVariable>();
+                        }
+                        parent.Properties.Add(buffVar);
+                    }
+                    else
+                    {
+                        result.RawVariables.Add(buffVar);
+                    }
+                }
+                else
+                {
+                    result.RawObjects.Add(buffer);
+                }
+                nodeMap.Add(buffer.Id, buffer);
+            }
+
+            var update = config.Extraction.Update;
+            
+            await GetNodeData(update, result);
+
+            result.Objects.AddRange(FilterObjects(update, result.RawObjects));
+            InitEventStates(result);
+            FilterVariables(update, result);
+
+            return result;
         }
         /// <summary>
         /// Push nodes to given pusher
@@ -673,7 +743,10 @@ namespace Cognite.OpcUa
         /// <param name="pusher">Destination to push to</param>
         /// <param name="initial">True if this counts as initialization of the pusher</param>
         /// <param name="initMissing">Whether or not to initialize nodes with missing ranges to empty</param>
-        public async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries,
+        public async Task PushNodes(
+            IEnumerable<BufferedNode> objects,
+            IEnumerable<BufferedVariable> timeseries,
+            IEnumerable<BufferedReference> references,
             IPusher pusher, bool initial, bool initMissing)
         {
             if (pusher == null) throw new ArgumentNullException(nameof(pusher));
@@ -684,7 +757,19 @@ namespace Cognite.OpcUa
                 pusher.NoInit = false;
                 return;
             }
-            var result = await pusher.PushNodes(objects, timeseries, config.Extraction.Update, source.Token);
+
+            var tasks = new List<Task<bool>>();
+            if (objects.Any() || timeseries.Any())
+            {
+                tasks.Add(pusher.PushNodes(objects, timeseries, config.Extraction.Update, source.Token));
+            }
+            if (references != null && references.Any())
+            {
+                tasks.Add(pusher.PushReferences(references, source.Token));
+            }
+
+            var results = await Task.WhenAll(tasks);
+            var result = results.All(res => res);
             if (!result)
             {
                 log.Error("Failed to push nodes on pusher {name}", pusher.GetType());
@@ -701,12 +786,12 @@ namespace Cognite.OpcUa
                     .Distinct()
                     .Select(id => State.GetNodeState(id))
                     .Where(state => state.FrontfillEnabled);
-                var results = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, initMissing, source.Token), 
+                var initResults = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, initMissing, source.Token), 
                     pusher.InitExtractedEventRanges(State.EmitterStates.Where(state => state.FrontfillEnabled),
                         config.History.Backfill,
                         initMissing,
                         source.Token));
-                if (!results.All(res => res))
+                if (!initResults.All(res => res))
                 {
                     log.Error("Initialization of extracted ranges failed for pusher {name}", pusher.GetType());
                     pusher.Initialized = false;
@@ -723,7 +808,10 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="objects">Objects to synchronize with destinations</param>
         /// <param name="timeseries">Variables to synchronize with destinations</param>
-        private async Task PushNodes(IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> timeseries)
+        /// <param name="references">References to synchronize with destinations</param>
+        private async Task PushNodes(IEnumerable<BufferedNode> objects,
+            IEnumerable<BufferedVariable> timeseries,
+            IEnumerable<BufferedReference> references)
         {
             var newStates = timeseries
                 .Select(ts => ts.Id)
@@ -732,7 +820,7 @@ namespace Cognite.OpcUa
 
             bool initial = objects.Count() + timeseries.Count() == State.ActiveNodes.Count();
 
-            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, pusher, initial, false));
+            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, references, pusher, initial, false));
 
             if (StateStorage != null && config.StateStorage.Interval > 0)
             {
