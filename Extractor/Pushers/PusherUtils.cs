@@ -387,16 +387,9 @@ namespace Cognite.OpcUa.Pushers
             return writePoco;
         }
 
-        private static CogniteSdk.Beta.RelationshipVertexType GetVertexType(BufferedNode node)
+        private static CogniteSdk.Beta.RelationshipVertexType GetVertexType(ReferenceVertex node)
         {
-            if (node.IsVariable && node is BufferedVariable variable)
-            {
-                if (variable.IsArray && variable.Index == -1)
-                {
-                    return CogniteSdk.Beta.RelationshipVertexType.Asset;
-                }
-                return CogniteSdk.Beta.RelationshipVertexType.TimeSeries;
-            }
+            if (node.IsTimeSeries) return CogniteSdk.Beta.RelationshipVertexType.Asset;
             return CogniteSdk.Beta.RelationshipVertexType.Asset;
         }
 

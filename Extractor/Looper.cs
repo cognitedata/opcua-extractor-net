@@ -190,19 +190,13 @@ namespace Cognite.OpcUa
                         foreach (var pusher in toInit)
                         {
                             var (nodes, timeseries) = ExtractorUtils.SortNodes(pusher.PendingNodes);
-                            tasks.Add(extractor.PushNodes(nodes, timeseries, pusher, true, true));
+                            var references = pusher.PendingReferences;
+                            pusher.PendingNodes.Clear();
+                            pusher.PendingReferences.Clear();
+                            tasks.Add(extractor.PushNodes(nodes, timeseries, references, pusher, true, true));
                         }
 
                         await Task.WhenAll(tasks);
-
-                        foreach (var pusher in toInit)
-                        {
-                            if (pusher.Initialized)
-                            {
-                                pusher.PendingNodes.Clear();
-                            }
-                        }
-
                     }
                     foreach (var pair in recovered)
                     {

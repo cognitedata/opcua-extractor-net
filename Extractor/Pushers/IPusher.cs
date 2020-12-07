@@ -38,6 +38,10 @@ namespace Cognite.OpcUa
         /// Nodes not yet pushed due to pusher failure, should be cleared to free up memory after a successfull push.
         /// </summary>
         List<BufferedNode> PendingNodes { get; }
+        /// <summary>
+        /// References not yet pushed due to pusher failure.
+        /// </summary>
+        List<BufferedReference> PendingReferences { get; }
 
         /// <summary>
         /// Push nodes, emptying the queue

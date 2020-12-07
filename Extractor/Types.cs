@@ -546,12 +546,14 @@ namespace Cognite.OpcUa
         /// <summary>
         /// NodeId of the source node
         /// </summary>
-        public BufferedNode Source { get; }
+        public ReferenceVertex Source { get; }
         /// <summary>
         /// NodeId of the target node
         /// </summary>
-        public BufferedNode Target { get; }
-        public BufferedReference(ReferenceDescription desc, BufferedNode source, BufferedNode target, ReferenceTypeManager manager)
+        public ReferenceVertex Target { get; }
+        // Slight hack here to properly get vertex types without needing the full node objects.
+        public BufferedReference(ReferenceDescription desc, BufferedNode source,
+            NodeId target, NodeExtractionState targetState, ReferenceTypeManager manager)
         {
             if (desc == null) throw new ArgumentNullException(nameof(desc));
             if (source == null) throw new ArgumentNullException(nameof(source));
@@ -559,8 +561,8 @@ namespace Cognite.OpcUa
             if (manager == null) throw new ArgumentNullException(nameof(manager));
             Type = manager.GetReferenceType(desc.ReferenceTypeId);
             IsForward = desc.IsForward;
-            Source = source;
-            Target = target;
+            Source = new ReferenceVertex(source.Id, (source is BufferedVariable variable) && !variable.IsArray);
+            Target = new ReferenceVertex(target, desc.NodeClass == NodeClass.Variable && (targetState == null || !targetState.IsArray));
         }
         public string GetName()
         {
@@ -569,14 +571,25 @@ namespace Cognite.OpcUa
         public override bool Equals(object obj)
         {
             if (!(obj is BufferedReference other)) return false;
-            return other.Source.Id == Source.Id
-                && other.Target.Id == Target.Id
+            return other.Source == Source
+                && other.Target == Target
                 && other.Type.Id == Type.Id;
         }
 
         public override int GetHashCode()
         {
-            return (Source.Id, Target.Id, Type.Id).GetHashCode();
+            return (Source, Target, Type.Id).GetHashCode();
+        }
+    }
+    public class ReferenceVertex
+    {
+        public NodeId Id { get; }
+        public int Index { get; }
+        public bool IsTimeSeries { get; }
+        public ReferenceVertex(NodeId id, bool isVariable)
+        {
+            Id = id;
+            IsTimeSeries = isVariable;
         }
     }
 }

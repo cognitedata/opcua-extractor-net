@@ -53,7 +53,6 @@ namespace Cognite.OpcUa
 
         public IEnumerable<NodeExtractionState> NodeStates => nodeStates.Values;
         public IEnumerable<EventExtractionState> EmitterStates => emitterStates.Values;
-
         public IEnumerable<BufferedReference> ActiveReferences => references;
 
         /// <summary>

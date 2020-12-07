@@ -444,7 +444,7 @@ namespace Cognite.OpcUa
             IEnumerable<BufferedReference> references = null;
             if (config.Extraction.Relationships.Enabled)
             {
-                references = await referenceTypeManager.GetReferencesAsync(nodes.RawObjects.Concat(nodes.RawVariables).Select(node => node.Id),
+                references = await referenceTypeManager.GetReferencesAsync(nodes.RawObjects.Concat(nodes.RawVariables),
                     ReferenceTypeIds.NonHierarchicalReferences, source.Token);
                 await referenceTypeManager.GetReferenceTypeDataAsync(source.Token);
                 references = State.AddReferences(references);
@@ -746,6 +746,10 @@ namespace Cognite.OpcUa
                 pusher.NoInit = false;
                 pusher.PendingNodes.AddRange(objects);
                 pusher.PendingNodes.AddRange(timeseries);
+                if (references != null)
+                {
+                    pusher.PendingReferences.AddRange(references);
+                }
                 return;
             }
 
@@ -769,6 +773,10 @@ namespace Cognite.OpcUa
                 pusher.EventsFailing = true;
                 pusher.PendingNodes.AddRange(objects);
                 pusher.PendingNodes.AddRange(timeseries);
+                if (references != null)
+                {
+                    pusher.PendingReferences.AddRange(references);
+                }
                 return;
             }
 
@@ -793,6 +801,10 @@ namespace Cognite.OpcUa
                     pusher.PendingNodes.AddRange(timeseries
                         .DistinctBy(ts => ts.Id)
                         .Where(ts => State.GetNodeState(ts.Id)?.FrontfillEnabled ?? false));
+                    if (references != null)
+                    {
+                        pusher.PendingReferences.AddRange(references);
+                    }
                     return;
                 }
             }
