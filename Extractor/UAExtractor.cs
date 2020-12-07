@@ -963,6 +963,11 @@ namespace Cognite.OpcUa
             {
                 var bufferedNode = new BufferedNode(uaClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
+
+                if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
+                {
+                    bufferedNode.ObjectType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), false);
+                }
                 log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
                 State.RegisterNode(bufferedNode.Id, GetUniqueId(bufferedNode.Id));
                 commonQueue.Enqueue(bufferedNode);
@@ -978,6 +983,10 @@ namespace Cognite.OpcUa
                     // Properties do not have children themselves in OPC-UA,
                     // but mapped variables might.
                     bufferedNode.PropertiesRead = node.TypeDefinition == VariableTypeIds.PropertyType;
+                }
+                else if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
+                {
+                    bufferedNode.ObjectType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), true);
                 }
                 State.RegisterNode(bufferedNode.Id, GetUniqueId(bufferedNode.Id));
                 log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);

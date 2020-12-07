@@ -67,6 +67,10 @@ namespace Cognite.OpcUa
         /// </summary>
         public byte EventNotifier { get; set; }
         /// <summary>
+        /// OPC-UA object type
+        /// </summary>
+        public BufferedObjectType ObjectType { get; set; }
+        /// <summary>
         /// Return a string description, for logging
         /// </summary>
         /// <returns>Descriptive string</returns>
