@@ -578,7 +578,14 @@ namespace Cognite.OpcUa
                 }
             }
             await Task.Run(() => uaClient.ReadNodeData(nodes, source.Token));
-            await DataTypeManager.GetDataTypeMetadataAsync(result.RawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token);
+
+            var extraMetaTasks = new List<Task>();
+            extraMetaTasks.Add(DataTypeManager.GetDataTypeMetadataAsync(result.RawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token));
+            if (config.Extraction.NodeTypes.Metadata)
+            {
+                extraMetaTasks.Add(uaClient.ObjectTypeManager.GetObjectTypeMetadataAsync(source.Token));
+            }
+            await Task.WhenAll(extraMetaTasks);
         }
 
         private IEnumerable<BufferedNode> FilterObjects(UpdateConfig update, IEnumerable<BufferedNode> rawObjects)
