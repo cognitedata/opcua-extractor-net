@@ -30,6 +30,7 @@ using Serilog;
 using Cognite.Extractor.Common;
 using System.Text;
 using System.Collections;
+using Cognite.OpcUa.TypeCollectors;
 
 namespace Cognite.OpcUa
 {

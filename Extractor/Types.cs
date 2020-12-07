@@ -23,6 +23,7 @@ using System.IO;
 using System.Linq;
 using Cognite.Extensions;
 using Cognite.Extractor.Utils;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using Serilog;
 

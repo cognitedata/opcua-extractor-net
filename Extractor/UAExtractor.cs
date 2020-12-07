@@ -24,6 +24,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
