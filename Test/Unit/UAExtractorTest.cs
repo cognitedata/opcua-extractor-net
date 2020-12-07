@@ -13,6 +13,8 @@ using Xunit.Abstractions;
 using Test.Utils;
 using System.Runtime.InteropServices;
 using System.Linq;
+using System.Collections.Generic;
+using Opc.Ua;
 
 namespace Test.Unit
 {
@@ -170,6 +172,89 @@ namespace Test.Unit
             {
                 tester.Config.Source.RestartOnReconnect = false;
             }
+        }
+        [Theory]
+        [InlineData(0, 2, 2, 1, 0, 0)]
+        [InlineData(1, 0, 0, 1, 4, 0)]
+        [InlineData(2, 2, 2, 0, 1, 1)]
+        [InlineData(3, 2, 2, 1, 1, 0)]
+        [InlineData(4, 2, 2, 1, 0, 0)]
+        [InlineData(5, 0, 0, 0, 4, 1)]
+        public async Task TestPushNodes(int failAt, int pushedObjects, int pushedVariables, int pushedRefs, int failedNodes, int failedRefs)
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            tester.Config.Extraction.Relationships.Enabled = true;
+            using var extractor = tester.BuildExtractor(pushers: pusher);
+
+            switch (failAt)
+            {
+                case 1:
+                    pusher.PushNodesResult = false;
+                    break;
+                case 2:
+                    pusher.PushReferenceResult = false;
+                    break;
+                case 3:
+                    pusher.InitDpRangesResult = false;
+                    break;
+                case 4:
+                    pusher.InitEventRangesResult = false;
+                    break;
+                case 5:
+                    pusher.NoInit = true;
+                    break;
+            }
+
+            var root = new NodeId(1);
+            var nodes = new List<BufferedNode>
+            {
+                new BufferedNode(new NodeId("object1"), "object1", root),
+                new BufferedNode(new NodeId("object2"), "object2", root)
+            };
+            var variables = new List<BufferedVariable>
+            {
+                new BufferedVariable(new NodeId("var1"), "var1", root),
+                new BufferedVariable(new NodeId("var2"), "var2", root)
+            };
+
+            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[0], true, true, false));
+            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[1], false, false, false));
+
+
+            var refManager = (ReferenceTypeManager)extractor.GetType().GetField("referenceTypeManager",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(extractor);
+
+            var references = new List<BufferedReference>
+            {
+                new BufferedReference(new ReferenceDescription {
+                    IsForward = true, NodeClass = NodeClass.Variable, ReferenceTypeId = ReferenceTypeIds.Organizes },
+                    new BufferedNode(new NodeId("object1"), "object1", root), new NodeId("var1"), null, refManager)
+            };
+
+            try
+            {
+                await extractor.PushNodes(nodes, variables, references, pusher, true, true);
+
+                Assert.Equal(pushedObjects, pusher.PushedNodes.Count);
+                Assert.Equal(pushedVariables, pusher.PushedVariables.Count);
+                Assert.Equal(pushedRefs, pusher.PushedReferences.Count);
+                Assert.Equal(failedNodes, pusher.PendingNodes.Count);
+                Assert.Equal(failedRefs, pusher.PendingReferences.Count);
+
+                if (failAt == 0)
+                {
+                    Assert.True(pusher.Initialized);
+                }
+                else
+                {
+                    Assert.False(pusher.Initialized);
+                }
+            }
+            finally
+            {
+                tester.Config.Extraction.Relationships.Enabled = false;
+            }
+            
         }
     }
 }

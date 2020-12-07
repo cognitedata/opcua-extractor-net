@@ -34,6 +34,7 @@ namespace Test.Utils
         public bool InitEventRangesResult { get; set; } = true;
         public bool? PushDataPointResult { get; set; } = true;
         public bool? PushEventResult { get; set; } = true;
+        public bool PushReferenceResult { get; set; } = true;
 
         public ManualResetEvent OnReset { get; } = new ManualResetEvent(false);
 
@@ -58,6 +59,12 @@ namespace Test.Utils
             = new Dictionary<NodeId, BufferedNode>();
         public Dictionary<(NodeId, int), BufferedVariable> PushedVariables { get; }
             = new Dictionary<(NodeId, int), BufferedVariable>();
+        public HashSet<BufferedReference> PushedReferences { get; }
+            = new HashSet<BufferedReference>();
+
+        public List<BufferedNode> PendingNodes { get; } = new List<BufferedNode>();
+
+        public List<BufferedReference> PendingReferences { get; } = new List<BufferedReference>();
 
         public DummyPusher(DummyPusherConfig config)
         {
@@ -115,7 +122,7 @@ namespace Test.Utils
         {
             if (!config.ReadExtractedRanges) return Task.FromResult(true);
             if (!InitDpRangesResult) return Task.FromResult(InitDpRangesResult);
-            if (states == null || !states.Any()) return Task.FromResult(InitDpRangesResult);
+            if (states == null || !states.Any()) return Task.FromResult(true);
             lock (dpLock)
             {
                 foreach (var state in states)
@@ -151,7 +158,7 @@ namespace Test.Utils
         {
             if (!config.ReadExtractedRanges) return Task.FromResult(true);
             if (!InitEventRangesResult) return Task.FromResult(InitEventRangesResult);
-            if (states == null || !states.Any()) return Task.FromResult(InitEventRangesResult);
+            if (states == null || !states.Any()) return Task.FromResult(true);
             lock (eventLock)
             {
                 foreach (var state in states)
@@ -179,7 +186,7 @@ namespace Test.Utils
         public Task<bool?> PushEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
             if (!PushEventResult ?? false) return Task.FromResult(PushEventResult);
-            if (events == null || !events.Any()) return Task.FromResult(PushEventResult);
+            if (events == null || !events.Any()) return Task.FromResult<bool?>(null);
             lock (eventLock)
             {
                 var groups = events.GroupBy(evt => evt.EmittingNode);
@@ -200,7 +207,7 @@ namespace Test.Utils
         public Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
         {
             if (!PushDataPointResult ?? false) return Task.FromResult(PushDataPointResult);
-            if (points == null || !points.Any()) return Task.FromResult(PushDataPointResult);
+            if (points == null || !points.Any()) return Task.FromResult<bool?>(null);
             lock (dpLock)
             {
                 // Missing nodes here is unacceptable
@@ -213,6 +220,18 @@ namespace Test.Utils
             return Task.FromResult(PushDataPointResult);
         }
 
+        public Task<bool> PushReferences(IEnumerable<BufferedReference> references, CancellationToken token)
+        {
+            if (!PushReferenceResult) return Task.FromResult(PushReferenceResult);
+            if (references == null || !references.Any()) return Task.FromResult(true);
+
+            foreach (var rel in references)
+            {
+                PushedReferences.Add(rel);
+            }
+
+            return Task.FromResult(true);
+        }
         public void Reset()
         {
             OnReset.Set();

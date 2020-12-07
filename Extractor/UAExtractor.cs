@@ -747,6 +747,36 @@ namespace Cognite.OpcUa
 
             return result;
         }
+
+
+        private void PushNodesFailure(
+            IEnumerable<BufferedNode> objects,
+            IEnumerable<BufferedVariable> timeseries,
+            IEnumerable<BufferedReference> references,
+            bool nodesPassed,
+            bool referencesPassed,
+            bool dpRangesPassed,
+            IPusher pusher)
+        {
+            pusher.Initialized = false;
+            pusher.DataFailing = true;
+            pusher.EventsFailing = true;
+            if (!nodesPassed)
+            {
+                pusher.PendingNodes.AddRange(objects);
+                pusher.PendingNodes.AddRange(timeseries);
+            }
+            else if (!dpRangesPassed)
+            {
+                pusher.PendingNodes.AddRange(timeseries
+                    .DistinctBy(ts => ts.Id)
+                    .Where(ts => State.GetNodeState(ts.Id)?.FrontfillEnabled ?? false));
+            }
+            if (!referencesPassed && references != null)
+            {
+                pusher.PendingReferences.AddRange(references);
+            }
+        }
         /// <summary>
         /// Push nodes to given pusher
         /// </summary>
@@ -765,14 +795,7 @@ namespace Cognite.OpcUa
             if (pusher.NoInit)
             {
                 log.Warning("Skipping pushing on pusher {name}", pusher.GetType());
-                pusher.Initialized = false;
-                pusher.NoInit = false;
-                pusher.PendingNodes.AddRange(objects);
-                pusher.PendingNodes.AddRange(timeseries);
-                if (references != null)
-                {
-                    pusher.PendingReferences.AddRange(references);
-                }
+                PushNodesFailure(objects, timeseries, references, false, false, false, pusher);
                 return;
             }
 
@@ -791,15 +814,10 @@ namespace Cognite.OpcUa
             if (!result)
             {
                 log.Error("Failed to push nodes on pusher {name}", pusher.GetType());
-                pusher.Initialized = false;
-                pusher.DataFailing = true;
-                pusher.EventsFailing = true;
-                pusher.PendingNodes.AddRange(objects);
-                pusher.PendingNodes.AddRange(timeseries);
-                if (references != null)
-                {
-                    pusher.PendingReferences.AddRange(references);
-                }
+                int idx = 0;
+                bool nodesPassed = objects.Any() && timeseries.Any() && results[idx++];
+                bool referencesPassed = references != null && references.Any() && results[idx];
+                PushNodesFailure(objects, timeseries, references, nodesPassed, referencesPassed, false, pusher);
                 return;
             }
 
@@ -810,24 +828,17 @@ namespace Cognite.OpcUa
                     .Distinct()
                     .Select(id => State.GetNodeState(id))
                     .Where(state => state.FrontfillEnabled);
-                var initResults = await Task.WhenAll(pusher.InitExtractedRanges(statesToSync, config.History.Backfill, initMissing, source.Token), 
-                    pusher.InitExtractedEventRanges(State.EmitterStates.Where(state => state.FrontfillEnabled),
-                        config.History.Backfill,
-                        initMissing,
-                        source.Token));
+
+                var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled);
+
+                var initResults = await Task.WhenAll(
+                    pusher.InitExtractedRanges(statesToSync, config.History.Backfill, initMissing, source.Token), 
+                    pusher.InitExtractedEventRanges(eventStatesToSync, config.History.Backfill, initMissing, source.Token));
+
                 if (!initResults.All(res => res))
                 {
                     log.Error("Initialization of extracted ranges failed for pusher {name}", pusher.GetType());
-                    pusher.Initialized = false;
-                    pusher.DataFailing = true;
-                    pusher.EventsFailing = true;
-                    pusher.PendingNodes.AddRange(timeseries
-                        .DistinctBy(ts => ts.Id)
-                        .Where(ts => State.GetNodeState(ts.Id)?.FrontfillEnabled ?? false));
-                    if (references != null)
-                    {
-                        pusher.PendingReferences.AddRange(references);
-                    }
+                    PushNodesFailure(objects, timeseries, references, true, true, initResults[0], pusher);
                     return;
                 }
             }
