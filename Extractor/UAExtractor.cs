@@ -440,7 +440,7 @@ namespace Cognite.OpcUa
             }
             if (config.Extraction.NodeTypes.Metadata)
             {
-                fields = fields ?? new Dictionary<string, string>();
+                fields ??= new Dictionary<string, string>();
                 if (node.NodeType?.Name != null)
                 {
                     fields["TypeDefinition"] = node.NodeType.Name;

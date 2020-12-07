@@ -387,6 +387,24 @@ namespace Cognite.OpcUa
             refd.BrowseName = results[1].GetValue(QualifiedName.Null);
             refd.DisplayName = results[2].GetValue(LocalizedText.Null);
             refd.NodeClass = (NodeClass)results[3].GetValue(0);
+
+            if (extractionConfig.NodeTypes.Metadata)
+            {
+                try
+                {
+                    Session.Browse(null, null, nodeId, 1, BrowseDirection.Forward, ReferenceTypeIds.HasTypeDefinition, false,
+                        (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType, out var _, out var references);
+                    if (references.Any())
+                    {
+                        refd.TypeDefinition = references.First().NodeId;
+                    }
+                }
+                catch (ServiceResultException ex)
+                {
+                    throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadRootNode);
+                }
+            }
+
             refd.ReferenceTypeId = null;
             refd.IsForward = true;
             return refd;

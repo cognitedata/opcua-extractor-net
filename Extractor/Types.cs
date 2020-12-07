@@ -272,6 +272,7 @@ namespace Cognite.OpcUa
             DataType = other.DataType;
             ValueRank = other.ValueRank;
             ArrayDimensions = other.ArrayDimensions;
+            NodeType = other.NodeType;
         }
         /// <summary>
         /// Returns given variable if it is not null, otherwise throws an error.
