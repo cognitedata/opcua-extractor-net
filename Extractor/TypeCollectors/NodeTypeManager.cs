@@ -12,22 +12,22 @@ namespace Cognite.OpcUa.TypeCollectors
     /// <summary>
     /// Handles the type definitions of objects and variables.
     /// </summary>
-    public class ObjectTypeManager
+    public class NodeTypeManager
     {
-        private readonly ILogger log = Log.Logger.ForContext<ObjectTypeManager>();
+        private readonly ILogger log = Log.Logger.ForContext<NodeTypeManager>();
         private readonly UAClient uaClient;
-        private readonly Dictionary<NodeId, BufferedObjectType> mappedTypes = new Dictionary<NodeId, BufferedObjectType>();
+        private readonly Dictionary<NodeId, BufferedNodeType> mappedTypes = new Dictionary<NodeId, BufferedNodeType>();
 
-        public ObjectTypeManager(UAClient client)
+        public NodeTypeManager(UAClient client)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             uaClient = client;
         }
-        public BufferedObjectType GetObjectType(NodeId id, bool isVariableType)
+        public BufferedNodeType GetObjectType(NodeId id, bool isVariableType)
         {
             if (id == null) id = NodeId.Null;
             if (mappedTypes.TryGetValue(id, out var type)) return type;
-            type = new BufferedObjectType(id, isVariableType);
+            type = new BufferedNodeType(id, isVariableType);
             mappedTypes[id] = type;
             return type;
         }

@@ -149,20 +149,20 @@ namespace Cognite.OpcUa
         /// Add node to overview of known mapped nodes
         /// </summary>
         /// <param name="node">Node to add</param>
-        public void AddActiveNode(BufferedNode node, TypeUpdateConfig update, bool dataTypeMetadata)
+        public void AddActiveNode(BufferedNode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
-            nodeChecksums[node.Id] = node.GetUpdateChecksum(update, dataTypeMetadata);
+            nodeChecksums[node.Id] = node.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
         }
         /// <summary>
         /// Add variable to overview of known mapped nodes
         /// </summary>
         /// <param name="node">Node to add</param>
-        public void AddActiveNode(BufferedVariable node, TypeUpdateConfig update, bool dataTypeMetadata)
+        public void AddActiveNode(BufferedVariable node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
             if (node.Index != -1) throw new InvalidOperationException();
-            nodeChecksums[node.Id] = node.GetUpdateChecksum(update, dataTypeMetadata);
+            nodeChecksums[node.Id] = node.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
         }
         /// <summary>
         /// Get node checksum by NodeId and index if it exists

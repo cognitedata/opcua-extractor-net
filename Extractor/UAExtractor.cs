@@ -430,6 +430,25 @@ namespace Cognite.OpcUa
             }
             log.Debug("Waited {s} milliseconds for subscriptions", time * 100);
         }
+        public Dictionary<string, string> GetExtraMetadata(BufferedNode node)
+        {
+            if (node == null) return null;
+            Dictionary<string, string> fields = null;
+            if (node is BufferedVariable variable)
+            {
+                fields = DataTypeManager.GetAdditionalMetadata(variable);
+            }
+            if (config.Extraction.NodeTypes.Metadata)
+            {
+                fields = fields ?? new Dictionary<string, string>();
+                if (node.NodeType?.Name != null)
+                {
+                    fields["TypeDefinition"] = node.NodeType.Name;
+                }
+            }
+            return fields;
+
+        }
         #endregion
 
         #region Mapping
@@ -597,11 +616,13 @@ namespace Cognite.OpcUa
                     var oldChecksum = State.GetNodeChecksum(node.Id);
                     if (oldChecksum != null)
                     {
-                        node.Changed = oldChecksum != node.GetUpdateChecksum(update.Objects, config.Extraction.DataTypes.DataTypeMetadata);
+                        node.Changed = oldChecksum != node.GetUpdateChecksum(update.Objects, config.Extraction.DataTypes.DataTypeMetadata,
+                            config.Extraction.NodeTypes.Metadata);
                         if (node.Changed)
                         {
 
-                            State.AddActiveNode(node, update.Objects, config.Extraction.DataTypes.DataTypeMetadata);
+                            State.AddActiveNode(node, update.Objects, config.Extraction.DataTypes.DataTypeMetadata,
+                                config.Extraction.NodeTypes.Metadata);
                             yield return node;
                         }
                         continue;
@@ -609,7 +630,8 @@ namespace Cognite.OpcUa
                 }
                 log.Verbose(node.ToDebugDescription());
 
-                State.AddActiveNode(node, update.Objects, config.Extraction.DataTypes.DataTypeMetadata);
+                State.AddActiveNode(node, update.Objects, config.Extraction.DataTypes.DataTypeMetadata,
+                    config.Extraction.NodeTypes.Metadata);
                 yield return node;
             }
         }
@@ -637,12 +659,14 @@ namespace Cognite.OpcUa
                     var oldChecksum = State.GetNodeChecksum(node.Id);
                     if (oldChecksum != null)
                     {
-                        node.Changed = oldChecksum != node.GetUpdateChecksum(update.Variables, config.Extraction.DataTypes.DataTypeMetadata);
+                        node.Changed = oldChecksum != node.GetUpdateChecksum(update.Variables, config.Extraction.DataTypes.DataTypeMetadata,
+                            config.Extraction.NodeTypes.Metadata);
 
                         if (node.Changed)
                         {
                             var oldState = State.GetNodeState(node.Id);
-                            State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata);
+                            State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata,
+                                config.Extraction.NodeTypes.Metadata);
                             if (oldState.IsArray)
                             {
                                 var children = node.CreateArrayChildren();
@@ -667,7 +691,8 @@ namespace Cognite.OpcUa
                 var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,
                     StateStorage != null && config.StateStorage.Interval > 0);
 
-                State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata);
+                State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata,
+                    config.Extraction.NodeTypes.Metadata);
                 if (state.IsArray)
                 {
                     var children = node.CreateArrayChildren();
@@ -973,7 +998,7 @@ namespace Cognite.OpcUa
 
                 if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
                 {
-                    bufferedNode.ObjectType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), false);
+                    bufferedNode.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), false);
                 }
                 log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
                 State.RegisterNode(bufferedNode.Id, GetUniqueId(bufferedNode.Id));
@@ -993,7 +1018,7 @@ namespace Cognite.OpcUa
                 }
                 else if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
                 {
-                    bufferedNode.ObjectType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), true);
+                    bufferedNode.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), true);
                 }
                 State.RegisterNode(bufferedNode.Id, GetUniqueId(bufferedNode.Id));
                 log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);

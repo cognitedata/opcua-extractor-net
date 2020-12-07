@@ -5,12 +5,12 @@ using System.Text;
 
 namespace Cognite.OpcUa.TypeCollectors
 {
-    public class BufferedObjectType
+    public class BufferedNodeType
     {
         public NodeId Id { get; }
         public string Name { get; set; }
         public bool IsVariableType { get; }
-        public BufferedObjectType(NodeId id, bool isVariableType)
+        public BufferedNodeType(NodeId id, bool isVariableType)
         {
             Id = id;
             IsVariableType = isVariableType;

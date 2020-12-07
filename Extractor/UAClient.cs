@@ -48,7 +48,7 @@ namespace Cognite.OpcUa
         private SessionReconnectHandler reconnectHandler;
         public UAExtractor Extractor { get; set; }
         public DataTypeManager DataTypeManager { get; }
-        public ObjectTypeManager ObjectTypeManager { get; }
+        public NodeTypeManager ObjectTypeManager { get; }
         private readonly object visitedNodesLock = new object();
         protected ISet<NodeId> VisitedNodes { get; }= new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
@@ -93,7 +93,7 @@ namespace Cognite.OpcUa
             if (config == null) throw new ArgumentNullException(nameof(config));
             this.config = config.Source;
             DataTypeManager = new DataTypeManager(this, config.Extraction.DataTypes);
-            ObjectTypeManager = new ObjectTypeManager(this);
+            ObjectTypeManager = new NodeTypeManager(this);
             extractionConfig = config.Extraction;
             eventConfig = config.Events;
             historyConfig = config.History;
