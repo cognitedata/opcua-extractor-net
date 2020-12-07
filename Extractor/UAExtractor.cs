@@ -440,23 +440,23 @@ namespace Cognite.OpcUa
         private async Task<IEnumerable<Task>> MapUAToDestinations()
         {
             var nodes = await GetNodesFromQueue();
+            nodes.ClearRaw();
 
             IEnumerable<BufferedReference> references = null;
             if (config.Extraction.Relationships.Enabled)
             {
-                references = await referenceTypeManager.GetReferencesAsync(nodes.RawObjects.Concat(nodes.RawVariables),
+                references = await referenceTypeManager.GetReferencesAsync(nodes.Objects.Concat(nodes.Variables).DistinctBy(node => node.Id),
                     ReferenceTypeIds.NonHierarchicalReferences, source.Token);
                 await referenceTypeManager.GetReferenceTypeDataAsync(source.Token);
-                references = State.AddReferences(references);
+                references = references.Distinct();
             }
 
-            if (!nodes.Objects.Any() && !nodes.Timeseries.Any() && !nodes.Variables.Any())
+            if (!nodes.Objects.Any() && !nodes.Timeseries.Any() && !nodes.Variables.Any() && (references == null || !references.Any()))
             {
                 log.Information("Mapping resulted in no new nodes");
                 return Array.Empty<Task>();
             }
 
-            nodes.ClearRaw();
 
             log.Information("Map {obj} objects, and {ts} destination timeseries, representing {var} variables, to destinations",
                 nodes.Objects.Count, nodes.Timeseries.Count, nodes.Variables.Count);
@@ -608,7 +608,7 @@ namespace Cognite.OpcUa
 
         private void InitEventStates(BrowseResult result)
         {
-            foreach (var node in result.RawObjects.Concat(result.RawVariables))
+            foreach (var node in result.Objects.Concat(result.Variables))
             {
                 if ((node.EventNotifier & EventNotifiers.SubscribeToEvents) == 0) continue;
                 if (State.GetEmitterState(node.Id) != null) continue;

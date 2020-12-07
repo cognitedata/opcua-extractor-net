@@ -389,7 +389,7 @@ namespace Cognite.OpcUa.Pushers
 
         private static CogniteSdk.Beta.RelationshipVertexType GetVertexType(ReferenceVertex node)
         {
-            if (node.IsTimeSeries) return CogniteSdk.Beta.RelationshipVertexType.Asset;
+            if (node.IsTimeSeries) return CogniteSdk.Beta.RelationshipVertexType.TimeSeries;
             return CogniteSdk.Beta.RelationshipVertexType.Asset;
         }
 

@@ -48,12 +48,8 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<NodeId, int> nodeChecksums =
             new ConcurrentDictionary<NodeId, int>();
 
-        private readonly HashSet<BufferedReference> references = new HashSet<BufferedReference>();
-        private object referenceLock = new object();
-
         public IEnumerable<NodeExtractionState> NodeStates => nodeStates.Values;
         public IEnumerable<EventExtractionState> EmitterStates => emitterStates.Values;
-        public IEnumerable<BufferedReference> ActiveReferences => references;
 
         /// <summary>
         /// Return a NodeExtractionState by externalId
@@ -181,22 +177,6 @@ namespace Cognite.OpcUa
             return null;
         }
 
-        public IEnumerable<BufferedReference> AddReferences(IEnumerable<BufferedReference> newReferences)
-        {
-            if (newReferences == null) return Array.Empty<BufferedReference>();
-            var retReferences = new List<BufferedReference>();
-            lock (referenceLock)
-            {
-                foreach (var reference in newReferences)
-                {
-                    if (references.Add(reference))
-                    {
-                        retReferences.Add(reference);
-                    }
-                }
-            }
-            return retReferences;
-        }
         /// <summary>
         /// Number of currently managed nodes.
         /// </summary>
