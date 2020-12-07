@@ -107,50 +107,44 @@ namespace Cognite.OpcUa
             IsVariable = isVariable;
             ParentId = parentId;
         }
-        public void CheckForUpdates(BufferedNode old, TypeUpdateConfig update, bool dataTypeMetadata)
+        public int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata)
         {
-            if (update == null) throw new ArgumentNullException(nameof(update));
-            if (old == null) throw new ArgumentNullException(nameof(old));
-            if (update.Context && old.ParentId != ParentId)
+            if (update == null || !update.AnyUpdate) return 0;
+            int checksum = 0;
+            unchecked
             {
-                Changed = true;
-                return;
-            }
-
-            if (update.Description && old.Description != Description && !string.IsNullOrWhiteSpace(Description))
-            {
-                Changed = true;
-                return;
-            }
-
-            if (update.Name && old.DisplayName != DisplayName && !string.IsNullOrWhiteSpace(DisplayName))
-            {
-                Changed = true;
-                return;
-            }
-
-            if (update.Metadata)
-            {
-                var oldProperties = old.Properties == null
-                    ? new Dictionary<string, BufferedDataPoint>()
-                    : old.Properties.Where(prop => prop.DisplayName != null).ToDictionary(prop => prop.DisplayName, prop => prop.Value);
-                Changed = Properties != null && Properties.Any(prop =>
+                if (update.Context)
                 {
-                    if (prop.DisplayName == null) return false;
-                    if (prop.Value == null) return false;
-                    if (string.IsNullOrWhiteSpace(prop.Value.StringValue) && prop.Value.DoubleValue == null) return false;
-                    if (!oldProperties.TryGetValue(prop.DisplayName, out var oldProp)) return true;
-                    if (oldProp == null) return true;
-                    return prop.Value.IsString && oldProp.StringValue != prop.Value.StringValue
-                        || !prop.Value.IsString && oldProp.DoubleValue != prop.Value.DoubleValue;
-                });
-                if (dataTypeMetadata
-                    && old is BufferedVariable oldVariable && this is BufferedVariable variable
-                    && oldVariable.DataType.Raw != variable.DataType.Raw)
+                    checksum += ParentId?.GetHashCode() ?? 0;
+                }
+                if (update.Description)
                 {
-                    Changed = true;
+                    checksum = checksum * 31 + Description?.GetHashCode() ?? 0;
+                }
+                if (update.Name)
+                {
+                    checksum = checksum * 31 + DisplayName?.GetHashCode() ?? 0;
+                }
+                if (update.Metadata)
+                {
+                    int metaHash = 0;
+                    if (Properties != null)
+                    {
+                        foreach (var prop in Properties.OrderBy(prop => prop.DisplayName))
+                        {
+                            metaHash *= 31;
+                            if (prop.Value == null || prop.DisplayName == null) continue;
+                            metaHash += (prop.DisplayName, prop.Value.StringValue).GetHashCode();
+                        }
+                        if (dataTypeMetadata && this is BufferedVariable variable)
+                        {
+                            metaHash = metaHash * 31 + variable.DataType.Raw.GetHashCode();
+                        }
+                    }
+                    checksum = checksum * 31 + metaHash;
                 }
             }
+            return checksum;
         }
     }
     
@@ -175,10 +169,6 @@ namespace Cognite.OpcUa
         /// True if variable is a property
         /// </summary>
         public bool IsProperty { get; set; }
-        /// <summary>
-        /// Local browse name of variable, sometimes useful for properties
-        /// </summary>
-        public QualifiedName BrowseName { get; set; }
         /// <summary>
         /// Value of variable as string or double
         /// </summary>
@@ -556,12 +546,14 @@ namespace Cognite.OpcUa
         /// <summary>
         /// NodeId of the source node
         /// </summary>
-        public BufferedNode Source { get; }
+        public ReferenceVertex Source { get; }
         /// <summary>
         /// NodeId of the target node
         /// </summary>
-        public BufferedNode Target { get; }
-        public BufferedReference(ReferenceDescription desc, BufferedNode source, BufferedNode target, ReferenceTypeManager manager)
+        public ReferenceVertex Target { get; }
+        // Slight hack here to properly get vertex types without needing the full node objects.
+        public BufferedReference(ReferenceDescription desc, BufferedNode source,
+            NodeId target, NodeExtractionState targetState, ReferenceTypeManager manager)
         {
             if (desc == null) throw new ArgumentNullException(nameof(desc));
             if (source == null) throw new ArgumentNullException(nameof(source));
@@ -569,8 +561,8 @@ namespace Cognite.OpcUa
             if (manager == null) throw new ArgumentNullException(nameof(manager));
             Type = manager.GetReferenceType(desc.ReferenceTypeId);
             IsForward = desc.IsForward;
-            Source = source;
-            Target = target;
+            Source = new ReferenceVertex(source.Id, (source is BufferedVariable variable) && !variable.IsArray);
+            Target = new ReferenceVertex(target, desc.NodeClass == NodeClass.Variable && (targetState == null || !targetState.IsArray));
         }
         public string GetName()
         {
@@ -579,14 +571,25 @@ namespace Cognite.OpcUa
         public override bool Equals(object obj)
         {
             if (!(obj is BufferedReference other)) return false;
-            return other.Source.Id == Source.Id
-                && other.Target.Id == Target.Id
+            return other.Source == Source
+                && other.Target == Target
                 && other.Type.Id == Type.Id;
         }
 
         public override int GetHashCode()
         {
-            return (Source.Id, Target.Id, Type.Id).GetHashCode();
+            return (Source, Target, Type.Id).GetHashCode();
+        }
+    }
+    public class ReferenceVertex
+    {
+        public NodeId Id { get; }
+        public int Index { get; }
+        public bool IsTimeSeries { get; }
+        public ReferenceVertex(NodeId id, bool isVariable)
+        {
+            Id = id;
+            IsTimeSeries = isVariable;
         }
     }
 }

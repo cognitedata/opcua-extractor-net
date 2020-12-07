@@ -33,6 +33,7 @@ using MQTTnet.Client.Options;
 using Prometheus;
 using Serilog;
 using Cognite.Extensions;
+using Opc.Ua;
 
 namespace Cognite.OpcUa.Pushers
 {
@@ -42,6 +43,8 @@ namespace Cognite.OpcUa.Pushers
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
+        public List<BufferedNode> PendingNodes { get; } = new List<BufferedNode>();
+        public List<BufferedReference> PendingReferences { get; } = new List<BufferedReference>();
         public UAExtractor Extractor { get; set; }
         public IPusherConfig BaseConfig => config;
         private readonly MqttPusherConfig config;
@@ -57,6 +60,8 @@ namespace Cognite.OpcUa.Pushers
         private bool closed;
 
         private HashSet<string> existingNodes;
+
+        private Dictionary<NodeId, string> eventParents = new Dictionary<NodeId, string>();
 
         private static readonly Counter createdAssets = Metrics
             .CreateCounter("opcua_created_assets_mqtt", "Number of assets pushed over mqtt");
@@ -283,6 +288,11 @@ namespace Cognite.OpcUa.Pushers
             {
                 var results = await Task.WhenAll(variables.ChunkBy(1000).Select(chunk => PushTimeseries(chunk, update.Variables, token)));
                 if (!results.All(res => res)) return false;
+                foreach (var ts in variables)
+                {
+                    if (ts.Index == -1) continue;
+                    eventParents[ts.Id] = Extractor.GetUniqueId(ts.ParentId);
+                }
             }
 
             if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
@@ -597,7 +607,9 @@ namespace Cognite.OpcUa.Pushers
         public async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> evts, CancellationToken token)
         {
             if (config.Debug) return true;
-            var events = evts.Select(evt => PusherUtils.EventToStatelessCDFEvent(evt, Extractor, config.DataSetId)).Where(evt => evt != null);
+            var events = evts
+                .Select(evt => PusherUtils.EventToStatelessCDFEvent(evt, Extractor, config.DataSetId, eventParents))
+                .Where(evt => evt != null);
 
             var data = JsonSerializer.SerializeToUtf8Bytes(events, null);
 

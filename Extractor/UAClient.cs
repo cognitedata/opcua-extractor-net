@@ -1277,7 +1277,6 @@ namespace Cognite.OpcUa
                 };
                 operand.BrowsePath.Add(browseName);
                 selectClauses.Add(operand);
-                log.Debug("Select event attribute {id}: {name}", root, browseName);
             }
             return new EventFilter
             {
