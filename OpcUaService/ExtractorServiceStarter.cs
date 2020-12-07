@@ -41,31 +41,30 @@ namespace OpcUaService
             var services = new ServiceCollection();
             _config = services.AddConfig<FullConfig>(configFile, 1);
             _config.Source.ConfigRoot = "config/";
-            _config.Logger.Console.Level = "NoConsoleLogging";
-
-            LoggingUtils.Configure(_config.Logger);
-            _log = Log.Logger.ForContext(typeof(ExtractorServiceStarter));
+            _config.Logger.Console.Level = "none";
 
             services.AddLogger();
             services.AddMetrics();
 
-            _log.Information($"Using configuration file: {configFile}");
+            if (_config.Cognite != null)
+            {
+                services.AddCogniteClient("OPC-UA Extractor", true, true, true);
+            }
+
+            using var provider = services.BuildServiceProvider();
+
+            Log.Logger = provider.GetRequiredService<ILogger>();
+            _log = Log.Logger.ForContext(typeof(ExtractorServiceStarter));
+
+            _log.Information("Using configuration file: {configFile}", configFile);
             _log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
             _log.Information("Revision information: {status}", Version.Status());
 
             version.Set(0);
 
-            services.AddSingleton(_config.Logger);
-
-            services.AddSingleton(_config.Metrics);
-
-            var metrics = services.BuildServiceProvider().GetRequiredService<MetricsService>();
+            var metrics = provider.GetRequiredService<MetricsService>();
             metrics.Start();
-            if (_config.Cognite != null)
-            {
-                services.AddCogniteClient("OPC-UA Extractor", true, true, true);
-            }
-            var provider = services.BuildServiceProvider();
+
             RunExtractorService(_config, provider);
 
             return 0;
