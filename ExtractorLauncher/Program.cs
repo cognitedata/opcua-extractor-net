@@ -38,7 +38,7 @@ namespace Cognite.OpcUa
     {
         private static readonly Gauge version =
             Metrics.CreateGauge("opcua_version", $"version: {Version.GetVersion()}, status: {Version.Status()}");
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(Program));
+        private static ILogger log;
         static int Main(string[] args)
         {
             // Temporary logger config for capturing logs during configuration.
@@ -54,9 +54,9 @@ namespace Cognite.OpcUa
             {
                 if (!(ex is ArgumentOutOfRangeException))
                 {
-                    log.Error(ex.Message);
+                    Log.Error(ex.Message);
                 }
-                log.Warning("Bad command-line arguments passed. Usage:\n" +
+                Log.Warning("Bad command-line arguments passed. Usage:\n" +
                             "    -t|--tool                  - Run the configuration tool\n" +
                             "    -h|--host [host]           - Override configured OPC-UA endpoint\n" +
                             "    -u|--user [user]           - Override configured OPC-UA username\n" +
@@ -86,7 +86,7 @@ namespace Cognite.OpcUa
                 try
                 {
                     string configFile = setup.ConfigFile ?? System.IO.Path.Combine(configDir, setup.ConfigTool ? "config.config-tool.yml" : "config.yml");
-                    log.Information("Loading config file from {path}", configFile);
+                    Log.Information("Loading config file from {path}", configFile);
                     config = services.AddConfig<FullConfig>(configFile, 1);
                     if (setup.ConfigTool)
                     {
@@ -95,7 +95,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Extractor.Configuration.ConfigurationException e)
                 {
-                    log.Error("Failed to load configuration: {msg}", e.Message);
+                    Log.Error("Failed to load configuration: {msg}", e.Message);
                     throw;
                 }
                 config.Source.ConfigRoot = configDir;
@@ -129,15 +129,20 @@ namespace Cognite.OpcUa
 
             services.AddMetrics();
             services.AddLogger();
-            LoggingUtils.Configure(config.Logger);
+
+            if (config.Cognite != null && !setup.ConfigTool)
+            {
+                services.AddCogniteClient("OPC-UA Extractor", true, true, true);
+            }
+
+            var provider = services.BuildServiceProvider();
+            Log.Logger = provider.GetRequiredService<ILogger>();
+            log = Log.Logger.ForContext<Program>();
 
             log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
             log.Information("Revision information: {status}", Version.Status());
 
             version.Set(0);
-
-            var metrics = services.BuildServiceProvider().GetRequiredService<MetricsService>();
-            metrics.Start();
 
             if (setup.ConfigTool)
             {
@@ -146,7 +151,9 @@ namespace Cognite.OpcUa
             }
             else
             {
-                RunExtractor(config, services);
+                var metrics = provider.GetRequiredService<MetricsService>();
+                metrics.Start();
+                RunExtractor(config, provider);
             }
 
             return 0;
@@ -155,17 +162,8 @@ namespace Cognite.OpcUa
         /// Start the extractor and keep it running until canceled, restarting on crashes
         /// </summary>
         /// <param name="config"></param>
-        private static void RunExtractor(FullConfig config, IServiceCollection services)
+        private static void RunExtractor(FullConfig config, IServiceProvider provider)
         {
-            services.AddMetrics();
-            if (config.Cognite != null)
-            {
-                services.AddCogniteClient("OPC-UA Extractor", true, true, true);
-            }
-            using var provider = services.BuildServiceProvider();
-            var metrics = provider.GetRequiredService<MetricsService>();
-            metrics.Start();
-
             var runTime = new ExtractorRuntime(config, provider);
 
             int waitRepeats = 0;
