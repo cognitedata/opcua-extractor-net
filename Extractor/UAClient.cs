@@ -227,7 +227,7 @@ namespace Cognite.OpcUa
             reconnectHandler.Dispose();
             log.Warning("--- RECONNECTED ---");
 
-            OnServerReconnect.Invoke(this, EventArgs.Empty);
+            OnServerReconnect?.Invoke(this, EventArgs.Empty);
 
             connects.Inc();
             connected.Set(1);
@@ -260,7 +260,7 @@ namespace Cognite.OpcUa
                     log.Warning("Client failed to close, quitting");
                 }
             }
-            OnServerDisconnect.Invoke(this, EventArgs.Empty);
+            OnServerDisconnect?.Invoke(this, EventArgs.Empty);
         }
         /// <summary>
         /// Called after succesful validation of a server certificate. Handles the case where the certificate is untrusted.
