@@ -47,7 +47,7 @@ namespace Test.Utils
         public Dictionary<NodeId, List<BufferedEvent>> Events { get; }
             = new Dictionary<NodeId, List<BufferedEvent>>();
 
-        private Dictionary<string, (NodeId, int)> uniqueToNodeId = new Dictionary<string, (NodeId, int)>();
+        public Dictionary<string, (NodeId, int)> UniqueToNodeId { get; } = new Dictionary<string, (NodeId, int)>();
 
         public IPusherConfig BaseConfig => config;
         private DummyPusherConfig config;
@@ -91,7 +91,7 @@ namespace Test.Utils
             {
                 foreach (var obj in objects)
                 {
-                    uniqueToNodeId[Extractor.GetUniqueId(obj.Id)] = (obj.Id, -1);
+                    UniqueToNodeId[Extractor.GetUniqueId(obj.Id)] = (obj.Id, -1);
                     PushedNodes[obj.Id] = obj;
                 }
             }
@@ -105,7 +105,7 @@ namespace Test.Utils
                         {
                             DataPoints[(variable.Id, variable.Index)] = new List<BufferedDataPoint>();
                         }
-                        uniqueToNodeId[Extractor.GetUniqueId(variable.Id, variable.Index)] = (variable.Id, variable.Index);
+                        UniqueToNodeId[Extractor.GetUniqueId(variable.Id, variable.Index)] = (variable.Id, variable.Index);
                         PushedVariables[(variable.Id, variable.Index)] = variable;
                     }
                 }
@@ -208,12 +208,13 @@ namespace Test.Utils
         {
             if (!PushDataPointResult ?? false) return Task.FromResult(PushDataPointResult);
             if (points == null || !points.Any()) return Task.FromResult<bool?>(null);
+            Console.WriteLine($"Push {points.Count()} dps");
             lock (dpLock)
             {
                 // Missing nodes here is unacceptable
                 foreach (var dp in points)
                 {
-                    DataPoints[uniqueToNodeId[dp.Id]].Add(dp);
+                    DataPoints[UniqueToNodeId[dp.Id]].Add(dp);
                 }
             }
 

@@ -54,7 +54,7 @@ namespace Cognite.OpcUa
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         private CancellationToken liveToken;
-        private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> eventFields;
+        private Dictionary<NodeId, HashSet<EventField>> eventFields;
 
         private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
@@ -1160,7 +1160,9 @@ namespace Cognite.OpcUa
                     DisplayName = "Value: " + (node as NodeExtractionState).DisplayName,
                     SamplingInterval = config.SamplingInterval,
                     QueueSize = (uint)Math.Max(0, config.QueueLength),
-                    AttributeId = Attributes.Value
+                    AttributeId = Attributes.Value,
+                    NodeClass = NodeClass.Variable,
+                    CacheQueueSize = Math.Max(0, config.QueueLength)
                 }, token);
 #pragma warning restore CA2000 // Dispose objects before losing scope
 
@@ -1193,7 +1195,8 @@ namespace Cognite.OpcUa
                     DisplayName = "Events: " + node.Id,
                     SamplingInterval = config.SamplingInterval,
                     QueueSize = (uint)Math.Max(0, config.QueueLength),
-                    Filter = filter
+                    Filter = filter,
+                    NodeClass = NodeClass.Object
                 },
                 token);
 #pragma warning restore CA2000 // Dispose objects before losing scope
@@ -1225,7 +1228,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="token"></param>
         /// <returns>The collected event fields</returns>
-        public Dictionary<NodeId, IEnumerable<(NodeId root, QualifiedName browseName)>> GetEventFields(CancellationToken token)
+        public Dictionary<NodeId, HashSet<EventField>> GetEventFields(CancellationToken token)
         {
             if (eventFields != null) return eventFields;
             var collector = new EventFieldCollector(this, eventConfig);
@@ -1235,7 +1238,7 @@ namespace Cognite.OpcUa
                 log.Verbose("Collected event field: {id}", pair.Key);
                 foreach (var fields in pair.Value)
                 {
-                    log.Verbose("    {root}: {browse}", fields.Item1, fields.Item2);
+                    log.Verbose("    {root}: {browse}", fields.TypeId, fields.BrowseName);
                 }
             }
             return eventFields;
@@ -1281,25 +1284,24 @@ namespace Cognite.OpcUa
 
 
             var fieldList = eventFields
-                .Aggregate((IEnumerable<(NodeId Root, QualifiedName BrowseName)>)new List<(NodeId, QualifiedName)>(), (agg, kvp) => agg.Concat(kvp.Value))
-                .GroupBy(variable => variable.BrowseName)
-                .Select(items => items.FirstOrDefault());
+                .Aggregate((IEnumerable<EventField>)new List<EventField>(), (agg, kvp) => agg.Concat(kvp.Value))
+                .DistinctBy(variable => variable.BrowseName);
 
             if (!fieldList.Any())
             {
                 log.Warning("Missing valid event fields, no results will be returned");
             }
             var selectClauses = new SimpleAttributeOperandCollection();
-            foreach (var (root, browseName) in fieldList)
+            foreach (var field in fieldList)
             {
-                if (eventConfig.ExcludeProperties.Contains(browseName.Name)
-                    || eventConfig.BaseExcludeProperties.Contains(browseName.Name) && root == ObjectTypeIds.BaseEventType) continue;
+                if (eventConfig.ExcludeProperties.Contains(field.BrowseName.Name)
+                    || eventConfig.BaseExcludeProperties.Contains(field.BrowseName.Name) && field.TypeId == ObjectTypeIds.BaseEventType) continue;
                 var operand = new SimpleAttributeOperand
                 {
                     AttributeId = Attributes.Value,
-                    TypeDefinitionId = root
+                    TypeDefinitionId = field.TypeId
                 };
-                operand.BrowsePath.Add(browseName);
+                operand.BrowsePath.Add(field.BrowseName);
                 selectClauses.Add(operand);
             }
             return new EventFilter
@@ -1379,7 +1381,8 @@ namespace Cognite.OpcUa
                     Filter = filter,
                     AttributeId = Attributes.EventNotifier,
                     SamplingInterval = config.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, config.QueueLength)
+                    QueueSize = (uint)Math.Max(0, config.QueueLength),
+                    NodeClass = NodeClass.Object
                 };
                 item.Notification += callback;
                 subscription.AddItem(item);
@@ -1473,7 +1476,14 @@ namespace Cognite.OpcUa
             }
             // Give up if there is no clear way to convert it
             if (!typeof(IConvertible).IsAssignableFrom(datavalue.GetType())) return 0;
-            return Convert.ToDouble(datavalue, CultureInfo.InvariantCulture);
+            try
+            {
+                return Convert.ToDouble(datavalue, CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                return 0;
+            }
         }
         /// <summary>
         /// Converts object fetched from ua server to string, contains cases for special types we want to represent in CDF

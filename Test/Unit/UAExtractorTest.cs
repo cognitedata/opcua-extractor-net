@@ -19,24 +19,27 @@ using Cognite.OpcUa.TypeCollectors;
 
 namespace Test.Unit
 {
-
-    public sealed class ExtractorTestFixture : IDisposable
+    public sealed class ExtractorTestFixture : BaseExtractorTestFixture
+    {
+        public ExtractorTestFixture() : base(62100) { }
+    }
+    public abstract class BaseExtractorTestFixture : IDisposable
     {
         public UAClient Client { get; }
         public FullConfig Config { get; }
         public ServerController Server { get; }
         public CancellationTokenSource Source { get; }
         public IServiceProvider Provider { get; }
-        public ExtractorTestFixture()
+        public BaseExtractorTestFixture(int port)
         {
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
-                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, 62100);
+                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, port);
             Server.Start().Wait();
 
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
-            Config.Source.EndpointUrl = $"opc.tcp://localhost:62100";
+            Config.Source.EndpointUrl = $"opc.tcp://localhost:{port}";
             services.AddLogging();
             LoggingUtils.Configure(Config.Logger);
             Provider = services.BuildServiceProvider();
@@ -44,12 +47,6 @@ namespace Test.Unit
             Client = new UAClient(Config);
             Source = new CancellationTokenSource();
             Client.Run(Source.Token).Wait();
-        }
-
-        public void Dispose()
-        {
-            Source.Cancel();
-            Source.Dispose();
         }
 
         public UAExtractor BuildExtractor(bool clear = true, IExtractionStateStore stateStore = null, params IPusher[] pushers)
@@ -61,6 +58,23 @@ namespace Test.Unit
                 Client.ResetVisitedNodes();
             }
             return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                Source.Cancel();
+                Source.Dispose();
+            }
+        }
+
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
     public class UAExtractorTest : MakeConsoleWork, IClassFixture<ExtractorTestFixture>

@@ -37,7 +37,7 @@ namespace Cognite.OpcUa.Config
         private List<NodeId> emittedEvents;
         private List<BufferedNode> eventTypes;
         private Dictionary<string, string> namespaceMap;
-        private Dictionary<NodeId, IEnumerable<(NodeId Root, QualifiedName BrowseName)>> activeEventFields;
+        private Dictionary<NodeId, HashSet<EventField>> activeEventFields;
         private bool history;
         private bool useServer;
 
@@ -993,13 +993,10 @@ namespace Cognite.OpcUa.Config
             for (int i = 0; i < filter.SelectClauses.Count; i++)
             {
                 var clause = filter.SelectClauses[i];
-                if (!targetEventFields.Any(field =>
-                    field.Root == clause.TypeDefinitionId
-                    && field.BrowseName == clause.BrowsePath[0]
-                    && clause.BrowsePath.Count == 1)) continue;
+                if (clause.BrowsePath.Count != 1
+                    || !targetEventFields.Contains(new EventField(clause.TypeDefinitionId, clause.BrowsePath[0]))) continue;
 
                 string name = clause.BrowsePath[0].Name;
-                if (config.Events.ExcludeProperties.Contains(name) || config.Events.BaseExcludeProperties.Contains(name)) continue;
                 if (config.Events.DestinationNameMap.ContainsKey(name) && name != "EventId" && name != "SourceNode" && name != "EventType")
                 {
                     name = config.Events.DestinationNameMap[name];
