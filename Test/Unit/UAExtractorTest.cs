@@ -256,5 +256,55 @@ namespace Test.Unit
             }
             
         }
+
+        [Fact]
+        public async Task TestGetProperties()
+        {
+            // Create multiple partially overlapping tasks to read properties, then wait for the last one to complete.
+            // This should result in all tasks being completed and all properties being read.
+            using var extractor = tester.BuildExtractor();
+
+            var custIds = tester.Server.Ids.Custom;
+            var var1 = new BufferedVariable(custIds.MysteryVar, "MysteryVar", custIds.Root);
+            var var2 = new BufferedVariable(custIds.Array, "Array", custIds.Root);
+            var obj1 = new BufferedNode(custIds.Obj1, "Object1", custIds.Root);
+            obj1.Properties = new List<BufferedVariable>
+            {
+                new BufferedVariable(custIds.StringArray, "StringArray", custIds.Obj1) { IsProperty = true, PropertiesRead = true },
+                new BufferedVariable(tester.Server.Ids.Base.DoubleVar1, "VarProp1", custIds.Obj1) { IsProperty = true }
+            };
+            var obj2 = new BufferedNode(custIds.Obj2, "Object2", custIds.Root);
+            obj2.Properties = new List<BufferedVariable>
+            {
+                new BufferedVariable(custIds.ObjProp, "ObjProp1", custIds.Obj2) { IsProperty = true, PropertiesRead = true },
+                new BufferedVariable(custIds.ObjProp2, "ObjProp2", custIds.Obj2) { IsProperty = true, PropertiesRead = true }
+            };
+
+            var chunks = new List<List<BufferedNode>>
+            {
+                new List<BufferedNode> { var1, obj1 },
+                new List<BufferedNode> { var2, obj2 },
+                new List<BufferedNode> { var1, obj2, var2 }
+            };
+
+            var tasks = chunks.Select(chunk => extractor.ReadProperties(chunk)).ToList();
+
+            await tasks[2];
+
+            Assert.True(tasks[0].IsCompleted);
+            Assert.True(tasks[1].IsCompleted);
+
+            Assert.Equal(2, var1.Properties.Count);
+            Assert.Equal(2, var2.Properties.Count);
+            foreach (var node in chunks.SelectMany(chunk => chunk))
+            {
+                Assert.Equal(2, node.Properties.Count);
+                foreach (var prop in node.Properties)
+                {
+                    Assert.NotNull(prop.Value);
+                    Assert.False(string.IsNullOrEmpty(prop.Value.StringValue));
+                }
+            }
+        }
     }
 }

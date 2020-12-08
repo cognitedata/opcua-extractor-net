@@ -1161,6 +1161,8 @@ namespace Cognite.OpcUa
                 source?.Cancel();
                 source?.Dispose();
                 Looper?.Dispose();
+                uaClient.OnServerDisconnect -= UaClient_OnServerDisconnect;
+                uaClient.OnServerReconnect -= UaClient_OnServerReconnect;
             }
         }
     }
