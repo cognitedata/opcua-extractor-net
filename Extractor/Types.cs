@@ -564,6 +564,24 @@ namespace Cognite.OpcUa
             Source = new ReferenceVertex(source.Id, (source is BufferedVariable variable) && !variable.IsArray);
             Target = new ReferenceVertex(target, desc.NodeClass == NodeClass.Variable && (targetState == null || !targetState.IsArray));
         }
+        // For hierarchical references, here the source should always be an object...
+        public BufferedReference(ReferenceDescription desc, NodeId source, BufferedNode target, ReferenceTypeManager manager, bool inverse)
+        {
+            if (desc == null) throw new ArgumentNullException(nameof(desc));
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (target == null) throw new ArgumentNullException(nameof(target));
+            if (manager == null) throw new ArgumentNullException(nameof(manager));
+            Type = manager.GetReferenceType(desc.ReferenceTypeId);
+            IsForward = !inverse;
+            Source = new ReferenceVertex(source, false);
+            Target = new ReferenceVertex(target.Id, target is BufferedVariable variable && !variable.IsArray);
+            if (inverse)
+            {
+                var temp = Source;
+                Source = Target;
+                Target = temp;
+            }
+        }
         public string GetName()
         {
             return Type.GetName(!IsForward);
