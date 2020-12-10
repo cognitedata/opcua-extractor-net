@@ -78,5 +78,55 @@ namespace Test
             Assert.Equal("Asset", arrayRel.sourceType);
             Assert.Equal("Asset", arrayRel.targetType);
         }
+
+        [Fact]
+        [Trait("Server", "array")]
+        [Trait("Target", "References")]
+        [Trait("Test", "hierarchicalreferences")]
+        public async Task TestHierarchicalReferences()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Array,
+                QuitAfterMap = true,
+                References = true
+            });
+            await tester.ClearPersistentData();
+
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+            tester.Config.Extraction.Relationships.Hierarchical = true;
+            tester.Config.Extraction.Relationships.InverseHierarchical = true;
+
+            await tester.StartServer();
+            tester.Server.PopulateArrayHistory();
+
+            tester.Config.Extraction.DataTypes.CustomNumericTypes = new[]
+            {
+                tester.IdToProtoDataType(tester.Server.Ids.Custom.MysteryType),
+                tester.IdToProtoDataType(tester.Server.Ids.Custom.NumberType),
+            };
+            tester.Config.Extraction.DataTypes.IgnoreDataTypes = new[]
+            {
+                tester.IdToProto(tester.Server.Ids.Custom.IgnoreType)
+            };
+
+            tester.StartExtractor();
+            await tester.TerminateRunTask(false);
+
+            var rels = tester.Handler.Relationships.Values;
+
+            Assert.Equal(30, rels.Count);
+
+            var assetRel = rels.First(rel => rel.externalId == "gp.Organizes;tl:i=1;tl:i=14");
+            Assert.Equal("Asset", assetRel.sourceType);
+            Assert.Equal("gp.tl:i=1", assetRel.sourceExternalId);
+            Assert.Equal("gp.tl:i=14", assetRel.targetExternalId);
+            var tsRel = rels.First(rel => rel.externalId == "gp.HasComponent;tl:i=1;tl:i=8");
+            Assert.Equal("TimeSeries", tsRel.targetType);
+            Assert.Equal("Asset", tsRel.sourceType);
+            Assert.Equal("gp.tl:i=1", tsRel.sourceExternalId);
+            Assert.Equal("gp.tl:i=8", tsRel.targetExternalId);
+        }
     }
 }
