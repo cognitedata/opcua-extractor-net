@@ -94,10 +94,13 @@ namespace Cognite.OpcUa.TypeCollectors
             foreach (var (parentId, children) in references)
             {
                 if (!nodeMap.TryGetValue(parentId, out var parentNode)) continue;
+                if (parentNode is BufferedVariable parentVar && parentVar.IsProperty) continue;
                 foreach (var child in children)
                 {
                     var childId = uaClient.ToNodeId(child.NodeId);
+                    if (child.TypeDefinition == VariableTypeIds.PropertyType) continue;
                     if (!extractor.State.IsMappedNode(childId)) continue;
+
                     NodeExtractionState childState = null;
                     if (child.NodeClass == NodeClass.Variable)
                     {

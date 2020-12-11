@@ -52,6 +52,8 @@ namespace Cognite.OpcUa
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
+        private readonly ConcurrentQueue<(ReferenceDescription Desc, NodeId ParentId)> referenceQueue =
+            new ConcurrentQueue<(ReferenceDescription, NodeId)>();
 
         // Concurrent reading of properties
         private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
@@ -465,10 +467,7 @@ namespace Cognite.OpcUa
             IEnumerable<BufferedReference> references = null;
             if (config.Extraction.Relationships.Enabled)
             {
-                references = await referenceTypeManager.GetReferencesAsync(nodes.Objects.Concat(nodes.Variables).DistinctBy(node => node.Id),
-                    ReferenceTypeIds.NonHierarchicalReferences, source.Token);
-                await referenceTypeManager.GetReferenceTypeDataAsync(source.Token);
-                references = references.Distinct();
+                references = await GetRelationshipData(nodes);
             }
 
             if (!nodes.Objects.Any() && !nodes.Timeseries.Any() && !nodes.Variables.Any() && (references == null || !references.Any()))
@@ -844,6 +843,37 @@ namespace Cognite.OpcUa
 
             pusher.Initialized |= initial;
         }
+
+        private async Task<IEnumerable<BufferedReference>> GetRelationshipData(BrowseResult nodes)
+        {
+            var references = await referenceTypeManager.GetReferencesAsync(nodes.Objects.Concat(nodes.Variables).DistinctBy(node => node.Id),
+                    ReferenceTypeIds.NonHierarchicalReferences, source.Token);
+
+            if (config.Extraction.Relationships.Hierarchical)
+            {
+                var nodeMap = nodes.Objects.Concat(nodes.Variables)
+                    .Where(node => !(node is BufferedVariable variable) || variable.Index == -1)
+                    .DistinctBy(node => node.Id)
+                    .ToDictionary(node => node.Id);
+                var hierarchicalReferences = new List<BufferedReference>();
+                while (referenceQueue.TryDequeue(out var pair))
+                {
+                    // The child should always be in the list of mapped nodes here
+                    if (!nodeMap.TryGetValue(uaClient.ToNodeId(pair.Desc.NodeId), out var childNode)) continue;
+                    if (childNode == null || childNode is BufferedVariable childVar && childVar.IsProperty) continue;
+
+                    hierarchicalReferences.Add(new BufferedReference(pair.Desc, pair.ParentId, childNode, referenceTypeManager, false));
+                    if (config.Extraction.Relationships.InverseHierarchical)
+                    {
+                        hierarchicalReferences.Add(new BufferedReference(pair.Desc, pair.ParentId, childNode, referenceTypeManager, true));
+                    }
+                }
+                references = references.Concat(hierarchicalReferences);
+            }
+
+            await referenceTypeManager.GetReferenceTypeDataAsync(source.Token);
+            return references.Distinct();
+        }
         /// <summary>
         /// Push given lists of nodes to pusher destinations, and fetches latest timestamp for relevant nodes.
         /// </summary>
@@ -989,6 +1019,7 @@ namespace Cognite.OpcUa
         /// <param name="parentId">Id of the parent node</param>
         private void HandleNode(ReferenceDescription node, NodeId parentId)
         {
+            bool mapped = false;
             log.Verbose("HandleNode {parent} {node}", parentId, node);
 
             if (node.NodeClass == NodeClass.Object)
@@ -1003,12 +1034,13 @@ namespace Cognite.OpcUa
                 log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
                 State.RegisterNode(bufferedNode.Id, GetUniqueId(bufferedNode.Id));
                 commonQueue.Enqueue(bufferedNode);
+                mapped = true;
             }
             else if (node.NodeClass == NodeClass.Variable)
             {
                 var bufferedNode = new BufferedVariable(uaClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
-                
+
                 if (IsProperty(node))
                 {
                     bufferedNode.IsProperty = true;
@@ -1016,13 +1048,23 @@ namespace Cognite.OpcUa
                     // but mapped variables might.
                     bufferedNode.PropertiesRead = node.TypeDefinition == VariableTypeIds.PropertyType;
                 }
-                else if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
+                else
                 {
-                    bufferedNode.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), true);
+                    mapped = true;
+                    if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
+                    {
+                        bufferedNode.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), true);
+                    }
                 }
                 State.RegisterNode(bufferedNode.Id, GetUniqueId(bufferedNode.Id));
                 log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
                 commonQueue.Enqueue(bufferedNode);
+            }
+
+            if (mapped && config.Extraction.Relationships.Enabled && config.Extraction.Relationships.Hierarchical)
+            {
+                if (parentId == null || parentId.IsNullNodeId) return;
+                referenceQueue.Enqueue((node, parentId));
             }
         }
 
