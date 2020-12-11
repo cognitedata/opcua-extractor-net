@@ -27,6 +27,7 @@ using Cognite.Extractor.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Cognite.Extractor.Metrics;
 using Cognite.Extractor.Utils;
+using Cognite.Extractor.StateStorage;
 
 namespace Cognite.OpcUa
 {
@@ -130,9 +131,13 @@ namespace Cognite.OpcUa
             services.AddMetrics();
             services.AddLogger();
 
-            if (config.Cognite != null && !setup.ConfigTool)
+            if (!setup.ConfigTool)
             {
-                services.AddCogniteClient("OPC-UA Extractor", true, true, true);
+                if (config.Cognite != null)
+                {
+                    services.AddCogniteClient("OPC-UA Extractor", true, true, true);
+                }
+                services.AddStateStore();
             }
 
             var provider = services.BuildServiceProvider();

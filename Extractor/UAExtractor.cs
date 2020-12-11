@@ -261,7 +261,7 @@ namespace Cognite.OpcUa
                 state.RestartHistory();
             }
 
-            Looper.WaitForNextPush().Wait();
+            Looper.WaitForNextPush(true).Wait();
             foreach (var pusher in pushers)
             {
                 pusher.Reset();
@@ -859,7 +859,7 @@ namespace Cognite.OpcUa
                     .Select(ts => ts.Id)
                     .Distinct()
                     .Select(id => State.GetNodeState(id))
-                    .Where(state => state.FrontfillEnabled);
+                    .Where(state => state != null && state.FrontfillEnabled);
 
                 var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled);
 

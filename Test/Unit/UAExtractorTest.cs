@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 using Test.Utils;
-using System.Runtime.InteropServices;
 using System.Linq;
 using System.Collections.Generic;
 using Opc.Ua;
