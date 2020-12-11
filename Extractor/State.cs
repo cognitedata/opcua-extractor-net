@@ -42,32 +42,15 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<string, EventExtractionState> emitterStatesByExtId =
             new ConcurrentDictionary<string, EventExtractionState>();
 
-        private readonly ConcurrentDictionary<NodeId, string> managedNodes =
-            new ConcurrentDictionary<NodeId, string>();
-
         public ConcurrentDictionary<NodeId, IEnumerable<(NodeId Root, QualifiedName BrowseName)>> ActiveEvents { get; }
             = new ConcurrentDictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>>();
 
-        private readonly ConcurrentDictionary<NodeId, BufferedNode> activeNodes =
-            new ConcurrentDictionary<NodeId, BufferedNode>();
-
-        private readonly HashSet<BufferedReference> references = new HashSet<BufferedReference>();
-        private object referenceLock = new object();
+        private readonly ConcurrentDictionary<NodeId, int> nodeChecksums =
+            new ConcurrentDictionary<NodeId, int>();
 
         public IEnumerable<NodeExtractionState> NodeStates => nodeStates.Values;
         public IEnumerable<EventExtractionState> EmitterStates => emitterStates.Values;
-        public IEnumerable<NodeId> AllActiveIds => managedNodes.Keys;
-        public IEnumerable<string> AllActiveExternalIds => managedNodes.Values;
 
-        public IEnumerable<BufferedNode> ActiveNodes => activeNodes.Values;
-        public IEnumerable<BufferedReference> ActiveReferences => references;
-
-        private readonly UAExtractor extractor;
-
-        public State(UAExtractor extractor)
-        {
-            this.extractor = extractor;
-        }
         /// <summary>
         /// Return a NodeExtractionState by externalId
         /// </summary>
@@ -131,15 +114,7 @@ namespace Cognite.OpcUa
             emitterStates[state.SourceId] = state;
             emitterStatesByExtId[state.Id] = state;
         }
-        /// <summary>
-        /// Indicate that the given node is managed by the extractor.
-        /// </summary>
-        /// <param name="id">Id to add</param>
-        public void AddManagedNode(NodeId id)
-        {
-            if (id == null || id.IsNullNodeId) throw new ArgumentNullException(nameof(id));
-            managedNodes[id] = extractor.GetUniqueId(id);
-        }
+
         /// <summary>
         /// Returns corresponding NodeId to given uniqueId if it exists.
         /// </summary>
@@ -168,64 +143,43 @@ namespace Cognite.OpcUa
         public bool IsMappedNode(NodeId id)
         {
             if (id == null || id.IsNullNodeId) return false;
-            return managedNodes.ContainsKey(id);
-        }
-        /// <summary>
-        /// Returns mapping from uniqueId to managed node if one exists.
-        /// </summary>
-        /// <param name="id">Id to look up</param>
-        /// <returns>UniqueId or null</returns>
-        public string GetUniqueId(NodeId id)
-        {
-            if (id == null || id.IsNullNodeId) return null;
-            return managedNodes.GetValueOrDefault(id);
+            return nodeChecksums.ContainsKey(id);
         }
         /// <summary>
         /// Add node to overview of known mapped nodes
         /// </summary>
         /// <param name="node">Node to add</param>
-        public void AddActiveNode(BufferedNode node)
+        public void AddActiveNode(BufferedNode node, TypeUpdateConfig update, bool dataTypeMetadata)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
-            activeNodes[node.Id] = node;
+            nodeChecksums[node.Id] = node.GetUpdateChecksum(update, dataTypeMetadata);
         }
         /// <summary>
         /// Add variable to overview of known mapped nodes
         /// </summary>
         /// <param name="node">Node to add</param>
-        public void AddActiveNode(BufferedVariable node)
+        public void AddActiveNode(BufferedVariable node, TypeUpdateConfig update, bool dataTypeMetadata)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
             if (node.Index != -1) throw new InvalidOperationException();
-            activeNodes[node.Id] = node;
+            nodeChecksums[node.Id] = node.GetUpdateChecksum(update, dataTypeMetadata);
         }
         /// <summary>
-        /// Get active node by NodeId and index if it exists
+        /// Get node checksum by NodeId and index if it exists
         /// </summary>
         /// <param name="id">NodeId to use for lookup</param>
         /// <param name="index">Index of node, default is -1</param>
         /// <returns></returns>
-        public BufferedNode GetActiveNode(NodeId id)
+        public int? GetNodeChecksum(NodeId id)
         {
             if (id == null || id.IsNullNodeId) return null;
-            return activeNodes.GetValueOrDefault(id);
+            if (nodeChecksums.TryGetValue(id, out var checksum)) return checksum;
+            return null;
         }
 
-        public IEnumerable<BufferedReference> AddReferences(IEnumerable<BufferedReference> newReferences)
-        {
-            if (newReferences == null) return Array.Empty<BufferedReference>();
-            var retReferences = new List<BufferedReference>();
-            lock (referenceLock)
-            {
-                foreach (var reference in newReferences)
-                {
-                    if (references.Add(reference))
-                    {
-                        retReferences.Add(reference);
-                    }
-                }
-            }
-            return retReferences;
-        }
+        /// <summary>
+        /// Number of currently managed nodes.
+        /// </summary>
+        public int NumActiveNodes => nodeChecksums.Count;
     }
 }

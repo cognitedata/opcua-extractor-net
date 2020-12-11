@@ -573,15 +573,17 @@ namespace Cognite.OpcUa
             }
         }
 
-        public async Task<IEnumerable<BufferedReference>> GetReferencesAsync(IEnumerable<NodeId> nodes, NodeId referenceTypes, CancellationToken token)
+        public async Task<IEnumerable<BufferedReference>> GetReferencesAsync(IEnumerable<BufferedNode> nodes, NodeId referenceTypes, CancellationToken token)
         {
             if (!nodes.Any()) return Array.Empty<BufferedReference>();
+
+            var nodeMap = nodes.ToDictionary(node => node.Id);
 
             // We only care about references to objects or variables, at least for now.
             // Only references between objects represented in the extracted hierarchy are relevant.
             log.Information("Get extra references from the server");
             var references = await Task.Run(() => uaClient.GetNodeChildren(
-                nodes,
+                nodeMap.Keys,
                 referenceTypes,
                 (uint)NodeClass.Object | (uint)NodeClass.Variable,
                 token,
@@ -591,13 +593,19 @@ namespace Cognite.OpcUa
 
             foreach (var (parentId, children) in references)
             {
-                var parentNode = extractor.State.GetActiveNode(parentId);
-                if (parentNode == null) continue;
+                if (!nodeMap.TryGetValue(parentId, out var parentNode)) continue;
+                if (parentNode is BufferedVariable parentVar && parentVar.IsProperty) continue;
                 foreach (var child in children)
                 {
-                    var childNode = extractor.State.GetActiveNode(uaClient.ToNodeId(child.NodeId));
-                    if (childNode == null) continue;
-                    results.Add(new BufferedReference(child, parentNode, childNode, this));
+                    var childId = uaClient.ToNodeId(child.NodeId);
+                    if (!extractor.State.IsMappedNode(childId)) continue;
+                    if (child.TypeDefinition == VariableTypeIds.PropertyType) continue;
+                    NodeExtractionState childState = null;
+                    if (child.NodeClass == NodeClass.Variable)
+                    {
+                        childState = extractor.State.GetNodeState(childId);
+                    }
+                    results.Add(new BufferedReference(child, parentNode, childId, childState, this));
                 }
             }
 

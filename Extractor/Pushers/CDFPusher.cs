@@ -47,7 +47,8 @@ namespace Cognite.OpcUa.Pushers
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
 
-
+        public List<BufferedNode> PendingNodes { get; } = new List<BufferedNode>();
+        public List<BufferedReference> PendingReferences { get; } = new List<BufferedReference>();
         public UAExtractor Extractor { get; set; }
         public IPusherConfig BaseConfig { get; }
 

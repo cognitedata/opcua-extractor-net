@@ -409,11 +409,13 @@ namespace Test
                     !state.FrontfillEnabled || !state.IsBackfilling && !state.IsFrontfilling),
                 20, "Expected backfill of events to terminate");
 
+            int count = 0;
             await tester.WaitForCondition(async () =>
             {
                 var evts = await tester.GetAllInfluxEvents(ObjectIds.Server);
-                return evts.Count() == 700;
-            }, 5, "Expected to get some events in influxdb");
+                count = evts.Count();
+                return count == 700;
+            }, 10, () => $"Expected to get 700 events in influxdb, but got {count}");
 
             Assert.True(CommonTestUtils.GetMetricValue("opcua_backfill_events_count") >= 1);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1));
