@@ -158,46 +158,6 @@ namespace Test
         }
 
         [Trait("Server", "basic")]
-        [Trait("Target", "ExtractorRuntime")]
-        [Trait("Test", "extractorruntime")]
-        [Fact]
-        public async Task TestExtractorRuntime()
-        {
-            var services = new ServiceCollection();
-            var fullConfig = services.AddConfig<FullConfig>("config.test.yml");
-            services.AddLogger();
-            services.AddMetrics();
-            fullConfig.Source.EndpointUrl = ExtractorTester.HostName;
-            fullConfig.Mqtt = null;
-            fullConfig.Influx = null;
-            fullConfig.Cognite = null;
-
-            using var server = new ServerController(new[] { PredefinedSetup.Base });
-            await server.Start();
-            var provider = services.BuildServiceProvider();
-
-            var runTime = new ExtractorRuntime(fullConfig, provider);
-
-            using var source = new CancellationTokenSource();
-
-            var runTask = runTime.Run(source.Token);
-
-            await Task.Delay(2000);
-
-            Assert.False(runTask.IsFaulted);
-
-            source.Cancel();
-
-            try
-            {
-                await runTask;
-            }
-            catch (Exception ex)
-            {
-                if (!CommonTestUtils.TestRunResult(ex)) throw;
-            }
-        }
-        [Trait("Server", "basic")]
         [Trait("Target", "ConfigToolRuntime")]
         [Trait("Test", "configtoolruntime")]
         [Fact]

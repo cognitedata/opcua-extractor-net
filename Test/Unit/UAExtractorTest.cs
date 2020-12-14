@@ -320,5 +320,82 @@ namespace Test.Unit
                 }
             }
         }
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task TestExtractorRuntime(bool failedStart)
+        {
+            // Set up for each of the three pushers
+            var services = new ServiceCollection();
+            var config = services.AddConfig<FullConfig>("config.test.yml", 1);
+            config.Source.EndpointUrl = "opc.tcp://localhost:62100";
+            var handler = new CDFMockHandler(config.Cognite.Project, CDFMockHandler.MockMode.None);
+
+            handler.AllowConnectionTest = !failedStart;
+
+            CommonTestUtils.AddDummyProvider(handler, services);
+            services.AddCogniteClient("OPC-UA Extractor", true, true, false);
+            var provider = services.BuildServiceProvider();
+
+            var runtime = new ExtractorRuntime(config, provider);
+
+            using (var source = new CancellationTokenSource())
+            {
+                var runTask = runtime.Run(source.Token);
+
+                await Task.Delay(2000);
+                Assert.False(runTask.IsFaulted);
+                if (!failedStart)
+                {
+                    await CommonTestUtils.WaitForCondition(() => handler.Timeseries.Any(), 10);
+                }
+                else
+                {
+                    Assert.Empty(handler.Timeseries);
+                }
+                Assert.False(runTask.IsFaulted);
+                source.Cancel();
+
+                try
+                {
+                    await runTask;
+                }
+                catch (Exception ex)
+                {
+                    CommonTestUtils.TestRunResult(ex);
+                }
+            }
+        }
+        [Fact]
+        public async Task TestEmptyRuntime()
+        {
+            var services = new ServiceCollection();
+            var config = services.AddConfig<FullConfig>("config.test.yml", 1);
+            config.Source.EndpointUrl = "opc.tcp://localhost:62100";
+            config.Cognite = null;
+            config.Influx = null;
+            config.Mqtt = null;
+            var provider = services.BuildServiceProvider();
+
+            var runtime = new ExtractorRuntime(config, provider);
+
+            using (var source = new CancellationTokenSource())
+            {
+                var runTask = runtime.Run(source.Token);
+
+                await Task.Delay(2000);
+                Assert.False(runTask.IsFaulted);
+                source.Cancel();
+
+                try
+                {
+                    await runTask;
+                }
+                catch (Exception ex)
+                {
+                    CommonTestUtils.TestRunResult(ex);
+                }
+            }
+        }
     }
 }
