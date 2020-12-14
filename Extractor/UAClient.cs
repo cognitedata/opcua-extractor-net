@@ -184,7 +184,7 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException ex)
             {
-                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.SelectEndpoint);
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
             }
             var endpointConfiguration = EndpointConfiguration.Create(Appconfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
@@ -207,7 +207,7 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException ex)
             {
-                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateSession);
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
             }
 
 
@@ -371,7 +371,7 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException ex)
             {
-                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadRootNode);
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadRootNode);
             }
             var refd = new ReferenceDescription();
             refd.NodeId = results[0].GetValue(NodeId.Null);
@@ -479,7 +479,7 @@ namespace Cognite.OpcUa
                 }
                 catch (ServiceResultException ex)
                 {
-                    throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.Browse);
+                    throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.Browse);
                 }
 
                 var indexMap = new NodeId[parents.Count()];
@@ -512,7 +512,7 @@ namespace Cognite.OpcUa
                     }
                     catch (ServiceResultException ex)
                     {
-                        throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.BrowseNext);
+                        throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
                     }
 
                     int nindex = 0;
@@ -676,7 +676,7 @@ namespace Cognite.OpcUa
                 attributeRequestFailures.Inc();
                 if (ex is ServiceResultException serviceEx)
                 {
-                    throw ExtractorUtils.HandleServiceResult(serviceEx, ExtractorUtils.SourceOp.ReadAttributes);
+                    throw ExtractorUtils.HandleServiceResult(log, serviceEx, ExtractorUtils.SourceOp.ReadAttributes);
                 }
                 throw;
             }
@@ -768,7 +768,7 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException ex)
             {
-                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadAttributes);
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
             int total = values.Count();
             int expected = nodes.Aggregate(0, (seed, node) =>
@@ -867,7 +867,7 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException ex)
             {
-                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadAttributes);
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
 
             var enumerator = values.GetEnumerator();
@@ -1035,7 +1035,7 @@ namespace Cognite.OpcUa
             catch (ServiceResultException ex)
             {
                 historyReadFailures.Inc();
-                throw ExtractorUtils.HandleServiceResult(ex, readParams.Details is ReadEventDetails
+                throw ExtractorUtils.HandleServiceResult(log, ex, readParams.Details is ReadEventDetails
                     ? ExtractorUtils.SourceOp.HistoryReadEvents
                     : ExtractorUtils.SourceOp.HistoryRead);
             }
@@ -1105,7 +1105,7 @@ namespace Cognite.OpcUa
                             }
                             catch (ServiceResultException ex)
                             {
-                                throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
+                                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
                             }
                         }
                         else if (lcount > 0)
@@ -1117,7 +1117,7 @@ namespace Cognite.OpcUa
                             }
                             catch (ServiceResultException ex)
                             {
-                                throw ExtractorUtils.HandleServiceResult(ex,
+                                throw ExtractorUtils.HandleServiceResult(log, ex,
                                     ExtractorUtils.SourceOp.CreateSubscription);
                             }
                         }

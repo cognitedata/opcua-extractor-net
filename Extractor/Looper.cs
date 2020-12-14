@@ -148,14 +148,14 @@ namespace Cognite.OpcUa
                     var terminated = await Task.WhenAny(tasks);
                     if (terminated.IsFaulted)
                     {
-                        ExtractorUtils.LogException(terminated.Exception,
+                        ExtractorUtils.LogException(log, terminated.Exception,
                             "Unexpected error in main task list",
                             "Handled error in main task list");
                     }
                 }
                 catch (Exception ex)
                 {
-                    ExtractorUtils.LogException(ex, "Unexpected error in main task list", "Handled error in main task list");
+                    ExtractorUtils.LogException(log, ex, "Unexpected error in main task list", "Handled error in main task list");
                 }
                 failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
 

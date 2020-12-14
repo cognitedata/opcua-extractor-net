@@ -20,13 +20,12 @@ using System;
 using System.Collections.Generic;
 using Opc.Ua;
 using System.Text;
+using System.Linq;
 
 namespace Cognite.OpcUa
 {
     public static class ExtractorUtils
     {
-        private static readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorUtils));
-
         /// <summary>
         /// Divide a list of BufferedNodes into lists of nodes mapped to destination context objects and
         /// data variables respectively.
@@ -36,6 +35,8 @@ namespace Cognite.OpcUa
         public static (IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> variables) SortNodes(IEnumerable<BufferedNode> nodes)
         {
             if (nodes == null) throw new ArgumentNullException(nameof(nodes));
+            if (!nodes.Any()) return (Enumerable.Empty<BufferedNode>(), Enumerable.Empty<BufferedVariable>());
+
             var timeseries = new List<BufferedVariable>();
             var objects = new List<BufferedNode>();
             foreach (var node in nodes)
@@ -92,8 +93,9 @@ namespace Cognite.OpcUa
         /// <param name="e">Exception to log</param>
         /// <param name="message">Message to give with normal exceptions</param>
         /// <param name="silentMessage">Message to give with silent exceptions</param>
-        public static void LogException(Exception e, string message, string silentMessage)
+        public static void LogException(ILogger log, Exception e, string message, string silentMessage)
         {
+            if (log == null) throw new ArgumentNullException(nameof(log));
             if (e is AggregateException aex)
             {
                 var silent = GetRootExceptionOfType<SilentServiceException>(aex);
@@ -110,7 +112,7 @@ namespace Cognite.OpcUa
                     log.Debug(failure, message);
                     return;
                 }
-                log.Error(e, message + " - {msg}", aex?.InnerException.Message ?? aex.Message);
+                log.Error(e, message + " - {msg}", aex?.InnerException?.Message ?? aex.Message);
             } 
             else if (e is SilentServiceException silent)
             {
@@ -133,9 +135,10 @@ namespace Cognite.OpcUa
         /// <param name="ex">Exception to transform</param>
         /// <param name="op">Source operation, for logging</param>
         /// <returns>Transformed exception if recognized, otherwise the given exception</returns>
-        public static Exception HandleServiceResult(ServiceResultException ex, SourceOp op)
+        public static Exception HandleServiceResult(ILogger log, ServiceResultException ex, SourceOp op)
         {
             if (ex == null) throw new ArgumentNullException(nameof(ex));
+            if (log == null) throw new ArgumentNullException(nameof(log));
             uint code = ex.StatusCode;
             string symId = StatusCode.LookupSymbolicId(code);
             switch (code)
@@ -324,7 +327,7 @@ namespace Cognite.OpcUa
                                     return new SilentServiceException("HistoryRead operation unspported", ex, op);
                             }
 
-                            break;
+                            goto case SourceOp.DefaultOperation;
                         case SourceOp.HistoryReadEvents:
                             switch (code)
                             {

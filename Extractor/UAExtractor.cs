@@ -197,7 +197,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception ex)
                 {
-                    ExtractorUtils.LogException(ex, "Unexpected error starting UAClient",
+                    ExtractorUtils.LogException(log, ex, "Unexpected error starting UAClient",
                         "Handled service result exception on starting UAClient");
                     throw;
                 }
@@ -230,7 +230,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                ExtractorUtils.LogException(ex, "Unexpected error in MapUAToDestinations", 
+                ExtractorUtils.LogException(log, ex, "Unexpected error in MapUAToDestinations", 
                     "Handled service result exception in MapUAToDestinations");
                 throw;
             }
@@ -327,8 +327,8 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException e)
             {
-                ExtractorUtils.LogException(
-                    ExtractorUtils.HandleServiceResult(e, ExtractorUtils.SourceOp.CloseSession),
+                ExtractorUtils.LogException(log,
+                    ExtractorUtils.HandleServiceResult(log, e, ExtractorUtils.SourceOp.CloseSession),
                     "",
                     "");
             }
