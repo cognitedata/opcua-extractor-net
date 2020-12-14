@@ -327,7 +327,7 @@ namespace Cognite.OpcUa
                                     return new SilentServiceException("HistoryRead operation unspported", ex, op);
                             }
 
-                            goto case SourceOp.DefaultOperation;
+                            break;
                         case SourceOp.HistoryReadEvents:
                             switch (code)
                             {

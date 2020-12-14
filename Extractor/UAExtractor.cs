@@ -220,7 +220,16 @@ namespace Cognite.OpcUa
             }
 
             log.Debug("Begin mapping directory");
-            await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, source.Token);
+            try
+            {
+                await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, source.Token);
+            }
+            catch (Exception ex)
+            {
+                ExtractorUtils.LogException(log, ex, "Unexpected error browsing node hierarchy",
+                    "Handled service result exception browsing node hierarchy");
+                throw;
+            }
             log.Debug("End mapping directory");
 
             IEnumerable<Task> synchTasks;

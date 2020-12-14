@@ -135,9 +135,9 @@ namespace Test.Unit
         [InlineData(StatusCodes.BadTooManyOperations, SourceOp.HistoryRead, 2, true)]
         [InlineData(StatusCodes.BadHistoryOperationUnsupported, SourceOp.HistoryRead, 3, true)]
         [InlineData(StatusCodes.BadFilterNotAllowed, SourceOp.HistoryReadEvents, 2, true)]
-        [InlineData(StatusCodes.BadServiceUnsupported, SourceOp.HistoryReadEvents, 2, true)]
-        [InlineData(StatusCodes.BadNoContinuationPoints, SourceOp.HistoryReadEvents, 2, true)]
-        [InlineData(StatusCodes.BadTooManyOperations, SourceOp.HistoryReadEvents, 2, true)]
+        [InlineData(StatusCodes.BadServiceUnsupported, SourceOp.CreateMonitoredItems, 2, true)]
+        [InlineData(StatusCodes.BadNoContinuationPoints, SourceOp.CreateMonitoredItems, 2, true)]
+        [InlineData(StatusCodes.BadTooManyOperations, SourceOp.CreateMonitoredItems, 2, true)]
         [InlineData(StatusCodes.BadTooManyOperations, SourceOp.CloseSession, 1, true)]
         public void TestHandleServiceException(uint code, SourceOp sourceOp, int errC, bool isSilent)
         {
