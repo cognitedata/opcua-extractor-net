@@ -1,4 +1,5 @@
 ﻿using Cognite.OpcUa;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using Opc.Ua.Client;
 using System;

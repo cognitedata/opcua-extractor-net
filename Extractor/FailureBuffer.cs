@@ -31,7 +31,7 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Utility for various ways of storing datapoints and events if the connection to a destination goes down.
     /// </summary>
-    public sealed class FailureBuffer : IDisposable
+    public sealed class FailureBuffer
     {
         private readonly InfluxPusher influxPusher;
         private readonly FailureBufferConfig config;
@@ -41,7 +41,7 @@ namespace Cognite.OpcUa
         private readonly Dictionary<string, InfluxBufferState> nodeBufferStates;
         private readonly Dictionary<string, InfluxBufferState> eventBufferStates;
 
-        public bool Any => anyPoints || fileAnyPoints;
+        public bool AnyPoints => anyPoints || fileAnyPoints;
         private bool fileAnyPoints;
         private bool anyPoints;
         public bool AnyEvents => anyEvents || fileAnyEvents;
@@ -97,6 +97,36 @@ namespace Cognite.OpcUa
             nodeBufferStates = new Dictionary<string, InfluxBufferState>();
             eventBufferStates = new Dictionary<string, InfluxBufferState>();
         }
+
+        private async Task<bool> RestoreStates(
+            IEnumerable<UAHistoryExtractionState> states,
+            string store,
+            Dictionary<string, InfluxBufferState> map,
+            CancellationToken token)
+        {
+            if (!states.Any()) return false;
+            var influxStates = states
+                .Where(state => !state.FrontfillEnabled)
+                .Select(state => new InfluxBufferState(state))
+                .ToList();
+
+            await extractor.StateStorage.RestoreExtractionState(
+                influxStates.ToDictionary(state => state.Id),
+                store,
+                false,
+                token);
+
+            bool any = false;
+
+            foreach (var state in influxStates)
+            {
+                if (state.DestinationExtractedRange == TimeRange.Empty) continue;
+                map[state.Id] = state;
+                any |= state.DestinationExtractedRange.First <= state.DestinationExtractedRange.Last;
+            }
+            return any;
+        }
+
         /// <summary>
         /// Load buffer states from state storage if influxdb buffering and state storage is enabled.
         /// </summary>
@@ -106,57 +136,53 @@ namespace Cognite.OpcUa
             IEnumerable<EventExtractionState> evtStates, CancellationToken token)
         {
             if (!config.Influx || influxPusher == null || !config.InfluxStateStore) return;
-            var variableStates = states
-                .Where(state => !state.FrontfillEnabled)
-                .Select(state => new InfluxBufferState(state))
-                .ToList();
 
-            await extractor.StateStorage.RestoreExtractionState(
-                variableStates.ToDictionary(state => state.Id),
-                fullConfig.StateStorage.InfluxVariableStore,
-                false,
-                token);
+            var results = await Task.WhenAll(
+                RestoreStates(states, fullConfig.StateStorage.InfluxVariableStore, nodeBufferStates, token),
+                RestoreStates(evtStates, fullConfig.StateStorage.InfluxEventStore, eventBufferStates, token)
+            );
 
-            foreach (var state in variableStates)
-            {
-                if (state.DestinationExtractedRange == TimeRange.Empty) continue;
-                nodeBufferStates[state.Id] = state;
-                if (state.DestinationExtractedRange.First <= state.DestinationExtractedRange.Last)
-                {
-                    anyPoints = true;
-                }
-            }
-
-            var eventStates = evtStates.Select(state => new InfluxBufferState(state)).ToList();
-
-            await extractor.StateStorage.RestoreExtractionState(
-                eventStates.ToDictionary(state => state.Id),
-                fullConfig.StateStorage.InfluxEventStore,
-                false,
-                token);
-
-            foreach (var state in eventStates)
-            {
-                if (state.DestinationExtractedRange == TimeRange.Empty) continue;
-                eventBufferStates[state.Id] = state;
-                if (state.DestinationExtractedRange.First < state.DestinationExtractedRange.Last)
-                {
-                    anyEvents = true;
-                }
-            }
+            anyPoints |= results[0];
+            anyEvents |= results[1];
         }
+
+        private async Task WriteDatapointsInflux(IDictionary<string, TimeRange> pointRanges, CancellationToken token)
+        {
+            if (influxPusher.DataFailing)
+            {
+                log.Warning("Influx pusher is failing, datapoints will not be buffered in influxdb");
+                return;
+            }
+
+            foreach ((string key, var value) in pointRanges)
+            {
+                if (!nodeBufferStates.TryGetValue(key, out var bufferState))
+                {
+                    var state = extractor.State.GetNodeState(key);
+                    if (state.FrontfillEnabled) continue;
+                    nodeBufferStates[key] = bufferState = new InfluxBufferState(state);
+                }
+                bufferState.UpdateDestinationRange(value.First, value.Last);
+            }
+            if (config.InfluxStateStore)
+            {
+                log.Information("Try to write {cnt} states to state store", nodeBufferStates.Count);
+                await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
+                    fullConfig.StateStorage.InfluxVariableStore, token).ConfigureAwait(false);
+            }
+
+            anyPoints = true;
+        }
+
         /// <summary>
         /// Write datapoints to enabled buffer locations.
         /// </summary>
         /// <param name="points">Datapoints to write</param>
         /// <param name="pointRanges">Ranges for given data variables, to simplify storage and state</param>
-        /// <param name="pushers">Active pushers</param>
         /// <returns>True on success</returns>
-        public async Task<bool> WriteDatapoints(IEnumerable<BufferedDataPoint> points, IDictionary<string, TimeRange> pointRanges,
-            IEnumerable<IPusher> pushers, CancellationToken token)
+        public async Task<bool> WriteDatapoints(IEnumerable<BufferedDataPoint> points, IDictionary<string, TimeRange> pointRanges, CancellationToken token)
         {
-            if (points == null || !points.Any() || pushers == null || !pushers.Any() || pointRanges == null
-                || !pointRanges.Any()) return true;
+            if (points == null || !points.Any() || pointRanges == null || !pointRanges.Any()) return true;
 
             points = points.GroupBy(pt => pt.Id)
                 .Where(group => !extractor.State.GetNodeState(group.Key).FrontfillEnabled)
@@ -167,58 +193,26 @@ namespace Cognite.OpcUa
 
             log.Information("Push {cnt} points to failurebuffer", points.Count());
 
-            bool success = true;
-
             if (config.Influx && influxPusher != null)
             {
-                try
-                {
-                    if (success && !influxPusher.DataFailing)
-                    {
-                        bool any = false;
-                        foreach ((string key, var value) in pointRanges)
-                        {
-                            if (!nodeBufferStates.TryGetValue(key, out var bufferState))
-                            {
-                                var state = extractor.State.GetNodeState(key);
-                                if (state.FrontfillEnabled) continue;
-                                nodeBufferStates[key] = bufferState = new InfluxBufferState(state);
-                                bufferState.InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
-                            }
-                            bufferState.UpdateDestinationRange(value.First, value.Last);
-                            any |= value.First <= value.Last;
-                        }
-                        if (config.InfluxStateStore)
-                        {
-                            await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
-                                fullConfig.StateStorage.InfluxVariableStore, token).ConfigureAwait(false);
-                        }
-
-                        anyPoints |= any;
-                    }
-                }
-                catch (Exception e)
-                {
-                    success = false;
-                    log.Error(e, "Failed to insert into influxdb buffer");
-                }
+                await WriteDatapointsInflux(pointRanges, token);
             }
 
             if (!string.IsNullOrEmpty(config.DatapointPath))
             {
                 try
                 {
-                    await Task.Run(() => WriteDatapointsToFile(config.DatapointPath, points, token), CancellationToken.None);
+                    await Task.Run(() => WriteDatapointsToFile(points, token), CancellationToken.None);
                     fileAnyPoints |= points.Any();
                 }
                 catch (Exception ex)
                 {
                     log.Error(ex, "Failed to write datapoints to file");
-                    success = false;
+                    return false;
                 }
             }
 
-            return success;
+            return true;
         }
         /// <summary>
         /// Read datapoints from storage locations into given list of pushers
@@ -230,41 +224,31 @@ namespace Cognite.OpcUa
             if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
-            if (config.Influx && influxPusher != null)
+            if (config.Influx && influxPusher != null && nodeBufferStates.Any())
             {
-                var activeStates = nodeBufferStates.Where(kvp =>
-                        !kvp.Value.Historizing
-                        && kvp.Value.DestinationExtractedRange.First >= kvp.Value.DestinationExtractedRange.Last)
-                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-
-                if (activeStates.Any())
+                try
                 {
-                    try
+                    var dps = await influxPusher.ReadDataPoints(nodeBufferStates, token);
+                    log.Information("Read {cnt} points from influxdb failure buffer", dps.Count());
+                    var result = await Task.WhenAll(pushers
+                        .Where(pusher => !(pusher is InfluxPusher))
+                        .Select(pusher => pusher.PushDataPoints(dps, token)));
+
+                    if (result.All(res => res ?? true))
                     {
-                        var dps = await influxPusher.ReadDataPoints(activeStates, token);
-                        log.Information("Read {cnt} points from influxdb failure buffer", dps.Count());
-                        await Task.WhenAll(pushers
-                            .Where(pusher => !(pusher is InfluxPusher))
-                            .Select(pusher => pusher.PushDataPoints(dps, token)));
-
-                        foreach (var state in activeStates)
-                        {
-                            state.Value.ClearRanges();
-                        }
-
                         if (config.InfluxStateStore)
                         {
-                            await extractor.StateStorage.StoreExtractionState(activeStates.Values,
-                                fullConfig.StateStorage.InfluxVariableStore, token).ConfigureAwait(false);
+                            await extractor.StateStorage.DeleteExtractionState(nodeBufferStates.Values,
+                                fullConfig.StateStorage.InfluxVariableStore, token);
                         }
-
+                        nodeBufferStates.Clear();
                         anyPoints = false;
                     }
-                    catch (Exception e)
-                    {
-                        success = false;
-                        log.Error(e, "Failed to read points from influxdb");
-                    }
+                }
+                catch (Exception e)
+                {
+                    success = false;
+                    log.Error(e, "Failed to read points from influxdb");
                 }
             }
 
@@ -275,17 +259,45 @@ namespace Cognite.OpcUa
 
             return success;
         }
+
+        private async Task WriteEventsInflux(IEnumerable<BufferedEvent> events, CancellationToken token)
+        {
+            if (influxPusher.EventsFailing)
+            {
+                log.Warning("Influx pusher is failing, events will not be buffered in influxdb");
+                return;
+            }
+
+            var ranges = events
+                .GroupBy(evt => evt.EmittingNode)
+                .Select(group => (Id: extractor.GetUniqueId(group.Key), Range: group.MinMax(evt => evt.Time)));
+
+            foreach (var group in ranges)
+            {
+                if (!eventBufferStates.TryGetValue(group.Id, out var bufferState))
+                {
+                    eventBufferStates[group.Id] = bufferState = new InfluxBufferState(extractor.State.GetEmitterState(group.Id));
+                }
+                bufferState.UpdateDestinationRange(group.Range.Min, group.Range.Max);
+            }
+
+            if (config.InfluxStateStore)
+            {
+                await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
+                    fullConfig.StateStorage.InfluxEventStore, token);
+            }
+            anyEvents = true;
+        }
+
+
         /// <summary>
         /// Write events to storage locations
         /// </summary>
         /// <param name="events">Events to write</param>
-        /// <param name="pushers">Active pushers</param>
         /// <returns>True on success</returns>
-        public async Task<bool> WriteEvents(IEnumerable<BufferedEvent> events,
-            IEnumerable<IPusher> pushers,
-            CancellationToken token)
+        public async Task<bool> WriteEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
         {
-            if (events == null || !events.Any() || pushers == null || !pushers.Any()) return true;
+            if (events == null || !events.Any()) return true;
 
             events = events.GroupBy(evt => evt.EmittingNode)
                 .Where(group => !extractor.State.GetEmitterState(group.Key).FrontfillEnabled)
@@ -296,67 +308,26 @@ namespace Cognite.OpcUa
 
             log.Information("Push {cnt} events to failurebuffer", events.Count());
 
-            bool success = true;
-
             if (config.Influx)
             {
-                if (!influxPusher.EventsFailing)
-                {
-                    var eventRanges = new Dictionary<string, TimeRange>();
-                    bool any = false;
-                    foreach (var evt in events)
-                    {
-                        var emitterId = extractor.GetUniqueId(evt.EmittingNode);
-                        any = true;
-                        if (!eventRanges.TryGetValue(emitterId, out var range))
-                        {
-                            eventRanges[emitterId] = new TimeRange(evt.Time, evt.Time);
-                            continue;
-                        }
-                        eventRanges[emitterId] = range.Extend(evt.Time, evt.Time);
-                    }
-
-                    foreach ((string emitterId, var range) in eventRanges)
-                    {
-                        if (!eventBufferStates.TryGetValue(emitterId, out var bufferState))
-                        {
-                            eventBufferStates[emitterId] = bufferState = new InfluxBufferState(extractor.State.GetEmitterState(emitterId));
-                            bufferState.InitExtractedRange(TimeRange.Empty.First, TimeRange.Empty.Last);
-                        }
-                        bufferState.UpdateDestinationRange(range.First, range.Last);
-                    }
-
-                    if (config.InfluxStateStore)
-                    {
-                        await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
-                            fullConfig.StateStorage.InfluxEventStore, token).ConfigureAwait(false);
-                    }
-                    if (any)
-                    {
-                        anyEvents = true;
-                    }
-                }
-                else
-                {
-                    log.Warning("Influxpusher is failing, events will not be buffered in influxdb");
-                }
+                await WriteEventsInflux(events, token);
             }
 
             if (!string.IsNullOrEmpty(config.EventPath))
             {
                 try
                 {
-                    await Task.Run(() => WriteEventsToFile(config.EventPath, events, extractor, token), CancellationToken.None);
+                    await Task.Run(() => WriteEventsToFile(events, token), CancellationToken.None);
                     fileAnyEvents |= events.Any();
                 }
                 catch (Exception ex)
                 {
                     log.Error(ex, "Failed to write events to file");
-                    success = false;
+                    return false;
                 }
             }
 
-            return success;
+            return true;
         }
         /// <summary>
         /// Read events from storage locations into given list of pushers
@@ -368,40 +339,33 @@ namespace Cognite.OpcUa
             if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
-            if (config.Influx && influxPusher != null)
+            if (config.Influx && influxPusher != null && eventBufferStates.Any())
             {
-                var activeStates = eventBufferStates.Where(kvp =>
-                        !kvp.Value.Historizing
-                        && kvp.Value.DestinationExtractedRange.First <= kvp.Value.DestinationExtractedRange.Last)
-                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                if (activeStates.Any())
+                try
                 {
-                    try
+                    var events = await influxPusher.ReadEvents(eventBufferStates, token);
+
+                    log.Information("Read {cnt} events from influxdb failure buffer", events.Count());
+                    var result = await Task.WhenAll(pushers
+                        .Where(pusher => !(pusher is InfluxPusher))
+                        .Select(pusher => pusher.PushEvents(events, token)));
+
+                    if (result.All(res => res ?? true))
                     {
-                        var events = await influxPusher.ReadEvents(activeStates, token);
-
-                        log.Information("Read {cnt} events from influxdb failure buffer", events.Count());
-                        await Task.WhenAll(pushers
-                            .Where(pusher => !(pusher is InfluxPusher))
-                            .Select(pusher => pusher.PushEvents(events, token)));
-
-                        foreach (var state in activeStates)
-                        {
-                            state.Value.ClearRanges();
-                        }
-
                         if (config.InfluxStateStore)
                         {
-                            await extractor.StateStorage.StoreExtractionState(activeStates.Values,
-                                fullConfig.StateStorage.InfluxEventStore, token).ConfigureAwait(false);
+                            await extractor.StateStorage.DeleteExtractionState(eventBufferStates.Values,
+                                fullConfig.StateStorage.InfluxEventStore, token);
                         }
+                        eventBufferStates.Clear();
                         anyEvents = false;
                     }
-                    catch (Exception e)
-                    {
-                        success = false;
-                        log.Error(e, "Failed to read events from influxdb");
-                    }
+
+                }
+                catch (Exception e)
+                {
+                    success = false;
+                    log.Error(e, "Failed to read events from influxdb");
                 }
             }
 
@@ -420,67 +384,57 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         private async Task<bool> ReadDatapointsFromFile(IEnumerable<IPusher> pushers, CancellationToken token)
         {
-            bool success = true;
             bool final = false;
 
-            using (var stream = new FileStream(config.DatapointPath, FileMode.OpenOrCreate, FileAccess.Read))
+            try
             {
+                using var stream = new FileStream(config.DatapointPath, FileMode.OpenOrCreate, FileAccess.Read);
                 do
                 {
-                    try
+                    var points = new List<BufferedDataPoint>();
+
+                    int count = 0;
+                    while (!token.IsCancellationRequested && count < 1_000_000)
                     {
-                        var points = new List<BufferedDataPoint>();
-
-                        int count = 0;
-                        while (!token.IsCancellationRequested && count < 1_000_000)
+                        var dp = BufferedDataPoint.FromStream(stream);
+                        if (dp == null)
                         {
-                            var dp = BufferedDataPoint.FromStream(stream);
-                            if (dp == null)
-                            {
-                                final = true;
-                                break;
-                            }
-                            points.Add(dp);
+                            final = true;
+                            break;
                         }
-                        log.Information("Read {cnt} datapoints from file", points.Count);
-                        if (!points.Any()) break;
-
-                        var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(points, token)));
-
-                        success &= results.All(result => result ?? true);
-                        if (!success) break;
-
-                        var ranges = new Dictionary<string, TimeRange>();
-
-                        foreach (var point in points)
-                        {
-                            if (!ranges.TryGetValue(point.Id, out var range))
-                            {
-                                ranges[point.Id] = new TimeRange(point.Timestamp, point.Timestamp);
-                                continue;
-                            }
-
-                            ranges[point.Id] = range.Extend(point.Timestamp, point.Timestamp);
-                        }
-
-                        foreach (var kvp in ranges)
-                        {
-                            var state = extractor.State.GetNodeState(kvp.Key);
-                            state.UpdateDestinationRange(kvp.Value.First, kvp.Value.Last);
-                        }
+                        points.Add(dp);
                     }
-                    catch (Exception ex)
+                    points = points
+                        .GroupBy(point => point.Id)
+                        .Where(group => extractor.State.GetNodeState(group.Key) != null)
+                        .SelectMany(group => group).ToList();
+
+                    log.Information("Read {cnt} datapoints from file", points.Count);
+                    if (!points.Any() && final) break;
+
+                    var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushDataPoints(points, token)));
+
+                    if (!results.All(result => result ?? true)) return false;
+
+                    var ranges = points
+                        .GroupBy(point => point.Id)
+                        .Select(group => (Id: group.Key, Range: group.MinMax(pt => pt.Timestamp)));
+
+                    foreach (var group in ranges)
                     {
-                        log.Error(ex, "Failed to read datapoints from file");
-                        success = false;
-                        break;
+                        var state = extractor.State.GetNodeState(group.Id);
+                        state.UpdateDestinationRange(group.Range.Min, group.Range.Max);
                     }
+
                 } while (!final && !token.IsCancellationRequested);
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex, "Failed to read datapoints from file");
+                return false;
             }
 
             if (token.IsCancellationRequested) return true;
-
-            if (!success) return false;
 
             log.Information("Wipe datapoint buffer file");
             File.Create(config.DatapointPath).Close();
@@ -496,66 +450,66 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         private async Task<bool> ReadEventsFromFile(IEnumerable<IPusher> pushers, CancellationToken token)
         {
-            bool success = true;
             bool final = false;
 
-            using (var stream = new FileStream(config.EventPath, FileMode.OpenOrCreate, FileAccess.Read))
+            try
             {
+                using var stream = new FileStream(config.EventPath, FileMode.OpenOrCreate, FileAccess.Read);
                 do
                 {
-                    try
+                    var events = new List<BufferedEvent>();
+
+                    int count = 0;
+                    while (!token.IsCancellationRequested && count < 10_000)
                     {
-                        var events = new List<BufferedEvent>();
-
-                        int count = 0;
-                        while (!token.IsCancellationRequested && count < 10_000)
+                        var evt = BufferedEvent.FromStream(stream, extractor);
+                        if (evt == null)
                         {
-                            var evt = BufferedEvent.FromStream(stream, extractor);
-                            if (evt == null)
-                            {
-                                final = true;
-                                break;
-                            }
-                            events.Add(evt);
+                            final = true;
+                            break;
                         }
-                        log.Information("Read {cnt} events from file", events.Count);
-
-                        var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
-
-                        success &= results.All(result => result ?? true);
-                        if (!success) break;
-
-                        var ranges = new Dictionary<NodeId, TimeRange>();
-
-                        foreach (var evt in events)
-                        {
-                            if (!ranges.TryGetValue(evt.EmittingNode, out var range))
-                            {
-                                ranges[evt.EmittingNode] = new TimeRange(evt.Time, evt.Time);
-                                continue;
-                            }
-
-                            ranges[evt.EmittingNode] = range.Extend(evt.Time, evt.Time);
-                        }
-
-                        foreach (var kvp in ranges)
-                        {
-                            var state = extractor.State.GetEmitterState(kvp.Key);
-                            state.UpdateDestinationRange(kvp.Value.First, kvp.Value.Last);
-                        }
+                        events.Add(evt);
                     }
-                    catch (Exception ex)
+
+                    log.Information("Read {cnt} raw events", events.Count);
+
+                    foreach (var group in events.GroupBy(evt => evt.EmittingNode))
                     {
-                        log.Error(ex, "Failed to read events from file");
-                        success = false;
-                        break;
+                        log.Information("Group: {key}, {state}", group.Key, extractor.State.GetEmitterState(group.Key));
                     }
+
+                    events = events
+                        .GroupBy(evt => evt.EmittingNode)
+                        .Where(group => extractor.State.GetEmitterState(group.Key) != null)
+                        .SelectMany(group => group).ToList();
+
+                    log.Information("Read {cnt} events from file", events.Count);
+                    if (!events.Any() && final) break;
+
+                    var results = await Task.WhenAll(pushers.Select(pusher => pusher.PushEvents(events, token)));
+
+                    if (!results.All(result => result ?? true)) return false;
+
+                    var ranges = events
+                        .GroupBy(evt => evt.EmittingNode)
+                        .Select(group => (Id: group.Key, Range: group.MinMax(evt => evt.Time)));
+
+                    foreach (var group in ranges)
+                    {
+                        var state = extractor.State.GetEmitterState(group.Id);
+                        state.UpdateDestinationRange(group.Range.Min, group.Range.Max);
+                    }
+
                 } while (!final && !token.IsCancellationRequested);
             }
+            catch (Exception ex)
+            {
+                log.Error(ex, "Failed to read events from file");
+                return false;
+            }
+
 
             if (token.IsCancellationRequested) return true;
-
-            if (!success) return false;
 
             log.Information("Wipe event buffer file");
             File.Create(config.EventPath).Close();
@@ -567,15 +521,13 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Write datapoints to a binary file
         /// </summary>
-        /// <param name="file">File to write to</param>
         /// <param name="dps">Datapoints to write</param>
-        public static void WriteDatapointsToFile(string file, IEnumerable<BufferedDataPoint> dps, CancellationToken token)
+        private void WriteDatapointsToFile(IEnumerable<BufferedDataPoint> dps, CancellationToken token)
         {
             if (dps == null) throw new ArgumentNullException(nameof(dps));
-            if (file == null) throw new ArgumentNullException(nameof(file));
             int count = 0;
 
-            using (var fs = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.None))
+            using (var fs = new FileStream(config.DatapointPath, FileMode.Append, FileAccess.Write, FileShare.None))
             {
                 foreach (var dp in dps)
                 {
@@ -596,16 +548,12 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Write events to a binary file
         /// </summary>
-        /// <param name="file">File to write to</param>
         /// <param name="evts">Events to write</param>
-        /// <param name="extractor">Extractor, used to map NodeIds</param>
-        public static void WriteEventsToFile(string file, IEnumerable<BufferedEvent> evts, UAExtractor extractor, CancellationToken token)
+        private void WriteEventsToFile(IEnumerable<BufferedEvent> evts, CancellationToken token)
         {
             if (evts == null) throw new ArgumentNullException(nameof(evts));
-            if (file == null) throw new ArgumentNullException(nameof(file));
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             int count = 0;
-            using (var fs = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.None))
+            using (var fs = new FileStream(config.EventPath, FileMode.Append, FileAccess.Write, FileShare.None))
             {
                 foreach (var evt in evts)
                 {
@@ -622,10 +570,6 @@ namespace Cognite.OpcUa
                 log.Debug("Write {cnt} events to file", count);
                 numEventsInBuffer.Inc();
             }
-        }
-        public void Dispose()
-        {
-            influxPusher?.Dispose();
         }
     }
 }

@@ -253,25 +253,26 @@ namespace Cognite.OpcUa
     public sealed class InfluxBufferState : BaseExtractionState
     {
         public InfluxBufferType Type { get; set; }
-        public bool Historizing { get; }
+        public NodeId SourceId { get; }
 
         public InfluxBufferState(BaseExtractionState other) : base(other?.Id)
         {
             if (other == null) throw new ArgumentNullException(nameof(other));
             DestinationExtractedRange = TimeRange.Empty;
-            if (other is EventExtractionState)
+            if (other is EventExtractionState eState)
             {
                 Type = InfluxBufferType.EventType;
+                SourceId = eState.SourceId;
             }
             else if (other is NodeExtractionState state)
             {
-                Historizing = state.FrontfillEnabled;
                 Type = state.DataType.IsString ? InfluxBufferType.StringType : InfluxBufferType.DoubleType;
+                SourceId = state.SourceId;
             }
             else if (other is InfluxBufferState iState)
             {
                 Type = iState.Type;
-                Historizing = iState.Historizing;
+                SourceId = iState.SourceId;
             }
         }
         /// <summary>

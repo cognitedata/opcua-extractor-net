@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
+using Cognite.OpcUa.TypeCollectors;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;

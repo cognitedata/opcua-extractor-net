@@ -362,8 +362,6 @@ namespace Cognite.OpcUa
         public byte[] ToStorableBytes()
         {
             var bytes = new List<byte>();
-            int pos = 0;
-            pos += sizeof(ushort);
             bytes.AddRange(CogniteUtils.StringToStorable(Id));
             bytes.AddRange(BitConverter.GetBytes(Timestamp.ToBinary()));
             bytes.AddRange(BitConverter.GetBytes(IsString));
@@ -489,12 +487,16 @@ namespace Cognite.OpcUa
             bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EmittingNode)));
             var metaDataBytes = new List<byte>();
             ushort count = 0;
-            foreach (var kvp in MetaData)
+            if (MetaData != null)
             {
-                count++;
-                metaDataBytes.AddRange(CogniteUtils.StringToStorable(kvp.Key));
-                metaDataBytes.AddRange(CogniteUtils.StringToStorable(extractor.ConvertToString(kvp.Value)));
+                foreach (var kvp in MetaData)
+                {
+                    count++;
+                    metaDataBytes.AddRange(CogniteUtils.StringToStorable(kvp.Key));
+                    metaDataBytes.AddRange(CogniteUtils.StringToStorable(extractor.ConvertToString(kvp.Value)));
+                }
             }
+
             bytes.AddRange(BitConverter.GetBytes(count));
             bytes.AddRange(metaDataBytes);
             return bytes.ToArray();
@@ -520,7 +522,6 @@ namespace Cognite.OpcUa
             evt.Time = DateTime.FromBinary(dt);
             var eventType = CogniteUtils.StringFromStream(stream);
             evt.EmittingNode = extractor.State.GetEmitterState(CogniteUtils.StringFromStream(stream))?.SourceId;
-            if (evt.EmittingNode == null) return null;
 
             if (stream.Read(buffer, 0, sizeof(ushort)) < sizeof(ushort)) return null;
             ushort count = BitConverter.ToUInt16(buffer, 0);

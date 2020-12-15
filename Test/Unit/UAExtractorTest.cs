@@ -38,8 +38,9 @@ namespace Test.Unit
 
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
+            Console.WriteLine($"Add logger: {Config.Logger}");
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{port}";
-            services.AddLogging();
+            services.AddLogger();
             LoggingUtils.Configure(Config.Logger);
             Provider = services.BuildServiceProvider();
 

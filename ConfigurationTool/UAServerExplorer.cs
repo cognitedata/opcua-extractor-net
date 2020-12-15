@@ -22,6 +22,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using Serilog;
 

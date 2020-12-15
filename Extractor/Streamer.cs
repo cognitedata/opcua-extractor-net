@@ -21,6 +21,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
@@ -148,7 +149,7 @@ namespace Cognite.OpcUa
                 }
                 if (config.FailureBuffer.Enabled)
                 {
-                    await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, failingPushers.Concat(failedPushers), token);
+                    await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, token);
                 }
 
                 return false;
@@ -176,7 +177,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (config.FailureBuffer.Enabled && extractor.FailureBuffer.Any)
+            if (config.FailureBuffer.Enabled && extractor.FailureBuffer.AnyPoints)
             {
                 await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
             }
@@ -244,7 +245,7 @@ namespace Cognite.OpcUa
 
                 if (config.FailureBuffer.Enabled)
                 {
-                    await extractor.FailureBuffer.WriteEvents(eventList, failedPushers.Concat(failingPushers), token);
+                    await extractor.FailureBuffer.WriteEvents(eventList, token);
                 }
 
                 return false;

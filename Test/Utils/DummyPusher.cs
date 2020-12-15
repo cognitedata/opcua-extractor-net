@@ -189,11 +189,13 @@ namespace Test.Utils
             if (events == null || !events.Any()) return Task.FromResult<bool?>(null);
             lock (eventLock)
             {
+                Console.WriteLine($"Push {events.Count()} events");
                 var groups = events.GroupBy(evt => evt.EmittingNode);
                 foreach (var group in groups)
                 {
                     if (!Events.TryGetValue(group.Key, out var stored))
                     {
+                        Console.WriteLine($"New group: {group.Key}");
                         Events[group.Key] = stored = new List<BufferedEvent>();
                     }
                     stored.AddRange(group);

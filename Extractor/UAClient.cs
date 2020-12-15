@@ -393,7 +393,7 @@ namespace Cognite.OpcUa
                 }
                 catch (ServiceResultException ex)
                 {
-                    throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadRootNode);
+                    throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadRootNode);
                 }
             }
 
