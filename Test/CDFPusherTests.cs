@@ -911,5 +911,44 @@ namespace Test
                 Assert.Equal(321, tester.Handler.Datapoints[enumId3 + "[2]"].NumericDatapoints.First().Value);
             }
         }
+        [Fact]
+        public async Task TestNodeTypeMapping()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ServerName = ServerName.Array,
+                StoreDatapoints = false,
+                QuitAfterMap = true
+            });
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+
+            await tester.ClearPersistentData();
+            await tester.StartServer();
+            tester.StartExtractor();
+
+            await tester.TerminateRunTask(false);
+
+            foreach (var asset in tester.Handler.Assets.Values)
+            {
+                Assert.NotNull(asset.metadata["TypeDefinition"]);
+            }
+            foreach (var ts in tester.Handler.Timeseries.Values)
+            {
+                Assert.NotNull(ts.metadata["TypeDefinition"]);
+            }
+            var root = tester.Handler.Assets["gp.tl:i=1"];
+            Assert.Equal("BaseObjectType", root.metadata["TypeDefinition"]);
+
+            var arrayRoot = tester.Handler.Assets["gp.tl:i=2"];
+            Assert.Equal("BaseDataVariableType", arrayRoot.metadata["TypeDefinition"]);
+
+            var arrayElem = tester.Handler.Timeseries["gp.tl:i=2[0]"];
+            Assert.Equal("BaseDataVariableType", arrayElem.metadata["TypeDefinition"]);
+
+            var someTs = tester.Handler.Timeseries["gp.tl:i=8"];
+            Assert.Equal("BaseDataVariableType", someTs.metadata["TypeDefinition"]);
+        }
     }
 }

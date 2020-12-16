@@ -503,6 +503,11 @@ extraction:
         # Does nothing if hierarchical is false.
         inverse-hierarchical: false
 
+    # Config related to mapping object- and variable types to destinations.
+    node-types:
+        # Add the TypeDefinition as a metadata field to all nodes 
+        metadata: false
+
 events:
     # Events are extracted with the following rules: By default all events are extracted.
     # Set all-events to false in order to disable extracting base OPC-UA events.

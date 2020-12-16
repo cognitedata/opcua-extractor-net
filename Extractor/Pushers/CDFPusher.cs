@@ -455,7 +455,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (existing.TryGetValue(kvp.Key, out var asset))
                 {
-                    var assetUpdate = PusherUtils.GetAssetUpdate(asset, kvp.Value, Extractor, update);
+                    var extras = Extractor.GetExtraMetadata(kvp.Value);
+                    var assetUpdate = PusherUtils.GetAssetUpdate(asset, kvp.Value, Extractor, update, extras);
 
                     if (assetUpdate == null) continue;
                     if (assetUpdate.ParentExternalId != null || assetUpdate.Description != null
@@ -606,8 +607,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (existing.TryGetValue(kvp.Key, out var ts))
                 {
-                    var tsUpdate = PusherUtils.GetTSUpdate(ts, kvp.Value, update, nodeToAssetIds,
-                        Extractor.DataTypeManager.GetAdditionalMetadata(kvp.Value));
+                    var tsUpdate = PusherUtils.GetTSUpdate(ts, kvp.Value, update, nodeToAssetIds, Extractor.GetExtraMetadata(kvp.Value));
                     if (tsUpdate == null) continue;
                     if (tsUpdate.AssetId != null || tsUpdate.Description != null
                         || tsUpdate.Name != null || tsUpdate.Metadata != null)

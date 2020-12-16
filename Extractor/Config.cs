@@ -75,6 +75,8 @@ namespace Cognite.OpcUa
         public string PropertyIdFilter { get; set; }
         public RelationshipConfig Relationships { get => relationships; set => relationships = value ?? relationships; }
         private RelationshipConfig relationships = new RelationshipConfig();
+        public NodeTypeConfig NodeTypes { get => nodeTypes; set => nodeTypes = value ?? nodeTypes; }
+        private NodeTypeConfig nodeTypes = new NodeTypeConfig();
     }
     public class DataTypeConfig
     {
@@ -94,6 +96,10 @@ namespace Cognite.OpcUa
         public bool Enabled { get; set; }
         public bool Hierarchical { get; set; }
         public bool InverseHierarchical { get; set; }
+    }
+    public class NodeTypeConfig
+    {
+        public bool Metadata { get; set; }
     }
 
     public class UpdateConfig

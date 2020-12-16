@@ -30,6 +30,7 @@ using Serilog;
 using Cognite.Extractor.Common;
 using System.Text;
 using System.Collections;
+using Cognite.OpcUa.TypeCollectors;
 
 namespace Cognite.OpcUa
 {
@@ -47,6 +48,7 @@ namespace Cognite.OpcUa
         private SessionReconnectHandler reconnectHandler;
         public UAExtractor Extractor { get; set; }
         public DataTypeManager DataTypeManager { get; }
+        public NodeTypeManager ObjectTypeManager { get; }
         private readonly object visitedNodesLock = new object();
         protected ISet<NodeId> VisitedNodes { get; }= new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
@@ -91,6 +93,7 @@ namespace Cognite.OpcUa
             if (config == null) throw new ArgumentNullException(nameof(config));
             this.config = config.Source;
             DataTypeManager = new DataTypeManager(this, config.Extraction.DataTypes);
+            ObjectTypeManager = new NodeTypeManager(this);
             extractionConfig = config.Extraction;
             eventConfig = config.Events;
             historyConfig = config.History;
@@ -384,6 +387,24 @@ namespace Cognite.OpcUa
             refd.BrowseName = results[1].GetValue(QualifiedName.Null);
             refd.DisplayName = results[2].GetValue(LocalizedText.Null);
             refd.NodeClass = (NodeClass)results[3].GetValue(0);
+
+            if (extractionConfig.NodeTypes.Metadata)
+            {
+                try
+                {
+                    Session.Browse(null, null, nodeId, 1, BrowseDirection.Forward, ReferenceTypeIds.HasTypeDefinition, false,
+                        (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType, out var _, out var references);
+                    if (references.Any())
+                    {
+                        refd.TypeDefinition = references.First().NodeId;
+                    }
+                }
+                catch (ServiceResultException ex)
+                {
+                    throw ExtractorUtils.HandleServiceResult(ex, ExtractorUtils.SourceOp.ReadRootNode);
+                }
+            }
+
             refd.ReferenceTypeId = null;
             refd.IsForward = true;
             return refd;
