@@ -15,6 +15,7 @@ using System.Runtime.InteropServices;
 using System.Linq;
 using System.Collections.Generic;
 using Opc.Ua;
+using Cognite.OpcUa.TypeCollectors;
 
 namespace Test.Unit
 {
