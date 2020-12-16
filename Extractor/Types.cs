@@ -23,6 +23,7 @@ using System.IO;
 using System.Linq;
 using Cognite.Extensions;
 using Cognite.Extractor.Utils;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using Serilog;
 
@@ -66,6 +67,10 @@ namespace Cognite.OpcUa
         /// </summary>
         public byte EventNotifier { get; set; }
         /// <summary>
+        /// OPC-UA node type
+        /// </summary>
+        public BufferedNodeType NodeType { get; set; }
+        /// <summary>
         /// Return a string description, for logging
         /// </summary>
         /// <returns>Descriptive string</returns>
@@ -107,7 +112,7 @@ namespace Cognite.OpcUa
             IsVariable = isVariable;
             ParentId = parentId;
         }
-        public int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata)
+        public int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             if (update == null || !update.AnyUpdate) return 0;
             int checksum = 0;
@@ -139,6 +144,10 @@ namespace Cognite.OpcUa
                         if (dataTypeMetadata && this is BufferedVariable variable)
                         {
                             metaHash = metaHash * 31 + variable.DataType.Raw.GetHashCode();
+                        }
+                        if (nodeTypeMetadata)
+                        {
+                            metaHash = metaHash * 31 + NodeType.Id.GetHashCode();
                         }
                     }
                     checksum = checksum * 31 + metaHash;
@@ -263,6 +272,7 @@ namespace Cognite.OpcUa
             DataType = other.DataType;
             ValueRank = other.ValueRank;
             ArrayDimensions = other.ArrayDimensions;
+            NodeType = other.NodeType;
         }
         /// <summary>
         /// Returns given variable if it is not null, otherwise throws an error.
