@@ -53,7 +53,7 @@ namespace Cognite.OpcUa.Pushers
         }
         public static Dictionary<string, string> PropertiesToMetadata(
             IEnumerable<BufferedVariable> properties,
-            Dictionary<string, string> extras = null)
+            Dictionary<string, string> extras)
         {
             if (properties == null && extras == null) return new Dictionary<string, string>();
 
@@ -120,7 +120,7 @@ namespace Cognite.OpcUa.Pushers
                 writePoco.ParentExternalId = extractor.GetUniqueId(node.ParentId);
             }
 
-            var extras = node is BufferedVariable variable ? extractor.DataTypeManager.GetAdditionalMetadata(variable) : null;
+            var extras = extractor.GetExtraMetadata(node);
             writePoco.Metadata = PropertiesToMetadata(node.Properties, extras);
             if (node.Properties != null && node.Properties.Any() && (metaMap?.Any() ?? false))
             {
@@ -297,7 +297,7 @@ namespace Cognite.OpcUa.Pushers
                 DataSetId = dataSetId
             };
 
-            var extra = extractor.DataTypeManager.GetAdditionalMetadata(variable);
+            var extra = extractor.GetExtraMetadata(variable);
             writePoco.Metadata = PropertiesToMetadata(variable.Properties, extra);
             if (variable.Properties != null && variable.Properties.Any() && (metaMap?.Any() ?? false))
             {
@@ -358,7 +358,7 @@ namespace Cognite.OpcUa.Pushers
                 writePoco.AssetId = parent;
             }
 
-            var extra = extractor.DataTypeManager.GetAdditionalMetadata(variable);
+            var extra = extractor.GetExtraMetadata(variable);
             writePoco.Metadata = PropertiesToMetadata(variable.Properties, extra);
 
             if (variable.Properties != null && variable.Properties.Any() && (metaMap?.Any() ?? false))
@@ -450,7 +450,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata)
             {
-                var extra = node is BufferedVariable variable ? extractor.DataTypeManager.GetAdditionalMetadata(variable) : null;
+                var extra = extractor.GetExtraMetadata(node);
                 var newMetaData = PropertiesToMetadata(node.Properties, extra);
                 if (raw.Columns.TryGetValue("metadata", out var rawMetaData))
                 {
@@ -597,7 +597,8 @@ namespace Cognite.OpcUa.Pushers
             Asset old,
             BufferedNode newAsset,
             UAExtractor extractor,
-            TypeUpdateConfig update)
+            TypeUpdateConfig update,
+            Dictionary<string, string> extra)
         {
             if (old == null || newAsset == null || extractor == null || update == null) return null;
             var assetUpdate = new AssetUpdate();
@@ -618,7 +619,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata && newAsset.Properties != null && newAsset.Properties.Any())
             {
-                var newMetaData = PropertiesToMetadata(newAsset.Properties)
+                var newMetaData = PropertiesToMetadata(newAsset.Properties, extra)
                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
                 if (old.Metadata == null

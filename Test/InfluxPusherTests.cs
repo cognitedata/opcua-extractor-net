@@ -144,13 +144,17 @@ namespace Test
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
 
-            var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.Config.Influx.Database, 
+            await CommonTestUtils.WaitForCondition(async () =>
+            {
+                var read = await tester.IfDbClient.QueryMultiSeriesAsync(tester.Config.Influx.Database,
                 "SELECT * FROM \"gp.tl:i=2\"");
+                if (read.Count < 1) return false;
 
-            Assert.True(read.Count > 0);
-            var readValues = read.First();
+                var readValues = read.First();
+                return readValues.Entries.Count == 6;
+            }, 5, "Expected values to arrive in influx");
+            
 
-            Assert.Equal(6, readValues.Entries.Count);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 0));
         }

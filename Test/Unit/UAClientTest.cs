@@ -19,7 +19,7 @@ using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Test
+namespace Test.Unit
 {
     public sealed class UAClientTestFixture : IDisposable
     {
@@ -127,8 +127,8 @@ namespace Test
             try
             {
                 using var process = CommonTestUtils.GetProxyProcess(62001, 62000);
-                await Task.Delay(500);
                 process.Start();
+                await Task.Delay(500);
                 await tester.Client.Run(tester.Source.Token);
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_connected", 1));
                 CommonTestUtils.StopProxyProcess();

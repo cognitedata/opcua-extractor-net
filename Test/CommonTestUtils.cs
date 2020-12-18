@@ -42,6 +42,7 @@ using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Utils;
 using File = System.IO.File;
 using Cognite.Extractor.Metrics;
+using System.Text;
 
 namespace Test
 {
@@ -488,6 +489,18 @@ namespace Test
             string assertion = "Expected condition to trigger")
         {
             await WaitForCondition(condition, seconds, () => assertion);
+        }
+        public static ProtoNodeId ToProtoNodeId(this NodeId id, UAClient client)
+        {
+            if (id == null || id.IsNullNodeId || client == null) return null;
+            var buffer = new StringBuilder();
+            NodeId.Format(buffer, id.Identifier, id.IdType, 0);
+            var ns = client.NamespaceTable.GetString(id.NamespaceIndex);
+            return new ProtoNodeId
+            {
+                NodeId = buffer.ToString(),
+                NamespaceUri = ns
+            };
         }
     }
     public enum ServerName { Basic, Full, Array, Events, Audit, Proxy, Wrong }
