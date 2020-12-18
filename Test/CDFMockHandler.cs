@@ -48,6 +48,7 @@ namespace Test
         public Dictionary<string, AssetDummy> AssetRaw { get; } = new Dictionary<string, AssetDummy>();
         public Dictionary<string, StatelessTimeseriesDummy> TimeseriesRaw { get; } = new Dictionary<string, StatelessTimeseriesDummy>();
         public Dictionary<string, RelationshipDummy> Relationships { get; } = new Dictionary<string, RelationshipDummy>();
+        public Dictionary<string, RelationshipDummy> RelationshipsRaw { get; } = new Dictionary<string, RelationshipDummy>();
 
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
@@ -174,6 +175,11 @@ namespace Test
                             res = req.Method == HttpMethod.Get
                                 ? HandleGetRawTimeseries()
                                 : HandleCreateRawTimeseries(content);
+                            break;
+                        case "/raw/dbs/metadata/tables/relationships/rows":
+                            res = req.Method == HttpMethod.Get
+                                ? HandleGetRawRelationships()
+                                : HandleCreateRawRelationships(content);
                             break;
                         case "/relationships":
                             res = HandleCreateRelationships(content);
@@ -644,6 +650,17 @@ namespace Test
                 Content = new StringContent(content)
             };
         }
+        private HttpResponseMessage HandleGetRawRelationships()
+        {
+            var data = new RawListWrapper<RelationshipDummy>();
+            data.items = RelationshipsRaw.Select(kvp => new RawWrapper<RelationshipDummy> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
+            var content = JsonConvert.SerializeObject(data);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(content)
+            };
+        }
+
         private HttpResponseMessage HandleCreateRawAssets(string content)
         {
             var toCreate = JsonConvert.DeserializeObject<RawListWrapper<AssetDummy>>(content);
@@ -659,11 +676,22 @@ namespace Test
         }
         private HttpResponseMessage HandleCreateRawTimeseries(string content)
         {
-            log.Information(content);
             var toCreate = JsonConvert.DeserializeObject<RawListWrapper<StatelessTimeseriesDummy>>(content);
             foreach (var item in toCreate.items)
             {
                 TimeseriesRaw[item.key] = item.columns;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}")
+            };
+        }
+        private HttpResponseMessage HandleCreateRawRelationships(string content)
+        {
+            var toCreate = JsonConvert.DeserializeObject<RawListWrapper<RelationshipDummy>>(content);
+            foreach (var item in toCreate.items)
+            {
+                RelationshipsRaw[item.key] = item.columns;
             }
             return new HttpResponseMessage(HttpStatusCode.OK)
             {

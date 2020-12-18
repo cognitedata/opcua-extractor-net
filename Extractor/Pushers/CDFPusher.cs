@@ -739,13 +739,23 @@ namespace Cognite.OpcUa.Pushers
         {
             var relationships = references
                 .Select(reference => PusherUtils.ReferenceToRelationship(reference, config.DataSetId, Extractor))
-                .DistinctBy(rel => rel.ExternalId)
-                .ChunkBy(1000);
+                .DistinctBy(rel => rel.ExternalId);
+
+            bool useRawRelationships = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.RelationshipsTable);
 
             log.Information("Test {cnt} relationships against CDF", references.Count());
             try
             {
-                await Task.WhenAll(relationships.Select(chunk => PushReferencesChunk(chunk, token)));
+                if (useRawRelationships)
+                {
+                    await PushRawReferences(relationships, token);
+                }   
+                else
+                {
+                    await Task.WhenAll(relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token)));
+                }
             }
             catch (Exception e)
             {
@@ -785,6 +795,21 @@ namespace Cognite.OpcUa.Pushers
                     throw;
                 }
             }
+        }
+        private async Task PushRawReferences(IEnumerable<CogniteSdk.Beta.RelationshipCreate> relationships, CancellationToken token)
+        {
+            await EnsureRawRows(
+                config.RawMetadata.Database,
+                config.RawMetadata.RelationshipsTable,
+                relationships.Select(rel => rel.ExternalId),
+                ids =>
+                {
+                    var idSet = ids.ToHashSet();
+                    return Task.FromResult((IDictionary<string, CogniteSdk.Beta.RelationshipCreate>)
+                        relationships.Where(rel => idSet.Contains(rel.ExternalId)).ToDictionary(rel => rel.ExternalId));
+                },
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
+                token);
         }
 
         public void Dispose() { }
