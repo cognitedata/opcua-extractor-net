@@ -46,11 +46,10 @@ namespace Cognite.OpcUa
         protected Session Session { get; set; }
         protected ApplicationConfiguration Appconfig { get; set; }
         private SessionReconnectHandler reconnectHandler;
-        public UAExtractor Extractor { get; set; }
         public DataTypeManager DataTypeManager { get; }
         public NodeTypeManager ObjectTypeManager { get; }
         private readonly object visitedNodesLock = new object();
-        protected ISet<NodeId> VisitedNodes { get; }= new HashSet<NodeId>();
+        protected ISet<NodeId> VisitedNodes { get; } = new HashSet<NodeId>();
         private readonly object subscriptionLock = new object();
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
@@ -58,6 +57,9 @@ namespace Cognite.OpcUa
         private Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> eventFields;
 
         private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
+
+        public event EventHandler OnServerDisconnect;
+        public event EventHandler OnServerReconnect;
 
         private int pendingOperations;
 
@@ -83,6 +85,8 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
+
+
 
         /// <summary>
         /// Constructor, does not start the client.
@@ -121,6 +125,7 @@ namespace Cognite.OpcUa
                 Session = null;
             }
             connected.Set(0);
+            Started = false;
         }
         /// <summary>
         /// Load security configuration for the Session, then start the server.
@@ -222,17 +227,8 @@ namespace Cognite.OpcUa
             Session = reconnectHandler.Session;
             reconnectHandler.Dispose();
             log.Warning("--- RECONNECTED ---");
-            if (config.RestartOnReconnect)
-            {
-                Extractor?.DataTypeManager?.Configure();
-                nodeOverrides?.Clear();
-                eventFields?.Clear();
-                Task.Run(() => Extractor?.RestartExtractor());
-                lock (visitedNodesLock)
-                {
-                    VisitedNodes.Clear();
-                }
-            }
+
+            OnServerReconnect?.Invoke(this, EventArgs.Empty);
 
             connects.Inc();
             connected.Set(1);
@@ -264,11 +260,8 @@ namespace Cognite.OpcUa
                 {
                     log.Warning("Client failed to close, quitting");
                 }
-                finally
-                {
-                    Extractor?.Close();
-                }
             }
+            OnServerDisconnect?.Invoke(this, EventArgs.Empty);
         }
         /// <summary>
         /// Called after succesful validation of a server certificate. Handles the case where the certificate is untrusted.
@@ -305,7 +298,6 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Wait for all opcua operations to finish
         /// </summary>
-        /// <returns></returns>
         public async Task WaitForOperations()
         {
             while (pendingOperations > 0) await Task.Delay(100);
@@ -323,7 +315,7 @@ namespace Cognite.OpcUa
             CancellationToken token,
             bool ignoreVisited = true)
         {
-            return BrowseNodeHierarchy(new[] {root}, callback, token, ignoreVisited);
+            return BrowseNodeHierarchy(new[] { root }, callback, token, ignoreVisited);
         }
         /// <summary>
         /// Browse an opcua directory, calling callback for all relevant nodes found.
@@ -815,7 +807,7 @@ namespace Cognite.OpcUa
                 {
                     enumerator.MoveNext();
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
-                    vnode.DataType = Extractor?.DataTypeManager?.GetDataType(dataType) ?? new BufferedDataType(dataType);
+                    vnode.DataType = DataTypeManager.GetDataType(dataType) ?? new BufferedDataType(dataType);
 
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
@@ -837,6 +829,12 @@ namespace Cognite.OpcUa
             }
             enumerator.Dispose();
         }
+        /// <summary>
+        /// Get the raw values for each given node id.
+        /// Nodes must be variables
+        /// </summary>
+        /// <param name="ids">Nodes to get values for</param>
+        /// <returns>A map from given nodeId to DataValue</returns>
         public Dictionary<NodeId, DataValue> ReadRawValues(IEnumerable<NodeId> ids, CancellationToken token)
         {
             var readValueIds = ids.Distinct().Select(id => new ReadValueId { AttributeId = Attributes.Value, NodeId = id }).ToList();
@@ -1222,6 +1220,11 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <returns>ISystemContext for given session, or null if no session exists</returns>
         public ISystemContext SystemContext => Session?.SystemContext;
+        /// <summary>
+        /// Fetch event fields from the server and store them on the client
+        /// </summary>
+        /// <param name="token"></param>
+        /// <returns>The collected event fields</returns>
         public Dictionary<NodeId, IEnumerable<(NodeId root, QualifiedName browseName)>> GetEventFields(CancellationToken token)
         {
             if (eventFields != null) return eventFields;
@@ -1348,7 +1351,7 @@ namespace Cognite.OpcUa
 
             return new EventFilter
             {
-               WhereClause = whereClause,
+                WhereClause = whereClause,
                 SelectClauses = selectClauses
             };
         }
@@ -1364,10 +1367,10 @@ namespace Cognite.OpcUa
                 var subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener", StringComparison.InvariantCulture))
 #pragma warning disable CA2000 // Dispose objects before losing scope
                                ?? new Subscription(Session.DefaultSubscription)
-                {
-                    PublishingInterval = config.PublishingInterval,
-                    DisplayName = "AuditListener"
-                };
+                               {
+                                   PublishingInterval = config.PublishingInterval,
+                                   DisplayName = "AuditListener"
+                               };
 #pragma warning restore CA2000 // Dispose objects before losing scope
                 if (subscription.MonitoredItemCount != 0) return;
                 var item = new MonitoredItem
@@ -1386,13 +1389,13 @@ namespace Cognite.OpcUa
                 try
                 {
                     if (subscription.Created && subscription.MonitoredItemCount == 0)
-                    { 
+                    {
                         subscription.CreateItems();
                     }
                     else if (!subscription.Created)
                     {
                         log.Information("Add subscription to the Session");
-                        Session.AddSubscription(subscription); 
+                        Session.AddSubscription(subscription);
                         subscription.Create();
                     }
                     else

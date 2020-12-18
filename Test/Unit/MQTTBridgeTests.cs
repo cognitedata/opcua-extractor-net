@@ -18,7 +18,7 @@ using MQTTnet.Client.Options;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Test
+namespace Test.Unit
 {
     /// <summary>
     /// Tests for the MQTT bridge as a standalone tool.
