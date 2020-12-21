@@ -76,7 +76,7 @@ namespace Cognite.OpcUa
         public Collection<int> ArrayDimensions { get; }
         public string DisplayName { get; }
 
-        private readonly IList<IEnumerable<BufferedDataPoint>> buffer;
+        private readonly List<BufferedDataPoint> buffer;
 
         public bool IsArray => ArrayDimensions != null && ArrayDimensions.Count == 1 && ArrayDimensions[0] > 0;
 
@@ -84,29 +84,29 @@ namespace Cognite.OpcUa
         /// Constructor. Copies relevant data from BufferedVariable, initializes the buffer if Historizing is true.
         /// </summary>
         /// <param name="variable">Variable to be used as base</param>
-        public NodeExtractionState(UAExtractor extractor, BufferedVariable variable, bool frontfill, bool backfill, bool stateStore)
+        public NodeExtractionState(UAExtractor extractor, BufferedVariable variable, bool frontfill, bool backfill)
             : base(extractor, variable?.Id, frontfill, backfill)
         {
             if (variable == null) throw new ArgumentNullException(nameof(variable));
             DataType = variable.DataType;
             ArrayDimensions = variable.ArrayDimensions;
             DisplayName = variable.DisplayName;
-            if (stateStore)
+            if (frontfill)
             {
-                buffer = new List<IEnumerable<BufferedDataPoint>>();
+                buffer = new List<BufferedDataPoint>();
             }
         }
 
-        public NodeExtractionState(UAClient client, BufferedVariable variable, bool frontfill, bool backfill, bool stateStore)
+        public NodeExtractionState(UAClient client, BufferedVariable variable, bool frontfill, bool backfill)
             : base(client, variable?.Id, frontfill, backfill)
         {
             if (variable == null) throw new ArgumentNullException(nameof(variable));
             DataType = variable.DataType;
             ArrayDimensions = variable.ArrayDimensions;
             DisplayName = variable.DisplayName;
-            if (stateStore)
+            if (frontfill)
             {
-                buffer = new List<IEnumerable<BufferedDataPoint>>();
+                buffer = new List<BufferedDataPoint>();
             }
         }
         /// <summary>
@@ -121,7 +121,7 @@ namespace Cognite.OpcUa
             {
                 if (IsFrontfilling)
                 {
-                    buffer?.Add(points);
+                    buffer?.AddRange(points);
                 }
             }
         }
@@ -150,12 +150,12 @@ namespace Cognite.OpcUa
         /// Retrieve the buffer after the final iteration of HistoryRead. Filters out data received before the last known timestamp.
         /// </summary>
         /// <returns>The contents of the buffer once called.</returns>
-        public IEnumerable<IEnumerable<BufferedDataPoint>> FlushBuffer()
+        public IEnumerable<BufferedDataPoint> FlushBuffer()
         {
-            if (IsFrontfilling || buffer == null || !buffer.Any()) return Array.Empty<IEnumerable<BufferedDataPoint>>();
+            if (IsFrontfilling || buffer == null || !buffer.Any()) return Array.Empty<BufferedDataPoint>();
             lock (_mutex)
             {
-                var result = buffer.Where(arr => arr.Max(pt => pt.Timestamp) > SourceExtractedRange.Last);
+                var result = buffer.Where(pt => pt.Timestamp > SourceExtractedRange.Last).ToList();
                 buffer.Clear();
                 return result;
             }
@@ -173,19 +173,19 @@ namespace Cognite.OpcUa
         /// </summary>
         private IList<BufferedEvent> buffer;
 
-        public EventExtractionState(UAExtractor extractor, NodeId emitterId, bool frontfill, bool backfill, bool stateStore)
+        public EventExtractionState(UAExtractor extractor, NodeId emitterId, bool frontfill, bool backfill)
             : base(extractor, emitterId, frontfill, backfill)
         {
-            if (stateStore)
+            if (frontfill)
             {
                 buffer = new List<BufferedEvent>();
             }
         }
 
-        public EventExtractionState(UAClient client, NodeId emitterId, bool frontfill, bool backfill, bool stateStore)
+        public EventExtractionState(UAClient client, NodeId emitterId, bool frontfill, bool backfill)
             : base(client, emitterId, frontfill, backfill)
         {
-            if (stateStore)
+            if (frontfill)
             {
                 buffer = new List<BufferedEvent>();
             }
@@ -207,24 +207,29 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        /// <summary>
-        /// Update last known timestamp from HistoryRead results. Empties the buffer if final is false.
-        /// </summary>
-        /// <param name="last">Latest timestamp in received values</param>
-        /// <param name="final">True if this is the final iteration of history read</param>
-        public override void UpdateFromFrontfill(DateTime last, bool final)
+        private void RefreshBuffer()
         {
+            if (buffer == null) return;
             lock (_mutex)
             {
-                SourceExtractedRange = SourceExtractedRange.Extend(null, last);
-                if (!final)
-                {
-                    buffer?.Clear();
-                }
-                else
-                {
-                    IsFrontfilling = false;
-                }
+                buffer = buffer.Where(evt => !SourceExtractedRange.Contains(evt.Time)).ToList();
+            }
+        }
+        public override void UpdateFromBackfill(DateTime first, bool final)
+        {
+            base.UpdateFromBackfill(first, final);
+            if (!final)
+            {
+                RefreshBuffer();
+            }
+        }
+
+        public override void UpdateFromFrontfill(DateTime last, bool final)
+        {
+            base.UpdateFromFrontfill(last, final);
+            if (!final)
+            {
+                RefreshBuffer();
             }
         }
         /// <summary>
@@ -236,7 +241,7 @@ namespace Cognite.OpcUa
             if (IsFrontfilling || buffer == null || !buffer.Any()) return Array.Empty<BufferedEvent>();
             lock (_mutex)
             {
-                var result = buffer.Where(evt => !SourceExtractedRange.Contains(evt.Time));
+                var result = buffer.Where(evt => !SourceExtractedRange.Contains(evt.Time)).ToList();
                 buffer.Clear();
                 return result;
             }

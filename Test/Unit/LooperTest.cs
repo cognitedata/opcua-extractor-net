@@ -104,14 +104,14 @@ namespace Test.Unit
 
         private void InitPusherLoopTest(UAExtractor extractor, params DummyPusher[] pushers)
         {
-            var evtState = new EventExtractionState(tester.Client, new NodeId("id"), false, false, false);
+            var evtState = new EventExtractionState(tester.Client, new NodeId("id"), false, false);
             evtState.InitToEmpty();
             evtState.FinalizeRangeInit();
             extractor.State.SetEmitterState(evtState);
 
             var dpState = new NodeExtractionState(tester.Client,
                 new BufferedVariable(new NodeId("id"), "test", NodeId.Null),
-                false, false, false);
+                false, false);
             dpState.InitToEmpty();
             dpState.FinalizeRangeInit();
             extractor.State.SetNodeState(dpState, "id");

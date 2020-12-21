@@ -52,7 +52,7 @@ namespace Test.Unit
 
             var state = new NodeExtractionState(tester.Client,
                 new BufferedVariable(new NodeId("id"), "test", NodeId.Null),
-                false, false, false);
+                false, false);
             state.InitToEmpty();
             state.FinalizeRangeInit();
 
@@ -108,7 +108,7 @@ namespace Test.Unit
             extractor.Streamer.AllowEvents = true;
             var start = DateTime.UtcNow;
 
-            var state = new EventExtractionState(tester.Client, new NodeId("id"), false, false, false);
+            var state = new EventExtractionState(tester.Client, new NodeId("id"), false, false);
             state.InitToEmpty();
             state.FinalizeRangeInit();
             extractor.State.SetEmitterState(state);
@@ -172,7 +172,7 @@ namespace Test.Unit
 
             var state = new NodeExtractionState(tester.Client,
                 new BufferedVariable(new NodeId("id"), "test", NodeId.Null),
-                true, true, false);
+                true, true);
             state.InitToEmpty();
             state.FinalizeRangeInit();
             state.UpdateFromBackfill(DateTime.MaxValue, true);
@@ -226,7 +226,7 @@ namespace Test.Unit
 
             var id = new NodeId("id");
 
-            var state = new EventExtractionState(tester.Client, id, true, true, false);
+            var state = new EventExtractionState(tester.Client, id, true, true);
             state.InitToEmpty();
             state.FinalizeRangeInit();
             state.UpdateFromBackfill(DateTime.MaxValue, true);
@@ -277,7 +277,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var node = new NodeExtractionState(tester.Client,
                 new BufferedVariable(new NodeId("id"), "node", NodeId.Null) { DataType = new BufferedDataType(DataTypeIds.Double) },
-                true, true, false);
+                true, true);
             extractor.State.SetNodeState(node, "id");
 
             var queue = (Queue<BufferedDataPoint>)extractor.Streamer.GetType()
@@ -336,7 +336,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var node1 = new NodeExtractionState(tester.Client,
                 new BufferedVariable(new NodeId("node1"), "node1", NodeId.Null) { DataType = new BufferedDataType(DataTypeIds.Double) },
-                true, true, false);
+                true, true);
 
             var ts = DateTime.UtcNow;
 
@@ -362,9 +362,12 @@ namespace Test.Unit
 
             // array node
             var node2 = new NodeExtractionState(tester.Client,
-                new BufferedVariable(new NodeId("node2"), "node2", NodeId.Null) { DataType = new BufferedDataType(DataTypeIds.Double),
-                ArrayDimensions = new Collection<int>(new[] { 4 }) },
-                true, true, false);
+                new BufferedVariable(new NodeId("node2"), "node2", NodeId.Null)
+                {
+                    DataType = new BufferedDataType(DataTypeIds.Double),
+                    ArrayDimensions = new Collection<int>(new[] { 4 })
+                },
+                true, true);
 
             // scalar value on array
             var dps4 = extractor.Streamer.ToDataPoint(new DataValue(1.0, StatusCodes.Good, ts), node2);
@@ -398,11 +401,12 @@ namespace Test.Unit
 
             // Very long array name
             var node3 = new NodeExtractionState(tester.Client,
-                new BufferedVariable(new NodeId(new string('x', 300)), new string('x', 300), NodeId.Null) {
+                new BufferedVariable(new NodeId(new string('x', 300)), new string('x', 300), NodeId.Null)
+                {
                     DataType = new BufferedDataType(DataTypeIds.Double),
                     ArrayDimensions = new Collection<int>(new[] { 20 })
                 },
-                true, true, false);
+                true, true);
             var dps8 = extractor.Streamer.ToDataPoint(new DataValue(Enumerable.Range(1, 20).Select(val => (double)val).ToArray(),
                 StatusCodes.Good, ts), node3);
             Assert.Equal(20, dps8.Count());
@@ -417,53 +421,12 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_array_points_missed", 4));
         }
 
-        private string[] baseFields = new[]
-        {
-            "EventId", "SourceNode", "EventType", "Message", "Time"
-        };
 
-        private EventExtractionState PopulateEventData(UAExtractor extractor)
-        {
-            // Add state
-            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true, false);
-            state.InitExtractedRange(DateTime.UtcNow.Subtract(TimeSpan.FromHours(1)), DateTime.UtcNow.AddHours(1));
-            state.FinalizeRangeInit();
-            extractor.State.SetEmitterState(state);
-
-            var fields = baseFields.Select(field => new EventField(ObjectTypeIds.BaseEventType, new QualifiedName(field)));
-            fields = fields.Append(new EventField(tester.Server.Ids.Custom.EUProp, new QualifiedName("EUProp")));
-            extractor.State.ActiveEvents[new NodeId("test")] = fields.ToHashSet();
-
-            return state;
-        }
-
-        private SimpleAttributeOperandCollection GetSelectClause()
-        {
-            var attrs = baseFields.Select(field => new SimpleAttributeOperand(ObjectTypeIds.BaseEventType, new QualifiedName(field)));
-            attrs = attrs.Append(new SimpleAttributeOperand(tester.Server.Ids.Custom.Array, new QualifiedName("Array"))); // some other field
-            attrs = attrs.Append(new SimpleAttributeOperand(tester.Server.Ids.Custom.EUProp, new QualifiedName("EUProp")));
-
-            return new SimpleAttributeOperandCollection(attrs);
-        }
-
-        private static VariantCollection GetEventValues()
-        {
-            return new Variant[]
-            {
-                new byte[] { 0, 0, 0, 0, 2 },
-                new NodeId("source"),
-                new NodeId("test"),
-                new LocalizedText("message"),
-                DateTime.UtcNow,
-                new int[] { 1, 2, 3 },
-                new ExtensionObject(new EUInformation("unit", "uuuniiit", "uri"))
-            };
-        }
         [Fact]
         public void TestEventHandler()
         {
             using var extractor = tester.BuildExtractor();
-            var state = PopulateEventData(extractor);
+            var state = EventUtils.PopulateEventData(extractor, tester, true);
 
             var queue = (Queue<BufferedEvent>)extractor.Streamer.GetType()
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
@@ -472,7 +435,7 @@ namespace Test.Unit
             var item = new MonitoredItem() { StartNodeId = new NodeId("emitter"), NodeClass = NodeClass.Object };
             var item2 = new MonitoredItem() { StartNodeId = new NodeId("someotherid"), NodeClass = NodeClass.Object };
 
-            var values = GetEventValues();
+            var values = EventUtils.GetEventValues(DateTime.UtcNow);
             var rawEvt = new EventFieldList { EventFields = values };
             item.SaveValueInCache(rawEvt);
             Assert.Empty(queue);
@@ -483,7 +446,7 @@ namespace Test.Unit
 
 
             // Test no state
-            var filter = new EventFilter { SelectClauses = GetSelectClause() };
+            var filter = new EventFilter { SelectClauses = EventUtils.GetSelectClause(tester) };
             item2.Filter = filter;
             extractor.Streamer.EventSubscriptionHandler(item2, null);
             Assert.Empty(queue);
@@ -513,9 +476,9 @@ namespace Test.Unit
 
             // Test multiple events, one early, one late, one ok
 
-            var val1 = GetEventValues();
-            var val2 = GetEventValues();
-            var val3 = GetEventValues();
+            var val1 = EventUtils.GetEventValues(DateTime.UtcNow);
+            var val2 = EventUtils.GetEventValues(DateTime.UtcNow);
+            var val3 = EventUtils.GetEventValues(DateTime.UtcNow);
             val1[4] = DateTime.UtcNow;
             val2[4] = DateTime.UtcNow.AddDays(1);
             val3[4] = DateTime.UtcNow.Subtract(TimeSpan.FromDays(1));
@@ -549,10 +512,10 @@ namespace Test.Unit
         public void TestToEvent()
         {
             using var extractor = tester.BuildExtractor();
-            var state = PopulateEventData(extractor);
+            var state = EventUtils.PopulateEventData(extractor, tester, true);
 
-            var filter = new EventFilter { SelectClauses = GetSelectClause() };
-            var values = GetEventValues();
+            var filter = new EventFilter { SelectClauses = EventUtils.GetSelectClause(tester) };
+            var values = EventUtils.GetEventValues(DateTime.UtcNow);
             var emitter = new NodeId("emitter");
 
             BufferedEvent created = null;
@@ -574,13 +537,14 @@ namespace Test.Unit
             var noTypeFilter = new EventFilter
             {
                 SelectClauses =
-                new SimpleAttributeOperandCollection(GetSelectClause().Where(attr => attr.BrowsePath[0].Name != BrowseNames.EventType))
+                new SimpleAttributeOperandCollection(EventUtils.GetSelectClause(tester)
+                    .Where(attr => attr.BrowsePath[0].Name != BrowseNames.EventType))
             };
             created = extractor.Streamer.ConstructEvent(noTypeFilter, values, emitter);
             Assert.Null(created);
 
             // Bad type
-            var badTypeValues = GetEventValues();
+            var badTypeValues = EventUtils.GetEventValues(DateTime.UtcNow);
             badTypeValues[2] = new NodeId("SomeOtherType");
             created = extractor.Streamer.ConstructEvent(filter, badTypeValues, emitter);
             Assert.Null(created);
@@ -590,13 +554,13 @@ namespace Test.Unit
             Assert.Null(created);
 
             // Bad Id
-            var badIdValues = GetEventValues();
+            var badIdValues = EventUtils.GetEventValues(DateTime.UtcNow);
             badIdValues[0] = Variant.Null;
             created = extractor.Streamer.ConstructEvent(filter, badIdValues, emitter);
             Assert.Null(created);
 
             // Bad time
-            var badTimeValues = GetEventValues();
+            var badTimeValues = EventUtils.GetEventValues(DateTime.UtcNow);
             badTimeValues[4] = Variant.Null;
             created = extractor.Streamer.ConstructEvent(filter, badTimeValues, emitter);
             Assert.Null(created);

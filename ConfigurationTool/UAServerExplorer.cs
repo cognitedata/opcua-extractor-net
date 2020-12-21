@@ -692,7 +692,7 @@ namespace Cognite.OpcUa.Config
             var states = nodeList.Where(node =>
                     node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty
                     && AllowTSMap(variable))
-                .Select(node => new NodeExtractionState(this, node as BufferedVariable, false, false, false)).ToList();
+                .Select(node => new NodeExtractionState(this, node as BufferedVariable, false, false)).ToList();
 
             log.Information("Get chunkSizes for subscribing to variables");
 
@@ -789,7 +789,7 @@ namespace Cognite.OpcUa.Config
         {
             var historizingStates = nodeList.Where(node =>
                     node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty && variable.Historizing)
-                .Select(node => new NodeExtractionState(this, node as BufferedVariable, true, true, false)).ToList();
+                .Select(node => new NodeExtractionState(this, node as BufferedVariable, true, true)).ToList();
 
             var stateMap = historizingStates.ToDictionary(state => state.SourceId);
 
@@ -1176,7 +1176,7 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                await ToolUtil.RunWithTimeout(() => SubscribeToEvents(new[] { new EventExtractionState(this, ObjectIds.Server, false, false, false) },
+                await ToolUtil.RunWithTimeout(() => SubscribeToEvents(new[] { new EventExtractionState(this, ObjectIds.Server, false, false) },
                     (item, args) =>
                     {
                         if (!(args.NotificationValue is EventFieldList triggeredEvent))

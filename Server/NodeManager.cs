@@ -98,10 +98,8 @@ namespace Server
             }
         }
 
-        public void PopulateHistory(NodeId id, int count, string type = "int", int msdiff = 10, Func<int, object> valueBuilder = null)
+        public void PopulateHistory(NodeId id, int count, DateTime start, string type = "int", int msdiff = 10, Func<int, object> valueBuilder = null)
         {
-            var diff = TimeSpan.FromMilliseconds(msdiff);
-            var start = DateTime.UtcNow.Subtract(diff * count);
             for (int i = 0; i < count; i++)
             {
                 var dv = new DataValue();
@@ -120,7 +118,7 @@ namespace Server
                         dv.Value = valueBuilder(i);
                         break;
                 }
-                if (i == count - 1)
+                if (i == count - 1 && start > DateTime.UtcNow)
                 {
                     UpdateNode(id, dv.Value);
                 }
@@ -140,13 +138,11 @@ namespace Server
             NodeId source,
             string message,
             int count,
+            DateTime start,
             int msdiff = 10,
             Action<ManagedEvent, int> builder = null)
             where T : ManagedEvent
         {
-            var diff = TimeSpan.FromMilliseconds(msdiff);
-            var start = DateTime.UtcNow.Subtract(diff * count);
-
             var eventState = (BaseObjectTypeState)PredefinedNodes[eventId];
             var emitterState = emitter == null || emitter.NamespaceIndex == 0 ? null : PredefinedNodes[emitter];
             var sourceState = source == null ? null : PredefinedNodes[source];

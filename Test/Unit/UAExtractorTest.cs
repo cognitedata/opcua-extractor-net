@@ -31,11 +31,6 @@ namespace Test.Unit
         public IServiceProvider Provider { get; }
         public BaseExtractorTestFixture(int port)
         {
-            Server = new ServerController(new[] {
-                PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
-                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, port);
-            Server.Start().Wait();
-
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
             Console.WriteLine($"Add logger: {Config.Logger}");
@@ -43,6 +38,11 @@ namespace Test.Unit
             services.AddLogger();
             LoggingUtils.Configure(Config.Logger);
             Provider = services.BuildServiceProvider();
+
+            Server = new ServerController(new[] {
+                PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
+                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, port);
+            Server.Start().Wait();
 
             Client = new UAClient(Config);
             Source = new CancellationTokenSource();
@@ -232,8 +232,8 @@ namespace Test.Unit
                 new BufferedVariable(new NodeId("var2"), "var2", root)
             };
 
-            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[0], true, true, false));
-            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[1], false, false, false));
+            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[0], true, true));
+            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[1], false, false));
 
 
             var refManager = (ReferenceTypeManager)extractor.GetType().GetField("referenceTypeManager",

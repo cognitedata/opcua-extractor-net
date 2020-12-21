@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Opc.Ua;
 using Serilog;
 
@@ -62,7 +63,7 @@ namespace Server
         public (IEnumerable<DataValue>, bool) ReadHistory(InternalHistoryRequest request)
         {
             int idx = request.MemoryIndex;
-            var data = historyStorage[request.Id];
+            var data = historyStorage[request.Id].OrderBy(dp => dp.SourceTimestamp).ToList();
             var result = new List<DataValue>();
             int count = 0;
             bool final = false;
@@ -75,12 +76,12 @@ namespace Server
                 }
                 else
                 {
-                    idx++;
+                    log.Information("Read data backwards from index {idx}/{cnt}", idx, data.Count - 1);
                 }
 
                 while (true)
                 {
-                    if (idx < 0 || idx >= data.Count || data[idx].SourceTimestamp < request.EndTime)
+                    if (idx < 0 || idx >= data.Count || (request.EndTime != DateTime.MinValue && data[idx].SourceTimestamp < request.EndTime))
                     {
                         final = true;
                         break;
@@ -88,7 +89,7 @@ namespace Server
 
                     if (request.NumValuesPerNode > 0 && count >= request.NumValuesPerNode || count >= maxHistoryDatapoints && maxHistoryDatapoints > 0)
                     {
-                        request.MemoryIndex = idx + 1;
+                        request.MemoryIndex = idx;
                         break;
                     }
 
@@ -107,12 +108,12 @@ namespace Server
             }
             else
             {
-                idx--;
+                log.Information("Read data from index {idx}/{cnt}", idx, data.Count - 1);
             }
 
             while (true)
             {
-                if (idx >= data.Count || idx < 0 || data[idx].SourceTimestamp > request.EndTime)
+                if (idx >= data.Count || idx < 0 || (request.EndTime != DateTime.MinValue && data[idx].SourceTimestamp > request.EndTime))
                 {
                     final = true;
                     break;
@@ -120,7 +121,7 @@ namespace Server
 
                 if (request.NumValuesPerNode > 0 && count >= request.NumValuesPerNode || count >= maxHistoryDatapoints && maxHistoryDatapoints > 0)
                 {
-                    request.MemoryIndex = idx - 1;
+                    request.MemoryIndex = idx;
                     break;
                 }
 
@@ -135,7 +136,7 @@ namespace Server
         public (IEnumerable<BaseEventState>, bool) ReadEventHistory(InternalEventHistoryRequest request)
         {
             int idx = request.MemoryIndex;
-            var data = eventHistoryStorage[request.Id];
+            var data = eventHistoryStorage[request.Id].OrderBy(evt => evt.Time.Value).ToList();
             var result = new List<BaseEventState>();
             int count = 0;
             bool final = false;
@@ -148,12 +149,12 @@ namespace Server
                 }
                 else
                 {
-                    idx--;
+                    log.Information("Read events backwards from index {idx}/{cnt}", idx, data.Count - 1);
                 }
 
                 while (true)
                 {
-                    if (idx < 0 || idx >= data.Count || data[idx].Time.Value < request.EndTime)
+                    if (idx < 0 || idx >= data.Count || (request.EndTime != DateTime.MinValue && data[idx].Time.Value < request.EndTime))
                     {
                         final = true;
                         break;
@@ -161,7 +162,7 @@ namespace Server
 
                     if (request.NumValuesPerNode > 0 && count >= request.NumValuesPerNode || count >= maxHistoryEvents && maxHistoryEvents > 0)
                     {
-                        request.MemoryIndex = idx + 1;
+                        request.MemoryIndex = idx;
                         break;
                     }
 
@@ -180,12 +181,12 @@ namespace Server
             }
             else
             {
-                idx++;
+                log.Information("Read events from index {idx}/{cnt}", idx, data.Count - 1);
             }
 
             while (true)
             {
-                if (idx >= data.Count || idx < 0 || data[idx].Time.Value > request.EndTime)
+                if (idx >= data.Count || idx < 0 || (request.EndTime != DateTime.MinValue && data[idx].Time.Value > request.EndTime))
                 {
                     final = true;
                     break;
@@ -193,7 +194,7 @@ namespace Server
 
                 if (request.NumValuesPerNode > 0 && count >= request.NumValuesPerNode || count >= maxHistoryEvents && maxHistoryEvents > 0)
                 {
-                    request.MemoryIndex = idx - 1;
+                    request.MemoryIndex = idx;
                     break;
                 }
 

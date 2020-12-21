@@ -52,16 +52,24 @@ namespace Server
             Server.Stop();
         }
 
-        public void PopulateArrayHistory()
+        public void PopulateArrayHistory(DateTime? start = null)
         {
-            Server.PopulateHistory(Server.Ids.Custom.Array, 1000, "custom", 10, (i => new int[] { i, i, i, i }));
-            Server.PopulateHistory(Server.Ids.Custom.MysteryVar, 1000, "int");
+            if (start == null)
+            {
+                start = DateTime.UtcNow.AddMilliseconds(-1000 * 10);
+            }
+            Server.PopulateHistory(Server.Ids.Custom.Array, 1000, start.Value, "custom", 10, (i => new int[] { i, i, i, i }));
+            Server.PopulateHistory(Server.Ids.Custom.MysteryVar, 1000, start.Value, "int");
         }
-        public void PopulateBaseHistory()
+        public void PopulateBaseHistory(DateTime? start = null)
         {
-            Server.PopulateHistory(Server.Ids.Base.DoubleVar1, 1000, "double");
-            Server.PopulateHistory(Server.Ids.Base.StringVar, 1000, "string");
-            Server.PopulateHistory(Server.Ids.Base.IntVar, 1000, "int");
+            if (start == null)
+            {
+                start = DateTime.UtcNow.AddMilliseconds(-1000 * 10);
+            }
+            Server.PopulateHistory(Server.Ids.Base.DoubleVar1, 1000, start.Value, "double");
+            Server.PopulateHistory(Server.Ids.Base.StringVar, 1000, start.Value, "string");
+            Server.PopulateHistory(Server.Ids.Base.IntVar, 1000, start.Value, "int");
         }
 
         public void UpdateNode(NodeId id, object value)
@@ -120,16 +128,20 @@ namespace Server
             Server.TriggerEvent<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, Ids.Event.ObjExclude, "basic-excludeobj " + idx);
         }
 
-        public void PopulateEvents()
+        public void PopulateEvents(DateTime? start = null)
         {
-            Server.PopulateEventHistory<PropertyEvent>(Ids.Event.PropType, ObjectIds.Server, Ids.Event.Obj1, "prop", 100, 100, (evt, idx) =>
+            if (start == null)
+            {
+                start = DateTime.UtcNow.AddMilliseconds(-100 * 100);
+            }
+            Server.PopulateEventHistory<PropertyEvent>(Ids.Event.PropType, ObjectIds.Server, Ids.Event.Obj1, "prop", 100, start.Value, 100, (evt, idx) =>
             {
                 var revt = evt as PropertyEvent;
                 revt.PropertyString.Value = "str " + idx;
                 revt.PropertyNum.Value = idx;
                 revt.SubType.Value = "sub-type";
             });
-            Server.PopulateEventHistory<PropertyEvent>(Ids.Event.PropType, Ids.Event.Obj1, Ids.Event.Obj1, "prop-e2", 100, 100, (evt, idx) =>
+            Server.PopulateEventHistory<PropertyEvent>(Ids.Event.PropType, Ids.Event.Obj1, Ids.Event.Obj1, "prop-e2", 100, start.Value, 100, (evt, idx) =>
             {
                 var revt = evt as PropertyEvent;
                 revt.PropertyString.Value = "str o2 " + idx;
@@ -137,20 +149,20 @@ namespace Server
                 revt.SubType.Value = "sub-type";
             });
             // Test types
-            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, Ids.Event.Obj1, "basic-pass", 100, 100);
-            Server.PopulateEventHistory<BasicEvent2>(Ids.Event.BasicType2, ObjectIds.Server, Ids.Event.Obj1, "basic-block", 100, 100);
-            Server.PopulateEventHistory<CustomEvent>(Ids.Event.CustomType, ObjectIds.Server, Ids.Event.Obj1, "mapped", 100, 100, (evt, idx) =>
+            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, Ids.Event.Obj1, "basic-pass", 100, start.Value, 100);
+            Server.PopulateEventHistory<BasicEvent2>(Ids.Event.BasicType2, ObjectIds.Server, Ids.Event.Obj1, "basic-block", 100, start.Value, 100);
+            Server.PopulateEventHistory<CustomEvent>(Ids.Event.CustomType, ObjectIds.Server, Ids.Event.Obj1, "mapped", 100, start.Value, 100, (evt, idx) =>
             {
                 var revt = evt as CustomEvent;
                 revt.TypeProp.Value = "CustomType";
             });
 
             // Test sources
-            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, Ids.Event.Obj2, "basic-pass-2", 100, 100);
-            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, Ids.Event.Obj1, Ids.Event.Obj2, "basic-pass-3", 100, 100);
-            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, Ids.Event.Var1, "basic-varsource", 100, 100);
-            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, null, "basic-nosource", 100, 100);
-            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, Ids.Event.ObjExclude, "basic-excludeobj", 100, 100);
+            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, Ids.Event.Obj2, "basic-pass-2", 100, start.Value, 100);
+            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, Ids.Event.Obj1, Ids.Event.Obj2, "basic-pass-3", 100, start.Value, 100);
+            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, Ids.Event.Var1, "basic-varsource", 100, start.Value, 100);
+            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, null, "basic-nosource", 100, start.Value, 100);
+            Server.PopulateEventHistory<BasicEvent1>(Ids.Event.BasicType1, ObjectIds.Server, Ids.Event.ObjExclude, "basic-excludeobj", 100, start.Value, 100);
         }
 
         public void DirectGrowth(int idx = 0)

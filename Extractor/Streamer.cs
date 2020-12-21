@@ -400,7 +400,11 @@ namespace Cognite.OpcUa
             {
                 if (eventFields == null || eventFields.EventFields == null) continue;
                 var buffEvent = ConstructEvent(filter, eventFields.EventFields, item.ResolvedNodeId);
-                if (buffEvent == null) return;
+                if (buffEvent == null)
+                {
+                    UAExtractor.BadEvents.Inc();
+                    continue;
+                }
                 eventState.UpdateFromStream(buffEvent);
 
                 // Either backfill/frontfill is done, or we are not outside of each respective bound

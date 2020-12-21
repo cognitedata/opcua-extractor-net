@@ -75,6 +75,9 @@ namespace Cognite.OpcUa
         public static readonly Counter BadDataPoints = Metrics
             .CreateCounter("opcua_bad_datapoints", "Datapoints skipped due to bad status");
 
+        public static readonly Counter BadEvents = Metrics
+            .CreateCounter("opcua_bad_events", "Events skipped due to bad fields received");
+
         public static readonly Gauge Starting = Metrics
             .CreateGauge("opcua_extractor_starting", "1 if the extractor is in the startup phase");
 
@@ -563,7 +566,7 @@ namespace Cognite.OpcUa
                     {
                         var history = (histEmitterIds.Contains(id)) && config.Events.History;
                         State.SetEmitterState(new EventExtractionState(this, id, history,
-                            history && config.History.Backfill, StateStorage != null && config.StateStorage.Interval > 0));
+                            history && config.History.Backfill));
                     }
                 }
                 var serverNode = uaClient.GetServerNode(source.Token);
@@ -571,7 +574,7 @@ namespace Cognite.OpcUa
                 {
                     var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
                     State.SetEmitterState(new EventExtractionState(this, serverNode.Id, history,
-                        history && config.History.Backfill, StateStorage != null && config.StateStorage.Interval > 0));
+                        history && config.History.Backfill));
                 }
             }
         }
@@ -674,8 +677,7 @@ namespace Cognite.OpcUa
                 if ((node.EventNotifier & EventNotifiers.SubscribeToEvents) == 0) continue;
                 if (State.GetEmitterState(node.Id) != null) continue;
                 bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
-                var eventState = new EventExtractionState(this, node.Id, history, history && config.History.Backfill,
-                    StateStorage != null && config.StateStorage.Interval > 0);
+                var eventState = new EventExtractionState(this, node.Id, history, history && config.History.Backfill);
                 State.SetEmitterState(eventState);
             }
         }
@@ -719,8 +721,7 @@ namespace Cognite.OpcUa
                 }
                 log.Verbose(node.ToDebugDescription());
                 result.Variables.Add(node);
-                var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,
-                    StateStorage != null && config.StateStorage.Interval > 0);
+                var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill);
 
                 State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata,
                     config.Extraction.NodeTypes.Metadata);

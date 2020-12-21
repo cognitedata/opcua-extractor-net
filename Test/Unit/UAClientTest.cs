@@ -539,7 +539,7 @@ namespace Test.Unit
                 });
 
             tester.Server.PopulateArrayHistory();
-            tester.Server.Server.PopulateHistory(tester.Server.Ids.Base.StringVar, 1000, "string");
+            tester.Server.Server.PopulateHistory(tester.Server.Ids.Base.StringVar, 1000, DateTime.UtcNow, "string");
 
 
 
@@ -585,7 +585,7 @@ namespace Test.Unit
             int start = (int)(uint)tester.Server.Ids.Full.WideRoot.Identifier;
             var nodes = Enumerable.Range(start + 1, 2000)
                 .Select(idf => new NodeId((uint)idf, 2))
-                .Select(id => new NodeExtractionState(tester.Client, new BufferedVariable(id, "somvar", tester.Server.Ids.Full.WideRoot), true, true, false))
+                .Select(id => new NodeExtractionState(tester.Client, new BufferedVariable(id, "somvar", tester.Server.Ids.Full.WideRoot), true, true))
                 .ToList();
 
             var lck = new object();
@@ -659,9 +659,9 @@ namespace Test.Unit
 
             var emitters = new[]
             {
-                new EventExtractionState(tester.Client, ObjectIds.Server, true, true, false),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true, false),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true, false)
+                new EventExtractionState(tester.Client, ObjectIds.Server, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true)
             };
             tester.Config.Source.SubscriptionChunk = 1;
 
@@ -710,9 +710,9 @@ namespace Test.Unit
             };
             var emitters = new[]
             {
-                new EventExtractionState(tester.Client, ObjectIds.Server, true, true, false),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true, false),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true, false)
+                new EventExtractionState(tester.Client, ObjectIds.Server, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true)
             };
             int count = 0;
 
