@@ -137,8 +137,6 @@ namespace Cognite.OpcUa
             tasks.Add(SafeWait(triggerHistoryRestart, Timeout.InfiniteTimeSpan, token));
             tasks.Add(SafeWait(triggerGrowTaskList, Timeout.InfiniteTimeSpan, token));
 
-            Console.WriteLine($"Scheduled {tasks.Count} tasks");
-
             Task failedTask = null;
 
             while (tasks.Any() && failedTask == null)

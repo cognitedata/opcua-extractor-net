@@ -156,10 +156,6 @@ namespace Test.Unit
             var historyEvents = new HistoryEvent { Events = frontfillEvents };
             Assert.Equal(0, historyEventHandler.Invoke(reader, new object[] { historyEvents, true, true, new NodeId("emitter"), null }));
 
-            // Test no events
-            historyEvents.Events = null;
-            Assert.Equal(0, historyEventHandler.Invoke(reader, new object[] { historyEvents, true, true, new NodeId("emitter"), details }));
-
             // Test bad emitter
             historyEvents.Events = frontfillEvents;
             Assert.Equal(0, historyEventHandler.Invoke(reader, new object[] { historyEvents, true, true, new NodeId("bademitter"), details }));

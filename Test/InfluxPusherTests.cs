@@ -374,11 +374,13 @@ namespace Test
                     !state.FrontfillEnabled || !state.IsBackfilling && !state.IsFrontfilling),
                 20, "Expected backfill of events to terminate");
 
+            int cnt = 0;
             await tester.WaitForCondition(async () =>
             {
                 var evts = await tester.GetAllInfluxEvents(ObjectIds.Server);
-                return evts.Count() == 700;
-            }, 5, "Expected to get some events in influxdb");
+                cnt = evts.Count();
+                return cnt == 700;
+            }, 5, () => $"Expected to get 700 events in influxdb, but got {cnt}");
 
             await tester.TerminateRunTask(false);
 

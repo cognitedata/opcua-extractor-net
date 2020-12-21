@@ -181,7 +181,7 @@ namespace Cognite.OpcUa
                 log.Warning("No event filter when reading from history, ignoring");
                 return 0;
             }
-            if (evts.Events == null || !evts.Events.Any()) return 0;
+            if (evts.Events == null) return 0;
             var emitterState = extractor.State.GetEmitterState(nodeId);
 
             if (emitterState == null)
@@ -231,6 +231,7 @@ namespace Cognite.OpcUa
                 var (smin, smax) = buffered.MinMax(dp => dp.Time);
                 emitterState.UpdateFromStream(smin, smax);
             }
+            log.Information("Read {cnt} events from buffer", buffered.Count());
             extractor.Streamer.Enqueue(buffered);
 
             return createdEvents.Count;

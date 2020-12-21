@@ -118,7 +118,7 @@ namespace Server
                         dv.Value = valueBuilder(i);
                         break;
                 }
-                if (i == count - 1 && start > DateTime.UtcNow)
+                if (i == count - 1 && start > DateTime.UtcNow.AddSeconds(-1))
                 {
                     UpdateNode(id, dv.Value);
                 }

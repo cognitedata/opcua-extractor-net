@@ -100,8 +100,7 @@ namespace Test
 
                 await tester.WaitForCondition(() => 
                         tester.Extractor.State.NodeStates.Any()
-                        && tester.Extractor.State.NodeStates.All(state =>
-                            !state.FrontfillEnabled || !state.IsBackfilling && !state.IsFrontfilling),
+                        && tester.Extractor.State.NodeStates.All(state => !state.IsFrontfilling),
                     20, "Expected history to complete");
 
                 await tester.WaitForCondition(() => tester.Extractor.State.NodeStates.Any(state =>
@@ -114,7 +113,7 @@ namespace Test
 
                 await tester.TerminateRunTask(true);
 
-                var dummyStates = tester.Extractor.State.NodeStates.Select(state => new InfluxBufferState(state))
+                var dummyStates = tester.Extractor.State.NodeStates.Where(state => state.FrontfillEnabled).Select(state => new InfluxBufferState(state))
                     .ToList();
 
                 await tester.Extractor.StateStorage.RestoreExtractionState(
@@ -196,7 +195,7 @@ namespace Test
             await tester.Extractor.Looper.WaitForNextPush();
             await tester.Extractor.Looper.StoreState(tester.Source.Token);
 
-            var dummyStates = tester.Extractor.State.EmitterStates.Select(state => new InfluxBufferState(state)).ToList();
+            var dummyStates = tester.Extractor.State.EmitterStates.Where(state => state.FrontfillEnabled).Select(state => new InfluxBufferState(state)).ToList();
 
             foreach (var state in dummyStates)
             {
@@ -288,10 +287,6 @@ namespace Test
 
                 states = tester.Extractor.State.NodeStates.Where(state => !state.FrontfillEnabled)
                     .Select(state => new InfluxBufferState(state)).ToList();
-                foreach (var state in states)
-                {
-                    state.SetComplete();
-                }
 
                 await tester.Extractor.StateStorage.RestoreExtractionState(
                     states.ToDictionary(state => state.Id),
@@ -325,10 +320,7 @@ namespace Test
             await tester2.Extractor.Looper.WaitForNextPush();
             await tester2.Extractor.Looper.WaitForNextPush();
 
-            foreach (var state in states)
-            {
-                state.SetComplete();
-            }
+            foreach (var state in states) state.ClearRanges();
 
             await tester2.Extractor.StateStorage.RestoreExtractionState(
                 states.ToDictionary(state => state.Id),
@@ -380,10 +372,6 @@ namespace Test
                 await tester.Extractor.Looper.WaitForNextPush();
 
                 states = tester.Extractor.State.EmitterStates.Select(state => new InfluxBufferState(state)).ToList();
-                foreach (var state in states)
-                {
-                    state.SetComplete();
-                }
 
                 await tester.Extractor.StateStorage.RestoreExtractionState(
                     states.ToDictionary(state => state.Id),
@@ -413,10 +401,7 @@ namespace Test
 
             await tester2.Extractor.Looper.WaitForNextPush();
 
-            foreach (var state in states)
-            {
-                state.SetComplete();
-            }
+            foreach (var state in states) state.ClearRanges();
 
             await tester2.Extractor.StateStorage.RestoreExtractionState(
                 states.ToDictionary(state => state.Id),

@@ -467,7 +467,7 @@ namespace Cognite.OpcUa
             {
                 sourceNode = Extractor.GetUniqueId(evt.SourceNode);
             }
-            idp.Fields.Add("source", sourceNode ?? "null");
+            idp.Tags.Add("source", sourceNode ?? "null");
             if (evt.MetaData != null)
             {
                 foreach (var kvp in evt.MetaData)
@@ -581,7 +581,8 @@ namespace Cognite.OpcUa
 
                 var state = states.Values.FirstOrDefault(state => name.StartsWith(state.Id, StringComparison.InvariantCulture));
                 if (state == null) continue;
-                
+
+
                 finalEvents.AddRange(series.Entries.Select(res =>
                 {
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
