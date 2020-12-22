@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
+using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Opc.Ua;
 using Serilog;
@@ -52,7 +53,7 @@ namespace Cognite.OpcUa.Pushers
             }
         }
         public static Dictionary<string, string> PropertiesToMetadata(
-            IEnumerable<BufferedVariable> properties,
+            IEnumerable<UAVariable> properties,
             Dictionary<string, string> extras)
         {
             if (properties == null && extras == null) return new Dictionary<string, string>();
@@ -103,7 +104,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="node">Node to be converted</param>
         /// <returns>Full asset write poco</returns>
-        public static AssetCreate NodeToAsset(BufferedNode node, UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
+        public static AssetCreate NodeToAsset(UANode node, UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
         {
             if (extractor == null || node == null) return null;
             var writePoco = new AssetCreate
@@ -149,7 +150,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="evt">Event to be transformed.</param>
         /// <returns>Final EventEntity object</returns>
-        public static StatelessEventCreate EventToStatelessCDFEvent(BufferedEvent evt, UAExtractor extractor, long? dataSetId,
+        public static StatelessEventCreate EventToStatelessCDFEvent(UAEvent evt, UAExtractor extractor, long? dataSetId,
             IDictionary<NodeId, string> parentIdMap)
         {
             if (evt == null || extractor == null) return null;
@@ -220,7 +221,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="evt">Event to be transformed.</param>
         /// <returns>Final EventEntity object</returns>
-        public static EventCreate EventToCDFEvent(BufferedEvent evt, UAExtractor extractor, long? dataSetId,
+        public static EventCreate EventToCDFEvent(UAEvent evt, UAExtractor extractor, long? dataSetId,
             IDictionary<NodeId, long> nodeToAssetIds)
         {
             if (evt == null || extractor == null) return null;
@@ -280,7 +281,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="variable">Variable to be converted</param>
         /// <returns>Complete timeseries write poco</returns>
-        public static StatelessTimeSeriesCreate VariableToStatelessTimeSeries(BufferedVariable variable,
+        public static StatelessTimeSeriesCreate VariableToStatelessTimeSeries(UAVariable variable,
             UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
         {
             if (variable == null || extractor == null) return null;
@@ -323,7 +324,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="variable">Variable to be converted</param>
         /// <returns>Complete timeseries write poco</returns>
-        public static TimeSeriesCreate VariableToTimeseries(BufferedVariable variable, UAExtractor extractor, long? dataSetId,
+        public static TimeSeriesCreate VariableToTimeseries(UAVariable variable, UAExtractor extractor, long? dataSetId,
             IDictionary<NodeId, long> nodeToAssetIds, Dictionary<string, string> metaMap, bool minimal = false)
         {
             if (variable == null
@@ -393,7 +394,7 @@ namespace Cognite.OpcUa.Pushers
             return CogniteSdk.Beta.RelationshipVertexType.Asset;
         }
 
-        public static CogniteSdk.Beta.RelationshipCreate ReferenceToRelationship(BufferedReference reference, long? dataSetId, UAExtractor extractor)
+        public static CogniteSdk.Beta.RelationshipCreate ReferenceToRelationship(UAReference reference, long? dataSetId, UAExtractor extractor)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             if (reference == null) throw new ArgumentNullException(nameof(reference));
@@ -431,7 +432,7 @@ namespace Cognite.OpcUa.Pushers
         }
         private static JsonElement? CreateRawUpdateCommon(
             UAExtractor extractor,
-            BufferedNode node,
+            UANode node,
             RawRow raw,
             TypeUpdateConfig update,
             Dictionary<string, object> ret)
@@ -495,7 +496,7 @@ namespace Cognite.OpcUa.Pushers
         }
 
         public static JsonElement? CreateRawTsUpdate(
-            BufferedVariable variable, 
+            UAVariable variable, 
             UAExtractor extractor,
             RawRow raw,
             TypeUpdateConfig update,
@@ -521,7 +522,7 @@ namespace Cognite.OpcUa.Pushers
         }
 
         public static JsonElement? CreateRawAssetUpdate(
-            BufferedNode node,
+            UANode node,
             UAExtractor extractor,
             RawRow raw,
             TypeUpdateConfig update,
@@ -546,7 +547,7 @@ namespace Cognite.OpcUa.Pushers
         }
         public static TimeSeriesUpdate GetTSUpdate(
             TimeSeries old,
-            BufferedVariable newTs,
+            UAVariable newTs,
             TypeUpdateConfig update,
             IDictionary<NodeId, long> nodeToAssetIds,
             Dictionary<string, string> extra)
@@ -595,7 +596,7 @@ namespace Cognite.OpcUa.Pushers
 
         public static AssetUpdate GetAssetUpdate(
             Asset old,
-            BufferedNode newAsset,
+            UANode newAsset,
             UAExtractor extractor,
             TypeUpdateConfig update,
             Dictionary<string, string> extra)

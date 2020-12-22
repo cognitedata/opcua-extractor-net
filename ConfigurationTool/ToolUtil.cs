@@ -21,6 +21,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Serilog;
@@ -88,7 +90,7 @@ namespace Cognite.OpcUa.Config
         /// <param name="child">Child to look for parents for</param>
         /// <param name="parent">Parent to look for</param>
         /// <returns>True if child is descendant of parent</returns>
-        public static bool IsChildOf(IEnumerable<BufferedNode> nodes, BufferedNode child, NodeId parent)
+        public static bool IsChildOf(IEnumerable<UANode> nodes, UANode child, NodeId parent)
         {
             var next = child ?? throw new ArgumentNullException(nameof(child));
 
@@ -114,20 +116,20 @@ namespace Cognite.OpcUa.Config
         /// <param name="target">List to write to</param>
         /// <param name="client">UAClient instance for namespaces</param>
         /// <returns>Callback for Browse in UAClient</returns>
-        public static Action<ReferenceDescription, NodeId> GetSimpleListWriterCallback(List<BufferedNode> target, UAClient client)
+        public static Action<ReferenceDescription, NodeId> GetSimpleListWriterCallback(List<UANode> target, UAClient client)
         {
             return (node, parentId) =>
             {
                 if (node.NodeClass == NodeClass.Object || node.NodeClass == NodeClass.DataType || node.NodeClass == NodeClass.ObjectType)
                 {
-                    var bufferedNode = new BufferedNode(client.ToNodeId(node.NodeId),
+                    var bufferedNode = new UANode(client.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
                     log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
                     target.Add(bufferedNode);
                 }
                 else if (node.NodeClass == NodeClass.Variable)
                 {
-                    var bufferedNode = new BufferedVariable(client.ToNodeId(node.NodeId),
+                    var bufferedNode = new UAVariable(client.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
                     if (node.TypeDefinition == VariableTypeIds.PropertyType)
                     {
@@ -139,27 +141,27 @@ namespace Cognite.OpcUa.Config
                 }
             };
         }
-        public static IEnumerable<BufferedDataPoint> ToDataPoint(DataValue value, NodeExtractionState variable, string uniqueId, UAClient client)
+        public static IEnumerable<UADataPoint> ToDataPoint(DataValue value, VariableExtractionState variable, string uniqueId, UAClient client)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
-            if (variable == null || value == null) return Array.Empty<BufferedDataPoint>();
+            if (variable == null || value == null) return Array.Empty<UADataPoint>();
             if (variable.ArrayDimensions != null && variable.ArrayDimensions.Count > 0 && variable.ArrayDimensions[0] > 0)
             {
-                var ret = new List<BufferedDataPoint>();
+                var ret = new List<UADataPoint>();
                 if (!(value.Value is Array))
                 {
                     log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
-                    return Enumerable.Empty<BufferedDataPoint>();
+                    return Enumerable.Empty<UADataPoint>();
                 }
                 var values = (Array)value.Value;
                 for (int i = 0; i < Math.Min(variable.ArrayDimensions[0], values.Length); i++)
                 {
                     var dp = variable.DataType.IsString
-                        ? new BufferedDataPoint(
+                        ? new UADataPoint(
                             value.SourceTimestamp,
                             $"{uniqueId}[{i}]",
                             client.ConvertToString(values.GetValue(i)))
-                        : new BufferedDataPoint(
+                        : new UADataPoint(
                             value.SourceTimestamp,
                             $"{uniqueId}[{i}]",
                             UAClient.ConvertToDouble(values.GetValue(i)));
@@ -168,11 +170,11 @@ namespace Cognite.OpcUa.Config
                 return ret;
             }
             var sdp = variable.DataType.IsString
-                ? new BufferedDataPoint(
+                ? new UADataPoint(
                     value.SourceTimestamp,
                     uniqueId,
                     client.ConvertToString(value.Value))
-                : new BufferedDataPoint(
+                : new UADataPoint(
                     value.SourceTimestamp,
                     uniqueId,
                     UAClient.ConvertToDouble(value.Value));
@@ -186,8 +188,8 @@ namespace Cognite.OpcUa.Config
         /// <param name="client">UAClient for namespaces</param>
         /// <returns>Subscription handler for datapoints</returns>
         public static MonitoredItemNotificationEventHandler GetSimpleListWriterHandler(
-            List<BufferedDataPoint> points,
-            IDictionary<NodeId, NodeExtractionState> states,
+            List<UADataPoint> points,
+            IDictionary<NodeId, VariableExtractionState> states,
             UAClient client)
         {
             return (item, args) =>
@@ -223,20 +225,20 @@ namespace Cognite.OpcUa.Config
             };
         }
 
-        public static BufferedDataPoint[] ReadResultToDataPoints(IEncodeable rawData, NodeExtractionState state, UAClient client)
+        public static UADataPoint[] ReadResultToDataPoints(IEncodeable rawData, VariableExtractionState state, UAClient client)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
-            if (rawData == null || state == null) return Array.Empty<BufferedDataPoint>();
+            if (rawData == null || state == null) return Array.Empty<UADataPoint>();
             if (!(rawData is HistoryData data))
             {
                 log.Warning("Incorrect result type of history read data");
-                return Array.Empty<BufferedDataPoint>();
+                return Array.Empty<UADataPoint>();
             }
 
-            if (data.DataValues == null) return Array.Empty<BufferedDataPoint>();
+            if (data.DataValues == null) return Array.Empty<UADataPoint>();
             string uniqueId = state.Id;
 
-            var result = new List<BufferedDataPoint>();
+            var result = new List<UADataPoint>();
 
             foreach (var datapoint in data.DataValues)
             {
@@ -288,14 +290,14 @@ namespace Cognite.OpcUa.Config
 
             return configText;
         }
-        public static bool NodeNameContains(BufferedNode node, string str)
+        public static bool NodeNameContains(UANode node, string str)
         {
             if (node == null) return false;
             string identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
             return identifier != null && identifier.StartsWith(str, StringComparison.InvariantCultureIgnoreCase)
                 || node.DisplayName != null && node.DisplayName.StartsWith(str, StringComparison.InvariantCultureIgnoreCase);
         }
-        public static bool NodeNameStartsWith(BufferedNode node, string str)
+        public static bool NodeNameStartsWith(UANode node, string str)
         {
             if (node == null) return false;
             string identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;

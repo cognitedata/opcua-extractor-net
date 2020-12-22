@@ -1,6 +1,8 @@
 ﻿using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
+using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -109,8 +111,8 @@ namespace Test.Unit
             evtState.FinalizeRangeInit();
             extractor.State.SetEmitterState(evtState);
 
-            var dpState = new NodeExtractionState(tester.Client,
-                new BufferedVariable(new NodeId("id"), "test", NodeId.Null),
+            var dpState = new VariableExtractionState(tester.Client,
+                new UAVariable(new NodeId("id"), "test", NodeId.Null),
                 false, false);
             dpState.InitToEmpty();
             dpState.FinalizeRangeInit();
@@ -133,9 +135,9 @@ namespace Test.Unit
 
             var start = DateTime.UtcNow;
 
-            var dps = Enumerable.Range(0, 100).Select(idx => new BufferedDataPoint(start.AddMilliseconds(idx), "id", idx));
+            var dps = Enumerable.Range(0, 100).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx));
             var evts = Enumerable.Range(0, 100).Select(idx =>
-                new BufferedEvent { EmittingNode = new NodeId("id"), Time = start.AddMilliseconds(idx) });
+                new UAEvent { EmittingNode = new NodeId("id"), Time = start.AddMilliseconds(idx) });
 
             InitPusherLoopTest(extractor, pusher1, pusher2);
 
@@ -143,10 +145,10 @@ namespace Test.Unit
             pusher2.Initialized = true;
 
             // Test all OK
-            var dps1 = pusher1.DataPoints[(new NodeId("id"), -1)] = new List<BufferedDataPoint>();
-            var dps2 = pusher2.DataPoints[(new NodeId("id"), -1)] = new List<BufferedDataPoint>();
-            var evts1 = pusher1.Events[new NodeId("id")] = new List<BufferedEvent>();
-            var evts2 = pusher2.Events[new NodeId("id")] = new List<BufferedEvent>();
+            var dps1 = pusher1.DataPoints[(new NodeId("id"), -1)] = new List<UADataPoint>();
+            var dps2 = pusher2.DataPoints[(new NodeId("id"), -1)] = new List<UADataPoint>();
+            var evts1 = pusher1.Events[new NodeId("id")] = new List<UAEvent>();
+            var evts2 = pusher2.Events[new NodeId("id")] = new List<UAEvent>();
 
             var loopTask = extractor.Looper.InitTaskLoop(Enumerable.Empty<Task>(), tester.Source.Token);
 
@@ -225,9 +227,9 @@ namespace Test.Unit
 
             var start = DateTime.UtcNow;
 
-            var dps = Enumerable.Range(0, 100).Select(idx => new BufferedDataPoint(start.AddMilliseconds(idx), "id", idx));
+            var dps = Enumerable.Range(0, 100).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx));
             var evts = Enumerable.Range(0, 100).Select(idx =>
-                new BufferedEvent { EmittingNode = new NodeId("id"), Time = start.AddMilliseconds(idx) });
+                new UAEvent { EmittingNode = new NodeId("id"), Time = start.AddMilliseconds(idx) });
 
             InitPusherLoopTest(extractor, pusher1, pusher2, pusher3);
 
@@ -237,12 +239,12 @@ namespace Test.Unit
             pusher2.TestConnectionResult = false;
             pusher3.Initialized = true;
 
-            var dps1 = pusher1.DataPoints[(new NodeId("id"), -1)] = new List<BufferedDataPoint>();
-            var dps2 = pusher2.DataPoints[(new NodeId("id"), -1)] = new List<BufferedDataPoint>();
-            var dps3 = pusher3.DataPoints[(new NodeId("id"), -1)] = new List<BufferedDataPoint>();
-            var evts1 = pusher1.Events[new NodeId("id")] = new List<BufferedEvent>();
-            var evts2 = pusher2.Events[new NodeId("id")] = new List<BufferedEvent>();
-            var evts3 = pusher3.Events[new NodeId("id")] = new List<BufferedEvent>();
+            var dps1 = pusher1.DataPoints[(new NodeId("id"), -1)] = new List<UADataPoint>();
+            var dps2 = pusher2.DataPoints[(new NodeId("id"), -1)] = new List<UADataPoint>();
+            var dps3 = pusher3.DataPoints[(new NodeId("id"), -1)] = new List<UADataPoint>();
+            var evts1 = pusher1.Events[new NodeId("id")] = new List<UAEvent>();
+            var evts2 = pusher2.Events[new NodeId("id")] = new List<UAEvent>();
+            var evts3 = pusher3.Events[new NodeId("id")] = new List<UAEvent>();
 
             Assert.Empty(dps1);
             Assert.Empty(dps2);
@@ -272,10 +274,10 @@ namespace Test.Unit
 
             // Add some missing nodes to each of the pushers, and verify that they are pushed on recovery
 
-            var nodes = new List<BufferedNode>
+            var nodes = new List<UANode>
             {
-                new BufferedNode(new NodeId("missing1"), "missing1", new NodeId("test")),
-                new BufferedVariable(new NodeId("missing2"), "missing2", new NodeId("test"))
+                new UANode(new NodeId("missing1"), "missing1", new NodeId("test")),
+                new UAVariable(new NodeId("missing2"), "missing2", new NodeId("test"))
             };
 
             pusher1.PendingNodes.AddRange(nodes);
@@ -284,12 +286,12 @@ namespace Test.Unit
             var refManager = (ReferenceTypeManager)extractor.GetType().GetField("referenceTypeManager",
                 BindingFlags.Instance | BindingFlags.NonPublic).GetValue(extractor);
 
-            var reference = new BufferedReference(new ReferenceDescription
+            var reference = new UAReference(new ReferenceDescription
             {
                 IsForward = true,
                 NodeClass = NodeClass.Variable,
                 ReferenceTypeId = ReferenceTypeIds.Organizes
-            }, new BufferedNode(new NodeId("object1"), "object1", new NodeId("test")), new NodeId("var1"), null, refManager);
+            }, new UANode(new NodeId("object1"), "object1", new NodeId("test")), new NodeId("var1"), null, refManager);
 
             pusher1.PendingReferences.Add(reference);
             pusher2.PendingReferences.Add(reference);

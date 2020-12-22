@@ -24,7 +24,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
+using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
@@ -50,7 +52,7 @@ namespace Cognite.OpcUa
         private readonly ReferenceTypeManager referenceTypeManager;
         public NodeId RootNode { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
-        private readonly ConcurrentQueue<BufferedNode> commonQueue = new ConcurrentQueue<BufferedNode>();
+        private readonly ConcurrentQueue<UANode> commonQueue = new ConcurrentQueue<UANode>();
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
         private readonly ConcurrentQueue<(ReferenceDescription Desc, NodeId ParentId)> referenceQueue =
             new ConcurrentQueue<(ReferenceDescription, NodeId)>();
@@ -363,7 +365,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="reference">Reference to get id for</param>
         /// <returns>String reference id</returns>
-        public string GetRelationshipId(BufferedReference reference)
+        public string GetRelationshipId(UAReference reference)
         {
             return uaClient.GetRelationshipId(reference);
         }
@@ -384,7 +386,7 @@ namespace Cognite.OpcUa
         /// waits on the first.
         /// </summary>
         /// <param name="nodes">Nodes to get properties for</param>
-        public async Task ReadProperties(IEnumerable<BufferedNode> nodes)
+        public async Task ReadProperties(IEnumerable<UANode> nodes)
         {
             Task newTask = null;
             List<Task> tasksToWaitFor;
@@ -467,11 +469,11 @@ namespace Cognite.OpcUa
             }
             log.Debug("Waited {s} milliseconds for subscriptions", time * 100);
         }
-        public Dictionary<string, string> GetExtraMetadata(BufferedNode node)
+        public Dictionary<string, string> GetExtraMetadata(UANode node)
         {
             if (node == null) return null;
             Dictionary<string, string> fields = null;
-            if (node is BufferedVariable variable)
+            if (node is UAVariable variable)
             {
                 fields = DataTypeManager.GetAdditionalMetadata(variable);
             }
@@ -499,7 +501,7 @@ namespace Cognite.OpcUa
             var nodes = await GetNodesFromQueue();
             nodes.ClearRaw();
 
-            IEnumerable<BufferedReference> references = null;
+            IEnumerable<UAReference> references = null;
             if (config.Extraction.Relationships.Enabled)
             {
                 references = await GetRelationshipData(nodes);
@@ -584,23 +586,23 @@ namespace Cognite.OpcUa
             /// <summary>
             /// All nodes that should be mapped to destination objects
             /// </summary>
-            public List<BufferedNode> Objects { get;} = new List<BufferedNode>();
+            public List<UANode> Objects { get;} = new List<UANode>();
             /// <summary>
             /// All nodes that should be mapped to destination variables
             /// </summary>
-            public List<BufferedVariable> Timeseries { get; } = new List<BufferedVariable>();
+            public List<UAVariable> Timeseries { get; } = new List<UAVariable>();
             /// <summary>
             /// All source system variables that should be read from
             /// </summary>
-            public List<BufferedVariable> Variables { get; } = new List<BufferedVariable>();
+            public List<UAVariable> Variables { get; } = new List<UAVariable>();
             /// <summary>
             /// All source system objects
             /// </summary>
-            public List<BufferedNode> RawObjects { get; private set; } = new List<BufferedNode>();
+            public List<UANode> RawObjects { get; private set; } = new List<UANode>();
             /// <summary>
             /// All source system variables
             /// </summary>
-            public List<BufferedVariable> RawVariables { get; private set; } = new List<BufferedVariable>();
+            public List<UAVariable> RawVariables { get; private set; } = new List<UAVariable>();
             /// <summary>
             /// Helps free up memory, especially on re-browse
             /// </summary>
@@ -641,7 +643,7 @@ namespace Cognite.OpcUa
             await Task.WhenAll(extraMetaTasks);
         }
 
-        private IEnumerable<BufferedNode> FilterObjects(UpdateConfig update, IEnumerable<BufferedNode> rawObjects)
+        private IEnumerable<UANode> FilterObjects(UpdateConfig update, IEnumerable<UANode> rawObjects)
         {
             foreach (var node in rawObjects)
             {
@@ -721,7 +723,7 @@ namespace Cognite.OpcUa
                 }
                 log.Verbose(node.ToDebugDescription());
                 result.Variables.Add(node);
-                var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill);
+                var state = new VariableExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill);
 
                 State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata,
                     config.Extraction.NodeTypes.Metadata);
@@ -751,19 +753,19 @@ namespace Cognite.OpcUa
         private async Task<BrowseResult> GetNodesFromQueue()
         {
             var result = new BrowseResult();
-            var nodeMap = new Dictionary<NodeId, BufferedNode>();
+            var nodeMap = new Dictionary<NodeId, UANode>();
 
-            while (commonQueue.TryDequeue(out BufferedNode buffer))
+            while (commonQueue.TryDequeue(out UANode buffer))
             {
-                if (buffer.IsVariable && buffer is BufferedVariable buffVar)
+                if (buffer.IsVariable && buffer is UAVariable buffVar)
                 {
                     if (buffVar.IsProperty)
                     {
-                        nodeMap.TryGetValue(buffVar.ParentId, out BufferedNode parent);
+                        nodeMap.TryGetValue(buffVar.ParentId, out UANode parent);
                         if (parent == null) continue;
                         if (parent.Properties == null)
                         {
-                            parent.Properties = new List<BufferedVariable>();
+                            parent.Properties = new List<UAVariable>();
                         }
                         parent.Properties.Add(buffVar);
                     }
@@ -792,9 +794,9 @@ namespace Cognite.OpcUa
 
 
         private void PushNodesFailure(
-            IEnumerable<BufferedNode> objects,
-            IEnumerable<BufferedVariable> timeseries,
-            IEnumerable<BufferedReference> references,
+            IEnumerable<UANode> objects,
+            IEnumerable<UAVariable> timeseries,
+            IEnumerable<UAReference> references,
             bool nodesPassed,
             bool referencesPassed,
             bool dpRangesPassed,
@@ -828,9 +830,9 @@ namespace Cognite.OpcUa
         /// <param name="initial">True if this counts as initialization of the pusher</param>
         /// <param name="initMissing">Whether or not to initialize nodes with missing ranges to empty</param>
         public async Task PushNodes(
-            IEnumerable<BufferedNode> objects,
-            IEnumerable<BufferedVariable> timeseries,
-            IEnumerable<BufferedReference> references,
+            IEnumerable<UANode> objects,
+            IEnumerable<UAVariable> timeseries,
+            IEnumerable<UAReference> references,
             IPusher pusher, bool initial, bool initMissing)
         {
             if (pusher == null) throw new ArgumentNullException(nameof(pusher));
@@ -888,7 +890,7 @@ namespace Cognite.OpcUa
             pusher.Initialized |= initial;
         }
 
-        private async Task<IEnumerable<BufferedReference>> GetRelationshipData(BrowseResult nodes)
+        private async Task<IEnumerable<UAReference>> GetRelationshipData(BrowseResult nodes)
         {
             var references = await referenceTypeManager.GetReferencesAsync(nodes.Objects.Concat(nodes.Variables).DistinctBy(node => node.Id),
                     ReferenceTypeIds.NonHierarchicalReferences, source.Token);
@@ -896,20 +898,20 @@ namespace Cognite.OpcUa
             if (config.Extraction.Relationships.Hierarchical)
             {
                 var nodeMap = nodes.Objects.Concat(nodes.Variables)
-                    .Where(node => !(node is BufferedVariable variable) || variable.Index == -1)
+                    .Where(node => !(node is UAVariable variable) || variable.Index == -1)
                     .DistinctBy(node => node.Id)
                     .ToDictionary(node => node.Id);
-                var hierarchicalReferences = new List<BufferedReference>();
+                var hierarchicalReferences = new List<UAReference>();
                 while (referenceQueue.TryDequeue(out var pair))
                 {
                     // The child should always be in the list of mapped nodes here
                     if (!nodeMap.TryGetValue(uaClient.ToNodeId(pair.Desc.NodeId), out var childNode)) continue;
-                    if (childNode == null || childNode is BufferedVariable childVar && childVar.IsProperty) continue;
+                    if (childNode == null || childNode is UAVariable childVar && childVar.IsProperty) continue;
 
-                    hierarchicalReferences.Add(new BufferedReference(pair.Desc, pair.ParentId, childNode, referenceTypeManager, false));
+                    hierarchicalReferences.Add(new UAReference(pair.Desc, pair.ParentId, childNode, referenceTypeManager, false));
                     if (config.Extraction.Relationships.InverseHierarchical)
                     {
-                        hierarchicalReferences.Add(new BufferedReference(pair.Desc, pair.ParentId, childNode, referenceTypeManager, true));
+                        hierarchicalReferences.Add(new UAReference(pair.Desc, pair.ParentId, childNode, referenceTypeManager, true));
                     }
                 }
                 references = references.Concat(hierarchicalReferences);
@@ -924,9 +926,9 @@ namespace Cognite.OpcUa
         /// <param name="objects">Objects to synchronize with destinations</param>
         /// <param name="timeseries">Variables to synchronize with destinations</param>
         /// <param name="references">References to synchronize with destinations</param>
-        private async Task PushNodes(IEnumerable<BufferedNode> objects,
-            IEnumerable<BufferedVariable> timeseries,
-            IEnumerable<BufferedReference> references)
+        private async Task PushNodes(IEnumerable<UANode> objects,
+            IEnumerable<UAVariable> timeseries,
+            IEnumerable<UAReference> references)
         {
             var newStates = timeseries
                 .Select(ts => ts.Id)
@@ -1005,7 +1007,7 @@ namespace Cognite.OpcUa
         /// Subscribe to data changes, then run history.
         /// </summary>
         /// <param name="states">States to subscribe to</param>
-        private async Task SynchronizeNodes(IEnumerable<NodeExtractionState> states)
+        private async Task SynchronizeNodes(IEnumerable<VariableExtractionState> states)
         {
             await Task.Run(() => uaClient.SubscribeToNodes(states, Streamer.DataSubscriptionHandler, source.Token));
             Interlocked.Increment(ref subscribed);
@@ -1030,7 +1032,7 @@ namespace Cognite.OpcUa
         /// <param name="variables">Variables to synchronize</param>
         /// <param name="objects">Recently added objects, used for event subscriptions</param>
         /// <returns>Two tasks, one for data and one for events</returns>
-        private IEnumerable<Task> Synchronize(IEnumerable<BufferedVariable> variables)
+        private IEnumerable<Task> Synchronize(IEnumerable<UAVariable> variables)
         {
             var states = variables.Select(ts => ts.Id).Distinct().Select(id => State.GetNodeState(id));
 
@@ -1057,7 +1059,7 @@ namespace Cognite.OpcUa
 
         #region Handlers
         /// <summary>
-        /// Callback for the browse operation, creates <see cref="BufferedNode"/>s and enqueues them.
+        /// Callback for the browse operation, creates <see cref="UANode"/>s and enqueues them.
         /// </summary>
         /// <param name="node">Description of the node to be handled</param>
         /// <param name="parentId">Id of the parent node</param>
@@ -1068,7 +1070,7 @@ namespace Cognite.OpcUa
 
             if (node.NodeClass == NodeClass.Object)
             {
-                var bufferedNode = new BufferedNode(uaClient.ToNodeId(node.NodeId),
+                var bufferedNode = new UANode(uaClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
 
                 if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
@@ -1082,7 +1084,7 @@ namespace Cognite.OpcUa
             }
             else if (node.NodeClass == NodeClass.Variable)
             {
-                var bufferedNode = new BufferedVariable(uaClient.ToNodeId(node.NodeId),
+                var bufferedNode = new UAVariable(uaClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
 
                 if (IsProperty(node))

@@ -43,6 +43,8 @@ using Cognite.Extractor.Utils;
 using File = System.IO.File;
 using Cognite.Extractor.Metrics;
 using System.Text;
+using Cognite.OpcUa.Types;
+using Cognite.OpcUa.HistoryStates;
 
 namespace Test
 {
@@ -678,7 +680,7 @@ namespace Test
             Server = new ServerController(new[] { SetupMap[testParams.ServerName] });
         }
 
-        public Task<IEnumerable<BufferedDataPoint>> GetAllInfluxPoints(NodeId node, bool isString = false, int index = -1)
+        public Task<IEnumerable<UADataPoint>> GetAllInfluxPoints(NodeId node, bool isString = false, int index = -1)
         {
             var dummy = new InfluxBufferState(Extractor.State.GetNodeState(node));
             dummy.SetComplete();
@@ -688,7 +690,7 @@ namespace Test
                 CancellationToken.None);
         }
 
-        public Task<IEnumerable<BufferedEvent>> GetAllInfluxEvents(NodeId emitter)
+        public Task<IEnumerable<UAEvent>> GetAllInfluxEvents(NodeId emitter)
         {
             var dummy = new InfluxBufferState(Extractor.State.GetEmitterState(emitter));
             dummy.SetComplete();

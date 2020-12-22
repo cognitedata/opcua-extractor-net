@@ -1,6 +1,8 @@
 ﻿using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -344,14 +346,14 @@ namespace Test.Unit
         public void TestReadNodeData()
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests");
-            var nodes = new BufferedNode[]
+            var nodes = new UANode[]
             {
-                new BufferedNode(tester.Server.Ids.Full.Root, "FullRoot", ObjectIds.ObjectsFolder),
-                new BufferedNode(tester.Server.Ids.Event.Obj1, "Object 1", tester.Server.Ids.Event.Root),
-                new BufferedNode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder),
-                new BufferedVariable(tester.Server.Ids.Custom.StringyVar, "StringyVar", tester.Server.Ids.Custom.Root),
-                new BufferedVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root),
-                new BufferedVariable(tester.Server.Ids.Custom.ObjProp, "ObjProp", tester.Server.Ids.Custom.Obj2) { IsProperty = true }
+                new UANode(tester.Server.Ids.Full.Root, "FullRoot", ObjectIds.ObjectsFolder),
+                new UANode(tester.Server.Ids.Event.Obj1, "Object 1", tester.Server.Ids.Event.Root),
+                new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder),
+                new UAVariable(tester.Server.Ids.Custom.StringyVar, "StringyVar", tester.Server.Ids.Custom.Root),
+                new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root),
+                new UAVariable(tester.Server.Ids.Custom.ObjProp, "ObjProp", tester.Server.Ids.Custom.Obj2) { IsProperty = true }
             };
             tester.Config.History.Enabled = true;
             tester.Config.History.Data = true;
@@ -371,11 +373,11 @@ namespace Test.Unit
 
             Assert.Equal("FullRoot Description", nodes[0].Description);
             Assert.Equal(EventNotifiers.SubscribeToEvents | EventNotifiers.HistoryRead, nodes[1].EventNotifier);
-            Assert.Equal(tester.Server.Ids.Custom.StringyType, (nodes[3] as BufferedVariable).DataType.Raw);
-            Assert.Equal(4, (nodes[4] as BufferedVariable).ArrayDimensions[0]);
-            Assert.Single((nodes[4] as BufferedVariable).ArrayDimensions);
-            Assert.True((nodes[4] as BufferedVariable).Historizing);
-            Assert.Null((nodes[5] as BufferedVariable).ArrayDimensions);
+            Assert.Equal(tester.Server.Ids.Custom.StringyType, (nodes[3] as UAVariable).DataType.Raw);
+            Assert.Equal(4, (nodes[4] as UAVariable).ArrayDimensions[0]);
+            Assert.Single((nodes[4] as UAVariable).ArrayDimensions);
+            Assert.True((nodes[4] as UAVariable).Historizing);
+            Assert.Null((nodes[5] as UAVariable).ArrayDimensions);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 1));
         }
@@ -386,7 +388,7 @@ namespace Test.Unit
             int start = (int)(uint)tester.Server.Ids.Full.WideRoot.Identifier;
             var nodes = Enumerable.Range(start + 1, 2000)
                 .Select(idf => new NodeId((uint)idf, 2))
-                .Select(id => new BufferedVariable(id, "subnode", tester.Server.Ids.Full.WideRoot))
+                .Select(id => new UAVariable(id, "subnode", tester.Server.Ids.Full.WideRoot))
                 .ToList();
             tester.Config.Source.AttributesChunk = 100;
             tester.Config.History.Enabled = true;
@@ -457,11 +459,11 @@ namespace Test.Unit
         {
             var nodes = new[]
             {
-                new BufferedVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar", tester.Server.Ids.Base.Root),
-                new BufferedVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root) { IsProperty = true },
-                new BufferedVariable(tester.Server.Ids.Custom.StringArray, "StringArray", tester.Server.Ids.Custom.Root) { IsProperty = true },
-                new BufferedVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Root) { IsProperty = true },
-                new BufferedVariable(tester.Server.Ids.Custom.RangeProp, "RangeProp", tester.Server.Ids.Custom.Root) { IsProperty = true }
+                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar", tester.Server.Ids.Base.Root),
+                new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root) { IsProperty = true },
+                new UAVariable(tester.Server.Ids.Custom.StringArray, "StringArray", tester.Server.Ids.Custom.Root) { IsProperty = true },
+                new UAVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Root) { IsProperty = true },
+                new UAVariable(tester.Server.Ids.Custom.RangeProp, "RangeProp", tester.Server.Ids.Custom.Root) { IsProperty = true }
             };
 
             // Need to read attributes first for this, to get proper conversion we need the datatype.
@@ -479,29 +481,29 @@ namespace Test.Unit
         public void TestGetNodeProperties()
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests", "opcua_browse_operations");
-            var arrayVar = new BufferedVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root)
+            var arrayVar = new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root)
             {
                 ArrayDimensions = new Collection<int> { 4 }
             };
             var nodes = new[]
             {
                 // Normal variable
-                new BufferedVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar", tester.Server.Ids.Base.Root),
+                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar", tester.Server.Ids.Base.Root),
                 // Array root
                 arrayVar,
                 // Array element
                 arrayVar.CreateArrayChildren().First(),
                 // Variable with properties
-                new BufferedVariable(tester.Server.Ids.Custom.MysteryVar, "NumberVar", tester.Server.Ids.Custom.Root),
+                new UAVariable(tester.Server.Ids.Custom.MysteryVar, "NumberVar", tester.Server.Ids.Custom.Root),
                 // object with no children
-                new BufferedNode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder),
+                new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder),
                 // object with properties
-                new BufferedNode(tester.Server.Ids.Custom.Obj2, "Object", tester.Server.Ids.Custom.Root)
+                new UANode(tester.Server.Ids.Custom.Obj2, "Object", tester.Server.Ids.Custom.Root)
                 {
-                    Properties = new List<BufferedVariable>
+                    Properties = new List<UAVariable>
                     {
-                        new BufferedVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Obj2) { IsProperty = true },
-                        new BufferedVariable(tester.Server.Ids.Custom.RangeProp, "Range", tester.Server.Ids.Custom.Obj2) { IsProperty = true },
+                        new UAVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Obj2) { IsProperty = true },
+                        new UAVariable(tester.Server.Ids.Custom.RangeProp, "Range", tester.Server.Ids.Custom.Obj2) { IsProperty = true },
                     }
                 }
             };
@@ -585,7 +587,7 @@ namespace Test.Unit
             int start = (int)(uint)tester.Server.Ids.Full.WideRoot.Identifier;
             var nodes = Enumerable.Range(start + 1, 2000)
                 .Select(idf => new NodeId((uint)idf, 2))
-                .Select(id => new NodeExtractionState(tester.Client, new BufferedVariable(id, "somvar", tester.Server.Ids.Full.WideRoot), true, true))
+                .Select(id => new VariableExtractionState(tester.Client, new UAVariable(id, "somvar", tester.Server.Ids.Full.WideRoot), true, true))
                 .ToList();
 
             var lck = new object();

@@ -2,7 +2,9 @@
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
+using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
@@ -148,20 +150,20 @@ namespace Test.Unit
             Assert.False(fb1.AnyEvents);
 
             // Test restore nothing
-            await fb1.InitializeBufferStates(Enumerable.Empty<NodeExtractionState>(), Enumerable.Empty<EventExtractionState>(), tester.Source.Token);
+            await fb1.InitializeBufferStates(Enumerable.Empty<VariableExtractionState>(), Enumerable.Empty<EventExtractionState>(), tester.Source.Token);
 
             Assert.False(fb1.AnyPoints);
             Assert.False(fb1.AnyEvents);
 
             // Test restore nonexisting states
-            var dt = new BufferedDataType(DataTypeIds.Double);
+            var dt = new UADataType(DataTypeIds.Double);
 
-            var state1 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
-            var state2 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt }, false, false);
-            var state3 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, true, true);
+            var state1 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
+            var state2 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt }, false, false);
+            var state3 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, true, true);
             var nodeStates = new[] { state1, state2, state3 };
 
             var nodeInfluxStates = nodeStates.Select(state => new InfluxBufferState(state)).ToList();
@@ -212,9 +214,9 @@ namespace Test.Unit
             Assert.True(fb1.AnyEvents);
         }
 
-        private static IEnumerable<BufferedDataPoint> GetDps(DateTime start, string id, int count)
+        private static IEnumerable<UADataPoint> GetDps(DateTime start, string id, int count)
         {
-            return Enumerable.Range(0, count).Select(idx => new BufferedDataPoint(start.AddSeconds(idx), id, idx));
+            return Enumerable.Range(0, count).Select(idx => new UADataPoint(start.AddSeconds(idx), id, idx));
         }
 
         [Fact]
@@ -229,14 +231,14 @@ namespace Test.Unit
             using var pusher = new InfluxPusher(tester.Config.Influx);
             var fb1 = new FailureBuffer(cfg, extractor, pusher);
 
-            var dt = new BufferedDataType(DataTypeIds.Double);
+            var dt = new UADataType(DataTypeIds.Double);
 
-            var state1 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
-            var state2 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt }, false, false);
-            var state3 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, true, true);
+            var state1 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
+            var state2 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt }, false, false);
+            var state3 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, true, true);
             extractor.State.SetNodeState(state1, "state1");
             extractor.State.SetNodeState(state2, "state2");
             extractor.State.SetNodeState(state3, "state3");
@@ -297,9 +299,9 @@ namespace Test.Unit
             Assert.True(new FileInfo(cfg.FailureBuffer.DatapointPath).Length > 0);
         }
 
-        private static IEnumerable<BufferedEvent> GetEvents(DateTime start, NodeId id, int cnt)
+        private static IEnumerable<UAEvent> GetEvents(DateTime start, NodeId id, int cnt)
         {
-            return Enumerable.Range(0, cnt).Select(idx => new BufferedEvent { EmittingNode = id, Time = start.AddSeconds(idx) });
+            return Enumerable.Range(0, cnt).Select(idx => new UAEvent { EmittingNode = id, Time = start.AddSeconds(idx) });
         }
 
         [Fact]
@@ -332,7 +334,7 @@ namespace Test.Unit
                 .GetValue(fb1);
 
             // Missing events
-            await fb1.WriteEvents(Enumerable.Empty<BufferedEvent>(), tester.Source.Token);
+            await fb1.WriteEvents(Enumerable.Empty<UAEvent>(), tester.Source.Token);
 
             Assert.Empty(eventBufferStates);
             Assert.False(fb1.AnyEvents);
@@ -387,14 +389,14 @@ namespace Test.Unit
             var pushers = new IPusher[] { pusher, dPusher };
             var fb1 = new FailureBuffer(cfg, extractor, pusher);
 
-            var dt = new BufferedDataType(DataTypeIds.Double);
+            var dt = new UADataType(DataTypeIds.Double);
 
-            var state1 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
-            var state2 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt }, false, false);
-            var state3 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, true, true);
+            var state1 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
+            var state2 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt }, false, false);
+            var state3 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, true, true);
             extractor.State.SetNodeState(state1, "state1");
             extractor.State.SetNodeState(state2, "state2");
             extractor.State.SetNodeState(state3, "state3");
@@ -408,9 +410,9 @@ namespace Test.Unit
             state3.UpdateFromBackfill(DateTime.MaxValue, true);
             state3.UpdateFromFrontfill(DateTime.MinValue, true);
 
-            var dps1 = dPusher.DataPoints[(new NodeId("state1"), -1)] = new List<BufferedDataPoint>();
-            var dps2 = dPusher.DataPoints[(new NodeId("state2"), -1)] = new List<BufferedDataPoint>();
-            var dps3 = dPusher.DataPoints[(new NodeId("state3"), -1)] = new List<BufferedDataPoint>();
+            var dps1 = dPusher.DataPoints[(new NodeId("state1"), -1)] = new List<UADataPoint>();
+            var dps2 = dPusher.DataPoints[(new NodeId("state2"), -1)] = new List<UADataPoint>();
+            var dps3 = dPusher.DataPoints[(new NodeId("state3"), -1)] = new List<UADataPoint>();
 
             using var client = await SetupInfluxdb(cfg.Influx);
 
@@ -505,9 +507,9 @@ namespace Test.Unit
 
             var evts = GetEvents(start, estate1.SourceId, 100).Concat(GetEvents(start, estate3.SourceId, 100)).ToList();
 
-            var evts1 = dPusher.Events[new NodeId("emitter1")] = new List<BufferedEvent>();
-            var evts2 = dPusher.Events[new NodeId("emitter2")] = new List<BufferedEvent>();
-            var evts3 = dPusher.Events[new NodeId("emitter3")] = new List<BufferedEvent>();
+            var evts1 = dPusher.Events[new NodeId("emitter1")] = new List<UAEvent>();
+            var evts2 = dPusher.Events[new NodeId("emitter2")] = new List<UAEvent>();
+            var evts3 = dPusher.Events[new NodeId("emitter3")] = new List<UAEvent>();
 
             using var client = await SetupInfluxdb(cfg.Influx);
 
@@ -577,22 +579,22 @@ namespace Test.Unit
             var pushers = new IPusher[] { dPusher };
             var fb1 = new FailureBuffer(cfg, extractor, null);
 
-            var dt = new BufferedDataType(DataTypeIds.Double);
-            var dt2 = new BufferedDataType(DataTypeIds.String);
+            var dt = new UADataType(DataTypeIds.Double);
+            var dt2 = new UADataType(DataTypeIds.String);
 
-            var state1 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
-            var state2 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt2 }, false, false);
-            var state3 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, false, false);
+            var state1 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
+            var state2 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt2 }, false, false);
+            var state3 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, false, false);
             extractor.State.SetNodeState(state1, "state1");
             extractor.State.SetNodeState(state2, "state2");
             extractor.State.SetNodeState(state3, "state3");
 
-            var dps1 = dPusher.DataPoints[(new NodeId("state1"), -1)] = new List<BufferedDataPoint>();
-            var dps2 = dPusher.DataPoints[(new NodeId("state2"), -1)] = new List<BufferedDataPoint>();
-            var dps3 = dPusher.DataPoints[(new NodeId("state3"), -1)] = new List<BufferedDataPoint>();
+            var dps1 = dPusher.DataPoints[(new NodeId("state1"), -1)] = new List<UADataPoint>();
+            var dps2 = dPusher.DataPoints[(new NodeId("state2"), -1)] = new List<UADataPoint>();
+            var dps3 = dPusher.DataPoints[(new NodeId("state3"), -1)] = new List<UADataPoint>();
 
             foreach (var state in new[] { state1, state2, state3 })
             {
@@ -604,7 +606,7 @@ namespace Test.Unit
             var start = DateTime.UtcNow;
 
             var dps = GetDps(start, "state1", 100)
-                .Concat(Enumerable.Range(0, 100).Select(idx => new BufferedDataPoint(start.AddSeconds(idx), "state2", "value" + idx)))
+                .Concat(Enumerable.Range(0, 100).Select(idx => new UADataPoint(start.AddSeconds(idx), "state2", "value" + idx)))
                 .Concat(GetDps(start, "state4", 100))
                 .Concat(GetDps(start, "state3", 100)).ToList();
 
@@ -663,10 +665,10 @@ namespace Test.Unit
                 .Concat(GetEvents(start, new NodeId("somemissingemitter"), 100))
                 .Concat(GetEvents(start, estate3.SourceId, 100)).ToList();
 
-            var evts1 = dPusher.Events[new NodeId("emitter1")] = new List<BufferedEvent>();
-            var evts2 = dPusher.Events[new NodeId("emitter2")] = new List<BufferedEvent>();
-            var evts3 = dPusher.Events[new NodeId("emitter3")] = new List<BufferedEvent>();
-            var evts4 = dPusher.Events[new NodeId("somemissingemitter")] = new List<BufferedEvent>();
+            var evts1 = dPusher.Events[new NodeId("emitter1")] = new List<UAEvent>();
+            var evts2 = dPusher.Events[new NodeId("emitter2")] = new List<UAEvent>();
+            var evts3 = dPusher.Events[new NodeId("emitter3")] = new List<UAEvent>();
+            var evts4 = dPusher.Events[new NodeId("somemissingemitter")] = new List<UAEvent>();
 
             Assert.Equal(0, new FileInfo(cfg.FailureBuffer.EventPath).Length);
 

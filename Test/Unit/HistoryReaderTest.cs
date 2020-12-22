@@ -1,7 +1,9 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
+using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -49,15 +51,15 @@ namespace Test.Unit
 
             var reader = new HistoryReader(tester.Client, extractor, cfg);
 
-            var dt = new BufferedDataType(DataTypeIds.Double);
+            var dt = new UADataType(DataTypeIds.Double);
 
-            var state1 = new NodeExtractionState(extractor,
-                new BufferedVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, true, true);
+            var state1 = new VariableExtractionState(extractor,
+                new UAVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, true, true);
             extractor.State.SetNodeState(state1, "state1");
 
             state1.FinalizeRangeInit();
 
-            var queue = (Queue<BufferedDataPoint>)extractor.Streamer.GetType()
+            var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
@@ -115,7 +117,7 @@ namespace Test.Unit
             queue.Clear();
             // Get a datapoint from stream that happened after the last history point was read from the server, but arrived
             // at the extractor before the history data was parsed. This is an edge-case, but a potential lost datapoint 
-            state1.UpdateFromStream(new[] { new BufferedDataPoint(start.AddSeconds(100), "state1", 1.0) });
+            state1.UpdateFromStream(new[] { new UADataPoint(start.AddSeconds(100), "state1", 1.0) });
             Assert.Equal(100, historyDataHandler.Invoke(reader, new object[] { historyData, true, true, new NodeId("state1"), null }));
             Assert.False(state1.IsFrontfilling);
             Assert.Equal(101, queue.Count);
@@ -135,7 +137,7 @@ namespace Test.Unit
 
             state.FinalizeRangeInit();
 
-            var queue = (Queue<BufferedEvent>)extractor.Streamer.GetType()
+            var queue = (Queue<UAEvent>)extractor.Streamer.GetType()
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
@@ -202,7 +204,7 @@ namespace Test.Unit
             historyEvents.Events = frontfillEvents;
             state.RestartHistory();
             queue.Clear();
-            state.UpdateFromStream(new BufferedEvent { Time = start.AddSeconds(100) });
+            state.UpdateFromStream(new UAEvent { Time = start.AddSeconds(100) });
             Assert.Equal(100, historyEventHandler.Invoke(reader, new object[] { historyEvents, true, true, new NodeId("emitter"), details }));
             Assert.False(state.IsFrontfilling);
             Assert.Equal(101, queue.Count);
@@ -221,13 +223,13 @@ namespace Test.Unit
 
             var reader = new HistoryReader(tester.Client, extractor, cfg);
 
-            var dt = new BufferedDataType(DataTypeIds.Double);
-            var dt2 = new BufferedDataType(DataTypeIds.String);
+            var dt = new UADataType(DataTypeIds.Double);
+            var dt2 = new UADataType(DataTypeIds.String);
 
             var states = new[] { tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Custom.Array,
                 tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.StringVar }
-                .Select((id, idx) => new NodeExtractionState(
-                    extractor, new BufferedVariable(id, "state", NodeId.Null) {
+                .Select((id, idx) => new VariableExtractionState(
+                    extractor, new UAVariable(id, "state", NodeId.Null) {
                         DataType = idx == 3 ? dt2 : dt, ArrayDimensions = idx == 1 ? new Collection<int>(new[] { 4 }) : null }, true, true))
                 .ToList();
 
@@ -240,14 +242,14 @@ namespace Test.Unit
                 extractor.State.SetNodeState(state);
             }
 
-            var queue = (Queue<BufferedDataPoint>)extractor.Streamer.GetType()
+            var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
             CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
 
             // Test no states
-            await reader.FrontfillData(Enumerable.Empty<NodeExtractionState>(), tester.Source.Token);
+            await reader.FrontfillData(Enumerable.Empty<VariableExtractionState>(), tester.Source.Token);
             Assert.Empty(queue);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 0));
 
@@ -298,13 +300,13 @@ namespace Test.Unit
 
             var reader = new HistoryReader(tester.Client, extractor, cfg);
 
-            var dt = new BufferedDataType(DataTypeIds.Double);
-            var dt2 = new BufferedDataType(DataTypeIds.String);
+            var dt = new UADataType(DataTypeIds.Double);
+            var dt2 = new UADataType(DataTypeIds.String);
 
             var states = new[] { tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Custom.Array,
                 tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.StringVar }
-                .Select((id, idx) => new NodeExtractionState(
-                    extractor, new BufferedVariable(id, "state", NodeId.Null)
+                .Select((id, idx) => new VariableExtractionState(
+                    extractor, new UAVariable(id, "state", NodeId.Null)
                     {
                         DataType = idx == 3 ? dt2 : dt,
                         ArrayDimensions = idx == 1 ? new Collection<int>(new[] { 4 }) : null
@@ -320,14 +322,14 @@ namespace Test.Unit
                 extractor.State.SetNodeState(state);
             }
 
-            var queue = (Queue<BufferedDataPoint>)extractor.Streamer.GetType()
+            var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
             CommonTestUtils.ResetMetricValues("opcua_backfill_data_count", "opcua_backfill_data_points");
 
             // Test no states
-            await reader.BackfillData(Enumerable.Empty<NodeExtractionState>(), tester.Source.Token);
+            await reader.BackfillData(Enumerable.Empty<VariableExtractionState>(), tester.Source.Token);
             Assert.Empty(queue);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 0));
 
@@ -393,7 +395,7 @@ namespace Test.Unit
                 extractor.State.SetEmitterState(state);
             }
 
-            var queue = (Queue<BufferedEvent>)extractor.Streamer.GetType()
+            var queue = (Queue<UAEvent>)extractor.Streamer.GetType()
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
@@ -473,7 +475,7 @@ namespace Test.Unit
                 extractor.State.SetEmitterState(state);
             }
 
-            var queue = (Queue<BufferedEvent>)extractor.Streamer.GetType()
+            var queue = (Queue<UAEvent>)extractor.Streamer.GetType()
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 

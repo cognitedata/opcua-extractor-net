@@ -15,6 +15,8 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -37,18 +39,18 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Nodes not yet pushed due to pusher failure, should be cleared to free up memory after a successfull push.
         /// </summary>
-        List<BufferedNode> PendingNodes { get; }
+        List<UANode> PendingNodes { get; }
         /// <summary>
         /// References not yet pushed due to pusher failure.
         /// </summary>
-        List<BufferedReference> PendingReferences { get; }
+        List<UAReference> PendingReferences { get; }
 
         /// <summary>
         /// Push nodes, emptying the queue
         /// </summary>
         Task<bool> PushNodes(
-            IEnumerable<BufferedNode> objects,
-            IEnumerable<BufferedVariable> variables,
+            IEnumerable<UANode> objects,
+            IEnumerable<UAVariable> variables,
             UpdateConfig update,
             CancellationToken token)
         {
@@ -62,7 +64,7 @@ namespace Cognite.OpcUa
         /// Get earliest and latest timestamps in destination system, if possible
         /// </summary>
         Task<bool> InitExtractedRanges(
-            IEnumerable<NodeExtractionState> states,
+            IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
             bool initMissing,
             CancellationToken token)
@@ -86,7 +88,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push events, emptying the event queue
         /// </summary>
-        Task<bool?> PushEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
+        Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
             return Task.FromResult((bool?)true);
         }
@@ -95,12 +97,12 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="dataPointQueue">Data points to be pushed</param>
         /// <returns>A list of datapoints that failed to be inserted</returns>
-        Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
+        Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             return Task.FromResult((bool?)true);
         }
 
-        Task<bool> PushReferences(IEnumerable<BufferedReference> references, CancellationToken token)
+        Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
         {
             return Task.FromResult(true);
         }

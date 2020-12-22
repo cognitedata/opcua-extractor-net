@@ -27,6 +27,7 @@ using Cognite.Extractor.Metrics;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using Xunit;
@@ -387,17 +388,17 @@ namespace Test
 
             var pusher = tester.Pusher;
 
-            var badPoints = new List<BufferedDataPoint>
+            var badPoints = new List<UADataPoint>
             {
-                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.PositiveInfinity),
-                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.NegativeInfinity),
-                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.NaN),
-                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E100),
-                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E100),
-                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E105),
-                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E105),
-                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.MaxValue),
-                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", double.MinValue)
+                new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", double.PositiveInfinity),
+                new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", double.NegativeInfinity),
+                new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", double.NaN),
+                new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E100),
+                new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E100),
+                new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E105),
+                new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E105),
+                new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", double.MaxValue),
+                new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", double.MinValue)
             };
 
             Assert.False(tester.Handler.Datapoints.ContainsKey("gp.efg:i=2"));
@@ -414,10 +415,10 @@ namespace Test
             Assert.True(tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.TrueForAll(item => Math.Abs(item.Value + 1) < 0.01
                 || item.Value == CogniteUtils.NumericValueMax || item.Value == CogniteUtils.NumericValueMin));
 
-            var badPoints2 = new List<BufferedDataPoint>
+            var badPoints2 = new List<UADataPoint>
             {
-                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E99),
-                new BufferedDataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E99)
+                new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", 1E99),
+                new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", -1E99)
             };
             await pusher.PushDataPoints(badPoints2, CancellationToken.None);
             Assert.Equal(17, tester.Handler.Datapoints["gp.efg:i=2"].NumericDatapoints.Count);
@@ -470,19 +471,19 @@ namespace Test
             // but leaves connections open, including subscriptions
             tester.Handler.StoreDatapoints = true;
 
-            var badPoints = new List<BufferedDataPoint>
+            var badPoints = new List<UADataPoint>
             {
                 // Too low datetime
-                new BufferedDataPoint(new DateTime(1970, 1, 1), numId2, 0),
-                new BufferedDataPoint(new DateTime(1900, 1, 1), numId2, 0),
-                new BufferedDataPoint(DateTime.MinValue, numId2, 0),
+                new UADataPoint(new DateTime(1970, 1, 1), numId2, 0),
+                new UADataPoint(new DateTime(1900, 1, 1), numId2, 0),
+                new UADataPoint(DateTime.MinValue, numId2, 0),
                 // Incorrect type
-                new BufferedDataPoint(DateTime.UtcNow, numId, 123),
-                new BufferedDataPoint(DateTime.UtcNow, numId, "123"),
-                new BufferedDataPoint(DateTime.UtcNow, numId, null),
-                new BufferedDataPoint(DateTime.UtcNow, strId, 123),
-                new BufferedDataPoint(DateTime.UtcNow, strId, "123"),
-                new BufferedDataPoint(DateTime.UtcNow, strId, null)
+                new UADataPoint(DateTime.UtcNow, numId, 123),
+                new UADataPoint(DateTime.UtcNow, numId, "123"),
+                new UADataPoint(DateTime.UtcNow, numId, null),
+                new UADataPoint(DateTime.UtcNow, strId, 123),
+                new UADataPoint(DateTime.UtcNow, strId, "123"),
+                new UADataPoint(DateTime.UtcNow, strId, null)
             };
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
@@ -490,12 +491,12 @@ namespace Test
             Assert.False(tester.Handler.Datapoints.ContainsKey(strId));
             Assert.False(tester.Handler.Datapoints.ContainsKey(numId2));
 
-            var badPoints2 = new List<BufferedDataPoint>
+            var badPoints2 = new List<UADataPoint>
             {
                 // Remember that this does not test against CDF
-                new BufferedDataPoint(new DateTime(1971, 1, 1), numId2, 0),
-                new BufferedDataPoint(new DateTime(2040, 1, 1), numId2, 0),
-                new BufferedDataPoint(new DateTime(1980, 1, 1), numId2, 0)
+                new UADataPoint(new DateTime(1971, 1, 1), numId2, 0),
+                new UADataPoint(new DateTime(2040, 1, 1), numId2, 0),
+                new UADataPoint(new DateTime(1980, 1, 1), numId2, 0)
             };
 
             await pusher.PushDataPoints(badPoints2, CancellationToken.None);

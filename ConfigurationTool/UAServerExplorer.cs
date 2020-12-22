@@ -22,7 +22,9 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
 
@@ -32,11 +34,11 @@ namespace Cognite.OpcUa.Config
     {
         private readonly FullConfig baseConfig;
         private readonly FullConfig config;
-        private List<BufferedNode> dataTypes;
+        private List<UANode> dataTypes;
         private List<ProtoDataType> customNumericTypes;
-        private List<BufferedNode> nodeList;
+        private List<UANode> nodeList;
         private List<NodeId> emittedEvents;
-        private List<BufferedNode> eventTypes;
+        private List<UANode> eventTypes;
         private Dictionary<string, string> namespaceMap;
         private Dictionary<NodeId, HashSet<EventField>> activeEventFields;
         private bool history;
@@ -214,7 +216,7 @@ namespace Cognite.OpcUa.Config
 
             foreach ((int lbrowseNodesChunk, int lbrowseChunk) in testBrowseChunkSizes)
             {
-                var nodes = new List<BufferedNode>();
+                var nodes = new List<UANode>();
 
                 VisitedNodes.Clear();
 
@@ -338,7 +340,7 @@ namespace Cognite.OpcUa.Config
             return id.NamespaceIndex != 0 || id.IdType != IdType.Numeric;
         }
 
-        private void TestDataType(BufferedNode type)
+        private void TestDataType(UANode type)
         {
             if (!IsCustomObject(type.Id)) return;
             uint dataTypeSwitch = 0;
@@ -417,7 +419,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public void ReadCustomTypes(CancellationToken token)
         {
-            dataTypes = new List<BufferedNode>();
+            dataTypes = new List<UANode>();
 
             log.Information("Browsing data type hierarchy for custom datatypes");
 
@@ -464,7 +466,7 @@ namespace Cognite.OpcUa.Config
 
             VisitedNodes.Clear();
 
-            nodeList = new List<BufferedNode>();
+            nodeList = new List<UANode>();
 
             try
             {
@@ -552,7 +554,7 @@ namespace Cognite.OpcUa.Config
             {
                 VisitedNodes.Clear();
                 log.Information("Filling common node information since this has not been done when identifying attribute chunk size");
-                nodeList = new List<BufferedNode>();
+                nodeList = new List<UANode>();
                 try
                 {
                     await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token);
@@ -568,8 +570,8 @@ namespace Cognite.OpcUa.Config
             log.Information("Mapping out variable datatypes");
 
             var variables = nodeList.Where(node =>
-                node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty)
-                .Select(node => node as BufferedVariable)
+                node.IsVariable && (node is UAVariable variable) && !variable.IsProperty)
+                .Select(node => node as UAVariable)
                 .Where(node => node != null);
 
             ReadNodeData(variables, token);
@@ -578,7 +580,7 @@ namespace Cognite.OpcUa.Config
             bool stringVariables = false;
             int maxLimitedArrayLength = 1;
 
-            var identifiedTypes = new List<BufferedNode>();
+            var identifiedTypes = new List<UANode>();
             foreach (var variable in variables)
             {
                 if (variable.ArrayDimensions != null
@@ -670,7 +672,7 @@ namespace Cognite.OpcUa.Config
             public int NumNodes;
             public bool failed;
         }
-        private bool AllowTSMap(BufferedVariable node)
+        private bool AllowTSMap(UAVariable node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
 
@@ -690,9 +692,9 @@ namespace Cognite.OpcUa.Config
         {
             bool failed = true;
             var states = nodeList.Where(node =>
-                    node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty
+                    node.IsVariable && (node is UAVariable variable) && !variable.IsProperty
                     && AllowTSMap(variable))
-                .Select(node => new NodeExtractionState(this, node as BufferedVariable, false, false)).ToList();
+                .Select(node => new VariableExtractionState(this, node as UAVariable, false, false)).ToList();
 
             log.Information("Get chunkSizes for subscribing to variables");
 
@@ -712,7 +714,7 @@ namespace Cognite.OpcUa.Config
                 summary.SubscriptionLimitWarning = true;
             }
 
-            var dps = new List<BufferedDataPoint>();
+            var dps = new List<UADataPoint>();
 
             foreach (int chunkSize in testChunks)
             {
@@ -788,8 +790,8 @@ namespace Cognite.OpcUa.Config
         public async Task GetHistoryReadConfig()
         {
             var historizingStates = nodeList.Where(node =>
-                    node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty && variable.Historizing)
-                .Select(node => new NodeExtractionState(this, node as BufferedVariable, true, true)).ToList();
+                    node.IsVariable && (node is UAVariable variable) && !variable.IsProperty && variable.Historizing)
+                .Select(node => new VariableExtractionState(this, node as UAVariable, true, true)).ToList();
 
             var stateMap = historizingStates.ToDictionary(state => state.SourceId);
 
@@ -971,7 +973,7 @@ namespace Cognite.OpcUa.Config
             }
 
         }
-        private BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
+        private UAEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
         {
             int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
                                                                        && atr.BrowsePath[0] == BrowseNames.EventType);
@@ -1009,7 +1011,7 @@ namespace Cognite.OpcUa.Config
             }
             try
             {
-                var buffEvent = new BufferedEvent
+                var buffEvent = new UAEvent
                 {
                     Message = ConvertToString(extractedProperties.GetValueOrDefault("Message")),
                     EventId = config.Extraction.IdPrefix + Convert.ToBase64String((byte[])extractedProperties["EventId"]),
@@ -1032,23 +1034,23 @@ namespace Cognite.OpcUa.Config
             }
         }
 
-        private IEnumerable<BufferedEvent> ReadResultToEvents(IEncodeable rawEvts, NodeId emitterId, ReadEventDetails details)
+        private IEnumerable<UAEvent> ReadResultToEvents(IEncodeable rawEvts, NodeId emitterId, ReadEventDetails details)
         {
-            if (rawEvts == null) return Array.Empty<BufferedEvent>();
+            if (rawEvts == null) return Array.Empty<UAEvent>();
             if (!(rawEvts is HistoryEvent evts))
             {
                 log.Warning("Incorrect return type of history read events");
-                return Array.Empty<BufferedEvent>();
+                return Array.Empty<UAEvent>();
             }
 
             var filter = details.Filter;
             if (filter == null)
             {
                 log.Warning("No event filter, ignoring");
-                return Array.Empty<BufferedEvent>();
+                return Array.Empty<UAEvent>();
             }
 
-            if (evts.Events == null) return Array.Empty<BufferedEvent>();
+            if (evts.Events == null) return Array.Empty<UAEvent>();
 
             return evts.Events.Select(evt => ConstructEvent(filter, evt.EventFields, emitterId)).ToArray();
         }
@@ -1060,7 +1062,7 @@ namespace Cognite.OpcUa.Config
         public async Task GetEventConfig(CancellationToken token)
         {
             log.Information("Test for event configuration");
-            eventTypes = new List<BufferedNode>();
+            eventTypes = new List<UANode>();
 
             try
             {
@@ -1127,7 +1129,7 @@ namespace Cognite.OpcUa.Config
 
             log.Information("Scan hierarchy for GeneratesEvent references");
 
-            var emitterReferences = new List<BufferedNode>();
+            var emitterReferences = new List<UANode>();
             try
             {
                 VisitedNodes.Clear();
@@ -1170,7 +1172,7 @@ namespace Cognite.OpcUa.Config
 
             activeEventFields = GetEventFields(token);
 
-            var events = new List<BufferedEvent>();
+            var events = new List<UAEvent>();
 
             object listLock = new object();
 
@@ -1239,7 +1241,7 @@ namespace Cognite.OpcUa.Config
                             return;
                         }
 
-                        var buffEvent = new BufferedEvent
+                        var buffEvent = new UAEvent
                         {
                             EventType = eventType
                         };

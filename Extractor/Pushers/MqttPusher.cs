@@ -34,6 +34,7 @@ using Prometheus;
 using Serilog;
 using Cognite.Extensions;
 using Opc.Ua;
+using Cognite.OpcUa.Types;
 
 namespace Cognite.OpcUa.Pushers
 {
@@ -43,8 +44,8 @@ namespace Cognite.OpcUa.Pushers
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
-        public List<BufferedNode> PendingNodes { get; } = new List<BufferedNode>();
-        public List<BufferedReference> PendingReferences { get; } = new List<BufferedReference>();
+        public List<UANode> PendingNodes { get; } = new List<UANode>();
+        public List<UAReference> PendingReferences { get; } = new List<UAReference>();
         public UAExtractor Extractor { get; set; }
         public IPusherConfig BaseConfig => config;
         private readonly MqttPusherConfig config;
@@ -126,7 +127,7 @@ namespace Cognite.OpcUa.Pushers
             client.ConnectAsync(options, CancellationToken.None).Wait();
         }
         #region interface
-        public async Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
+        public async Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             if (points == null) return null;
             if (!client.IsConnected)
@@ -135,7 +136,7 @@ namespace Cognite.OpcUa.Pushers
                 return false;
             }
             int count = 0;
-            var dataPointList = new Dictionary<string, List<BufferedDataPoint>>();
+            var dataPointList = new Dictionary<string, List<UADataPoint>>();
 
             foreach (var ldp in points)
             {
@@ -152,7 +153,7 @@ namespace Cognite.OpcUa.Pushers
                 {
                     if (config.NonFiniteReplacement != null)
                     {
-                        dp = new BufferedDataPoint(dp, config.NonFiniteReplacement.Value);
+                        dp = new UADataPoint(dp, config.NonFiniteReplacement.Value);
                     }
                     else
                     {
@@ -163,20 +164,20 @@ namespace Cognite.OpcUa.Pushers
 
                 if (dp.IsString && dp.StringValue == null)
                 {
-                    dp = new BufferedDataPoint(dp, "");
+                    dp = new UADataPoint(dp, "");
                 }
 
                 count++;
                 if (!dataPointList.ContainsKey(dp.Id))
                 {
-                    dataPointList[dp.Id] = new List<BufferedDataPoint>();
+                    dataPointList[dp.Id] = new List<UADataPoint>();
                 }
                 dataPointList[dp.Id].Add(dp);
             }
 
             if (count == 0) return null;
 
-            var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<BufferedDataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
+            var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<UADataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
             var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk.ToDictionary(pair => pair.Key, pair => pair.Values), token)).ToList();
             var results = await Task.WhenAll(pushTasks);
 
@@ -207,8 +208,8 @@ namespace Cognite.OpcUa.Pushers
         }
 
         public async Task<bool> PushNodes(
-            IEnumerable<BufferedNode> objects,
-            IEnumerable<BufferedVariable> variables,
+            IEnumerable<UANode> objects,
+            IEnumerable<UAVariable> variables,
             UpdateConfig update,
             CancellationToken token)
         {
@@ -312,10 +313,10 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-        public async Task<bool?> PushEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
+        public async Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
             if (events == null) return null;
-            var eventList = new List<BufferedEvent>();
+            var eventList = new List<UAEvent>();
             int count = 0;
             foreach (var buffEvent in events)
             {
@@ -352,7 +353,7 @@ namespace Cognite.OpcUa.Pushers
 
         #endregion
         #region pushing
-        private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<BufferedDataPoint>> dataPointList, CancellationToken token)
+        private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<UADataPoint>> dataPointList, CancellationToken token)
         {
             if (config.Debug) return true;
             if (!client.IsConnected) return false;
@@ -416,7 +417,7 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
 
-        private async Task<bool> PushAssets(IEnumerable<BufferedNode> objects, TypeUpdateConfig update, CancellationToken token)
+        private async Task<bool> PushAssets(IEnumerable<UANode> objects, TypeUpdateConfig update, CancellationToken token)
         {
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
@@ -473,7 +474,7 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
 
-        private IEnumerable<AssetCreate> ConvertNodes(IEnumerable<BufferedNode> nodes, TypeUpdateConfig update)
+        private IEnumerable<AssetCreate> ConvertNodes(IEnumerable<UANode> nodes, TypeUpdateConfig update)
         {
             foreach (var node in nodes)
             {
@@ -492,7 +493,7 @@ namespace Cognite.OpcUa.Pushers
             }
         }
 
-        private IEnumerable<StatelessTimeSeriesCreate> ConvertVariables(IEnumerable<BufferedVariable> variables, TypeUpdateConfig update)
+        private IEnumerable<StatelessTimeSeriesCreate> ConvertVariables(IEnumerable<UAVariable> variables, TypeUpdateConfig update)
         {
             foreach (var variable in variables)
             {
@@ -511,7 +512,7 @@ namespace Cognite.OpcUa.Pushers
             }
         }
 
-        private async Task<bool> PushTimeseries(IEnumerable<BufferedVariable> variables, TypeUpdateConfig update, CancellationToken token)
+        private async Task<bool> PushTimeseries(IEnumerable<UAVariable> variables, TypeUpdateConfig update, CancellationToken token)
         {
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
@@ -604,7 +605,7 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
 
-        public async Task<bool> PushEventsChunk(IEnumerable<BufferedEvent> evts, CancellationToken token)
+        public async Task<bool> PushEventsChunk(IEnumerable<UAEvent> evts, CancellationToken token)
         {
             if (config.Debug) return true;
             var events = evts

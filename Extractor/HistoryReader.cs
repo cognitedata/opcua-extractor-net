@@ -21,6 +21,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Prometheus;
 using Serilog;
@@ -190,7 +192,7 @@ namespace Cognite.OpcUa
                 return 0;
             }
 
-            var createdEvents = new List<BufferedEvent>(evts.Events.Count);
+            var createdEvents = new List<UAEvent>(evts.Events.Count);
             foreach (var evt in evts.Events)
             {
                 var buffEvt = extractor.Streamer.ConstructEvent(filter, evt.EventFields, nodeId);
@@ -304,7 +306,7 @@ namespace Cognite.OpcUa
         /// Frontfill data for the given list of states
         /// </summary>
         /// <param name="nodes">Nodes to be read</param>
-        private void FrontfillDataChunk(IEnumerable<NodeExtractionState> nodes, CancellationToken token)
+        private void FrontfillDataChunk(IEnumerable<VariableExtractionState> nodes, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
             var finalTimeStamp = nodes.Min(node => node.SourceExtractedRange.Last);
@@ -325,7 +327,7 @@ namespace Cognite.OpcUa
         /// Backfill data for the given list of states
         /// </summary>
         /// <param name="nodes">Nodes to be read</param>
-        private void BackfillDataChunk(IEnumerable<NodeExtractionState> nodes, CancellationToken token)
+        private void BackfillDataChunk(IEnumerable<VariableExtractionState> nodes, CancellationToken token)
         {
             var finalTimeStamp = nodes.Max(node => node.SourceExtractedRange.First);
             if (finalTimeStamp <= historyStartTime) return;
@@ -387,7 +389,7 @@ namespace Cognite.OpcUa
         /// Frontfill data for the given list of states. Chunks by time granularity and given chunksizes.
         /// </summary>
         /// <param name="states">Nodes to be read</param>
-        public async Task FrontfillData(IEnumerable<NodeExtractionState> states, CancellationToken token)
+        public async Task FrontfillData(IEnumerable<VariableExtractionState> states, CancellationToken token)
         {
             if (states == null || !states.Any()) return;
             try
@@ -407,7 +409,7 @@ namespace Cognite.OpcUa
         /// Backfill data for the given list of states. Chunks by time granularity and given chunksizes.
         /// </summary>
         /// <param name="states">Nodes to be read</param>
-        public async Task BackfillData(IEnumerable<NodeExtractionState> states, CancellationToken token)
+        public async Task BackfillData(IEnumerable<VariableExtractionState> states, CancellationToken token)
         {
             if (states == null || !states.Any()) return;
             try

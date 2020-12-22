@@ -1,4 +1,5 @@
-﻿using Opc.Ua;
+﻿using Cognite.OpcUa.Types;
+using Opc.Ua;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -16,18 +17,18 @@ namespace Cognite.OpcUa.TypeCollectors
     {
         private readonly ILogger log = Log.Logger.ForContext<NodeTypeManager>();
         private readonly UAClient uaClient;
-        private readonly Dictionary<NodeId, BufferedNodeType> mappedTypes = new Dictionary<NodeId, BufferedNodeType>();
+        private readonly Dictionary<NodeId, UANodeType> mappedTypes = new Dictionary<NodeId, UANodeType>();
 
         public NodeTypeManager(UAClient client)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             uaClient = client;
         }
-        public BufferedNodeType GetObjectType(NodeId id, bool isVariableType)
+        public UANodeType GetObjectType(NodeId id, bool isVariableType)
         {
             if (id == null) id = NodeId.Null;
             if (mappedTypes.TryGetValue(id, out var type)) return type;
-            type = new BufferedNodeType(id, isVariableType);
+            type = new UANodeType(id, isVariableType);
             mappedTypes[id] = type;
             return type;
         }

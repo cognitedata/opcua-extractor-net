@@ -18,7 +18,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 
 namespace Cognite.OpcUa
@@ -28,11 +30,11 @@ namespace Cognite.OpcUa
     /// </summary>
     public class State
     {
-        private readonly ConcurrentDictionary<NodeId, NodeExtractionState> nodeStates =
-            new ConcurrentDictionary<NodeId, NodeExtractionState>();
+        private readonly ConcurrentDictionary<NodeId, VariableExtractionState> nodeStates =
+            new ConcurrentDictionary<NodeId, VariableExtractionState>();
 
-        private readonly ConcurrentDictionary<string, NodeExtractionState> nodeStatesByExtId =
-            new ConcurrentDictionary<string, NodeExtractionState>();
+        private readonly ConcurrentDictionary<string, VariableExtractionState> nodeStatesByExtId =
+            new ConcurrentDictionary<string, VariableExtractionState>();
 
         private readonly ConcurrentDictionary<NodeId, EventExtractionState> emitterStates=
             new ConcurrentDictionary<NodeId, EventExtractionState>();
@@ -49,7 +51,7 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<NodeId, int> nodeChecksums =
             new ConcurrentDictionary<NodeId, int>();
 
-        public IEnumerable<NodeExtractionState> NodeStates => nodeStates.Values;
+        public IEnumerable<VariableExtractionState> NodeStates => nodeStates.Values;
         public IEnumerable<EventExtractionState> EmitterStates => emitterStates.Values;
 
         /// <summary>
@@ -57,7 +59,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="externalId">ExternalId for lookup</param>
         /// <returns>State if it exists</returns>
-        public NodeExtractionState GetNodeState(string externalId)
+        public VariableExtractionState GetNodeState(string externalId)
         {
             if (externalId == null) return null;
             return nodeStatesByExtId.GetValueOrDefault(externalId);
@@ -67,7 +69,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="id">NodeId for lookup</param>
         /// <returns>State if it exists</returns>
-        public NodeExtractionState GetNodeState(NodeId id)
+        public VariableExtractionState GetNodeState(NodeId id)
         {
             if (id == null || id.IsNullNodeId) return null;
             return nodeStates.GetValueOrDefault(id);
@@ -98,7 +100,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="state">State to add</param>
         /// <param name="uniqueId">ExternalId, leave empty to auto generate</param>
-        public void SetNodeState(NodeExtractionState state, string uniqueId = null)
+        public void SetNodeState(VariableExtractionState state, string uniqueId = null)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
             nodeStates[state.SourceId] = state;
@@ -150,7 +152,7 @@ namespace Cognite.OpcUa
         /// Add node to overview of known mapped nodes
         /// </summary>
         /// <param name="node">Node to add</param>
-        public void AddActiveNode(BufferedNode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
+        public void AddActiveNode(UANode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
             nodeChecksums[node.Id] = node.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
@@ -159,7 +161,7 @@ namespace Cognite.OpcUa
         /// Add variable to overview of known mapped nodes
         /// </summary>
         /// <param name="node">Node to add</param>
-        public void AddActiveNode(BufferedVariable node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
+        public void AddActiveNode(UAVariable node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
             if (node.Index != -1) throw new InvalidOperationException();

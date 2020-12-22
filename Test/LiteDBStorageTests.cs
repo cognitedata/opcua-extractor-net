@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
 using Xunit;
@@ -437,7 +439,7 @@ namespace Test
 
             await tester.RunTask;
 
-            var evt = new BufferedEvent
+            var evt = new UAEvent
             {
                 EmittingNode = ObjectIds.Server,
                 EventId = "123456789",
@@ -453,7 +455,7 @@ namespace Test
                 Time = DateTime.UtcNow
             };
 
-            var evt2 = new BufferedEvent
+            var evt2 = new UAEvent
             {
                 EmittingNode = tester.Server.Ids.Event.Obj1,
                 EventId = "123456789",
@@ -472,10 +474,10 @@ namespace Test
 
             stream.Position = 0;
 
-            var converted = BufferedEvent.FromStream(stream, tester.Extractor);
-            var converted2 = BufferedEvent.FromStream(stream, tester.Extractor);
+            var converted = UAEvent.FromStream(stream, tester.Extractor);
+            var converted2 = UAEvent.FromStream(stream, tester.Extractor);
 
-            void EventsEqual(BufferedEvent evt, BufferedEvent converted)
+            void EventsEqual(UAEvent evt, UAEvent converted)
             {
                 Assert.Equal(evt.EmittingNode, converted.EmittingNode);
                 Assert.Equal(evt.EventId, converted.EventId);
@@ -498,10 +500,10 @@ namespace Test
         [Trait("Test", "datapointconversion")]
         public void TestDataPointConversion()
         {
-            var dp = new BufferedDataPoint(DateTime.UtcNow, "testid", 123.123);
-            var dp2 = new BufferedDataPoint(DateTime.UtcNow, "testid2", "testvalue");
+            var dp = new UADataPoint(DateTime.UtcNow, "testid", 123.123);
+            var dp2 = new UADataPoint(DateTime.UtcNow, "testid2", "testvalue");
 
-            void dpEqual(BufferedDataPoint dp, BufferedDataPoint dpconv)
+            void dpEqual(UADataPoint dp, UADataPoint dpconv)
             {
                 Assert.Equal(dp.Timestamp, dpconv.Timestamp);
                 Assert.Equal(dp.DoubleValue, dpconv.DoubleValue);
@@ -516,8 +518,8 @@ namespace Test
 
             stream.Position = 0;
 
-            var dpconv = BufferedDataPoint.FromStream(stream);
-            var dp2conv = BufferedDataPoint.FromStream(stream);
+            var dpconv = UADataPoint.FromStream(stream);
+            var dp2conv = UADataPoint.FromStream(stream);
 
             dpEqual(dp, dpconv);
             dpEqual(dp2, dp2conv);
