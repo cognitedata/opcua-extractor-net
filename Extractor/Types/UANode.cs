@@ -112,15 +112,15 @@ namespace Cognite.OpcUa.Types
             {
                 if (update.Context)
                 {
-                    checksum += ParentId?.GetHashCode() ?? 0;
+                    checksum += (ParentId?.GetHashCode() ?? 0);
                 }
                 if (update.Description)
                 {
-                    checksum = checksum * 31 + Description?.GetHashCode() ?? 0;
+                    checksum = checksum * 31 + (Description?.GetHashCode() ?? 0);
                 }
                 if (update.Name)
                 {
-                    checksum = checksum * 31 + DisplayName?.GetHashCode() ?? 0;
+                    checksum = checksum * 31 + (DisplayName?.GetHashCode() ?? 0);
                 }
                 if (update.Metadata)
                 {
@@ -130,8 +130,12 @@ namespace Cognite.OpcUa.Types
                         foreach (var prop in Properties.OrderBy(prop => prop.DisplayName))
                         {
                             metaHash *= 31;
-                            if (prop.Value == null || prop.DisplayName == null) continue;
-                            metaHash += (prop.DisplayName, prop.Value.StringValue).GetHashCode();
+                            if (prop.DisplayName == null) continue;
+                            metaHash += (prop.DisplayName, prop.Value?.StringValue).GetHashCode();
+                            if (prop.Properties?.Any() ?? false)
+                            {
+                                metaHash += prop.GetUpdateChecksum(new TypeUpdateConfig { Metadata = true }, false, false);
+                            }
                         }
                         if (dataTypeMetadata && this is UAVariable variable)
                         {
@@ -139,7 +143,7 @@ namespace Cognite.OpcUa.Types
                         }
                         if (nodeTypeMetadata)
                         {
-                            metaHash = metaHash * 31 + NodeType.Id.GetHashCode();
+                            metaHash = metaHash * 31 + (NodeType?.Id?.GetHashCode() ?? 0);
                         }
                     }
                     checksum = checksum * 31 + metaHash;
