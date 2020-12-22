@@ -18,7 +18,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using Opc.Ua;
 
 namespace Cognite.OpcUa.Types
@@ -54,26 +56,57 @@ namespace Cognite.OpcUa.Types
         public bool DataRead { get; set; }
         public override string ToDebugDescription()
         {
-            string propertyString = "properties: {" + (Properties != null && Properties.Any() ? "\n" : "");
-            if (Properties != null)
+            var builder = new StringBuilder();
+            builder.AppendFormat(CultureInfo.InvariantCulture, "DisplayName: {0}\n", DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Id: {0}\n", Id);
+            if (ParentId != null && !ParentId.IsNullNodeId)
             {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "ParentId: {0}\n", ParentId);
+            }
+            if (Description != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "Description: {0}\n", Description);
+            }
+            if (DataType != null)
+            {
+                builder.Append(DataType);
+                builder.Append('\n');
+            }
+            if (Historizing)
+            {
+                builder.Append("Historizing: true\n");
+            }
+            if (ValueRank != ValueRanks.Scalar)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "ValueRank: {0}\n", ValueRank);
+            }
+            if (ArrayDimensions != null && ArrayDimensions.Count == 1)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "Dimension: {0}\n", ArrayDimensions[0]);
+            }
+            if (NodeType != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "NodeType: {0}\n", NodeType.Name ?? NodeType.Id);
+            }
+
+            if (Properties != null && Properties.Any())
+            {
+                builder.Append("Properties: {\n");
                 foreach (var prop in Properties)
                 {
-                    propertyString += $"    {prop.DisplayName}: {prop.Value?.StringValue},\n";
+                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", prop.DisplayName, prop.Value?.StringValue ?? "??");
+                    if (prop.Properties != null && prop.Properties.Any())
+                    {
+                        foreach (var prop2 in prop.Properties)
+                        {
+                            builder.AppendFormat(CultureInfo.InvariantCulture, "        {0}: {1}\n",
+                                prop2.DisplayName, prop2.Value?.StringValue ?? "??");
+                        }
+                    }
                 }
+                builder.Append('}');
             }
-            propertyString += "}";
-
-            string ret = $"DisplayName: {DisplayName}\n"
-                + $"ParentId: {ParentId?.ToString()}\n"
-                + $"Id: {Id.ToString()}\n"
-                + $"Description: {Description}\n"
-                + $"Historizing: {Historizing}\n"
-                + $"ValueRank: {ValueRank}\n"
-                + $"Dimension: {(ArrayDimensions != null && ArrayDimensions.Count == 1 ? ArrayDimensions[0] : -1)}\n"
-                + propertyString + "\n"
-                + DataType + "\n";
-            return ret;
+            return builder.ToString();
         }
         /// <summary>
         /// Parent if this represents an element of an array.

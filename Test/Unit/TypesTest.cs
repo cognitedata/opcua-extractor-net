@@ -145,6 +145,51 @@ namespace Test.Unit
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
         }
+        [Fact]
+        public void TestDebugDescription()
+        {
+            // Super basic
+            var node = new UANode(new NodeId("test"), "name", NodeId.Null);
+            var str = node.ToDebugDescription();
+            var refStr = "DisplayName: name\n"
+                       + "Id: s=test\n";
+            Assert.Equal(refStr, str);
+
+            // Full
+            node = new UANode(new NodeId("test"), "name", new NodeId("parent"));
+            node.Description = "description";
+            node.EventNotifier = EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
+            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
+            propA.SetDataPoint("valueA", DateTime.UtcNow, tester.Client);
+            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
+            var nestedProp = new UAVariable(new NodeId("propN"), "propN", NodeId.Null);
+            nestedProp.SetDataPoint("nProp", DateTime.UtcNow, tester.Client);
+            nestedProp.Properties = new List<UAVariable> { propA };
+
+            node.Properties = new List<UAVariable>
+            {
+                propA, nestedProp, propB
+            };
+            node.NodeType = new UANodeType(new NodeId("type"), false);
+
+            str = node.ToDebugDescription();
+            refStr = "DisplayName: name\n"
+                   + "Id: s=test\n"
+                   + "ParentId: s=parent\n"
+                   + "Description: description\n"
+                   + "EventNotifier: 5\n"
+                   + "NodeType: s=type\n"
+                   + "Properties: {\n"
+                   + "    propA: valueA\n"
+                   + "    propN: nProp\n"
+                   + "        propA: valueA\n"
+                   + "    propB: ??\n"
+                   + "}";
+            Assert.Equal(refStr, str);
+        }
+        #endregion
+
+        #region uavariable
 
         #endregion
     }

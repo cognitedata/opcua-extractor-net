@@ -16,7 +16,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using Opc.Ua;
 
 namespace Cognite.OpcUa.Types
@@ -62,28 +64,51 @@ namespace Cognite.OpcUa.Types
         /// OPC-UA node type
         /// </summary>
         public UANodeType NodeType { get; set; }
+
         /// <summary>
         /// Return a string description, for logging
         /// </summary>
         /// <returns>Descriptive string</returns>
         public virtual string ToDebugDescription()
         {
-            string propertyString = "properties: {" + (Properties != null && Properties.Any() ? "\n" : "");
-            if (Properties != null)
+            var builder = new StringBuilder();
+            builder.AppendFormat(CultureInfo.InvariantCulture, "DisplayName: {0}\n", DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Id: {0}\n", Id);
+            if (ParentId != null && !ParentId.IsNullNodeId)
             {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "ParentId: {0}\n", ParentId);
+            }
+            if (Description != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "Description: {0}\n", Description);
+            }
+            if (EventNotifier != 0)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "EventNotifier: {0}\n", EventNotifier);
+            }
+            if (NodeType != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "NodeType: {0}\n", NodeType.Name ?? NodeType.Id);
+            }
+
+            if (Properties != null && Properties.Any())
+            {
+                builder.Append("Properties: {\n");
                 foreach (var prop in Properties)
                 {
-                    propertyString += $"    {prop.DisplayName} : {prop.Value?.StringValue ?? "??"},\n";
+                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", prop.DisplayName, prop.Value?.StringValue ?? "??");
+                    if (prop.Properties != null && prop.Properties.Any())
+                    {
+                        foreach (var prop2 in prop.Properties)
+                        {
+                            builder.AppendFormat(CultureInfo.InvariantCulture, "        {0}: {1}\n",
+                                prop2.DisplayName, prop2.Value?.StringValue ?? "??");
+                        }
+                    }
                 }
+                builder.Append('}');
             }
-            propertyString += "}";
-
-            string ret = $"DisplayName: {DisplayName}\n"
-                + $"ParentId: {ParentId?.ToString()}\n"
-                + $"Id: {Id.ToString()}\n"
-                + $"Description: {Description}\n"
-                + propertyString + "\n";
-            return ret;
+            return builder.ToString();
         }
         /// <summary>
         /// Properties in OPC-UA
