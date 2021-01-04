@@ -243,9 +243,14 @@ namespace Test.Unit
 
             var references = new List<UAReference>
             {
-                new UAReference(new ReferenceDescription {
-                    IsForward = true, NodeClass = NodeClass.Variable, ReferenceTypeId = ReferenceTypeIds.Organizes },
-                    new UANode(new NodeId("object1"), "object1", root), new NodeId("var1"), null, refManager)
+                new UAReference(
+                    ReferenceTypeIds.Organizes,
+                    true,
+                    new NodeId("object1"),
+                    new NodeId("var1"),
+                    false,
+                    true,
+                    refManager)
             };
 
             try

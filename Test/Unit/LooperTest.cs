@@ -286,12 +286,13 @@ namespace Test.Unit
             var refManager = (ReferenceTypeManager)extractor.GetType().GetField("referenceTypeManager",
                 BindingFlags.Instance | BindingFlags.NonPublic).GetValue(extractor);
 
-            var reference = new UAReference(new ReferenceDescription
-            {
-                IsForward = true,
-                NodeClass = NodeClass.Variable,
-                ReferenceTypeId = ReferenceTypeIds.Organizes
-            }, new UANode(new NodeId("object1"), "object1", new NodeId("test")), new NodeId("var1"), null, refManager);
+            var reference = new UAReference(
+                ReferenceTypeIds.Organizes,
+                true, new NodeId("object1"),
+                new NodeId("var1"),
+                false,
+                true,
+                refManager);
 
             pusher1.PendingReferences.Add(reference);
             pusher2.PendingReferences.Add(reference);

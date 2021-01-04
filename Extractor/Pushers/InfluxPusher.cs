@@ -606,7 +606,7 @@ namespace Cognite.OpcUa
                             || kvp.Key == "Type" || string.IsNullOrEmpty(kvp.Value as string)) continue;
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
-                    log.Verbose(evt.ToDebugDescription());
+                    log.Verbose(evt.ToString());
 
                     return evt;
                 }).Where(evt => evt != null));

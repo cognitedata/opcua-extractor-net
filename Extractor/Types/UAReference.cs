@@ -16,7 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using System;
-using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 
@@ -43,36 +42,27 @@ namespace Cognite.OpcUa.Types
         /// NodeId of the target node
         /// </summary>
         public ReferenceVertex Target { get; }
-        // Slight hack here to properly get vertex types without needing the full node objects.
-        public UAReference(ReferenceDescription desc, UANode source,
-            NodeId target, VariableExtractionState targetState, ReferenceTypeManager manager)
+        public UAReference(NodeId type, bool isForward, NodeId source, NodeId target,
+            bool sourceTs, bool targetTs, ReferenceTypeManager manager)
         {
-            if (desc == null) throw new ArgumentNullException(nameof(desc));
+            if (type == null) throw new ArgumentNullException(nameof(type));
             if (source == null) throw new ArgumentNullException(nameof(source));
             if (target == null) throw new ArgumentNullException(nameof(target));
             if (manager == null) throw new ArgumentNullException(nameof(manager));
-            Type = manager.GetReferenceType(desc.ReferenceTypeId);
-            IsForward = desc.IsForward;
-            Source = new ReferenceVertex(source.Id, (source is UAVariable variable) && !variable.IsArray);
-            Target = new ReferenceVertex(target, desc.NodeClass == NodeClass.Variable && (targetState == null || !targetState.IsArray));
+            Type = manager.GetReferenceType(type);
+            IsForward = isForward;
+            Source = new ReferenceVertex(source, sourceTs);
+            Target = new ReferenceVertex(target, targetTs);
         }
-        // For hierarchical references, here the source should always be an object...
-        public UAReference(ReferenceDescription desc, NodeId source, UANode target, ReferenceTypeManager manager, bool inverse)
+        public override string ToString()
         {
-            if (desc == null) throw new ArgumentNullException(nameof(desc));
-            if (source == null) throw new ArgumentNullException(nameof(source));
-            if (target == null) throw new ArgumentNullException(nameof(target));
-            if (manager == null) throw new ArgumentNullException(nameof(manager));
-            Type = manager.GetReferenceType(desc.ReferenceTypeId);
-            IsForward = !inverse;
-            Source = new ReferenceVertex(source, false);
-            Target = new ReferenceVertex(target.Id, target is UAVariable variable && !variable.IsArray);
-            if (inverse)
+            string refName = Type.GetName(!IsForward);
+            if (refName == null)
             {
-                var temp = Source;
-                Source = Target;
-                Target = temp;
+                refName = $"{Type.Id} {(IsForward ? "Forward" : "Inverse")}";
             }
+
+            return $"Reference: {Source} {refName} {Target}";
         }
         public string GetName()
         {
@@ -81,25 +71,39 @@ namespace Cognite.OpcUa.Types
         public override bool Equals(object obj)
         {
             if (!(obj is UAReference other)) return false;
-            return other.Source == Source
-                && other.Target == Target
-                && other.Type.Id == Type.Id;
+            return other.Source.Equals(Source)
+                && other.Target.Equals(Target)
+                && other.Type.Id == Type.Id
+                && other.IsForward == IsForward;
         }
 
         public override int GetHashCode()
         {
-            return (Source, Target, Type.Id).GetHashCode();
+            return HashCode.Combine(Source, Target, Type.Id, IsForward);
         }
     }
     public class ReferenceVertex
     {
         public NodeId Id { get; }
-        public int Index { get; }
         public bool IsTimeSeries { get; }
-        public ReferenceVertex(NodeId id, bool isVariable)
+        public ReferenceVertex(NodeId id, bool isTimeSeries)
         {
             Id = id;
-            IsTimeSeries = isVariable;
+            IsTimeSeries = isTimeSeries;
+        }
+        public override string ToString()
+        {
+            return $"{(IsTimeSeries ? "TimeSeries" : "Asset")} {Id}";
+        }
+        public override bool Equals(object obj)
+        {
+            if (!(obj is ReferenceVertex other)) return false;
+            return other.Id == Id && other.IsTimeSeries == IsTimeSeries; 
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Id, IsTimeSeries);
         }
     }
 }

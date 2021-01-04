@@ -1,4 +1,6 @@
 ﻿using Cognite.OpcUa;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
@@ -546,6 +548,166 @@ namespace Test.Unit
                    + "}";
             Assert.Equal(refStr, str);
         }
+        #endregion
+
+        #region uaevent
+        [Fact]
+        public void TestEventDebugDescription()
+        {
+            var now = DateTime.UtcNow;
+            var evt = new UAEvent
+            {
+                EventId = "test.test",
+                Time = now,
+                EmittingNode = new NodeId("emitter"),
+                EventType = new NodeId("type")
+            };
+            var str = evt.ToString();
+            var refStr = "Event: test.test\n"
+                       + $"Time: {now.ToString(CultureInfo.InvariantCulture)}\n"
+                       + "Type: s=type\n"
+                       + "Emitter: s=emitter\n";
+            Assert.Equal(refStr, str);
+
+            evt.Message = "message";
+            evt.SourceNode = new NodeId("source");
+            evt.MetaData = new Dictionary<string, object>
+            {
+                { "key", "value1" },
+                { "key2", 123 },
+                { "key3", "value2" }
+            };
+
+            str = evt.ToString();
+            refStr = "Event: test.test\n"
+                   + $"Time: {now.ToString(CultureInfo.InvariantCulture)}\n"
+                   + "Type: s=type\n"
+                   + "Emitter: s=emitter\n"
+                   + "Message: message\n"
+                   + "SourceNode: s=source\n"
+                   + "MetaData: {\n"
+                   + "    key: value1\n"
+                   + "    key2: 123\n"
+                   + "    key3: value2\n"
+                   + "}\n";
+            Assert.Equal(refStr, str);
+        }
+        [Fact]
+        public void TestEventSerialization()
+        {
+            // minimal
+            var now = DateTime.UtcNow;
+            using var extractor = tester.BuildExtractor();
+            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true);
+            extractor.State.SetEmitterState(state);
+            extractor.State.RegisterNode(new NodeId("type"), tester.Client.GetUniqueId(new NodeId("type")));
+            // No event should be created without all of these
+            var evt = new UAEvent
+            {
+                EventId = "test.test",
+                Time = DateTime.MinValue,
+                EmittingNode = new NodeId("emitter"),
+                EventType = new NodeId("type"),
+                SourceNode = NodeId.Null
+            };
+
+            var bytes = evt.ToStorableBytes(extractor);
+            using (var stream = new MemoryStream(bytes))
+            {
+                var convEvt = UAEvent.FromStream(stream, extractor);
+                Assert.Equal(convEvt.EventId, evt.EventId);
+                Assert.Equal(convEvt.Time, evt.Time);
+                Assert.Equal(convEvt.EmittingNode, evt.EmittingNode);
+                Assert.Equal(convEvt.EventType, evt.EventType);
+                Assert.Empty(convEvt.MetaData);
+                Assert.Equal(convEvt.Message, evt.Message);
+                Assert.Equal(convEvt.SourceNode, evt.SourceNode);
+            }
+
+            // full
+            extractor.State.RegisterNode(new NodeId("source"), tester.Client.GetUniqueId(new NodeId("source")));
+            evt.Message = "message";
+            evt.Time = now;
+            evt.SourceNode = new NodeId("source");
+            evt.MetaData = new Dictionary<string, object>
+            {
+                { "key1", "value1" },
+                { "key2", 123 },
+                { "key3", null },
+                { "key4", new NodeId("meta") }
+            };
+
+            bytes = evt.ToStorableBytes(extractor);
+            using (var stream = new MemoryStream(bytes))
+            {
+                var convEvt = UAEvent.FromStream(stream, extractor);
+                Assert.Equal(convEvt.EventId, evt.EventId);
+                Assert.Equal(convEvt.Time, evt.Time);
+                Assert.Equal(convEvt.EmittingNode, evt.EmittingNode);
+                Assert.Equal(convEvt.EventType, evt.EventType);
+                Assert.Equal(convEvt.Message, evt.Message);
+                Assert.Equal(convEvt.SourceNode, evt.SourceNode);
+                Assert.Equal(convEvt.MetaData.Count, evt.MetaData.Count);
+                foreach (var kvp in convEvt.MetaData)
+                {
+                    Assert.Equal(kvp.Value ?? "", tester.Client.ConvertToString(evt.MetaData[kvp.Key]));
+                }
+            }
+        }
+        #endregion
+
+        #region uareference
+        [Fact]
+        public void TestReferenceDebugDescription()
+        {
+            using var extractor = tester.BuildExtractor();
+            // asset - asset
+            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, false, mgr);
+            reference.Type.SetNames("Organizes", "IsOrganizedBy");
+            Assert.Equal("Reference: Asset s=source Organizes Asset s=target", reference.ToString());
+            // inverse
+            reference = new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source"), new NodeId("target"), false, false, mgr);
+            Assert.Equal("Reference: Asset s=source IsOrganizedBy Asset s=target", reference.ToString());
+
+            // ts - asset
+            reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, false, mgr);
+            Assert.Equal("Reference: TimeSeries s=source Organizes Asset s=target", reference.ToString());
+
+            reference = new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source"), new NodeId("target"), false, true, mgr);
+            Assert.Equal("Reference: Asset s=source IsOrganizedBy TimeSeries s=target", reference.ToString());
+
+            reference = new UAReference(ReferenceTypeIds.HasComponent, true, new NodeId("source"), new NodeId("target"), false, false, mgr);
+            Assert.Equal("Reference: Asset s=source i=47 Forward Asset s=target", reference.ToString());
+
+            reference = new UAReference(ReferenceTypeIds.HasComponent, false, new NodeId("source"), new NodeId("target"), false, false, mgr);
+            Assert.Equal("Reference: Asset s=source i=47 Inverse Asset s=target", reference.ToString());
+        }
+        [Fact]
+        public void TestReferenceEquality()
+        {
+            using var extractor = tester.BuildExtractor();
+            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, false, mgr);
+            Assert.Equal(reference, reference);
+            // Different due to different type only
+            var reference2 = new UAReference(ReferenceTypeIds.HasComponent, true, new NodeId("source"), new NodeId("target"), false, false, mgr);
+            Assert.NotEqual(reference, reference2);
+            // Different due to different source vertex type
+            reference2 = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, false, mgr);
+            Assert.NotEqual(reference, reference2);
+            // Different due to different target vertex type
+            reference2 = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, true, mgr);
+            Assert.NotEqual(reference, reference2);
+            // Different due to different direction
+            reference2 = new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source"), new NodeId("target"), false, false, mgr);
+            Assert.NotEqual(reference, reference2);
+            // Equal
+            reference2 = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, false, mgr);
+            Assert.Equal(reference, reference2);
+            Assert.Equal(reference.GetHashCode(), reference2.GetHashCode());
+        }
+
         #endregion
     }
 }

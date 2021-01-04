@@ -1022,8 +1022,7 @@ namespace Cognite.OpcUa.Config
                         .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
                                       && kvp.Key != "Time" && kvp.Key != "EventType")
                         .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-                    EmittingNode = emitter,
-                    ReceivedTime = DateTime.UtcNow,
+                    EmittingNode = emitter
                 };
                 return buffEvent;
             }
@@ -1200,7 +1199,7 @@ namespace Cognite.OpcUa.Config
                             events.Add(buffEvent);
                         }
 
-                        log.Verbose(buffEvent.ToDebugDescription());
+                        log.Verbose(buffEvent.ToString());
 
                     }, token), 120);
             }
@@ -1250,7 +1249,7 @@ namespace Cognite.OpcUa.Config
                             events.Add(buffEvent);
                         }
 
-                        log.Verbose(buffEvent.ToDebugDescription());
+                        log.Verbose(buffEvent.ToString());
 
                     }), 120);
             }

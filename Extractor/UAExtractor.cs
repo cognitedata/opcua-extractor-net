@@ -559,6 +559,7 @@ namespace Cognite.OpcUa
                 foreach (var field in eventFields)
                 {
                     State.ActiveEvents[field.Key] = field.Value;
+                    State.RegisterNode(field.Key, uaClient.GetUniqueId(field.Key));
                 }
                 if (config.Events.EmitterIds != null && config.Events.EmitterIds.Any())
                 {
@@ -908,10 +909,27 @@ namespace Cognite.OpcUa
                     if (!nodeMap.TryGetValue(uaClient.ToNodeId(pair.Desc.NodeId), out var childNode)) continue;
                     if (childNode == null || childNode is UAVariable childVar && childVar.IsProperty) continue;
 
-                    hierarchicalReferences.Add(new UAReference(pair.Desc, pair.ParentId, childNode, referenceTypeManager, false));
+                    bool childIsTs = childNode is UAVariable cVar && !cVar.IsArray;
+
+                    hierarchicalReferences.Add(new UAReference(
+                        pair.Desc.ReferenceTypeId,
+                        true,
+                        pair.ParentId,
+                        childNode.Id,
+                        false,
+                        childIsTs,
+                        referenceTypeManager));
+
                     if (config.Extraction.Relationships.InverseHierarchical)
                     {
-                        hierarchicalReferences.Add(new UAReference(pair.Desc, pair.ParentId, childNode, referenceTypeManager, true));
+                        hierarchicalReferences.Add(new UAReference(
+                            pair.Desc.ReferenceTypeId,
+                            false,
+                            childNode.Id,
+                            pair.ParentId,
+                            childIsTs,
+                            true,
+                            referenceTypeManager));
                     }
                 }
                 references = references.Concat(hierarchicalReferences);

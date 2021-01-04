@@ -451,7 +451,6 @@ namespace Test
                     ["dt2"] = "data2"
                 },
                 SourceNode = tester.Server.Ids.Event.Obj2,
-                ReceivedTime = DateTime.UtcNow,
                 Time = DateTime.UtcNow
             };
 
@@ -463,7 +462,6 @@ namespace Test
                 Message = null,
                 MetaData = new Dictionary<string, object>(),
                 SourceNode = tester.Server.Ids.Event.Var1,
-                ReceivedTime = DateTime.UtcNow,
                 Time = DateTime.UtcNow
             };
 

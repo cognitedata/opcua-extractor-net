@@ -481,9 +481,8 @@ namespace Cognite.OpcUa
                     }
 
                     events = events
-                        .GroupBy(evt => evt.EmittingNode)
-                        .Where(group => extractor.State.GetEmitterState(group.Key) != null)
-                        .SelectMany(group => group).ToList();
+                        .Where(evt => evt.EmittingNode != null)
+                        .ToList();
 
                     log.Information("Read {cnt} events from file", events.Count);
                     if (!events.Any() && final) break;

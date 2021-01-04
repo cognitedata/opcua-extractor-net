@@ -108,7 +108,14 @@ namespace Cognite.OpcUa.TypeCollectors
                     {
                         childState = extractor.State.GetNodeState(childId);
                     }
-                    results.Add(new UAReference(child, parentNode, childId, childState, this));
+                    results.Add(new UAReference(
+                        child.ReferenceTypeId,
+                        child.IsForward,
+                        parentId,
+                        childId,
+                        parentNode is UAVariable pVar && !pVar.IsArray,
+                        childState != null && !childState.IsArray,
+                        this));
                 }
             }
 

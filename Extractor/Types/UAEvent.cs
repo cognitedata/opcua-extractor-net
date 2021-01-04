@@ -17,7 +17,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Text;
 using Cognite.Extensions;
 using Opc.Ua;
 
@@ -53,32 +56,36 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public Dictionary<string, object> MetaData { get; set; }
         /// <summary>
-        /// Timestamp this event was received locally
-        /// </summary>
-        public DateTime ReceivedTime { get; set; }
-        /// <summary>
         /// Id of the node that emitted the event in opc-ua
         /// </summary>
         public NodeId EmittingNode { get; set; }
 
-        public string ToDebugDescription()
+        public override string ToString()
         {
-            string metadata = "{";
-            if (MetaData != null)
+            var builder = new StringBuilder();
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Event: {0}\n", EventId);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Time: {0}\n", Time);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Type: {0}\n", EventType);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Emitter: {0}\n", EmittingNode);
+            if (Message != null)
             {
-                metadata += "\n";
+                builder.AppendFormat(CultureInfo.InvariantCulture, "Message: {0}\n", Message);
+            }
+            if (SourceNode != null && !SourceNode.IsNullNodeId)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "SourceNode: {0}\n", SourceNode);
+            }
+            if (MetaData != null && MetaData.Any())
+            {
+                builder.Append("MetaData: {\n");
                 foreach (var kvp in MetaData)
                 {
-                    metadata += $"        {kvp.Key} : {kvp.Value}\n";
+                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", kvp.Key, kvp.Value);
                 }
+                builder.Append("}\n");
             }
-            metadata += "    }";
-            return $"EventId: {EventId}\n"
-                + $"    Message: {Message}\n"
-                + $"    SourceNodeId: {SourceNode}\n"
-                + $"    Time: {Time}\n"
-                + $"    EventTypeId: {EventType}\n"
-                + $"    MetaData: {metadata}\n";
+
+            return builder.ToString();
         }
         /// <summary>
         /// Converts event into array of bytes which may be written to file.
@@ -133,16 +140,13 @@ namespace Cognite.OpcUa.Types
             if (stream.Read(buffer, 0, sizeof(long)) < sizeof(long)) return null;
             long dt = BitConverter.ToInt64(buffer, 0);
             evt.Time = DateTime.FromBinary(dt);
-            var eventType = CogniteUtils.StringFromStream(stream);
-            evt.EmittingNode = extractor.State.GetEmitterState(CogniteUtils.StringFromStream(stream))?.SourceId;
+            evt.EventType = extractor.State.GetNodeId(CogniteUtils.StringFromStream(stream));
+            evt.EmittingNode = extractor.State.GetEmitterState(CogniteUtils.StringFromStream(stream))?.SourceId ?? NodeId.Null;
 
             if (stream.Read(buffer, 0, sizeof(ushort)) < sizeof(ushort)) return null;
             ushort count = BitConverter.ToUInt16(buffer, 0);
 
-            evt.MetaData = new Dictionary<string, object>
-            {
-                ["Type"] = eventType
-            };
+            evt.MetaData = new Dictionary<string, object>();
 
             for (int i = 0; i < count; i++)
             {

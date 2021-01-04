@@ -414,7 +414,7 @@ namespace Cognite.OpcUa
                     && (eventState.IsFrontfilling && buffEvent.Time > eventState.SourceExtractedRange.Last
                         || eventState.IsBackfilling && buffEvent.Time < eventState.SourceExtractedRange.First)) continue;
 
-                log.Verbose(buffEvent.ToDebugDescription());
+                log.Verbose(buffEvent.ToString());
                 Enqueue(buffEvent);
             }
         }
@@ -491,8 +491,7 @@ namespace Cognite.OpcUa
                     .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
                                   && kvp.Key != "Time" && kvp.Key != "EventType")
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-                EmittingNode = emitter,
-                ReceivedTime = DateTime.UtcNow,
+                EmittingNode = emitter
             };
             return buffEvent;
         }
