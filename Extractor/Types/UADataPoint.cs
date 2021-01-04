@@ -87,7 +87,7 @@ namespace Cognite.OpcUa.Types
         /// <returns>Array of bytes</returns>
         public byte[] ToStorableBytes()
         {
-            var bytes = new List<byte>();
+            var bytes = new List<byte>(16);
             bytes.AddRange(CogniteUtils.StringToStorable(Id));
             bytes.AddRange(BitConverter.GetBytes(Timestamp.ToBinary()));
             bytes.AddRange(BitConverter.GetBytes(IsString));

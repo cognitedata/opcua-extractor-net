@@ -3,6 +3,8 @@ using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -316,6 +318,86 @@ namespace Test.Unit
             }
 
         }
+        #endregion
+
+        #region uadatapoint
+        [Fact]
+        public void TestDataPointConstructors()
+        {
+            var now = DateTime.UtcNow;
+            var dt = new UADataPoint(now, "id", 123.123);
+            Assert.Equal(now, dt.Timestamp);
+            Assert.Equal("id", dt.Id);
+            Assert.False(dt.IsString);
+            Assert.Equal(123.123, dt.DoubleValue);
+            Assert.Null(dt.StringValue);
+
+            dt = new UADataPoint(dt, 12.34);
+            Assert.Equal(now, dt.Timestamp);
+            Assert.Equal("id", dt.Id);
+            Assert.False(dt.IsString);
+            Assert.Equal(12.34, dt.DoubleValue);
+            Assert.Null(dt.StringValue);
+
+            dt = new UADataPoint(now, "id", "value");
+            Assert.Equal(now, dt.Timestamp);
+            Assert.Equal("id", dt.Id);
+            Assert.True(dt.IsString);
+            Assert.Equal("value", dt.StringValue);
+            Assert.Null(dt.DoubleValue);
+
+            dt = new UADataPoint(dt, "value2");
+            Assert.Equal(now, dt.Timestamp);
+            Assert.Equal("id", dt.Id);
+            Assert.True(dt.IsString);
+            Assert.Equal("value2", dt.StringValue);
+            Assert.Null(dt.DoubleValue);
+        }
+        [Theory]
+        [InlineData("id", 123.123)]
+        [InlineData("longwæeirdæid", 123.123)]
+        [InlineData("id", -123.123)]
+        [InlineData("id", "stringvalue")]
+        [InlineData("id", null)]
+        [InlineData("id", "longwæirdævalue")]
+        public void TestDataPointSerialization(string id, object value)
+        {
+            UADataPoint dt;
+            var ts = DateTime.UtcNow;
+            if (value is string || value == null)
+            {
+                dt = new UADataPoint(ts, id, value as string);
+            }
+            else
+            {
+                dt = new UADataPoint(ts, id, UAClient.ConvertToDouble(value));
+            }
+            var bytes = dt.ToStorableBytes();
+            using (var stream = new MemoryStream(bytes))
+            {
+                var convDt = UADataPoint.FromStream(stream);
+                Assert.Equal(dt.Timestamp, convDt.Timestamp);
+                Assert.Equal(dt.Id, convDt.Id);
+                Assert.Equal(dt.IsString, convDt.IsString);
+                Assert.Equal(dt.StringValue, convDt.StringValue);
+                Assert.Equal(dt.DoubleValue, convDt.DoubleValue);
+            }
+        }
+        [Fact]
+        public void TestDataPointDebugDescription()
+        {
+            var ts = DateTime.UtcNow;
+            var dt = new UADataPoint(ts, "id", 123.123);
+            var str = dt.ToDebugDescription();
+            var refStr = $"Update timeseries id to 123.123 at {ts.ToString(CultureInfo.InvariantCulture)}";
+            Assert.Equal(refStr, str);
+
+            dt = new UADataPoint(ts, "id", "value");
+            str = dt.ToDebugDescription();
+            refStr = $"Update timeseries id to \"value\" at {ts.ToString(CultureInfo.InvariantCulture)}";
+            Assert.Equal(refStr, str);
+        }
+
         #endregion
     }
 }
