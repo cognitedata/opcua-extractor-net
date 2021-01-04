@@ -305,7 +305,7 @@ namespace Cognite.OpcUa
             var node = client.ToNodeId(NodeId, NamespaceUri);
             if (node.IsNullNodeId)
             {
-                return defaultValue ?? Opc.Ua.NodeId.Null;
+                return defaultValue ?? node;
             }
             return node;
         }

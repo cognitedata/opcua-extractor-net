@@ -707,7 +707,6 @@ namespace Test.Unit
             Assert.Equal(reference, reference2);
             Assert.Equal(reference.GetHashCode(), reference2.GetHashCode());
         }
-
         #endregion
     }
 }

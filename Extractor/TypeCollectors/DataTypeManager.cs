@@ -51,7 +51,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 foreach (var type in config.CustomNumericTypes)
                 {
                     var id = type.NodeId.ToNodeId(uaClient);
-                    if (id == null)
+                    if (id == null || id.IsNullNodeId)
                     {
                         log.Warning("Invalid datatype nodeId: {ns}: {identifier}", type.NodeId.NamespaceUri, type.NodeId.NodeId);
                         continue;
@@ -65,7 +65,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 foreach (var type in config.IgnoreDataTypes)
                 {
                     var id = type.ToNodeId(uaClient);
-                    if (id == null)
+                    if (id == null || id.IsNullNodeId)
                     {
                         log.Warning("Invalid ignore datatype nodeId: {ns}: {identifier}", type.NamespaceUri, type.NodeId);
                         continue;
@@ -87,7 +87,7 @@ namespace Cognite.OpcUa.TypeCollectors
 
         private UADataType CreateDataType(NodeId id)
         {
-            if (id == null || id.IsNullNodeId)
+            if (id.IsNullNodeId)
             {
                 return new UADataType(NodeId.Null)
                 {
@@ -159,19 +159,20 @@ namespace Cognite.OpcUa.TypeCollectors
                 {
                     log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and too large dimension {dim}",
                         node.Id, node.ValueRank, length);
+                    return false;
                 }
             }
             else if (node.ArrayDimensions == null)
             {
                 log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and null ArrayDimensions", node.Id, node.ValueRank);
+                return false;
             }
             else
             {
                 log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
                     node.Id, node.ArrayDimensions.Count);
+                return false;
             }
-
-            return false;
         }
 
         public Dictionary<string, string> GetAdditionalMetadata(UAVariable variable)
@@ -228,7 +229,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             if (!enumPropMap.Any()) return;
 
-            var values = await Task.Run(() => uaClient.ReadRawValues(enumPropMap.Values, token));
+            var values = await Task.Run(() => uaClient.ReadRawValues(enumPropMap.Values.Distinct(), token));
             foreach (var kvp in enumPropMap)
             {
                 var type = dataTypes[kvp.Key];
@@ -238,13 +239,6 @@ namespace Cognite.OpcUa.TypeCollectors
                     for (int i = 0; i < strings.Length; i++)
                     {
                         type.EnumValues[i] = strings[i].Text;
-                    }
-                }
-                else if (value.Value is EnumValueType[] enumValues)
-                {
-                    foreach (var val in enumValues)
-                    {
-                        type.EnumValues[val.Value] = val.DisplayName.Text;
                     }
                 }
                 else if (value.Value is ExtensionObject[] exts)
@@ -272,7 +266,10 @@ namespace Cognite.OpcUa.TypeCollectors
             {
                 var id = uaClient.ToNodeId(child.NodeId);
                 parentIds[id] = parent;
-                customTypeNames[id] = child.DisplayName?.Text;
+                if (id.NamespaceIndex != 0)
+                {
+                    customTypeNames[id] = child.DisplayName?.Text;
+                }
             }
 
             await Task.Run(() => uaClient.BrowseDirectory(new List<NodeId> { DataTypeIds.BaseDataType },
