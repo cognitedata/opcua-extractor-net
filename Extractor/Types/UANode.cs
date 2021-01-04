@@ -72,7 +72,7 @@ namespace Cognite.OpcUa.Types
         public virtual string ToDebugDescription()
         {
             var builder = new StringBuilder();
-            builder.AppendFormat(CultureInfo.InvariantCulture, "DisplayName: {0}\n", DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Object: {0}\n", DisplayName);
             builder.AppendFormat(CultureInfo.InvariantCulture, "Id: {0}\n", Id);
             if (ParentId != null && !ParentId.IsNullNodeId)
             {

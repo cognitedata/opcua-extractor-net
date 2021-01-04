@@ -57,7 +57,7 @@ namespace Cognite.OpcUa.Types
         public override string ToDebugDescription()
         {
             var builder = new StringBuilder();
-            builder.AppendFormat(CultureInfo.InvariantCulture, "DisplayName: {0}\n", DisplayName);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Variable: {0}\n", DisplayName);
             builder.AppendFormat(CultureInfo.InvariantCulture, "Id: {0}\n", Id);
             if (ParentId != null && !ParentId.IsNullNodeId)
             {
@@ -74,7 +74,7 @@ namespace Cognite.OpcUa.Types
             }
             if (Historizing)
             {
-                builder.Append("Historizing: true\n");
+                builder.Append("Historizing: True\n");
             }
             if (ValueRank != ValueRanks.Scalar)
             {
@@ -187,6 +187,7 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public IEnumerable<UAVariable> CreateArrayChildren()
         {
+            if (!IsArray) return Enumerable.Empty<UAVariable>();
             var children = new List<UAVariable>();
             for (int i = 0; i < ArrayDimensions[0]; i++)
             {

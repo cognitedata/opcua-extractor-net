@@ -151,7 +151,7 @@ namespace Test.Unit
             // Super basic
             var node = new UANode(new NodeId("test"), "name", NodeId.Null);
             var str = node.ToDebugDescription();
-            var refStr = "DisplayName: name\n"
+            var refStr = "Object: name\n"
                        + "Id: s=test\n";
             Assert.Equal(refStr, str);
 
@@ -173,7 +173,7 @@ namespace Test.Unit
             node.NodeType = new UANodeType(new NodeId("type"), false);
 
             str = node.ToDebugDescription();
-            refStr = "DisplayName: name\n"
+            refStr = "Object: name\n"
                    + "Id: s=test\n"
                    + "ParentId: s=parent\n"
                    + "Description: description\n"
@@ -190,7 +190,132 @@ namespace Test.Unit
         #endregion
 
         #region uavariable
+        [Fact]
+        public void TestVariableDebugDescription()
+        {
+            // basic
+            var node = new UAVariable(new NodeId("test"), "name", NodeId.Null);
+            node.ValueRank = ValueRanks.Scalar;
+            var str = node.ToDebugDescription();
+            var refStr = "Variable: name\n"
+                       + "Id: s=test\n";
+            Assert.Equal(refStr, str);
 
+            // full
+            node = new UAVariable(new NodeId("test"), "name", new NodeId("parent"));
+            node.Description = "description";
+            node.DataType = new UADataType(DataTypeIds.Double);
+            node.Historizing = true;
+            node.ValueRank = ValueRanks.Any;
+            node.ArrayDimensions = new System.Collections.ObjectModel.Collection<int>(new int[] { 4 });
+            node.NodeType = new UANodeType(new NodeId("type"), false);
+
+            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
+            propA.SetDataPoint("valueA", DateTime.UtcNow, tester.Client);
+            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
+            var nestedProp = new UAVariable(new NodeId("propN"), "propN", NodeId.Null);
+            nestedProp.SetDataPoint("nProp", DateTime.UtcNow, tester.Client);
+            nestedProp.Properties = new List<UAVariable> { propA };
+
+            node.Properties = new List<UAVariable>
+            {
+                propA, nestedProp, propB
+            };
+
+            str = node.ToDebugDescription();
+            refStr = "Variable: name\n"
+                   + "Id: s=test\n"
+                   + "ParentId: s=parent\n"
+                   + "Description: description\n"
+                   + "DataType: {\n"
+                   + $"    NodeId: i={DataTypes.Double}\n"
+                   + "    isStep: False\n"
+                   + "    isString: False\n"
+                   + "}\n"
+                   + "Historizing: True\n"
+                   + "ValueRank: -2\n"
+                   + "Dimension: 4\n"
+                   + "NodeType: s=type\n"
+                   + "Properties: {\n"
+                   + "    propA: valueA\n"
+                   + "    propN: nProp\n"
+                   + "        propA: valueA\n"
+                   + "    propB: ??\n"
+                   + "}";
+            Assert.Equal(refStr, str);
+        }
+        [Fact]
+        public void TestSetDatapoint()
+        {
+            // Property
+            var node = new UAVariable(new NodeId("test"), "name", NodeId.Null);
+            node.IsProperty = true;
+            var now = DateTime.UtcNow;
+            node.SetDataPoint(123.4, now, tester.Client);
+            Assert.Equal(now, node.Value.Timestamp);
+            Assert.True(node.Value.IsString);
+            Assert.Equal("123.4", node.Value.StringValue);
+            node.SetDataPoint("test", now, tester.Client);
+            Assert.Equal(now, node.Value.Timestamp);
+            Assert.True(node.Value.IsString);
+            Assert.Equal("test", node.Value.StringValue);
+
+            // Double datatype
+            node.IsProperty = false;
+            node.DataType = new UADataType(DataTypeIds.Double);
+            node.SetDataPoint(123.0, now, tester.Client);
+            Assert.Equal(now, node.Value.Timestamp);
+            Assert.False(node.Value.IsString);
+            Assert.Equal(123.0, node.Value.DoubleValue);
+            node.SetDataPoint("test", now, tester.Client);
+            Assert.Equal(now, node.Value.Timestamp);
+            Assert.False(node.Value.IsString);
+            Assert.Equal(0, node.Value.DoubleValue);
+
+            // String datatype
+            node.DataType = new UADataType(DataTypeIds.String);
+            node.SetDataPoint(123.4, now, tester.Client);
+            Assert.Equal(now, node.Value.Timestamp);
+            Assert.True(node.Value.IsString);
+            Assert.Equal("123.4", node.Value.StringValue);
+            node.SetDataPoint("test", now, tester.Client);
+            Assert.Equal(now, node.Value.Timestamp);
+            Assert.True(node.Value.IsString);
+            Assert.Equal("test", node.Value.StringValue);
+        }
+        [Fact]
+        public void TestGetArrayChildren()
+        {
+            var id = new NodeId("test");
+            var node = new UAVariable(id, "name", NodeId.Null);
+            Assert.Empty(node.CreateArrayChildren());
+            Assert.Null(node.ArrayChildren);
+
+            node.Historizing = true;
+            node.DataType = new UADataType(DataTypeIds.Double);
+            node.NodeType = new UANodeType(new NodeId("test"), true);
+            node.ValueRank = ValueRanks.OneDimension;
+            node.ArrayDimensions = new System.Collections.ObjectModel.Collection<int>(new int[] { 4 });
+
+            var children = node.CreateArrayChildren().ToList();
+            Assert.Equal(4, children.Count);
+            Assert.Equal(children, node.ArrayChildren);
+
+            for (int i = 0; i < 4; i++)
+            {
+                var child = children[i];
+                Assert.True(child.Historizing);
+                Assert.Equal($"name[{i}]", child.DisplayName);
+                Assert.Equal(node.Id, child.ParentId);
+                Assert.Equal(node, child.ArrayParent);
+                Assert.Equal(node.DataType, child.DataType);
+                Assert.Equal(node.NodeType, child.NodeType);
+                Assert.Equal(node.ValueRank, child.ValueRank);
+                Assert.Equal(node.ArrayDimensions, child.ArrayDimensions);
+                Assert.Equal(i, child.Index);
+            }
+
+        }
         #endregion
     }
 }
