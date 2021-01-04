@@ -69,7 +69,7 @@ namespace Cognite.OpcUa.Types
         /// Return a string description, for logging
         /// </summary>
         /// <returns>Descriptive string</returns>
-        public virtual string ToDebugDescription()
+        public override string ToString()
         {
             var builder = new StringBuilder();
             builder.AppendFormat(CultureInfo.InvariantCulture, "Object: {0}\n", DisplayName);

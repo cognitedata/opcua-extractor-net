@@ -19,6 +19,7 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 
 namespace Cognite.OpcUa.Types
 {
@@ -105,14 +106,19 @@ namespace Cognite.OpcUa.Types
 
         public override string ToString()
         {
-            return "DataType: {\n" +
-                $"    NodeId: {Raw}\n" +
-                $"    isStep: {IsStep}\n" +
-                $"    isString: {IsString}\n" +
-                (EnumValues != null ?
-                $"    EnumValues: {string.Concat(EnumValues)}\n"
-                : "") +
-                "}";
+            var builder = new StringBuilder("DataType: {\n");
+            builder.AppendFormat(CultureInfo.InvariantCulture, "    NodeId: {0}\n", Raw);
+            if (IsStep)
+            {
+                builder.Append("    Step: True\n");
+            }
+            builder.AppendFormat(CultureInfo.InvariantCulture, "    String: {0}\n", IsString);
+            if (EnumValues != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "    EnumValues: [{0}]\n", string.Join(", ", EnumValues));
+            }
+            builder.Append('}');
+            return builder.ToString();
         }
     }
 }

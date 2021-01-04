@@ -54,7 +54,7 @@ namespace Cognite.OpcUa.Types
         /// True if attributes have been read from OPC-UA for this variable
         /// </summary>
         public bool DataRead { get; set; }
-        public override string ToDebugDescription()
+        public override string ToString()
         {
             var builder = new StringBuilder();
             builder.AppendFormat(CultureInfo.InvariantCulture, "Variable: {0}\n", DisplayName);

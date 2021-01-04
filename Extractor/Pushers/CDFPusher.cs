@@ -244,7 +244,7 @@ namespace Cognite.OpcUa.Pushers
                 await Extractor.ReadProperties(objects.Concat(variables));
                 foreach (var node in objects.Concat(variables))
                 {
-                    log.Verbose(node.ToDebugDescription());
+                    log.Verbose(node.ToString());
                 }
                 return true;
             }

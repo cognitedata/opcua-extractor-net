@@ -152,7 +152,7 @@ namespace Test.Unit
         {
             // Super basic
             var node = new UANode(new NodeId("test"), "name", NodeId.Null);
-            var str = node.ToDebugDescription();
+            var str = node.ToString();
             var refStr = "Object: name\n"
                        + "Id: s=test\n";
             Assert.Equal(refStr, str);
@@ -174,7 +174,7 @@ namespace Test.Unit
             };
             node.NodeType = new UANodeType(new NodeId("type"), false);
 
-            str = node.ToDebugDescription();
+            str = node.ToString();
             refStr = "Object: name\n"
                    + "Id: s=test\n"
                    + "ParentId: s=parent\n"
@@ -198,7 +198,7 @@ namespace Test.Unit
             // basic
             var node = new UAVariable(new NodeId("test"), "name", NodeId.Null);
             node.ValueRank = ValueRanks.Scalar;
-            var str = node.ToDebugDescription();
+            var str = node.ToString();
             var refStr = "Variable: name\n"
                        + "Id: s=test\n";
             Assert.Equal(refStr, str);
@@ -224,15 +224,14 @@ namespace Test.Unit
                 propA, nestedProp, propB
             };
 
-            str = node.ToDebugDescription();
+            str = node.ToString();
             refStr = "Variable: name\n"
                    + "Id: s=test\n"
                    + "ParentId: s=parent\n"
                    + "Description: description\n"
                    + "DataType: {\n"
                    + $"    NodeId: i={DataTypes.Double}\n"
-                   + "    isStep: False\n"
-                   + "    isString: False\n"
+                   + "    String: False\n"
                    + "}\n"
                    + "Historizing: True\n"
                    + "ValueRank: -2\n"
@@ -397,7 +396,156 @@ namespace Test.Unit
             refStr = $"Update timeseries id to \"value\" at {ts.ToString(CultureInfo.InvariantCulture)}";
             Assert.Equal(refStr, str);
         }
+        #endregion
 
+        #region uadatatype
+        [Fact]
+        public void TestDataTypeConstructors()
+        {
+            // Base constructor
+            // Native type, double
+            var dt = new UADataType(DataTypeIds.Double);
+            Assert.Equal(DataTypeIds.Double, dt.Raw);
+            Assert.False(dt.IsStep);
+            Assert.False(dt.IsString);
+
+            // Native type, integer
+            dt = new UADataType(DataTypeIds.Integer);
+            Assert.Equal(DataTypeIds.Integer, dt.Raw);
+            Assert.False(dt.IsStep);
+            Assert.False(dt.IsString);
+
+            // Native type, string
+            dt = new UADataType(DataTypeIds.String);
+            Assert.Equal(DataTypeIds.String, dt.Raw);
+            Assert.False(dt.IsStep);
+            Assert.True(dt.IsString);
+
+            // Native type, bool
+            dt = new UADataType(DataTypeIds.Boolean);
+            Assert.Equal(DataTypeIds.Boolean, dt.Raw);
+            Assert.True(dt.IsStep);
+            Assert.False(dt.IsString);
+
+            // Custom type
+            dt = new UADataType(new NodeId("test"));
+            Assert.Equal(new NodeId("test"), dt.Raw);
+            Assert.False(dt.IsStep);
+            Assert.True(dt.IsString);
+
+            // From proto
+            var config = new DataTypeConfig();
+
+            // Override step
+            dt = new UADataType(new ProtoDataType { IsStep = true }, new NodeId("test"), config);
+            Assert.Equal(new NodeId("test"), dt.Raw);
+            Assert.True(dt.IsStep);
+            Assert.False(dt.IsString);
+
+            // Override enum, strings disabled
+            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test"), config);
+            Assert.Equal(new NodeId("test"), dt.Raw);
+            Assert.True(dt.IsStep);
+            Assert.False(dt.IsString);
+            Assert.NotNull(dt.EnumValues);
+
+            // Override enum, strings enabled
+            config.EnumsAsStrings = true;
+            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test"), config);
+            Assert.Equal(new NodeId("test"), dt.Raw);
+            Assert.False(dt.IsStep);
+            Assert.True(dt.IsString);
+            Assert.NotNull(dt.EnumValues);
+
+
+            // Child constructor
+            var rootDt = new UADataType(DataTypeIds.Boolean);
+            dt = new UADataType(new NodeId("test"), rootDt);
+            Assert.Equal(new NodeId("test"), dt.Raw);
+            Assert.True(dt.IsStep);
+            Assert.False(dt.IsString);
+
+            rootDt.EnumValues = new Dictionary<long, string>();
+            rootDt.EnumValues[123] = "test";
+            dt = new UADataType(new NodeId("test"), rootDt);
+            Assert.Equal(new NodeId("test"), dt.Raw);
+            Assert.True(dt.IsStep);
+            Assert.False(dt.IsString);
+            Assert.NotNull(dt.EnumValues);
+            Assert.Empty(dt.EnumValues);
+        }
+        [Fact]
+        public void TestTypeToDataPoint()
+        {
+            // Normal double
+            using var extractor = tester.BuildExtractor();
+            var now = DateTime.UtcNow;
+            var dt = new UADataType(DataTypeIds.Double);
+            var dp = dt.ToDataPoint(extractor, 123.123, now, "id");
+            Assert.Equal("id", dp.Id);
+            Assert.Equal(123.123, dp.DoubleValue);
+            Assert.Equal(now, dp.Timestamp);
+
+            // Normal string
+            dt = new UADataType(DataTypeIds.String);
+            dp = dt.ToDataPoint(extractor, 123.123, now, "id");
+            Assert.Equal("id", dp.Id);
+            Assert.Equal("123.123", dp.StringValue);
+            Assert.Equal(now, dp.Timestamp);
+
+            // Enum double
+            var config = new DataTypeConfig();
+            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test"), config);
+            dp = dt.ToDataPoint(extractor, 123, now, "id");
+            Assert.Equal("id", dp.Id);
+            Assert.Equal(123, dp.DoubleValue);
+            Assert.Equal(now, dp.Timestamp);
+
+            // Enum string
+            config.EnumsAsStrings = true;
+            dt = new UADataType(new ProtoDataType { Enum = true }, new NodeId("test"), config);
+            dt.EnumValues[123] = "enum";
+            dp = dt.ToDataPoint(extractor, 123, now, "id");
+            Assert.Equal("id", dp.Id);
+            Assert.Equal("enum", dp.StringValue);
+            Assert.Equal(now, dp.Timestamp);
+
+            dp = dt.ToDataPoint(extractor, 124, now, "id");
+            Assert.Equal("id", dp.Id);
+            Assert.Equal("124", dp.StringValue);
+            Assert.Equal(now, dp.Timestamp);
+        }
+        [Fact]
+        public void TestDataTypeDebugDescription()
+        {
+            // plain
+            var dt = new UADataType(DataTypeIds.String);
+            var str = dt.ToString();
+            var refStr = "DataType: {\n"
+                       + "    NodeId: i=12\n"
+                       + "    String: True\n"
+                       + "}";
+            Assert.Equal(refStr, str);
+
+            // full
+            dt = new UADataType(new NodeId("test"));
+            dt.IsString = false;
+            dt.IsStep = true;
+            dt.EnumValues = new Dictionary<long, string>
+            {
+                { 123, "test" },
+                { 321, "test2" },
+                { 1, "test3" }
+            };
+            str = dt.ToString();
+            refStr = "DataType: {\n"
+                   + "    NodeId: s=test\n"
+                   + "    Step: True\n"
+                   + "    String: False\n"
+                   + "    EnumValues: [[123, test], [321, test2], [1, test3]]\n"
+                   + "}";
+            Assert.Equal(refStr, str);
+        }
         #endregion
     }
 }

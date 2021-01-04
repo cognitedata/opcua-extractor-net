@@ -664,7 +664,7 @@ namespace Cognite.OpcUa
                         continue;
                     }
                 }
-                log.Verbose(node.ToDebugDescription());
+                log.Verbose(node.ToString());
 
                 State.AddActiveNode(node, update.Objects, config.Extraction.DataTypes.DataTypeMetadata,
                     config.Extraction.NodeTypes.Metadata);
@@ -721,7 +721,7 @@ namespace Cognite.OpcUa
                         continue;
                     }
                 }
-                log.Verbose(node.ToDebugDescription());
+                log.Verbose(node.ToString());
                 result.Variables.Add(node);
                 var state = new VariableExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill);
 
