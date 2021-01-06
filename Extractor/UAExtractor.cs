@@ -454,7 +454,7 @@ namespace Cognite.OpcUa
         {
             // If we are updating we want to re-discover nodes in order to run them through mapping again.
             await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, source.Token,
-                !config.Extraction.Update.AnyUpdate);
+                !config.Extraction.Update.AnyUpdate && !config.Extraction.Relationships.Enabled);
             var historyTasks = await MapUAToDestinations();
             Looper.ScheduleTasks(historyTasks);
         }
@@ -499,13 +499,13 @@ namespace Cognite.OpcUa
         private async Task<IEnumerable<Task>> MapUAToDestinations()
         {
             var nodes = await GetNodesFromQueue();
-            nodes.ClearRaw();
 
             IEnumerable<UAReference> references = null;
             if (config.Extraction.Relationships.Enabled)
             {
                 references = await GetRelationshipData(nodes);
             }
+            nodes.ClearRaw();
 
             if (!nodes.Objects.Any() && !nodes.Timeseries.Any() && !nodes.Variables.Any() && (references == null || !references.Any()))
             {
@@ -893,12 +893,12 @@ namespace Cognite.OpcUa
 
         private async Task<IEnumerable<UAReference>> GetRelationshipData(BrowseResult nodes)
         {
-            var references = await referenceTypeManager.GetReferencesAsync(nodes.Objects.Concat(nodes.Variables).DistinctBy(node => node.Id),
+            var references = await referenceTypeManager.GetReferencesAsync(nodes.RawObjects.Concat(nodes.RawVariables).DistinctBy(node => node.Id),
                     ReferenceTypeIds.NonHierarchicalReferences, source.Token);
 
             if (config.Extraction.Relationships.Hierarchical)
             {
-                var nodeMap = nodes.Objects.Concat(nodes.Variables)
+                var nodeMap = nodes.RawObjects.Concat(nodes.RawVariables)
                     .Where(node => !(node is UAVariable variable) || variable.Index == -1)
                     .DistinctBy(node => node.Id)
                     .ToDictionary(node => node.Id);
@@ -1132,8 +1132,9 @@ namespace Cognite.OpcUa
             }
         }
 
-        private bool IsProperty(ReferenceDescription node)
+        public bool IsProperty(ReferenceDescription node)
         {
+            if (node == null) throw new ArgumentNullException(nameof(node));
             if (node.TypeDefinition == VariableTypeIds.PropertyType)
             {
                 return true;

@@ -501,6 +501,59 @@ namespace Test.Unit
             Assert.Equal("CustomVariableType", type5.Name);
         }
         #endregion
+        #region referencetypemanager
+        [Fact]
+        public async Task TestReferenceTypeMeta()
+        {
+            using var extractor = tester.BuildExtractor();
+            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            var type1 = mgr.GetReferenceType(ReferenceTypeIds.Organizes);
+            var type2 = mgr.GetReferenceType(ReferenceTypeIds.HasComponent);
+            var type3 = mgr.GetReferenceType(tester.Server.Ids.Custom.RefType1);
+            var type4 = mgr.GetReferenceType(tester.Server.Ids.Custom.RefType2);
 
+            await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
+
+            Assert.Equal("Organizes", type1.GetName(false));
+            Assert.Equal("OrganizedBy", type1.GetName(true));
+            Assert.Equal("HasComponent", type2.GetName(false));
+            Assert.Equal("ComponentOf", type2.GetName(true));
+            Assert.Equal("HasCustomRelation", type3.GetName(false));
+            Assert.Equal("IsCustomRelationOf", type3.GetName(true));
+            Assert.Equal("HasSymmetricRelation", type4.GetName(false));
+            Assert.Equal("HasSymmetricRelation", type4.GetName(true));
+        }
+
+        private async Task TestGetReferencesGroup(NodeId referenceTypeId, int results, params NodeId[] ids)
+        {
+            using var extractor = tester.BuildExtractor();
+            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+
+            var nodes = ids.Select(id => new UANode(id, "Node", NodeId.Null)).ToList();
+            foreach (var node in nodes)
+            {
+                extractor.State.RegisterNode(node.Id, tester.Client.GetUniqueId(node.Id));
+                extractor.State.AddActiveNode(node, new TypeUpdateConfig(), false, false);
+            }
+
+            var references = await mgr.GetReferencesAsync(nodes, referenceTypeId, tester.Source.Token);
+            Assert.All(references, reference => Assert.True(reference.Type != null && !reference.Type.Id.IsNullNodeId));
+            Assert.Equal(results, references.Count());
+        }
+        [Fact]
+        public async Task TestGetReferences()
+        {
+            var ids = tester.Server.Ids.Custom;
+            await TestGetReferencesGroup(ReferenceTypeIds.NonHierarchicalReferences, 10,
+                ids.Root, ids.Array, ids.StringArray, ids.StringyVar, ids.MysteryVar, ids.IgnoreVar);
+            await TestGetReferencesGroup(ids.RefType2, 6,
+                ids.Root, ids.Array, ids.StringArray, ids.StringyVar, ids.MysteryVar, ids.IgnoreVar);
+            await TestGetReferencesGroup(ReferenceTypeIds.HierarchicalReferences, 4,
+                ids.Root, ids.Array, ids.StringArray);
+            await TestGetReferencesGroup(ReferenceTypeIds.References, 20,
+                ids.Root, ids.Array, ids.StringArray, ids.StringyVar, ids.MysteryVar, ids.IgnoreVar);
+        }
+
+        #endregion
     }
 }
