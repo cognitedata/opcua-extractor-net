@@ -481,5 +481,26 @@ namespace Test.Unit
             Assert.Equal(6, fields[eventIds.BasicType1].Count);
         }
         #endregion
+        #region nodetypemanager
+        [Fact]
+        public async Task TestNodeTypeManager()
+        {
+            var mgr = new NodeTypeManager(tester.Client);
+            var type1 = mgr.GetObjectType(ObjectTypeIds.BaseObjectType, false);
+            var type2 = mgr.GetObjectType(ObjectTypeIds.FolderType, false);
+            var type3 = mgr.GetObjectType(VariableTypeIds.AudioVariableType, true);
+            var type4 = mgr.GetObjectType(tester.Server.Ids.Custom.ObjectType, false);
+            var type5 = mgr.GetObjectType(tester.Server.Ids.Custom.VariableType, true);
+
+            await mgr.GetObjectTypeMetadataAsync(tester.Source.Token);
+
+            Assert.Equal("BaseObjectType", type1.Name);
+            Assert.Equal("FolderType", type2.Name);
+            Assert.Equal("AudioVariableType", type3.Name);
+            Assert.Equal("CustomObjectType", type4.Name);
+            Assert.Equal("CustomVariableType", type5.Name);
+        }
+        #endregion
+
     }
 }
