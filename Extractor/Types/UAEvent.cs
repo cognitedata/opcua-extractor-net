@@ -22,6 +22,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Cognite.Extensions;
+using Cognite.Extractor.Common;
+using Cognite.OpcUa.Pushers;
+using CogniteSdk;
 using Opc.Ua;
 
 namespace Cognite.OpcUa.Types
@@ -155,6 +158,99 @@ namespace Cognite.OpcUa.Types
                 evt.MetaData[key] = value;
             }
 
+            return evt;
+        }
+
+        private void ToCDFEventBase(UAExtractor extractor, EventCreate evt, long? dataSetId)
+        {
+            evt.Description = Message;
+            evt.StartTime = MetaData.TryGetValue("StartTime", out var rawStartTime)
+                ? PusherUtils.GetTimestampValue(rawStartTime)
+                : Time.ToUnixTimeMilliseconds();
+            evt.EndTime = MetaData.TryGetValue("EndTime", out var rawEndTime)
+                ? PusherUtils.GetTimestampValue(rawEndTime)
+                : Time.ToUnixTimeMilliseconds();
+            evt.ExternalId = EventId;
+            evt.Type = MetaData.TryGetValue("Type", out var rawType)
+                ? extractor.ConvertToString(rawType)
+                : extractor.GetUniqueId(EventType);
+            evt.DataSetId = dataSetId;
+
+            var finalMetaData = new Dictionary<string, string>();
+            finalMetaData["Emitter"] = extractor.GetUniqueId(EmittingNode);
+            if (!MetaData.ContainsKey("SourceNode") && SourceNode != null && !SourceNode.IsNullNodeId)
+            {
+                finalMetaData["SourceNode"] = extractor.GetUniqueId(SourceNode);
+            }
+            if (MetaData.TryGetValue("SubType", out var subtype))
+            {
+                evt.Subtype = extractor.ConvertToString(subtype);
+            }
+
+            foreach (var dt in MetaData)
+            {
+                if (!excludeMetaData.Contains(dt.Key))
+                {
+                    finalMetaData[dt.Key] = extractor.ConvertToString(dt.Value);
+                }
+            }
+
+            if (finalMetaData.Any())
+            {
+                evt.Metadata = finalMetaData;
+            }
+        }
+
+        private static readonly HashSet<string> excludeMetaData = new HashSet<string> {
+            "StartTime", "EndTime", "Type", "SubType"
+        };
+        public StatelessEventCreate ToStatelessCDFEvent(
+            UAExtractor extractor,
+            long? dataSetId,
+            IDictionary<NodeId, string> parentIdMap)
+        {
+            if (extractor == null) return null;
+
+            string sourceId = null;
+            if (SourceNode != null && !SourceNode.IsNullNodeId)
+            {
+                if (parentIdMap != null && parentIdMap.TryGetValue(SourceNode, out var parentId))
+                {
+                    sourceId = parentId;
+                }
+                else
+                {
+                    sourceId = extractor.GetUniqueId(SourceNode);
+                }
+            }
+
+            var evt = new StatelessEventCreate
+            {
+                AssetExternalIds = sourceId == null
+                    ? Enumerable.Empty<string>()
+                    : new string[] { sourceId }
+            };
+            ToCDFEventBase(extractor, evt, dataSetId);
+
+            return evt;
+        }
+
+        public EventCreate ToCDFEvent(
+            UAExtractor extractor,
+            long? dataSetId,
+            IDictionary<NodeId, long> nodeToAssetIds)
+        {
+            if (extractor == null) return null;
+            var evt = new EventCreate();
+
+            if (nodeToAssetIds != null
+                && SourceNode != null
+                && !SourceNode.IsNullNodeId
+                && nodeToAssetIds.TryGetValue(SourceNode, out var assetId))
+            {
+                evt.AssetIds = new List<long> { assetId };
+            }
+            ToCDFEventBase(extractor, evt, dataSetId);
             return evt;
         }
     }

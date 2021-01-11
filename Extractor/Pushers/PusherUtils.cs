@@ -194,12 +194,10 @@ namespace Cognite.OpcUa.Pushers
                 DataSetId = dataSetId
             };
             var finalMetaData = new Dictionary<string, string>();
-            int len = 1;
             finalMetaData["Emitter"] = extractor.GetUniqueId(evt.EmittingNode);
             if (!evt.MetaData.ContainsKey("SourceNode") && evt.SourceNode != null && !evt.SourceNode.IsNullNodeId)
             {
                 finalMetaData["SourceNode"] = extractor.GetUniqueId(evt.SourceNode);
-                len++;
             }
             if (evt.MetaData.ContainsKey("SubType"))
             {
@@ -212,8 +210,6 @@ namespace Cognite.OpcUa.Pushers
                 {
                     finalMetaData[dt.Key] = extractor.ConvertToString(dt.Value);
                 }
-
-                if (len++ == 15) break;
             }
 
             if (finalMetaData.Any())
@@ -255,12 +251,10 @@ namespace Cognite.OpcUa.Pushers
             }
 
             var finalMetaData = new Dictionary<string, string>();
-            int len = 1;
             finalMetaData["Emitter"] = extractor.GetUniqueId(evt.EmittingNode);
             if (!evt.MetaData.ContainsKey("SourceNode") && evt.SourceNode != null && !evt.SourceNode.IsNullNodeId)
             {
                 finalMetaData["SourceNode"] = extractor.GetUniqueId(evt.SourceNode);
-                len++;
             }
             if (evt.MetaData.TryGetValue("SubType", out var rawSubType))
             {
@@ -273,8 +267,6 @@ namespace Cognite.OpcUa.Pushers
                 {
                     finalMetaData[dt.Key] = extractor.ConvertToString(dt.Value);
                 }
-
-                if (len++ == 15) break;
             }
 
             if (finalMetaData.Any())

@@ -1,4 +1,5 @@
-﻿using Cognite.OpcUa;
+﻿using Cognite.Extractor.Common;
+using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -886,6 +887,124 @@ namespace Test.Unit
                     Assert.Equal(kvp.Value ?? "", tester.Client.ConvertToString(evt.MetaData[kvp.Key]));
                 }
             }
+        }
+        [Fact]
+        public void TestToStatelessCDFEvent()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var ts = DateTime.UtcNow;
+
+            var evt = new UAEvent
+            {
+                EmittingNode = new NodeId("emitter"),
+                MetaData = new Dictionary<string, object>(),
+                EventId = "eventid",
+                EventType = new NodeId("type"),
+                Message = "message",
+                SourceNode = new NodeId("source"),
+                Time = ts
+            };
+            evt.MetaData["field"] = "value";
+
+            // Plain
+            var conv = evt.ToStatelessCDFEvent(extractor, 123, null);
+            Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
+            Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
+            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("gp.base:s=type", conv.Type);
+            Assert.Equal("eventid", conv.ExternalId);
+            Assert.Equal("message", conv.Description);
+            Assert.Equal(ts.ToUnixTimeMilliseconds(), conv.StartTime);
+            Assert.Equal(ts.ToUnixTimeMilliseconds(), conv.EndTime);
+            Assert.Equal(123, conv.DataSetId);
+            Assert.Equal(new[] { "gp.base:s=source" }, conv.AssetExternalIds);
+
+            // With parentId mapping
+            conv = evt.ToStatelessCDFEvent(extractor, 123, new Dictionary<NodeId, string>
+            {
+                { new NodeId("source"), "source" }
+            });
+            Assert.Equal(new[] { "source" }, conv.AssetExternalIds);
+
+            // With mapped metadata
+            evt.MetaData["SubType"] = "SomeSubType";
+            evt.MetaData["StartTime"] = ts.AddDays(-1);
+            evt.MetaData["EndTime"] = ts.AddDays(1).ToUnixTimeMilliseconds();
+            evt.MetaData["Type"] = "SomeOtherType";
+
+            conv = evt.ToStatelessCDFEvent(extractor, 123, null);
+            Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
+            Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
+            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("SomeOtherType", conv.Type);
+            Assert.Equal("SomeSubType", conv.Subtype);
+            Assert.Equal("eventid", conv.ExternalId);
+            Assert.Equal("message", conv.Description);
+            Assert.Equal(ts.AddDays(-1).ToUnixTimeMilliseconds(), conv.StartTime);
+            Assert.Equal(ts.AddDays(1).ToUnixTimeMilliseconds(), conv.EndTime);
+            Assert.Equal(123, conv.DataSetId);
+            Assert.Equal(new[] { "gp.base:s=source" }, conv.AssetExternalIds);
+        }
+        [Fact]
+        public void TestToCDFEvent()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var ts = DateTime.UtcNow;
+
+            var evt = new UAEvent
+            {
+                EmittingNode = new NodeId("emitter"),
+                MetaData = new Dictionary<string, object>(),
+                EventId = "eventid",
+                EventType = new NodeId("type"),
+                Message = "message",
+                SourceNode = new NodeId("source"),
+                Time = ts
+            };
+            evt.MetaData["field"] = "value";
+
+            // Plain
+            var nodeToAsset = new Dictionary<NodeId, long>
+            {
+                { new NodeId("source"), 111 }
+            };
+
+            var conv = evt.ToCDFEvent(extractor, 123, null);
+            Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
+            Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
+            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("gp.base:s=type", conv.Type);
+            Assert.Equal("eventid", conv.ExternalId);
+            Assert.Equal("message", conv.Description);
+            Assert.Equal(ts.ToUnixTimeMilliseconds(), conv.StartTime);
+            Assert.Equal(ts.ToUnixTimeMilliseconds(), conv.EndTime);
+            Assert.Equal(123, conv.DataSetId);
+            Assert.Null(conv.AssetIds);
+
+            // With mapped metadata
+            evt.MetaData["SubType"] = "SomeSubType";
+            evt.MetaData["StartTime"] = ts.AddDays(-1);
+            evt.MetaData["EndTime"] = ts.AddDays(1).ToUnixTimeMilliseconds();
+            evt.MetaData["Type"] = "SomeOtherType";
+
+            conv = evt.ToCDFEvent(extractor, 123, nodeToAsset);
+            Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
+            Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
+            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("SomeOtherType", conv.Type);
+            Assert.Equal("SomeSubType", conv.Subtype);
+            Assert.Equal("eventid", conv.ExternalId);
+            Assert.Equal("message", conv.Description);
+            Assert.Equal(ts.AddDays(-1).ToUnixTimeMilliseconds(), conv.StartTime);
+            Assert.Equal(ts.AddDays(1).ToUnixTimeMilliseconds(), conv.EndTime);
+            Assert.Equal(123, conv.DataSetId);
+            Assert.Equal(new long[] { 111 }, conv.AssetIds);
         }
         #endregion
 
