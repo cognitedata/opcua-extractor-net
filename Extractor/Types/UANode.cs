@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using CogniteSdk;
 using Opc.Ua;
 
 namespace Cognite.OpcUa.Types
@@ -175,6 +176,73 @@ namespace Cognite.OpcUa.Types
                 }
             }
             return checksum;
+        }
+        public Dictionary<string, string> BuildMetadata(UAExtractor extractor)
+        {
+            Dictionary<string, string> extras = extractor?.GetExtraMetadata(this);
+            if (Properties == null && extras == null) return new Dictionary<string, string>();
+            if (Properties == null) return extras;
+            var result = extras ?? new Dictionary<string, string>();
+
+            foreach (var prop in Properties)
+            {
+                if (prop != null && !string.IsNullOrEmpty(prop.DisplayName))
+                {
+                    result[prop.DisplayName] = prop.Value?.StringValue;
+
+                    // Handles one layer of nested properties. This only happens if variables that have their own properties are mapped
+                    // to properties.
+                    if (prop.Properties != null)
+                    {
+                        // Null extractor to not get extra metadata
+                        var nestedProperties = prop.BuildMetadata(null);
+                        foreach (var sprop in nestedProperties)
+                        {
+                            result[$"{prop.DisplayName}_{sprop.Key}"] = sprop.Value;
+                        }
+                    }
+                }
+            }
+
+            return result;
+        }
+        public AssetCreate ToCDFAsset(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
+        {
+            if (extractor == null) return null;
+            var id = extractor.GetUniqueId(Id);
+            var writePoco = new AssetCreate
+            {
+                Description = Description,
+                ExternalId = id,
+                Name = string.IsNullOrEmpty(DisplayName)
+                    ? id : DisplayName,
+                DataSetId = dataSetId
+            };
+
+            if (ParentId != null && !ParentId.IsNullNodeId)
+            {
+                writePoco.ParentExternalId = extractor.GetUniqueId(ParentId);
+            }
+
+            writePoco.Metadata = BuildMetadata(extractor);
+            if (Properties != null && Properties.Any() && (metaMap?.Any() ?? false))
+            {
+                foreach (var prop in Properties)
+                {
+                    if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                    {
+                        var value = prop.Value.StringValue;
+                        switch (mapped)
+                        {
+                            case "description": writePoco.Description = value; break;
+                            case "name": writePoco.Name = value; break;
+                            case "parentId": writePoco.ParentExternalId = value; break;
+                        }
+                    }
+                }
+            }
+
+            return writePoco;
         }
     }
 }

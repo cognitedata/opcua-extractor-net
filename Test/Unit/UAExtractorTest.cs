@@ -405,5 +405,29 @@ namespace Test.Unit
                 }
             }
         }
+        [Fact]
+        public void TestGetExtraMetadata()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            Assert.Null(extractor.GetExtraMetadata(null));
+
+            tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
+            var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null);
+            variable.DataType = new UADataType(DataTypeIds.Double);
+            var fields = extractor.GetExtraMetadata(variable);
+            Assert.Single(fields);
+            Assert.Equal("Double", fields["dataType"]);
+
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            var node = new UANode(new NodeId("test"), "test", NodeId.Null);
+            node.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
+            fields = extractor.GetExtraMetadata(node);
+            Assert.Single(fields);
+            Assert.Equal("SomeType", fields["TypeDefinition"]);
+
+            tester.Config.Extraction.DataTypes.DataTypeMetadata = false;
+            tester.Config.Extraction.NodeTypes.Metadata = false;
+        }
     }
 }

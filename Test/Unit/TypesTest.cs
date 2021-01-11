@@ -191,6 +191,127 @@ namespace Test.Unit
                    + "}";
             Assert.Equal(refStr, str);
         }
+
+        [Fact]
+        public void TestBuildMetadata()
+        {
+            using var extractor = tester.BuildExtractor();
+            var node = new UANode(new NodeId("test"), "test", NodeId.Null);
+            Assert.Empty(node.BuildMetadata(null));
+            Assert.Empty(node.BuildMetadata(extractor));
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            node.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
+            // Test extras only
+            Assert.Single(node.BuildMetadata(extractor));
+
+            // Test properties only
+            tester.Config.Extraction.NodeTypes.Metadata = false;
+            var ts = DateTime.UtcNow;
+            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
+            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
+            propA.SetDataPoint("valueA", ts, tester.Client);
+            propB.SetDataPoint("valueB", ts, tester.Client);
+
+            node.Properties = new List<UAVariable>
+            {
+                propA, propB
+            };
+            var meta = node.BuildMetadata(extractor);
+            Assert.Equal(2, meta.Count);
+            Assert.Equal("valueA", meta["propA"]);
+            Assert.Equal("valueB", meta["propB"]);
+
+            // Test both
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            Assert.Equal(3, node.BuildMetadata(extractor).Count);
+
+            // Test nested properties
+            var nestedProp = new UAVariable(new NodeId("nestedProp"), "nestedProp", NodeId.Null);
+            nestedProp.SetDataPoint("nestedValue", ts, tester.Client);
+            propB.Properties = new List<UAVariable>
+            {
+                nestedProp
+            };
+            meta = node.BuildMetadata(extractor);
+            Assert.Equal(4, meta.Count);
+            Assert.Equal("nestedValue", meta["propB_nestedProp"]);
+
+            // Test null name
+            var nullNameProp = new UAVariable(new NodeId("nullName"), null, NodeId.Null);
+            node.Properties.Add(nullNameProp);
+            meta = node.BuildMetadata(extractor);
+            Assert.Equal(4, meta.Count);
+
+            // Test null value
+            var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", NodeId.Null);
+            node.Properties.Add(nullValueProp);
+            meta = node.BuildMetadata(extractor);
+            Assert.Equal(5, meta.Count);
+            Assert.Null(meta["nullValue"]);
+
+            // Test duplicated properties
+            var propA2 = new UAVariable(new NodeId("propA2"), "propA", NodeId.Null);
+            node.Properties.Add(propA2);
+            propA2.SetDataPoint("valueA2", ts, tester.Client);
+            meta = node.BuildMetadata(extractor);
+            Assert.Equal(5, meta.Count);
+            Assert.Equal("valueA2", meta["propA"]);
+
+            // Test overwrite extras
+            Assert.Equal("SomeType", meta["TypeDefinition"]);
+            var propNT = new UAVariable(new NodeId("TypeDef"), "TypeDefinition", NodeId.Null);
+            propNT.SetDataPoint("SomeOtherType", ts, tester.Client);
+            node.Properties.Add(propNT);
+            meta = node.BuildMetadata(extractor);
+            Assert.Equal(5, meta.Count);
+            Assert.Equal("SomeOtherType", meta["TypeDefinition"]);
+        }
+
+        [Fact]
+        public void TestToCDFAsset()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var node = new UANode(new NodeId("test"), "test", new NodeId("parent"));
+            node.Description = "description";
+            var ts = DateTime.UtcNow;
+            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
+            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
+            propA.SetDataPoint("valueA", ts, tester.Client);
+            propB.SetDataPoint("valueB", ts, tester.Client);
+
+            node.Properties = new List<UAVariable>
+            {
+                propA, propB
+            };
+
+            var poco = node.ToCDFAsset(extractor, 123, null);
+            Assert.Equal(node.Description, poco.Description);
+            Assert.Equal(123, poco.DataSetId);
+            Assert.Equal("test", poco.Name);
+            Assert.Equal("gp.base:s=test", poco.ExternalId);
+            Assert.Equal("gp.base:s=parent", poco.ParentExternalId);
+            Assert.Equal(2, poco.Metadata.Count);
+
+            // Test meta-map
+            var propC = new UAVariable(new NodeId("propC"), "propC", NodeId.Null);
+            propC.SetDataPoint("valueC", ts, tester.Client);
+            node.Properties.Add(propC);
+
+            var metaMap = new Dictionary<string, string>
+            {
+                { "propA", "description" },
+                { "propB", "name" },
+                { "propC", "parentId" }
+            };
+            poco = node.ToCDFAsset(extractor, 123, metaMap);
+            Assert.Equal("valueA", poco.Description);
+            Assert.Equal(123, poco.DataSetId);
+            Assert.Equal("valueB", poco.Name);
+            Assert.Equal("gp.base:s=test", poco.ExternalId);
+            Assert.Equal("valueC", poco.ParentExternalId);
+            Assert.Equal(3, poco.Metadata.Count);
+        }
         #endregion
 
         #region uavariable

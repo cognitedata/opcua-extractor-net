@@ -38,3 +38,4 @@ extraction:
         # Saves space compared to using the full URL. Using the ns index is not safe
         # If not specified, the full URI is used instead.
         "opc.tcp://test.localhost": "tl:"
+        "http://opcfoundation.org/UA/": "base:"

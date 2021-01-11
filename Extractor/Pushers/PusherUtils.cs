@@ -41,7 +41,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="value">Value of the object. Assumed to be a timestamp or numeric value</param>
         /// <returns>Milliseconds since epoch</returns>
-        private static long GetTimestampValue(object value)
+        public static long GetTimestampValue(object value)
         {
             if (value is DateTime dt)
             {
@@ -49,7 +49,14 @@ namespace Cognite.OpcUa.Pushers
             }
             else
             {
-                return Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                try
+                {
+                    return Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                }
+                catch
+                {
+                    return 0;
+                }
             }
         }
         public static Dictionary<string, string> PropertiesToMetadata(
