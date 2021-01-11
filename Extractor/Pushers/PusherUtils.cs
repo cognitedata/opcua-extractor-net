@@ -59,355 +59,6 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
         }
-        public static Dictionary<string, string> PropertiesToMetadata(
-            IEnumerable<UAVariable> properties,
-            Dictionary<string, string> extras)
-        {
-            if (properties == null && extras == null) return new Dictionary<string, string>();
-
-            var raw = new List<KeyValuePair<string, string>>();
-            if (extras != null) raw.AddRange(extras);
-            if (properties != null)
-            {
-                foreach (var prop in properties)
-                {
-                    if (prop != null && !string.IsNullOrEmpty(prop.DisplayName))
-                    {
-                        raw.Add(new KeyValuePair<string, string>(
-                            prop.DisplayName, prop.Value?.StringValue
-                        ));
-
-                        // Handles one layer of nested properties. This only happens if variables that have their own properties are mapped
-                        // to properties.
-                        if (prop.Properties != null)
-                        {
-                            raw.AddRange(prop.Properties
-                                .Where(prop => prop != null && !string.IsNullOrEmpty(prop.DisplayName))
-                                .Select(nestedProp => new KeyValuePair<string, string>(
-                                    $"{prop.DisplayName}_{nestedProp.DisplayName}",
-                                    nestedProp.Value?.StringValue))
-                            );
-                        }
-
-                    }
-                }
-
-            }
-            int count = 0;
-            int byteCount = 0;
-            raw = raw.TakeWhile(pair =>
-            {
-                count++;
-                if (pair.Key != null) byteCount += Encoding.UTF8.GetByteCount(pair.Key);
-                if (pair.Value != null) byteCount += Encoding.UTF8.GetByteCount(pair.Value);
-                return count <= 256 && byteCount <= 10240;
-            }).ToList();
-
-            return raw.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-        }
-
-        /// <summary>
-        /// Converts BufferedNode into asset write poco.
-        /// </summary>
-        /// <param name="node">Node to be converted</param>
-        /// <returns>Full asset write poco</returns>
-        public static AssetCreate NodeToAsset(UANode node, UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
-        {
-            if (extractor == null || node == null) return null;
-            var writePoco = new AssetCreate
-            {
-                Description = node.Description,
-                ExternalId = extractor.GetUniqueId(node.Id),
-                Name = string.IsNullOrEmpty(node.DisplayName)
-                    ? extractor.GetUniqueId(node.Id) : node.DisplayName,
-                DataSetId = dataSetId
-            };
-
-            if (node.ParentId != null && !node.ParentId.IsNullNodeId)
-            {
-                writePoco.ParentExternalId = extractor.GetUniqueId(node.ParentId);
-            }
-
-            var extras = extractor.GetExtraMetadata(node);
-            writePoco.Metadata = PropertiesToMetadata(node.Properties, extras);
-            if (node.Properties != null && node.Properties.Any() && (metaMap?.Any() ?? false))
-            {
-                foreach (var prop in node.Properties)
-                {
-                    if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
-                    {
-                        var value = prop.Value.StringValue;
-                        switch (mapped)
-                        {
-                            case "description": writePoco.Description = value; break;
-                            case "name": writePoco.Name = value; break;
-                            case "parentId": writePoco.ParentExternalId = value; break;
-                        }
-                    }
-                }
-            }
-            
-            return writePoco;
-        }
-        private static readonly HashSet<string> excludeMetaData = new HashSet<string> {
-            "StartTime", "EndTime", "Type", "SubType"
-        };
-        /// <summary>
-        /// Transform BufferedEvent into EventEntity to be sent to CDF.
-        /// </summary>
-        /// <param name="evt">Event to be transformed.</param>
-        /// <returns>Final EventEntity object</returns>
-        public static StatelessEventCreate EventToStatelessCDFEvent(UAEvent evt, UAExtractor extractor, long? dataSetId,
-            IDictionary<NodeId, string> parentIdMap)
-        {
-            if (evt == null || extractor == null) return null;
-
-            string sourceId = null;
-            if (evt.SourceNode != null && !evt.SourceNode.IsNullNodeId && parentIdMap != null)
-            {
-                if (parentIdMap.TryGetValue(evt.SourceNode, out var parentId))
-                {
-                    sourceId = parentId;
-                }
-                else
-                {
-                    sourceId = extractor.GetUniqueId(evt.SourceNode);
-                }
-            }
-
-            var entity = new StatelessEventCreate
-            {
-                Description = evt.Message,
-                StartTime = evt.MetaData.TryGetValue("StartTime", out var rawStartTime)
-                    ? GetTimestampValue(rawStartTime)
-                    : evt.Time.ToUnixTimeMilliseconds(),
-                EndTime = evt.MetaData.TryGetValue("EndTime", out var rawEndTime)
-                    ? GetTimestampValue(rawEndTime)
-                    : evt.Time.ToUnixTimeMilliseconds(),
-                AssetExternalIds = sourceId == null
-                    ? Enumerable.Empty<string>()
-                    : new string[] { sourceId },
-                ExternalId = evt.EventId,
-                Type = evt.MetaData.TryGetValue("Type", out var rawType)
-                    ? extractor.ConvertToString(rawType)
-                    : extractor.GetUniqueId(evt.EventType),
-                DataSetId = dataSetId
-            };
-            var finalMetaData = new Dictionary<string, string>();
-            finalMetaData["Emitter"] = extractor.GetUniqueId(evt.EmittingNode);
-            if (!evt.MetaData.ContainsKey("SourceNode") && evt.SourceNode != null && !evt.SourceNode.IsNullNodeId)
-            {
-                finalMetaData["SourceNode"] = extractor.GetUniqueId(evt.SourceNode);
-            }
-            if (evt.MetaData.ContainsKey("SubType"))
-            {
-                entity.Subtype = extractor.ConvertToString(evt.MetaData["SubType"]);
-            }
-
-            foreach (var dt in evt.MetaData)
-            {
-                if (!excludeMetaData.Contains(dt.Key))
-                {
-                    finalMetaData[dt.Key] = extractor.ConvertToString(dt.Value);
-                }
-            }
-
-            if (finalMetaData.Any())
-            {
-                entity.Metadata = finalMetaData;
-            }
-            return entity;
-        }
-
-        /// <summary>
-        /// Transform BufferedEvent into EventEntity to be sent to CDF.
-        /// </summary>
-        /// <param name="evt">Event to be transformed.</param>
-        /// <returns>Final EventEntity object</returns>
-        public static EventCreate EventToCDFEvent(UAEvent evt, UAExtractor extractor, long? dataSetId,
-            IDictionary<NodeId, long> nodeToAssetIds)
-        {
-            if (evt == null || extractor == null) return null;
-            EventCreate entity;
-            entity = new EventCreate
-            {
-                Description = evt.Message,
-                StartTime = evt.MetaData.TryGetValue("StartTime", out var rawStartTime)
-                    ? GetTimestampValue(rawStartTime)
-                    : evt.Time.ToUnixTimeMilliseconds(),
-                EndTime = evt.MetaData.TryGetValue("EndTime", out var rawEndTime)
-                    ? GetTimestampValue(rawEndTime)
-                    : evt.Time.ToUnixTimeMilliseconds(),
-                ExternalId = evt.EventId,
-                Type = evt.MetaData.TryGetValue("Type", out var rawType)
-                    ? extractor.ConvertToString(rawType)
-                    : extractor.GetUniqueId(evt.EventType),
-                DataSetId = dataSetId
-            };
-
-            if (nodeToAssetIds != null && evt.SourceNode != null && !evt.SourceNode.IsNullNodeId
-                && nodeToAssetIds.TryGetValue(evt.SourceNode, out var assetId)) {
-                entity.AssetIds = new List<long> { assetId };
-            }
-
-            var finalMetaData = new Dictionary<string, string>();
-            finalMetaData["Emitter"] = extractor.GetUniqueId(evt.EmittingNode);
-            if (!evt.MetaData.ContainsKey("SourceNode") && evt.SourceNode != null && !evt.SourceNode.IsNullNodeId)
-            {
-                finalMetaData["SourceNode"] = extractor.GetUniqueId(evt.SourceNode);
-            }
-            if (evt.MetaData.TryGetValue("SubType", out var rawSubType))
-            {
-                entity.Subtype = extractor.ConvertToString(rawSubType);
-            }
-
-            foreach (var dt in evt.MetaData)
-            {
-                if (!excludeMetaData.Contains(dt.Key))
-                {
-                    finalMetaData[dt.Key] = extractor.ConvertToString(dt.Value);
-                }
-            }
-
-            if (finalMetaData.Any())
-            {
-                entity.Metadata = finalMetaData;
-            }
-            return entity;
-        }
-        /// <summary>
-        /// Create timeseries poco to create this node in CDF
-        /// </summary>
-        /// <param name="variable">Variable to be converted</param>
-        /// <returns>Complete timeseries write poco</returns>
-        public static StatelessTimeSeriesCreate VariableToStatelessTimeSeries(UAVariable variable,
-            UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
-        {
-            if (variable == null || extractor == null) return null;
-            string externalId = extractor.GetUniqueId(variable.Id, variable.Index);
-            var writePoco = new StatelessTimeSeriesCreate
-            {
-                Description = variable.Description,
-                ExternalId = externalId,
-                AssetExternalId = extractor.GetUniqueId(variable.ParentId),
-                Name = variable.DisplayName,
-                LegacyName = externalId,
-                IsString = variable.DataType.IsString,
-                IsStep = variable.DataType.IsStep,
-                DataSetId = dataSetId
-            };
-
-            var extra = extractor.GetExtraMetadata(variable);
-            writePoco.Metadata = PropertiesToMetadata(variable.Properties, extra);
-            if (variable.Properties != null && variable.Properties.Any() && (metaMap?.Any() ?? false))
-            {
-                foreach (var prop in variable.Properties)
-                {
-                    if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
-                    {
-                        var value = prop.Value.StringValue;
-                        switch (mapped)
-                        {
-                            case "description": writePoco.Description = value; break;
-                            case "name": writePoco.Name = value; break;
-                            case "unit": writePoco.Unit = value; break;
-                            case "parentId": writePoco.AssetExternalId = value; break;
-                        }
-                    }
-                }
-            }
-            return writePoco;
-        }
-        /// <summary>
-        /// Create timeseries poco to create this node in CDF
-        /// </summary>
-        /// <param name="variable">Variable to be converted</param>
-        /// <returns>Complete timeseries write poco</returns>
-        public static TimeSeriesCreate VariableToTimeseries(UAVariable variable, UAExtractor extractor, long? dataSetId,
-            IDictionary<NodeId, long> nodeToAssetIds, Dictionary<string, string> metaMap, bool minimal = false)
-        {
-            if (variable == null
-                || extractor == null) return null;
-
-            string externalId = extractor.GetUniqueId(variable.Id, variable.Index);
-
-            if (minimal)
-            {
-                return new TimeSeriesCreate
-                {
-                    ExternalId = externalId,
-                    IsString = variable.DataType.IsString,
-                    IsStep = variable.DataType.IsStep,
-                    DataSetId = dataSetId
-                };
-            }
-
-            var writePoco = new TimeSeriesCreate
-            {
-                Description = variable.Description,
-                ExternalId = externalId,
-                Name = variable.DisplayName,
-                LegacyName = externalId,
-                IsString = variable.DataType.IsString,
-                IsStep = variable.DataType.IsStep,
-                DataSetId = dataSetId
-            };
-
-            if (nodeToAssetIds != null && nodeToAssetIds.TryGetValue(variable.ParentId, out long parent))
-            {
-                writePoco.AssetId = parent;
-            }
-
-            var extra = extractor.GetExtraMetadata(variable);
-            writePoco.Metadata = PropertiesToMetadata(variable.Properties, extra);
-
-            if (variable.Properties != null && variable.Properties.Any() && (metaMap?.Any() ?? false))
-            {
-                foreach (var prop in variable.Properties)
-                {
-                    if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
-                    {
-                        var value = prop.Value.StringValue;
-                        switch (mapped)
-                        {
-                            case "description": writePoco.Description = value; break;
-                            case "name": writePoco.Name = value; break;
-                            case "unit": writePoco.Unit = value; break;
-                            case "parentId":
-                                var id = extractor.State.GetNodeId(value);
-                                if (id != null && nodeToAssetIds != null && nodeToAssetIds.TryGetValue(id, out long assetId))
-                                {
-                                    writePoco.AssetId = assetId;
-                                }
-                                break;
-                        }
-                    }
-                }
-            }
-            return writePoco;
-        }
-
-        private static CogniteSdk.Beta.RelationshipVertexType GetVertexType(ReferenceVertex node)
-        {
-            if (node.IsTimeSeries) return CogniteSdk.Beta.RelationshipVertexType.TimeSeries;
-            return CogniteSdk.Beta.RelationshipVertexType.Asset;
-        }
-
-        public static CogniteSdk.Beta.RelationshipCreate ReferenceToRelationship(UAReference reference, long? dataSetId, UAExtractor extractor)
-        {
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
-            if (reference == null) throw new ArgumentNullException(nameof(reference));
-            var relationship = new CogniteSdk.Beta.RelationshipCreate
-            {
-                DataSetId = dataSetId,
-                SourceExternalId = extractor.GetUniqueId(reference.Source.Id),
-                TargetExternalId = extractor.GetUniqueId(reference.Target.Id),
-                SourceType = GetVertexType(reference.Source),
-                TargetType = GetVertexType(reference.Target),
-                ExternalId = extractor.GetRelationshipId(reference)
-            };
-            return relationship;
-        }
 
         private static void UpdateIfModified(Dictionary<string, object> ret, RawRow raw, string newValue, string key)
         {
@@ -450,8 +101,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata)
             {
-                var extra = extractor.GetExtraMetadata(node);
-                var newMetaData = PropertiesToMetadata(node.Properties, extra);
+                var newMetaData = node.BuildMetadata(extractor);
                 if (raw.Columns.TryGetValue("metadata", out var rawMetaData))
                 {
                     Dictionary<string, string> oldMetaData = null;
@@ -505,7 +155,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (raw == null)
             {
-                var create = VariableToStatelessTimeSeries(variable, extractor, null, metaMap);
+                var create = variable.ToStatelessTimeSeries(extractor, null, metaMap);
                 return JsonDocument.Parse(JsonSerializer.Serialize(create,
                     new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })).RootElement;
             }
@@ -531,7 +181,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (raw == null)
             {
-                var create = NodeToAsset(node, extractor, null, metaMap);
+                var create = node.ToCDFAsset(extractor, null, metaMap);
                 return JsonDocument.Parse(JsonSerializer.Serialize(create,
                     new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })).RootElement;
             }
@@ -545,11 +195,11 @@ namespace Cognite.OpcUa.Pushers
             return CreateRawUpdateCommon(extractor, node, raw, update, ret);
         }
         public static TimeSeriesUpdate GetTSUpdate(
+            UAExtractor extractor,
             TimeSeries old,
             UAVariable newTs,
             TypeUpdateConfig update,
-            IDictionary<NodeId, long> nodeToAssetIds,
-            Dictionary<string, string> extra)
+            IDictionary<NodeId, long> nodeToAssetIds)
         {
             if (update == null || newTs == null || nodeToAssetIds == null || old == null) return null;
             var tsUpdate = new TimeSeriesUpdate();
@@ -573,19 +223,19 @@ namespace Cognite.OpcUa.Pushers
             if (update.Name && !string.IsNullOrEmpty(newName) && newName != old.Name)
                 tsUpdate.Name = new UpdateNullable<string>(newName);
 
-            if (update.Metadata && newTs.Properties != null && newTs.Properties.Any()
-                || (extra?.Any() ?? false))
+            if (update.Metadata)
             {
-                var newMetaData = PropertiesToMetadata(newTs.Properties, extra)
+                var newMetaData = newTs.BuildMetadata(extractor)
                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
                     .SanitizeMetadata(
                         Sanitation.TimeSeriesMetadataMaxPerKey,
-                        Sanitation.TimeSeriesMetadataMaxPerKey,
+                        Sanitation.TimeSeriesMetadataMaxPairs,
                         Sanitation.TimeSeriesMetadataMaxPerValue,
                         Sanitation.TimeSeriesMetadataMaxBytes);
 
-                if (old.Metadata == null || newMetaData.Any(meta => !old.Metadata.ContainsKey(meta.Key) || old.Metadata[meta.Key] != meta.Value))
+                if (old.Metadata == null && newMetaData.Any()
+                    || newMetaData.Any(meta => !old.Metadata.ContainsKey(meta.Key) || old.Metadata[meta.Key] != meta.Value))
                 {
                     tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
                 }
@@ -597,8 +247,7 @@ namespace Cognite.OpcUa.Pushers
             Asset old,
             UANode newAsset,
             UAExtractor extractor,
-            TypeUpdateConfig update,
-            Dictionary<string, string> extra)
+            TypeUpdateConfig update)
         {
             if (old == null || newAsset == null || extractor == null || update == null) return null;
             var assetUpdate = new AssetUpdate();
@@ -617,12 +266,18 @@ namespace Cognite.OpcUa.Pushers
             if (update.Name && !string.IsNullOrEmpty(newAsset.DisplayName) && newAsset.DisplayName != old.Name)
                 assetUpdate.Name = new UpdateNullable<string>(newAsset.DisplayName);
 
-            if (update.Metadata && newAsset.Properties != null && newAsset.Properties.Any())
+            if (update.Metadata)
             {
-                var newMetaData = PropertiesToMetadata(newAsset.Properties, extra)
+                var newMetaData = newAsset.BuildMetadata(extractor)
                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
-                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                if (old.Metadata == null
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+                    .SanitizeMetadata(
+                        Sanitation.AssetMetadataMaxPerKey,
+                        Sanitation.AssetMetadataMaxPairs,
+                        Sanitation.AssetMetadataMaxPerValue,
+                        Sanitation.AssetMetadataMaxBytes);
+
+                if (old.Metadata == null && newMetaData.Any()
                     || newMetaData.Any(meta => !old.Metadata.ContainsKey(meta.Key) || old.Metadata[meta.Key] != meta.Value))
                 {
                     assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());

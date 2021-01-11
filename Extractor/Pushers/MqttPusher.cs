@@ -477,7 +477,7 @@ namespace Cognite.OpcUa.Pushers
         {
             foreach (var node in nodes)
             {
-                var create = PusherUtils.NodeToAsset(node, Extractor, config.DataSetId, config.MetadataMapping?.Assets);
+                var create = node.ToCDFAsset(Extractor, config.DataSetId, config.MetadataMapping?.Assets);
                 if (create == null) continue;
                 if (!node.Changed)
                 {
@@ -496,7 +496,7 @@ namespace Cognite.OpcUa.Pushers
         {
             foreach (var variable in variables)
             {
-                var create = PusherUtils.VariableToStatelessTimeSeries(variable, Extractor, config.DataSetId, config.MetadataMapping?.Timeseries);
+                var create = variable.ToStatelessTimeSeries(Extractor, config.DataSetId, config.MetadataMapping?.Timeseries);
                 if (create == null) continue;
                 if (!variable.Changed)
                 {
@@ -524,7 +524,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var minimalTimeseries = variables
                     .Where(variable => !update.AnyUpdate || !variable.Changed)
-                    .Select(variable => PusherUtils.VariableToTimeseries(variable, Extractor, config.DataSetId, null, null, true))
+                    .Select(variable => variable.ToTimeseries(Extractor, config.DataSetId, null, null, true))
                     .Where(variable => variable != null)
                     .ToList();
 
@@ -608,7 +608,7 @@ namespace Cognite.OpcUa.Pushers
         {
             if (config.Debug) return true;
             var events = evts
-                .Select(evt => PusherUtils.EventToStatelessCDFEvent(evt, Extractor, config.DataSetId, eventParents))
+                .Select(evt => evt.ToStatelessCDFEvent(Extractor, config.DataSetId, eventParents))
                 .Where(evt => evt != null);
 
             var data = JsonSerializer.SerializeToUtf8Bytes(events, null);

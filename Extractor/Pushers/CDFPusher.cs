@@ -187,7 +187,7 @@ namespace Cognite.OpcUa.Pushers
             try
             {
                 var result = await destination.EnsureEventsExistsAsync(eventList
-                    .Select(evt => PusherUtils.EventToCDFEvent(evt, Extractor, config.DataSetId, nodeToAssetIds))
+                    .Select(evt => evt.ToCDFEvent(Extractor, config.DataSetId, nodeToAssetIds))
                     .Where(evt => evt != null), RetryMode.OnError, SanitationMode.Clean, token);
 
                 var skipped = result.Errors.Aggregate(0, (seed, err) =>
@@ -415,7 +415,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var assets = ids.Select(id => assetMap[id]);
                 await Extractor.ReadProperties(assets);
-                return assets.Select(node => PusherUtils.NodeToAsset(node, Extractor, null, config.MetadataMapping?.Assets))
+                return assets.Select(node => node.ToCDFAsset(Extractor, null, config.MetadataMapping?.Assets))
                     .Where(asset => asset != null)
                     .ToDictionary(asset => asset.ExternalId);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
@@ -431,7 +431,7 @@ namespace Cognite.OpcUa.Pushers
                     var assets = ids.Select(id => assetMap[id]);
                     await Extractor.ReadProperties(assets);
                     return assets
-                        .Select(node => PusherUtils.NodeToAsset(node, Extractor, config.DataSetId, config.MetadataMapping?.Assets))
+                        .Select(node => node.ToCDFAsset(Extractor, config.DataSetId, config.MetadataMapping?.Assets))
                         .Where(asset => asset != null);
                 }, RetryMode.None, SanitationMode.Clean, token);
 
@@ -458,7 +458,7 @@ namespace Cognite.OpcUa.Pushers
                 if (existing.TryGetValue(kvp.Key, out var asset))
                 {
                     var extras = Extractor.GetExtraMetadata(kvp.Value);
-                    var assetUpdate = PusherUtils.GetAssetUpdate(asset, kvp.Value, Extractor, update, extras);
+                    var assetUpdate = PusherUtils.GetAssetUpdate(asset, kvp.Value, Extractor, update);
 
                     if (assetUpdate == null) continue;
                     if (assetUpdate.ParentExternalId != null || assetUpdate.Description != null
@@ -544,7 +544,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var timeseries = ids.Select(id => tsMap[id]);
                 await Extractor.ReadProperties(timeseries);
-                return timeseries.Select(node => PusherUtils.VariableToStatelessTimeSeries(node, Extractor, null, config.MetadataMapping?.Timeseries))
+                return timeseries.Select(node => node.ToStatelessTimeSeries(Extractor, null, config.MetadataMapping?.Timeseries))
                     .Where(ts => ts != null)
                     .ToDictionary(ts => ts.ExternalId);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
@@ -562,7 +562,7 @@ namespace Cognite.OpcUa.Pushers
                 {
                     await Extractor.ReadProperties(tss);
                 }
-                return tss.Select(ts => PusherUtils.VariableToTimeseries(ts,
+                return tss.Select(ts => ts.ToTimeseries(
                     Extractor,
                     config.DataSetId,
                     nodeToAssetIds,
@@ -609,7 +609,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (existing.TryGetValue(kvp.Key, out var ts))
                 {
-                    var tsUpdate = PusherUtils.GetTSUpdate(ts, kvp.Value, update, nodeToAssetIds, Extractor.GetExtraMetadata(kvp.Value));
+                    var tsUpdate = PusherUtils.GetTSUpdate(Extractor, ts, kvp.Value, update, nodeToAssetIds);
                     if (tsUpdate == null) continue;
                     if (tsUpdate.AssetId != null || tsUpdate.Description != null
                         || tsUpdate.Name != null || tsUpdate.Metadata != null)
@@ -740,7 +740,7 @@ namespace Cognite.OpcUa.Pushers
         public async Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
         {
             var relationships = references
-                .Select(reference => PusherUtils.ReferenceToRelationship(reference, config.DataSetId, Extractor))
+                .Select(reference => reference.ToRelationship(config.DataSetId, Extractor))
                 .DistinctBy(rel => rel.ExternalId);
 
             bool useRawRelationships = config.RawMetadata != null
