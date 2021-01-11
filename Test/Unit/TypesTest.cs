@@ -3,6 +3,7 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using CogniteSdk.Beta;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -1058,6 +1059,30 @@ namespace Test.Unit
             reference2 = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, false, mgr);
             Assert.Equal(reference, reference2);
             Assert.Equal(reference.GetHashCode(), reference2.GetHashCode());
+        }
+        [Fact]
+        public void TestToRelationship()
+        {
+            using var extractor = tester.BuildExtractor();
+            var manager = new ReferenceTypeManager(tester.Client, extractor);
+            var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, true, manager);
+            reference.Type.SetNames("Organizes", "OrganizedBy");
+            var rel = reference.ToRelationship(123, extractor);
+            Assert.Equal(123, rel.DataSetId);
+            Assert.Equal(RelationshipVertexType.Asset, rel.SourceType);
+            Assert.Equal(RelationshipVertexType.TimeSeries, rel.TargetType);
+            Assert.Equal("gp.base:s=source", rel.SourceExternalId);
+            Assert.Equal("gp.base:s=target", rel.TargetExternalId);
+            Assert.Equal("gp.Organizes;base:s=source;base:s=target", rel.ExternalId);
+
+            reference = new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("target"), new NodeId("source"), true, false, manager);
+            rel = reference.ToRelationship(123, extractor);
+            Assert.Equal(123, rel.DataSetId);
+            Assert.Equal(RelationshipVertexType.TimeSeries, rel.SourceType);
+            Assert.Equal(RelationshipVertexType.Asset, rel.TargetType);
+            Assert.Equal("gp.base:s=target", rel.SourceExternalId);
+            Assert.Equal("gp.base:s=source", rel.TargetExternalId);
+            Assert.Equal("gp.OrganizedBy;base:s=target;base:s=source", rel.ExternalId);
         }
         #endregion
     }
