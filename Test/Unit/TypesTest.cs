@@ -440,6 +440,118 @@ namespace Test.Unit
             }
 
         }
+        [Fact]
+        public void TestToStatelessTimeseries()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent"));
+            node.Description = "description";
+            node.DataType = new UADataType(DataTypeIds.Boolean);
+            node.Properties = new List<UAVariable>();
+            var now = DateTime.UtcNow;
+            for (int i = 1; i < 5; i++)
+            {
+                var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
+                prop.SetDataPoint($"value{i}", now, tester.Client);
+                node.Properties.Add(prop);
+            }
+
+            var ts = node.ToStatelessTimeSeries(extractor, 123, null);
+            Assert.Equal("gp.base:s=test", ts.ExternalId);
+            Assert.Equal(123, ts.DataSetId);
+            Assert.Equal("test", ts.Name);
+            Assert.Equal("gp.base:s=test", ts.LegacyName);
+            Assert.Equal("gp.base:s=parent", ts.AssetExternalId);
+            Assert.True(ts.IsStep);
+            Assert.False(ts.IsString);
+            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Null(ts.Unit);
+            Assert.Equal("description", ts.Description);
+
+
+            var metaMap = new Dictionary<string, string>
+            {
+                { "prop1", "description" },
+                { "prop2", "name" },
+                { "prop3", "unit" },
+                { "prop4", "parentId" }
+            };
+            ts = node.ToStatelessTimeSeries(extractor, 123, metaMap);
+            Assert.Equal("gp.base:s=test", ts.ExternalId);
+            Assert.Equal(123, ts.DataSetId);
+            Assert.Equal("value2", ts.Name);
+            Assert.Equal("gp.base:s=test", ts.LegacyName);
+            Assert.Equal("value4", ts.AssetExternalId);
+            Assert.True(ts.IsStep);
+            Assert.False(ts.IsString);
+            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Equal("value1", ts.Description);
+            Assert.Equal("value3", ts.Unit);
+        }
+        [Fact]
+        public void TestToTimeseries()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent"));
+            node.Description = "description";
+            node.DataType = new UADataType(DataTypeIds.Boolean);
+            node.Properties = new List<UAVariable>();
+            var now = DateTime.UtcNow;
+            for (int i = 1; i < 5; i++)
+            {
+                var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
+                prop.SetDataPoint($"value{i}", now, tester.Client);
+                node.Properties.Add(prop);
+            }
+
+            var nodeToAssetIds = new Dictionary<NodeId, long>
+            {
+                { new NodeId("parent"), 111 },
+                { new NodeId("parent2"), 222 }
+            };
+            extractor.State.RegisterNode(new NodeId("parent2"), "value4");
+
+            var ts = node.ToTimeseries(extractor, 123, nodeToAssetIds, null);
+            Assert.Equal("gp.base:s=test", ts.ExternalId);
+            Assert.Equal(123, ts.DataSetId);
+            Assert.Equal("test", ts.Name);
+            Assert.Equal("gp.base:s=test", ts.LegacyName);
+            Assert.Equal(111, ts.AssetId);
+            Assert.True(ts.IsStep);
+            Assert.False(ts.IsString);
+            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Null(ts.Unit);
+            Assert.Equal("description", ts.Description);
+
+            ts = node.ToTimeseries(extractor, 123, nodeToAssetIds, null, true);
+            Assert.Null(ts.Name);
+            Assert.Null(ts.Metadata);
+            Assert.Null(ts.AssetId);
+            Assert.Equal("gp.base:s=test", ts.ExternalId);
+            Assert.True(ts.IsStep);
+            Assert.False(ts.IsString);
+
+            var metaMap = new Dictionary<string, string>
+            {
+                { "prop1", "description" },
+                { "prop2", "name" },
+                { "prop3", "unit" },
+                { "prop4", "parentId" }
+            };
+            ts = node.ToTimeseries(extractor, 123, nodeToAssetIds, metaMap);
+            Assert.Equal("gp.base:s=test", ts.ExternalId);
+            Assert.Equal(123, ts.DataSetId);
+            Assert.Equal("value2", ts.Name);
+            Assert.Equal("gp.base:s=test", ts.LegacyName);
+            Assert.Equal(222, ts.AssetId);
+            Assert.True(ts.IsStep);
+            Assert.False(ts.IsString);
+            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Equal("value1", ts.Description);
+            Assert.Equal("value3", ts.Unit);
+        }
         #endregion
 
         #region uadatapoint
