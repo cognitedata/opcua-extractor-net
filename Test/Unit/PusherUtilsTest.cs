@@ -7,10 +7,7 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -292,11 +289,95 @@ namespace Test.Unit
             Assert.Equal("value3", result.Metadata.Add["prop3"]);
             Assert.Equal("value4-new", result.Metadata.Add["prop4"]);
             Assert.Equal("value-new", result.Metadata.Add["prop-new"]);
+            Assert.Null(result.ExternalId);
 
             // Update with null values, and missing asset
             node = new UAVariable(new NodeId("test3"), null, new NodeId("parent3"));
             result = PusherUtils.GetTSUpdate(extractor, ts, node, update, nodeToAssetIds);
             Assert.Null(result.AssetId);
+            Assert.Null(result.Description);
+            Assert.Null(result.Metadata);
+            Assert.Null(result.Name);
+        }
+        [Fact]
+        public void TestGetAssetUpdate()
+        {
+            using var extractor = tester.BuildExtractor();
+            var node = new UANode(new NodeId("test"), "test", new NodeId("parent"));
+            node.Description = "description";
+            node.Properties = new List<UAVariable>();
+            var now = DateTime.UtcNow;
+            for (int i = 1; i < 5; i++)
+            {
+                var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
+                prop.SetDataPoint($"value{i}", now, tester.Client);
+                node.Properties.Add(prop);
+            }
+
+            var asset = new Asset
+            {
+                ExternalId = "gp.base:s=test",
+                Name = "test",
+                ParentExternalId = "gp.base:s=parent",
+                Description = "description",
+                Metadata = new Dictionary<string, string>
+                {
+                    { "prop1", "value1" },
+                    { "prop2", "value2" },
+                    { "prop3", "value3" },
+                    { "prop4", "value4" }
+                }
+            };
+            var update = new TypeUpdateConfig();
+
+            Assert.Null(PusherUtils.GetAssetUpdate(asset, null, extractor, update));
+            var result = PusherUtils.GetAssetUpdate(asset, node, extractor, update);
+            Assert.Null(result.ParentExternalId);
+            Assert.Null(result.Description);
+            Assert.Null(result.Metadata);
+            Assert.Null(result.Name);
+
+            update.Context = true;
+            update.Description = true;
+            update.Metadata = true;
+            update.Name = true;
+            result = PusherUtils.GetAssetUpdate(asset, node, extractor, update);
+            Assert.Null(result.ParentExternalId);
+            Assert.Null(result.Description);
+            Assert.Null(result.Metadata);
+            Assert.Null(result.Name);
+
+            // Update everything
+            var oldProperties = node.Properties;
+            node = new UANode(new NodeId("test2"), "test2", new NodeId("parent2"));
+            node.Description = "description2";
+            node.Properties = oldProperties;
+            oldProperties.RemoveAt(1);
+            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null));
+            oldProperties[3].SetDataPoint("value-new", now, tester.Client);
+            oldProperties[2].SetDataPoint("value4-new", now, tester.Client);
+
+            result = PusherUtils.GetAssetUpdate(asset, node, extractor, new TypeUpdateConfig());
+            Assert.Null(result.ParentExternalId);
+            Assert.Null(result.Description);
+            Assert.Null(result.Metadata);
+            Assert.Null(result.Name);
+
+            result = PusherUtils.GetAssetUpdate(asset, node, extractor, update);
+            Assert.Equal("description2", result.Description.Set);
+            Assert.Equal("test2", result.Name.Set);
+            Assert.Equal("gp.base:s=parent2", result.ParentExternalId.Set);
+            Assert.Equal(4, result.Metadata.Add.Count);
+            Assert.Equal("value1", result.Metadata.Add["prop1"]);
+            Assert.False(result.Metadata.Add.ContainsKey("prop2"));
+            Assert.Equal("value3", result.Metadata.Add["prop3"]);
+            Assert.Equal("value4-new", result.Metadata.Add["prop4"]);
+            Assert.Equal("value-new", result.Metadata.Add["prop-new"]);
+            Assert.Null(result.ExternalId);
+
+            node = new UANode(new NodeId("test3"), null, NodeId.Null);
+            result = PusherUtils.GetAssetUpdate(asset, node, extractor, update);
+            Assert.Null(result.ParentExternalId);
             Assert.Null(result.Description);
             Assert.Null(result.Metadata);
             Assert.Null(result.Name);
