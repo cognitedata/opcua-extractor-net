@@ -110,8 +110,8 @@ namespace Cognite.OpcUa.Pushers
                         oldMetaData = JsonSerializer.Deserialize<Dictionary<string, string>>(rawMetaData.ToString());
                     }
                     catch (JsonException) { }
-                    if (oldMetaData == null || newMetaData != null && newMetaData.Any(kvp =>
-                        !oldMetaData.TryGetValue(kvp.Key, out var field) || field != kvp.Value))
+                    if (oldMetaData == null || newMetaData != null
+                        && newMetaData.Any(kvp => !oldMetaData.TryGetValue(kvp.Key, out var field) || field != kvp.Value))
                     {
                         if (oldMetaData != null)
                         {
@@ -257,7 +257,7 @@ namespace Cognite.OpcUa.Pushers
                 var parentId = extractor.GetUniqueId(newAsset.ParentId);
                 if (parentId != old.ParentExternalId)
                 {
-                    assetUpdate.ParentExternalId = new UpdateNullable<string>(extractor.GetUniqueId(newAsset.ParentId));
+                    assetUpdate.ParentExternalId = new UpdateNullable<string>(parentId);
                 }
             }
 
