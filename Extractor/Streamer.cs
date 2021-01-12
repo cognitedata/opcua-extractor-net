@@ -21,6 +21,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
@@ -61,7 +62,7 @@ namespace Cognite.OpcUa
             lock (dataPointMutex)
             {
                 dataPointQueue.Enqueue(dp);
-                if (dataPointQueue.Count > maxDpCount) extractor.Looper.TriggerPush();
+                if (dataPointQueue.Count >= maxDpCount) extractor.Looper.TriggerPush();
             }
         }
         public void Enqueue(IEnumerable<BufferedDataPoint> dps)
@@ -70,7 +71,7 @@ namespace Cognite.OpcUa
             lock (dataPointMutex)
             {
                 foreach (var dp in dps) dataPointQueue.Enqueue(dp);
-                if (dataPointQueue.Count > maxDpCount) extractor.Looper.TriggerPush();
+                if (dataPointQueue.Count >= maxDpCount) extractor.Looper.TriggerPush();
 
             }
         }
@@ -79,7 +80,7 @@ namespace Cognite.OpcUa
             lock (eventMutex)
             {
                 eventQueue.Enqueue(evt);
-                if (eventQueue.Count > maxEventCount) extractor.Looper.TriggerPush();
+                if (eventQueue.Count >= maxEventCount) extractor.Looper.TriggerPush();
             }
         }
         public void Enqueue(IEnumerable<BufferedEvent> events)
@@ -88,7 +89,7 @@ namespace Cognite.OpcUa
             lock (eventMutex)
             {
                 foreach (var evt in events) eventQueue.Enqueue(evt);
-                if (eventQueue.Count > maxEventCount) extractor.Looper.TriggerPush();
+                if (eventQueue.Count >= maxEventCount) extractor.Looper.TriggerPush();
             }
         }
         /// <summary>
@@ -148,7 +149,7 @@ namespace Cognite.OpcUa
                 }
                 if (config.FailureBuffer.Enabled)
                 {
-                    await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, failingPushers.Concat(failedPushers), token);
+                    await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, token);
                 }
 
                 return false;
@@ -157,17 +158,8 @@ namespace Cognite.OpcUa
             if (reconnectedPushers.Any())
             {
                 log.Information("{cnt} failing pushers were able to push data, reconnecting", reconnectedPushers.Count);
-                // Try to push any non-historizing points
-                var nonHistorizing = pointRanges.Keys.Where(key => !extractor.State.GetNodeState(key).FrontfillEnabled).ToHashSet();
-                var pointsToPush = dataPointList.Where(point => nonHistorizing.Contains(point.Id)).ToList();
-                var pushResults = await Task.WhenAll(reconnectedPushers.Select(pusher => pusher.PushDataPoints(pointsToPush, token)));
 
-                // Here we are fine with "null" result. Not ideal, but it is what it is.
-                // In theory we might end up in an expensive loop, but the connection tests should be designed so that
-                // success there implies success otherwise.
-                if (!pushResults.All(res => res == null || res == true)) return false;
-
-                if (config.History.Enabled)
+                if (config.History.Enabled && extractor.State.NodeStates.Any(state => state.FrontfillEnabled))
                 {
                     log.Information("Restarting history for {cnt} states", extractor.State.NodeStates.Count(state => state.FrontfillEnabled));
                     bool success = await extractor.TerminateHistory(30);
@@ -185,7 +177,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (config.FailureBuffer.Enabled && extractor.FailureBuffer.Any)
+            if (config.FailureBuffer.Enabled && extractor.FailureBuffer.AnyPoints)
             {
                 await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
             }
@@ -253,7 +245,7 @@ namespace Cognite.OpcUa
 
                 if (config.FailureBuffer.Enabled)
                 {
-                    await extractor.FailureBuffer.WriteEvents(eventList, failedPushers.Concat(failingPushers), token);
+                    await extractor.FailureBuffer.WriteEvents(eventList, token);
                 }
 
                 return false;
@@ -262,17 +254,8 @@ namespace Cognite.OpcUa
             if (reconnectedPushers.Any())
             {
                 log.Information("{cnt} failing pushers were able to push events, reconnecting", reconnectedPushers.Count);
-                // Try to push any non-historizing points
-                var nonHistorizing = eventRanges.Keys.Where(key => !extractor.State.GetEmitterState(key).IsFrontfilling).ToHashSet();
-                var eventsToPush = eventList.Where(point => nonHistorizing.Contains(point.EmittingNode)).ToList();
-                var pushResults = await Task.WhenAll(reconnectedPushers.Select(pusher => pusher.PushEvents(eventsToPush, token)));
 
-                // Here we are fine with "null" result. Not ideal, but it is what it is.
-                // In theory we might end up in an expensive loop, but the connection tests should be designed so that
-                // success there implies success otherwise.
-                if (!pushResults.All(res => res == null || res == true)) return false;
-
-                if (extractor.State.EmitterStates.Any(state => state.FrontfillEnabled))
+                if (config.Events.History && extractor.State.EmitterStates.Any(state => state.FrontfillEnabled))
                 {
                     log.Information("Restarting event history for {cnt} states", extractor.State.EmitterStates.Count(state => state.FrontfillEnabled));
                     bool success = await extractor.TerminateHistory(30);
@@ -306,9 +289,9 @@ namespace Cognite.OpcUa
         /// Handles notifications on subscribed items, pushes all new datapoints to the queue.
         /// </summary>
         /// <param name="item">Modified item</param>
-        public void DataSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
+        public void DataSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs _)
         {
-            if (item == null || eventArgs == null) return;
+            if (item == null) return;
             var node = extractor.State.GetNodeState(item.ResolvedNodeId);
             if (node == null)
             {
@@ -326,20 +309,23 @@ namespace Cognite.OpcUa
                 }
                 var buffDps = ToDataPoint(datapoint, node);
                 node.UpdateFromStream(buffDps);
-                if (node.IsFrontfilling && (extractor.StateStorage == null || config.StateStorage.Interval <= 0)) return;
+
+                if ((extractor.StateStorage == null || config.StateStorage.Interval <= 0)
+                    && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
+                        || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) continue;
                 foreach (var buffDp in buffDps)
                 {
                     log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
+                    Enqueue(buffDp);
                 }
-                Enqueue(buffDps);
             }
         }
         private static string GetArrayUniqueId(string baseId, int index)
         {
             if (index < 0) return baseId;
-            int idxLength = (int)Math.Log10(Math.Max(1, index)) + 3;
-            if (baseId.Length + idxLength < 255) return baseId + $"[{index}]";
-            return baseId.Substring(0, 255 - idxLength) + $"[{index}]";
+            string idxStr = $"[{index}]";
+            if (baseId.Length + idxStr.Length < 255) return baseId + idxStr;
+            return baseId.Substring(0, 255 - idxStr.Length) + idxStr;
         }
         /// <summary>
         /// Transform a given DataValue into a datapoint or a list of datapoints if the variable in question has array type.
@@ -395,32 +381,40 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Handle subscription callback for events
         /// </summary>
-        public void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs eventArgs)
+        public void EventSubscriptionHandler(MonitoredItem item, MonitoredItemNotificationEventArgs _)
         {
-            if (eventArgs == null || item == null) return;
-            if (!(eventArgs.NotificationValue is EventFieldList triggeredEvent))
-            {
-                log.Warning("No event in event subscription notification: {}", item.StartNodeId);
-                return;
-            }
-            var eventFields = triggeredEvent.EventFields;
+            if (item == null) return;
             if (!(item.Filter is EventFilter filter))
             {
                 log.Warning("Triggered event without filter");
                 return;
             }
-            var buffEvent = ConstructEvent(filter, eventFields, item.ResolvedNodeId);
-            if (buffEvent == null) return;
             var eventState = extractor.State.GetEmitterState(item.ResolvedNodeId);
-            eventState.UpdateFromStream(buffEvent);
+            if (eventState == null)
+            {
+                log.Warning("Event triggered from unknown node: {id}", item.ResolvedNodeId);
+                return;
+            }
 
-            // Either backfill/frontfill is done, or we are not outside of each respective bound
-            if ((extractor.StateStorage == null || config.StateStorage.Interval <= 0)
-                && (eventState.IsFrontfilling && buffEvent.Time > eventState.SourceExtractedRange.Last
-                    || eventState.IsBackfilling && buffEvent.Time < eventState.SourceExtractedRange.First)) return;
+            foreach (var eventFields in item.DequeueEvents())
+            {
+                if (eventFields == null || eventFields.EventFields == null) continue;
+                var buffEvent = ConstructEvent(filter, eventFields.EventFields, item.ResolvedNodeId);
+                if (buffEvent == null)
+                {
+                    UAExtractor.BadEvents.Inc();
+                    continue;
+                }
+                eventState.UpdateFromStream(buffEvent);
 
-            log.Verbose(buffEvent.ToDebugDescription());
-            Enqueue(buffEvent);
+                // Either backfill/frontfill is done, or we are not outside of each respective bound
+                if ((extractor.StateStorage == null || config.StateStorage.Interval <= 0)
+                    && (eventState.IsFrontfilling && buffEvent.Time > eventState.SourceExtractedRange.Last
+                        || eventState.IsBackfilling && buffEvent.Time < eventState.SourceExtractedRange.First)) continue;
+
+                log.Verbose(buffEvent.ToDebugDescription());
+                Enqueue(buffEvent);
+            }
         }
         /// <summary>
         /// Construct event from filter and collection of event fields
@@ -432,13 +426,17 @@ namespace Cognite.OpcUa
             if (filter == null) throw new ArgumentNullException(nameof(filter));
             if (eventFields == null) throw new ArgumentNullException(nameof(eventFields));
 
-            int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
-                                                                       && atr.BrowsePath[0] == BrowseNames.EventType);
-            if (eventTypeIndex < 0)
+            int eventTypeIndex = filter.SelectClauses.FindIndex(atr =>
+                atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
+                && atr.BrowsePath.Count == 1
+                && atr.BrowsePath[0] == BrowseNames.EventType);
+
+            if (eventTypeIndex < 0 || eventFields.Count <= eventTypeIndex)
             {
                 log.Warning("Triggered event has no type, ignoring.");
                 return null;
             }
+
             var eventType = eventFields[eventTypeIndex].Value as NodeId;
             // Many servers don't handle filtering on history data.
             if (eventType == null || !extractor.State.ActiveEvents.TryGetValue(eventType, out var targetEventFields))
@@ -452,13 +450,10 @@ namespace Cognite.OpcUa
             for (int i = 0; i < filter.SelectClauses.Count; i++)
             {
                 var clause = filter.SelectClauses[i];
-                if (!targetEventFields.Any(field =>
-                    field.Root == clause.TypeDefinitionId
-                    && field.BrowseName == clause.BrowsePath[0]
-                    && clause.BrowsePath.Count == 1)) continue;
+                if (clause.BrowsePath.Count != 1
+                    || !targetEventFields.Contains(new EventField(clause.TypeDefinitionId, clause.BrowsePath[0]))) continue;
 
                 string name = clause.BrowsePath[0].Name;
-                if (config.Events.ExcludeProperties.Contains(name) || config.Events.BaseExcludeProperties.Contains(name)) continue;
                 if (name != "EventId" && name != "SourceNode" && name != "EventType" && config.Events.DestinationNameMap.TryGetValue(name, out var mapped))
                 {
                     name = mapped;
@@ -476,20 +471,19 @@ namespace Cognite.OpcUa
             }
 
             string eventId = Convert.ToBase64String(rawEventId);
-            var sourceNode = extractedProperties.GetValueOrDefault("SourceNode");
+            var sourceNode = extractedProperties.GetValueOrDefault("SourceNode") as NodeId;
 
-            var time = extractedProperties.GetValueOrDefault("Time");
-            if (time == null)
+            if (!(extractedProperties.GetValueOrDefault("Time") is DateTime time))
             {
-                log.Verbose("Event lacks specified time, type: {type}", eventType, eventId);
+                log.Verbose("Event lacks specified time, type: {type}", eventType);
                 return null;
             }
             var buffEvent = new BufferedEvent
             {
                 Message = extractor.ConvertToString(extractedProperties.GetValueOrDefault("Message")),
                 EventId = config.Extraction.IdPrefix + eventId,
-                SourceNode = sourceNode as NodeId,
-                Time = (DateTime)time,
+                SourceNode = sourceNode,
+                Time = time,
                 EventType = eventType,
                 MetaData = extractedProperties
                     .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"

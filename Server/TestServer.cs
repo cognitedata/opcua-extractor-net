@@ -70,9 +70,9 @@ namespace Server
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1062:Validate arguments of public methods",
             Justification = "valueBuilder is not used here")]
-        public void PopulateHistory(NodeId id, int count, string type = "int", int msdiff = 10, Func<int, object> valueBuilder = null)
+        public void PopulateHistory(NodeId id, int count, DateTime start, string type = "int", int msdiff = 10, Func<int, object> valueBuilder = null)
         {
-            custom.PopulateHistory(id, count, type, msdiff, valueBuilder);
+            custom.PopulateHistory(id, count, start, type, msdiff, valueBuilder);
         }
 
         public void PopulateEventHistory<T>(NodeId eventId,
@@ -80,11 +80,12 @@ namespace Server
             NodeId source,
             string message,
             int count,
+            DateTime start,
             int msdiff = 10,
             Action<ManagedEvent, int> builder = null)
             where T : ManagedEvent
         {
-            custom.PopulateEventHistory<T>(eventId, emitter, source, message, count, msdiff, builder);
+            custom.PopulateEventHistory<T>(eventId, emitter, source, message, count, start, msdiff, builder);
         }
 
         public NodeId AddObject(NodeId parentId, string name, bool audit = false)

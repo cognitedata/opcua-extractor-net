@@ -85,22 +85,29 @@ namespace OpcUaService
             }
             catch (TaskCanceledException)
             {
-                _log.Warning("Extractor stopped manually");
             }
             catch (AggregateException aex)
             {
                 if (ExtractorUtils.GetRootExceptionOfType<Cognite.OpcUa.ConfigurationException>(aex) != null)
                 {
-                    _log.Error("Invalid configuration, stopping");
+                    _log.Error("Invalid configuration: {msg}", aex.InnerException.Message);
                 }
-                if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) != null)
+                else if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) != null)
                 {
-                    _log.Warning("Extractor stopped manually");
+                    _log.Error("Extractor halted due to cancelled task");
+                }
+                else if (ExtractorUtils.GetRootExceptionOfType<SilentServiceException>(aex) == null)
+                {
+                    _log.Error(aex, "Unexpected failure in extractor: {msg}", aex.Message);
                 }
             }
-            catch
+            catch (Cognite.OpcUa.ConfigurationException ex)
             {
-                _log.Error("Extractor crashed, restarting");
+                _log.Error("Invalid configuration: {msg}", ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _log.Error(ex, "Unexpected failure in extractor: {msg}", ex.Message);
             }
 
             _log.Information("Stopping extractor");

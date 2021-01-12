@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 using Test.Utils;
-using System.Runtime.InteropServices;
 using System.Linq;
 using System.Collections.Generic;
 using Opc.Ua;
@@ -19,37 +18,35 @@ using Cognite.OpcUa.TypeCollectors;
 
 namespace Test.Unit
 {
-
-    public sealed class ExtractorTestFixture : IDisposable
+    public sealed class ExtractorTestFixture : BaseExtractorTestFixture
+    {
+        public ExtractorTestFixture() : base(62100) { }
+    }
+    public abstract class BaseExtractorTestFixture : IDisposable
     {
         public UAClient Client { get; }
         public FullConfig Config { get; }
         public ServerController Server { get; }
         public CancellationTokenSource Source { get; }
         public IServiceProvider Provider { get; }
-        public ExtractorTestFixture()
+        public BaseExtractorTestFixture(int port)
         {
-            Server = new ServerController(new[] {
-                PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
-                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, 62100);
-            Server.Start().Wait();
-
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
-            Config.Source.EndpointUrl = $"opc.tcp://localhost:62100";
-            services.AddLogging();
+            Console.WriteLine($"Add logger: {Config.Logger}");
+            Config.Source.EndpointUrl = $"opc.tcp://localhost:{port}";
+            services.AddLogger();
             LoggingUtils.Configure(Config.Logger);
             Provider = services.BuildServiceProvider();
+
+            Server = new ServerController(new[] {
+                PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
+                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, port);
+            Server.Start().Wait();
 
             Client = new UAClient(Config);
             Source = new CancellationTokenSource();
             Client.Run(Source.Token).Wait();
-        }
-
-        public void Dispose()
-        {
-            Source.Cancel();
-            Source.Dispose();
         }
 
         public UAExtractor BuildExtractor(bool clear = true, IExtractionStateStore stateStore = null, params IPusher[] pushers)
@@ -61,6 +58,23 @@ namespace Test.Unit
                 Client.ResetVisitedNodes();
             }
             return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                Source.Cancel();
+                Source.Dispose();
+            }
+        }
+
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
     public class UAExtractorTest : MakeConsoleWork, IClassFixture<ExtractorTestFixture>
@@ -218,8 +232,8 @@ namespace Test.Unit
                 new BufferedVariable(new NodeId("var2"), "var2", root)
             };
 
-            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[0], true, true, false));
-            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[1], false, false, false));
+            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[0], true, true));
+            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[1], false, false));
 
 
             var refManager = (ReferenceTypeManager)extractor.GetType().GetField("referenceTypeManager",
@@ -304,6 +318,83 @@ namespace Test.Unit
                 {
                     Assert.NotNull(prop.Value);
                     Assert.False(string.IsNullOrEmpty(prop.Value.StringValue));
+                }
+            }
+        }
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task TestExtractorRuntime(bool failedStart)
+        {
+            // Set up for each of the three pushers
+            var services = new ServiceCollection();
+            var config = services.AddConfig<FullConfig>("config.test.yml", 1);
+            config.Source.EndpointUrl = "opc.tcp://localhost:62100";
+            var handler = new CDFMockHandler(config.Cognite.Project, CDFMockHandler.MockMode.None);
+
+            handler.AllowConnectionTest = !failedStart;
+
+            CommonTestUtils.AddDummyProvider(handler, services);
+            services.AddCogniteClient("OPC-UA Extractor", true, true, false);
+            var provider = services.BuildServiceProvider();
+
+            var runtime = new ExtractorRuntime(config, provider);
+
+            using (var source = new CancellationTokenSource())
+            {
+                var runTask = runtime.Run(source.Token);
+
+                await Task.Delay(2000);
+                Assert.False(runTask.IsFaulted);
+                if (!failedStart)
+                {
+                    await CommonTestUtils.WaitForCondition(() => handler.Timeseries.Any(), 10);
+                }
+                else
+                {
+                    Assert.Empty(handler.Timeseries);
+                }
+                Assert.False(runTask.IsFaulted);
+                source.Cancel();
+
+                try
+                {
+                    await runTask;
+                }
+                catch (Exception ex)
+                {
+                    CommonTestUtils.TestRunResult(ex);
+                }
+            }
+        }
+        [Fact]
+        public async Task TestEmptyRuntime()
+        {
+            var services = new ServiceCollection();
+            var config = services.AddConfig<FullConfig>("config.test.yml", 1);
+            config.Source.EndpointUrl = "opc.tcp://localhost:62100";
+            config.Cognite = null;
+            config.Influx = null;
+            config.Mqtt = null;
+            var provider = services.BuildServiceProvider();
+
+            var runtime = new ExtractorRuntime(config, provider);
+
+            using (var source = new CancellationTokenSource())
+            {
+                var runTask = runtime.Run(source.Token);
+
+                await Task.Delay(2000);
+                Assert.False(runTask.IsFaulted);
+                source.Cancel();
+
+                try
+                {
+                    await runTask;
+                }
+                catch (Exception ex)
+                {
+                    CommonTestUtils.TestRunResult(ex);
                 }
             }
         }

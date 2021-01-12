@@ -75,6 +75,9 @@ namespace Cognite.OpcUa
         public static readonly Counter BadDataPoints = Metrics
             .CreateCounter("opcua_bad_datapoints", "Datapoints skipped due to bad status");
 
+        public static readonly Counter BadEvents = Metrics
+            .CreateCounter("opcua_bad_events", "Events skipped due to bad fields received");
+
         public static readonly Gauge Starting = Metrics
             .CreateGauge("opcua_extractor_starting", "1 if the extractor is in the startup phase");
 
@@ -197,7 +200,7 @@ namespace Cognite.OpcUa
                 }
                 catch (Exception ex)
                 {
-                    ExtractorUtils.LogException(ex, "Unexpected error starting UAClient",
+                    ExtractorUtils.LogException(log, ex, "Unexpected error starting UAClient",
                         "Handled service result exception on starting UAClient");
                     throw;
                 }
@@ -220,7 +223,16 @@ namespace Cognite.OpcUa
             }
 
             log.Debug("Begin mapping directory");
-            await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, source.Token);
+            try
+            {
+                await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, source.Token);
+            }
+            catch (Exception ex)
+            {
+                ExtractorUtils.LogException(log, ex, "Unexpected error browsing node hierarchy",
+                    "Handled service result exception browsing node hierarchy");
+                throw;
+            }
             log.Debug("End mapping directory");
 
             IEnumerable<Task> synchTasks;
@@ -230,7 +242,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                ExtractorUtils.LogException(ex, "Unexpected error in MapUAToDestinations", 
+                ExtractorUtils.LogException(log, ex, "Unexpected error in MapUAToDestinations", 
                     "Handled service result exception in MapUAToDestinations");
                 throw;
             }
@@ -261,7 +273,7 @@ namespace Cognite.OpcUa
                 state.RestartHistory();
             }
 
-            Looper.WaitForNextPush().Wait();
+            Looper.WaitForNextPush(true).Wait();
             foreach (var pusher in pushers)
             {
                 pusher.Reset();
@@ -327,8 +339,8 @@ namespace Cognite.OpcUa
             }
             catch (ServiceResultException e)
             {
-                ExtractorUtils.LogException(
-                    ExtractorUtils.HandleServiceResult(e, ExtractorUtils.SourceOp.CloseSession),
+                ExtractorUtils.LogException(log,
+                    ExtractorUtils.HandleServiceResult(log, e, ExtractorUtils.SourceOp.CloseSession),
                     "",
                     "");
             }
@@ -554,7 +566,7 @@ namespace Cognite.OpcUa
                     {
                         var history = (histEmitterIds.Contains(id)) && config.Events.History;
                         State.SetEmitterState(new EventExtractionState(this, id, history,
-                            history && config.History.Backfill, StateStorage != null && config.StateStorage.Interval > 0));
+                            history && config.History.Backfill));
                     }
                 }
                 var serverNode = uaClient.GetServerNode(source.Token);
@@ -562,7 +574,7 @@ namespace Cognite.OpcUa
                 {
                     var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
                     State.SetEmitterState(new EventExtractionState(this, serverNode.Id, history,
-                        history && config.History.Backfill, StateStorage != null && config.StateStorage.Interval > 0));
+                        history && config.History.Backfill));
                 }
             }
         }
@@ -665,8 +677,7 @@ namespace Cognite.OpcUa
                 if ((node.EventNotifier & EventNotifiers.SubscribeToEvents) == 0) continue;
                 if (State.GetEmitterState(node.Id) != null) continue;
                 bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
-                var eventState = new EventExtractionState(this, node.Id, history, history && config.History.Backfill,
-                    StateStorage != null && config.StateStorage.Interval > 0);
+                var eventState = new EventExtractionState(this, node.Id, history, history && config.History.Backfill);
                 State.SetEmitterState(eventState);
             }
         }
@@ -710,8 +721,7 @@ namespace Cognite.OpcUa
                 }
                 log.Verbose(node.ToDebugDescription());
                 result.Variables.Add(node);
-                var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill,
-                    StateStorage != null && config.StateStorage.Interval > 0);
+                var state = new NodeExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill);
 
                 State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata,
                     config.Extraction.NodeTypes.Metadata);
@@ -859,7 +869,7 @@ namespace Cognite.OpcUa
                     .Select(ts => ts.Id)
                     .Distinct()
                     .Select(id => State.GetNodeState(id))
-                    .Where(state => state.FrontfillEnabled);
+                    .Where(state => state != null && state.FrontfillEnabled);
 
                 var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled);
 

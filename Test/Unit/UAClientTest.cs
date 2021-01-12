@@ -30,17 +30,17 @@ namespace Test.Unit
         public IServiceProvider Provider { get; }
         public UAClientTestFixture()
         {
-            Server = new ServerController(new[] {
-                PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
-                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, 62000);
-            Server.Start().Wait();
-
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
             Config.Source.EndpointUrl = $"opc.tcp://localhost:62000";
             services.AddLogging();
             LoggingUtils.Configure(Config.Logger);
             Provider = services.BuildServiceProvider();
+
+            Server = new ServerController(new[] {
+                PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
+                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, 62000);
+            Server.Start().Wait();
 
             Client = new UAClient(Config);
             Source = new CancellationTokenSource();
@@ -538,10 +538,10 @@ namespace Test.Unit
                     NumValuesPerNode = 600
                 });
 
-            tester.Server.PopulateArrayHistory();
-            tester.Server.Server.PopulateHistory(tester.Server.Ids.Base.StringVar, 1000, "string");
+            var start = DateTime.UtcNow.AddSeconds(-20);
 
-
+            tester.Server.PopulateArrayHistory(start);
+            tester.Server.Server.PopulateHistory(tester.Server.Ids.Base.StringVar, 1000, start, "string");
 
             try
             {
@@ -565,7 +565,7 @@ namespace Test.Unit
                 foreach (var result in results)
                 {
                     var historyData = result.RawData as HistoryData;
-                    Assert.Equal(401, historyData.DataValues.Count);
+                    Assert.Equal(400, historyData.DataValues.Count);
                     Assert.True(req.Completed[result.Id]);
                 }
             }
@@ -585,7 +585,7 @@ namespace Test.Unit
             int start = (int)(uint)tester.Server.Ids.Full.WideRoot.Identifier;
             var nodes = Enumerable.Range(start + 1, 2000)
                 .Select(idf => new NodeId((uint)idf, 2))
-                .Select(id => new NodeExtractionState(tester.Client, new BufferedVariable(id, "somvar", tester.Server.Ids.Full.WideRoot), true, true, false))
+                .Select(id => new NodeExtractionState(tester.Client, new BufferedVariable(id, "somvar", tester.Server.Ids.Full.WideRoot), true, true))
                 .ToList();
 
             var lck = new object();
@@ -659,9 +659,9 @@ namespace Test.Unit
 
             var emitters = new[]
             {
-                new EventExtractionState(tester.Client, ObjectIds.Server, true, true, false),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true, false),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true, false)
+                new EventExtractionState(tester.Client, ObjectIds.Server, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true)
             };
             tester.Config.Source.SubscriptionChunk = 1;
 
@@ -710,9 +710,9 @@ namespace Test.Unit
             };
             var emitters = new[]
             {
-                new EventExtractionState(tester.Client, ObjectIds.Server, true, true, false),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true, false),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true, false)
+                new EventExtractionState(tester.Client, ObjectIds.Server, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true)
             };
             int count = 0;
 

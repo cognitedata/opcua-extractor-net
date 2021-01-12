@@ -24,6 +24,29 @@ using System.Threading;
 
 namespace Cognite.OpcUa.TypeCollectors
 {
+    public class EventField
+    {
+        public NodeId TypeId { get; }
+        public QualifiedName BrowseName { get; }
+        public EventField(NodeId typeId, QualifiedName browseName)
+        {
+            TypeId = typeId;
+            BrowseName = browseName;
+        }
+        // The default hash code of browsename does not include the namespaceindex for some reason.
+        public override int GetHashCode()
+        {
+            return (TypeId, BrowseName.Name, BrowseName.NamespaceIndex).GetHashCode();
+        }
+        public override bool Equals(object other)
+        {
+            if (!(other is EventField otherField)) return false;
+            return otherField.TypeId == TypeId
+                && otherField.BrowseName.Name == BrowseName.Name
+                && otherField.BrowseName.NamespaceIndex == BrowseName.NamespaceIndex;
+        }
+    }
+
     /// <summary>
     /// Collects the fields of events. It does this by mapping out the entire event type hierarchy,
     /// and collecting the fields of each node on the way.
@@ -54,7 +77,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// then collects the resulting fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).
         /// </summary>
         /// <returns>The collected fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).</returns>
-        public Dictionary<NodeId, IEnumerable<(NodeId, QualifiedName)>> GetEventIdFields(CancellationToken token)
+        public Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token)
         {
             types[ObjectTypeIds.BaseEventType] = new BufferedEventType
             {
@@ -68,21 +91,20 @@ namespace Cognite.OpcUa.TypeCollectors
             uaClient.BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType },
                 EventTypeCallback, token, ReferenceTypeIds.HierarchicalReferences, (uint)NodeClass.ObjectType | (uint)NodeClass.Variable);
 
-            var result = new Dictionary<NodeId, List<(NodeId, QualifiedName)>>();
+            var result = new Dictionary<NodeId, HashSet<EventField>>();
 
             var excludeProperties = new HashSet<string>(config.ExcludeProperties);
             var baseExcludeProperties = new HashSet<string>(config.BaseExcludeProperties);
 
-            var propVariables = new Dictionary<NodeId, (NodeId, QualifiedName)>();
+            var propVariables = new Dictionary<NodeId, EventField>();
             // Find reverse mappings from properties to their parents, along with their browse name
             foreach (var type in types.Values)
             {
                 foreach (var description in type.Properties)
                 {
-
                     if (!propVariables.ContainsKey(uaClient.ToNodeId(description.NodeId)))
                     {
-                        propVariables[uaClient.ToNodeId(description.NodeId)] = (type.Id, description.BrowseName);
+                        propVariables[uaClient.ToNodeId(description.NodeId)] = new EventField(type.Id, description.BrowseName);
                     }
                 }
             }
@@ -98,7 +120,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 if (ignoreFilter != null && ignoreFilter.IsMatch(type.DisplayName.Text)) continue;
                 if (!config.AllEvents && type.Id.NamespaceIndex == 0) continue;
                 if (whitelist != null && whitelist.Any() && !whitelist.Contains(type.Id)) continue;
-                result[type.Id] = new List<(NodeId, QualifiedName)>();
+                result[type.Id] = new HashSet<EventField>();
                 foreach (var desc in type.CollectedFields)
                 {
                     if (excludeProperties.Contains(desc.BrowseName.Name)
@@ -107,7 +129,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
             }
 
-            return result.ToDictionary(kvp => kvp.Key, kvp => (IEnumerable<(NodeId, QualifiedName)>)kvp.Value);
+            return result;
         }
         /// <summary>
         /// HandleNode callback for the event type mapping.

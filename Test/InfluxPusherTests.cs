@@ -225,14 +225,14 @@ namespace Test
             tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1000);
             tester.Server.UpdateNode(tester.Server.Ids.Base.IntVar, 1000);
 
-            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.Any,
+            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyPoints,
                 10, "Failurebuffer must receive some data");
 
             await Task.Delay(500);
             tester.Handler.AllowPush = true;
             tester.Handler.AllowConnectionTest = true;
 
-            await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.Any,
+            await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.AnyPoints,
                 10, "FailureBuffer should be emptied");
 
             tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar2, 1001);
@@ -374,11 +374,13 @@ namespace Test
                     !state.FrontfillEnabled || !state.IsBackfilling && !state.IsFrontfilling),
                 20, "Expected backfill of events to terminate");
 
+            int cnt = 0;
             await tester.WaitForCondition(async () =>
             {
                 var evts = await tester.GetAllInfluxEvents(ObjectIds.Server);
-                return evts.Count() == 700;
-            }, 5, "Expected to get some events in influxdb");
+                cnt = evts.Count();
+                return cnt == 700;
+            }, 5, () => $"Expected to get 700 events in influxdb, but got {cnt}");
 
             await tester.TerminateRunTask(false);
 

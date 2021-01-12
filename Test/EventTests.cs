@@ -237,7 +237,7 @@ namespace Test
             Assert.False(tester.Extractor.FailureBuffer.AnyEvents);
 
             await tester.WaitForCondition(() => tester.Handler.Events.Count == 920, 10,
-                "Expected to receive some events");
+                () => $"Expected to receive 920 events, but got {tester.Handler.Events.Count}");
 
             await tester.TerminateRunTask(true);
 
@@ -271,8 +271,8 @@ namespace Test
 
             tester.StartExtractor();
             await tester.WaitForCondition(() =>
-                    tester.Handler.Events.Values.Count > 20 &&
-                    tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling),
+                    tester.Handler.Events.Values.Count == 900 &&
+                    tester.Extractor.State.EmitterStates.All(state => !state.IsBackfilling),
                 20, "Expected history read to finish");
 
 
@@ -340,7 +340,7 @@ namespace Test
 
             await tester.WaitForCondition(() =>
                     tester.Handler.Events.Values.Count == 900 &&
-                    tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling),
+                    tester.Extractor.State.EmitterStates.All(state => !state.IsBackfilling),
                 20, "Expected history read to finish");
 
             var events = tester.Handler.Events.Values.ToList();

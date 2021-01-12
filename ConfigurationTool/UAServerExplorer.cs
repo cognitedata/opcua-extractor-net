@@ -22,6 +22,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using Serilog;
 
@@ -37,7 +38,7 @@ namespace Cognite.OpcUa.Config
         private List<NodeId> emittedEvents;
         private List<BufferedNode> eventTypes;
         private Dictionary<string, string> namespaceMap;
-        private Dictionary<NodeId, IEnumerable<(NodeId Root, QualifiedName BrowseName)>> activeEventFields;
+        private Dictionary<NodeId, HashSet<EventField>> activeEventFields;
         private bool history;
         private bool useServer;
 
@@ -691,7 +692,7 @@ namespace Cognite.OpcUa.Config
             var states = nodeList.Where(node =>
                     node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty
                     && AllowTSMap(variable))
-                .Select(node => new NodeExtractionState(this, node as BufferedVariable, false, false, false)).ToList();
+                .Select(node => new NodeExtractionState(this, node as BufferedVariable, false, false)).ToList();
 
             log.Information("Get chunkSizes for subscribing to variables");
 
@@ -788,7 +789,7 @@ namespace Cognite.OpcUa.Config
         {
             var historizingStates = nodeList.Where(node =>
                     node.IsVariable && (node is BufferedVariable variable) && !variable.IsProperty && variable.Historizing)
-                .Select(node => new NodeExtractionState(this, node as BufferedVariable, true, true, false)).ToList();
+                .Select(node => new NodeExtractionState(this, node as BufferedVariable, true, true)).ToList();
 
             var stateMap = historizingStates.ToDictionary(state => state.SourceId);
 
@@ -993,13 +994,10 @@ namespace Cognite.OpcUa.Config
             for (int i = 0; i < filter.SelectClauses.Count; i++)
             {
                 var clause = filter.SelectClauses[i];
-                if (!targetEventFields.Any(field =>
-                    field.Root == clause.TypeDefinitionId
-                    && field.BrowseName == clause.BrowsePath[0]
-                    && clause.BrowsePath.Count == 1)) continue;
+                if (clause.BrowsePath.Count != 1
+                    || !targetEventFields.Contains(new EventField(clause.TypeDefinitionId, clause.BrowsePath[0]))) continue;
 
                 string name = clause.BrowsePath[0].Name;
-                if (config.Events.ExcludeProperties.Contains(name) || config.Events.BaseExcludeProperties.Contains(name)) continue;
                 if (config.Events.DestinationNameMap.ContainsKey(name) && name != "EventId" && name != "SourceNode" && name != "EventType")
                 {
                     name = config.Events.DestinationNameMap[name];
@@ -1178,7 +1176,7 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                await ToolUtil.RunWithTimeout(() => SubscribeToEvents(new[] { new EventExtractionState(this, ObjectIds.Server, false, false, false) },
+                await ToolUtil.RunWithTimeout(() => SubscribeToEvents(new[] { new EventExtractionState(this, ObjectIds.Server, false, false) },
                     (item, args) =>
                     {
                         if (!(args.NotificationValue is EventFieldList triggeredEvent))

@@ -27,6 +27,7 @@ using Cognite.Extractor.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Cognite.Extractor.Metrics;
 using Cognite.Extractor.Utils;
+using Cognite.Extractor.StateStorage;
 
 namespace Cognite.OpcUa
 {
@@ -130,9 +131,13 @@ namespace Cognite.OpcUa
             services.AddMetrics();
             services.AddLogger();
 
-            if (config.Cognite != null && !setup.ConfigTool)
+            if (!setup.ConfigTool)
             {
-                services.AddCogniteClient("OPC-UA Extractor", true, true, true);
+                if (config.Cognite != null)
+                {
+                    services.AddCogniteClient("OPC-UA Extractor", true, true, true);
+                }
+                services.AddStateStore();
             }
 
             var provider = services.BuildServiceProvider();
@@ -200,12 +205,16 @@ namespace Cognite.OpcUa
                 {
                     if (ExtractorUtils.GetRootExceptionOfType<ConfigurationException>(aex) != null)
                     {
-                        log.Error("Invalid configuration, stopping");
+                        log.Error("Invalid configuration, stopping: {msg}", aex.InnerException.Message);
                         break;
                     }
-                    if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) == null)
+                    if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) != null)
                     {
-                        log.Error(aex, "Extractor crashed");
+                        log.Error("Extractor halted due to cancelled task");
+                    }
+                    else if (ExtractorUtils.GetRootExceptionOfType<SilentServiceException>(aex) == null)
+                    {
+                        log.Error(aex, "Unexpected failure in extractor: {msg}", aex.Message);
                     }
                 }
                 catch (ConfigurationException)
@@ -213,9 +222,9 @@ namespace Cognite.OpcUa
                     log.Error("Invalid configuration, stopping");
                     break;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    log.Error("Extractor crashed, restarting");
+                    log.Error(ex, "Unexpected failure in extractor: {msg}", ex.Message);
                 }
 
                 if (config.Source.ExitOnFailure)

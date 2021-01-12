@@ -30,7 +30,7 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Tool to read history from OPC-UA. Manages backfill and frontfill of datapoints and events.
     /// </summary>
-    class HistoryReader
+    public class HistoryReader
     {
         private static readonly Counter numFrontfillPoints = Metrics
             .CreateCounter("opcua_frontfill_data_points", "Number of datapoints retrieved through frontfill");
@@ -67,6 +67,9 @@ namespace Cognite.OpcUa
         /// <param name="config">Configuration to use</param>
         public HistoryReader(UAClient uaClient, UAExtractor extractor, HistoryConfig config)
         {
+            if (config == null) throw new ArgumentNullException(nameof(config));
+            if (uaClient == null) throw new ArgumentNullException(nameof(uaClient));
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             this.config = config;
             this.uaClient = uaClient;
             this.extractor = extractor;
@@ -81,12 +84,10 @@ namespace Cognite.OpcUa
         /// <param name="rawData">Data to be transformed into events</param>
         /// <param name="final">True if this is the last read</param>
         /// <param name="frontfill">True if this is frontfill, false for backfill</param>
-        /// <param name="nodeid">NodeId being read</param>
-        /// <param name="details">The HistoryReadDetails used</param>
+        /// <param name="nodeId">NodeId being read</param>
         /// <returns>Number of points read</returns>
-        private int HistoryDataHandler(IEncodeable rawData, bool final, bool frontfill, NodeId nodeid, HistoryReadDetails details)
+        private int HistoryDataHandler(IEncodeable rawData, bool final, bool frontfill, NodeId nodeId, HistoryReadDetails _)
         {
-            if (rawData == null) return 0;
             if (!(rawData is HistoryData data))
             {
                 log.Warning("Incorrect result type of history read data");
@@ -94,20 +95,31 @@ namespace Cognite.OpcUa
             }
 
             if (data.DataValues == null) return 0;
-            var nodeState = extractor.State.GetNodeState(nodeid);
+            var nodeState = extractor.State.GetNodeState(nodeId);
 
             if (nodeState == null)
             {
-                log.Warning("History data for unknown node received: {id}", nodeid);
+                log.Warning("History data for unknown node received: {id}", nodeId);
                 return 0;
             }
+
+            var datapoints = data.DataValues.Where(dp =>
+            {
+                if (StatusCode.IsNotGood(dp.StatusCode))
+                {
+                    UAExtractor.BadDataPoints.Inc();
+                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", nodeState.Id, dp.SourceTimestamp);
+                    return false;
+                }
+                return true;
+            }).ToList();
 
             var last = DateTime.MinValue;
             var first = DateTime.MaxValue;
 
-            if (data.DataValues.Any())
+            if (datapoints.Any())
             {
-                (first, last) = data.DataValues.MinMax(dp => dp.SourceTimestamp);
+                (first, last) = datapoints.MinMax(dp => dp.SourceTimestamp);
             }
 
             if (frontfill)
@@ -122,15 +134,8 @@ namespace Cognite.OpcUa
             }
 
             int cnt = 0;
-            foreach (var datapoint in data.DataValues)
+            foreach (var datapoint in datapoints)
             {
-                if (StatusCode.IsNotGood(datapoint.StatusCode))
-                {
-                    UAExtractor.BadDataPoints.Inc();
-                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", nodeState.Id, datapoint.SourceTimestamp);
-                    continue;
-                }
-
                 var buffDps = extractor.Streamer.ToDataPoint(datapoint, nodeState);
                 foreach (var buffDp in buffDps)
                 {
@@ -143,7 +148,8 @@ namespace Cognite.OpcUa
             if (!final || !frontfill) return cnt;
 
             var buffered = nodeState.FlushBuffer();
-            extractor.Streamer.Enqueue(buffered.SelectMany(dplist => dplist));
+            nodeState.UpdateFromStream(buffered);
+            extractor.Streamer.Enqueue(buffered);
 
             return cnt;
         }
@@ -154,12 +160,11 @@ namespace Cognite.OpcUa
         /// <param name="rawEvts">Collection of events to be handled as IEncodable</param>
         /// <param name="final">True if this is the final call for this node, and the lock may be removed</param>
         /// <param name="frontfill">True if frontfill, false for backfill</param>
-        /// <param name="nodeid">Id of the emitter in question.</param>
+        /// <param name="nodeId">Id of the emitter in question.</param>
         /// <param name="details">History read details used to generate this HistoryRead result</param>
         /// <returns>Number of events read</returns>
-        private int HistoryEventHandler(IEncodeable rawEvts, bool final, bool frontfill, NodeId nodeid, HistoryReadDetails details)
+        private int HistoryEventHandler(IEncodeable rawEvts, bool final, bool frontfill, NodeId nodeId, HistoryReadDetails details)
         {
-            if (rawEvts == null) return 0;
             if (!(rawEvts is HistoryEvent evts))
             {
                 log.Warning("Incorrect return type of history read events");
@@ -171,43 +176,65 @@ namespace Cognite.OpcUa
                 return 0;
             }
             var filter = eventDetails.Filter;
-            if (filter == null)
+            if (filter == null || filter.SelectClauses == null)
             {
-                log.Warning("No event filter, ignoring");
+                log.Warning("No event filter when reading from history, ignoring");
                 return 0;
             }
             if (evts.Events == null) return 0;
-            var emitterState = extractor.State.GetEmitterState(nodeid);
-            int cnt = 0;
+            var emitterState = extractor.State.GetEmitterState(nodeId);
 
-            var range = TimeRange.Empty;
+            if (emitterState == null)
+            {
+                log.Warning("History events for unknown emitter received: {id}", nodeId);
+                return 0;
+            }
 
+            var createdEvents = new List<BufferedEvent>(evts.Events.Count);
             foreach (var evt in evts.Events)
             {
-                var buffEvt = extractor.Streamer.ConstructEvent(filter, evt.EventFields, nodeid);
-                if (buffEvt == null) continue;
-                range = range.Extend(buffEvt.Time, buffEvt.Time);
+                var buffEvt = extractor.Streamer.ConstructEvent(filter, evt.EventFields, nodeId);
+                if (buffEvt == null)
+                {
+                    UAExtractor.BadEvents.Inc();
+                    continue;
+                }
+                createdEvents.Add(buffEvt);
+            }
 
-                extractor.Streamer.Enqueue(buffEvt);
-                cnt++;
+            var last = DateTime.MinValue;
+            var first = DateTime.MaxValue;
+
+            if (createdEvents.Any())
+            {
+                (first, last) = createdEvents.MinMax(dp => dp.Time);
             }
 
             if (frontfill)
             {
-                emitterState.UpdateFromFrontfill(range.Last, final);
-                log.Debug("Frontfill of events for {id} at: {end}", nodeid, range.Last);
+                emitterState.UpdateFromFrontfill(last, final);
+                log.Debug("Frontfill of events for {id} at: {end}", nodeId, last);
             }
             else
             {
-                emitterState.UpdateFromBackfill(range.First, final);
-                log.Debug("Backfill of events for {id} at: {end}", nodeid, range.First);
+                emitterState.UpdateFromBackfill(first, final);
+                log.Debug("Backfill of events for {id} at: {end}", nodeId, first);
             }
 
-            if (!final || !frontfill) return cnt;
-            var buffered = emitterState.FlushBuffer();
+            extractor.Streamer.Enqueue(createdEvents);
 
+            if (!final || !frontfill) return createdEvents.Count;
+
+            var buffered = emitterState.FlushBuffer();
+            if (buffered.Any())
+            {
+                var (smin, smax) = buffered.MinMax(dp => dp.Time);
+                emitterState.UpdateFromStream(smin, smax);
+            }
+            log.Information("Read {cnt} events from buffer", buffered.Count());
             extractor.Streamer.Enqueue(buffered);
-            return cnt;
+
+            return createdEvents.Count;
         }
         /// <summary>
         /// Main history read loop. Reads for the given list of nodes until all are done, using the given HistoryReadDetails.
@@ -280,13 +307,13 @@ namespace Cognite.OpcUa
         private void FrontfillDataChunk(IEnumerable<NodeExtractionState> nodes, CancellationToken token)
         {
             // Earliest latest timestamp in chunk.
-            var finalTimeStamp = nodes.Select(node => node.SourceExtractedRange.Last).Min();
+            var finalTimeStamp = nodes.Min(node => node.SourceExtractedRange.Last);
             finalTimeStamp = finalTimeStamp < historyStartTime ? historyStartTime : finalTimeStamp;
             finalTimeStamp = finalTimeStamp > DateTime.UtcNow ? DateTime.UtcNow : finalTimeStamp;
             var details = new ReadRawModifiedDetails
             {
                 IsReadModified = false,
-                EndTime = DateTime.UtcNow.AddDays(10),
+                EndTime = DateTime.MinValue,
                 StartTime = finalTimeStamp,
                 NumValuesPerNode = (uint)config.DataChunk
             };
@@ -300,8 +327,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">Nodes to be read</param>
         private void BackfillDataChunk(IEnumerable<NodeExtractionState> nodes, CancellationToken token)
         {
-            // Earliest latest timestamp in chunk.
-            var finalTimeStamp = nodes.Select(node => node.SourceExtractedRange.First).Max();
+            var finalTimeStamp = nodes.Max(node => node.SourceExtractedRange.First);
             if (finalTimeStamp <= historyStartTime) return;
             var details = new ReadRawModifiedDetails
             {
@@ -322,13 +348,12 @@ namespace Cognite.OpcUa
         /// <param name="nodes">SourceNodes to read for</param>
         private void FrontfillEventsChunk(IEnumerable<EventExtractionState> states, CancellationToken token)
         {
-            // Earliest latest timestamp in chunk.
-            var finalTimeStamp = states.Select(node => node.SourceExtractedRange.Last).Min();
+            var finalTimeStamp = states.Min(node => node.SourceExtractedRange.Last);
             finalTimeStamp = finalTimeStamp < historyStartTime ? historyStartTime : finalTimeStamp;
             finalTimeStamp = finalTimeStamp > DateTime.UtcNow ? DateTime.UtcNow : finalTimeStamp;
             var details = new ReadEventDetails
             {
-                EndTime = DateTime.UtcNow.AddDays(10),
+                EndTime = DateTime.MinValue,
                 StartTime = finalTimeStamp,
                 NumValuesPerNode = (uint)config.EventChunk,
                 Filter = uaClient.BuildEventFilter()
@@ -344,8 +369,7 @@ namespace Cognite.OpcUa
         /// <param name="states">Emitters to be read from</param>
         private void BackfillEventsChunk(IEnumerable<EventExtractionState> states, CancellationToken token)
         {
-            // Earliest latest timestamp in chunk.
-            var finalTimeStamp = states.Select(node => node.SourceExtractedRange.First).Max();
+            var finalTimeStamp = states.Max(node => node.SourceExtractedRange.First);
             if (finalTimeStamp <= historyStartTime) return;
             var details = new ReadEventDetails
             {
@@ -365,6 +389,7 @@ namespace Cognite.OpcUa
         /// <param name="states">Nodes to be read</param>
         public async Task FrontfillData(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
+            if (states == null || !states.Any()) return;
             try
             {
                 Interlocked.Increment(ref running);
@@ -384,6 +409,7 @@ namespace Cognite.OpcUa
         /// <param name="states">Nodes to be read</param>
         public async Task BackfillData(IEnumerable<NodeExtractionState> states, CancellationToken token)
         {
+            if (states == null || !states.Any()) return;
             try
             {
                 Interlocked.Increment(ref running);
@@ -411,6 +437,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">SourceNodes to read for</param>
         public async Task FrontfillEvents(IEnumerable<EventExtractionState> states, CancellationToken token)
         {
+            if (states == null || !states.Any()) return;
             try
             {
                 Interlocked.Increment(ref running);
@@ -431,6 +458,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">SourceNodes to read for</param>
         public async Task BackfillEvents(IEnumerable<EventExtractionState> states, CancellationToken token)
         {
+            if (states == null || !states.Any()) return;
             try
             {
                 Interlocked.Increment(ref running);

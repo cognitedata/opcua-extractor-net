@@ -36,7 +36,7 @@ namespace Cognite.OpcUa
         public bool AutoAccept { get; set; } = true;
         public int PublishingInterval { get; set; } = 500;
         public int SamplingInterval { get; set; } = 100;
-        public int QueueLength { get; set; } = 10;
+        public int QueueLength { get; set; } = 100;
         public string Username { get; set; }
         public string Password { get; set; }
         public bool Secure { get; set; }

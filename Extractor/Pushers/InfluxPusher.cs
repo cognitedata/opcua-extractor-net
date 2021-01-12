@@ -177,7 +177,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                log.Warning("Failed to push {cnt} events to influxdb: {msg}", count, ex.Message);
+                log.Warning(ex, "Failed to push {cnt} events to influxdb: {msg}", count, ex.Message);
                 eventPushFailures.Inc();
                 return false;
             }
@@ -443,22 +443,40 @@ namespace Cognite.OpcUa
         {
             var idp = new InfluxDatapoint<string>
             {
-                UtcTimestamp = evt.Time,
-                MeasurementName = "events." + Extractor.GetUniqueId(evt.EmittingNode) + ":"
-                                  + (evt.MetaData.TryGetValue("Type", out var rawType) ? rawType : Extractor.GetUniqueId(evt.EventType))
+                UtcTimestamp = evt.Time
             };
-            idp.Fields.Add("value", evt.Message);
-            idp.Fields.Add("id", evt.EventId);
-            var sourceNode = evt.MetaData.TryGetValue("SourceNode", out var rawSourceNode)
-                ? Extractor.ConvertToString(rawSourceNode) : Extractor.GetUniqueId(evt.SourceNode);
-            idp.Fields.Add("source", sourceNode ?? "null");
-            foreach (var kvp in evt.MetaData)
+            string name = "events." + Extractor.GetUniqueId(evt.EmittingNode) + ":";
+            if (evt.MetaData != null && evt.MetaData.TryGetValue("Type", out var rawType))
             {
-                if (kvp.Key == "Emitter" || kvp.Key == "Type" || kvp.Key == "SourceNode") continue;
-                var str = Extractor.ConvertToString(kvp.Value);
-                idp.Tags[kvp.Key] = string.IsNullOrEmpty(str) ? "null" : str;
+                name += rawType;
             }
+            else
+            {
+                name += Extractor.GetUniqueId(evt.EventType);
+            }
+            idp.MeasurementName = name;
 
+            idp.Fields.Add("value", evt.Message ?? "");
+            idp.Fields.Add("id", evt.EventId ?? "");
+            string sourceNode;
+            if (evt.MetaData != null && evt.MetaData.TryGetValue("SourceNode", out var rawSourceNode))
+            {
+                sourceNode = Extractor.ConvertToString(rawSourceNode);
+            }
+            else
+            {
+                sourceNode = Extractor.GetUniqueId(evt.SourceNode);
+            }
+            idp.Tags.Add("source", sourceNode ?? "null");
+            if (evt.MetaData != null)
+            {
+                foreach (var kvp in evt.MetaData)
+                {
+                    if (kvp.Key == "Emitter" || kvp.Key == "Type" || kvp.Key == "SourceNode") continue;
+                    var str = Extractor.ConvertToString(kvp.Value);
+                    idp.Tags[kvp.Key] = string.IsNullOrEmpty(str) ? "null" : str;
+                }
+            }
             return idp;
         }
         /// <summary>
@@ -529,7 +547,6 @@ namespace Cognite.OpcUa
                 if (first) ret += " AND";
                 ret += $" time <= {(state.DestinationExtractedRange.Last - CogniteTime.DateTimeEpoch).Ticks * 100}";
             }
-
             return ret;
         }
 
@@ -564,7 +581,8 @@ namespace Cognite.OpcUa
 
                 var state = states.Values.FirstOrDefault(state => name.StartsWith(state.Id, StringComparison.InvariantCulture));
                 if (state == null) continue;
-                
+
+
                 finalEvents.AddRange(series.Entries.Select(res =>
                 {
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
@@ -575,7 +593,7 @@ namespace Cognite.OpcUa
                         Time = (DateTime)values["Time"],
                         EventId = (string)values["Id"],
                         Message = (string)values["Value"],
-                        EmittingNode = state.Id,
+                        EmittingNode = state.SourceId,
                         SourceNode = sourceNode,
                         MetaData = new Dictionary<string, object>()
                     };
