@@ -45,7 +45,7 @@ namespace Cognite.OpcUa.Pushers
         {
             if (value is DateTime dt)
             {
-                return new DateTimeOffset(dt).ToUnixTimeMilliseconds();
+                return dt.ToUnixTimeMilliseconds();
             }
             else
             {
@@ -156,6 +156,7 @@ namespace Cognite.OpcUa.Pushers
             if (raw == null)
             {
                 var create = variable.ToStatelessTimeSeries(extractor, null, metaMap);
+                // This is inefficient, but it seems like it might be difficult to do better given the SDK and System.Text.Json
                 return JsonDocument.Parse(JsonSerializer.Serialize(create,
                     new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })).RootElement;
             }
