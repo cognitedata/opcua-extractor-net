@@ -475,13 +475,8 @@ namespace Cognite.OpcUa
 
                     log.Information("Read {cnt} raw events", events.Count);
 
-                    foreach (var group in events.GroupBy(evt => evt.EmittingNode))
-                    {
-                        log.Information("Group: {key}, {state}", group.Key, extractor.State.GetEmitterState(group.Key));
-                    }
-
                     events = events
-                        .Where(evt => evt.EmittingNode != null)
+                        .Where(evt => evt.EmittingNode != null && !evt.EmittingNode.IsNullNodeId)
                         .ToList();
 
                     log.Information("Read {cnt} events from file", events.Count);
