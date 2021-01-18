@@ -898,15 +898,17 @@ namespace Cognite.OpcUa
 
             if (config.Extraction.Relationships.Hierarchical)
             {
-                var nodeMap = nodes.RawObjects.Concat(nodes.RawVariables)
+                var nodeMap = nodes.Objects.Concat(nodes.Variables)
                     .Where(node => !(node is UAVariable variable) || variable.Index == -1)
                     .DistinctBy(node => node.Id)
                     .ToDictionary(node => node.Id);
                 var hierarchicalReferences = new List<UAReference>();
+
                 while (referenceQueue.TryDequeue(out var pair))
                 {
                     // The child should always be in the list of mapped nodes here
-                    if (!nodeMap.TryGetValue(uaClient.ToNodeId(pair.Desc.NodeId), out var childNode)) continue;
+                    var nodeId = uaClient.ToNodeId(pair.Desc.NodeId);
+                    if (!nodeMap.TryGetValue(nodeId, out var childNode)) continue;
                     if (childNode == null || childNode is UAVariable childVar && childVar.IsProperty) continue;
 
                     bool childIsTs = childNode is UAVariable cVar && !cVar.IsArray;

@@ -424,7 +424,7 @@ namespace Test
         [Trait("Server", "events")]
         [Trait("Target", "OldBuffer")]
         [Trait("Test", "eventbyteconversion")]
-        public async Task TextEventByteConversion()
+        public async Task TestEventByteConversion()
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
@@ -467,6 +467,8 @@ namespace Test
 
             using var stream = new MemoryStream();
 
+            tester.Extractor.State.RegisterNode(evt.EventType, tester.UAClient.GetUniqueId(evt.EventType));
+
             stream.Write(evt.ToStorableBytes(tester.Extractor));
             stream.Write(evt2.ToStorableBytes(tester.Extractor));
 
@@ -479,7 +481,7 @@ namespace Test
             {
                 Assert.Equal(evt.EmittingNode, converted.EmittingNode);
                 Assert.Equal(evt.EventId, converted.EventId);
-                Assert.Equal(tester.Extractor.GetUniqueId(evt.EventType), converted.MetaData["Type"]);
+                Assert.Equal(evt.EventType, converted.EventType);
                 Assert.Equal(evt.Message, converted.Message);
                 foreach (var kvp in evt.MetaData)
                 {

@@ -220,7 +220,8 @@ namespace Test
                 "opcua_event_push_failures_influx",
                 "opcua_duplicated_events_cdf",
                 "opcua_created_assets_mqtt",
-                "opcua_created_timeseries_mqtt"
+                "opcua_created_timeseries_mqtt",
+                "opcua_array_points_missed"
             };
             foreach (var metric in metrics)
             {

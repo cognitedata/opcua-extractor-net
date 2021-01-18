@@ -152,6 +152,7 @@ namespace Test
                 if (read.Count < 1) return false;
 
                 var readValues = read.First();
+                Console.WriteLine($"Got {readValues.Entries.Count}/6 results");
                 return readValues.Entries.Count == 6;
             }, 5, "Expected values to arrive in influx");
             

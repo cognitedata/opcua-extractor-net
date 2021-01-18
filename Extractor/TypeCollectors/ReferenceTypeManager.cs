@@ -96,6 +96,7 @@ namespace Cognite.OpcUa.TypeCollectors
             foreach (var (parentId, children) in references)
             {
                 if (!nodeMap.TryGetValue(parentId, out var parentNode)) continue;
+                if (!extractor.State.IsMappedNode(parentId)) continue;
                 if (parentNode is UAVariable parentVar && parentVar.IsProperty) continue;
                 foreach (var child in children)
                 {
