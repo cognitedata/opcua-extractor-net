@@ -486,8 +486,8 @@ namespace Server
                 var ignoreVar = CreateVariable("IgnoreVar", ignoreType.NodeId);
                 AddNodeRelation(ignoreVar, root, ReferenceTypeIds.HasComponent);
 
-                var numberVar = CreateVariable("MysteryVar", numberType.NodeId);
-                AddNodeRelation(numberVar, root, ReferenceTypeIds.HasComponent);
+                var mysteryVar = CreateVariable("MysteryVar", numberType.NodeId);
+                AddNodeRelation(mysteryVar, root, ReferenceTypeIds.HasComponent);
 
                 var numberVar2 = CreateVariable("NumberVar", numberType2.NodeId);
                 AddNodeRelation(numberVar2, root, ReferenceTypeIds.HasComponent);
@@ -496,13 +496,13 @@ namespace Server
                 {
                     UnitId = 4408652
                 };
-                var euprop = numberVar.AddProperty<EUInformation>("EngineeringUnits", DataTypes.EUInformation, -1);
+                var euprop = mysteryVar.AddProperty<EUInformation>("EngineeringUnits", DataTypes.EUInformation, -1);
                 euprop.NodeId = GenerateNodeId();
                 euprop.Value = euinf;
 
                 var eurange = new Opc.Ua.Range(100, 0);
 
-                var rangeprop = numberVar.AddProperty<Opc.Ua.Range>("EURange", DataTypes.Range, -1);
+                var rangeprop = mysteryVar.AddProperty<Opc.Ua.Range>("EURange", DataTypes.Range, -1);
                 rangeprop.NodeId = GenerateNodeId();
                 rangeprop.Value = eurange;
 
@@ -566,7 +566,7 @@ namespace Server
                 // object, variable (asset-timeseries)
                 AddNodeRelation(root, stringyVar, refType1.NodeId);
                 // variable, variable (timeseries-timeseries)
-                AddNodeRelation(numberVar, stringyVar, refType2.NodeId);
+                AddNodeRelation(mysteryVar, stringyVar, refType2.NodeId);
                 // variable, ignored (asset-none, ignored)
                 AddNodeRelation(stringyVar, ignoreVar, refType2.NodeId);
 
@@ -582,10 +582,10 @@ namespace Server
                 AddTypesToTypeTree(variableType);
 
                 store.AddHistorizingNode(myarray);
-                store.AddHistorizingNode(numberVar);
+                store.AddHistorizingNode(mysteryVar);
 
                 AddPredefinedNodes(SystemContext, root, myarray, mystrarray, stringyType, ignoreType, numberType, numberType2, stringyVar,
-                    ignoreVar, numberVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2, arrprop, arrprop2,
+                    ignoreVar, mysteryVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2, arrprop, arrprop2,
                     enumType1, enumType2, enumProp1, enumProp2, enumVar1, enumVar2, enumVar3, refType1, refType2, objType, variableType);
 
                 Ids.Custom.Root = root.NodeId;
@@ -597,7 +597,7 @@ namespace Server
                 Ids.Custom.NumberType = numberType2.NodeId;
                 Ids.Custom.StringyVar = stringyVar.NodeId;
                 Ids.Custom.IgnoreVar = ignoreVar.NodeId;
-                Ids.Custom.MysteryVar = numberVar.NodeId;
+                Ids.Custom.MysteryVar = mysteryVar.NodeId;
                 Ids.Custom.NumberVar = numberVar2.NodeId;
                 Ids.Custom.RangeProp = rangeprop.NodeId;
                 Ids.Custom.Obj1 = obj.NodeId;

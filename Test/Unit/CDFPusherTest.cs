@@ -248,8 +248,311 @@ namespace Test.Unit
             Assert.Equal(3, handler.Events.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_event_pushes_cdf", 2));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_events_pushed_cdf", 3));
-
-            Assert.True(false);
         }
+        #region pushnodes
+        [Fact]
+        public async Task TestCreateUpdateAssets()
+        {
+            var (handler, pusher) = tester.GetPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
+            tester.Config.Cognite.RawMetadata = null;
+
+            var tss = Enumerable.Empty<UAVariable>();
+            var update = new UpdateConfig();
+            Assert.True(await pusher.PushNodes(Enumerable.Empty<UANode>(), tss, update, tester.Source.Token));
+
+            // Test debug mode
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            tester.Config.Cognite.Debug = true;
+            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            tester.Config.Cognite.Debug = false;
+            Assert.Empty(handler.Assets);
+
+            // Fail to create assets
+            node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            handler.FailedRoutes.Add("/assets");
+            Assert.False(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            handler.FailedRoutes.Clear();
+
+            // Create the asset
+            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            Assert.Single(handler.Assets);
+
+            // Do nothing here, due to no update configured.
+            handler.FailedRoutes.Add("/assets/update");
+            node.Description = "description";
+            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+
+            // Do nothing again, due to no changes on the node
+            update.Objects.Context = true;
+            update.Objects.Description = true;
+            update.Objects.Metadata = true;
+            update.Objects.Name = true;
+            node.Description = null;
+            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+
+            // Fail due to failed update, but the other will still be created
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null);
+            node.Description = "description";
+            Assert.False(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            Assert.Equal(2, handler.Assets.Count);
+            Assert.Null(handler.Assets.First().Value.description);
+            Assert.Null(handler.Assets.Last().Value.description);
+
+            // Update both nodes
+            handler.FailedRoutes.Clear();
+            node2.Description = "description";
+            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            Assert.Equal(2, handler.Assets.Count);
+            Assert.Equal("description", handler.Assets.First().Value.description);
+            Assert.Equal("description", handler.Assets.Last().Value.description);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 2));
+        }
+        [Fact]
+        public async Task TestCreateRawAssets()
+        {
+            var (handler, pusher) = tester.GetPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
+
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                AssetsTable = "assets",
+                Database = "metadata"
+            };
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            var tss = Enumerable.Empty<UAVariable>();
+            var update = new UpdateConfig();
+            // Fail to create
+            handler.FailedRoutes.Add("/raw/dbs/metadata/tables/assets/rows");
+            Assert.False(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            Assert.Empty(handler.AssetRaw);
+
+            // Create one
+            handler.FailedRoutes.Clear();
+            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            Assert.Single(handler.AssetRaw);
+            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.name);
+
+            // Create another, do not overwrite the existing one, due to no update settings
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null);
+            node.Description = "description";
+            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            Assert.Equal(2, handler.AssetRaw.Count);
+            Assert.Null(handler.AssetRaw.First().Value.description);
+            Assert.Null(handler.AssetRaw.Last().Value.description);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
+            tester.Config.Cognite.RawMetadata = null;
+        }
+        [Fact]
+        public async Task TestUpdateRawAssets()
+        {
+            var (handler, pusher) = tester.GetPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
+
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                AssetsTable = "assets",
+                Database = "metadata"
+            };
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            var tss = Enumerable.Empty<UAVariable>();
+            var update = new UpdateConfig();
+            update.Objects.Context = true;
+            update.Objects.Description = true;
+            update.Objects.Metadata = true;
+            update.Objects.Name = true;
+
+            // Fail to upsert
+            handler.FailedRoutes.Add("/raw/dbs/metadata/tables/assets/rows");
+            Assert.False(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            Assert.Empty(handler.AssetRaw);
+
+            // Create one
+            handler.FailedRoutes.Clear();
+            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            Assert.Single(handler.AssetRaw);
+            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.name);
+
+            // Create another, overwrite the existing one
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null);
+            node.Description = "description";
+            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            Assert.Equal(2, handler.AssetRaw.Count);
+            Assert.Single(handler.AssetRaw, asset => asset.Value.description == "description");
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
+            tester.Config.Cognite.RawMetadata = null;
+        }
+        [Fact]
+        public async Task TestCreateUpdateTimeseries()
+        {
+            var (handler, pusher) = tester.GetPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
+            tester.Config.Cognite.RawMetadata = null;
+
+            var dt = new UADataType(DataTypeIds.Double);
+
+            var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
+                .GetField("nodeToAssetIds", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(pusher);
+            nodeToAssetIds[new NodeId("parent")] = 123;
+
+            var assets = Enumerable.Empty<UANode>();
+            var update = new UpdateConfig();
+
+            // Test debug mode
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+            tester.Config.Cognite.Debug = true;
+            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.Equal(2, node.Properties.Count);
+            tester.Config.Cognite.Debug = false;
+            Assert.Empty(handler.Timeseries);
+
+            // Fail to create timeseries, should still result in properties being read.
+            node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+            handler.FailedRoutes.Add("/timeseries");
+            Assert.False(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.Equal(2, node.Properties.Count);
+            handler.FailedRoutes.Clear();
+            Assert.Empty(handler.Timeseries);
+
+            // Create the timeseries
+            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.Single(handler.Timeseries);
+            Assert.Equal(123, handler.Timeseries.First().Value.assetId);
+
+            // Do nothing due to no configured update
+            handler.FailedRoutes.Add("/timeseries/update");
+            node.Description = "description";
+            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+
+            // Do nothing again due to no changes on the node
+            update.Variables.Context = true;
+            update.Variables.Description = true;
+            update.Variables.Metadata = true;
+            update.Variables.Name = true;
+            node.Description = null;
+            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+
+            // Create one, fail to update the other
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent")) { DataType = dt };
+            node.Description = "description";
+            Assert.False(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            Assert.Equal(2, handler.Timeseries.Count);
+            Assert.Null(handler.Timeseries.First().Value.description);
+            Assert.Null(handler.Timeseries.Last().Value.description);
+
+            // Update both nodes
+            handler.FailedRoutes.Clear();
+            node2.Description = "description";
+            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            Assert.Equal(2, handler.Timeseries.Count);
+            Assert.Equal("description", handler.Timeseries.First().Value.description);
+            Assert.Equal("description", handler.Timeseries.Last().Value.description);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 2));
+        }
+        [Fact]
+        public async Task TestCreateRawTimeseries()
+        {
+            var (handler, pusher) = tester.GetPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
+
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                TimeseriesTable = "timeseries",
+                Database = "metadata"
+            };
+
+            var dt = new UADataType(DataTypeIds.Double);
+
+            var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
+                .GetField("nodeToAssetIds", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(pusher);
+            nodeToAssetIds[new NodeId("parent")] = 123;
+
+            var assets = Enumerable.Empty<UANode>();
+            var update = new UpdateConfig();
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+
+            // Fail to create
+            handler.FailedRoutes.Add("/raw/dbs/metadata/tables/timeseries/rows");
+            Assert.False(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.Empty(handler.TimeseriesRaw);
+
+            // Create one
+            handler.FailedRoutes.Clear();
+            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.Single(handler.TimeseriesRaw);
+            Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.name);
+
+            // Create another, do not overwrite the existing one, due to no update settings
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent")) { DataType = dt };
+            node.Description = "description";
+            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            Assert.Equal(2, handler.TimeseriesRaw.Count);
+            Assert.Null(handler.TimeseriesRaw.First().Value.description);
+            Assert.Null(handler.TimeseriesRaw.Last().Value.description);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
+            tester.Config.Cognite.RawMetadata = null;
+        }
+        [Fact]
+        public async Task TestUpdateRawTimeseries()
+        {
+            var (handler, pusher) = tester.GetPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
+
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                TimeseriesTable = "timeseries",
+                Database = "metadata"
+            };
+
+            var dt = new UADataType(DataTypeIds.Double);
+
+            var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
+                .GetField("nodeToAssetIds", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(pusher);
+            nodeToAssetIds[new NodeId("parent")] = 123;
+
+            var assets = Enumerable.Empty<UANode>();
+            var update = new UpdateConfig();
+            update.Variables.Context = true;
+            update.Variables.Description = true;
+            update.Variables.Metadata = true;
+            update.Variables.Name = true;
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+
+            // Fail to upsert
+            handler.FailedRoutes.Add("/raw/dbs/metadata/tables/timeseries/rows");
+            Assert.False(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.Empty(handler.TimeseriesRaw);
+
+            // Create one
+            handler.FailedRoutes.Clear();
+            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            Assert.Single(handler.TimeseriesRaw);
+            Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.name);
+
+            // Create another, overwrite the existing due to update settings
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent")) { DataType = dt };
+            node.Description = "description";
+            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            Assert.Equal(2, handler.TimeseriesRaw.Count);
+            Assert.Contains(handler.TimeseriesRaw, ts => ts.Value.description == "description");
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
+            tester.Config.Cognite.RawMetadata = null;
+        }
+        #endregion
     }
 }

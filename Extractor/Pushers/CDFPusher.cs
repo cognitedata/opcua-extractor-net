@@ -425,7 +425,6 @@ namespace Cognite.OpcUa.Pushers
 
         private async Task UpdateRawAssets(IDictionary<string, UANode> assetMap, TypeUpdateConfig update, CancellationToken token)
         {
-            string columns = BuildColumnString(update, true);
             await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async rows =>
             {
                 var rowDict = rows.ToDictionary(row => row.Key);
@@ -440,7 +439,7 @@ namespace Cognite.OpcUa.Pushers
                     .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
 
                 return updates;
-            }, null, columns, token);
+            }, null, token);
         }
 
         private async Task CreateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
@@ -491,7 +490,6 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (existing.TryGetValue(kvp.Key, out var asset))
                 {
-                    var extras = Extractor.GetExtraMetadata(kvp.Value);
                     var assetUpdate = PusherUtils.GetAssetUpdate(asset, kvp.Value, Extractor, update);
 
                     if (assetUpdate == null) continue;
@@ -552,7 +550,6 @@ namespace Cognite.OpcUa.Pushers
             TypeUpdateConfig update,
             CancellationToken token)
         {
-            string columns = BuildColumnString(update, false);
             await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, async rows =>
             {
                 var rowDict = rows.ToDictionary(row => row.Key);
@@ -567,7 +564,7 @@ namespace Cognite.OpcUa.Pushers
                     .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
 
                 return updates;
-            }, null, columns, token);
+            }, null, token);
         }
 
         private async Task CreateRawTimeseries(
@@ -694,15 +691,6 @@ namespace Cognite.OpcUa.Pushers
         #endregion
 
         #region raw-utils
-        private static string BuildColumnString(TypeUpdateConfig config, bool assets)
-        {
-            var fields = new List<string>();
-            if (config.Context) fields.Add(assets ? "parentExternalId" : "assetExternalId");
-            if (config.Description) fields.Add("description");
-            if (config.Metadata) fields.Add("metadata");
-            if (config.Name) fields.Add("name");
-            return string.Join(',', fields);
-        }
         private async Task EnsureRawRows<T>(
             string dbName,
             string tableName,
@@ -746,7 +734,6 @@ namespace Cognite.OpcUa.Pushers
             IEnumerable<string> toRetrieve,
             Func<IEnumerable<RawRow>, Task<IDictionary<string, T>>> dtoBuilder,
             JsonSerializerOptions options,
-            string columns,
             CancellationToken token)
         {
             string cursor = null;
@@ -757,7 +744,7 @@ namespace Cognite.OpcUa.Pushers
                 try
                 {
                     var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
-                        new RawRowQuery { Columns = new[] { columns }, Cursor = cursor, Limit = 10_000 }, token);
+                        new RawRowQuery { Cursor = cursor, Limit = 10_000 }, token);
                     foreach (var item in result.Items)
                     {
                         existing.Add(item);
