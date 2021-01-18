@@ -256,7 +256,7 @@ namespace Test.Unit
 
             try
             {
-                await extractor.PushNodes(nodes, variables, references, pusher, true, true);
+                await extractor.PushNodes(nodes, variables, references, pusher, true);
 
                 Assert.Equal(pushedObjects, pusher.PushedNodes.Count);
                 Assert.Equal(pushedVariables, pusher.PushedVariables.Count);

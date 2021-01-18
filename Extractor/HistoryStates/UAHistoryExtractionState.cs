@@ -25,6 +25,7 @@ namespace Cognite.OpcUa.HistoryStates
     public class UAHistoryExtractionState : HistoryExtractionState
     {
         public NodeId SourceId { get; }
+        public bool Initialized { get; private set; }
         public UAHistoryExtractionState(UAExtractor extractor, NodeId id, bool frontfill, bool backfill)
             : base(extractor?.GetUniqueId(id), frontfill, backfill)
         {
@@ -49,6 +50,11 @@ namespace Cognite.OpcUa.HistoryStates
                     SourceExtractedRange = DestinationExtractedRange = new TimeRange(CogniteTime.DateTimeEpoch, CogniteTime.DateTimeEpoch);
                 }
             }
+        }
+        public override void FinalizeRangeInit()
+        {
+            Initialized = true;
+            base.FinalizeRangeInit();
         }
     }
 }

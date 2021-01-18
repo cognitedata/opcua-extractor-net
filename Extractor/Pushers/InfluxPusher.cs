@@ -195,7 +195,6 @@ namespace Cognite.OpcUa
         public async Task<bool> InitExtractedRanges(
             IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
-            bool initMissing,
             CancellationToken token)
         {
             if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
@@ -227,7 +226,7 @@ namespace Cognite.OpcUa
                 {
                     state.InitExtractedRange(range.First, range.Last);
                 }
-                else if (initMissing)
+                else
                 {
                     state.InitToEmpty();
                 }
@@ -255,7 +254,6 @@ namespace Cognite.OpcUa
         private async Task InitExtractedEventRange(EventExtractionState state,
             bool backfillEnabled,
             IEnumerable<string> seriesNames,
-            bool initMissing,
             CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
@@ -305,7 +303,7 @@ namespace Cognite.OpcUa
                 bestRange = new TimeRange(bestRange.Last, bestRange.Last);
             }
 
-            if (initMissing && bestRange == TimeRange.Empty)
+            if (bestRange == TimeRange.Empty)
             {
                 state.InitToEmpty();
             }
@@ -323,7 +321,6 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool> InitExtractedEventRanges(IEnumerable<EventExtractionState> states,
             bool backfillEnabled,
-            bool initMissing,
             CancellationToken token)
         {
             if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
@@ -341,7 +338,7 @@ namespace Cognite.OpcUa
                 return false;
             }
 
-            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, backfillEnabled, eventSeries, initMissing, token));
+            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, backfillEnabled, eventSeries, token));
             try
             {
                 await Task.WhenAll(getRangeTasks);

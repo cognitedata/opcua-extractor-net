@@ -439,6 +439,27 @@ namespace Test
             }
             else
             {
+                var timeseries = found.Select(id => Timeseries[id]).ToList();
+                foreach (var ts in timeseries)
+                {
+                    if (Datapoints.TryGetValue(ts.externalId, out var dps))
+                    {
+                        if (ts.isString && (dps.StringDatapoints?.Any() ?? false))
+                        {
+                            ts.datapoints = new[] { new DataPoint
+                            {
+                                timestamp = dps.StringDatapoints.Max(dp => dp.Timestamp)
+                            } };
+                        }
+                        else if (dps.NumericDatapoints?.Any() ?? false)
+                        {
+                            ts.datapoints = new[] { new DataPoint
+                            {
+                                timestamp = dps.NumericDatapoints.Max(dp => dp.Timestamp)
+                            } };
+                        }
+                    }
+                }
                 string result = JsonConvert.SerializeObject(new TimeseriesReadWrapper
                 {
                     items = found.Select(id => Timeseries[id])
@@ -669,19 +690,26 @@ namespace Test
                     ExternalId = id.externalId,
                     Id = Timeseries[id.externalId].id
                 };
-                if (Datapoints.ContainsKey(id.externalId))
+                if (Datapoints.TryGetValue(id.externalId, out var dps))
                 {
                     if (Timeseries[id.externalId].isString)
                     {
                         item.StringDatapoints = new StringDatapoints();
-                        item.StringDatapoints.Datapoints.Add(Datapoints[id.externalId].StringDatapoints.Aggregate((curMin, x) =>
-                            curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
+                        if (dps.StringDatapoints?.Any() ?? false)
+                        {
+                            item.StringDatapoints.Datapoints.Add(dps.StringDatapoints.Aggregate((curMin, x) =>
+                                curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
+                        }
                     }
                     else
                     {
                         item.NumericDatapoints = new NumericDatapoints();
-                        item.NumericDatapoints.Datapoints.Add(Datapoints[id.externalId].NumericDatapoints.Aggregate((curMin, x) =>
-                            curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
+                        if (dps.NumericDatapoints?.Any() ?? false)
+                        {
+                            item.NumericDatapoints.Datapoints.Add(Datapoints[id.externalId].NumericDatapoints.Aggregate((curMin, x) =>
+                                curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
+                        }
+
                     }
                 }
 

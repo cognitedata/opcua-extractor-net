@@ -294,7 +294,6 @@ namespace Cognite.OpcUa.Pushers
         public async Task<bool> InitExtractedRanges(
             IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
-            bool initMissing,
             CancellationToken token)
         {
             if (states == null) throw new ArgumentNullException(nameof(states));
@@ -315,7 +314,6 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
             log.Information("Getting extracted ranges from CDF for {cnt} states", ids.Count);
-            if (config.Debug) return true;
 
             Dictionary<string, TimeRange> ranges;
             try
@@ -331,14 +329,24 @@ namespace Cognite.OpcUa.Pushers
 
             foreach (var state in states)
             {
-                if (ranges.TryGetValue(state.Id, out var range))
+                if (state.IsArray)
                 {
-                    state.InitExtractedRange(range.First, range.Last);
+                    for (int i = 0; i < state.ArrayDimensions[0]; i++)
+                    {
+                        if (ranges.TryGetValue(Extractor.GetUniqueId(state.SourceId, i), out var range))
+                        {
+                            state.InitExtractedRange(range.First, range.Last);
+                        }
+                    }
                 }
-                else if (initMissing)
+                else
                 {
-                    state.InitToEmpty();
+                    if (ranges.TryGetValue(state.Id, out var range))
+                    {
+                        state.InitExtractedRange(range.First, range.Last);
+                    }
                 }
+
             }
 
             return true;

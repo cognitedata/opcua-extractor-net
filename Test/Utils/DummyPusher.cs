@@ -119,7 +119,6 @@ namespace Test.Utils
         public Task<bool> InitExtractedRanges(
             IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
-            bool initMissing,
             CancellationToken _)
         {
             if (!config.ReadExtractedRanges) return Task.FromResult(true);
@@ -143,7 +142,7 @@ namespace Test.Utils
                             state.InitExtractedRange(CogniteTime.DateTimeEpoch, max);
                         }
                     }
-                    else if (initMissing)
+                    else
                     {
                         state.InitToEmpty();
                     }
@@ -155,7 +154,6 @@ namespace Test.Utils
         public Task<bool> InitExtractedEventRanges(
             IEnumerable<EventExtractionState> states,
             bool backfillEnabled,
-            bool initMissing,
             CancellationToken token)
         {
             if (!config.ReadExtractedRanges) return Task.FromResult(true);
@@ -176,7 +174,7 @@ namespace Test.Utils
                             state.InitExtractedRange(CogniteTime.DateTimeEpoch, range.Last);
                         }
                     }
-                    else if (initMissing)
+                    else
                     {
                         state.InitToEmpty();
                     }

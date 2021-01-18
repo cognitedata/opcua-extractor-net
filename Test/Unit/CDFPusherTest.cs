@@ -13,6 +13,9 @@ using Cognite.OpcUa.Types;
 using Cognite.Extractor.Common;
 using Opc.Ua;
 using System.Reflection;
+using Cognite.OpcUa.HistoryStates;
+using System.Collections.ObjectModel;
+using Com.Cognite.V1.Timeseries.Proto;
 
 namespace Test.Unit
 {
@@ -554,5 +557,101 @@ namespace Test.Unit
             tester.Config.Cognite.RawMetadata = null;
         }
         #endregion
+        [Fact]
+        public async Task TestInitExtractedRanges()
+        {
+            var (handler, pusher) = tester.GetPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            tester.Config.Cognite.ReadExtractedRanges = true;
+            VariableExtractionState[] GetStates()
+            {
+                var state1 = new VariableExtractionState(tester.Client,
+                new UAVariable(new NodeId("double"), "double", NodeId.Null) { DataType = new UADataType(DataTypeIds.Double) }, true, true);
+                var state2 = new VariableExtractionState(tester.Client,
+                    new UAVariable(new NodeId("string"), "string", NodeId.Null) { DataType = new UADataType(DataTypeIds.String) }, true, true);
+                var state3 = new VariableExtractionState(tester.Client,
+                    new UAVariable(new NodeId("array"), "array", NodeId.Null)
+                    {
+                        DataType = new UADataType(DataTypeIds.Double),
+                        ArrayDimensions = new Collection<int> { 3 }
+                    }, true, true);
+                return new[] { state1, state2, state3 };
+            }
+
+            var states = GetStates();
+
+            // Nothing in CDF
+            // Failure
+            handler.FailedRoutes.Add("/timeseries/data/latest");
+            Assert.False(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
+
+            // Init missing
+            handler.FailedRoutes.Clear();
+            Assert.True(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
+            foreach (var state in states)
+            {
+                Assert.Equal(TimeRange.Empty, state.DestinationExtractedRange);
+            }
+
+            handler.MockTimeseries("gp.base:s=double");
+            var ts = handler.MockTimeseries("gp.base:s=string");
+            ts.isString = true;
+            handler.MockTimeseries("gp.base:s=array[0]");
+            handler.MockTimeseries("gp.base:s=array[1]");
+            handler.MockTimeseries("gp.base:s=array[2]");
+
+
+            // Stuff in CDF
+            states = GetStates();
+            handler.Datapoints[states[0].Id] = (new List<NumericDatapoint>
+            {
+                new NumericDatapoint { Timestamp = 1000 },
+                new NumericDatapoint { Timestamp = 2000 },
+                new NumericDatapoint { Timestamp = 3000 }
+            }, null);
+            handler.Datapoints[states[1].Id] = (null, new List<StringDatapoint>
+            {
+                new StringDatapoint { Timestamp = 1000 },
+                new StringDatapoint { Timestamp = 2000 },
+                new StringDatapoint { Timestamp = 3000 }
+            });
+            handler.Datapoints[$"{states[2].Id}[0]"] = (new List<NumericDatapoint>
+            {
+                new NumericDatapoint { Timestamp = 1000 },
+                new NumericDatapoint { Timestamp = 2000 }
+            }, null);
+            handler.Datapoints[$"{states[2].Id}[1]"] = (new List<NumericDatapoint>
+            {
+                new NumericDatapoint { Timestamp = 2000 },
+                new NumericDatapoint { Timestamp = 3000 }
+            }, null);
+
+            // Failure
+            handler.FailedRoutes.Add("/timeseries/data/latest");
+            Assert.False(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
+
+            // Normal init
+            handler.FailedRoutes.Clear();
+            Assert.True(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
+            var range = new TimeRange(CogniteTime.FromUnixTimeMilliseconds(1000), CogniteTime.FromUnixTimeMilliseconds(3000));
+            Assert.Equal(range, states[0].DestinationExtractedRange);
+            Assert.Equal(range, states[1].DestinationExtractedRange);
+            Assert.Equal(TimeRange.Empty, states[2].DestinationExtractedRange);
+
+            // Init array
+            handler.Datapoints[$"{states[2].Id}[2]"] = (new List<NumericDatapoint>
+            {
+                new NumericDatapoint { Timestamp = 1000 },
+                new NumericDatapoint { Timestamp = 2000 },
+                new NumericDatapoint { Timestamp = 3000 }
+            }, null);
+
+            states = GetStates();
+            Assert.True(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
+            Assert.Equal(range, states[0].DestinationExtractedRange);
+            Assert.Equal(range, states[1].DestinationExtractedRange);
+            Assert.Equal(CogniteTime.FromUnixTimeMilliseconds(2000), states[2].DestinationExtractedRange.First);
+            Assert.Equal(CogniteTime.FromUnixTimeMilliseconds(2000), states[2].DestinationExtractedRange.Last);
+        }
     }
 }
