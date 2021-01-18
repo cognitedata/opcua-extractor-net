@@ -62,6 +62,24 @@ namespace Test
         public bool StoreDatapoints { get; set; }
         public MockMode mode { get; set; }
 
+
+        private static HttpResponseMessage GetFailedRequest(HttpStatusCode code)
+        {
+            return new HttpResponseMessage(code)
+            {
+                Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
+                {
+                    error = new ErrorContent
+                    {
+                        code = (int)code,
+                        message = code.ToString()
+                    }
+                }))
+            };
+        }
+
+        public HashSet<string> FailedRoutes { get; } = new HashSet<string>();
+
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFMockHandler));
 
         public enum MockMode
@@ -79,6 +97,8 @@ namespace Test
             return new HttpMessageHandlerStub(MessageHandler);
         }
 
+
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
             Justification = "Messages should be disposed in the client")]
         private async Task<HttpResponseMessage> MessageHandler(HttpRequestMessage req, CancellationToken cancellationToken)
@@ -87,17 +107,7 @@ namespace Test
 
             if (BlockAllConnections)
             {
-                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
-                {
-                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
-                    {
-                        error = new ErrorContent
-                        {
-                            code = 501,
-                            message = "bad something or other"
-                        }
-                    }))
-                };
+                return GetFailedRequest(HttpStatusCode.InternalServerError);
             }
 
             if (req.RequestUri.AbsolutePath == "/login/status")
@@ -106,9 +116,11 @@ namespace Test
             }
             string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "", StringComparison.InvariantCulture);
 
+            if (FailedRoutes.Contains(reqPath)) return GetFailedRequest(HttpStatusCode.Forbidden);
+
             if (reqPath == "/timeseries/data" && req.Method == HttpMethod.Post && StoreDatapoints)
             {
-                var proto = await req.Content.ReadAsByteArrayAsync();
+                var proto = await req.Content.ReadAsByteArrayAsync(cancellationToken);
                 var data = DataPointInsertionRequest.Parser.ParseFrom(proto);
                 return HandleTimeseriesData(data);
             }
@@ -116,7 +128,7 @@ namespace Test
             string content = "";
             try
             {
-                content = await req.Content.ReadAsStringAsync();
+                content = await req.Content.ReadAsStringAsync(cancellationToken);
             }
             catch { }
             lock (handlerLock)

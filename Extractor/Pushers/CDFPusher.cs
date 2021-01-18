@@ -333,6 +333,7 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
+
         public async Task<bool?> TestConnection(FullConfig config, CancellationToken token)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));

@@ -30,16 +30,17 @@ namespace Test.Unit
         public FullConfig Config { get; }
         public ServerController Server { get; }
         public CancellationTokenSource Source { get; }
-        public IServiceProvider Provider { get; }
+        public IServiceProvider Provider { get; protected set; }
+        protected ServiceCollection Services { get; }
         public BaseExtractorTestFixture(int port)
         {
-            var services = new ServiceCollection();
-            Config = services.AddConfig<FullConfig>("config.test.yml", 1);
+            Services = new ServiceCollection();
+            Config = Services.AddConfig<FullConfig>("config.test.yml", 1);
             Console.WriteLine($"Add logger: {Config.Logger}");
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{port}";
-            services.AddLogger();
+            Services.AddLogger();
             LoggingUtils.Configure(Config.Logger);
-            Provider = services.BuildServiceProvider();
+            Provider = Services.BuildServiceProvider();
 
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,

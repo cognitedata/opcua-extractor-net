@@ -13,14 +13,14 @@ using Xunit.Abstractions;
 
 namespace Test.Unit
 {
-    public sealed class PusherTestFixture : BaseExtractorTestFixture
+    public sealed class PusherUtilsTestFixture : BaseExtractorTestFixture
     {
-        public PusherTestFixture() : base(62800) { }
+        public PusherUtilsTestFixture() : base(62800) { }
     }
-    public class PusherUtilsTest : MakeConsoleWork, IClassFixture<PusherTestFixture>
+    public class PusherUtilsTest : MakeConsoleWork, IClassFixture<PusherUtilsTestFixture>
     {
-        private PusherTestFixture tester;
-        public PusherUtilsTest(ITestOutputHelper output, PusherTestFixture tester) : base(output)
+        private PusherUtilsTestFixture tester;
+        public PusherUtilsTest(ITestOutputHelper output, PusherUtilsTestFixture tester) : base(output)
         {
             this.tester = tester;
         }
