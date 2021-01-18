@@ -122,7 +122,12 @@ namespace Test
             }
             string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "", StringComparison.InvariantCulture);
 
-            if (FailedRoutes.Contains(reqPath)) return GetFailedRequest(HttpStatusCode.Forbidden);
+            log.Information("Request to {path}", reqPath);
+            if (FailedRoutes.Contains(reqPath))
+            {
+                log.Information("Failing request to {path}", reqPath);
+                return GetFailedRequest(HttpStatusCode.Forbidden);
+            }
 
             if (reqPath == "/timeseries/data" && req.Method == HttpMethod.Post && StoreDatapoints)
             {

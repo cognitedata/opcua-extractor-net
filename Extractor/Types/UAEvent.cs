@@ -164,20 +164,25 @@ namespace Cognite.OpcUa.Types
         private void ToCDFEventBase(UAExtractor extractor, EventCreate evt, long? dataSetId)
         {
             evt.Description = Message;
-            evt.StartTime = MetaData.TryGetValue("StartTime", out var rawStartTime)
+            evt.StartTime = MetaData != null && MetaData.TryGetValue("StartTime", out var rawStartTime)
                 ? PusherUtils.GetTimestampValue(rawStartTime)
                 : Time.ToUnixTimeMilliseconds();
-            evt.EndTime = MetaData.TryGetValue("EndTime", out var rawEndTime)
+            evt.EndTime = MetaData != null && MetaData.TryGetValue("EndTime", out var rawEndTime)
                 ? PusherUtils.GetTimestampValue(rawEndTime)
                 : Time.ToUnixTimeMilliseconds();
             evt.ExternalId = EventId;
-            evt.Type = MetaData.TryGetValue("Type", out var rawType)
+            evt.Type = MetaData != null && MetaData.TryGetValue("Type", out var rawType)
                 ? extractor.ConvertToString(rawType)
                 : extractor.GetUniqueId(EventType);
             evt.DataSetId = dataSetId;
 
             var finalMetaData = new Dictionary<string, string>();
             finalMetaData["Emitter"] = extractor.GetUniqueId(EmittingNode);
+            if (MetaData == null)
+            {
+                evt.Metadata = finalMetaData;
+                return;
+            }
             if (!MetaData.ContainsKey("SourceNode") && SourceNode != null && !SourceNode.IsNullNodeId)
             {
                 finalMetaData["SourceNode"] = extractor.GetUniqueId(SourceNode);

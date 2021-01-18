@@ -161,7 +161,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception e)
             {
-                log.Error(e, "Failed to push {count} points to CDF: {msg}", count, e.Message);
+                log.Error("Failed to push {count} points to CDF: {msg}", count, e.Message);
                 dataPointPushFailures.Inc();
                 // Return false indicating unexpected failure if we want to buffer.
                 return false;
@@ -196,15 +196,19 @@ namespace Cognite.OpcUa.Pushers
                     .Select(evt => evt.ToCDFEvent(Extractor, config.DataSetId, nodeToAssetIds))
                     .Where(evt => evt != null), RetryMode.OnError, SanitationMode.Clean, token);
 
-                var skipped = result.Errors.Aggregate(0, (seed, err) =>
-                    seed + (err.Skipped?.Count() ?? 0));
-
-                var fatalError = result.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
-                if (fatalError != null)
+                int skipped = 0;
+                if (result.Errors != null)
                 {
-                    log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", count, fatalError.Exception.Message);
-                    eventPushFailures.Inc();
-                    return fatalError.Exception is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
+                    skipped = result.Errors.Aggregate(0, (seed, err) =>
+                        seed + (err.Skipped?.Count() ?? 0));
+
+                    var fatalError = result.Errors.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
+                    if (fatalError != null)
+                    {
+                        log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", count, fatalError.Exception.Message);
+                        eventPushFailures.Inc();
+                        return fatalError.Exception is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
+                    }
                 }
 
                 eventCounter.Inc(count - skipped);
@@ -214,7 +218,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception exc)
             {
-                log.Error("Failed to push {NumFailedEvents} events to CDF: {msg}", count, exc.Message);
+                log.Error(exc, "Failed to push {NumFailedEvents} events to CDF: {msg}", count, exc.Message);
                 eventPushFailures.Inc();
                 return exc is ResponseException rex && (rex.Code == 400 || rex.Code == 409);
             }
