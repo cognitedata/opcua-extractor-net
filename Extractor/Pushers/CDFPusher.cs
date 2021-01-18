@@ -82,6 +82,10 @@ namespace Cognite.OpcUa.Pushers
             "Number of completely failed requests to CDF when ensuring assets/timeseries exist");
         private static readonly Counter skippedEvents = Metrics
             .CreateCounter("opcua_skipped_events_cdf", "Number of events skipped by CDF pusher");
+        private static readonly Gauge missingTimeseriesCnt = Metrics
+            .CreateGauge("opcua_missing_timeseries", "Number of distinct timeseries that have been found to be missing in CDF");
+        private static readonly Gauge mismatchedTimeseriesCnt = Metrics
+            .CreateGauge("opcua_mismatched_timeseries","Number of distinct timeseries that have been found to have different types in OPC-UA and in CDF");
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusher));
         #region Interface
@@ -102,13 +106,13 @@ namespace Cognite.OpcUa.Pushers
                         if (dp.IsString) return dp;
                         if (!double.IsFinite(dp.DoubleValue.Value))
                         {
-                            if (config.NonFiniteReplacement != null) return new UADataPoint(dp, config.NonFiniteReplacement.Value);
-                            return null;
+                            if (config.NonFiniteReplacement == null) return null;
+                            return new UADataPoint(dp, config.NonFiniteReplacement.Value);
                         }
                         return dp;
-                    }).Where(dp => dp != null));
+                    }).Where(dp => dp != null).ToList());
 
-            int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count());
+            int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count);
 
             if (count == 0) return null;
 
@@ -131,6 +135,7 @@ namespace Cognite.OpcUa.Pushers
                     {
                         missingTimeseries.Add(id.ExternalId);
                     }
+                    missingTimeseriesCnt.Set(missingTimeseries.Count);
                 }
                 if (error.IdsWithMismatchedData.Any())
                 {
@@ -139,6 +144,7 @@ namespace Cognite.OpcUa.Pushers
                     {
                         mismatchedTimeseries.Add(id.ExternalId);
                     }
+                    mismatchedTimeseriesCnt.Set(mismatchedTimeseries.Count);
                 }
 
                 int realCount = count;
@@ -146,7 +152,7 @@ namespace Cognite.OpcUa.Pushers
                 {
                     foreach (var id in error.IdsNotFound.Concat(error.IdsWithMismatchedData))
                     {
-                        realCount -= dataPointList[id.ExternalId].Count();
+                        realCount -= dataPointList[id.ExternalId].Count;
                     }
                 }
                 log.Debug("Successfully pushed {real} / {total} points to CDF", realCount, count);
@@ -377,16 +383,39 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-        #endregion
-        private static string BuildColumnString(TypeUpdateConfig config, bool assets)
+        public async Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
         {
-            var fields = new List<string>();
-            if (config.Context) fields.Add(assets ? "parentExternalId" : "assetExternalId");
-            if (config.Description) fields.Add("description");
-            if (config.Metadata) fields.Add("metadata");
-            if (config.Name) fields.Add("name");
-            return string.Join(',', fields);
+            var relationships = references
+                .Select(reference => reference.ToRelationship(config.DataSetId, Extractor))
+                .DistinctBy(rel => rel.ExternalId);
+
+            bool useRawRelationships = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.RelationshipsTable);
+
+            log.Information("Test {cnt} relationships against CDF", references.Count());
+            try
+            {
+                if (useRawRelationships)
+                {
+                    await PushRawReferences(relationships, token);
+                }
+                else
+                {
+                    await Task.WhenAll(relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token)));
+                }
+            }
+            catch (Exception e)
+            {
+                log.Error(e, "Failed to ensure relationships");
+                nodeEnsuringFailures.Inc();
+                return false;
+            }
+            log.Information("Sucessfully pushed relationships to CDF");
+            return true;
         }
+        #endregion
+
 
         #region assets
 
@@ -661,7 +690,15 @@ namespace Cognite.OpcUa.Pushers
         #endregion
 
         #region raw-utils
-
+        private static string BuildColumnString(TypeUpdateConfig config, bool assets)
+        {
+            var fields = new List<string>();
+            if (config.Context) fields.Add(assets ? "parentExternalId" : "assetExternalId");
+            if (config.Description) fields.Add("description");
+            if (config.Metadata) fields.Add("metadata");
+            if (config.Name) fields.Add("name");
+            return string.Join(',', fields);
+        }
         private async Task EnsureRawRows<T>(
             string dbName,
             string tableName,
@@ -738,37 +775,7 @@ namespace Cognite.OpcUa.Pushers
         }
         #endregion
 
-        public async Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
-        {
-            var relationships = references
-                .Select(reference => reference.ToRelationship(config.DataSetId, Extractor))
-                .DistinctBy(rel => rel.ExternalId);
-
-            bool useRawRelationships = config.RawMetadata != null
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
-                && !string.IsNullOrWhiteSpace(config.RawMetadata.RelationshipsTable);
-
-            log.Information("Test {cnt} relationships against CDF", references.Count());
-            try
-            {
-                if (useRawRelationships)
-                {
-                    await PushRawReferences(relationships, token);
-                }   
-                else
-                {
-                    await Task.WhenAll(relationships.ChunkBy(1000).Select(chunk => PushReferencesChunk(chunk, token)));
-                }
-            }
-            catch (Exception e)
-            {
-                log.Error(e, "Failed to ensure relationships");
-                nodeEnsuringFailures.Inc();
-                return false;
-            }
-            log.Information("Sucessfully pushed relationships to CDF");
-            return true;
-        }
+        #region references
 
         private async Task PushReferencesChunk(IEnumerable<CogniteSdk.Beta.RelationshipCreate> relationships, CancellationToken token)
         {
@@ -814,7 +821,7 @@ namespace Cognite.OpcUa.Pushers
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },
                 token);
         }
-
+        #endregion
         public void Dispose() { }
     }
 }

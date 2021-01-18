@@ -63,9 +63,9 @@ namespace Test
         public MockMode mode { get; set; }
 
 
-        private static HttpResponseMessage GetFailedRequest(HttpStatusCode code)
+        private HttpResponseMessage GetFailedRequest(HttpStatusCode code)
         {
-            return new HttpResponseMessage(code)
+            var res = new HttpResponseMessage(code)
             {
                 Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
                 {
@@ -76,6 +76,9 @@ namespace Test
                     }
                 }))
             };
+            res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
+            return res;
         }
 
         public HashSet<string> FailedRoutes { get; } = new HashSet<string>();
@@ -112,7 +115,10 @@ namespace Test
 
             if (req.RequestUri.AbsolutePath == "/login/status")
             {
-                return HandleLoginStatus();
+                var res = HandleLoginStatus();
+                res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
+                return res;
             }
             string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "", StringComparison.InvariantCulture);
 
@@ -122,7 +128,10 @@ namespace Test
             {
                 var proto = await req.Content.ReadAsByteArrayAsync(cancellationToken);
                 var data = DataPointInsertionRequest.Parser.ParseFrom(proto);
-                return HandleTimeseriesData(data);
+                var res = HandleTimeseriesData(data);
+                res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
+                return res;
             }
 
             string content = "";
@@ -475,6 +484,46 @@ namespace Test
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent("{}")
+                };
+            }
+            Console.WriteLine("Push points");
+
+            var missing = req.Items.Where(item => !Timeseries.ContainsKey(item.ExternalId)).Select(item => item.ExternalId);
+            var mismatched = req.Items.Where(item =>
+            {
+                if (!Timeseries.TryGetValue(item.ExternalId, out var ts)) return false;
+                bool isString = item.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.StringDatapoints;
+                return ts.isString != isString;
+            }).Select(item => item.ExternalId);
+
+            if (missing.Any())
+            {
+                Console.WriteLine($"Found {missing.Count()} missing timeseries");
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
+                    {
+                        error = new ErrorContent
+                        {
+                            code = 400,
+                            message = "missing",
+                            missing = missing.Select(id => new CdfIdentity { externalId = id })
+                        }
+                    }))
+                };
+            }
+            if (mismatched.Any())
+            {
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
+                    {
+                        error = new ErrorContent
+                        {
+                            code = 400,
+                            message = "Expected string value for datapoint"
+                        }
+                    }))
                 };
             }
 
@@ -869,7 +918,7 @@ namespace Test
             };
         }
 
-        private AssetDummy MockAsset(string externalId)
+        public AssetDummy MockAsset(string externalId)
         {
             var asset = new AssetDummy
             {
@@ -886,7 +935,7 @@ namespace Test
             return asset;
         }
 
-        private TimeseriesDummy MockTimeseries(string externalId)
+        public TimeseriesDummy MockTimeseries(string externalId)
         {
             var ts = new TimeseriesDummy(mode)
             {
