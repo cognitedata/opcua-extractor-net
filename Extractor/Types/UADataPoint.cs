@@ -110,7 +110,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="bytes">Bytes to convert</param>
         public static UADataPoint FromStream(Stream stream)
         {
-            if (stream == null) return null;
+            if (stream == null) throw new ArgumentNullException(nameof(stream));
             string id = CogniteUtils.StringFromStream(stream);
             if (id == null) return null;
             var buffer = new byte[sizeof(long)];
