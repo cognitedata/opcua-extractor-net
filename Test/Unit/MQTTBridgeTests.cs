@@ -9,6 +9,7 @@ using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
 using CogniteSdk;
+using RelationshipCreate = CogniteSdk.Beta.RelationshipCreate;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Microsoft.Extensions.DependencyInjection;
@@ -147,6 +148,21 @@ namespace Test.Unit
                 var msg = baseBuilder
                     .WithPayload(data)
                     .WithTopic(Config.Mqtt.RawTopic)
+                    .Build();
+
+                var waitTask = bridge.WaitForNextMessage();
+                await client.PublishAsync(msg);
+                await waitTask;
+            }
+
+            public async Task PublishRelationships(IEnumerable<RelationshipCreate> relationships)
+            {
+                if (!client.IsConnected) throw new InvalidOperationException("Client is not connected");
+                var data = JsonSerializer.SerializeToUtf8Bytes(relationships, null);
+
+                var msg = baseBuilder
+                    .WithPayload(data)
+                    .WithTopic(Config.Mqtt.RelationshipTopic)
                     .Build();
 
                 var waitTask = bridge.WaitForNextMessage();
@@ -753,6 +769,63 @@ namespace Test.Unit
             Assert.True(tester.Handler.AssetRaw.ContainsKey("test-asset-1"));
             var asset1 = tester.Handler.AssetRaw["test-asset-1"];
             Assert.Equal("test-value", asset1.metadata["test-prop"]);
+        }
+
+        [Fact]
+        [Trait("Server", "none")]
+        [Trait("Target", "MQTTBridge")]
+        [Trait("Test", "mqttcreaterelationships")]
+        public async Task TestCreateRelationships()
+        {
+            using var tester = new BridgeTester(CDFMockHandler.MockMode.None);
+
+            var roundOne = new List<RelationshipCreate>
+            {
+                new RelationshipCreate
+                {
+                    SourceExternalId = "test-1",
+                    SourceType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    TargetExternalId = "test-2",
+                    TargetType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    ExternalId = "test-1"
+                },
+                new RelationshipCreate
+                {
+                    SourceExternalId = "test-3",
+                    SourceType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    TargetExternalId = "test-4",
+                    TargetType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    ExternalId = "test-2"
+                }
+            };
+
+            var roundTwo = new List<RelationshipCreate>
+            {
+                new RelationshipCreate
+                {
+                    SourceExternalId = "test-5",
+                    SourceType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    TargetExternalId = "test-6",
+                    TargetType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    ExternalId = "test-2"
+                },
+                new RelationshipCreate
+                {
+                    SourceExternalId = "test-7",
+                    SourceType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    TargetExternalId = "test-8",
+                    TargetType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    ExternalId = "test-3"
+                }
+            };
+
+            await tester.PublishRelationships(roundOne);
+            Assert.Equal(2, tester.Handler.Relationships.Count);
+            Assert.True(tester.Handler.Relationships.ContainsKey("test-1"));
+            Assert.True(tester.Handler.Relationships.ContainsKey("test-2"));
+            await tester.PublishRelationships(roundTwo);
+            Assert.Equal(3, tester.Handler.Relationships.Count);
+            Assert.True(tester.Handler.Relationships.ContainsKey("test-3"));
         }
         class StatelessEventCreate : EventCreate
         {

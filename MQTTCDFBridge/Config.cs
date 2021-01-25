@@ -17,6 +17,7 @@ namespace Cognite.Bridge
         public string EventTopic { get; set; } = "cognite/opcua/events";
         public string DatapointTopic { get; set; } = "cognite/opcua/datapoints";
         public string RawTopic { get; set; } = "cognite/opcua/raw";
+        public string RelationshipTopic { get; set; } = "cognite/opcua/relationships";
     }
 
     public class CogniteDestConfig : CogniteConfig
