@@ -702,6 +702,65 @@ namespace Test.Unit
 
             // Test pushing all duplicates
             Assert.True(await pusher.PushReferences(references, tester.Source.Token));
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
+        }
+        [Fact]
+        public async Task TestCreateRawRelationships()
+        {
+            var (handler, pusher) = tester.GetPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
+
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                RelationshipsTable = "relationships",
+                Database = "metadata"
+            };
+
+            // Push none
+            Assert.True(await pusher.PushReferences(Enumerable.Empty<UAReference>(), tester.Source.Token));
+
+            // Fail to push
+            var references = new List<UAReference>
+            {
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr),
+            };
+            await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
+            handler.FailedRoutes.Add("/raw/dbs/metadata/tables/relationships/rows");
+            Assert.False(await pusher.PushReferences(references, tester.Source.Token));
+            Assert.Empty(handler.RelationshipsRaw);
+
+            // Push successful
+            handler.FailedRoutes.Clear();
+            Assert.True(await pusher.PushReferences(references, tester.Source.Token));
+            Assert.Equal(2, handler.RelationshipsRaw.Count);
+
+            // Push again, with duplicates
+            var references2 = new List<UAReference>
+            {
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr)
+            };
+            Assert.True(await pusher.PushReferences(references2, tester.Source.Token));
+            Assert.Equal(4, handler.RelationshipsRaw.Count);
+            var ids = new List<string>
+            {
+                "gp.Organizes;base:s=source;base:s=target",
+                "gp.OrganizedBy;base:s=source2;base:s=target2",
+                "gp.Organizes;base:s=source;base:s=target2",
+                "gp.OrganizedBy;base:s=source2;base:s=target",
+            };
+            Assert.All(ids, id => Assert.Contains(handler.RelationshipsRaw, rel => rel.Key == id));
+
+            // Test pushing all duplicates
+            Assert.True(await pusher.PushReferences(references, tester.Source.Token));
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
         }
     }
 }
