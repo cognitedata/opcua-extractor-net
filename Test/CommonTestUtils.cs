@@ -45,7 +45,9 @@ using Cognite.Extractor.Metrics;
 using System.Text;
 using Cognite.OpcUa.Types;
 using Cognite.OpcUa.HistoryStates;
+using System.Collections.ObjectModel;
 
+[assembly: CLSCompliant(false)]
 namespace Test
 {
     public class ConfigInitFixture
@@ -59,7 +61,7 @@ namespace Test
     }
 
     [CollectionDefinition("Extractor tests")]
-    public class ExtractorCollection : ICollectionFixture<ConfigInitFixture> { }
+    public class ExtractorCollectionDefinition : ICollectionFixture<ConfigInitFixture> { }
 
 
     public class MakeConsoleWork : IDisposable
@@ -106,7 +108,7 @@ namespace Test
         {
             if (handler == null) throw new ArgumentNullException(nameof(handler));
             services.AddHttpClient<Client.Builder>()
-                .ConfigurePrimaryHttpMessageHandler(handler.GetHandler);
+                .ConfigurePrimaryHttpMessageHandler(handler.CreateHandler);
         }
 
         private static Collector GetCollector(string name)
@@ -334,7 +336,7 @@ namespace Test
             }
             else
             {
-                throw new Exception("Unknown event found");
+                throw new FatalException("Unknown event found");
             }
         }
 
@@ -545,7 +547,7 @@ namespace Test
         private readonly ExtractorTestParameters testParams;
         private readonly ILogger log = Log.Logger.ForContext(typeof(ExtractorTester));
         private IServiceProvider provider;
-        public List<IPusher> Pushers { get; } = new List<IPusher>();
+        public Collection<IPusher> Pushers { get; } = new Collection<IPusher>();
 
         public ExtractorTester(ExtractorTestParameters testParams)
         {
@@ -867,11 +869,10 @@ namespace Test
             TestContinuity(intdps);
         }
 
-        public static void TestContinuity(List<int> intdps)
+        public static void TestContinuity(IEnumerable<int> intdps)
         {
             if (intdps == null) throw new ArgumentNullException(nameof(intdps));
-            intdps = intdps.Distinct().ToList();
-            intdps.Sort();
+            intdps = intdps.Distinct().OrderBy(dp => dp).ToList();
             int min = intdps.Min();
             int max = intdps.Max();
             int last = min - 1;
@@ -885,7 +886,7 @@ namespace Test
                 last = dp;
             }
             
-            Assert.True(max - min == intdps.Count - 1, $"Continuity impossible, min is {min}, max is {max}, count is {intdps.Count}: {msg}");
+            Assert.True(max - min == intdps.Count() - 1, $"Continuity impossible, min is {min}, max is {max}, count is {intdps.Count()}: {msg}");
         }
         /// <summary>
         /// Test that the points given by the id is within ms +/- 200ms of eachother.

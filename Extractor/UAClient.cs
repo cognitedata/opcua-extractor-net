@@ -173,7 +173,7 @@ namespace Cognite.OpcUa
             }
             else
             {
-                Appconfig.ApplicationUri = Utils.GetApplicationUriFromCertificate(
+                Appconfig.ApplicationUri = X509Utils.GetApplicationUriFromCertificate(
                     Appconfig.SecurityConfiguration.ApplicationCertificate.Certificate);
                 config.AutoAccept |= Appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 Appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;

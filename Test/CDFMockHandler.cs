@@ -95,7 +95,7 @@ namespace Test
             this.mode = mode;
         }
 
-        public HttpMessageHandler GetHandler()
+        public HttpMessageHandler CreateHandler()
         {
             return new HttpMessageHandlerStub(MessageHandler);
         }

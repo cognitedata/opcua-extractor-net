@@ -12,6 +12,6 @@ nuget xunit
 nuget xunit.runner.visualstudio
 nuget OPCFoundation.NetStandard.Opc.Ua
 nuget AdysTech.InfluxDB.Client.Net.Core
-nuget Microsoft.CodeAnalysis.FxCopAnalyzers
+nuget InfluxDB.Client
 nuget Microsoft.Windows.Compatibility
 nuget MQTTnet

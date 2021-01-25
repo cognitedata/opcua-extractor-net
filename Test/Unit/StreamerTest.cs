@@ -375,31 +375,31 @@ namespace Test.Unit
             var dps4 = extractor.Streamer.ToDataPoint(new DataValue(1.0, StatusCodes.Good, ts), node2);
             Assert.Single(dps4);
             Assert.Equal(1.0, dps4.First().DoubleValue);
-            Assert.EndsWith("[0]", dps4.First().Id);
+            Assert.EndsWith("[0]", dps4.First().Id, StringComparison.InvariantCulture);
 
             // Too few values
             var dps5 = extractor.Streamer.ToDataPoint(new DataValue(new[] { 1.0, 2.0, 3.0 }, StatusCodes.Good, ts), node2);
             Assert.Equal(3, dps5.Count());
             Assert.Equal(1.0, dps5.First().DoubleValue);
             Assert.Equal(3.0, dps5.Last().DoubleValue);
-            Assert.EndsWith("[0]", dps5.First().Id);
-            Assert.EndsWith("[2]", dps5.Last().Id);
+            Assert.EndsWith("[0]", dps5.First().Id, StringComparison.InvariantCulture);
+            Assert.EndsWith("[2]", dps5.Last().Id, StringComparison.InvariantCulture);
 
             // Just right
             var dps6 = extractor.Streamer.ToDataPoint(new DataValue(new[] { 1.0, 2.0, 3.0, 4.0 }, StatusCodes.Good, ts), node2);
             Assert.Equal(4, dps6.Count());
             Assert.Equal(1.0, dps6.First().DoubleValue);
             Assert.Equal(4.0, dps6.Last().DoubleValue);
-            Assert.EndsWith("[0]", dps6.First().Id);
-            Assert.EndsWith("[3]", dps6.Last().Id);
+            Assert.EndsWith("[0]", dps6.First().Id, StringComparison.InvariantCulture);
+            Assert.EndsWith("[3]", dps6.Last().Id, StringComparison.InvariantCulture);
 
             // Too many values
             var dps7 = extractor.Streamer.ToDataPoint(new DataValue(new[] { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 }, StatusCodes.Good, ts), node2);
             Assert.Equal(4, dps7.Count());
             Assert.Equal(1.0, dps7.First().DoubleValue);
             Assert.Equal(4.0, dps7.Last().DoubleValue);
-            Assert.EndsWith("[0]", dps7.First().Id);
-            Assert.EndsWith("[3]", dps7.Last().Id);
+            Assert.EndsWith("[0]", dps7.First().Id, StringComparison.InvariantCulture);
+            Assert.EndsWith("[3]", dps7.Last().Id, StringComparison.InvariantCulture);
 
             // Very long array name
             var node3 = new VariableExtractionState(tester.Client,
@@ -414,8 +414,8 @@ namespace Test.Unit
             Assert.Equal(20, dps8.Count());
             Assert.Equal(1.0, dps8.First().DoubleValue);
             Assert.Equal(20.0, dps8.Last().DoubleValue);
-            Assert.EndsWith("[0]", dps8.First().Id);
-            Assert.EndsWith("[19]", dps8.Last().Id);
+            Assert.EndsWith("[0]", dps8.First().Id, StringComparison.InvariantCulture);
+            Assert.EndsWith("[19]", dps8.Last().Id, StringComparison.InvariantCulture);
             Assert.Equal(255, dps8.First().Id.Length);
             Assert.Equal(255, dps8.Last().Id.Length);
 

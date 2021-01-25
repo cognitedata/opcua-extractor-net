@@ -5,6 +5,7 @@
     <TargetFramework>net5.0</TargetFramework>
     <RootNamespace>Cognite.Bridge</RootNamespace>
     <PublishTrimmed>true</PublishTrimmed>
+    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
   </PropertyGroup>
   <ItemGroup>
     <None Remove=".editorconfig" />

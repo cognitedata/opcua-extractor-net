@@ -4,7 +4,6 @@ Microsoft.Extensions.Http.Polly
 Polly
 Polly.Extensions.Http
 MQTTnet
-Microsoft.CodeAnalysis.FxCopAnalyzers
 CogniteSdk
 Cognite.Extractor.Configuration
 Cognite.Extractor.Logging

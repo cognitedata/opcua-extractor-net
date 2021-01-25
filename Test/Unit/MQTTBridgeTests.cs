@@ -69,7 +69,7 @@ namespace Test.Unit
                 bridge.Dispose();
                 bridge = new MQTTBridge(new Destination(Config.Cognite, provider), Config);
                 bool success = await bridge.StartBridge(CancellationToken.None);
-                if (!success) throw new Exception("Unable to start bridge");
+                if (!success) throw new ConfigurationException("Unable to start bridge");
             }
 
             public async Task PublishAssets(IEnumerable<AssetCreate> assets)

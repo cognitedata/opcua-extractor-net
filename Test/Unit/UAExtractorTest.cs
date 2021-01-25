@@ -32,7 +32,7 @@ namespace Test.Unit
         public CancellationTokenSource Source { get; }
         public IServiceProvider Provider { get; protected set; }
         protected ServiceCollection Services { get; }
-        public BaseExtractorTestFixture(int port)
+        protected BaseExtractorTestFixture(int port)
         {
             Services = new ServiceCollection();
             Config = Services.AddConfig<FullConfig>("config.test.yml", 1);
