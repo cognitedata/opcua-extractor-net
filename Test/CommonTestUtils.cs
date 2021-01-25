@@ -43,6 +43,8 @@ using Cognite.Extractor.Utils;
 using File = System.IO.File;
 using Cognite.Extractor.Metrics;
 using System.Text;
+using Cognite.OpcUa.Types;
+using Cognite.OpcUa.HistoryStates;
 
 namespace Test
 {
@@ -218,7 +220,8 @@ namespace Test
                 "opcua_event_push_failures_influx",
                 "opcua_duplicated_events_cdf",
                 "opcua_created_assets_mqtt",
-                "opcua_created_timeseries_mqtt"
+                "opcua_created_timeseries_mqtt",
+                "opcua_array_points_missed"
             };
             foreach (var metric in metrics)
             {
@@ -678,7 +681,7 @@ namespace Test
             Server = new ServerController(new[] { SetupMap[testParams.ServerName] });
         }
 
-        public Task<IEnumerable<BufferedDataPoint>> GetAllInfluxPoints(NodeId node, bool isString = false, int index = -1)
+        public Task<IEnumerable<UADataPoint>> GetAllInfluxPoints(NodeId node, bool isString = false, int index = -1)
         {
             var dummy = new InfluxBufferState(Extractor.State.GetNodeState(node));
             dummy.SetComplete();
@@ -688,7 +691,7 @@ namespace Test
                 CancellationToken.None);
         }
 
-        public Task<IEnumerable<BufferedEvent>> GetAllInfluxEvents(NodeId emitter)
+        public Task<IEnumerable<UAEvent>> GetAllInfluxEvents(NodeId emitter)
         {
             var dummy = new InfluxBufferState(Extractor.State.GetEmitterState(emitter));
             dummy.SetComplete();

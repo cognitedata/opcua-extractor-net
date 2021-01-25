@@ -1,5 +1,6 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
 using Serilog.Events;
@@ -7,8 +8,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Xunit;
 
 using SourceOp = Cognite.OpcUa.ExtractorUtils.SourceOp;
@@ -22,33 +21,33 @@ namespace Test.Unit
         public void TestSortNodes()
         {
             // Empty
-            IEnumerable<BufferedNode> objects;
-            IEnumerable<BufferedVariable> variables;
-            (objects, variables) = ExtractorUtils.SortNodes(Enumerable.Empty<BufferedNode>());
+            IEnumerable<UANode> objects;
+            IEnumerable<UAVariable> variables;
+            (objects, variables) = ExtractorUtils.SortNodes(Enumerable.Empty<UANode>());
             Assert.Empty(objects);
             Assert.Empty(variables);
 
             // Null
             Assert.Throws<ArgumentNullException>(() => ExtractorUtils.SortNodes(null));
 
-            var arrParent = new BufferedVariable(new NodeId("arr1"), "arr1", NodeId.Null) { ValueRank = 1, ArrayDimensions = new Collection<int>(new[] { 2 }) };
+            var arrParent = new UAVariable(new NodeId("arr1"), "arr1", NodeId.Null) { ValueRank = 1, ArrayDimensions = new Collection<int>(new[] { 2 }) };
             var children = arrParent.CreateArrayChildren();
             // Populated
-            var nodes = new BufferedNode[]
+            var nodes = new UANode[]
             {
-                new BufferedNode(new NodeId("object1"), "obj1", NodeId.Null),
-                new BufferedNode(new NodeId("object2"), "obj2", NodeId.Null),
-                new BufferedVariable(new NodeId("var1"), "var1", NodeId.Null),
-                new BufferedVariable(new NodeId("var2"), "var2", NodeId.Null),
+                new UANode(new NodeId("object1"), "obj1", NodeId.Null),
+                new UANode(new NodeId("object2"), "obj2", NodeId.Null),
+                new UAVariable(new NodeId("var1"), "var1", NodeId.Null),
+                new UAVariable(new NodeId("var2"), "var2", NodeId.Null),
                 arrParent,
-                new BufferedVariable(new NodeId("arr2"), "arr2", NodeId.Null) { ValueRank = 1, ArrayDimensions = new Collection<int>(new [] { 2 }) },
+                new UAVariable(new NodeId("arr2"), "arr2", NodeId.Null) { ValueRank = 1, ArrayDimensions = new Collection<int>(new [] { 2 }) },
             }.Concat(children);
 
             (objects, variables) = ExtractorUtils.SortNodes(nodes);
             Assert.Equal(4, objects.Count());
             Assert.Equal(4, variables.Count());
 
-            Assert.Equal(8, objects.Concat(variables).DistinctBy(node => (node.Id, node is BufferedVariable variable ? variable.Index : -1)).Count());
+            Assert.Equal(8, objects.Concat(variables).DistinctBy(node => (node.Id, node is UAVariable variable ? variable.Index : -1)).Count());
         }
         [Fact]
         public void TestGetRootException()

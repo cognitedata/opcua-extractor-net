@@ -19,8 +19,8 @@ using Serilog;
 using System;
 using System.Collections.Generic;
 using Opc.Ua;
-using System.Text;
 using System.Linq;
+using Cognite.OpcUa.Types;
 
 namespace Cognite.OpcUa
 {
@@ -32,16 +32,16 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="nodes">Nodes to sort</param>
         /// <returns>Tuple of sorted objects and variables</returns>
-        public static (IEnumerable<BufferedNode> objects, IEnumerable<BufferedVariable> variables) SortNodes(IEnumerable<BufferedNode> nodes)
+        public static (IEnumerable<UANode> objects, IEnumerable<UAVariable> variables) SortNodes(IEnumerable<UANode> nodes)
         {
             if (nodes == null) throw new ArgumentNullException(nameof(nodes));
-            if (!nodes.Any()) return (Enumerable.Empty<BufferedNode>(), Enumerable.Empty<BufferedVariable>());
+            if (!nodes.Any()) return (Enumerable.Empty<UANode>(), Enumerable.Empty<UAVariable>());
 
-            var timeseries = new List<BufferedVariable>();
-            var objects = new List<BufferedNode>();
+            var timeseries = new List<UAVariable>();
+            var objects = new List<UANode>();
             foreach (var node in nodes)
             {
-                if (node.IsVariable && node is BufferedVariable variable)
+                if (node.IsVariable && node is UAVariable variable)
                 {
                     if (variable.IsArray && variable.Index == -1)
                     {

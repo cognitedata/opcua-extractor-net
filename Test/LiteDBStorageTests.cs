@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
 using Xunit;
@@ -422,7 +424,7 @@ namespace Test
         [Trait("Server", "events")]
         [Trait("Target", "OldBuffer")]
         [Trait("Test", "eventbyteconversion")]
-        public async Task TextEventByteConversion()
+        public async Task TestEventByteConversion()
         {
             using var tester = new ExtractorTester(new ExtractorTestParameters
             {
@@ -437,7 +439,7 @@ namespace Test
 
             await tester.RunTask;
 
-            var evt = new BufferedEvent
+            var evt = new UAEvent
             {
                 EmittingNode = ObjectIds.Server,
                 EventId = "123456789",
@@ -449,11 +451,10 @@ namespace Test
                     ["dt2"] = "data2"
                 },
                 SourceNode = tester.Server.Ids.Event.Obj2,
-                ReceivedTime = DateTime.UtcNow,
                 Time = DateTime.UtcNow
             };
 
-            var evt2 = new BufferedEvent
+            var evt2 = new UAEvent
             {
                 EmittingNode = tester.Server.Ids.Event.Obj1,
                 EventId = "123456789",
@@ -461,25 +462,26 @@ namespace Test
                 Message = null,
                 MetaData = new Dictionary<string, object>(),
                 SourceNode = tester.Server.Ids.Event.Var1,
-                ReceivedTime = DateTime.UtcNow,
                 Time = DateTime.UtcNow
             };
 
             using var stream = new MemoryStream();
+
+            tester.Extractor.State.RegisterNode(evt.EventType, tester.UAClient.GetUniqueId(evt.EventType));
 
             stream.Write(evt.ToStorableBytes(tester.Extractor));
             stream.Write(evt2.ToStorableBytes(tester.Extractor));
 
             stream.Position = 0;
 
-            var converted = BufferedEvent.FromStream(stream, tester.Extractor);
-            var converted2 = BufferedEvent.FromStream(stream, tester.Extractor);
+            var converted = UAEvent.FromStream(stream, tester.Extractor);
+            var converted2 = UAEvent.FromStream(stream, tester.Extractor);
 
-            void EventsEqual(BufferedEvent evt, BufferedEvent converted)
+            void EventsEqual(UAEvent evt, UAEvent converted)
             {
                 Assert.Equal(evt.EmittingNode, converted.EmittingNode);
                 Assert.Equal(evt.EventId, converted.EventId);
-                Assert.Equal(tester.Extractor.GetUniqueId(evt.EventType), converted.MetaData["Type"]);
+                Assert.Equal(evt.EventType, converted.EventType);
                 Assert.Equal(evt.Message, converted.Message);
                 foreach (var kvp in evt.MetaData)
                 {
@@ -498,10 +500,10 @@ namespace Test
         [Trait("Test", "datapointconversion")]
         public void TestDataPointConversion()
         {
-            var dp = new BufferedDataPoint(DateTime.UtcNow, "testid", 123.123);
-            var dp2 = new BufferedDataPoint(DateTime.UtcNow, "testid2", "testvalue");
+            var dp = new UADataPoint(DateTime.UtcNow, "testid", 123.123);
+            var dp2 = new UADataPoint(DateTime.UtcNow, "testid2", "testvalue");
 
-            void dpEqual(BufferedDataPoint dp, BufferedDataPoint dpconv)
+            void dpEqual(UADataPoint dp, UADataPoint dpconv)
             {
                 Assert.Equal(dp.Timestamp, dpconv.Timestamp);
                 Assert.Equal(dp.DoubleValue, dpconv.DoubleValue);
@@ -516,8 +518,8 @@ namespace Test
 
             stream.Position = 0;
 
-            var dpconv = BufferedDataPoint.FromStream(stream);
-            var dp2conv = BufferedDataPoint.FromStream(stream);
+            var dpconv = UADataPoint.FromStream(stream);
+            var dp2conv = UADataPoint.FromStream(stream);
 
             dpEqual(dp, dpconv);
             dpEqual(dp2, dp2conv);

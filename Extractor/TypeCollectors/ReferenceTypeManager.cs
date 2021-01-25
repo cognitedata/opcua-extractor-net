@@ -15,6 +15,8 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
 using System;
@@ -33,7 +35,7 @@ namespace Cognite.OpcUa.TypeCollectors
         private ILogger log = Log.Logger.ForContext<ReferenceTypeManager>();
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
-        private readonly Dictionary<NodeId, BufferedReferenceType> mappedTypes = new Dictionary<NodeId, BufferedReferenceType>();
+        private readonly Dictionary<NodeId, UAReferenceType> mappedTypes = new Dictionary<NodeId, UAReferenceType>();
         public ReferenceTypeManager(UAClient client, UAExtractor extractor)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
@@ -41,11 +43,11 @@ namespace Cognite.OpcUa.TypeCollectors
             this.extractor = extractor;
         }
 
-        public BufferedReferenceType GetReferenceType(NodeId id)
+        public UAReferenceType GetReferenceType(NodeId id)
         {
             if (id == null) id = NodeId.Null;
             if (mappedTypes.TryGetValue(id, out var type)) return type;
-            type = new BufferedReferenceType(id);
+            type = new UAReferenceType(id);
             mappedTypes[id] = type;
             return type;
         }
@@ -73,9 +75,9 @@ namespace Cognite.OpcUa.TypeCollectors
             }
         }
 
-        public async Task<IEnumerable<BufferedReference>> GetReferencesAsync(IEnumerable<BufferedNode> nodes, NodeId referenceTypes, CancellationToken token)
+        public async Task<IEnumerable<UAReference>> GetReferencesAsync(IEnumerable<UANode> nodes, NodeId referenceTypes, CancellationToken token)
         {
-            if (!nodes.Any()) return Array.Empty<BufferedReference>();
+            if (!nodes.Any()) return Array.Empty<UAReference>();
 
             var nodeMap = nodes.ToDictionary(node => node.Id);
 
@@ -89,24 +91,32 @@ namespace Cognite.OpcUa.TypeCollectors
                 token,
                 BrowseDirection.Both));
 
-            var results = new List<BufferedReference>();
+            var results = new List<UAReference>();
 
             foreach (var (parentId, children) in references)
             {
                 if (!nodeMap.TryGetValue(parentId, out var parentNode)) continue;
-                if (parentNode is BufferedVariable parentVar && parentVar.IsProperty) continue;
+                if (!extractor.State.IsMappedNode(parentId)) continue;
+                if (parentNode is UAVariable parentVar && parentVar.IsProperty) continue;
                 foreach (var child in children)
                 {
                     var childId = uaClient.ToNodeId(child.NodeId);
-                    if (child.TypeDefinition == VariableTypeIds.PropertyType) continue;
+                    if (extractor.IsProperty(child)) continue;
                     if (!extractor.State.IsMappedNode(childId)) continue;
 
-                    NodeExtractionState childState = null;
+                    VariableExtractionState childState = null;
                     if (child.NodeClass == NodeClass.Variable)
                     {
                         childState = extractor.State.GetNodeState(childId);
                     }
-                    results.Add(new BufferedReference(child, parentNode, childId, childState, this));
+                    results.Add(new UAReference(
+                        child.ReferenceTypeId,
+                        child.IsForward,
+                        parentId,
+                        childId,
+                        parentNode is UAVariable pVar && !pVar.IsArray,
+                        childState != null && !childState.IsArray,
+                        this));
                 }
             }
 

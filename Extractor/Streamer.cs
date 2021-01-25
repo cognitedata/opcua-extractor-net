@@ -21,7 +21,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
@@ -34,8 +36,8 @@ namespace Cognite.OpcUa
         private readonly UAExtractor extractor;
         private readonly FullConfig config;
 
-        private readonly Queue<BufferedDataPoint> dataPointQueue = new Queue<BufferedDataPoint>();
-        private readonly Queue<BufferedEvent> eventQueue = new Queue<BufferedEvent>();
+        private readonly Queue<UADataPoint> dataPointQueue = new Queue<UADataPoint>();
+        private readonly Queue<UAEvent> eventQueue = new Queue<UAEvent>();
 
         private const int maxEventCount = 100_000;
         private const int maxDpCount = 1_000_000;
@@ -57,7 +59,7 @@ namespace Cognite.OpcUa
             this.config = config;
         }
 
-        public void Enqueue(BufferedDataPoint dp)
+        public void Enqueue(UADataPoint dp)
         {
             lock (dataPointMutex)
             {
@@ -65,7 +67,7 @@ namespace Cognite.OpcUa
                 if (dataPointQueue.Count >= maxDpCount) extractor.Looper.TriggerPush();
             }
         }
-        public void Enqueue(IEnumerable<BufferedDataPoint> dps)
+        public void Enqueue(IEnumerable<UADataPoint> dps)
         {
             if (dps == null) return;
             lock (dataPointMutex)
@@ -75,7 +77,7 @@ namespace Cognite.OpcUa
 
             }
         }
-        public void Enqueue(BufferedEvent evt)
+        public void Enqueue(UAEvent evt)
         {
             lock (eventMutex)
             {
@@ -83,7 +85,7 @@ namespace Cognite.OpcUa
                 if (eventQueue.Count >= maxEventCount) extractor.Looper.TriggerPush();
             }
         }
-        public void Enqueue(IEnumerable<BufferedEvent> events)
+        public void Enqueue(IEnumerable<UAEvent> events)
         {
             if (events == null) return;
             lock (eventMutex)
@@ -105,12 +107,12 @@ namespace Cognite.OpcUa
 
             bool restartHistory = false;
 
-            var dataPointList = new List<BufferedDataPoint>();
+            var dataPointList = new List<UADataPoint>();
             var pointRanges = new Dictionary<string, TimeRange>();
 
             lock (dataPointMutex)
             {
-                while (dataPointQueue.TryDequeue(out BufferedDataPoint dp))
+                while (dataPointQueue.TryDequeue(out UADataPoint dp))
                 {
                     dataPointList.Add(dp);
                     if (!pointRanges.TryGetValue(dp.Id, out var range))
@@ -199,14 +201,14 @@ namespace Cognite.OpcUa
         {
             if (!AllowEvents) return false;
 
-            var eventList = new List<BufferedEvent>();
+            var eventList = new List<UAEvent>();
             var eventRanges = new Dictionary<NodeId, TimeRange>();
 
             bool restartHistory = false;
 
             lock (eventMutex)
             {
-                while (eventQueue.TryDequeue(out BufferedEvent evt))
+                while (eventQueue.TryDequeue(out UAEvent evt))
                 {
                     eventList.Add(evt);
                     if (!eventRanges.TryGetValue(evt.EmittingNode, out var range))
@@ -334,7 +336,7 @@ namespace Cognite.OpcUa
         /// <param name="variable">NodeExtractionState for variable the datavalue belongs to</param>
         /// <param name="uniqueId"></param>
         /// <returns>UniqueId to be used, for efficiency</returns>
-        public IEnumerable<BufferedDataPoint> ToDataPoint(DataValue value, NodeExtractionState variable)
+        public IEnumerable<UADataPoint> ToDataPoint(DataValue value, VariableExtractionState variable)
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
             if (variable == null) throw new ArgumentNullException(nameof(value));
@@ -362,7 +364,7 @@ namespace Cognite.OpcUa
                     log.Debug("Missing {cnt} points for variable {id} due to too small ArrayDimensions", values.Length - dim, variable.Id);
                     missedArrayPoints.Inc(values.Length - dim);
                 }
-                var ret = new List<BufferedDataPoint>();
+                var ret = new List<UADataPoint>();
                 for (int i = 0; i < dim; i++)
                 {
                     var id = variable.IsArray ? GetArrayUniqueId(uniqueId, i) : uniqueId;
@@ -412,7 +414,7 @@ namespace Cognite.OpcUa
                     && (eventState.IsFrontfilling && buffEvent.Time > eventState.SourceExtractedRange.Last
                         || eventState.IsBackfilling && buffEvent.Time < eventState.SourceExtractedRange.First)) continue;
 
-                log.Verbose(buffEvent.ToDebugDescription());
+                log.Verbose(buffEvent.ToString());
                 Enqueue(buffEvent);
             }
         }
@@ -421,7 +423,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="filter">Filter that resulted in this event</param>
         /// <param name="eventFields">Fields for a single event</param>
-        public BufferedEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
+        public UAEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
         {
             if (filter == null) throw new ArgumentNullException(nameof(filter));
             if (eventFields == null) throw new ArgumentNullException(nameof(eventFields));
@@ -478,7 +480,7 @@ namespace Cognite.OpcUa
                 log.Verbose("Event lacks specified time, type: {type}", eventType);
                 return null;
             }
-            var buffEvent = new BufferedEvent
+            var buffEvent = new UAEvent
             {
                 Message = extractor.ConvertToString(extractedProperties.GetValueOrDefault("Message")),
                 EventId = config.Extraction.IdPrefix + eventId,
@@ -489,8 +491,7 @@ namespace Cognite.OpcUa
                     .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
                                   && kvp.Key != "Time" && kvp.Key != "EventType")
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-                EmittingNode = emitter,
-                ReceivedTime = DateTime.UtcNow,
+                EmittingNode = emitter
             };
             return buffEvent;
         }

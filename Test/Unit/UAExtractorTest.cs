@@ -15,6 +15,8 @@ using System.Linq;
 using System.Collections.Generic;
 using Opc.Ua;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
+using Cognite.OpcUa.HistoryStates;
 
 namespace Test.Unit
 {
@@ -221,29 +223,34 @@ namespace Test.Unit
             }
 
             var root = new NodeId(1);
-            var nodes = new List<BufferedNode>
+            var nodes = new List<UANode>
             {
-                new BufferedNode(new NodeId("object1"), "object1", root),
-                new BufferedNode(new NodeId("object2"), "object2", root)
+                new UANode(new NodeId("object1"), "object1", root),
+                new UANode(new NodeId("object2"), "object2", root)
             };
-            var variables = new List<BufferedVariable>
+            var variables = new List<UAVariable>
             {
-                new BufferedVariable(new NodeId("var1"), "var1", root),
-                new BufferedVariable(new NodeId("var2"), "var2", root)
+                new UAVariable(new NodeId("var1"), "var1", root),
+                new UAVariable(new NodeId("var2"), "var2", root)
             };
 
-            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[0], true, true));
-            extractor.State.SetNodeState(new NodeExtractionState(tester.Client, variables[1], false, false));
+            extractor.State.SetNodeState(new VariableExtractionState(tester.Client, variables[0], true, true));
+            extractor.State.SetNodeState(new VariableExtractionState(tester.Client, variables[1], false, false));
 
 
             var refManager = (ReferenceTypeManager)extractor.GetType().GetField("referenceTypeManager",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(extractor);
 
-            var references = new List<BufferedReference>
+            var references = new List<UAReference>
             {
-                new BufferedReference(new ReferenceDescription {
-                    IsForward = true, NodeClass = NodeClass.Variable, ReferenceTypeId = ReferenceTypeIds.Organizes },
-                    new BufferedNode(new NodeId("object1"), "object1", root), new NodeId("var1"), null, refManager)
+                new UAReference(
+                    ReferenceTypeIds.Organizes,
+                    true,
+                    new NodeId("object1"),
+                    new NodeId("var1"),
+                    false,
+                    true,
+                    refManager)
             };
 
             try
@@ -280,26 +287,26 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
 
             var custIds = tester.Server.Ids.Custom;
-            var var1 = new BufferedVariable(custIds.MysteryVar, "MysteryVar", custIds.Root);
-            var var2 = new BufferedVariable(custIds.Array, "Array", custIds.Root);
-            var obj1 = new BufferedNode(custIds.Obj1, "Object1", custIds.Root);
-            obj1.Properties = new List<BufferedVariable>
+            var var1 = new UAVariable(custIds.MysteryVar, "MysteryVar", custIds.Root);
+            var var2 = new UAVariable(custIds.Array, "Array", custIds.Root);
+            var obj1 = new UANode(custIds.Obj1, "Object1", custIds.Root);
+            obj1.Properties = new List<UAVariable>
             {
-                new BufferedVariable(custIds.StringArray, "StringArray", custIds.Obj1) { IsProperty = true, PropertiesRead = true },
-                new BufferedVariable(tester.Server.Ids.Base.DoubleVar1, "VarProp1", custIds.Obj1) { IsProperty = true }
+                new UAVariable(custIds.StringArray, "StringArray", custIds.Obj1) { IsProperty = true, PropertiesRead = true },
+                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "VarProp1", custIds.Obj1) { IsProperty = true }
             };
-            var obj2 = new BufferedNode(custIds.Obj2, "Object2", custIds.Root);
-            obj2.Properties = new List<BufferedVariable>
+            var obj2 = new UANode(custIds.Obj2, "Object2", custIds.Root);
+            obj2.Properties = new List<UAVariable>
             {
-                new BufferedVariable(custIds.ObjProp, "ObjProp1", custIds.Obj2) { IsProperty = true, PropertiesRead = true },
-                new BufferedVariable(custIds.ObjProp2, "ObjProp2", custIds.Obj2) { IsProperty = true, PropertiesRead = true }
+                new UAVariable(custIds.ObjProp, "ObjProp1", custIds.Obj2) { IsProperty = true, PropertiesRead = true },
+                new UAVariable(custIds.ObjProp2, "ObjProp2", custIds.Obj2) { IsProperty = true, PropertiesRead = true }
             };
 
-            var chunks = new List<List<BufferedNode>>
+            var chunks = new List<List<UANode>>
             {
-                new List<BufferedNode> { var1, obj1 },
-                new List<BufferedNode> { var2, obj2 },
-                new List<BufferedNode> { var1, obj2, var2 }
+                new List<UANode> { var1, obj1 },
+                new List<UANode> { var2, obj2 },
+                new List<UANode> { var1, obj2, var2 }
             };
 
             var tasks = chunks.Select(chunk => extractor.ReadProperties(chunk)).ToList();

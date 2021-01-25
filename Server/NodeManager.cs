@@ -573,13 +573,20 @@ namespace Server
                 AddTypesToTypeTree(refType1);
                 AddTypesToTypeTree(refType2);
 
-                log.Information("Type: {id}, {isnon}", refType1.NodeId, SystemContext.TypeTable.IsTypeOf(refType1.NodeId, ReferenceTypeIds.NonHierarchicalReferences));
+                // Custom object and variable type
+                var objType = CreateObjectType("CustomObjectType", ObjectTypeIds.BaseObjectType, externalReferences);
+                var variableType = CreateVariableType("CustomVariableType", VariableTypeIds.BaseDataVariableType,
+                    externalReferences, DataTypeIds.Double);
+
+                AddTypesToTypeTree(objType);
+                AddTypesToTypeTree(variableType);
+
                 store.AddHistorizingNode(myarray);
                 store.AddHistorizingNode(numberVar);
 
                 AddPredefinedNodes(SystemContext, root, myarray, mystrarray, stringyType, ignoreType, numberType, numberType2, stringyVar,
                     ignoreVar, numberVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2, arrprop, arrprop2,
-                    enumType1, enumType2, enumProp1, enumProp2, enumVar1, enumVar2, enumVar3, refType1, refType2);
+                    enumType1, enumType2, enumProp1, enumProp2, enumVar1, enumVar2, enumVar3, refType1, refType2, objType, variableType);
 
                 Ids.Custom.Root = root.NodeId;
                 Ids.Custom.Array = myarray.NodeId;
@@ -605,6 +612,8 @@ namespace Server
                 Ids.Custom.EnumVar3 = enumVar3.NodeId;
                 Ids.Custom.RefType1 = refType1.NodeId;
                 Ids.Custom.RefType2 = refType2.NodeId;
+                Ids.Custom.ObjectType = objType.NodeId;
+                Ids.Custom.VariableType = variableType.NodeId;
             }
         }
         
@@ -836,6 +845,26 @@ namespace Server
                 externalReferences[parent] = references = new List<IReference>();
             }
 
+            type.AddReference(ReferenceTypeIds.HasSubtype, true, parent);
+            references.Add(new NodeStateReference(ReferenceTypeIds.HasSubtype, false, type.NodeId));
+
+            return type;
+        }
+
+        private BaseDataVariableTypeState CreateVariableType(string name, NodeId parent,
+            IDictionary<NodeId, IList<IReference>> externalReferences, NodeId dataType)
+        {
+            var type = new BaseDataVariableTypeState
+            {
+                NodeId = GenerateNodeId(),
+                BrowseName = new QualifiedName(name, NamespaceIndex),
+                DataType = dataType
+            };
+            type.DisplayName = type.BrowseName.Name;
+            if (!externalReferences.TryGetValue(parent, out var references))
+            {
+                externalReferences[parent] = references = new List<IReference>();
+            }
             type.AddReference(ReferenceTypeIds.HasSubtype, true, parent);
             references.Add(new NodeStateReference(ReferenceTypeIds.HasSubtype, false, type.NodeId));
 
@@ -1349,6 +1378,8 @@ namespace Server
         public NodeId EnumVar3 { get; set; }
         public NodeId RefType1 { get; set; }
         public NodeId RefType2 { get; set; }
+        public NodeId ObjectType { get; set; }
+        public NodeId VariableType { get; set; }
     }
 
     public class EventNodeReference

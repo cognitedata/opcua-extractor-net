@@ -31,6 +31,8 @@ using Cognite.Extractor.Common;
 using System.Text;
 using System.Collections;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
+using Cognite.OpcUa.HistoryStates;
 
 namespace Cognite.OpcUa
 {
@@ -405,10 +407,10 @@ namespace Cognite.OpcUa
         /// Retrieve a representation of the server node
         /// </summary>
         /// <returns></returns>
-        public BufferedNode GetServerNode(CancellationToken token)
+        public UANode GetServerNode(CancellationToken token)
         {
             var desc = GetRootNode(ObjectIds.Server);
-            var node = new BufferedNode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null);
+            var node = new UANode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null);
             ReadNodeData(new[] { node }, token);
             return node;
         }
@@ -695,7 +697,7 @@ namespace Cognite.OpcUa
         /// <param name="common">List of attributes to fetch for all nodes</param>
         /// <param name="variables">List of attributes to fetch for variable nodes only</param>
         /// <returns>A list of <see cref="DataValue"/>s</returns>
-        private IEnumerable<DataValue> GetNodeAttributes(IEnumerable<BufferedNode> nodes,
+        private IEnumerable<DataValue> GetNodeAttributes(IEnumerable<UANode> nodes,
             IEnumerable<uint> common,
             IEnumerable<uint> variables,
             IEnumerable<uint> properties,
@@ -709,7 +711,7 @@ namespace Cognite.OpcUa
                 readValueIds.AddRange(common.Select(attribute => new ReadValueId {AttributeId = attribute, NodeId = node.Id}));
                 if (node.IsVariable)
                 {
-                    if (node is BufferedVariable variable && variable.IsProperty)
+                    if (node is UAVariable variable && variable.IsProperty)
                     {
                         readValueIds.AddRange(properties.Select(attribute => new ReadValueId { AttributeId = attribute, NodeId = node.Id }));
                     }
@@ -726,9 +728,9 @@ namespace Cognite.OpcUa
         /// Gets Description for all nodes, and DataType, Historizing and ValueRank for Variable nodes, then updates the given list of nodes
         /// </summary>
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
-        public void ReadNodeData(IEnumerable<BufferedNode> nodes, CancellationToken token)
+        public void ReadNodeData(IEnumerable<UANode> nodes, CancellationToken token)
         {
-            nodes = nodes.Where(node => !node.IsVariable || node is BufferedVariable variable && variable.Index == -1);
+            nodes = nodes.Where(node => !node.IsVariable || node is UAVariable variable && variable.Index == -1);
             var variableAttributes = new List<uint>
             {
                 Attributes.DataType,
@@ -773,7 +775,7 @@ namespace Cognite.OpcUa
             int total = values.Count();
             int expected = nodes.Aggregate(0, (seed, node) =>
             {
-                if (node.IsVariable && node is BufferedVariable variable)
+                if (node.IsVariable && node is UAVariable variable)
                 {
                     if (variable.IsProperty)
                     {
@@ -803,11 +805,11 @@ namespace Cognite.OpcUa
                     enumerator.MoveNext();
                     node.EventNotifier = enumerator.Current.GetValue(EventNotifiers.None);
                 }
-                if (node.IsVariable && node is BufferedVariable vnode)
+                if (node.IsVariable && node is UAVariable vnode)
                 {
                     enumerator.MoveNext();
                     NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
-                    vnode.DataType = DataTypeManager.GetDataType(dataType) ?? new BufferedDataType(dataType);
+                    vnode.DataType = DataTypeManager.GetDataType(dataType) ?? new UADataType(dataType);
 
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
@@ -851,7 +853,7 @@ namespace Cognite.OpcUa
         /// To avoid complications, avoid fetching data of unknown large size here.
         /// </remarks>
         /// <param name="nodes">List of variables to be updated</param>
-        public void ReadNodeValues(IEnumerable<BufferedVariable> nodes, CancellationToken token)
+        public void ReadNodeValues(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
             nodes = nodes.Where(node => !node.DataRead && node.Index == -1).ToList();
             IEnumerable<DataValue> values;
@@ -885,20 +887,20 @@ namespace Cognite.OpcUa
         /// Gets properties for variables in nodes given, then updates all properties in given list of nodes with relevant data and values.
         /// </summary>
         /// <param name="nodes">Nodes to be updated with properties</param>
-        public void GetNodeProperties(IEnumerable<BufferedNode> nodes, CancellationToken token)
+        public void GetNodeProperties(IEnumerable<UANode> nodes, CancellationToken token)
         {
             if (nodes == null || !nodes.Any()) return;
 
             var nodeList = nodes.ToList();
 
-            var properties = new HashSet<BufferedVariable>();
+            var properties = new HashSet<UAVariable>();
             log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
             var idsToCheck = new List<NodeId>();
             foreach (var node in nodes)
             {
                 if (node.IsVariable)
                 {
-                    if (node is BufferedVariable variable && variable.Index <= 0)
+                    if (node is UAVariable variable && variable.Index <= 0)
                     {
                         idsToCheck.Add(node.Id);
                     }
@@ -944,18 +946,18 @@ namespace Cognite.OpcUa
                 if (!result.TryGetValue(parent.Id, out var children)) continue;
                 foreach (var child in children)
                 {
-                    var property = new BufferedVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
+                    var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
                     properties.Add(property);
                     if (parent.Properties == null)
                     {
-                        parent.Properties = new List<BufferedVariable>();
+                        parent.Properties = new List<UAVariable>();
                     }
                     parent.Properties.Add(property);
                 }
-                if (parent.IsVariable && parent is BufferedVariable variable)
+                if (parent.IsVariable && parent is UAVariable variable)
                 {
                     if (variable.IsProperty) continue;
-                    BufferedVariable arrayParent = variable.Index == -1 ? variable : variable.ArrayParent;
+                    UAVariable arrayParent = variable.Index == -1 ? variable : variable.ArrayParent;
 
                     if (arrayParent != null && arrayParent.Index == -1 && arrayParent.ArrayDimensions != null
                         && arrayParent.ArrayDimensions.Count == 1 && arrayParent.ArrayDimensions[0] > 0)
@@ -1143,7 +1145,7 @@ namespace Cognite.OpcUa
         /// <param name="nodeList">List of buffered variables to synchronize</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
-        public void SubscribeToNodes(IEnumerable<NodeExtractionState> nodeList,
+        public void SubscribeToNodes(IEnumerable<VariableExtractionState> nodeList,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
@@ -1157,7 +1159,7 @@ namespace Cognite.OpcUa
                 node => new MonitoredItem
                 {
                     StartNodeId = node.SourceId,
-                    DisplayName = "Value: " + (node as NodeExtractionState).DisplayName,
+                    DisplayName = "Value: " + (node as VariableExtractionState).DisplayName,
                     SamplingInterval = config.SamplingInterval,
                     QueueSize = (uint)Math.Max(0, config.QueueLength),
                     AttributeId = Attributes.Value,
@@ -1642,7 +1644,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="reference">Reference to get id for</param>
         /// <returns>String reference id</returns>
-        public string GetRelationshipId(BufferedReference reference)
+        public string GetRelationshipId(UAReference reference)
         {
             if (reference == null) throw new ArgumentNullException(nameof(reference));
             var buffer = new StringBuilder(extractionConfig.IdPrefix, 64);

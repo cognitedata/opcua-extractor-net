@@ -23,6 +23,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Prometheus;
 using Serilog;
@@ -40,8 +42,8 @@ namespace Cognite.OpcUa
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
-        public List<BufferedNode> PendingNodes { get; } = new List<BufferedNode>();
-        public List<BufferedReference> PendingReferences { get; } = new List<BufferedReference>();
+        public List<UANode> PendingNodes { get; } = new List<UANode>();
+        public List<UAReference> PendingReferences { get; } = new List<UAReference>();
 
 
         private readonly InfluxPusherConfig config;
@@ -75,10 +77,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Push each datapoint to influxdb. The datapoint Id, which corresponds to timeseries externalId in CDF, is used as MeasurementName
         /// </summary>
-        public async Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
+        public async Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             if (points == null) return null;
-            var dataPointList = new List<BufferedDataPoint>();
+            var dataPointList = new List<UADataPoint>();
 
             int count = 0;
             foreach (var lBuffer in points)
@@ -94,7 +96,7 @@ namespace Cognite.OpcUa
                 {
                     if (config.NonFiniteReplacement != null)
                     {
-                        buffer = new BufferedDataPoint(buffer, config.NonFiniteReplacement.Value);
+                        buffer = new UADataPoint(buffer, config.NonFiniteReplacement.Value);
                     }
                     else
                     {
@@ -148,10 +150,10 @@ namespace Cognite.OpcUa
         /// <param name="events">Events to push</param>
         /// <returns>True on success, null if none were pushed</returns>
 
-        public async Task<bool?> PushEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
+        public async Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
             if (events == null) return null;
-            var evts = new List<BufferedEvent>();
+            var evts = new List<UAEvent>();
             int count = 0;
             foreach (var evt in events)
             {
@@ -191,7 +193,7 @@ namespace Cognite.OpcUa
         /// <param name="backfillEnabled">True if backfill is enabled, in which case the first timestamp will be read</param>
         /// <returns>True on success</returns>
         public async Task<bool> InitExtractedRanges(
-            IEnumerable<NodeExtractionState> states,
+            IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
             bool initMissing,
             CancellationToken token)
@@ -394,7 +396,7 @@ namespace Cognite.OpcUa
                      || dataType == DataTypes.UInteger;
         }
 
-        private static IInfluxDatapoint BufferedDPToInflux(NodeExtractionState state, BufferedDataPoint dp)
+        private static IInfluxDatapoint BufferedDPToInflux(VariableExtractionState state, UADataPoint dp)
         {
 
             if (state.DataType.IsString)
@@ -439,7 +441,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        private IInfluxDatapoint BufferedEventToInflux(BufferedEvent evt)
+        private IInfluxDatapoint BufferedEventToInflux(UAEvent evt)
         {
             var idp = new InfluxDatapoint<string>
             {
@@ -484,11 +486,11 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="states">InfluxBufferStates to read from</param>
         /// <returns>List of datapoints</returns>
-        public async Task<IEnumerable<BufferedDataPoint>> ReadDataPoints(
+        public async Task<IEnumerable<UADataPoint>> ReadDataPoints(
             IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
-            if (config.Debug) return Array.Empty<BufferedDataPoint>();
+            if (config.Debug) return Array.Empty<UADataPoint>();
             token.ThrowIfCancellationRequested();
             if (states == null) throw new ArgumentNullException(nameof(states));
 
@@ -500,7 +502,7 @@ namespace Cognite.OpcUa
             var results = await Task.WhenAll(fetchTasks);
             token.ThrowIfCancellationRequested();
 
-            var finalPoints = new List<BufferedDataPoint>();
+            var finalPoints = new List<UADataPoint>();
 
             foreach (var series in results)
             {
@@ -513,7 +515,7 @@ namespace Cognite.OpcUa
                 {
                     if (isString)
                     {
-                        return new BufferedDataPoint(dp.Time, id, (string) dp.Value);
+                        return new UADataPoint(dp.Time, id, (string) dp.Value);
                     }
 
                     double convVal;
@@ -526,7 +528,7 @@ namespace Cognite.OpcUa
                         convVal = Convert.ToDouble(dp.Value);
                     }
 
-                    return new BufferedDataPoint(dp.Time, id, convVal);
+                    return new UADataPoint(dp.Time, id, convVal);
                 }));
             }
 
@@ -557,11 +559,11 @@ namespace Cognite.OpcUa
         /// <param name="startTime">Time to read from, reading forwards</param>
         /// <param name="measurements">Nodes to read events from</param>
         /// <returns>A list of read events</returns>
-        public async Task<IEnumerable<BufferedEvent>> ReadEvents(
+        public async Task<IEnumerable<UAEvent>> ReadEvents(
             IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
-            if (config.Debug || states == null) return Array.Empty<BufferedEvent>();
+            if (config.Debug || states == null) return Array.Empty<UAEvent>();
             token.ThrowIfCancellationRequested();
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
@@ -571,7 +573,7 @@ namespace Cognite.OpcUa
 
             var results = await Task.WhenAll(fetchTasks);
             token.ThrowIfCancellationRequested();
-            var finalEvents = new List<BufferedEvent>();
+            var finalEvents = new List<UAEvent>();
 
             foreach (var series in results.SelectMany(res => res).DistinctBy(series => series.SeriesName))
             {
@@ -588,7 +590,7 @@ namespace Cognite.OpcUa
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
                     if (!(res is IDictionary<string, object> values)) return null;
                     var sourceNode = Extractor.State.GetNodeId((string)values["Source"]);
-                    var evt = new BufferedEvent
+                    var evt = new UAEvent
                     {
                         Time = (DateTime)values["Time"],
                         EventId = (string)values["Id"],
@@ -604,7 +606,7 @@ namespace Cognite.OpcUa
                             || kvp.Key == "Type" || string.IsNullOrEmpty(kvp.Value as string)) continue;
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
-                    log.Verbose(evt.ToDebugDescription());
+                    log.Verbose(evt.ToString());
 
                     return evt;
                 }).Where(evt => evt != null));

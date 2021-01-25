@@ -22,6 +22,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Prometheus;
 using Serilog;
@@ -132,7 +134,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="states">States to read into</param>
         /// <param name="nodeIds">Nodes to read for</param>
-        public async Task InitializeBufferStates(IEnumerable<NodeExtractionState> states,
+        public async Task InitializeBufferStates(IEnumerable<VariableExtractionState> states,
             IEnumerable<EventExtractionState> evtStates, CancellationToken token)
         {
             if (!config.Influx || influxPusher == null || !config.InfluxStateStore) return;
@@ -180,7 +182,7 @@ namespace Cognite.OpcUa
         /// <param name="points">Datapoints to write</param>
         /// <param name="pointRanges">Ranges for given data variables, to simplify storage and state</param>
         /// <returns>True on success</returns>
-        public async Task<bool> WriteDatapoints(IEnumerable<BufferedDataPoint> points, IDictionary<string, TimeRange> pointRanges, CancellationToken token)
+        public async Task<bool> WriteDatapoints(IEnumerable<UADataPoint> points, IDictionary<string, TimeRange> pointRanges, CancellationToken token)
         {
             if (points == null || !points.Any() || pointRanges == null || !pointRanges.Any()) return true;
 
@@ -260,7 +262,7 @@ namespace Cognite.OpcUa
             return success;
         }
 
-        private async Task WriteEventsInflux(IEnumerable<BufferedEvent> events, CancellationToken token)
+        private async Task WriteEventsInflux(IEnumerable<UAEvent> events, CancellationToken token)
         {
             if (influxPusher.EventsFailing)
             {
@@ -295,7 +297,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="events">Events to write</param>
         /// <returns>True on success</returns>
-        public async Task<bool> WriteEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
+        public async Task<bool> WriteEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
             if (events == null || !events.Any()) return true;
 
@@ -391,12 +393,12 @@ namespace Cognite.OpcUa
                 using var stream = new FileStream(config.DatapointPath, FileMode.OpenOrCreate, FileAccess.Read);
                 do
                 {
-                    var points = new List<BufferedDataPoint>();
+                    var points = new List<UADataPoint>();
 
                     int count = 0;
                     while (!token.IsCancellationRequested && count < 1_000_000)
                     {
-                        var dp = BufferedDataPoint.FromStream(stream);
+                        var dp = UADataPoint.FromStream(stream);
                         if (dp == null)
                         {
                             final = true;
@@ -457,12 +459,12 @@ namespace Cognite.OpcUa
                 using var stream = new FileStream(config.EventPath, FileMode.OpenOrCreate, FileAccess.Read);
                 do
                 {
-                    var events = new List<BufferedEvent>();
+                    var events = new List<UAEvent>();
 
                     int count = 0;
                     while (!token.IsCancellationRequested && count < 10_000)
                     {
-                        var evt = BufferedEvent.FromStream(stream, extractor);
+                        var evt = UAEvent.FromStream(stream, extractor);
                         if (evt == null)
                         {
                             final = true;
@@ -473,15 +475,9 @@ namespace Cognite.OpcUa
 
                     log.Information("Read {cnt} raw events", events.Count);
 
-                    foreach (var group in events.GroupBy(evt => evt.EmittingNode))
-                    {
-                        log.Information("Group: {key}, {state}", group.Key, extractor.State.GetEmitterState(group.Key));
-                    }
-
                     events = events
-                        .GroupBy(evt => evt.EmittingNode)
-                        .Where(group => extractor.State.GetEmitterState(group.Key) != null)
-                        .SelectMany(group => group).ToList();
+                        .Where(evt => evt.EmittingNode != null && !evt.EmittingNode.IsNullNodeId)
+                        .ToList();
 
                     log.Information("Read {cnt} events from file", events.Count);
                     if (!events.Any() && final) break;
@@ -522,7 +518,7 @@ namespace Cognite.OpcUa
         /// Write datapoints to a binary file
         /// </summary>
         /// <param name="dps">Datapoints to write</param>
-        private void WriteDatapointsToFile(IEnumerable<BufferedDataPoint> dps, CancellationToken token)
+        private void WriteDatapointsToFile(IEnumerable<UADataPoint> dps, CancellationToken token)
         {
             if (dps == null) throw new ArgumentNullException(nameof(dps));
             int count = 0;
@@ -549,7 +545,7 @@ namespace Cognite.OpcUa
         /// Write events to a binary file
         /// </summary>
         /// <param name="evts">Events to write</param>
-        private void WriteEventsToFile(IEnumerable<BufferedEvent> evts, CancellationToken token)
+        private void WriteEventsToFile(IEnumerable<UAEvent> evts, CancellationToken token)
         {
             if (evts == null) throw new ArgumentNullException(nameof(evts));
             int count = 0;

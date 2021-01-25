@@ -19,13 +19,14 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 
-namespace Cognite.OpcUa.TypeCollectors
+namespace Cognite.OpcUa.Types
 {
     /// <summary>
     /// Represents a simplified OPC-UA datatype, containing information relevant to us (isString, isStep)
     /// </summary>
-    public class BufferedDataType
+    public class UADataType
     {
         public uint Identifier { get; set; }
         public bool IsStep { get; set; }
@@ -36,7 +37,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// Construct BufferedDataType from NodeId of datatype
         /// </summary>
         /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
-        public BufferedDataType(NodeId rawDataType)
+        public UADataType(NodeId rawDataType)
         {
             if (rawDataType == null) throw new ArgumentNullException(nameof(rawDataType));
             Raw = rawDataType;
@@ -52,7 +53,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 IsString = true;
             }
         }
-        public BufferedDataPoint ToDataPoint(UAExtractor extractor, object value, DateTime timestamp, string id)
+        public UADataPoint ToDataPoint(UAExtractor extractor, object value, DateTime timestamp, string id)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             if (IsString)
@@ -64,16 +65,16 @@ namespace Cognite.OpcUa.TypeCollectors
                         var longVal = Convert.ToInt64(value, CultureInfo.InvariantCulture);
                         if (EnumValues.TryGetValue(longVal, out string enumVal))
                         {
-                            return new BufferedDataPoint(timestamp, id, enumVal);
+                            return new UADataPoint(timestamp, id, enumVal);
                         }
                     }
                     catch
                     {
                     }
                 }
-                return new BufferedDataPoint(timestamp, id, extractor.ConvertToString(value));
+                return new UADataPoint(timestamp, id, extractor.ConvertToString(value));
             }
-            return new BufferedDataPoint(timestamp, id, UAClient.ConvertToDouble(value));
+            return new UADataPoint(timestamp, id, UAClient.ConvertToDouble(value));
         }
 
         /// <summary>
@@ -81,7 +82,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// </summary>
         /// <param name="protoDataType">Overriding propoDataType</param>
         /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
-        public BufferedDataType(ProtoDataType protoDataType, NodeId rawDataType, DataTypeConfig config) : this(rawDataType)
+        public UADataType(ProtoDataType protoDataType, NodeId rawDataType, DataTypeConfig config) : this(rawDataType)
         {
             if (protoDataType == null) throw new ArgumentNullException(nameof(protoDataType));
             if (config == null) throw new ArgumentNullException(nameof(config));
@@ -94,7 +95,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
         }
 
-        public BufferedDataType(NodeId rawDataType, BufferedDataType other) : this(rawDataType)
+        public UADataType(NodeId rawDataType, UADataType other) : this(rawDataType)
         {
             if (other == null) throw new ArgumentNullException(nameof(other));
             IsStep = other.IsStep;
@@ -105,14 +106,19 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public override string ToString()
         {
-            return "DataType: {\n" +
-                $"    NodeId: {Raw}\n" +
-                $"    isStep: {IsStep}\n" +
-                $"    isString: {IsString}\n" +
-                (EnumValues != null ? 
-                $"    EnumValues: {string.Concat(EnumValues)}\n"
-                : "") +
-                "}";
+            var builder = new StringBuilder("DataType: {\n");
+            builder.AppendFormat(CultureInfo.InvariantCulture, "    NodeId: {0}\n", Raw);
+            if (IsStep)
+            {
+                builder.Append("    Step: True\n");
+            }
+            builder.AppendFormat(CultureInfo.InvariantCulture, "    String: {0}\n", IsString);
+            if (EnumValues != null)
+            {
+                builder.AppendFormat(CultureInfo.InvariantCulture, "    EnumValues: [{0}]\n", string.Join(", ", EnumValues));
+            }
+            builder.Append('}');
+            return builder.ToString();
         }
     }
 }

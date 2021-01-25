@@ -17,15 +17,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Opc.Ua;
 
-namespace Cognite.OpcUa.TypeCollectors
+namespace Cognite.OpcUa.Types
 {
-    public class BufferedReferenceType
+    public class UAReferenceType
     {
         public NodeId Id { get; }
         private string name;
         private string inverseName;
         public bool HasName => name != null;
-        public BufferedReferenceType(NodeId id)
+        public UAReferenceType(NodeId id)
         {
             Id = id;
         }

@@ -1,5 +1,7 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -42,10 +44,10 @@ namespace Test.Utils
 
         private object dpLock = new object();
         private object eventLock = new object();
-        public Dictionary<(NodeId, int), List<BufferedDataPoint>> DataPoints { get; }
-            = new Dictionary<(NodeId, int), List<BufferedDataPoint>>();
-        public Dictionary<NodeId, List<BufferedEvent>> Events { get; }
-            = new Dictionary<NodeId, List<BufferedEvent>>();
+        public Dictionary<(NodeId, int), List<UADataPoint>> DataPoints { get; }
+            = new Dictionary<(NodeId, int), List<UADataPoint>>();
+        public Dictionary<NodeId, List<UAEvent>> Events { get; }
+            = new Dictionary<NodeId, List<UAEvent>>();
 
         public Dictionary<string, (NodeId, int)> UniqueToNodeId { get; } = new Dictionary<string, (NodeId, int)>();
 
@@ -55,16 +57,16 @@ namespace Test.Utils
         public UAExtractor Extractor { get; set; }
 
 
-        public Dictionary<NodeId, BufferedNode> PushedNodes { get; }
-            = new Dictionary<NodeId, BufferedNode>();
-        public Dictionary<(NodeId, int), BufferedVariable> PushedVariables { get; }
-            = new Dictionary<(NodeId, int), BufferedVariable>();
-        public HashSet<BufferedReference> PushedReferences { get; }
-            = new HashSet<BufferedReference>();
+        public Dictionary<NodeId, UANode> PushedNodes { get; }
+            = new Dictionary<NodeId, UANode>();
+        public Dictionary<(NodeId, int), UAVariable> PushedVariables { get; }
+            = new Dictionary<(NodeId, int), UAVariable>();
+        public HashSet<UAReference> PushedReferences { get; }
+            = new HashSet<UAReference>();
 
-        public List<BufferedNode> PendingNodes { get; } = new List<BufferedNode>();
+        public List<UANode> PendingNodes { get; } = new List<UANode>();
 
-        public List<BufferedReference> PendingReferences { get; } = new List<BufferedReference>();
+        public List<UAReference> PendingReferences { get; } = new List<UAReference>();
 
         public DummyPusher(DummyPusherConfig config)
         {
@@ -81,8 +83,8 @@ namespace Test.Utils
         }
 
         public Task<bool> PushNodes(
-            IEnumerable<BufferedNode> objects,
-            IEnumerable<BufferedVariable> variables,
+            IEnumerable<UANode> objects,
+            IEnumerable<UAVariable> variables,
             UpdateConfig _,
             CancellationToken __)
         {
@@ -103,7 +105,7 @@ namespace Test.Utils
                     {
                         if (!DataPoints.ContainsKey((variable.Id, variable.Index)))
                         {
-                            DataPoints[(variable.Id, variable.Index)] = new List<BufferedDataPoint>();
+                            DataPoints[(variable.Id, variable.Index)] = new List<UADataPoint>();
                         }
                         UniqueToNodeId[Extractor.GetUniqueId(variable.Id, variable.Index)] = (variable.Id, variable.Index);
                         PushedVariables[(variable.Id, variable.Index)] = variable;
@@ -115,7 +117,7 @@ namespace Test.Utils
         }
 
         public Task<bool> InitExtractedRanges(
-            IEnumerable<NodeExtractionState> states,
+            IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
             bool initMissing,
             CancellationToken _)
@@ -183,7 +185,7 @@ namespace Test.Utils
             return Task.FromResult(InitEventRangesResult);
         }
 
-        public Task<bool?> PushEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
+        public Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
             if (!PushEventResult ?? false) return Task.FromResult(PushEventResult);
             if (events == null || !events.Any()) return Task.FromResult<bool?>(null);
@@ -196,7 +198,7 @@ namespace Test.Utils
                     if (!Events.TryGetValue(group.Key, out var stored))
                     {
                         Console.WriteLine($"New group: {group.Key}");
-                        Events[group.Key] = stored = new List<BufferedEvent>();
+                        Events[group.Key] = stored = new List<UAEvent>();
                     }
                     stored.AddRange(group);
                 }
@@ -206,7 +208,7 @@ namespace Test.Utils
             return Task.FromResult(PushEventResult);
         }
 
-        public Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
+        public Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             if (!PushDataPointResult ?? false) return Task.FromResult(PushDataPointResult);
             if (points == null || !points.Any()) return Task.FromResult<bool?>(null);
@@ -223,7 +225,7 @@ namespace Test.Utils
             return Task.FromResult(PushDataPointResult);
         }
 
-        public Task<bool> PushReferences(IEnumerable<BufferedReference> references, CancellationToken token)
+        public Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
         {
             if (!PushReferenceResult) return Task.FromResult(PushReferenceResult);
             if (references == null || !references.Any()) return Task.FromResult(true);

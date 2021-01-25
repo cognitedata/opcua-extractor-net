@@ -36,7 +36,7 @@ namespace Cognite.OpcUa.TypeCollectors
         // The default hash code of browsename does not include the namespaceindex for some reason.
         public override int GetHashCode()
         {
-            return (TypeId, BrowseName.Name, BrowseName.NamespaceIndex).GetHashCode();
+            return HashCode.Combine(TypeId, BrowseName.Name, BrowseName.NamespaceIndex);
         }
         public override bool Equals(object other)
         {
@@ -54,9 +54,11 @@ namespace Cognite.OpcUa.TypeCollectors
     public class EventFieldCollector
     {
         private readonly UAClient uaClient;
-        private readonly Dictionary<NodeId, BufferedEventType> types = new Dictionary<NodeId, BufferedEventType>();
+        private readonly Dictionary<NodeId, UAEventType> types = new Dictionary<NodeId, UAEventType>();
         private readonly EventConfig config;
         private readonly Regex ignoreFilter;
+        private HashSet<string> excludeProperties;
+        private HashSet<string> baseExcludeProperties;
         /// <summary>
         /// Construct the collector.
         /// </summary>
@@ -71,6 +73,8 @@ namespace Cognite.OpcUa.TypeCollectors
             {
                 ignoreFilter = new Regex(config.ExcludeEventFilter, RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.CultureInvariant);
             }
+            excludeProperties = new HashSet<string>(config.ExcludeProperties);
+            baseExcludeProperties = new HashSet<string>(config.BaseExcludeProperties);
         }
         /// <summary>
         /// Main collection function. Calls BrowseDirectory on BaseEventType, waits for it to complete, which should populate properties and localProperties,
@@ -79,13 +83,10 @@ namespace Cognite.OpcUa.TypeCollectors
         /// <returns>The collected fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).</returns>
         public Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token)
         {
-            types[ObjectTypeIds.BaseEventType] = new BufferedEventType
+            types[ObjectTypeIds.BaseEventType] = new UAEventType
             {
                 Id = ObjectTypeIds.BaseEventType,
-                CollectedFields = new List<ReferenceDescription>(),
-                Properties = new List<ReferenceDescription>(),
-                DisplayName = "BaseEventType",
-                ParentId = NodeId.Null
+                DisplayName = "BaseEventType"
             };
 
             uaClient.BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType },
@@ -93,40 +94,21 @@ namespace Cognite.OpcUa.TypeCollectors
 
             var result = new Dictionary<NodeId, HashSet<EventField>>();
 
-            var excludeProperties = new HashSet<string>(config.ExcludeProperties);
-            var baseExcludeProperties = new HashSet<string>(config.BaseExcludeProperties);
-
-            var propVariables = new Dictionary<NodeId, EventField>();
-            // Find reverse mappings from properties to their parents, along with their browse name
-            foreach (var type in types.Values)
-            {
-                foreach (var description in type.Properties)
-                {
-                    if (!propVariables.ContainsKey(uaClient.ToNodeId(description.NodeId)))
-                    {
-                        propVariables[uaClient.ToNodeId(description.NodeId)] = new EventField(type.Id, description.BrowseName);
-                    }
-                }
-            }
-
             HashSet<NodeId> whitelist = null;
             if (config.EventIds != null && config.EventIds.Any())
             {
                 whitelist = new HashSet<NodeId>(config.EventIds.Select(proto => proto.ToNodeId(uaClient, ObjectTypeIds.BaseEventType)));
             }
-            // Add mappings to result
+
             foreach (var type in types.Values)
             {
                 if (ignoreFilter != null && ignoreFilter.IsMatch(type.DisplayName.Text)) continue;
-                if (!config.AllEvents && type.Id.NamespaceIndex == 0) continue;
-                if (whitelist != null && whitelist.Any() && !whitelist.Contains(type.Id)) continue;
-                result[type.Id] = new HashSet<EventField>();
-                foreach (var desc in type.CollectedFields)
+                if (whitelist != null && whitelist.Any())
                 {
-                    if (excludeProperties.Contains(desc.BrowseName.Name)
-                        || baseExcludeProperties.Contains(desc.BrowseName.Name) && type.Id == ObjectTypeIds.BaseEventType) continue;
-                    result[type.Id].Add(propVariables[uaClient.ToNodeId(desc.NodeId)]);
+                    if (!whitelist.Contains(type.Id)) continue;
                 }
+                else if (!config.AllEvents && type.Id.NamespaceIndex == 0) continue;
+                result[type.Id] = new HashSet<EventField>(type.CollectedFields);
             }
 
             return result;
@@ -143,29 +125,32 @@ namespace Cognite.OpcUa.TypeCollectors
 
             if (child.NodeClass == NodeClass.ObjectType)
             {
-                types[id] = new BufferedEventType
+                types[id] = new UAEventType
                 {
                     Id = id,
-                    ParentId = parent,
-                    Properties = new List<ReferenceDescription>(),
-                    CollectedFields = parentType?.CollectedFields?.ToList() ?? new List<ReferenceDescription>(),
+                    Parent = parentType,
                     DisplayName = child.DisplayName
                 };
             }
-            if (child.ReferenceTypeId == ReferenceTypeIds.HasProperty)
+            else if (child.ReferenceTypeId == ReferenceTypeIds.HasProperty)
             {
                 if (parentType == null) return;
-                parentType.Properties.Add(child);
-                parentType.CollectedFields.Add(child);
+                if (parent == ObjectTypeIds.BaseEventType && baseExcludeProperties.Contains(child.BrowseName.Name)
+                    || excludeProperties.Contains(child.BrowseName.Name)) return;
+                parentType.AddField(child);
             }
         }
-        private class BufferedEventType
+        private class UAEventType
         {
             public NodeId Id { get; set; }
             public LocalizedText DisplayName { get; set; }
-            public NodeId ParentId { get; set; }
-            public List<ReferenceDescription> Properties { get; set; }
-            public List<ReferenceDescription> CollectedFields { get; set; }
+            public UAEventType Parent { get; set; }
+            public void AddField(ReferenceDescription desc)
+            {
+                fields.Add(new EventField(Id, desc.BrowseName));
+            }
+            public IEnumerable<EventField> CollectedFields { get => Parent?.CollectedFields?.Concat(fields) ?? fields; }
+            private List<EventField> fields = new List<EventField>();
         }
     }
 }

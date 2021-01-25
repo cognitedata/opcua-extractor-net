@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -140,7 +141,7 @@ namespace Test
 
             var pusher = tester.Pusher;
 
-            var badPoints = values.Select(value => new BufferedDataPoint(DateTime.UtcNow, "gp.tl:i=2", value)).ToList();
+            var badPoints = values.Select(value => new UADataPoint(DateTime.UtcNow, "gp.tl:i=2", value)).ToList();
 
             await pusher.PushDataPoints(badPoints, CancellationToken.None);
 
@@ -151,6 +152,7 @@ namespace Test
                 if (read.Count < 1) return false;
 
                 var readValues = read.First();
+                Console.WriteLine($"Got {readValues.Entries.Count}/6 results");
                 return readValues.Entries.Count == 6;
             }, 5, "Expected values to arrive in influx");
             

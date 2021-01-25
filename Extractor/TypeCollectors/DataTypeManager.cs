@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
 using System;
@@ -31,7 +32,7 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly ILogger log = Log.Logger.ForContext<DataTypeManager>();
         private readonly UAClient uaClient;
         private readonly Dictionary<NodeId, NodeId> parentIds = new Dictionary<NodeId, NodeId>();
-        private readonly Dictionary<NodeId, BufferedDataType> dataTypes = new Dictionary<NodeId, BufferedDataType>();
+        private readonly Dictionary<NodeId, UADataType> dataTypes = new Dictionary<NodeId, UADataType>();
         private readonly Dictionary<NodeId, string> customTypeNames = new Dictionary<NodeId, string>();
         private readonly HashSet<NodeId> ignoreDataTypes = new HashSet<NodeId>();
         private readonly DataTypeConfig config;
@@ -50,12 +51,12 @@ namespace Cognite.OpcUa.TypeCollectors
                 foreach (var type in config.CustomNumericTypes)
                 {
                     var id = type.NodeId.ToNodeId(uaClient);
-                    if (id == null)
+                    if (id == null || id.IsNullNodeId)
                     {
                         log.Warning("Invalid datatype nodeId: {ns}: {identifier}", type.NodeId.NamespaceUri, type.NodeId.NodeId);
                         continue;
                     }
-                    dataTypes[id] = new BufferedDataType(type, id, config);
+                    dataTypes[id] = new UADataType(type, id, config);
                     log.Information("Add custom datatype: {id}", id);
                 }
             }
@@ -64,7 +65,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 foreach (var type in config.IgnoreDataTypes)
                 {
                     var id = type.ToNodeId(uaClient);
-                    if (id == null)
+                    if (id == null || id.IsNullNodeId)
                     {
                         log.Warning("Invalid ignore datatype nodeId: {ns}: {identifier}", type.NamespaceUri, type.NodeId);
                         continue;
@@ -84,11 +85,11 @@ namespace Cognite.OpcUa.TypeCollectors
             }
         }
 
-        private BufferedDataType CreateDataType(NodeId id)
+        private UADataType CreateDataType(NodeId id)
         {
-            if (id == null || id.IsNullNodeId)
+            if (id.IsNullNodeId)
             {
-                return new BufferedDataType(NodeId.Null)
+                return new UADataType(NodeId.Null)
                 {
                     IsString = !config.NullAsNumeric
                 };
@@ -97,20 +98,20 @@ namespace Cognite.OpcUa.TypeCollectors
             foreach (var parent in GetAncestors(id))
             {
                 if (parent != DataTypes.BaseDataType && dataTypes.TryGetValue(parent, out var dt))
-                    return new BufferedDataType(id, dt);
+                    return new UADataType(id, dt);
 
-                if (parent == DataTypes.Number) return new BufferedDataType(id) { IsString = false };
-                if (parent == DataTypes.Boolean) return new BufferedDataType(id) { IsString = false, IsStep = true };
-                if (parent == DataTypes.Enumeration) return new BufferedDataType(id)
+                if (parent == DataTypes.Number) return new UADataType(id) { IsString = false };
+                if (parent == DataTypes.Boolean) return new UADataType(id) { IsString = false, IsStep = true };
+                if (parent == DataTypes.Enumeration) return new UADataType(id)
                 {
                     IsString = config.EnumsAsStrings,
                     IsStep = !config.EnumsAsStrings,
                     EnumValues = new Dictionary<long, string>()
                 };
             }
-            return new BufferedDataType(id);
+            return new UADataType(id);
         }
-        public BufferedDataType GetDataType(NodeId id)
+        public UADataType GetDataType(NodeId id)
         {
             if (id == null) id = NodeId.Null;
             if (dataTypes.TryGetValue(id, out var dt)) return dt;
@@ -124,7 +125,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// </summary>
         /// <param name="node">Variable to be tested</param>
         /// <returns>True if variable may be mapped to a timeseries</returns>
-        public bool AllowTSMap(BufferedVariable node, int? arraySizeOverride = null, bool overrideString = false)
+        public bool AllowTSMap(UAVariable node, int? arraySizeOverride = null, bool overrideString = false)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
             if (node.DataType == null)
@@ -158,22 +159,23 @@ namespace Cognite.OpcUa.TypeCollectors
                 {
                     log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and too large dimension {dim}",
                         node.Id, node.ValueRank, length);
+                    return false;
                 }
             }
             else if (node.ArrayDimensions == null)
             {
                 log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and null ArrayDimensions", node.Id, node.ValueRank);
+                return false;
             }
             else
             {
                 log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
                     node.Id, node.ArrayDimensions.Count);
+                return false;
             }
-
-            return false;
         }
 
-        public Dictionary<string, string> GetAdditionalMetadata(BufferedVariable variable)
+        public Dictionary<string, string> GetAdditionalMetadata(UAVariable variable)
         {
             if (variable == null || variable.DataType == null) return null;
             var dt = variable.DataType;
@@ -227,7 +229,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             if (!enumPropMap.Any()) return;
 
-            var values = await Task.Run(() => uaClient.ReadRawValues(enumPropMap.Values, token));
+            var values = await Task.Run(() => uaClient.ReadRawValues(enumPropMap.Values.Distinct(), token));
             foreach (var kvp in enumPropMap)
             {
                 var type = dataTypes[kvp.Key];
@@ -237,13 +239,6 @@ namespace Cognite.OpcUa.TypeCollectors
                     for (int i = 0; i < strings.Length; i++)
                     {
                         type.EnumValues[i] = strings[i].Text;
-                    }
-                }
-                else if (value.Value is EnumValueType[] enumValues)
-                {
-                    foreach (var val in enumValues)
-                    {
-                        type.EnumValues[val.Value] = val.DisplayName.Text;
                     }
                 }
                 else if (value.Value is ExtensionObject[] exts)
@@ -271,7 +266,10 @@ namespace Cognite.OpcUa.TypeCollectors
             {
                 var id = uaClient.ToNodeId(child.NodeId);
                 parentIds[id] = parent;
-                customTypeNames[id] = child.DisplayName?.Text;
+                if (id.NamespaceIndex != 0)
+                {
+                    customTypeNames[id] = child.DisplayName?.Text;
+                }
             }
 
             await Task.Run(() => uaClient.BrowseDirectory(new List<NodeId> { DataTypeIds.BaseDataType },

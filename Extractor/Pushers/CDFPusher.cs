@@ -31,6 +31,8 @@ using TimeRange = Cognite.Extractor.Common.TimeRange;
 using System.Text.Json;
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
+using Cognite.OpcUa.Types;
+using Cognite.OpcUa.HistoryStates;
 
 namespace Cognite.OpcUa.Pushers
 {
@@ -47,8 +49,8 @@ namespace Cognite.OpcUa.Pushers
         public bool Initialized { get; set; }
         public bool NoInit { get; set; }
 
-        public List<BufferedNode> PendingNodes { get; } = new List<BufferedNode>();
-        public List<BufferedReference> PendingReferences { get; } = new List<BufferedReference>();
+        public List<UANode> PendingNodes { get; } = new List<UANode>();
+        public List<UAReference> PendingReferences { get; } = new List<UAReference>();
         public UAExtractor Extractor { get; set; }
         public IPusherConfig BaseConfig { get; }
 
@@ -87,7 +89,7 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Dequeues up to 100000 points from the BufferedDPQueue, then pushes them to CDF. On failure, writes to file if enabled.
         /// </summary>
-        public async Task<bool?> PushDataPoints(IEnumerable<BufferedDataPoint> points, CancellationToken token)
+        public async Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             if (points == null) return null;
             var dataPointList = points
@@ -100,7 +102,7 @@ namespace Cognite.OpcUa.Pushers
                         if (dp.IsString) return dp;
                         if (!double.IsFinite(dp.DoubleValue.Value))
                         {
-                            if (config.NonFiniteReplacement != null) return new BufferedDataPoint(dp, config.NonFiniteReplacement.Value);
+                            if (config.NonFiniteReplacement != null) return new UADataPoint(dp, config.NonFiniteReplacement.Value);
                             return null;
                         }
                         return dp;
@@ -164,10 +166,10 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Dequeues up to 1000 events from the BufferedEventQueue, then pushes them to CDF.
         /// </summary>
-        public async Task<bool?> PushEvents(IEnumerable<BufferedEvent> events, CancellationToken token)
+        public async Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
             if (events == null) return null;
-            var eventList = new List<BufferedEvent>();
+            var eventList = new List<UAEvent>();
             int count = 0;
             foreach (var buffEvent in events)
             {
@@ -221,8 +223,8 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="variables">List of variables to be synchronized</param>
         /// <returns>True if no operation failed unexpectedly</returns>
         public async Task<bool> PushNodes(
-            IEnumerable<BufferedNode> objects,
-            IEnumerable<BufferedVariable> variables,
+            IEnumerable<UANode> objects,
+            IEnumerable<UAVariable> variables,
             UpdateConfig update,
             CancellationToken token)
         {
@@ -242,7 +244,7 @@ namespace Cognite.OpcUa.Pushers
                 await Extractor.ReadProperties(objects.Concat(variables));
                 foreach (var node in objects.Concat(variables))
                 {
-                    log.Verbose(node.ToDebugDescription());
+                    log.Verbose(node.ToString());
                 }
                 return true;
             }
@@ -280,7 +282,7 @@ namespace Cognite.OpcUa.Pushers
             mismatchedTimeseries.Clear();
         }
         public async Task<bool> InitExtractedRanges(
-            IEnumerable<NodeExtractionState> states,
+            IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
             bool initMissing,
             CancellationToken token)
@@ -387,7 +389,7 @@ namespace Cognite.OpcUa.Pushers
 
         #region assets
 
-        private async Task UpdateRawAssets(IDictionary<string, BufferedNode> assetMap, TypeUpdateConfig update, CancellationToken token)
+        private async Task UpdateRawAssets(IDictionary<string, UANode> assetMap, TypeUpdateConfig update, CancellationToken token)
         {
             string columns = BuildColumnString(update, true);
             await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async rows =>
@@ -407,7 +409,7 @@ namespace Cognite.OpcUa.Pushers
             }, null, columns, token);
         }
 
-        private async Task CreateRawAssets(IDictionary<string, BufferedNode> assetMap, CancellationToken token)
+        private async Task CreateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
             await EnsureRawRows<AssetCreate>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async ids =>
             {
@@ -419,7 +421,7 @@ namespace Cognite.OpcUa.Pushers
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
 
-        private async Task<IEnumerable<Asset>> CreateAssets(IDictionary<string, BufferedNode> assetMap, CancellationToken token)
+        private async Task<IEnumerable<Asset>> CreateAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
             var assets = new List<Asset>();
             foreach (var chunk in Chunking.ChunkByHierarchy(assetMap.Values, config.CdfChunking.Assets, node => node.Id, node => node.ParentId))
@@ -447,7 +449,7 @@ namespace Cognite.OpcUa.Pushers
             return assets;
         }
 
-        private async Task UpdateAssets(IDictionary<string, BufferedNode> assetMap, IEnumerable<Asset> assets, TypeUpdateConfig update, CancellationToken token)
+        private async Task UpdateAssets(IDictionary<string, UANode> assetMap, IEnumerable<Asset> assets, TypeUpdateConfig update, CancellationToken token)
         {
             var updates = new List<AssetUpdateItem>();
             var existing = assets.ToDictionary(asset => asset.ExternalId);
@@ -474,13 +476,13 @@ namespace Cognite.OpcUa.Pushers
         }
 
         private async Task PushAssets(
-            IEnumerable<BufferedNode> objects,
+            IEnumerable<UANode> objects,
             TypeUpdateConfig update,
             CancellationToken token)
         {
             if (config.SkipMetadata) return;
 
-            var assetIds = new ConcurrentDictionary<string, BufferedNode>(objects.ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
+            var assetIds = new ConcurrentDictionary<string, UANode>(objects.ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
             var metaMap = config.MetadataMapping?.Assets;
             bool useRawAssets = config.RawMetadata != null
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
@@ -512,7 +514,7 @@ namespace Cognite.OpcUa.Pushers
 
         #region timeseries
         private async Task UpdateRawTimeseries(
-            IDictionary<string, BufferedVariable> tsMap,
+            IDictionary<string, UAVariable> tsMap,
             TypeUpdateConfig update,
             CancellationToken token)
         {
@@ -535,7 +537,7 @@ namespace Cognite.OpcUa.Pushers
         }
 
         private async Task CreateRawTimeseries(
-            IDictionary<string, BufferedVariable> tsMap,
+            IDictionary<string, UAVariable> tsMap,
             CancellationToken token)
         {
             await EnsureRawRows<StatelessTimeSeriesCreate>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, async ids =>
@@ -549,7 +551,7 @@ namespace Cognite.OpcUa.Pushers
         }
 
         private async Task<IEnumerable<TimeSeries>> CreateTimeseries(
-            IDictionary<string, BufferedVariable> tsMap,
+            IDictionary<string, UAVariable> tsMap,
             bool createMinimalTimeseries,
             CancellationToken token)
         {
@@ -596,7 +598,7 @@ namespace Cognite.OpcUa.Pushers
         }
 
         private async Task UpdateTimeseries(
-            IDictionary<string, BufferedVariable> tsMap,
+            IDictionary<string, UAVariable> tsMap,
             IEnumerable<TimeSeries> timeseries,
             TypeUpdateConfig update,
             CancellationToken token)
@@ -624,11 +626,11 @@ namespace Cognite.OpcUa.Pushers
         }
 
         private async Task PushTimeseries(
-            IEnumerable<BufferedVariable> tsList,
+            IEnumerable<UAVariable> tsList,
             TypeUpdateConfig update,
             CancellationToken token)
         {
-            var tsIds = new ConcurrentDictionary<string, BufferedVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
+            var tsIds = new ConcurrentDictionary<string, UAVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
             bool useRawTimeseries = config.RawMetadata != null
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
@@ -735,7 +737,7 @@ namespace Cognite.OpcUa.Pushers
         }
         #endregion
 
-        public async Task<bool> PushReferences(IEnumerable<BufferedReference> references, CancellationToken token)
+        public async Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
         {
             var relationships = references
                 .Select(reference => PusherUtils.ReferenceToRelationship(reference, config.DataSetId, Extractor))

@@ -1,11 +1,9 @@
 ﻿using Cognite.OpcUa;
+using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Test.Unit;
 
 namespace Test.Utils
