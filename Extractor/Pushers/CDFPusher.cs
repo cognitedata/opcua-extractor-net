@@ -397,6 +397,8 @@ namespace Cognite.OpcUa.Pushers
         }
         public async Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
         {
+            if (references == null || !references.Any()) return true;
+
             var relationships = references
                 .Select(reference => reference.ToRelationship(config.DataSetId, Extractor))
                 .DistinctBy(rel => rel.ExternalId);
@@ -778,6 +780,7 @@ namespace Cognite.OpcUa.Pushers
 
         private async Task PushReferencesChunk(IEnumerable<CogniteSdk.Beta.RelationshipCreate> relationships, CancellationToken token)
         {
+            if (!relationships.Any()) return;
             try
             {
                 await destination.CogniteClient.Beta.Relationships.CreateAsync(relationships, token);
