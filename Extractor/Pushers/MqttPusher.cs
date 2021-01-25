@@ -637,7 +637,7 @@ namespace Cognite.OpcUa.Pushers
         {
             if (config.SkipMetadata) return true;
 
-            var relationships = references.Select(rel => PusherUtils.ReferenceToRelationship(rel, config.DataSetId, Extractor));
+            var relationships = references.Select(rel => rel.ToRelationship(config.DataSetId, Extractor));
 
             if (!string.IsNullOrEmpty(config.LocalState))
             {
