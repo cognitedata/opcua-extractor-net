@@ -45,6 +45,9 @@ namespace Cognite.OpcUa
         public List<UANode> PendingNodes { get; } = new List<UANode>();
         public List<UAReference> PendingReferences { get; } = new List<UAReference>();
 
+        private readonly DateTime minTs = DateTime.Parse("1677-09-21T00:12:43.145224194Z");
+        private readonly DateTime maxTs = DateTime.Parse("2262-04-11T23:47:16.854775806Z");
+
 
         private readonly InfluxPusherConfig config;
         private InfluxDBClient client;
@@ -86,7 +89,7 @@ namespace Cognite.OpcUa
             foreach (var lBuffer in points)
             {
                 var buffer = lBuffer;
-                if (buffer.Timestamp <= DateTime.UnixEpoch)
+                if (buffer.Timestamp < minTs || buffer.Timestamp > maxTs)
                 {
                     skippedDatapoints.Inc();
                     continue;
@@ -172,7 +175,7 @@ namespace Cognite.OpcUa
             int count = 0;
             foreach (var evt in events)
             {
-                if (evt.Time < DateTime.UnixEpoch)
+                if (evt.Time < minTs || evt.Time > maxTs)
                 {
                     skippedEvents.Inc();
                     continue;
@@ -184,8 +187,8 @@ namespace Cognite.OpcUa
 
             if (count == 0) return null;
 
-            var points = evts.Select(BufferedEventToInflux);
-            if (config.Debug) return true;
+            var points = evts.Select(UAEventToInflux);
+            if (config.Debug) return null;
             try
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
@@ -452,7 +455,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        private IInfluxDatapoint BufferedEventToInflux(UAEvent evt)
+        private IInfluxDatapoint UAEventToInflux(UAEvent evt)
         {
             var idp = new InfluxDatapoint<string>
             {
@@ -564,6 +567,11 @@ namespace Cognite.OpcUa
         }
 
 
+        private HashSet<string> ExcludeEventTags = new HashSet<string>
+        {
+            "id", "value", "source", "time", "type"
+        };
+
         /// <summary>
         /// Read events from influxdb back into BufferedEvents
         /// </summary>
@@ -601,6 +609,7 @@ namespace Cognite.OpcUa
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
                     if (!(res is IDictionary<string, object> values)) return null;
                     var sourceNode = Extractor.State.GetNodeId((string)values["Source"]);
+                    var type = Extractor.State.GetNodeId(name.Substring(state.Id.Length + 1));
                     var evt = new UAEvent
                     {
                         Time = (DateTime)values["Time"],
@@ -608,13 +617,12 @@ namespace Cognite.OpcUa
                         Message = (string)values["Value"],
                         EmittingNode = state.SourceId,
                         SourceNode = sourceNode,
+                        EventType = type,
                         MetaData = new Dictionary<string, object>()
                     };
-                    evt.MetaData["Type"] = name.Substring(state.Id.Length + 1);
                     foreach (var kvp in values)
                     {
-                        if (kvp.Key == "Time" || kvp.Key == "Id" || kvp.Key == "Value"
-                            || kvp.Key == "Type" || string.IsNullOrEmpty(kvp.Value as string)) continue;
+                        if (string.IsNullOrEmpty(kvp.Value as string) || ExcludeEventTags.Contains(kvp.Key.ToLower())) continue;
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
                     log.Verbose(evt.ToString());

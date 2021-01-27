@@ -87,6 +87,15 @@ namespace Test.Unit
                 new Dictionary<string, InfluxBufferState> { { id, dummy } },
                 tester.Source.Token);
         }
+        private async Task<IEnumerable<UAEvent>> GetAllEvents(InfluxPusher pusher, UAExtractor extractor, NodeId id)
+        {
+            var dummy = new InfluxBufferState(extractor.State.GetEmitterState(id));
+            dummy.SetComplete();
+            dummy.Type = InfluxBufferType.EventType;
+            return await pusher.ReadEvents(
+                new Dictionary<string, InfluxBufferState> { { extractor.GetUniqueId(id), dummy } },
+                tester.Source.Token);
+        }
         [Fact]
         public async Task TestPushDataPoints()
         {
@@ -183,6 +192,116 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_skipped_datapoints_influx", 8));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_influx", 2));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_pushes_influx", 2));
+        }
+        [Fact]
+        public async Task TestPushEvents()
+        {
+            var (client, pusher) = tester.GetPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            CommonTestUtils.ResetMetricValues("opcua_event_push_failures_influx",
+                "opcua_events_pushed_influx", "opcua_event_pushes_influx",
+                "opcua_skipped_events_influx");
+
+            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true);
+            extractor.State.SetEmitterState(state);
+            extractor.State.RegisterNode(new NodeId("source"), extractor.GetUniqueId(new NodeId("source")));
+            extractor.State.RegisterNode(new NodeId("emitter"), extractor.GetUniqueId(new NodeId("emitter")));
+            extractor.State.RegisterNode(new NodeId("type"), extractor.GetUniqueId(new NodeId("type")));
+
+            Assert.Null(await pusher.PushEvents(null, tester.Source.Token));
+            var invalidEvents = new[]
+            {
+                new UAEvent
+                {
+                    Time = DateTime.MinValue
+                },
+                new UAEvent
+                {
+                    Time = DateTime.MaxValue
+                }
+            };
+            Assert.Null(await pusher.PushEvents(invalidEvents, tester.Source.Token));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_skipped_events_influx", 2));
+
+            var time = DateTime.UtcNow;
+
+            var events = new[]
+            {
+                new UAEvent
+                {
+                    Time = time,
+                    EmittingNode = new NodeId("emitter"),
+                    SourceNode = new NodeId("source"),
+                    EventType = new NodeId("type"),
+                    EventId = "someid",
+                    MetaData = new Dictionary<string, object>
+                    {
+                        { "Key1", "object1" },
+                        { "Key2", 123 }
+                    }
+                },
+                new UAEvent
+                {
+                    Time = time.AddSeconds(1),
+                    EmittingNode = new NodeId("emitter"),
+                    SourceNode = new NodeId("source"),
+                    EventType = new NodeId("type"),
+                    EventId = "someid2",
+                    MetaData = new Dictionary<string, object>
+                    {
+                        { "Key1", "object1" },
+                        { "Key2", 123 }
+                    }
+                }
+            };
+
+            tester.Config.Influx.Debug = true;
+            Assert.Null(await pusher.PushEvents(events, tester.Source.Token));
+            tester.Config.Influx.Debug = false;
+
+
+            tester.Config.Influx.Host = "http://localhost:8000";
+            pusher.Reconfigure();
+            Assert.False(await pusher.PushEvents(events, tester.Source.Token));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_event_push_failures_influx", 1));
+            tester.Config.Influx.Host = "http://localhost:8086";
+            pusher.Reconfigure();
+
+            Assert.True(await pusher.PushEvents(events, tester.Source.Token));
+            var ifEvents = await GetAllEvents(pusher, extractor, new NodeId("emitter"));
+            Assert.Equal(2, ifEvents.Count());
+            var eventsById = events.ToDictionary(evt => evt.EventId);
+
+            foreach (var evt in ifEvents)
+            {
+                var rawEvt = eventsById[evt.EventId];
+                Assert.Equal(rawEvt.Time, evt.Time);
+                Assert.Equal(rawEvt.EmittingNode, evt.EmittingNode);
+                Assert.Equal(rawEvt.SourceNode, evt.SourceNode);
+                Assert.Equal(rawEvt.EventId, evt.EventId);
+                Assert.Equal(rawEvt.EventType, evt.EventType);
+                Assert.Equal(rawEvt.MetaData.Count, evt.MetaData.Count);
+                foreach (var kvp in evt.MetaData)
+                {
+                    Assert.Equal(extractor.ConvertToString(rawEvt.MetaData[kvp.Key]), kvp.Value);
+                }
+            }
+
+            events = events.Append(new UAEvent
+            {
+                Time = time,
+                EmittingNode = new NodeId("emitter"),
+                SourceNode = new NodeId("source"),
+                EventType = new NodeId("type"),
+                EventId = "someid3"
+            }).ToArray();
+
+            Assert.True(await pusher.PushEvents(events, tester.Source.Token));
+            ifEvents = await GetAllEvents(pusher, extractor, new NodeId("emitter"));
+            Assert.Equal(3, ifEvents.Count());
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_event_pushes_influx", 2));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_events_pushed_influx", 5));
         }
     }
 }
