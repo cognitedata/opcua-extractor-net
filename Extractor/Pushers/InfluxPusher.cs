@@ -118,7 +118,7 @@ namespace Cognite.OpcUa
             {
                 var ts = Extractor.State.GetNodeState(group.Key);
                 if (ts == null) continue;
-                ipoints.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
+                ipoints.AddRange(group.Select(dp => UADataPointToInflux(ts, dp)));
             }
 
             if (config.Debug) return null;
@@ -131,12 +131,27 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
+                dataPointPushFailures.Inc();
                 if (e is InfluxDBException iex)
                 {
-                    log.Debug("Failed to insert datapoints into influxdb: {line}, {reason}", 
-                        iex.FailedLine, iex.Reason);
+                    log.Error("Failed to insert datapoints into influxdb: {line}, {reason}. Message: {msg}", 
+                        iex.FailedLine, iex.Reason, iex.Message);
+                    if (iex.Reason.StartsWith("partial write"))
+                    {
+                        dataPointPushes.Inc();
+                        int droppedIdx = iex.Message.LastIndexOf("dropped=");
+                        if (droppedIdx != -1)
+                        {
+                            string droppedRaw = iex.Message.Substring(droppedIdx + 8).Trim();
+                            if (int.TryParse(droppedRaw, out int num) && num > 0)
+                            {
+                                skippedDatapoints.Inc(num);
+                            }
+                        }
+                        return true;
+                    }
+                    return false;
                 }
-                dataPointPushFailures.Inc();
                 log.Error("Failed to insert {count} datapoints into influxdb: {msg}", count, e.Message);
                 return false;
             }
@@ -393,9 +408,8 @@ namespace Cognite.OpcUa
                      || dataType == DataTypes.UInteger;
         }
 
-        private static IInfluxDatapoint BufferedDPToInflux(VariableExtractionState state, UADataPoint dp)
+        private static IInfluxDatapoint UADataPointToInflux(VariableExtractionState state, UADataPoint dp)
         {
-
             if (state.DataType.IsString)
             {
                 var idp = new InfluxDatapoint<string>
