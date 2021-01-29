@@ -1,7 +1,9 @@
 ﻿using Cognite.Bridge;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using MQTTnet.Client;
 using System;
@@ -70,6 +72,81 @@ namespace Test.Unit
             await client.DisconnectAsync();
             Assert.False(client.IsConnected);
             await CommonTestUtils.WaitForCondition(() => client.IsConnected, 5, "Expected client to reconnect automatically");
+        }
+        [Fact]
+        public async Task TestPushDatapoints()
+        {
+            CommonTestUtils.ResetMetricValues("opcua_datapoint_push_failures_mqtt",
+                "opcua_datapoints_pushed_mqtt", "opcua_datapoint_pushes_mqtt");
+
+            handler.MockTimeseries("test-ts-double");
+            var stringTs = handler.MockTimeseries("test-ts-string");
+            stringTs.isString = true;
+
+            // Null input
+            Assert.Null(await pusher.PushDataPoints(null, tester.Source.Token));
+
+            // Test filtering out dps
+            var invalidDps = new[]
+            {
+                new UADataPoint(DateTime.MinValue, "test-ts-double", 123),
+                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NaN),
+                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NegativeInfinity),
+                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.PositiveInfinity),
+            };
+            Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
+
+            tester.Config.Mqtt.Debug = true;
+
+            var time = DateTime.UtcNow;
+
+            var dps = new[]
+            {
+                new UADataPoint(time, "test-ts-double", 123),
+                new UADataPoint(time.AddSeconds(1), "test-ts-double", 321),
+                new UADataPoint(time, "test-ts-string", "string"),
+                new UADataPoint(time.AddSeconds(1), "test-ts-string", "string2"),
+                new UADataPoint(time, "test-ts-missing", "value")
+            };
+
+            // Debug true
+            Assert.Null(await pusher.PushDataPoints(dps, tester.Source.Token));
+
+            tester.Config.Mqtt.Debug = false;
+
+            // Missing timeseries, but the others should succeed
+            var waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            await waitTask;
+
+            Assert.Equal(2, handler.Datapoints["test-ts-double"].NumericDatapoints.Count);
+            Assert.Equal(2, handler.Datapoints["test-ts-string"].StringDatapoints.Count);
+
+            Assert.Equal(time.ToUnixTimeMilliseconds(), handler.Datapoints["test-ts-double"].NumericDatapoints.First().Timestamp);
+            Assert.Equal(123, handler.Datapoints["test-ts-double"].NumericDatapoints.First().Value);
+            Assert.Equal(time.ToUnixTimeMilliseconds(), handler.Datapoints["test-ts-string"].StringDatapoints.First().Timestamp);
+            Assert.Equal("string", handler.Datapoints["test-ts-string"].StringDatapoints.First().Value);
+
+            Assert.Equal(2, handler.Datapoints.Count);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_mqtt", 0));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoints_pushed_mqtt", 5));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_pushes_mqtt", 1));
+
+            // Mismatched timeseries, handled by bridge
+            dps = new[]
+            {
+                new UADataPoint(time.AddSeconds(2), "test-ts-double", "string"),
+                new UADataPoint(time.AddSeconds(3), "test-ts-double", "string2"),
+                new UADataPoint(time.AddSeconds(2), "test-ts-string", "string3"),
+                new UADataPoint(time.AddSeconds(3), "test-ts-string", "string4"),
+                new UADataPoint(time, "test-ts-missing", "value")
+            };
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
+            await waitTask;
+
+            Assert.Equal(2, handler.Datapoints["test-ts-double"].NumericDatapoints.Count);
+            Assert.Equal(4, handler.Datapoints["test-ts-string"].StringDatapoints.Count);
         }
 
         protected override void Dispose(bool disposing)

@@ -175,7 +175,7 @@ namespace Cognite.OpcUa.Pushers
                 dataPointList[dp.Id].Add(dp);
             }
 
-            if (count == 0) return null;
+            if (count == 0 || config.Debug) return null;
 
             var dpChunks = dataPointList.Select(kvp => (kvp.Key, (IEnumerable<UADataPoint>)kvp.Value)).ChunkBy(100000, 10000).ToArray();
             var pushTasks = dpChunks.Select(chunk => PushDataPointsChunk(chunk.ToDictionary(pair => pair.Key, pair => pair.Values), token)).ToList();
@@ -404,8 +404,6 @@ namespace Cognite.OpcUa.Pushers
         #region pushing
         private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<UADataPoint>> dataPointList, CancellationToken token)
         {
-            if (config.Debug) return true;
-            if (!client.IsConnected) return false;
             int count = 0;
             var inserts = dataPointList.Select(kvp =>
             {
