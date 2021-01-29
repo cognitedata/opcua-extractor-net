@@ -46,15 +46,17 @@ namespace Test.Unit
     public class InfluxPusherTest : MakeConsoleWork, IClassFixture<InfluxPusherTestFixture>
     {
         private readonly InfluxPusherTestFixture tester;
+        private InfluxDBClient client;
+        private InfluxPusher pusher;
         public InfluxPusherTest(ITestOutputHelper output, InfluxPusherTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            (client, pusher) = tester.GetPusher();
         }
         [Fact]
         public async Task TestTestConnection()
         {
-            var (client, pusher) = tester.GetPusher();
-
             // Test with against non-existing server
             tester.Config.Influx.Host = "http://localhost:8000";
             pusher.Reconfigure();
@@ -101,7 +103,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestPushReadDataPoints()
         {
-            var (client, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             CommonTestUtils.ResetMetricValues("opcua_datapoint_push_failures_influx",
@@ -210,7 +211,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestPushReadEvents()
         {
-            var (client, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             CommonTestUtils.ResetMetricValues("opcua_event_push_failures_influx",
@@ -320,7 +320,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestInitExtractedRanges()
         {
-            var (client, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             tester.Config.Influx.ReadExtractedRanges = true;
@@ -418,7 +417,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestInitExtractedEventRanges()
         {
-            var (client, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             EventExtractionState[] GetStates()
@@ -506,6 +504,16 @@ namespace Test.Unit
             Assert.True(await pusher.InitExtractedEventRanges(states, true, tester.Source.Token));
             Assert.Equal(new TimeRange(GetTs(1000), GetTs(3000)), states[0].DestinationExtractedRange);
             Assert.Equal(new TimeRange(GetTs(1000), GetTs(2000)), states[1].DestinationExtractedRange);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            if (disposing)
+            {
+                client.Dispose();
+                pusher.Dispose();
+            }
         }
     }
 }

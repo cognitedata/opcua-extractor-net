@@ -39,15 +39,17 @@ namespace Test.Unit
     public class CDFPusherTest : MakeConsoleWork, IClassFixture<CDFPusherTestFixture>
     {
         private CDFPusherTestFixture tester;
+        private CDFMockHandler handler;
+        private CDFPusher pusher;
         public CDFPusherTest(ITestOutputHelper output, CDFPusherTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            (handler, pusher) = tester.GetPusher();
         }
         [Fact]
         public async Task TestTestConnection()
         {
-            var (handler, pusher) = tester.GetPusher();
-
             handler.AllowConnectionTest = false;
 
             tester.Config.Cognite.Debug = true;
@@ -81,8 +83,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestPushDatapoints()
         {
-            var (handler, pusher) = tester.GetPusher();
-
             CommonTestUtils.ResetMetricValues("opcua_datapoint_push_failures_cdf",
                 "opcua_missing_timeseries", "opcua_mismatched_timeseries",
                 "opcua_datapoints_pushed_cdf", "opcua_datapoint_pushes_cdf");
@@ -176,7 +176,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestPushEvents()
         {
-            var (handler, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             CommonTestUtils.ResetMetricValues("opcua_event_push_failures_cdf",
@@ -257,7 +256,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateUpdateAssets()
         {
-            var (handler, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.RawMetadata = null;
@@ -317,7 +315,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRawAssets()
         {
-            var (handler, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
@@ -354,7 +351,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestUpdateRawAssets()
         {
-            var (handler, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
@@ -395,7 +391,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateUpdateTimeseries()
         {
-            var (handler, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
             tester.Config.Cognite.RawMetadata = null;
@@ -465,7 +460,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRawTimeseries()
         {
-            var (handler, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
@@ -511,7 +505,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestUpdateRawTimeseries()
         {
-            var (handler, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
 
@@ -561,7 +554,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestInitExtractedRanges()
         {
-            var (handler, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             tester.Config.Cognite.ReadExtractedRanges = true;
             VariableExtractionState[] GetStates()
@@ -657,7 +649,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRelationships()
         {
-            var (handler, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var mgr = new ReferenceTypeManager(tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
@@ -708,7 +699,6 @@ namespace Test.Unit
         [Fact]
         public async Task TestCreateRawRelationships()
         {
-            var (handler, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
             var mgr = new ReferenceTypeManager(tester.Client, extractor);
             CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_cdf");
@@ -761,6 +751,14 @@ namespace Test.Unit
             Assert.True(await pusher.PushReferences(references, tester.Source.Token));
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
+        }
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            if (disposing)
+            {
+                pusher.Dispose();
+            }
         }
     }
 }
