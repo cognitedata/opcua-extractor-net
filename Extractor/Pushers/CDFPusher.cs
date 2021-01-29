@@ -346,7 +346,6 @@ namespace Cognite.OpcUa.Pushers
                         state.InitExtractedRange(range.First, range.Last);
                     }
                 }
-
             }
 
             return true;

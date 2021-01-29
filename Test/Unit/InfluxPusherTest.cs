@@ -1,10 +1,12 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
+using Cognite.Extractor.Common;
 using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
@@ -97,7 +99,7 @@ namespace Test.Unit
                 tester.Source.Token);
         }
         [Fact]
-        public async Task TestPushDataPoints()
+        public async Task TestPushReadDataPoints()
         {
             var (client, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -162,8 +164,20 @@ namespace Test.Unit
 
             // Successful insertion
             Assert.True(await pusher.PushDataPoints(dps, tester.Source.Token));
-            Assert.Equal(2, (await GetAllDataPoints(pusher, extractor, "test-ts-double")).Count());
-            Assert.Equal(2, (await GetAllDataPoints(pusher, extractor, "test-ts-string", true)).Count());
+            var doubleDps = await GetAllDataPoints(pusher, extractor, "test-ts-double");
+            Assert.Equal(2, doubleDps.Count());
+            Assert.Contains(doubleDps, dp => dp.DoubleValue.Value == 123);
+            Assert.Contains(doubleDps, dp => dp.DoubleValue.Value == 321);
+            Assert.Contains(doubleDps, dp => dp.Timestamp == time);
+            Assert.Contains(doubleDps, dp => dp.Timestamp == time.AddSeconds(1));
+            Assert.All(doubleDps, dp => Assert.Equal("test-ts-double", dp.Id));
+            var stringDps = await GetAllDataPoints(pusher, extractor, "test-ts-string", true);
+            Assert.Equal(2, stringDps.Count());
+            Assert.Contains(stringDps, dp => dp.StringValue == "string");
+            Assert.Contains(stringDps, dp => dp.StringValue == "string2");
+            Assert.Contains(stringDps, dp => dp.Timestamp == time);
+            Assert.Contains(stringDps, dp => dp.Timestamp == time.AddSeconds(1));
+            Assert.All(stringDps, dp => Assert.Equal("test-ts-string", dp.Id));
 
             // Insert with mismatched types
             var dps2 = new[]
@@ -194,7 +208,7 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_pushes_influx", 2));
         }
         [Fact]
-        public async Task TestPushEvents()
+        public async Task TestPushReadEvents()
         {
             var (client, pusher) = tester.GetPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -302,6 +316,104 @@ namespace Test.Unit
             Assert.Equal(3, ifEvents.Count());
             Assert.True(CommonTestUtils.TestMetricValue("opcua_event_pushes_influx", 2));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_events_pushed_influx", 5));
+        }
+        [Fact]
+        public async Task TestInitExtractedRanges()
+        {
+            var (client, pusher) = tester.GetPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            tester.Config.Influx.ReadExtractedRanges = true;
+            VariableExtractionState[] GetStates()
+            {
+                var state1 = new VariableExtractionState(tester.Client,
+                new UAVariable(new NodeId("double"), "double", NodeId.Null) { DataType = new UADataType(DataTypeIds.Double) }, true, true);
+                var state2 = new VariableExtractionState(tester.Client,
+                    new UAVariable(new NodeId("string"), "string", NodeId.Null) { DataType = new UADataType(DataTypeIds.String) }, true, true);
+                var state3 = new VariableExtractionState(tester.Client,
+                    new UAVariable(new NodeId("array"), "array", NodeId.Null)
+                    {
+                        DataType = new UADataType(DataTypeIds.Double),
+                        ArrayDimensions = new Collection<int> { 3 }
+                    }, true, true);
+                extractor.State.SetNodeState(state1, state1.Id);
+                extractor.State.SetNodeState(state2, state2.Id);
+                extractor.State.SetNodeState(state3, state3.Id);
+                for (int i = 0; i < state3.ArrayDimensions[0]; i++)
+                {
+                    extractor.State.SetNodeState(state3, $"{state3.Id}[{i}]");
+                }
+                return new[] { state1, state2, state3 };
+            }
+
+            var states = GetStates();
+
+            // Nothing in Influx
+            // Failure
+            tester.Config.Influx.Host = "http://localhost:8000";
+            pusher.Reconfigure();
+            Assert.False(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
+
+            // Init missing
+            tester.Config.Influx.Host = "http://localhost:8086";
+            pusher.Reconfigure();
+            Assert.True(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
+            foreach (var state in states)
+            {
+                Assert.Equal(TimeRange.Empty, state.DestinationExtractedRange);
+            }
+
+            DateTime GetTs(int ms)
+            {
+                return CogniteTime.FromUnixTimeMilliseconds(ms);
+            }
+
+
+            // Stuff in influx
+            states = GetStates();
+            await pusher.PushDataPoints(new[]
+            {
+                new UADataPoint(GetTs(1000), states[0].Id, 123),
+                new UADataPoint(GetTs(2000), states[0].Id, 123),
+                new UADataPoint(GetTs(3000), states[0].Id, 123),
+                new UADataPoint(GetTs(1000), states[1].Id, "s1"),
+                new UADataPoint(GetTs(2000), states[1].Id, "s2"),
+                new UADataPoint(GetTs(3000), states[1].Id, "s3"),
+                new UADataPoint(GetTs(1000), $"{states[2].Id}[0]", 123),
+                new UADataPoint(GetTs(2000), $"{states[2].Id}[0]", 123),
+                new UADataPoint(GetTs(2000), $"{states[2].Id}[1]", 123),
+                new UADataPoint(GetTs(3000), $"{states[2].Id}[1]", 123)
+            }, tester.Source.Token);
+
+            // Failure
+            tester.Config.Influx.Host = "http://localhost:8000";
+            pusher.Reconfigure();
+            Assert.False(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
+
+            // Normal init
+            tester.Config.Influx.Host = "http://localhost:8086";
+            pusher.Reconfigure();
+            Assert.True(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
+            var range = new TimeRange(GetTs(1000), GetTs(3000));
+            Assert.Equal(range, states[0].DestinationExtractedRange);
+            Assert.Equal(range, states[1].DestinationExtractedRange);
+            Assert.Equal(TimeRange.Empty, states[2].DestinationExtractedRange);
+
+            // Init array
+
+            await pusher.PushDataPoints(new[]
+            {
+                new UADataPoint(GetTs(1000), $"{states[2].Id}[2]", 123),
+                new UADataPoint(GetTs(2000), $"{states[2].Id}[2]", 123),
+                new UADataPoint(GetTs(3000), $"{states[2].Id}[2]", 123),
+            }, tester.Source.Token);
+
+            states = GetStates();
+            Assert.True(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
+            Assert.Equal(range, states[0].DestinationExtractedRange);
+            Assert.Equal(range, states[1].DestinationExtractedRange);
+            Assert.Equal(GetTs(2000), states[2].DestinationExtractedRange.First);
+            Assert.Equal(GetTs(2000), states[2].DestinationExtractedRange.Last);
         }
     }
 }

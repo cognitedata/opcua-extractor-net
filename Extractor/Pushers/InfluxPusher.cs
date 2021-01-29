@@ -217,12 +217,31 @@ namespace Cognite.OpcUa
         {
             if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
             var ranges = new ConcurrentDictionary<string, TimeRange>();
-            var getRangeTasks = states.Select(async state =>
+
+            var ids = new List<string>();
+            foreach (var state in states)
             {
-                var id = Extractor.GetUniqueId(state.SourceId,
-                    state.ArrayDimensions != null && state.ArrayDimensions.Count > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1);
+                if (state.IsArray)
+                {
+                    for (int i = 0; i < state.ArrayDimensions[0]; i++)
+                    {
+                        ids.Add(Extractor.GetUniqueId(state.SourceId, i));
+                    }
+                }
+                else
+                {
+                    ids.Add(state.Id);
+                }
+            }
+
+            var getRangeTasks = ids.Select(async id =>
+            {
+                ranges[id] = TimeRange.Empty;
+
                 var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\"");
+
+                Console.WriteLine($"Got {last.Count} values from {id}");
 
                 if (last.Any() && last.First().HasEntries)
                 {
@@ -240,14 +259,6 @@ namespace Cognite.OpcUa
                         ranges[id] = new TimeRange(ts, ranges[id].Last);
                     }
                 }
-                if (ranges.TryGetValue(id, out var range))
-                {
-                    state.InitExtractedRange(range.First, range.Last);
-                }
-                else
-                {
-                    state.InitToEmpty();
-                }
             });
             try
             {
@@ -258,6 +269,28 @@ namespace Cognite.OpcUa
                 log.Error(e, "Failed to get timestamps from influxdb");
                 return false;
             }
+
+            foreach (var state in states)
+            {
+                if (state.IsArray)
+                {
+                    for (int i = 0; i < state.ArrayDimensions[0]; i++)
+                    {
+                        if (ranges.TryGetValue(Extractor.GetUniqueId(state.SourceId, i), out var range))
+                        {
+                            state.InitExtractedRange(range.First, range.Last);
+                        }
+                    }
+                }
+                else
+                {
+                    if (ranges.TryGetValue(state.Id, out var range))
+                    {
+                        state.InitExtractedRange(range.First, range.Last);
+                    }
+                }
+            }
+
             return true;
         }
         /// <summary>
