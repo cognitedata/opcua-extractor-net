@@ -471,11 +471,6 @@ namespace Test.Unit
 
             var dt = new UADataType(DataTypeIds.Double);
 
-            var nodeToAssetIds = (Dictionary<NodeId, long>)pusher.GetType()
-                .GetField("nodeToAssetIds", BindingFlags.Instance | BindingFlags.NonPublic)
-                .GetValue(pusher);
-            nodeToAssetIds[new NodeId("parent")] = 123;
-
             var assets = Enumerable.Empty<UANode>();
             var update = new UpdateConfig();
             var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };

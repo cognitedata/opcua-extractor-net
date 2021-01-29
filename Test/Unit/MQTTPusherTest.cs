@@ -278,7 +278,6 @@ namespace Test.Unit
             Assert.Null(handler.Assets.Last().Value.description);
 
             // Update both nodes
-            handler.FailedRoutes.Clear();
             node.Description = "description";
             node2.Description = "description";
             waitTask = bridge.WaitForNextMessage();
@@ -340,7 +339,131 @@ namespace Test.Unit
             Assert.Equal("description", handler.AssetRaw.Last().Value.description);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
-            tester.Config.Cognite.RawMetadata = null;
+            tester.Config.Mqtt.RawMetadata = null;
+        }
+        [Fact]
+        public async Task TestCreateUpdateTimeseries()
+        {
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
+            tester.Config.Mqtt.RawMetadata = null;
+
+            var dt = new UADataType(DataTypeIds.Double);
+
+            var assets = Enumerable.Empty<UANode>();
+            var update = new UpdateConfig();
+
+            handler.MockAsset(tester.Client.GetUniqueId(new NodeId("parent")));
+
+            // Test debug mode
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+            tester.Config.Mqtt.Debug = true;
+            var waitTask = bridge.WaitForNextMessage(1);
+            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
+            Assert.Equal(2, node.Properties.Count);
+            tester.Config.Mqtt.Debug = false;
+            Assert.Empty(handler.Timeseries);
+
+            // Create the timeseries
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            await waitTask;
+            Assert.Single(handler.Timeseries);
+            Assert.Equal(1, handler.Timeseries.First().Value.assetId);
+
+            // Do nothing due to no configured update
+            node.Description = "description";
+            waitTask = bridge.WaitForNextMessage(1);
+            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
+
+            // Do nothing again due to no changes on the node
+            update.Variables.Context = true;
+            update.Variables.Description = true;
+            update.Variables.Metadata = true;
+            update.Variables.Name = true;
+            node.Description = null;
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            await waitTask;
+
+            // Create new node
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent")) { DataType = dt };
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(2, handler.Timeseries.Count);
+            Assert.Null(handler.Timeseries.First().Value.description);
+            Assert.Null(handler.Timeseries.Last().Value.description);
+
+            // Update both nodes
+            node2.Description = "description";
+            node.Description = "description";
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(2, handler.Timeseries.Count);
+            Assert.Equal("description", handler.Timeseries.First().Value.description);
+            Assert.Equal("description", handler.Timeseries.Last().Value.description);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
+        }
+        [Fact]
+        public async Task TestCreateUpdateRawTimeseries()
+        {
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
+
+            tester.Config.Mqtt.RawMetadata = new RawMetadataConfig
+            {
+                TimeseriesTable = "timeseries",
+                Database = "metadata"
+            };
+
+            var dt = new UADataType(DataTypeIds.Double);
+
+            var assets = Enumerable.Empty<UANode>();
+            var update = new UpdateConfig();
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+
+            // Create one
+            var waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
+            await waitTask;
+            Assert.Single(handler.TimeseriesRaw);
+            Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.name);
+
+            // Create another, do not overwrite the existing one, due to no update settings
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent")) { DataType = dt };
+            node.Description = "description";
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(2, handler.TimeseriesRaw.Count);
+            Assert.Null(handler.TimeseriesRaw.First().Value.description);
+            Assert.Null(handler.TimeseriesRaw.Last().Value.description);
+
+            // Try to create again, skip both
+            waitTask = bridge.WaitForNextMessage(1);
+            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
+            Assert.Equal(2, handler.TimeseriesRaw.Count);
+            Assert.Null(handler.TimeseriesRaw.First().Value.description);
+            Assert.Null(handler.TimeseriesRaw.Last().Value.description);
+
+            // Update due to update settings
+            update.Variables.Description = true;
+            node2.Description = "description";
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(2, handler.TimeseriesRaw.Count);
+            Assert.Equal("description", handler.TimeseriesRaw.First().Value.description);
+            Assert.Equal("description", handler.TimeseriesRaw.Last().Value.description);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
+            tester.Config.Mqtt.RawMetadata = null;
         }
 
         protected override void Dispose(bool disposing)
