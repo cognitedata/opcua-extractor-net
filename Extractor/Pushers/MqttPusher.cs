@@ -60,7 +60,7 @@ namespace Cognite.OpcUa.Pushers
 
         private bool closed;
 
-        private HashSet<string> existingNodes;
+        private HashSet<string> existingNodes = new HashSet<string>();
 
         private Dictionary<NodeId, string> eventParents = new Dictionary<NodeId, string>();
 
@@ -219,7 +219,7 @@ namespace Cognite.OpcUa.Pushers
             if (objects == null) throw new ArgumentNullException(nameof(objects));
             if (update == null) throw new ArgumentNullException(nameof(update));
 
-            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
+            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null && existingNodes == null)
             {
                 Dictionary<string, ExistingState> states;
                 if (config.SkipMetadata)
@@ -245,30 +245,30 @@ namespace Cognite.OpcUa.Pushers
                     token);
 
                 existingNodes = new HashSet<string>(states.Where(state => state.Value.Existing).Select(state => state.Key));
+            }
 
-
-                if (existingNodes.Any())
+            if (existingNodes != null && existingNodes.Any())
+            {
+                if (!update.Objects.AnyUpdate)
                 {
-                    if (!update.Objects.AnyUpdate)
-                    {
-                        objects = objects
-                            .Where(obj => !existingNodes.Contains(Extractor.GetUniqueId(obj.Id))).ToList();
-                    }
-                    else
-                    {
-                        foreach (var obj in objects) obj.Changed = existingNodes.Contains(Extractor.GetUniqueId(obj.Id));
-                    }
-                    if (!update.Variables.AnyUpdate)
-                    {
-                        variables = variables
-                            .Where(variable => !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index))).ToList();
-                    }
-                    else
-                    {
-                        foreach (var node in variables) node.Changed = existingNodes.Contains(Extractor.GetUniqueId(node.Id, node.Index));
-                    }
+                    objects = objects
+                        .Where(obj => !existingNodes.Contains(Extractor.GetUniqueId(obj.Id))).ToList();
+                }
+                else
+                {
+                    foreach (var obj in objects) obj.Changed = existingNodes.Contains(Extractor.GetUniqueId(obj.Id));
+                }
+                if (!update.Variables.AnyUpdate)
+                {
+                    variables = variables
+                        .Where(variable => !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index))).ToList();
+                }
+                else
+                {
+                    foreach (var node in variables) node.Changed = existingNodes.Contains(Extractor.GetUniqueId(node.Id, node.Index));
                 }
             }
+
             if (!objects.Any() && !variables.Any()) return true;
             if (!config.SkipMetadata)
             {
@@ -296,14 +296,19 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
 
-            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
-            {
-                var newStates = objects
+            var newStates = objects
                     .Select(node => Extractor.GetUniqueId(node.Id))
                     .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
                     .Select(id => new ExistingState { Id = id, Existing = true, LastTimeModified = DateTime.UtcNow })
                     .ToList();
 
+            foreach (var state in newStates)
+            {
+                existingNodes.Add(state.Id);
+            }
+
+            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
+            {
                 await Extractor.StateStorage.StoreExtractionState(
                     newStates,
                     config.LocalState,

@@ -91,8 +91,7 @@ namespace Cognite.Bridge
         /// <returns>True on success</returns>
         public async Task<bool> PushAssets(MqttApplicationMessage msg, CancellationToken token)
         {
-            if (msg == null) return true;
-            if (msg.Payload == null)
+            if (msg == null || msg.Payload == null)
             {
                 log.Warning("Null payload in assets");
                 return true;

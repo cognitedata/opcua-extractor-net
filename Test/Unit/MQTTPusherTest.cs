@@ -2,6 +2,7 @@
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Utils;
+using Cognite.OpcUa;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +31,7 @@ namespace Test.Unit
             var mqttConfig = ConfigurationUtils.Read<BridgeConfig>("config.bridge.yml");
             mqttConfig.Mqtt.ClientId = $"opcua-mqtt-pusher-test-bridge-{idCounter}";
             mqttConfig.GenerateDefaults();
+            mqttConfig.Cognite.Update = true;
             var handler = new CDFMockHandler(mqttConfig.Cognite.Project, CDFMockHandler.MockMode.None)
             {
                 StoreDatapoints = true
@@ -224,6 +226,121 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_events_pushed_mqtt", 5));
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_event_push_failures_mqtt", 0));
+        }
+        [Fact]
+        public async Task TestCreateUpdateAssets()
+        {
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
+            tester.Config.Mqtt.RawMetadata = null;
+
+            var tss = Enumerable.Empty<UAVariable>();
+            var update = new UpdateConfig();
+            Assert.True(await pusher.PushNodes(Enumerable.Empty<UANode>(), tss, update, tester.Source.Token));
+
+            // Test debug mode
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            tester.Config.Mqtt.Debug = true;
+            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            tester.Config.Mqtt.Debug = false;
+            Assert.Empty(handler.Assets);
+
+            // Create the asset
+            node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            var waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            await waitTask;
+            Assert.Single(handler.Assets);
+
+            // Do nothing here, due to no update configured.
+            node.Description = "description";
+            waitTask = bridge.WaitForNextMessage(1);
+            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
+
+            // Do nothing again, due to no changes on the node
+            update.Objects.Context = true;
+            update.Objects.Description = true;
+            update.Objects.Metadata = true;
+            update.Objects.Name = true;
+            node.Description = null;
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            await waitTask;
+
+            // Create new node
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null);
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(2, handler.Assets.Count);
+            Assert.Null(handler.Assets.First().Value.description);
+            Assert.Null(handler.Assets.Last().Value.description);
+
+            // Update both nodes
+            handler.FailedRoutes.Clear();
+            node.Description = "description";
+            node2.Description = "description";
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(2, handler.Assets.Count);
+            Assert.Equal("description", handler.Assets.First().Value.description);
+            Assert.Equal("description", handler.Assets.Last().Value.description);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
+        }
+        [Fact]
+        public async Task TestCreateUpdateRawAssets()
+        {
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            tester.Config.Mqtt.RawMetadata = new RawMetadataConfig
+            {
+                AssetsTable = "assets",
+                Database = "metadata"
+            };
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            var tss = Enumerable.Empty<UAVariable>();
+            var update = new UpdateConfig();
+
+            // Create one
+            var waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
+            await waitTask;
+            Assert.Single(handler.AssetRaw);
+            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.name);
+
+            // Create another, do not overwrite the existing one, due to no update settings
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null);
+            node.Description = "description";
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(2, handler.AssetRaw.Count);
+            Assert.Null(handler.AssetRaw.First().Value.description);
+            Assert.Null(handler.AssetRaw.Last().Value.description);
+
+            // Try to create again, skip both
+            waitTask = bridge.WaitForNextMessage(1);
+            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
+            Assert.Equal(2, handler.AssetRaw.Count);
+            Assert.Null(handler.AssetRaw.First().Value.description);
+            Assert.Null(handler.AssetRaw.Last().Value.description);
+
+            // Update due to update settings
+            update.Objects.Description = true;
+            node2.Description = "description";
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(2, handler.AssetRaw.Count);
+            Assert.Equal("description", handler.AssetRaw.First().Value.description);
+            Assert.Equal("description", handler.AssetRaw.Last().Value.description);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
+            tester.Config.Cognite.RawMetadata = null;
         }
 
         protected override void Dispose(bool disposing)
