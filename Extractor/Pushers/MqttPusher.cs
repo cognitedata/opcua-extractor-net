@@ -244,10 +244,16 @@ namespace Cognite.OpcUa.Pushers
                     (state, poco) => state.Existing = true,
                     token);
 
-                existingNodes = new HashSet<string>(states.Where(state => state.Value.Existing).Select(state => state.Key));
+                foreach (var node in states)
+                {
+                    if (node.Value.Existing)
+                    {
+                        existingNodes.Add(node.Key);
+                    }
+                }
             }
 
-            if (existingNodes != null && existingNodes.Any())
+            if (existingNodes.Any())
             {
                 if (!update.Objects.AnyUpdate)
                 {
@@ -367,8 +373,18 @@ namespace Cognite.OpcUa.Pushers
                     (state, poco) => state.Existing = true,
                     token);
 
-                existingNodes = new HashSet<string>(states.Where(state => state.Value.Existing).Select(state => state.Key));
+                
+                foreach (var node in states)
+                {
+                    if (node.Value.Existing)
+                    {
+                        existingNodes.Add(node.Key);
+                    }
+                }
+            }
 
+            if (existingNodes.Any())
+            {
                 relationships = relationships.Where(rel => !existingNodes.Contains(rel.ExternalId)).ToList();
             }
 
@@ -381,13 +397,18 @@ namespace Cognite.OpcUa.Pushers
 
             if (!results.All(res => res)) return false;
 
+            var newStates = relationships
+                .Select(rel => rel.ExternalId)
+                .Select(id => new ExistingState { Id = id, Existing = true, LastTimeModified = DateTime.UtcNow })
+                .ToList();
+
+            foreach (var state in newStates)
+            {
+                existingNodes.Add(state.Id);
+            }
+
             if (!string.IsNullOrEmpty(config.LocalState))
             {
-                var newStates = relationships
-                    .Select(rel => rel.ExternalId)
-                    .Select(id => new ExistingState { Id = id, Existing = true, LastTimeModified = DateTime.UtcNow })
-                    .ToList();
-
                 await Extractor.StateStorage.StoreExtractionState(
                     newStates,
                     config.LocalState,
