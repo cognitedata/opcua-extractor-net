@@ -311,7 +311,9 @@ namespace Cognite.OpcUa
             var mutex = new object();
             var bestRange = TimeRange.Empty;
 
-            var ids = seriesNames.Where(name => name.StartsWith("events." + state.Id, StringComparison.InvariantCulture));
+            var ids = seriesNames
+                .Where(name => name.StartsWith("events." + state.Id + ":", StringComparison.InvariantCulture))
+                .Distinct().ToList();
 
             var tasks = ids.Select(async id =>
             {
@@ -323,7 +325,7 @@ namespace Cognite.OpcUa
                     DateTime ts = last.First().Entries[0].Time;
                     lock (mutex)
                     {
-                        bestRange = bestRange.Extend(null, ts);
+                        bestRange = bestRange.Extend(ts, ts);
                     }
                 }
 
@@ -337,31 +339,15 @@ namespace Cognite.OpcUa
                         DateTime ts = first.First().Entries[0].Time;
                         lock (mutex)
                         {
-                            bestRange = bestRange.Extend(ts, null);
+                            bestRange = bestRange.Extend(ts, ts);
                         }
                     }
                 }
             });
             await Task.WhenAll(tasks);
             token.ThrowIfCancellationRequested();
-            if (bestRange.Last == CogniteTime.DateTimeEpoch && backfillEnabled)
-            {
-                bestRange = new TimeRange(bestRange.First, DateTime.UtcNow);
-            }
 
-            if (bestRange.First == DateTime.MaxValue)
-            {
-                bestRange = new TimeRange(bestRange.Last, bestRange.Last);
-            }
-
-            if (bestRange == TimeRange.Empty)
-            {
-                state.InitToEmpty();
-            }
-            else
-            {
-                state.InitExtractedRange(bestRange.First, bestRange.Last);
-            }
+            state.InitExtractedRange(bestRange.First, bestRange.Last);
         }
         /// <summary>
         /// Reads the first and last datapoint from influx for each emitter, sending the timestamps to each passed state
@@ -374,7 +360,7 @@ namespace Cognite.OpcUa
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            if (!states.Any() || config.Debug || !config.ReadExtractedEventRanges) return true;
             IEnumerable<string> eventSeries;
             try
             {

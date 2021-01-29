@@ -170,6 +170,7 @@ namespace Cognite.OpcUa
         public int PointChunkSize { get; set; } = 100000;
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; } = true;
+        public bool ReadExtractedEventRanges { get; set; } = true;
         public double? NonFiniteReplacement
         {
             get => nonFiniteReplacement;

@@ -415,5 +415,97 @@ namespace Test.Unit
             Assert.Equal(GetTs(2000), states[2].DestinationExtractedRange.First);
             Assert.Equal(GetTs(2000), states[2].DestinationExtractedRange.Last);
         }
+        [Fact]
+        public async Task TestInitExtractedEventRanges()
+        {
+            var (client, pusher) = tester.GetPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            EventExtractionState[] GetStates()
+            {
+                var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true);
+                var state2 = new EventExtractionState(tester.Client, new NodeId("emitter2"), true, true);
+                extractor.State.SetEmitterState(state);
+                extractor.State.SetEmitterState(state2);
+                return new[] { state, state2 };
+            }
+            
+            extractor.State.RegisterNode(new NodeId("source"), extractor.GetUniqueId(new NodeId("source")));
+            extractor.State.RegisterNode(new NodeId("emitter"), extractor.GetUniqueId(new NodeId("emitter")));
+            extractor.State.RegisterNode(new NodeId("emitter2"), extractor.GetUniqueId(new NodeId("emitter2")));
+            extractor.State.RegisterNode(new NodeId("type"), extractor.GetUniqueId(new NodeId("type")));
+            extractor.State.RegisterNode(new NodeId("type2"), extractor.GetUniqueId(new NodeId("type2")));
+
+            var states = GetStates();
+
+            // Nothing in Influx
+            // Failure
+            tester.Config.Influx.Host = "http://localhost:8000";
+            pusher.Reconfigure();
+            Assert.False(await pusher.InitExtractedEventRanges(states, true, tester.Source.Token));
+
+            // Init missing
+            tester.Config.Influx.Host = "http://localhost:8086";
+            pusher.Reconfigure();
+            Assert.True(await pusher.InitExtractedEventRanges(states, true, tester.Source.Token));
+            foreach (var state in states)
+            {
+                Assert.Equal(TimeRange.Empty, state.DestinationExtractedRange);
+            }
+
+            // Stuff in influx
+            DateTime GetTs(int ms)
+            {
+                return CogniteTime.FromUnixTimeMilliseconds(ms);
+            }
+
+            var events = new[]
+            {
+                new UAEvent
+                {
+                    Time = GetTs(1000),
+                    EmittingNode = new NodeId("emitter"),
+                    EventType = new NodeId("type"),
+                    EventId = "someid"
+                },
+                new UAEvent
+                {
+                    Time = GetTs(3000),
+                    EmittingNode = new NodeId("emitter"),
+                    EventType = new NodeId("type2"),
+                    EventId = "someid2"
+                },
+                new UAEvent
+                {
+                    Time = GetTs(1000),
+                    EmittingNode = new NodeId("emitter2"),
+                    EventType = new NodeId("type"),
+                    EventId = "someid3"
+                },
+                new UAEvent
+                {
+                    Time = GetTs(2000),
+                    EmittingNode = new NodeId("emitter2"),
+                    EventType = new NodeId("type"),
+                    EventId = "someid4"
+                }
+            };
+
+            states = GetStates();
+
+            await pusher.PushEvents(events, tester.Source.Token);
+
+            // Failure
+            tester.Config.Influx.Host = "http://localhost:8000";
+            pusher.Reconfigure();
+            Assert.False(await pusher.InitExtractedEventRanges(states, true, tester.Source.Token));
+
+            // Normal init
+            tester.Config.Influx.Host = "http://localhost:8086";
+            pusher.Reconfigure();
+            Assert.True(await pusher.InitExtractedEventRanges(states, true, tester.Source.Token));
+            Assert.Equal(new TimeRange(GetTs(1000), GetTs(3000)), states[0].DestinationExtractedRange);
+            Assert.Equal(new TimeRange(GetTs(1000), GetTs(2000)), states[1].DestinationExtractedRange);
+        }
     }
 }
