@@ -370,9 +370,6 @@ namespace Cognite.Bridge
                     .Select(id => assetIds[id] ?? 0);
             }
 
-
-            events = events.Where(evt => evt.AssetIds.Any() || !evt.AssetExternalIds.Any());
-
             if (!events.Any()) return true;
 
             try

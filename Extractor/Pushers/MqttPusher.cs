@@ -320,7 +320,7 @@ namespace Cognite.OpcUa.Pushers
             int count = 0;
             foreach (var buffEvent in events)
             {
-                if (buffEvent.Time < minDateTime && !config.Debug)
+                if (buffEvent.Time < PusherUtils.CogniteMinTime || buffEvent.Time > PusherUtils.CogniteMaxTime)
                 {
                     skippedEvents.Inc();
                     continue;

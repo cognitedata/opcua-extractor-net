@@ -6,6 +6,7 @@ using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using MQTTnet.Client;
+using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -128,7 +129,6 @@ namespace Test.Unit
             Assert.Equal("string", handler.Datapoints["test-ts-string"].StringDatapoints.First().Value);
 
             Assert.Equal(2, handler.Datapoints.Count);
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_mqtt", 0));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoints_pushed_mqtt", 5));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_pushes_mqtt", 1));
 
@@ -147,6 +147,83 @@ namespace Test.Unit
 
             Assert.Equal(2, handler.Datapoints["test-ts-double"].NumericDatapoints.Count);
             Assert.Equal(4, handler.Datapoints["test-ts-string"].StringDatapoints.Count);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_datapoint_push_failures_mqtt", 0));
+        }
+        [Fact]
+        public async Task TestPushEvents()
+        {
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            CommonTestUtils.ResetMetricValues("opcua_event_push_failures_mqtt",
+                "opcua_events_pushed_mqtt", "opcua_event_pushes_mqtt");
+
+            Assert.Null(await pusher.PushEvents(null, tester.Source.Token));
+            var invalidEvents = new[]
+            {
+                new UAEvent
+                {
+                    Time = DateTime.MinValue
+                },
+                new UAEvent
+                {
+                    Time = DateTime.MaxValue
+                }
+            };
+            Assert.Null(await pusher.PushEvents(invalidEvents, tester.Source.Token));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_skipped_events_mqtt", 2));
+
+            handler.MockAsset(tester.Client.GetUniqueId(new NodeId("source")));
+
+            var time = DateTime.UtcNow;
+
+            var events = new[]
+            {
+                new UAEvent
+                {
+                    Time = time,
+                    EmittingNode = new NodeId("emitter"),
+                    SourceNode = new NodeId("source"),
+                    EventType = new NodeId("type"),
+                    EventId = "someid"
+                },
+                new UAEvent
+                {
+                    Time = time,
+                    EmittingNode = new NodeId("emitter"),
+                    SourceNode = new NodeId("missingsource"),
+                    EventType = new NodeId("type"),
+                    EventId = "someid2"
+                }
+            };
+
+            tester.Config.Mqtt.Debug = true;
+            Assert.Null(await pusher.PushEvents(events, tester.Source.Token));
+            tester.Config.Mqtt.Debug = false;
+
+            var waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushEvents(events, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(2, handler.Events.Count);
+            Assert.Equal(1, handler.Events.First().Value.assetIds.First());
+            Assert.Empty(handler.Events.Last().Value.assetIds);
+
+            events = events.Append(new UAEvent
+            {
+                Time = time,
+                EmittingNode = new NodeId("emitter"),
+                SourceNode = new NodeId("source"),
+                EventType = new NodeId("type"),
+                EventId = "someid3"
+            }).ToArray();
+
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushEvents(events, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(3, handler.Events.Count);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_event_pushes_mqtt", 2));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_events_pushed_mqtt", 5));
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_event_push_failures_mqtt", 0));
         }
 
         protected override void Dispose(bool disposing)
