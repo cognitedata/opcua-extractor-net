@@ -190,7 +190,7 @@ namespace Test.Unit
             var childrenDict = tester.Client.GetNodeChildren(new[] { ObjectIds.ObjectsFolder }, ReferenceTypeIds.HierarchicalReferences,
                 0, tester.Source.Token);
             var children = childrenDict[ObjectIds.ObjectsFolder];
-            Assert.Equal(7, children.Count);
+            Assert.Equal(8, children.Count);
 
             var nodes = children.ToDictionary(child => child.DisplayName.Text);
             var fullRoot = nodes["FullRoot"];
@@ -658,6 +658,7 @@ namespace Test.Unit
         public async Task TestEventSubscriptions()
         {
             tester.Config.Events.Enabled = true;
+            tester.Config.Source.QueueLength = 100;
 
             var emitters = new[]
             {
@@ -671,6 +672,7 @@ namespace Test.Unit
 
             void handler(MonitoredItem _, MonitoredItemNotificationEventArgs __)
             {
+                Console.WriteLine("Trigger event");
                 count++;
             }
 
@@ -831,7 +833,7 @@ namespace Test.Unit
         public void TestGetUniqueId()
         {
             Assert.Equal("gp.tl:i=123", tester.Client.GetUniqueId(new NodeId(123u, 2)));
-            Assert.Equal("gp.http://opcfoundation.org/UA/:i=123", tester.Client.GetUniqueId(new NodeId(123u)));
+            Assert.Equal("gp.base:i=123", tester.Client.GetUniqueId(new NodeId(123u)));
             var id = tester.Client.GetUniqueId(new NodeId(new string('s', 400), 2));
             Assert.Equal($"gp.tl:s={new string('s', 247)}", id);
             Assert.Equal(255, id.Length);

@@ -694,12 +694,12 @@ namespace Test.Unit
             await tester.PublishEvents(roundOne);
             Assert.Equal(3, tester.Handler.Events.Count);
             await tester.PublishEvents(roundTwo);
-            Assert.Equal(5, tester.Handler.Events.Count);
+            Assert.Equal(6, tester.Handler.Events.Count);
             Assert.True(tester.Handler.Events.ContainsKey("test-event-1"));
             Assert.True(tester.Handler.Events.ContainsKey("test-event-2"));
             Assert.True(tester.Handler.Events.ContainsKey("test-event-3"));
             Assert.True(tester.Handler.Events.ContainsKey("test-event-4"));
-            Assert.False(tester.Handler.Events.ContainsKey("test-event-5"));
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-5"));
             Assert.True(tester.Handler.Events.ContainsKey("test-event-6"));
             Assert.Empty(tester.Handler.Events["test-event-4"].assetIds);
             Assert.Equal(2, tester.Handler.Events["test-event-1"].assetIds.Count());
@@ -707,10 +707,10 @@ namespace Test.Unit
             Assert.Single(tester.Handler.Events["test-event-6"].assetIds);
             await tester.RecreateBridge();
             await tester.PublishEvents(roundThree);
-            Assert.Equal(7, tester.Handler.Events.Count);
+            Assert.Equal(9, tester.Handler.Events.Count);
             Assert.True(tester.Handler.Events.ContainsKey("test-event-7"));
             Assert.True(tester.Handler.Events.ContainsKey("test-event-8"));
-            Assert.False(tester.Handler.Events.ContainsKey("test-event-9"));
+            Assert.True(tester.Handler.Events.ContainsKey("test-event-9"));
             Assert.Equal(2, tester.Handler.Events["test-event-7"].assetIds.Count());
             Assert.Single(tester.Handler.Events["test-event-8"].assetIds);
         }

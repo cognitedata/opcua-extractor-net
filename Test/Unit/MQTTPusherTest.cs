@@ -23,7 +23,7 @@ namespace Test.Unit
     public sealed class MQTTPusherTestFixture : BaseExtractorTestFixture
     {
         private static int idCounter;
-        public MQTTPusherTestFixture() : base(62900)
+        public MQTTPusherTestFixture() : base(63100)
         {
         }
         public (CDFMockHandler, MQTTBridge, MQTTPusher) GetPusher()

@@ -605,7 +605,7 @@ namespace Cognite.OpcUa
                     foreach (var rd in children)
                     {
                         var nodeId = ToNodeId(rd.NodeId);
-                        if (rd.NodeId == ObjectIds.Server) continue;
+                        if (rd.NodeId == ObjectIds.Server || rd.NodeId == ObjectIds.Aliases) continue;
                         if (extractionConfig.IgnoreNamePrefix != null && extractionConfig.IgnoreNamePrefix.Any(prefix =>
                             rd.DisplayName.Text.StartsWith(prefix, StringComparison.CurrentCulture))
                             || extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(rd.DisplayName.Text))

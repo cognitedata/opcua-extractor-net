@@ -423,7 +423,7 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         public void Reset()
         {
-            existingNodes = null;
+            existingNodes = new HashSet<string>();
         }
 
         #endregion
