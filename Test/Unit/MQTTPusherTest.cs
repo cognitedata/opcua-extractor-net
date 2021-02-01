@@ -1,16 +1,19 @@
 ﻿using Cognite.Bridge;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
+using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using MQTTnet.Client;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -520,6 +523,111 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
         }
 
+        [Fact]
+        public async Task TestNodesState()
+        {
+            try
+            {
+                File.Delete("mqtt-state-store.db");
+            } catch { }
+
+            var stateStoreConfig = new StateStoreConfig
+            {
+                Database = StateStoreConfig.StorageType.LiteDb,
+                Location = "mqtt-state-store-1.db"
+            };
+            using var stateStore = new LiteDBStateStore(stateStoreConfig, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
+            using var extractor = tester.BuildExtractor(true, stateStore, pusher);
+            CommonTestUtils.ResetMetricValues("opcua_node_ensure_failures_mqtt", "opcua_created_assets_mqtt",
+                "opcua_created_timeseries_mqtt");
+            tester.Config.Mqtt.RawMetadata = null;
+            tester.Config.Mqtt.LocalState = "mqtt_state";
+
+            var dt = new UADataType(DataTypeIds.Double);
+
+            var ts = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+            var ts2 = new UAVariable(tester.Server.Ids.Base.DoubleVar2, "Variable 2", new NodeId("parent")) { DataType = dt };
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "BaseRoot", NodeId.Null);
+
+            await pusher.PushNodes(new[] { node, node2 }, new[] { ts, ts2 }, new UpdateConfig(), tester.Source.Token);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 2));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 2));
+
+            var existingNodes = (HashSet<string>)pusher.GetType()
+                .GetField("existingNodes", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(pusher);
+
+            Assert.Equal(4, existingNodes.Count);
+            existingNodes.Clear();
+
+            await pusher.PushNodes(new[] { node, node2 }, new[] { ts, ts2 }, new UpdateConfig(), tester.Source.Token);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_assets_mqtt", 2));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 2));
+            Assert.Equal(4, existingNodes.Count);
+
+            tester.Config.Mqtt.LocalState = null;
+
+
+            try
+            {
+                File.Delete("mqtt-state-store-1.db");
+            }
+            catch { }
+        }
+
+        [Fact]
+        public async Task TestReferencesState()
+        {
+            try
+            {
+                File.Delete("mqtt-state-store-2.db");
+            }
+            catch { }
+
+            var stateStoreConfig = new StateStoreConfig
+            {
+                Database = StateStoreConfig.StorageType.LiteDb,
+                Location = "mqtt-state-store-2.db"
+            };
+            using var stateStore = new LiteDBStateStore(stateStoreConfig, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
+
+            using var extractor = tester.BuildExtractor(true, stateStore, pusher);
+            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            CommonTestUtils.ResetMetricValues("opcua_node_ensure_failures_mqtt", "opcua_created_relationships_mqtt");
+            tester.Config.Mqtt.LocalState = "mqtt_state";
+
+            var references = new List<UAReference>
+            {
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr),
+            };
+            await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
+
+            await pusher.PushReferences(references, tester.Source.Token);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_relationships_mqtt", 2));
+
+            var existingNodes = (HashSet<string>)pusher.GetType()
+                .GetField("existingNodes", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(pusher);
+            Assert.Equal(2, existingNodes.Count);
+
+            existingNodes.Clear();
+
+            await pusher.PushReferences(references, tester.Source.Token);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_created_relationships_mqtt", 2));
+            Assert.Equal(2, existingNodes.Count);
+            tester.Config.Mqtt.LocalState = null;
+
+            try
+            {
+                File.Delete("mqtt-state-store-2.db");
+            }
+            catch { }
+        }
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);

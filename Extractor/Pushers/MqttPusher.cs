@@ -80,6 +80,10 @@ namespace Cognite.OpcUa.Pushers
             .CreateCounter("opcua_events_pushed_mqtt", "Number of events pushed to MQTT");
         private static readonly Counter eventPushCounter = Metrics
             .CreateCounter("opcua_event_pushes_mqtt", "Number of times events have been pushed to MQTT");
+        private static readonly Counter createdRelationships = Metrics
+            .CreateCounter("opcua_created_relationships_mqtt", "Number of relationships pushed over MQTT");
+
+
         public MQTTPusher(MqttPusherConfig config)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
@@ -415,7 +419,7 @@ namespace Cognite.OpcUa.Pushers
                 existingNodes.Add(state.Id);
             }
 
-            if (!string.IsNullOrEmpty(config.LocalState))
+            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
                 await Extractor.StateStorage.StoreExtractionState(
                     newStates,
@@ -733,6 +737,7 @@ namespace Cognite.OpcUa.Pushers
                 log.Error("Failed to write relationships to MQTT: {msg}", e.Message);
                 return false;
             }
+            createdRelationships.Inc(references.Count());
             return true;
         }
 
