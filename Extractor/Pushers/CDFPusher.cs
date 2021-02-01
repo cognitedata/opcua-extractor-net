@@ -335,7 +335,14 @@ namespace Cognite.OpcUa.Pushers
                     {
                         if (ranges.TryGetValue(Extractor.GetUniqueId(state.SourceId, i), out var range))
                         {
-                            state.InitExtractedRange(range.First, range.Last);
+                            if (range == TimeRange.Empty)
+                            {
+                                state.InitToEmpty();
+                            }
+                            else
+                            {
+                                state.InitExtractedRange(range.First, range.Last);
+                            }
                         }
                     }
                 }
@@ -343,7 +350,14 @@ namespace Cognite.OpcUa.Pushers
                 {
                     if (ranges.TryGetValue(state.Id, out var range))
                     {
-                        state.InitExtractedRange(range.First, range.Last);
+                        if (range == TimeRange.Empty)
+                        {
+                            state.InitToEmpty();
+                        }
+                        else
+                        {
+                            state.InitExtractedRange(range.First, range.Last);
+                        }
                     }
                 }
             }

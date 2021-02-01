@@ -278,7 +278,14 @@ namespace Cognite.OpcUa
                     {
                         if (ranges.TryGetValue(Extractor.GetUniqueId(state.SourceId, i), out var range))
                         {
-                            state.InitExtractedRange(range.First, range.Last);
+                            if (range == TimeRange.Empty)
+                            {
+                                state.InitToEmpty();
+                            }
+                            else
+                            {
+                                state.InitExtractedRange(range.First, range.Last);
+                            }
                         }
                     }
                 }
@@ -286,7 +293,14 @@ namespace Cognite.OpcUa
                 {
                     if (ranges.TryGetValue(state.Id, out var range))
                     {
-                        state.InitExtractedRange(range.First, range.Last);
+                        if (range == TimeRange.Empty)
+                        {
+                            state.InitToEmpty();
+                        }
+                        else
+                        {
+                            state.InitExtractedRange(range.First, range.Last);
+                        }
                     }
                 }
             }
@@ -347,7 +361,14 @@ namespace Cognite.OpcUa
             await Task.WhenAll(tasks);
             token.ThrowIfCancellationRequested();
 
-            state.InitExtractedRange(bestRange.First, bestRange.Last);
+            if (bestRange == TimeRange.Empty)
+            {
+                state.InitToEmpty();
+            }
+            else
+            {
+                state.InitExtractedRange(bestRange.First, bestRange.Last);
+            }
         }
         /// <summary>
         /// Reads the first and last datapoint from influx for each emitter, sending the timestamps to each passed state
@@ -375,6 +396,8 @@ namespace Cognite.OpcUa
                 return false;
             }
 
+            log.Information("Initializing extracted event ranges for {cnt} emitters", states.Count());
+
             var getRangeTasks = states.Select(state => InitExtractedEventRange(state, backfillEnabled, eventSeries, token));
             try
             {
@@ -384,6 +407,10 @@ namespace Cognite.OpcUa
             {
                 log.Error("Failed to get timestamps from influxdb: {msg}", e.Message);
                 return false;
+            }
+            foreach (var state in states)
+            {
+                log.Information("State: {id} initialized to {start}, {end}", state.Id, state.DestinationExtractedRange.First, state.DestinationExtractedRange.Last);
             }
             return true;
         }

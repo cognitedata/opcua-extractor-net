@@ -871,9 +871,9 @@ namespace Cognite.OpcUa
                     .Select(ts => ts.Id)
                     .Distinct()
                     .Select(id => State.GetNodeState(id))
-                    .Where(state => state != null && state.FrontfillEnabled && state.Initialized);
+                    .Where(state => state != null && state.FrontfillEnabled && !state.Initialized);
 
-                var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled && state.Initialized);
+                var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled && !state.Initialized);
 
                 var initResults = await Task.WhenAll(
                     pusher.InitExtractedRanges(statesToSync, config.History.Backfill, source.Token), 

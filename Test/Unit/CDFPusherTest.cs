@@ -179,7 +179,8 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             CommonTestUtils.ResetMetricValues("opcua_event_push_failures_cdf",
-                "opcua_events_pushed_cdf", "opcua_event_pushes_cdf");
+                "opcua_events_pushed_cdf", "opcua_event_pushes_cdf",
+                "opcua_skipped_events_cdf");
 
             Assert.Null(await pusher.PushEvents(null, tester.Source.Token));
             var invalidEvents = new[]
@@ -578,7 +579,7 @@ namespace Test.Unit
             Assert.True(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
             foreach (var state in states)
             {
-                Assert.Equal(TimeRange.Empty, state.DestinationExtractedRange);
+                Assert.Equal(state.DestinationExtractedRange.First, state.DestinationExtractedRange.Last);
             }
 
             handler.MockTimeseries("gp.base:s=double");
@@ -624,7 +625,7 @@ namespace Test.Unit
             var range = new TimeRange(CogniteTime.FromUnixTimeMilliseconds(1000), CogniteTime.FromUnixTimeMilliseconds(3000));
             Assert.Equal(range, states[0].DestinationExtractedRange);
             Assert.Equal(range, states[1].DestinationExtractedRange);
-            Assert.Equal(TimeRange.Empty, states[2].DestinationExtractedRange);
+            Assert.Equal(states[2].DestinationExtractedRange.First, states[2].DestinationExtractedRange.Last);
 
             // Init array
             handler.Datapoints[$"{states[2].Id}[2]"] = (new List<NumericDatapoint>

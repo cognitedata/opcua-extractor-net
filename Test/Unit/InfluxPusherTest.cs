@@ -359,7 +359,7 @@ namespace Test.Unit
             Assert.True(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
             foreach (var state in states)
             {
-                Assert.Equal(TimeRange.Empty, state.DestinationExtractedRange);
+                Assert.Equal(state.DestinationExtractedRange.First, state.DestinationExtractedRange.Last);
             }
 
             DateTime GetTs(int ms)
@@ -396,7 +396,7 @@ namespace Test.Unit
             var range = new TimeRange(GetTs(1000), GetTs(3000));
             Assert.Equal(range, states[0].DestinationExtractedRange);
             Assert.Equal(range, states[1].DestinationExtractedRange);
-            Assert.Equal(TimeRange.Empty, states[2].DestinationExtractedRange);
+            Assert.Equal(states[2].DestinationExtractedRange.First, states[2].DestinationExtractedRange.Last);
 
             // Init array
 
@@ -448,7 +448,7 @@ namespace Test.Unit
             Assert.True(await pusher.InitExtractedEventRanges(states, true, tester.Source.Token));
             foreach (var state in states)
             {
-                Assert.Equal(TimeRange.Empty, state.DestinationExtractedRange);
+                Assert.Equal(state.DestinationExtractedRange.First, state.DestinationExtractedRange.Last);
             }
 
             // Stuff in influx

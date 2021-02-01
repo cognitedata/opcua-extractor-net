@@ -76,7 +76,6 @@ namespace Server
         public void TriggerEvent<T>(NodeId eventId, NodeId emitter, NodeId source, string message, Action<ManagedEvent> builder = null)
             where T : ManagedEvent
         {
-            Console.WriteLine($"Triggering event on {emitter}");
             var eventState = (BaseObjectTypeState)PredefinedNodes[eventId];
             var emitterState = emitter == null || emitter.NamespaceIndex == 0 ? null : PredefinedNodes[emitter];
             var sourceState = source == null ? null : PredefinedNodes[source];
@@ -91,7 +90,6 @@ namespace Server
             }
             if (emitterState == null)
             {
-                Console.WriteLine("Report event to server");
                 Server.ReportEvent(SystemContext, evt);
             }
             else

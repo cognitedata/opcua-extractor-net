@@ -43,7 +43,8 @@ namespace Cognite.OpcUa.HistoryStates
             {
                 if (!FrontfillEnabled || BackfillEnabled)
                 {
-                    SourceExtractedRange = DestinationExtractedRange = new TimeRange(DateTime.UtcNow, DateTime.UtcNow);
+                    var now = DateTime.UtcNow;
+                    SourceExtractedRange = DestinationExtractedRange = new TimeRange(now, now);
                 }
                 else
                 {

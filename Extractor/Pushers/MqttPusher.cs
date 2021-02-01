@@ -109,16 +109,22 @@ namespace Cognite.OpcUa.Pushers
             {
                 log.Warning("MQTT Client disconnected");
                 log.Debug(e.Exception, "MQTT client disconnected");
-                await Task.Delay(1000);
-                if (closed) return;
-                try
+                async Task TryReconnect(int retries)
                 {
-                    await client.ConnectAsync(options, CancellationToken.None);
+                    if (client.IsConnected || retries == 0 || closed) return;
+                    await Task.Delay(1000);
+                    if (client.IsConnected || retries == 0 || closed) return;
+                    try
+                    {
+                        await client.ConnectAsync(options, CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Warning("Failed to reconnect to broker: {msg}", ex.Message);
+                        await TryReconnect(retries - 1);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    log.Warning("Failed to reconnect to broker: {msg}", ex.Message);
-                }
+                await TryReconnect(3);
             });
             client.UseConnectedHandler(_ =>
             {
@@ -219,13 +225,14 @@ namespace Cognite.OpcUa.Pushers
             if (objects == null) throw new ArgumentNullException(nameof(objects));
             if (update == null) throw new ArgumentNullException(nameof(update));
 
-            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null && existingNodes == null)
+            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
                 Dictionary<string, ExistingState> states;
                 if (config.SkipMetadata)
                 {
                     states = variables
                         .Select(node => Extractor.GetUniqueId(node.Id))
+                        .Where(node => !existingNodes.Contains(node))
                         .Select(id => new ExistingState { Id = id })
                         .ToDictionary(state => state.Id);
                 }
@@ -233,6 +240,7 @@ namespace Cognite.OpcUa.Pushers
                 {
                     states = objects
                        .Select(node => Extractor.GetUniqueId(node.Id))
+                       .Where(node => !existingNodes.Contains(node))
                        .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
                        .Select(id => new ExistingState { Id = id })
                        .ToDictionary(state => state.Id);
@@ -360,7 +368,7 @@ namespace Cognite.OpcUa.Pushers
 
             var relationships = references.Select(rel => rel.ToRelationship(config.DataSetId, Extractor));
 
-            if (!string.IsNullOrEmpty(config.LocalState))
+            if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
                 var states = relationships
                     .Select(rel => rel.ExternalId)
