@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
 

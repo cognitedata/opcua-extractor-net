@@ -17,6 +17,7 @@ using Cognite.OpcUa.HistoryStates;
 using System.Collections.ObjectModel;
 using Com.Cognite.V1.Timeseries.Proto;
 using Cognite.OpcUa.TypeCollectors;
+using Test.Utils;
 
 namespace Test.Unit
 {

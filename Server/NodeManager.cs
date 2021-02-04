@@ -756,13 +756,17 @@ namespace Server
                 tooLargeDimProp.NodeId = GenerateNodeId();
                 tooLargeDimProp.ArrayDimensions = new ReadOnlyList<uint>(new List<uint> { 20 });
 
-                AddPredefinedNodes(SystemContext, root, rankImp, rankImpNoDim, wrongDim, tooLargeDimProp);
+                var nullType = CreateVariable("NullType", NodeId.Null);
+                AddNodeRelation(nullType, root, ReferenceTypeIds.HasComponent);
+
+                AddPredefinedNodes(SystemContext, root, rankImp, rankImpNoDim, wrongDim, tooLargeDimProp, nullType);
 
                 Ids.Wrong.Root = root.NodeId;
                 Ids.Wrong.RankImprecise = rankImp.NodeId;
                 Ids.Wrong.RankImpreciseNoDim = rankImpNoDim.NodeId;
                 Ids.Wrong.WrongDim = wrongDim.NodeId;
                 Ids.Wrong.TooLargeProp = tooLargeDimProp.NodeId;
+                Ids.Wrong.NullType = nullType.NodeId;
             }
         }
 
@@ -1411,6 +1415,7 @@ namespace Server
         public NodeId RankImpreciseNoDim { get; set; }
         public NodeId WrongDim { get; set; }
         public NodeId TooLargeProp { get; set; }
+        public NodeId NullType { get; set; }
     }
     #endregion
 }

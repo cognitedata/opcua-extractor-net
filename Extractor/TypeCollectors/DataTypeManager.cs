@@ -97,12 +97,12 @@ namespace Cognite.OpcUa.TypeCollectors
 
             foreach (var parent in GetAncestors(id))
             {
-                if (parent != DataTypes.BaseDataType && dataTypes.TryGetValue(parent, out var dt))
+                if (parent != DataTypeIds.BaseDataType && dataTypes.TryGetValue(parent, out var dt))
                     return new UADataType(id, dt);
 
-                if (parent == DataTypes.Number) return new UADataType(id) { IsString = false };
-                if (parent == DataTypes.Boolean) return new UADataType(id) { IsString = false, IsStep = true };
-                if (parent == DataTypes.Enumeration) return new UADataType(id)
+                if (parent == DataTypeIds.Number) return new UADataType(id) { IsString = false };
+                if (parent == DataTypeIds.Boolean) return new UADataType(id) { IsString = false, IsStep = true };
+                if (parent == DataTypeIds.Enumeration) return new UADataType(id)
                 {
                     IsString = config.EnumsAsStrings,
                     IsStep = !config.EnumsAsStrings,
@@ -145,8 +145,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 log.Debug("Skipping variable {id} due to raw datatype {raw} being in list of ignored data types", node.Id, dt.Raw);
                 return false;
             }
-            if (node.ValueRank == ValueRanks.Scalar || config.UnknownAsScalar
-                && (node.ValueRank == ValueRanks.ScalarOrOneDimension || node.ValueRank == ValueRanks.Any)) return true;
+            if (node.ValueRank == ValueRanks.Scalar) return true;
 
             if (node.ArrayDimensions != null && node.ArrayDimensions.Count == 1)
             {
@@ -164,6 +163,8 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             else if (node.ArrayDimensions == null)
             {
+                if (config.UnknownAsScalar && (node.ValueRank == ValueRanks.ScalarOrOneDimension
+                    || node.ValueRank == ValueRanks.Any)) return true;
                 log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and null ArrayDimensions", node.Id, node.ValueRank);
                 return false;
             }
@@ -180,7 +181,7 @@ namespace Cognite.OpcUa.TypeCollectors
             if (variable == null || variable.DataType == null) return null;
             var dt = variable.DataType;
             Dictionary<string, string> ret = null;
-            if (dt.EnumValues != null && !config.EnumsAsStrings)
+            if (dt.EnumValues != null)
             {
                 ret = new Dictionary<string, string>();
                 foreach (var val in dt.EnumValues)
@@ -262,6 +263,8 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             if (!config.AutoIdentifyTypes) return;
 
+            log.Information("Map out datatype structure to automatically identify numeric datatypes");
+
             void Callback(ReferenceDescription child, NodeId parent)
             {
                 var id = uaClient.ToNodeId(child.NodeId);
@@ -278,6 +281,13 @@ namespace Cognite.OpcUa.TypeCollectors
                 ReferenceTypeIds.HasSubtype,
                 (uint)NodeClass.DataType,
                 false), CancellationToken.None);
+        }
+        public void Reset()
+        {
+            parentIds.Clear();
+            dataTypes.Clear();
+            ignoreDataTypes.Clear();
+            Configure();
         }
     }
 }

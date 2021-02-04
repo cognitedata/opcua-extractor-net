@@ -82,13 +82,14 @@ namespace Test.Utils
             return Task.FromResult(TestConnectionResult);
         }
 
-        public Task<bool> PushNodes(
+        public async Task<bool> PushNodes(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> variables,
             UpdateConfig update,
             CancellationToken token)
         {
-            if (!PushNodesResult) return Task.FromResult(false);
+            if (!PushNodesResult) return false;
+            await Extractor.ReadProperties(objects.Concat(variables));
             if (objects != null)
             {
                 foreach (var obj in objects)
@@ -113,7 +114,7 @@ namespace Test.Utils
                 }
             }
 
-            return Task.FromResult(PushNodesResult);
+            return PushNodesResult;
         }
 
         public Task<bool> InitExtractedRanges(
@@ -238,6 +239,15 @@ namespace Test.Utils
         public void Reset()
         {
             OnReset.Set();
+        }
+        public void Wipe()
+        {
+            PushedNodes.Clear();
+            PushedReferences.Clear();
+            PushedVariables.Clear();
+            DataPoints.Clear();
+            Events.Clear();
+            UniqueToNodeId.Clear();
         }
     }
 }
