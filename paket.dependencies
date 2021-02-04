@@ -11,7 +11,6 @@ nuget Microsoft.NET.Test.Sdk
 nuget xunit
 nuget xunit.runner.visualstudio
 nuget OPCFoundation.NetStandard.Opc.Ua
-nuget OPCFoundation.NetStandard.Opc.Ua.Server 1.4.365.10
 nuget AdysTech.InfluxDB.Client.Net.Core
 nuget Microsoft.Windows.Compatibility
 nuget MQTTnet

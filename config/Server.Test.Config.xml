@@ -145,4 +145,5 @@
     <!-- Show Only Security, ServiceResultExceptions, Errors and Trace -->
     <!-- <TraceMasks>519</TraceMasks> -->
   </TraceConfiguration>
+  <DisableHiResClock>true</DisableHiResClock>
 </ApplicationConfiguration>
