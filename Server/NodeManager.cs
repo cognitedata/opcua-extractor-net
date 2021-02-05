@@ -546,6 +546,7 @@ namespace Server
                 AddNodeRelation(enumVar1, root, ReferenceTypeIds.HasComponent);
 
                 var enumVar2 = CreateVariable("EnumVar2", enumType2.NodeId);
+                enumVar2.NodeId = new NodeId("enumvar", NamespaceIndex);
                 enumVar2.Value = 123;
                 AddNodeRelation(enumVar2, root, ReferenceTypeIds.HasComponent);
 

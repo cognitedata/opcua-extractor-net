@@ -1538,7 +1538,7 @@ namespace Cognite.OpcUa
             }
             if (value.GetType() == typeof(ExpandedNodeId))
             {
-                return GetUniqueId(ToNodeId((ExpandedNodeId)value));
+                return GetUniqueId((ExpandedNodeId)value);
             }
             if (value.GetType() == typeof(LocalizedText))
             {

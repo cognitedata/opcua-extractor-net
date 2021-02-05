@@ -517,6 +517,37 @@ namespace Test.Integration
             extraction.DataTypes.MaxArraySize = 0;
             extraction.DataTypes.AutoIdentifyTypes = false;
         }
+        [Fact]
+        public async Task TestPropertyIdFilter()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            extraction.PropertyIdFilter = "enum";
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(6, pusher.PushedNodes.Count);
+            Assert.Equal(15, pusher.PushedVariables.Count);
+            Assert.False(pusher.PushedVariables.ContainsKey((ids.EnumVar2, -1)));
+
+            var node = pusher.PushedNodes[ids.Root];
+            Assert.Single(node.Properties);
+            var prop = node.Properties.First(prop => prop.DisplayName == "EnumVar2");
+            Assert.Equal("VEnum2", prop.Value.StringValue);
+
+            extraction.PropertyIdFilter = null;
+            extraction.DataTypes.AllowStringVariables = false;
+            extraction.DataTypes.MaxArraySize = 0;
+            extraction.DataTypes.AutoIdentifyTypes = false;
+        }
 
 
         #endregion
