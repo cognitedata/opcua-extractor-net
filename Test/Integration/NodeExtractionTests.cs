@@ -614,5 +614,111 @@ namespace Test.Integration
             extraction.NodeTypes.Metadata = false;
         }
         #endregion
+
+        #region references
+        private async Task RunReferenceExtraction(UAExtractor extractor)
+        {
+            var dataTypes = tester.Config.Extraction.DataTypes;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+            dataTypes.AllowStringVariables = true;
+            dataTypes.MaxArraySize = 4;
+            dataTypes.AutoIdentifyTypes = true;
+            dataTypes.IgnoreDataTypes = new[]
+            {
+                CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.IgnoreType, tester.Client)
+            };
+
+            await extractor.RunExtractor(true);
+
+            dataTypes.AllowStringVariables = false;
+            dataTypes.MaxArraySize = 0;
+            dataTypes.AutoIdentifyTypes = false;
+            dataTypes.IgnoreDataTypes = null;
+        }
+        [Fact]
+        public async Task TestBasicReferences()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            tester.Config.Extraction.Relationships.Enabled = true;
+
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await RunReferenceExtraction(extractor);
+
+            Assert.Equal(8, pusher.PushedReferences.Count);
+            Assert.Equal(4, pusher.PushedReferences.Count(rel => rel.IsForward));
+
+            Assert.All(pusher.PushedReferences, rel =>
+            {
+                Assert.NotNull(rel.Source);
+                Assert.NotNull(rel.Target);
+                Assert.False(rel.Source.Id.IsNullNodeId);
+                Assert.False(rel.Target.Id.IsNullNodeId);
+                Assert.NotNull(rel.Type);
+                Assert.NotNull(rel.Type.Id);
+                Assert.True(rel.Type.HasName);
+                Assert.Contains(pusher.PushedReferences, orel => orel.Source.Id == rel.Target.Id
+                    && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
+            });
+
+            tester.Config.Extraction.Relationships.Enabled = false;
+        }
+        [Fact]
+        public async Task TestHierarchicalReferences()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Extraction.Relationships.Hierarchical = true;
+
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            await RunReferenceExtraction(extractor);
+
+            Assert.Equal(18, pusher.PushedReferences.Count);
+            Assert.Equal(14, pusher.PushedReferences.Count(rel => rel.IsForward));
+
+            Assert.All(pusher.PushedReferences, rel =>
+            {
+                Assert.NotNull(rel.Source);
+                Assert.NotNull(rel.Target);
+                Assert.False(rel.Source.Id.IsNullNodeId);
+                Assert.False(rel.Target.Id.IsNullNodeId);
+                Assert.NotNull(rel.Type);
+                Assert.NotNull(rel.Type.Id);
+                Assert.True(rel.Type.HasName);
+            });
+
+            tester.Config.Extraction.Relationships.Enabled = false;
+            tester.Config.Extraction.Relationships.Hierarchical = false;
+        }
+        [Fact]
+        public async Task TestInverseHierarchicalReferences()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Extraction.Relationships.Hierarchical = true;
+            tester.Config.Extraction.Relationships.InverseHierarchical = true;
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            await RunReferenceExtraction(extractor);
+
+            Assert.Equal(28, pusher.PushedReferences.Count);
+            Assert.Equal(14, pusher.PushedReferences.Count(rel => rel.IsForward));
+            Assert.All(pusher.PushedReferences, rel =>
+            {
+                Assert.NotNull(rel.Source);
+                Assert.NotNull(rel.Target);
+                Assert.False(rel.Source.Id.IsNullNodeId);
+                Assert.False(rel.Target.Id.IsNullNodeId);
+                Assert.NotNull(rel.Type);
+                Assert.NotNull(rel.Type.Id);
+                Assert.True(rel.Type.HasName);
+                Assert.Contains(pusher.PushedReferences, orel => orel.Source.Id == rel.Target.Id
+                    && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
+            });
+            tester.Config.Extraction.Relationships.Enabled = false;
+            tester.Config.Extraction.Relationships.Hierarchical = false;
+            tester.Config.Extraction.Relationships.InverseHierarchical = false;
+        }
+        #endregion
     }
 }
