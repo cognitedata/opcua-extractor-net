@@ -102,15 +102,16 @@ namespace Test.Unit
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
 
+            var pdt = new UADataType(DataTypeIds.String);
 
-            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
+            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null) { DataType = pdt };
             propA.SetDataPoint("valueA", DateTime.UtcNow, tester.Client);
-            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
+            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null) { DataType = pdt };
             propB.SetDataPoint("valueB", DateTime.UtcNow, tester.Client);
 
-            var propC = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
+            var propC = new UAVariable(new NodeId("propA"), "propA", NodeId.Null) { DataType = pdt };
             propC.SetDataPoint("valueA", DateTime.UtcNow, tester.Client);
-            var propD = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
+            var propD = new UAVariable(new NodeId("propB"), "propB", NodeId.Null) { DataType = pdt };
             propD.SetDataPoint("valueC", DateTime.UtcNow, tester.Client);
 
             // Test metadata
@@ -138,8 +139,8 @@ namespace Test.Unit
             Assert.Equal(csA, csB);
 
             // Test nested metadata
-            var nestProp = new UAVariable(new NodeId("nestProp"), "nestProp", NodeId.Null);
-            var nestProp2 = new UAVariable(new NodeId("nestProp"), "nestProp", NodeId.Null);
+            var nestProp = new UAVariable(new NodeId("nestProp"), "nestProp", NodeId.Null) { DataType = pdt };
+            var nestProp2 = new UAVariable(new NodeId("nestProp"), "nestProp", NodeId.Null) { DataType = pdt };
 
             nestProp.Properties = new List<UAVariable> { propA };
             nestProp2.Properties = new List<UAVariable> { propB };
@@ -163,13 +164,15 @@ namespace Test.Unit
             Assert.Equal(refStr, str);
 
             // Full
+            var pdt = new UADataType(DataTypeIds.String);
+
             node = new UANode(new NodeId("test"), "name", new NodeId("parent"));
             node.Description = "description";
             node.EventNotifier = EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
-            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
+            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null) { DataType = pdt };
             propA.SetDataPoint("valueA", DateTime.UtcNow, tester.Client);
-            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
-            var nestedProp = new UAVariable(new NodeId("propN"), "propN", NodeId.Null);
+            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null) { DataType = pdt };
+            var nestedProp = new UAVariable(new NodeId("propN"), "propN", NodeId.Null) { DataType = pdt };
             nestedProp.SetDataPoint("nProp", DateTime.UtcNow, tester.Client);
             nestedProp.Properties = new List<UAVariable> { propA };
 
@@ -208,10 +211,12 @@ namespace Test.Unit
             Assert.Single(node.BuildMetadata(extractor));
 
             // Test properties only
+            var pdt = new UADataType(DataTypeIds.String);
+
             tester.Config.Extraction.NodeTypes.Metadata = false;
             var ts = DateTime.UtcNow;
-            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
-            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
+            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null) { DataType = pdt };
+            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null) { DataType = pdt };
             propA.SetDataPoint("valueA", ts, tester.Client);
             propB.SetDataPoint("valueB", ts, tester.Client);
 
@@ -229,7 +234,7 @@ namespace Test.Unit
             Assert.Equal(3, node.BuildMetadata(extractor).Count);
 
             // Test nested properties
-            var nestedProp = new UAVariable(new NodeId("nestedProp"), "nestedProp", NodeId.Null);
+            var nestedProp = new UAVariable(new NodeId("nestedProp"), "nestedProp", NodeId.Null) { DataType = pdt };
             nestedProp.SetDataPoint("nestedValue", ts, tester.Client);
             propB.Properties = new List<UAVariable>
             {
@@ -240,20 +245,20 @@ namespace Test.Unit
             Assert.Equal("nestedValue", meta["propB_nestedProp"]);
 
             // Test null name
-            var nullNameProp = new UAVariable(new NodeId("nullName"), null, NodeId.Null);
+            var nullNameProp = new UAVariable(new NodeId("nullName"), null, NodeId.Null) { DataType = pdt };
             node.Properties.Add(nullNameProp);
             meta = node.BuildMetadata(extractor);
             Assert.Equal(4, meta.Count);
 
             // Test null value
-            var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", NodeId.Null);
+            var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", NodeId.Null) { DataType = pdt };
             node.Properties.Add(nullValueProp);
             meta = node.BuildMetadata(extractor);
             Assert.Equal(5, meta.Count);
             Assert.Null(meta["nullValue"]);
 
             // Test duplicated properties
-            var propA2 = new UAVariable(new NodeId("propA2"), "propA", NodeId.Null);
+            var propA2 = new UAVariable(new NodeId("propA2"), "propA", NodeId.Null) { DataType = pdt };
             node.Properties.Add(propA2);
             propA2.SetDataPoint("valueA2", ts, tester.Client);
             meta = node.BuildMetadata(extractor);
@@ -262,7 +267,7 @@ namespace Test.Unit
 
             // Test overwrite extras
             Assert.Equal("SomeType", meta["TypeDefinition"]);
-            var propNT = new UAVariable(new NodeId("TypeDef"), "TypeDefinition", NodeId.Null);
+            var propNT = new UAVariable(new NodeId("TypeDef"), "TypeDefinition", NodeId.Null) { DataType = pdt };
             propNT.SetDataPoint("SomeOtherType", ts, tester.Client);
             node.Properties.Add(propNT);
             meta = node.BuildMetadata(extractor);
@@ -278,8 +283,10 @@ namespace Test.Unit
             var node = new UANode(new NodeId("test"), "test", new NodeId("parent"));
             node.Description = "description";
             var ts = DateTime.UtcNow;
-            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
-            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
+            var pdt = new UADataType(DataTypeIds.String);
+
+            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null) { DataType = pdt };
+            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null) { DataType = pdt };
             propA.SetDataPoint("valueA", ts, tester.Client);
             propB.SetDataPoint("valueB", ts, tester.Client);
 
@@ -297,7 +304,7 @@ namespace Test.Unit
             Assert.Equal(2, poco.Metadata.Count);
 
             // Test meta-map
-            var propC = new UAVariable(new NodeId("propC"), "propC", NodeId.Null);
+            var propC = new UAVariable(new NodeId("propC"), "propC", NodeId.Null) { DataType = pdt };
             propC.SetDataPoint("valueC", ts, tester.Client);
             node.Properties.Add(propC);
 
@@ -321,6 +328,8 @@ namespace Test.Unit
         [Fact]
         public void TestVariableDebugDescription()
         {
+            var pdt = new UADataType(DataTypeIds.String);
+
             // basic
             var node = new UAVariable(new NodeId("test"), "name", NodeId.Null);
             node.ValueRank = ValueRanks.Scalar;
@@ -338,10 +347,10 @@ namespace Test.Unit
             node.ArrayDimensions = new System.Collections.ObjectModel.Collection<int>(new int[] { 4 });
             node.NodeType = new UANodeType(new NodeId("type"), false);
 
-            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
+            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null) { DataType = pdt };
             propA.SetDataPoint("valueA", DateTime.UtcNow, tester.Client);
-            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
-            var nestedProp = new UAVariable(new NodeId("propN"), "propN", NodeId.Null);
+            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null) { DataType = pdt };
+            var nestedProp = new UAVariable(new NodeId("propN"), "propN", NodeId.Null) { DataType = pdt };
             nestedProp.SetDataPoint("nProp", DateTime.UtcNow, tester.Client);
             nestedProp.Properties = new List<UAVariable> { propA };
 
@@ -375,8 +384,10 @@ namespace Test.Unit
         public void TestSetDatapoint()
         {
             // Property
+            var sdt = new UADataType(DataTypeIds.String);
             var node = new UAVariable(new NodeId("test"), "name", NodeId.Null);
             node.IsProperty = true;
+            node.DataType = sdt;
             var now = DateTime.UtcNow;
             node.SetDataPoint(123.4, now, tester.Client);
             Assert.Equal(now, node.Value.Timestamp);
@@ -448,14 +459,16 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
 
-            var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent"));
+            var pdt = new UADataType(DataTypeIds.String);
+
+            var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent")) { DataType = pdt };
             node.Description = "description";
             node.DataType = new UADataType(DataTypeIds.Boolean);
             node.Properties = new List<UAVariable>();
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
             {
-                var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
+                var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null) { DataType = pdt };
                 prop.SetDataPoint($"value{i}", now, tester.Client);
                 node.Properties.Add(prop);
             }
@@ -501,10 +514,13 @@ namespace Test.Unit
             node.Description = "description";
             node.DataType = new UADataType(DataTypeIds.Boolean);
             node.Properties = new List<UAVariable>();
+
+            var pdt = new UADataType(DataTypeIds.String);
+
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
             {
-                var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
+                var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null) { DataType = pdt };
                 prop.SetDataPoint($"value{i}", now, tester.Client);
                 node.Properties.Add(prop);
             }

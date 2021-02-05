@@ -294,6 +294,41 @@ namespace Test.Integration
             dataTypes.IgnoreDataTypes = null;
         }
         [Fact]
+        public async Task TestCustomDataType()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+            var dataTypes = tester.Config.Extraction.DataTypes;
+
+            dataTypes.AllowStringVariables = true;
+            dataTypes.MaxArraySize = -1;
+            dataTypes.AutoIdentifyTypes = true;
+            dataTypes.CustomNumericTypes = new List<ProtoDataType> {
+                new ProtoDataType
+                {
+                    IsStep = true,
+                    NodeId = CommonTestUtils.ToProtoNodeId(ids.NumberType, tester.Client)
+                }
+            };
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(6, pusher.PushedNodes.Count);
+            Assert.Equal(16, pusher.PushedVariables.Count);
+
+            var node = pusher.PushedVariables[(ids.NumberVar, -1)];
+            Assert.True(node.DataType.IsStep);
+            Assert.False(node.DataType.IsString);
+            Assert.Equal(ids.NumberType, node.DataType.Raw);
+
+            dataTypes.AllowStringVariables = false;
+            dataTypes.MaxArraySize = 0;
+            dataTypes.AutoIdentifyTypes = false;
+            dataTypes.CustomNumericTypes = null;
+        }
+        [Fact]
         public async Task TestNullDataType()
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
@@ -363,6 +398,126 @@ namespace Test.Integration
             dataTypes.UnknownAsScalar = false;
             dataTypes.MaxArraySize = 0;
         }
+
+        #endregion
+
+        #region structureconfig
+        [Fact]
+        public async Task TestIgnoreName()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+            var extraction = tester.Config.Extraction;
+
+            extraction.IgnoreName = new[] { "Child", "ChildObject", "Variable", "IgnoreVar", "Variable Array", "EURange", "NumericProp" };
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(4, pusher.PushedNodes.Count);
+            Assert.Equal(11, pusher.PushedVariables.Count);
+            Assert.True(pusher.PushedNodes.ContainsKey(ids.StringArray));
+            Assert.False(pusher.PushedNodes.ContainsKey(ids.Array));
+            Assert.True(pusher.PushedVariables.ContainsKey((ids.StringArray, 1)));
+            Assert.True(pusher.PushedVariables.ContainsKey((ids.MysteryVar, -1)));
+            Assert.False(pusher.PushedVariables.ContainsKey((ids.IgnoreVar, -1)));
+            Assert.False(pusher.PushedVariables.ContainsKey((ids.Array, 1)));
+
+            var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
+            Assert.Equal(1, vnode.Properties.Count);
+            Assert.DoesNotContain(vnode.Properties, prop => prop.DisplayName == "EURange");
+
+            var node = pusher.PushedNodes[ids.Obj2];
+            Assert.Equal(1, node.Properties.Count);
+
+            extraction.IgnoreName = null;
+            extraction.DataTypes.AllowStringVariables = false;
+            extraction.DataTypes.MaxArraySize = 0;
+        }
+        [Fact]
+        public async Task TestIgnoreNamePrefix()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+            var extraction = tester.Config.Extraction;
+
+            extraction.IgnoreNamePrefix = new[] { "Variable", "Ignore", "EUR", "Numeric" };
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(4, pusher.PushedNodes.Count);
+            Assert.Equal(9, pusher.PushedVariables.Count);
+            Assert.False(pusher.PushedNodes.ContainsKey(ids.StringArray));
+            Assert.False(pusher.PushedNodes.ContainsKey(ids.Array));
+            Assert.False(pusher.PushedVariables.ContainsKey((ids.StringArray, 1)));
+            Assert.True(pusher.PushedVariables.ContainsKey((ids.MysteryVar, -1)));
+            Assert.False(pusher.PushedVariables.ContainsKey((ids.IgnoreVar, -1)));
+            Assert.False(pusher.PushedVariables.ContainsKey((ids.Array, 1)));
+
+            var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
+            Assert.Equal(1, vnode.Properties.Count);
+            Assert.DoesNotContain(vnode.Properties, prop => prop.DisplayName == "EURange");
+
+            var node = pusher.PushedNodes[ids.Obj2];
+            Assert.Equal(1, node.Properties.Count);
+
+            extraction.IgnoreNamePrefix = null;
+            extraction.DataTypes.AllowStringVariables = false;
+            extraction.DataTypes.MaxArraySize = 0;
+        }
+        [Fact]
+        public async Task TestPropertyNameFilter()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            extraction.PropertyNameFilter = "ble Str|ble Arr|[0-9]$";
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(3, pusher.PushedNodes.Count);
+            Assert.Equal(4, pusher.PushedVariables.Count);
+            Assert.False(pusher.PushedNodes.ContainsKey(ids.StringArray));
+            Assert.False(pusher.PushedNodes.ContainsKey(ids.Array));
+            Assert.False(pusher.PushedVariables.ContainsKey((ids.StringArray, 1)));
+            Assert.True(pusher.PushedVariables.ContainsKey((ids.MysteryVar, -1)));
+            Assert.False(pusher.PushedVariables.ContainsKey((ids.Array, 1)));
+
+            var node = pusher.PushedNodes[ids.Root];
+            Assert.Equal(5, node.Properties.Count);
+            var prop = node.Properties.First(prop => prop.DisplayName == "Variable StringArray");
+            Assert.Equal("[test1, test2]", prop.Value.StringValue);
+            prop = node.Properties.First(prop => prop.DisplayName == "Variable Array");
+            Assert.Equal("[0, 0, 0, 0]", prop.Value.StringValue);
+            prop = node.Properties.First(prop => prop.DisplayName == "EnumVar1");
+            Assert.Equal("Enum2", prop.Value.StringValue);
+            prop = node.Properties.First(prop => prop.DisplayName == "EnumVar2");
+            Assert.Equal("VEnum2", prop.Value.StringValue);
+            prop = node.Properties.First(prop => prop.DisplayName == "EnumVar3");
+            Assert.Equal("[VEnum2, VEnum2, VEnum1, VEnum2]", prop.Value.StringValue);
+
+            extraction.PropertyNameFilter = null;
+            extraction.DataTypes.AllowStringVariables = false;
+            extraction.DataTypes.MaxArraySize = 0;
+            extraction.DataTypes.AutoIdentifyTypes = false;
+        }
+
 
         #endregion
     }

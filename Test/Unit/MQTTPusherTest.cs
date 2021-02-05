@@ -529,7 +529,7 @@ namespace Test.Unit
         {
             try
             {
-                File.Delete("mqtt-state-store.db");
+                File.Delete("mqtt-state-store-1.db");
             } catch { }
 
             var stateStoreConfig = new StateStoreConfig

@@ -144,20 +144,7 @@ namespace Cognite.OpcUa.Types
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (value == null) return;
-            if (IsProperty || (DataType?.IsString ?? true))
-            {
-                Value = new UADataPoint(
-                    sourceTimestamp <= DateTime.MinValue ? DateTime.UtcNow : sourceTimestamp,
-                    client.GetUniqueId(Id),
-                    client.ConvertToString(value));
-            }
-            else
-            {
-                Value = new UADataPoint(
-                    sourceTimestamp <= DateTime.MinValue ? DateTime.UtcNow : sourceTimestamp,
-                    client.GetUniqueId(Id),
-                    UAClient.ConvertToDouble(value));
-            }
+            Value = DataType.ToDataPoint(client, value, sourceTimestamp, client.GetUniqueId(Id), IsProperty);
         }
         /// <summary>
         /// Create an array-element variable.

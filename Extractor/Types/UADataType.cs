@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Opc.Ua;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -53,26 +54,14 @@ namespace Cognite.OpcUa.Types
                 IsString = true;
             }
         }
-        public UADataPoint ToDataPoint(UAExtractor extractor, object value, DateTime timestamp, string id)
+
+        public UADataPoint ToDataPoint(IUAClientAccess client, object value, DateTime timestamp, string id, bool stringOverride = false)
         {
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
-            if (IsString)
+            if (client == null) throw new ArgumentNullException(nameof(client));
+            if (timestamp == DateTime.MinValue) timestamp = DateTime.UtcNow;
+            if (IsString || stringOverride)
             {
-                if (EnumValues != null)
-                {
-                    try
-                    {
-                        var longVal = Convert.ToInt64(value, CultureInfo.InvariantCulture);
-                        if (EnumValues.TryGetValue(longVal, out string enumVal))
-                        {
-                            return new UADataPoint(timestamp, id, enumVal);
-                        }
-                    }
-                    catch
-                    {
-                    }
-                }
-                return new UADataPoint(timestamp, id, extractor.ConvertToString(value));
+                return new UADataPoint(timestamp, id, client.ConvertToString(value, EnumValues));
             }
             return new UADataPoint(timestamp, id, UAClient.ConvertToDouble(value));
         }

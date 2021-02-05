@@ -280,6 +280,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 token,
                 ReferenceTypeIds.HasSubtype,
                 (uint)NodeClass.DataType,
+                false,
                 false), CancellationToken.None);
         }
         public void Reset()

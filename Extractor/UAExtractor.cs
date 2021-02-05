@@ -37,7 +37,7 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Main extractor class, tying together the <see cref="uaClient"/> and CDF client.
     /// </summary>
-    public class UAExtractor : IDisposable
+    public class UAExtractor : IDisposable, IUAClientAccess
     {
         private readonly UAClient uaClient;
         private readonly FullConfig config;
@@ -355,7 +355,7 @@ namespace Cognite.OpcUa
         /// <param name="id">NodeId to convert</param>
         /// <param name="index">Index to use for uniqueId</param>
         /// <returns>Converted uniqueId</returns>
-        public string GetUniqueId(NodeId id, int index = -1)
+        public string GetUniqueId(ExpandedNodeId id, int index = -1)
         {
             return uaClient.GetUniqueId(id, index);
         }
@@ -374,9 +374,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="value">Value to convert</param>
         /// <returns>Converted value</returns>
-        public string ConvertToString(object value)
+        public string ConvertToString(object value, IDictionary<long, string> enumValues = null)
         {
-            return uaClient.ConvertToString(value);
+            return uaClient.ConvertToString(value, enumValues);
         }
         /// <summary>
         /// Read properties for the given list of BufferedNode. This is intelligent,
@@ -395,7 +395,7 @@ namespace Cognite.OpcUa
                 nodes = nodes.Where(node => !pendingProperties.Contains(node.Id) && !node.PropertiesRead).ToList();
                 if (nodes.Any())
                 {
-                    newTask = Task.Run(() => uaClient.GetNodeProperties(nodes, source.Token));
+                    newTask = Task.Run(async () => await uaClient.GetNodeProperties(nodes, source.Token));
                     propertyReadTasks.Add(newTask);
                 }
 
@@ -1281,5 +1281,11 @@ namespace Cognite.OpcUa
                 uaClient.OnServerReconnect -= UaClient_OnServerReconnect;
             }
         }
+    }
+    public interface IUAClientAccess
+    {
+        string GetUniqueId(ExpandedNodeId id, int index = -1);
+        string ConvertToString(object value, IDictionary<long, string> enumValues = null);
+        string GetRelationshipId(UAReference reference);
     }
 }
