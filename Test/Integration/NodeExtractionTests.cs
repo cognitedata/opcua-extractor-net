@@ -551,5 +551,68 @@ namespace Test.Integration
 
 
         #endregion
+
+        #region custommetadata
+        [Fact]
+        public async Task TestExtraMetadata()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+            extraction.DataTypes.DataTypeMetadata = true;
+            extraction.NodeTypes.Metadata = true;
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(6, pusher.PushedNodes.Count);
+            Assert.Equal(16, pusher.PushedVariables.Count);
+
+            var node = pusher.PushedNodes[ids.Root];
+            var metadata = extractor.GetExtraMetadata(node);
+            Assert.Single(metadata);
+            Assert.Equal("BaseObjectType", metadata["TypeDefinition"]);
+
+            node = pusher.PushedNodes[ids.Array];
+            metadata = extractor.GetExtraMetadata(node);
+            Assert.Equal(2, metadata.Count);
+            Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
+            Assert.Equal("Double", metadata["dataType"]);
+
+            node = pusher.PushedNodes[ids.EnumVar3];
+            metadata = extractor.GetExtraMetadata(node);
+            Assert.Equal(4, metadata.Count);
+            Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
+            Assert.Equal("CustomEnumType2", metadata["dataType"]);
+            Assert.Equal("VEnum1", metadata["321"]);
+            Assert.Equal("VEnum2", metadata["123"]);
+
+            node = pusher.PushedVariables[(ids.EnumVar3, 1)];
+            metadata = extractor.GetExtraMetadata(node);
+            Assert.Equal(4, metadata.Count);
+            Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
+            Assert.Equal("CustomEnumType2", metadata["dataType"]);
+            Assert.Equal("VEnum1", metadata["321"]);
+            Assert.Equal("VEnum2", metadata["123"]);
+
+            node = pusher.PushedVariables[(ids.MysteryVar, -1)];
+            metadata = extractor.GetExtraMetadata(node);
+            Assert.Equal(2, metadata.Count);
+            Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
+            Assert.Equal("MysteryType", metadata["dataType"]);
+
+            extraction.DataTypes.AllowStringVariables = false;
+            extraction.DataTypes.MaxArraySize = 0;
+            extraction.DataTypes.AutoIdentifyTypes = false;
+            extraction.DataTypes.DataTypeMetadata = false;
+            extraction.NodeTypes.Metadata = false;
+        }
+        #endregion
     }
 }

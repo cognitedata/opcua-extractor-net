@@ -717,46 +717,6 @@ namespace Test
         }
         [Trait("Server", "array")]
         [Trait("Target", "CDFPusher")]
-        [Trait("Test", "metadatamapping")]
-        [Fact]
-        public async Task TestMetadataMapping()
-        {
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                ServerName = ServerName.Array
-            });
-            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
-            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
-            tester.Config.History.Enabled = false;
-            tester.Config.Cognite.MetadataMapping = new MetadataMapConfig
-            {
-                Assets = new Dictionary<string, string> { { "StringProp", "name" }, { "NumericProp", "description" }, { "EURange", "description" } },
-                Timeseries = new Dictionary<string, string> { { "EURange", "description" }, { "EngineeringUnits", "unit" } }
-            };
-
-            await tester.ClearPersistentData();
-            await tester.StartServer();
-            tester.StartExtractor();
-
-            await tester.Extractor.WaitForSubscriptions();
-
-            var obj2 = tester.Handler.Assets[tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.Obj2)];
-            Assert.Equal("String prop value", obj2.name);
-            Assert.Equal("1234", obj2.description);
-
-            var numVar = tester.Handler.Timeseries[tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.MysteryVar)];
-            Assert.Equal("°C: degree Celsius", numVar.unit);
-            Assert.Equal("(0, 100)", numVar.description);
-
-            var arrayElem = tester.Handler.Timeseries[tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.Array, 2)];
-            Assert.Equal("°C: degree Celsius", arrayElem.unit);
-            Assert.Equal("(0, 100)", arrayElem.description);
-
-            var arrayParent = tester.Handler.Assets[tester.Extractor.GetUniqueId(tester.Server.Ids.Custom.Array)];
-            Assert.Equal("(0, 100)", arrayParent.description);
-        }
-        [Trait("Server", "array")]
-        [Trait("Target", "CDFPusher")]
         [Trait("Test", "enummapping")]
         [Theory]
         [InlineData(false)]
