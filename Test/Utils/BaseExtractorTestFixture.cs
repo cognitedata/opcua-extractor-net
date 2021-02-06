@@ -15,7 +15,7 @@ namespace Test.Utils
         public UAClient Client { get; }
         public FullConfig Config { get; }
         public ServerController Server { get; }
-        public CancellationTokenSource Source { get; }
+        public CancellationTokenSource Source { get; protected set; }
         public IServiceProvider Provider { get; protected set; }
         protected ServiceCollection Services { get; }
         protected BaseExtractorTestFixture(int port)
@@ -58,7 +58,6 @@ namespace Test.Utils
                 Source.Dispose();
             }
         }
-
 
         public void Dispose()
         {

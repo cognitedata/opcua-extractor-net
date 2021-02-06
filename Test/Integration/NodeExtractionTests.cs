@@ -720,5 +720,123 @@ namespace Test.Integration
             tester.Config.Extraction.Relationships.InverseHierarchical = false;
         }
         #endregion
+        [Fact]
+        public async Task TestLateInitInitialFail()
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Extraction.Relationships.Hierarchical = true;
+            tester.Config.Extraction.Relationships.InverseHierarchical = true;
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            pusher.NoInit = true;
+            pusher.TestConnectionResult = false;
+
+            var dataTypes = tester.Config.Extraction.DataTypes;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+            dataTypes.AllowStringVariables = true;
+            dataTypes.MaxArraySize = 4;
+            dataTypes.AutoIdentifyTypes = true;
+
+            var runTask = extractor.RunExtractor();
+            await extractor.WaitForSubscriptions();
+
+            Assert.Empty(pusher.PushedNodes);
+            Assert.Empty(pusher.PushedVariables);
+            Assert.Equal(22, pusher.PendingNodes.Count);
+            Assert.Equal(32, pusher.PendingReferences.Count);
+
+            Assert.False(pusher.Initialized);
+
+            pusher.TestConnectionResult = true;
+
+            await CommonTestUtils.WaitForCondition(() =>
+                pusher.PushedNodes.Count == 6
+                && pusher.PushedReferences.Count == 32
+                && pusher.PushedVariables.Count == 16, 5, () => $"Expected to get 6 nodes, got {pusher.PushedNodes.Count}, " +
+                    $"16 variables and got {pusher.PushedVariables.Count}, 32 references and got {pusher.PushedReferences.Count}");
+
+            Assert.False(pusher.NoInit);
+            Assert.True(pusher.Initialized);
+
+            extractor.Close(false);
+
+
+            await Assert.ThrowsAsync<TaskCanceledException>(async () => await runTask);
+
+            tester.Config.Extraction.Relationships.Enabled = false;
+            tester.Config.Extraction.Relationships.Hierarchical = false;
+            tester.Config.Extraction.Relationships.InverseHierarchical = false;
+            dataTypes.AllowStringVariables = false;
+            dataTypes.MaxArraySize = 0;
+            dataTypes.AutoIdentifyTypes = false;
+        }
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
+        public async Task TestLateInitLateFail(bool failNodes, bool failReferences)
+        {
+            var pusher = new DummyPusher(new DummyPusherConfig());
+            tester.Config.Extraction.Relationships.Enabled = true;
+            tester.Config.Extraction.Relationships.Hierarchical = true;
+            tester.Config.Extraction.Relationships.InverseHierarchical = true;
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            pusher.NoInit = false;
+            pusher.TestConnectionResult = false;
+            pusher.PushNodesResult = !failNodes;
+            pusher.PushReferenceResult = !failReferences;
+
+            var dataTypes = tester.Config.Extraction.DataTypes;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+            dataTypes.AllowStringVariables = true;
+            dataTypes.MaxArraySize = 4;
+            dataTypes.AutoIdentifyTypes = true;
+
+            var runTask = extractor.RunExtractor();
+            await extractor.WaitForSubscriptions();
+
+            if (failNodes)
+            {
+                Assert.Empty(pusher.PushedNodes);
+                Assert.Empty(pusher.PushedVariables);
+                Assert.Equal(22, pusher.PendingNodes.Count);
+            }
+            if (failReferences)
+            {
+                Assert.Empty(pusher.PushedReferences);
+                Assert.Equal(32, pusher.PendingReferences.Count);
+            }
+
+
+            Assert.False(pusher.Initialized);
+
+            pusher.TestConnectionResult = true;
+            pusher.PushNodesResult = true;
+            pusher.PushReferenceResult = true;
+
+            await CommonTestUtils.WaitForCondition(() =>
+                pusher.PushedNodes.Count == 6
+                && pusher.PushedReferences.Count == 32
+                && pusher.PushedVariables.Count == 16, 5, () => $"Expected to get 6 nodes, got {pusher.PushedNodes.Count}, " +
+                    $"16 variables and got {pusher.PushedVariables.Count}, 32 references and got {pusher.PushedReferences.Count}");
+
+            Assert.True(pusher.Initialized);
+
+            extractor.Close(false);
+
+
+            await Assert.ThrowsAsync<TaskCanceledException>(async () => await runTask);
+
+            tester.Config.Extraction.Relationships.Enabled = false;
+            tester.Config.Extraction.Relationships.Hierarchical = false;
+            tester.Config.Extraction.Relationships.InverseHierarchical = false;
+            dataTypes.AllowStringVariables = false;
+            dataTypes.MaxArraySize = 0;
+            dataTypes.AutoIdentifyTypes = false;
+        }
     }
 }

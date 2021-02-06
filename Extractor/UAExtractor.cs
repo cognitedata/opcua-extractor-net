@@ -331,10 +331,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Closes the extractor, mainly just shutting down the opcua client and waiting for a clean loss of connection.
         /// </summary>
-        public void Close()
+        public void Close(bool closeClient = true)
         {
             source.Cancel();
-            if (!uaClient.Started) return;
+            if (!uaClient.Started || !closeClient) return;
             try
             {
                 uaClient.Close();

@@ -220,6 +220,7 @@ namespace Cognite.OpcUa
                             var references = pusher.PendingReferences.ToList();
                             pusher.PendingNodes.Clear();
                             pusher.PendingReferences.Clear();
+                            pusher.NoInit = false;
                             tasks.Add(extractor.PushNodes(nodes, timeseries, references, pusher, true));
                         }
 
