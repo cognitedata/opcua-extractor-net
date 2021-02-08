@@ -143,54 +143,5 @@ namespace Test
             await tester.TerminateRunTask(false, ex =>
                 ex is TaskCanceledException || ex is AggregateException aex && aex.InnerException is TaskCanceledException);
         }
-        [Trait("Server", "wrong")]
-        [Trait("Target", "UAExtractor")]
-        [Trait("Test", "updatenullproperty")]
-        [Fact]
-        public async Task TestUpdateNullPropertyValue()
-        {
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                ServerName = ServerName.Wrong
-            });
-            await tester.ClearPersistentData();
-            await tester.StartServer();
-
-            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
-            tester.Config.Extraction.Update = new UpdateConfig
-            {
-                Objects = new TypeUpdateConfig
-                {
-                    Metadata = true
-                },
-                Variables = new TypeUpdateConfig
-                {
-                    Metadata = true
-                }
-            };
-
-            tester.StartExtractor();
-
-            await tester.Extractor.WaitForSubscriptions();
-
-            Assert.True(string.IsNullOrEmpty(tester.Handler.Assets["gp.tl:i=2"].metadata["TooLargeDim"]));
-
-            await tester.Extractor.Rebrowse();
-
-            Assert.True(string.IsNullOrEmpty(tester.Handler.Assets["gp.tl:i=2"].metadata["TooLargeDim"]));
-
-            tester.Server.Server.MutateNode(tester.Server.Ids.Wrong.TooLargeProp, state =>
-            {
-                var varState = state as PropertyState;
-                varState.ArrayDimensions = new ReadOnlyList<uint>(new List<uint> { 5 });
-                varState.Value = Enumerable.Range(0, 5).ToArray();
-            });
-
-            await tester.Extractor.Rebrowse();
-
-            Assert.Equal("[0, 1, 2, 3, 4]", tester.Handler.Assets["gp.tl:i=2"].metadata["TooLargeDim"]);
-
-            await tester.TerminateRunTask(false);
-        }
     }
 }

@@ -973,6 +973,53 @@ namespace Test.Integration
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }
+        // Test for a specific bug
+        [Fact]
+        public async Task TestUpdateNullPropertyValue()
+        {
+            var (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Wrong.Root, tester.Client);
+
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+            tester.Config.Extraction.Update = new UpdateConfig
+            {
+                Objects = new TypeUpdateConfig
+                {
+                    Metadata = true
+                },
+                Variables = new TypeUpdateConfig
+                {
+                    Metadata = true
+                }
+            };
+
+            var runTask = extractor.RunExtractor();
+
+            await CommonTestUtils.WaitForCondition(() => handler.Assets.Any() && handler.Timeseries.Any(), 5);
+
+            var id = tester.Client.GetUniqueId(tester.Server.Ids.Wrong.RankImprecise);
+
+            Assert.True(string.IsNullOrEmpty(handler.Assets[id].metadata["TooLargeDim"]));
+
+            await extractor.Rebrowse();
+
+            Assert.True(string.IsNullOrEmpty(handler.Assets[id].metadata["TooLargeDim"]));
+
+            tester.Server.Server.MutateNode(tester.Server.Ids.Wrong.TooLargeProp, state =>
+            {
+                var varState = state as PropertyState;
+                varState.ArrayDimensions = new ReadOnlyList<uint>(new List<uint> { 5 });
+                varState.Value = Enumerable.Range(0, 5).ToArray();
+            });
+
+            await extractor.Rebrowse();
+
+            Assert.Equal("[0, 1, 2, 3, 4]", handler.Assets[id].metadata["TooLargeDim"]);
+
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
+        }
         #endregion
     }
 }
