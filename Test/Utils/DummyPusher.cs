@@ -134,6 +134,7 @@ namespace Test.Utils
                     if (DataPoints.TryGetValue((state.SourceId, idx), out var dps) && dps.Any())
                     {
                         var (min, max) = dps.MinMax(dp => dp.Timestamp);
+                        Console.WriteLine($"Init {state.SourceId} to {min}, {max}");
                         if (backfillEnabled)
                         {
                             state.InitExtractedRange(min, max);

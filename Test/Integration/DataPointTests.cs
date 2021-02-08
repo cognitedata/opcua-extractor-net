@@ -500,12 +500,14 @@ namespace Test.Integration
 
                 await extractor.Looper.WaitForNextPush();
 
+                await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
+
                 await extractor.Looper.StoreState(tester.Source.Token);
+                await TerminateRunTask(runTask, extractor);
+
 
                 CountCustomValues(pusher, 1000);
                 pusher.Wipe();
-
-                await TerminateRunTask(runTask, extractor);
             }
             finally
             {
@@ -528,15 +530,102 @@ namespace Test.Integration
 
                 await extractor.Looper.WaitForNextPush();
 
-                foreach (var kvp in pusher.DataPoints)
-                {
-                    Console.WriteLine($"{kvp.Key}: {kvp.Value.Count}");
-                }
+                await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
+                await TerminateRunTask(runTask, extractor);
 
                 CountCustomValues(pusher, 1001);
                 pusher.Wipe();
 
+            }
+            finally
+            {
+                extractor.Dispose();
+            }
+
+            tester.Config.History.Enabled = false;
+            tester.Config.History.Data = false;
+            tester.Config.History.Backfill = false;
+            dataTypes.AllowStringVariables = false;
+            dataTypes.AutoIdentifyTypes = false;
+            dataTypes.MaxArraySize = 4;
+            tester.WipeCustomHistory();
+        }
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task TestPusherStateRestart(bool backfill)
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
+            var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Data = true;
+            tester.Config.History.Backfill = backfill;
+            var dataTypes = tester.Config.Extraction.DataTypes;
+            dataTypes.AllowStringVariables = true;
+            dataTypes.AutoIdentifyTypes = true;
+            dataTypes.MaxArraySize = 4;
+
+            var now = DateTime.UtcNow;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+
+            tester.WipeCustomHistory();
+            tester.Server.PopulateCustomHistory(now.AddSeconds(-5));
+
+            try
+            {
+                var runTask = extractor.RunExtractor();
+
+                await extractor.WaitForSubscriptions();
+
+                await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                    !node.IsFrontfilling && !node.IsBackfilling), 10);
+
+                await extractor.Looper.WaitForNextPush();
+
+                await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
+
                 await TerminateRunTask(runTask, extractor);
+
+                CountCustomValues(pusher, 1000);
+            }
+            finally
+            {
+                extractor.Dispose();
+            }
+
+            tester.Server.PopulateCustomHistory(now.AddSeconds(-15));
+            tester.Server.PopulateCustomHistory(now.AddSeconds(5));
+
+            extractor = tester.BuildExtractor(true, null, pusher);
+
+            try
+            {
+                var runTask = extractor.RunExtractor();
+
+                await extractor.WaitForSubscriptions();
+
+                await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                    !node.IsFrontfilling && !node.IsBackfilling), 10);
+
+                await extractor.Looper.WaitForNextPush();
+
+                await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 2000), 5);
+
+                await TerminateRunTask(runTask, extractor);
+
+                if (backfill)
+                {
+                    // We cannot know if backfill has finished or not based on the pusher state
+                    CountCustomValues(pusher, 3000);
+                }
+                else
+                {
+                    CountCustomValues(pusher, 2000);
+                }
             }
             finally
             {
