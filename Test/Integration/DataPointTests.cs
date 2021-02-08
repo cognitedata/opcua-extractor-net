@@ -1,10 +1,14 @@
 ﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -318,6 +322,17 @@ namespace Test.Integration
             }
         }
 
+        private void CountCustomValues(DummyPusher pusher, int count)
+        {
+            var ids = tester.Server.Ids.Custom;
+            Assert.Equal(count, pusher.DataPoints[(ids.Array, 0)].DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(count, pusher.DataPoints[(ids.Array, 1)].DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(count, pusher.DataPoints[(ids.Array, 2)].DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(count, pusher.DataPoints[(ids.Array, 3)].DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(count, pusher.DataPoints[(ids.StringyVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(count, pusher.DataPoints[(ids.MysteryVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
+
+        }
         // Details are tested elsewhere, this is just testing that history is run correctly on startup,
         // and that continuous data is returned when running frontfill and backfill
         [Theory]
@@ -354,16 +369,13 @@ namespace Test.Integration
 
             await extractor.Looper.WaitForNextPush();
 
-            Assert.Equal(1000, pusher.DataPoints[(ids.Array, 0)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(1000, pusher.DataPoints[(ids.Array, 1)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(1000, pusher.DataPoints[(ids.Array, 2)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(1000, pusher.DataPoints[(ids.Array, 3)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(1000, pusher.DataPoints[(ids.StringyVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(1000, pusher.DataPoints[(ids.MysteryVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
+            CountCustomValues(pusher, 1000);
 
             TestContinuity(pusher.DataPoints[(ids.Array, 0)], false);
             TestContinuity(pusher.DataPoints[(ids.StringyVar, -1)], true);
             TestContinuity(pusher.DataPoints[(ids.MysteryVar, -1)], false);
+
+            await TerminateRunTask(runTask, extractor);
 
             tester.Config.History.Enabled = false;
             tester.Config.History.Data = false;
@@ -408,12 +420,7 @@ namespace Test.Integration
 
             await extractor.Looper.WaitForNextPush();
 
-            Assert.Equal(1000, pusher.DataPoints[(ids.Array, 0)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(1000, pusher.DataPoints[(ids.Array, 1)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(1000, pusher.DataPoints[(ids.Array, 2)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(1000, pusher.DataPoints[(ids.Array, 3)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(1000, pusher.DataPoints[(ids.StringyVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(1000, pusher.DataPoints[(ids.MysteryVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
+            CountCustomValues(pusher, 1000);
 
             TestContinuity(pusher.DataPoints[(ids.Array, 0)], false);
             TestContinuity(pusher.DataPoints[(ids.StringyVar, -1)], true);
@@ -431,13 +438,10 @@ namespace Test.Integration
 
             await extractor.Looper.WaitForNextPush();
 
+            await TerminateRunTask(runTask, extractor);
+
             // Only datapoints inserted after end should be returned, backfill is assumed to be complete.
-            Assert.Equal(2000, pusher.DataPoints[(ids.Array, 0)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(2000, pusher.DataPoints[(ids.Array, 1)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(2000, pusher.DataPoints[(ids.Array, 2)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(2000, pusher.DataPoints[(ids.Array, 3)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(2000, pusher.DataPoints[(ids.StringyVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(2000, pusher.DataPoints[(ids.MysteryVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
+            CountCustomValues(pusher, 2000);
 
             tester.Config.History.Enabled = false;
             tester.Config.History.Data = false;
@@ -448,6 +452,105 @@ namespace Test.Integration
             tester.WipeCustomHistory();
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task TestLiteDbStateRestart(bool backfill)
+        {
+            try
+            {
+                File.Delete("history-data-test-1.db");
+            }
+            catch { }
+            using var stateStore = new LiteDBStateStore(new StateStoreConfig
+            {
+                Database = StateStoreConfig.StorageType.LiteDb,
+                Location = "history-data-test-1.db"
+            }, tester.Provider.GetRequiredService<ILogger<LiteDBStateStore>>());
+
+            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = false });
+            var extractor = tester.BuildExtractor(true, stateStore, pusher);
+
+            var ids = tester.Server.Ids.Custom;
+
+            tester.Config.History.Enabled = true;
+            tester.Config.StateStorage.Interval = 1000000;
+            tester.Config.History.Data = true;
+            tester.Config.History.Backfill = backfill;
+            var dataTypes = tester.Config.Extraction.DataTypes;
+            dataTypes.AllowStringVariables = true;
+            dataTypes.AutoIdentifyTypes = true;
+            dataTypes.MaxArraySize = 4;
+
+            var now = DateTime.UtcNow;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+
+            tester.WipeCustomHistory();
+            tester.Server.PopulateCustomHistory(now.AddSeconds(-5));
+
+            try
+            {
+                var runTask = extractor.RunExtractor();
+
+                await extractor.WaitForSubscriptions();
+
+                await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                    !node.IsFrontfilling && !node.IsBackfilling), 10);
+
+                await extractor.Looper.WaitForNextPush();
+
+                await extractor.Looper.StoreState(tester.Source.Token);
+
+                CountCustomValues(pusher, 1000);
+                pusher.Wipe();
+
+                await TerminateRunTask(runTask, extractor);
+            }
+            finally
+            {
+                extractor.Dispose();
+            }
+
+            tester.Server.PopulateCustomHistory(now.AddSeconds(-15));
+            tester.Server.PopulateCustomHistory(now.AddSeconds(5));
+
+            extractor = tester.BuildExtractor(true, stateStore, pusher);
+
+            try
+            {
+                var runTask = extractor.RunExtractor();
+
+                await extractor.WaitForSubscriptions();
+
+                await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>
+                    !node.IsFrontfilling && !node.IsBackfilling), 10);
+
+                await extractor.Looper.WaitForNextPush();
+
+                foreach (var kvp in pusher.DataPoints)
+                {
+                    Console.WriteLine($"{kvp.Key}: {kvp.Value.Count}");
+                }
+
+                CountCustomValues(pusher, 1001);
+                pusher.Wipe();
+
+                await TerminateRunTask(runTask, extractor);
+            }
+            finally
+            {
+                extractor.Dispose();
+            }
+
+            tester.Config.History.Enabled = false;
+            tester.Config.History.Data = false;
+            tester.Config.History.Backfill = false;
+            dataTypes.AllowStringVariables = false;
+            dataTypes.AutoIdentifyTypes = false;
+            dataTypes.MaxArraySize = 4;
+            tester.WipeCustomHistory();
+        }
         #endregion
     }
 }
