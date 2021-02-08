@@ -1,5 +1,8 @@
-﻿using Cognite.OpcUa;
+﻿using Cognite.Extractor.Utils;
+using Cognite.OpcUa;
+using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Types;
+using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -17,6 +20,16 @@ namespace Test.Integration
         public NodeExtractionTestFixture() : base(63200) 
         {
             Config.History.Enabled = false;
+        }
+        public (CDFMockHandler, CDFPusher) GetCDFPusher()
+        {
+            var handler = new CDFMockHandler("test", CDFMockHandler.MockMode.None);
+            handler.StoreDatapoints = true;
+            CommonTestUtils.AddDummyProvider(handler, Services);
+            Services.AddCogniteClient("appid", true, true, false);
+            var provider = Services.BuildServiceProvider();
+            var pusher = Config.Cognite.ToPusher(provider) as CDFPusher;
+            return (handler, pusher);
         }
     }
 
@@ -723,6 +736,7 @@ namespace Test.Integration
             tester.Config.Extraction.Relationships.InverseHierarchical = false;
         }
         #endregion
+        #region lateinit
         [Fact]
         public async Task TestLateInitInitialFail()
         {
@@ -841,5 +855,124 @@ namespace Test.Integration
             dataTypes.MaxArraySize = 0;
             dataTypes.AutoIdentifyTypes = false;
         }
+        #endregion
+
+        #region updates
+        [Theory]
+        [InlineData(true, true, true, true, false, false, false, false)]
+        [InlineData(false, false, false, false, true, true, true, true)]
+        [InlineData(true, false, true, false, true, false, true, false)]
+        [InlineData(false, true, false, true, false, true, false, true)]
+        [InlineData(true, true, true, true, true, true, true, true)]
+        public async Task TestUpdateFields(
+            bool assetName, bool variableName,
+            bool assetDesc, bool variableDesc,
+            bool assetContext, bool variableContext,
+            bool assetMeta, bool variableMeta)
+        {
+            var (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var upd = tester.Config.Extraction.Update;
+            upd.Objects.Name = assetName;
+            upd.Objects.Description = assetDesc;
+            upd.Objects.Context = assetContext;
+            upd.Objects.Metadata = assetMeta;
+            upd.Variables.Name = variableName;
+            upd.Variables.Description = variableDesc;
+            upd.Variables.Context = variableContext;
+            upd.Variables.Metadata = variableMeta;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+            tester.Config.History.Enabled = false;
+
+            var runTask = extractor.RunExtractor();
+
+            await CommonTestUtils.WaitForCondition(() => handler.Assets.Any() && handler.Timeseries.Any(), 5);
+
+            CommonTestUtils.VerifyStartingConditions(handler.Assets, handler.Timeseries, null, extractor, tester.Server.Ids.Custom, false);
+
+            tester.Server.ModifyCustomServer();
+
+            var rebrowseTask = extractor.Rebrowse();
+            await Task.WhenAny(rebrowseTask, Task.Delay(10000));
+            Assert.True(rebrowseTask.IsCompleted);
+
+            CommonTestUtils.VerifyStartingConditions(handler.Assets, handler.Timeseries, upd, extractor, tester.Server.Ids.Custom, false);
+            CommonTestUtils.VerifyModified(handler.Assets, handler.Timeseries, upd, extractor, tester.Server.Ids.Custom, false);
+
+            tester.Server.ResetCustomServer();
+            tester.Config.Extraction.Update = new UpdateConfig();
+            tester.Config.Extraction.DataTypes.AllowStringVariables = false;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 0;
+
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
+        }
+        [Theory]
+        [InlineData(true, true, true, true, false, false, false, false)]
+        [InlineData(false, false, false, false, true, true, true, true)]
+        [InlineData(true, false, true, false, true, false, true, false)]
+        [InlineData(false, true, false, true, false, true, false, true)]
+        [InlineData(true, true, true, true, true, true, true, true)]
+        public async Task TestUpdateFieldsRaw(
+            bool assetName, bool variableName,
+            bool assetDesc, bool variableDesc,
+            bool assetContext, bool variableContext,
+            bool assetMeta, bool variableMeta)
+        {
+            var (handler, pusher) = tester.GetCDFPusher();
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var upd = tester.Config.Extraction.Update;
+            upd.Objects.Name = assetName;
+            upd.Objects.Description = assetDesc;
+            upd.Objects.Context = assetContext;
+            upd.Objects.Metadata = assetMeta;
+            upd.Variables.Name = variableName;
+            upd.Variables.Description = variableDesc;
+            upd.Variables.Context = variableContext;
+            upd.Variables.Metadata = variableMeta;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                Database = "metadata",
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries"
+            };
+
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+            tester.Config.History.Enabled = false;
+
+            var runTask = extractor.RunExtractor();
+
+            await CommonTestUtils.WaitForCondition(() => handler.AssetRaw.Any() && handler.TimeseriesRaw.Any(), 5);
+
+            CommonTestUtils.VerifyStartingConditions(handler.AssetRaw, handler.TimeseriesRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), null, extractor, tester.Server.Ids.Custom, true);
+
+            tester.Server.ModifyCustomServer();
+
+            await extractor.Rebrowse();
+
+            CommonTestUtils.VerifyStartingConditions(handler.AssetRaw, handler.TimeseriesRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, extractor, tester.Server.Ids.Custom, true);
+            CommonTestUtils.VerifyModified(handler.AssetRaw, handler.TimeseriesRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, extractor, tester.Server.Ids.Custom, true);
+
+            tester.Server.ResetCustomServer();
+            tester.Config.Extraction.Update = new UpdateConfig();
+            tester.Config.Cognite.RawMetadata = null;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = false;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 0;
+
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
+        }
+        #endregion
     }
 }

@@ -105,6 +105,10 @@ namespace Server
         {
             return custom.AddProperty<T>(parentId, name, dataType, value, rank);
         }
+        public void RemoveProperty(NodeId parentId, string name)
+        {
+            custom.RemoveProperty(parentId, name);
+        }
         public void MutateNode(NodeId id, Action<NodeState> mutation)
         {
             if (mutation == null) throw new ArgumentNullException(nameof(mutation));

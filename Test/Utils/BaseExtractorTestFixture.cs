@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Server;
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Test.Utils
 {
@@ -67,6 +68,17 @@ namespace Test.Utils
             // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
+        }
+
+        public static async Task TerminateRunTask(Task runTask, UAExtractor extractor)
+        {
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
+            extractor.Close(false);
+            try
+            {
+                await runTask;
+            }
+            catch (TaskCanceledException) { }
         }
     }
 }

@@ -220,6 +220,49 @@ namespace Server
                 prop.DisplayName = new LocalizedText("StringProp updated");
             });
         }
+        public void ResetCustomServer()
+        {
+            Server.MutateNode(Ids.Custom.Root, root =>
+            {
+                root.Description = null;
+                root.DisplayName = new LocalizedText("CustomRoot");
+            });
+            Server.MutateNode(Ids.Custom.StringyVar, node =>
+            {
+                node.Description = null;
+                node.DisplayName = new LocalizedText("StringyVar");
+            });
+            Server.ReContextualize(Ids.Custom.Obj2, Ids.Custom.Obj1, Ids.Custom.Root, ReferenceTypeIds.Organizes);
+            Server.ReContextualize(Ids.Custom.StringyVar, Ids.Custom.Obj1, Ids.Custom.Root, ReferenceTypeIds.HasComponent);
+
+            Server.RemoveProperty(Ids.Custom.StringyVar, "NewProp");
+            Server.RemoveProperty(Ids.Custom.Obj1, "NewAssetProp");
+
+            Server.MutateNode(Ids.Custom.RangeProp, node =>
+            {
+                var prop = node as PropertyState;
+                if (prop == null) return;
+                prop.Value = new Opc.Ua.Range(100, 0);
+            });
+            Server.MutateNode(Ids.Custom.ObjProp, node =>
+            {
+                var prop = node as PropertyState;
+                if (prop == null) return;
+                prop.Value = 1234L;
+            });
+            Server.MutateNode(Ids.Custom.EUProp, node =>
+            {
+                var prop = node as PropertyState;
+                if (prop == null) return;
+                prop.DisplayName = new LocalizedText("EngineeringUnits");
+            });
+            Server.MutateNode(Ids.Custom.ObjProp2, node =>
+            {
+                var prop = node as PropertyState;
+                if (prop == null) return;
+                prop.DisplayName = new LocalizedText("StringProp");
+            });
+        }
         public void WipeHistory(NodeId id, object value)
         {
             Server.WipeHistory(id, value);

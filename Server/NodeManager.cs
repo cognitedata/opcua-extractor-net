@@ -264,6 +264,15 @@ namespace Server
             AddPredefinedNode(SystemContext, prop);
             return prop.NodeId;
         }
+        public void RemoveProperty(NodeId parentId, string name)
+        {
+            var parent = PredefinedNodes[parentId];
+            var children = new List<BaseInstanceState>();
+            parent.GetChildren(SystemContext, children);
+            var prop = children.First(child => child.DisplayName.Text == name);
+            parent.RemoveChild(prop);
+            prop.Delete(SystemContext);
+        }
 
         public void ReContextualize(NodeId id, NodeId oldParentId, NodeId newParentId, NodeId referenceType)
         {
