@@ -132,38 +132,6 @@ namespace Test
         [Fact]
         [Trait("Server", "basic")]
         [Trait("Target", "CDFPusher")]
-        [Trait("Test", "nodemap")]
-        public async Task TestNodeMap()
-        {
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                StoreDatapoints = true
-            });
-            await tester.ClearPersistentData();
-
-            await tester.StartServer();
-            tester.Server.PopulateBaseHistory();
-
-            tester.Config.Extraction.NodeMap = new Dictionary<string, ProtoNodeId>
-            {
-                { "Map1", tester.IdToProto(tester.Server.Ids.Base.IntVar) }
-            };
-
-            tester.StartExtractor();
-
-            await tester.WaitForCondition(() => tester.Handler.Datapoints.ContainsKey("Map1"), 20,
-                "Expected the overriden timeseries to create data");
-
-            await tester.TerminateRunTask(true);
-
-            Assert.True(tester.Handler.Datapoints.ContainsKey("Map1"));
-            Assert.True(tester.Handler.Timeseries.ContainsKey("Map1"));
-            Assert.Equal("Variable int", tester.Handler.Timeseries["Map1"].name);
-        }
-
-        [Fact]
-        [Trait("Server", "basic")]
-        [Trait("Target", "CDFPusher")]
         [Trait("Test", "backfill")]
         public async Task TestBackfill()
         {

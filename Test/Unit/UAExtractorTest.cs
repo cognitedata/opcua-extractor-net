@@ -371,5 +371,24 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.DataTypeMetadata = false;
             tester.Config.Extraction.NodeTypes.Metadata = false;
         }
+        [Fact]
+        public async Task TestNodeMapping()
+        {
+            tester.Config.Extraction.NodeMap = new Dictionary<string, ProtoNodeId>
+            {
+                { "Test1", new NodeId("test").ToProtoNodeId(tester.Client) },
+                { "Test2", new NodeId("test2", 2).ToProtoNodeId(tester.Client) }
+            };
+            using var extractor = tester.BuildExtractor();
+
+            // Run the configure extractor method...
+            await extractor.RunExtractor(true);
+
+            Assert.Equal("Test1", extractor.GetUniqueId(new NodeId("test")));
+            Assert.Equal("Test2", tester.Client.GetUniqueId(new NodeId("test2", 2)));
+            Assert.Equal("Test1[0]", extractor.GetUniqueId(new NodeId("test"), 0));
+
+            tester.Config.Extraction.NodeMap = null;
+        }
     }
 }
