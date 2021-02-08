@@ -26,7 +26,7 @@ namespace Test.Unit
         public HistoryReaderTestFixture() : base(62500)
         {
             HistoryStart = DateTime.UtcNow.AddSeconds(-20);
-            Server.PopulateArrayHistory(HistoryStart);
+            Server.PopulateCustomHistory(HistoryStart);
             Server.PopulateBaseHistory(HistoryStart);
             Server.PopulateEvents(HistoryStart);
         }

@@ -31,7 +31,7 @@ namespace Test
             await tester.ClearPersistentData();
             
             await tester.StartServer();
-            tester.Server.PopulateArrayHistory();
+            tester.Server.PopulateCustomHistory();
             
             tester.StartExtractor();
             
@@ -170,7 +170,7 @@ namespace Test
             await tester.ClearPersistentData();
 
             await tester.StartServer();
-            tester.Server.PopulateArrayHistory();
+            tester.Server.PopulateCustomHistory();
 
             tester.StartExtractor();
 

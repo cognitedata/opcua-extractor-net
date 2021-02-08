@@ -31,13 +31,13 @@ namespace Server
             this.predefinedNodes = predefinedNodes;
         }
         #region access
-        public void UpdateNode(NodeId id, object value)
+        public void UpdateNode(NodeId id, object value, DateTime? timestamp = null)
         {
             PredefinedNodes.TryGetValue(id, out var pstate);
             var state = pstate as BaseDataVariableState;
             if (state == null) return;
             state.Value = value;
-            state.Timestamp = DateTime.UtcNow;
+            state.Timestamp = timestamp ?? DateTime.UtcNow;
             if (state.Historizing)
             {
                 store.UpdateNode(state);
@@ -120,7 +120,7 @@ namespace Server
                 }
                 if (i == count - 1 && start > DateTime.UtcNow.AddSeconds(-1))
                 {
-                    UpdateNode(id, dv.Value);
+                    UpdateNode(id, dv.Value, start);
                 }
                 else
                 {
@@ -593,6 +593,7 @@ namespace Server
 
                 store.AddHistorizingNode(myarray);
                 store.AddHistorizingNode(mysteryVar);
+                store.AddHistorizingNode(stringyVar);
 
                 AddPredefinedNodes(SystemContext, root, myarray, mystrarray, stringyType, ignoreType, numberType, numberType2, stringyVar,
                     ignoreVar, mysteryVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2, arrprop, arrprop2,

@@ -311,7 +311,6 @@ namespace Cognite.OpcUa
             // Earliest latest timestamp in chunk.
             var finalTimeStamp = nodes.Min(node => node.SourceExtractedRange.Last);
             finalTimeStamp = finalTimeStamp < historyStartTime ? historyStartTime : finalTimeStamp;
-            finalTimeStamp = finalTimeStamp > DateTime.UtcNow ? DateTime.UtcNow : finalTimeStamp;
             var details = new ReadRawModifiedDetails
             {
                 IsReadModified = false,
@@ -352,7 +351,6 @@ namespace Cognite.OpcUa
         {
             var finalTimeStamp = states.Min(node => node.SourceExtractedRange.Last);
             finalTimeStamp = finalTimeStamp < historyStartTime ? historyStartTime : finalTimeStamp;
-            finalTimeStamp = finalTimeStamp > DateTime.UtcNow ? DateTime.UtcNow : finalTimeStamp;
             var details = new ReadEventDetails
             {
                 EndTime = DateTime.MinValue,

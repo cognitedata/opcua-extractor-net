@@ -542,7 +542,7 @@ namespace Test.Unit
 
             var start = DateTime.UtcNow.AddSeconds(-20);
 
-            tester.Server.PopulateArrayHistory(start);
+            tester.Server.PopulateCustomHistory(start);
             tester.Server.Server.PopulateHistory(tester.Server.Ids.Base.StringVar, 1000, start, "string");
 
             try

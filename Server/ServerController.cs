@@ -52,7 +52,7 @@ namespace Server
             Server.Stop();
         }
 
-        public void PopulateArrayHistory(DateTime? start = null)
+        public void PopulateCustomHistory(DateTime? start = null)
         {
             if (start == null)
             {
@@ -60,6 +60,7 @@ namespace Server
             }
             Server.PopulateHistory(Server.Ids.Custom.Array, 1000, start.Value, "custom", 10, (i => new int[] { i, i, i, i }));
             Server.PopulateHistory(Server.Ids.Custom.MysteryVar, 1000, start.Value, "int");
+            Server.PopulateHistory(Server.Ids.Custom.StringyVar, 1000, start.Value, "string");
         }
         public void PopulateBaseHistory(DateTime? start = null)
         {

@@ -71,7 +71,7 @@ namespace Test
 
             if (serverName == ServerName.Array)
             {
-                server.PopulateArrayHistory();
+                server.PopulateCustomHistory();
             }
 
             if (serverName == ServerName.Basic)
