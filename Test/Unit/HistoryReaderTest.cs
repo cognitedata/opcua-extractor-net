@@ -527,6 +527,56 @@ namespace Test.Unit
                 Assert.Equal(tester.HistoryStart, state.SourceExtractedRange.First);
             }
         }
+        [Theory]
+        [InlineData(1, 900)]
+        [InlineData(4, 0)]
+        public async Task TestReadGranularity(int expectedReads, int granularity)
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var cfg = new HistoryConfig
+            {
+                Backfill = true,
+                Data = true,
+                Granularity = granularity
+            };
+
+            var reader = new HistoryReader(tester.Client, extractor, cfg);
+
+            var dt = new UADataType(DataTypeIds.Double);
+            var dt2 = new UADataType(DataTypeIds.String);
+
+            var states = new[] { tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Custom.Array,
+                tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.StringVar }
+                .Select((id, idx) => new VariableExtractionState(
+                    extractor, new UAVariable(id, "state", NodeId.Null)
+                    {
+                        DataType = idx == 3 ? dt2 : dt,
+                        ArrayDimensions = idx == 1 ? new Collection<int>(new[] { 4 }) : null
+                    }, true, true))
+                .ToList();
+
+            var start = tester.HistoryStart.AddSeconds(5);
+
+            foreach (var state in states)
+            {
+                state.InitExtractedRange(start, start);
+                state.FinalizeRangeInit();
+                extractor.State.SetNodeState(state);
+            }
+
+            var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
+                .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(extractor.Streamer);
+
+            CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points", "opcua_history_reads");
+
+            await reader.FrontfillData(states, tester.Source.Token);
+            // 4 nodes, one is array of 4, half of history = 3*500 + 4*500
+            Assert.Equal(3500, queue.Count);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_history_reads", expectedReads));
+        }
         [Fact]
         public async Task TestTerminate()
         {

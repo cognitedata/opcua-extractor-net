@@ -66,32 +66,6 @@ namespace Test
         }
         [Trait("Server", "basic")]
         [Trait("Target", "UAClient")]
-        [Trait("Test", "granularity")]
-        [Theory]
-        [InlineData(1, 900)]
-        [InlineData(3, 0)]
-        public async Task TestHistoryReadGranularity(int expectedReads, int granularity)
-        {
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                HistoryGranularity = granularity
-            });
-            await tester.ClearPersistentData();
-            await tester.StartServer();
-            tester.Server.PopulateBaseHistory();
-
-            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
-            tester.Config.History.DataChunk = 10000;
-
-            tester.StartExtractor();
-
-            await tester.WaitForCondition(() => (int)CommonTestUtils.GetMetricValue("opcua_history_reads") == expectedReads, 20,
-                () => $"Expected history to be read {expectedReads} times, got {CommonTestUtils.GetMetricValue("opcua_history_reads")}");
-
-            await tester.TerminateRunTask(false);
-        }
-        [Trait("Server", "basic")]
-        [Trait("Target", "UAClient")]
         [Trait("Test", "reconnect")]
         [Fact]
         public async Task TestServerReconnect()
