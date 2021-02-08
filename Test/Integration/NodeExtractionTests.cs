@@ -14,7 +14,10 @@ namespace Test.Integration
 {
     public sealed class NodeExtractionTestFixture : BaseExtractorTestFixture
     {
-        public NodeExtractionTestFixture() : base(63200) { }
+        public NodeExtractionTestFixture() : base(63200) 
+        {
+            Config.History.Enabled = false;
+        }
     }
 
     // Tests for various configurations for extracting nodes and pushing to dummy pusher

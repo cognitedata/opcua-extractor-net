@@ -41,7 +41,7 @@ namespace Server
     {
         private TestEventManager manager;
 
-        public ManagedEvent(NodeState parent, TestEventManager manager) : base(parent)
+        protected ManagedEvent(NodeState parent, TestEventManager manager) : base(parent)
         {
             this.manager = manager;
         }

@@ -1101,12 +1101,12 @@ namespace Cognite.OpcUa
                             {
                                 var monitor = builder(node);
                                 monitor.Notification += handler;
-                                count++;
                                 lcount++;
                                 return monitor;
                             })
                         );
                         log.Debug("Add subscriptions for {numnodes} nodes, {subscribed} / {total} done.", lcount, count, total);
+                        count += lcount;
 
                         if (lcount > 0 && subscription.Created)
                         {

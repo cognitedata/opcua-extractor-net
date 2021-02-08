@@ -46,6 +46,9 @@ namespace Test.Utils
                 Client.ClearEventFields();
                 Client.ResetVisitedNodes();
                 Client.DataTypeManager.Reset();
+                Client.RemoveSubscription("EventListener");
+                Client.RemoveSubscription("DataChangeListener");
+                Client.RemoveSubscription("AuditListener");
             }
             return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
         }

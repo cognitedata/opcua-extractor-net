@@ -1,0 +1,284 @@
+﻿using Cognite.OpcUa;
+using Opc.Ua;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Test.Utils;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace Test.Integration
+{
+    public class DataPointTestFixture : BaseExtractorTestFixture
+    {
+        public DataPointTestFixture() : base(63300)
+        {
+            Config.Source.PublishingInterval = 200;
+            Config.Extraction.DataPushDelay = 200;
+            Config.History.Enabled = false;
+        }
+        public void ResetCustomServerValues()
+        {
+            var ids = Server.Ids.Custom;
+            Server.UpdateNode(ids.StringyVar, "value");
+            Server.UpdateNode(ids.StringArray, new[] { "test1", "test2" });
+            Server.UpdateNode(ids.MysteryVar, 0);
+            Server.UpdateNode(ids.Array, new[] { 0, 0, 0, 0 });
+            Server.UpdateNode(ids.EnumVar1, 1);
+            Server.UpdateNode(ids.IgnoreVar, 0);
+            Server.UpdateNode(ids.EnumVar2, 123);
+            Server.UpdateNode(ids.EnumVar3, new[] { 123, 123, 321, 123 });
+        }
+    }
+
+    public class DataPointTests : MakeConsoleWork, IClassFixture<DataPointTestFixture>
+    {
+        private readonly DataPointTestFixture tester;
+        public DataPointTests(ITestOutputHelper output, DataPointTestFixture tester) : base(output)
+        {
+            this.tester = tester;
+        }
+
+        static async Task TerminateRunTask(Task runTask, UAExtractor extractor)
+        {
+            extractor.Close(false);
+            try
+            {
+                await runTask;
+            }
+            catch (TaskCanceledException) { }
+        }
+
+        #region subscriptions
+        [Fact]
+        public async Task TestBasicSubscriptions()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var dataTypes = tester.Config.Extraction.DataTypes;
+            var ids = tester.Server.Ids.Custom;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+            dataTypes.AllowStringVariables = true;
+            dataTypes.MaxArraySize = 4;
+            dataTypes.AutoIdentifyTypes = true;
+            dataTypes.IgnoreDataTypes = new[]
+            {
+                CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.IgnoreType, tester.Client)
+            };
+
+            var runTask = extractor.RunExtractor();
+
+            await extractor.WaitForSubscriptions();
+
+            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
+            foreach (var kvp in pusher.DataPoints)
+            {
+                kvp.Value.Clear();
+            }
+
+            // Trigger a bunch of subscriptions
+            // string variable
+            tester.Server.UpdateNode(ids.StringyVar, "value1");
+            // string array
+            tester.Server.UpdateNode(ids.StringArray, new[] { "test12", "test22" });
+            // numeric variable
+            tester.Server.UpdateNode(ids.MysteryVar, 123.123);
+            // numeric array
+            tester.Server.UpdateNode(ids.Array, new[] { 1.1, 2.2, 3.3, 4.4 });
+            // enum
+            tester.Server.UpdateNode(ids.EnumVar1, 2);
+            // ignored variable
+            tester.Server.UpdateNode(ids.IgnoreVar, 123.123);
+            // enum array
+            tester.Server.UpdateNode(ids.EnumVar3, new[] { 123, 321, 321, 321 });
+
+            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 13,
+                5, () => $"Expected to get values in 13 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Any())}");
+
+            void TestDataPoints((NodeId, int) id, object expected)
+            {
+                var dps = pusher.DataPoints[id];
+                Assert.Single(dps);
+                var dp = dps.First();
+                Assert.Equal(tester.Client.GetUniqueId(id.Item1, id.Item2), dp.Id);
+                if (dp.IsString)
+                {
+                    Assert.Equal((string)expected, dp.StringValue);
+                }
+                else
+                {
+                    Assert.Equal((double)expected, dp.DoubleValue);
+                }
+            }
+
+            TestDataPoints((ids.StringyVar, -1), "value1");
+            TestDataPoints((ids.StringArray, 0), "test12");
+            TestDataPoints((ids.StringArray, 1), "test22");
+            TestDataPoints((ids.MysteryVar, -1), 123.123);
+            TestDataPoints((ids.Array, 0), 1.1);
+            TestDataPoints((ids.Array, 1), 2.2);
+            TestDataPoints((ids.Array, 2), 3.3);
+            TestDataPoints((ids.Array, 3), 4.4);
+            TestDataPoints((ids.EnumVar1, -1), 2.0);
+            Assert.False(pusher.DataPoints.ContainsKey((ids.IgnoreVar, -1)));
+            TestDataPoints((ids.EnumVar3, 0), 123.0);
+            TestDataPoints((ids.EnumVar3, 1), 321.0);
+            TestDataPoints((ids.EnumVar3, 2), 321.0);
+            TestDataPoints((ids.EnumVar3, 3), 321.0);
+
+            await TerminateRunTask(runTask, extractor);
+
+            dataTypes.AllowStringVariables = false;
+            dataTypes.MaxArraySize = 0;
+            dataTypes.AutoIdentifyTypes = false;
+            dataTypes.IgnoreDataTypes = null;
+            tester.ResetCustomServerValues();
+        }
+        [Fact]
+        public async Task TestEnumAsString()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var dataTypes = tester.Config.Extraction.DataTypes;
+            var ids = tester.Server.Ids.Custom;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+            dataTypes.AllowStringVariables = true;
+            dataTypes.MaxArraySize = 4;
+            dataTypes.EnumsAsStrings = true;
+            dataTypes.AutoIdentifyTypes = true;
+
+            var runTask = extractor.RunExtractor();
+
+            await extractor.WaitForSubscriptions();
+
+            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
+            foreach (var kvp in pusher.DataPoints)
+            {
+                kvp.Value.Clear();
+            }
+
+            // enum
+            tester.Server.UpdateNode(ids.EnumVar1, 2);
+            // enum array
+            tester.Server.UpdateNode(ids.EnumVar3, new[] { 123, 321, 321, 321 });
+
+            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 5,
+                5, () => $"Expected to get values in 5 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Any())}");
+
+            void TestDataPoints((NodeId, int) id, object expected)
+            {
+                var dps = pusher.DataPoints[id];
+                Assert.Single(dps);
+                var dp = dps.First();
+                Assert.Equal(tester.Client.GetUniqueId(id.Item1, id.Item2), dp.Id);
+                if (dp.IsString)
+                {
+                    Assert.Equal((string)expected, dp.StringValue);
+                }
+                else
+                {
+                    Assert.Equal((double)expected, dp.DoubleValue);
+                }
+            }
+
+            TestDataPoints((ids.EnumVar1, -1), "Enum3");
+            TestDataPoints((ids.EnumVar3, 0), "VEnum2");
+            TestDataPoints((ids.EnumVar3, 1), "VEnum1");
+            TestDataPoints((ids.EnumVar3, 2), "VEnum1");
+            TestDataPoints((ids.EnumVar3, 3), "VEnum1");
+
+            await TerminateRunTask(runTask, extractor);
+
+            dataTypes.AllowStringVariables = false;
+            dataTypes.MaxArraySize = 0;
+            dataTypes.AutoIdentifyTypes = false;
+            dataTypes.EnumsAsStrings = false;
+            tester.ResetCustomServerValues();
+        }
+        [Fact]
+        public async Task TestWrongData()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var dataTypes = tester.Config.Extraction.DataTypes;
+            var ids = tester.Server.Ids.Wrong;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Wrong.Root, tester.Client);
+            dataTypes.AllowStringVariables = true;
+            dataTypes.UnknownAsScalar = true;
+            dataTypes.NullAsNumeric = true;
+            dataTypes.MaxArraySize = 4;
+
+            var runTask = extractor.RunExtractor();
+
+            await extractor.WaitForSubscriptions();
+
+            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
+            foreach (var kvp in pusher.DataPoints)
+            {
+                kvp.Value.Clear();
+            }
+
+            CommonTestUtils.ResetMetricValue("opcua_array_points_missed");
+
+            // too small 
+            tester.Server.UpdateNode(ids.WrongDim, new[] { 1, 2 });
+            // too large
+            tester.Server.UpdateNode(ids.RankImprecise, new[] { 1, 2, 3, 4, 5, 6 });
+            // Array on scalar
+            tester.Server.UpdateNode(ids.RankImpreciseNoDim, new[] { 1, 2, 3, 4 });
+            tester.Server.UpdateNode(ids.NullType, 1);
+
+            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Count(kvp => kvp.Value.Any()) == 8,
+                5, () => $"Expected to get values in 8 timeseries, but got {pusher.DataPoints.Count(kvp => kvp.Value.Any())}");
+
+            void TestDataPoints((NodeId, int) id, object expected)
+            {
+                var dps = pusher.DataPoints[id];
+                Assert.Single(dps);
+                var dp = dps.First();
+                Assert.Equal(tester.Client.GetUniqueId(id.Item1, id.Item2), dp.Id);
+                if (dp.IsString)
+                {
+                    Assert.Equal((string)expected, dp.StringValue);
+                }
+                else
+                {
+                    Assert.Equal((double)expected, dp.DoubleValue);
+                }
+            }
+
+            TestDataPoints((ids.WrongDim, 0), 1.0);
+            TestDataPoints((ids.WrongDim, 1), 2.0);
+            Assert.Empty(pusher.DataPoints[(ids.WrongDim, 2)]);
+            Assert.Empty(pusher.DataPoints[(ids.WrongDim, 3)]);
+            TestDataPoints((ids.RankImprecise, 0), 1.0);
+            TestDataPoints((ids.RankImprecise, 1), 2.0);
+            TestDataPoints((ids.RankImprecise, 2), 3.0);
+            TestDataPoints((ids.RankImprecise, 3), 4.0);
+            Assert.False(pusher.DataPoints.ContainsKey((ids.RankImprecise, 4)));
+            TestDataPoints((ids.RankImpreciseNoDim, -1), 1.0);
+            TestDataPoints((ids.NullType, -1), 1.0);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_array_points_missed", 5));
+
+            await TerminateRunTask(runTask, extractor);
+
+            dataTypes.AllowStringVariables = false;
+            dataTypes.UnknownAsScalar = false;
+            dataTypes.MaxArraySize = 0;
+
+            tester.Server.UpdateNode(ids.WrongDim, new[] { 0, 0, 0, 0 });
+            tester.Server.UpdateNode(ids.RankImprecise, new[] { 0, 0, 0, 0 });
+            tester.Server.UpdateNode(ids.RankImpreciseNoDim, 0);
+            tester.Server.UpdateNode(ids.NullType, 0);
+        }
+        #endregion
+    }
+}

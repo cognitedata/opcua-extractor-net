@@ -1085,7 +1085,6 @@ namespace Server
                             var server = (BaseObjectState)cfnm.Find(ObjectIds.Server);
                             serverHandle = new NodeHandle(ObjectIds.Server, server);
                         }
-                        if (serverHandle == null) continue;
                         nodeToRead.Processed = true;
 
                         serverHandle.Index = i;

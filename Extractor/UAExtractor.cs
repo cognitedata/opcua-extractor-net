@@ -954,7 +954,7 @@ namespace Cognite.OpcUa
                 .Distinct()
                 .Select(id => State.GetNodeState(id));
 
-            bool initial = objects.Count() + timeseries.Count() == State.NumActiveNodes;
+            bool initial = objects.Count() + timeseries.Count() >= State.NumActiveNodes;
 
             var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, references, pusher, initial));
 
