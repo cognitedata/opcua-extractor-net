@@ -252,5 +252,60 @@ namespace Test.Integration
 
             await tester2.TerminateRunTask(false);
         }
+        [Fact]
+        [Trait("Server", "events")]
+        [Trait("Target", "FailureBuffer")]
+        [Trait("Test", "influxeventsbuffering")]
+        public async Task TestEventsInfluxBuffering()
+        {
+            using var tester = new ExtractorTester(new ExtractorTestParameters
+            {
+                ConfigName = ConfigName.Events,
+                ServerName = ServerName.Events,
+                FailureInflux = true
+            });
+            await tester.ClearPersistentData();
+
+            tester.Config.History.Enabled = true;
+
+            tester.Handler.AllowEvents = false;
+            tester.Handler.AllowPush = false;
+            tester.Handler.AllowConnectionTest = false;
+
+            await tester.StartServer();
+            tester.Server.PopulateEvents();
+
+            tester.StartExtractor();
+            await tester.Extractor.WaitForSubscriptions();
+            await tester.WaitForCondition(() => tester.Pusher.EventsFailing, 20, "Expect pusher to start failing");
+
+            tester.Server.TriggerEvents(100);
+            tester.Server.TriggerEvents(101);
+
+            await tester.WaitForCondition(() => tester.Extractor.FailureBuffer.AnyEvents
+                && tester.Pusher.EventsFailing,
+                20, "Expected failurebuffer to contain some events");
+            await tester.Extractor.Looper.WaitForNextPush();
+
+            tester.Handler.AllowEvents = true;
+            tester.Handler.AllowPush = true;
+            tester.Handler.AllowConnectionTest = true;
+            await tester.WaitForCondition(() => !tester.Extractor.FailureBuffer.AnyEvents,
+                20, "Expected FailureBuffer to be emptied");
+
+            Assert.False(tester.Extractor.FailureBuffer.AnyEvents);
+
+            await tester.WaitForCondition(() => tester.Handler.Events.Count == 920, 10,
+                () => $"Expected to receive 920 events, but got {tester.Handler.Events.Count}");
+
+            await tester.TerminateRunTask(true);
+
+            var events = tester.Handler.Events.Values.ToList();
+
+            foreach (var ev in events)
+            {
+                CommonTestUtils.TestEvent(ev, tester.Handler);
+            }
+        }
     }
 }
