@@ -344,8 +344,10 @@ namespace Test.Integration
             dataTypes.AutoIdentifyTypes = false;
             dataTypes.CustomNumericTypes = null;
         }
-        [Fact]
-        public async Task TestNullDataType()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task TestNullDataType(bool nullAsNumeric)
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -356,6 +358,7 @@ namespace Test.Integration
 
             dataTypes.AllowStringVariables = true;
             dataTypes.AutoIdentifyTypes = true;
+            dataTypes.NullAsNumeric = nullAsNumeric;
             await extractor.RunExtractor(true);
 
             Assert.Single(pusher.PushedNodes);
@@ -364,20 +367,7 @@ namespace Test.Integration
             var node = pusher.PushedVariables.Values.First();
             Assert.Equal("NullType", node.DisplayName);
             Assert.Equal(NodeId.Null, node.DataType.Raw);
-            Assert.True(node.DataType.IsString);
-
-            tester.Client.ResetVisitedNodes();
-            tester.Client.DataTypeManager.Reset();
-            pusher.Wipe();
-            dataTypes.NullAsNumeric = true;
-            await extractor.RunExtractor(true);
-            Assert.Single(pusher.PushedNodes);
-            Assert.Single(pusher.PushedVariables);
-
-            node = pusher.PushedVariables.Values.First();
-            Assert.Equal("NullType", node.DisplayName);
-            Assert.Equal(NodeId.Null, node.DataType.Raw);
-            Assert.False(node.DataType.IsString);
+            Assert.NotEqual(nullAsNumeric, node.DataType.IsString);
 
             dataTypes.AllowStringVariables = false;
             dataTypes.AutoIdentifyTypes = false;

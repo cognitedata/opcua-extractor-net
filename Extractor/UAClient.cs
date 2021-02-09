@@ -1221,6 +1221,7 @@ namespace Cognite.OpcUa
         /// <param name="name"></param>
         public void RemoveSubscription(string name)
         {
+            if (Session == null || Session.Subscriptions == null) return;
             var subscription = Session.Subscriptions.FirstOrDefault(sub =>
                                        sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
             if (subscription == null || !subscription.Created) return;
