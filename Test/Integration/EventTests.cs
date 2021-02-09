@@ -430,5 +430,82 @@ namespace Test.Integration
             tester.WipeEventHistory();
         }
         #endregion
+        [Fact]
+        public async Task TestFileAutoBuffer()
+        {
+            try
+            {
+                File.Delete("event-buffer-test.bin");
+            }
+            catch { }
+
+            tester.Config.FailureBuffer.EventPath = "event-buffer-test.bin";
+            tester.Config.FailureBuffer.Enabled = true;
+
+            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Event;
+
+            tester.Config.History.Enabled = true;
+            tester.Config.Events.History = true;
+            tester.Config.Events.ExcludeEventFilter = "2$";
+            tester.Config.Events.ExcludeProperties = new[] { "PropertyNum" };
+            tester.Config.Events.DestinationNameMap["TypeProp"] = "Type";
+
+            CommonTestUtils.ResetMetricValues("opcua_buffer_num_events");
+
+            var now = DateTime.UtcNow;
+
+            tester.Server.PopulateEvents(now.AddSeconds(-20));
+
+            pusher.PushEventResult = false;
+            pusher.PushDataPointResult = false;
+
+            var runTask = extractor.RunExtractor();
+            await extractor.WaitForSubscriptions();
+
+            Assert.False(runTask.IsFaulted, $"Faulted! {runTask.Exception}");
+
+            // expect no data to arrive in pusher
+            try
+            {
+                await CommonTestUtils.WaitForCondition(
+                    () => pusher.DataFailing
+                    && extractor.State.EmitterStates.All(state => !state.IsFrontfilling), 5,
+                    () => $"Pusher is dataFailing: {pusher.DataFailing}");
+            }
+            finally
+            {
+                foreach (var state in extractor.State.EmitterStates)
+                {
+                    Console.WriteLine($"{state.Id}: {state.IsFrontfilling}");
+                }
+            }
+
+
+            Assert.True(pusher.DataPoints.All(dps => !dps.Value.Any()));
+
+            tester.Server.TriggerEvents(100);
+
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_buffer_num_events", 1), 5,
+                () => $"Expected 1 event to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_events")}");
+
+            tester.Server.TriggerEvents(101);
+
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_buffer_num_events", 2), 5,
+                () => $"Expected 2 events to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_events")}");
+
+            pusher.PushEventResult = true;
+            pusher.PushDataPointResult = true;
+
+            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 3 && pusher.Events[ObjectIds.Server].Count == 714, 10);
+
+            Assert.Equal(204, pusher.Events[ids.Obj1].Count);
+            Assert.Equal(2, pusher.Events[ids.Obj2].Count);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_buffer_num_events", 0));
+            tester.WipeEventHistory();
+        }
     }
 }
