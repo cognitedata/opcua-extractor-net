@@ -507,5 +507,51 @@ namespace Test.Integration
             Assert.True(CommonTestUtils.TestMetricValue("opcua_buffer_num_events", 0));
             tester.WipeEventHistory();
         }
+        [Fact]
+        public async Task TestAuditEvents()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Audit;
+            tester.Config.Extraction.RootNode = ids.Root.ToProtoNodeId(tester.Client);
+            tester.Config.Extraction.EnableAuditDiscovery = true;
+
+            var runTask = extractor.RunExtractor();
+            await extractor.WaitForSubscriptions();
+
+            Assert.Equal(3, pusher.PushedNodes.Count);
+
+            tester.Server.DirectGrowth();
+
+            await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Count == 4 && pusher.PushedVariables.Count == 1, 10);
+
+            var directRoot = pusher.PushedNodes[ids.DirectAdd];
+
+            var directObj = pusher.PushedNodes.Values.First(obj => obj.DisplayName == "AddObj 0");
+            var directVar = pusher.PushedVariables.Values.First(variable => variable.DisplayName == "AddVar 0");
+
+            Assert.Equal(directRoot.Id, directObj.ParentId);
+            Assert.Equal(directRoot.Id, directVar.ParentId);
+            Assert.NotNull(directVar.DataType);
+            Assert.True(extractor.Streamer.AllowData);
+
+            tester.Server.ReferenceGrowth(1);
+
+            await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Count == 5 && pusher.PushedVariables.Count == 2, 10);
+
+            var refRoot = pusher.PushedNodes[ids.RefAdd];
+
+            var refObj = pusher.PushedNodes.Values.First(obj => obj.DisplayName == "AddObj 1");
+            var refVar = pusher.PushedVariables.Values.First(variable => variable.DisplayName == "AddVar 1");
+
+            Assert.Equal(refRoot.Id, refObj.ParentId);
+            Assert.Equal(refRoot.Id, refVar.ParentId);
+            Assert.NotNull(refVar.DataType);
+
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Event.Root.ToProtoNodeId(tester.Client);
+            tester.Config.Extraction.EnableAuditDiscovery = false;
+        }
     }
 }
