@@ -16,7 +16,7 @@ using Serilog;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Test
+namespace Test.Integration
 {
     [Collection("Extractor tests")]
     public class LiteDbStorageTests : MakeConsoleWork
@@ -25,7 +25,7 @@ namespace Test
         // Nobody is using it, and it is unnecessarily complex. The file buffer is faster and
         // much simpler, which in the end makes it safer.
         public LiteDbStorageTests(ITestOutputHelper output) : base(output) { }
-        
+
         [Trait("Server", "basic")]
         [Trait("Target", "StateStorage")]
         [Trait("Test", "influxautobufferdata")]
@@ -155,7 +155,7 @@ namespace Test
             await tester2.Extractor.WaitForSubscriptions();
 
             await tester2.Extractor.Looper.WaitForNextPush();
-            await tester2.WaitForCondition(() => tester2.Extractor.State.EmitterStates.Any() 
+            await tester2.WaitForCondition(() => tester2.Extractor.State.EmitterStates.Any()
                 && tester2.Extractor.State.EmitterStates.All(state => !state.FrontfillEnabled
                     || !state.IsBackfilling && !state.IsFrontfilling),
                 20, "Expected history to complete");

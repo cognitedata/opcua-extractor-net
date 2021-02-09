@@ -126,6 +126,17 @@ namespace Test.Unit
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62001";
             tester.Config.Source.KeepAliveInterval = 1000;
 
+            bool connected = true;
+
+            tester.Client.OnServerDisconnect += (client, args) =>
+            {
+                connected = false;
+            };
+            tester.Client.OnServerReconnect += (client, args) =>
+            {
+                connected = true;
+            };
+
             try
             {
                 using var process = CommonTestUtils.GetProxyProcess(62001, 62000);
@@ -136,9 +147,11 @@ namespace Test.Unit
                 CommonTestUtils.StopProxyProcess();
                 await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0), 10,
                     "Expected client to disconnect");
+                Assert.False(connected);
                 process.Start();
                 await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1), 10,
                     "Expected client to reconnect");
+                Assert.True(connected);
             }
             finally
             {
