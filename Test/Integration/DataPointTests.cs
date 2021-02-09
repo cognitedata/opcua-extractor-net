@@ -45,6 +45,13 @@ namespace Test.Integration
             Server.WipeHistory(ids.MysteryVar, 0);
             Server.WipeHistory(ids.Array, new[] { 0, 0, 0, 0 });
         }
+        public void WipeBaseHistory()
+        {
+            var ids = Server.Ids.Base;
+            Server.WipeHistory(ids.DoubleVar1, 0);
+            Server.WipeHistory(ids.StringVar, null);
+            Server.WipeHistory(ids.IntVar, 0);
+        }
     }
 
     public class DataPointTests : MakeConsoleWork, IClassFixture<DataPointTestFixture>
@@ -535,7 +542,6 @@ namespace Test.Integration
 
                 CountCustomValues(pusher, 1001);
                 pusher.Wipe();
-
             }
             finally
             {
@@ -639,6 +645,90 @@ namespace Test.Integration
             dataTypes.AutoIdentifyTypes = false;
             dataTypes.MaxArraySize = 4;
             tester.WipeCustomHistory();
+        }
+        #endregion
+
+        #region buffer
+        [Fact]
+        public async Task TestFileAutoBuffer()
+        {
+            try
+            {
+                File.Delete("datapoint-buffer-test.bin");
+            }
+            catch { }
+
+            tester.Config.FailureBuffer.DatapointPath = "datapoint-buffer-test.bin";
+            tester.Config.FailureBuffer.Enabled = true;
+
+            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Base;
+
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Data = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+
+            CommonTestUtils.ResetMetricValues("opcua_buffer_num_points");
+
+            var now = DateTime.UtcNow;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+            tester.Server.PopulateBaseHistory(now.AddSeconds(-20));
+
+            pusher.PushDataPointResult = false;
+
+            var runTask = extractor.RunExtractor();
+            await extractor.WaitForSubscriptions();
+            
+            Assert.False(runTask.IsFaulted, $"Faulted! {runTask.Exception}");
+
+            // expect no data to arrive in pusher
+            try
+            {
+                await CommonTestUtils.WaitForCondition(
+                    () => pusher.DataFailing
+                    && extractor.State.NodeStates.All(state => !state.IsFrontfilling), 5,
+                    () => $"Pusher is dataFailing: {pusher.DataFailing}");
+            }
+            finally
+            {
+                foreach (var state in extractor.State.NodeStates)
+                {
+                    Console.WriteLine($"{state.Id}: {state.IsFrontfilling}");
+                }
+            }
+
+
+            Assert.True(pusher.DataPoints.All(dps => !dps.Value.Any()));
+
+            tester.Server.UpdateNode(ids.DoubleVar1, 1000);
+            tester.Server.UpdateNode(ids.DoubleVar2, 1);
+            tester.Server.UpdateNode(ids.BoolVar, true);
+            tester.Server.UpdateNode(ids.StringVar, "str: 1000");
+
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_buffer_num_points", 4), 5,
+                () => $"Expected 4 points to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_points")}");
+
+            tester.Server.UpdateNode(ids.DoubleVar1, 1001);
+            tester.Server.UpdateNode(ids.DoubleVar2, 2);
+            tester.Server.UpdateNode(ids.BoolVar, false);
+            tester.Server.UpdateNode(ids.StringVar, "str: 1001");
+
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_buffer_num_points", 6), 5,
+                () => $"Expected 6 points to arrive in buffer, but got {CommonTestUtils.GetMetricValue("opcua_buffer_num_points")}");
+
+            pusher.PushDataPointResult = true;
+
+            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count == 1002, 10);
+
+            Assert.Equal(1002, pusher.DataPoints[(ids.DoubleVar1, -1)].DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(3, pusher.DataPoints[(ids.DoubleVar2, -1)].Count);
+            Assert.Equal(3, pusher.DataPoints[(ids.BoolVar, -1)].Count);
+            Assert.Equal(1002, pusher.DataPoints[(ids.StringVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_buffer_num_points", 0));
         }
         #endregion
     }

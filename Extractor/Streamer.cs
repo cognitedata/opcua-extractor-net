@@ -143,11 +143,6 @@ namespace Cognite.OpcUa
                     }
                     log.Warning("Pushers of types {types} failed while pushing datapoints",
                         string.Concat(failedPushers.Select(pusher => pusher.GetType().ToString())));
-
-                    foreach (var state in extractor.State.NodeStates)
-                    {
-                        state.RestartHistory();
-                    }
                 }
                 if (config.FailureBuffer.Enabled)
                 {
@@ -239,10 +234,6 @@ namespace Cognite.OpcUa
                     }
                     log.Warning("Pushers of types {types} failed while pushing events", 
                         failedPushers.Select(pusher => pusher.GetType().ToString()).Aggregate((src, val) => src + ", " + val));
-                    foreach (var state in extractor.State.EmitterStates)
-                    {
-                        state.RestartHistory();
-                    }
                 }
 
                 if (config.FailureBuffer.Enabled)
