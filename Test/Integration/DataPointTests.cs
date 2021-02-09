@@ -62,16 +62,6 @@ namespace Test.Integration
             this.tester = tester;
         }
 
-        static async Task TerminateRunTask(Task runTask, UAExtractor extractor)
-        {
-            extractor.Close(false);
-            try
-            {
-                await runTask;
-            }
-            catch (TaskCanceledException) { }
-        }
-
         #region subscriptions
         [Fact]
         public async Task TestBasicSubscriptions()
@@ -151,7 +141,7 @@ namespace Test.Integration
             TestDataPoints((ids.EnumVar3, 2), 321.0);
             TestDataPoints((ids.EnumVar3, 3), 321.0);
 
-            await TerminateRunTask(runTask, extractor);
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
             dataTypes.AllowStringVariables = false;
             dataTypes.MaxArraySize = 0;
@@ -214,7 +204,7 @@ namespace Test.Integration
             TestDataPoints((ids.EnumVar3, 2), "VEnum1");
             TestDataPoints((ids.EnumVar3, 3), "VEnum1");
 
-            await TerminateRunTask(runTask, extractor);
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
             dataTypes.AllowStringVariables = false;
             dataTypes.MaxArraySize = 0;
@@ -289,7 +279,7 @@ namespace Test.Integration
             TestDataPoints((ids.NullType, -1), 1.0);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_array_points_missed", 5));
 
-            await TerminateRunTask(runTask, extractor);
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
             dataTypes.AllowStringVariables = false;
             dataTypes.UnknownAsScalar = false;
@@ -382,7 +372,7 @@ namespace Test.Integration
             TestContinuity(pusher.DataPoints[(ids.StringyVar, -1)], true);
             TestContinuity(pusher.DataPoints[(ids.MysteryVar, -1)], false);
 
-            await TerminateRunTask(runTask, extractor);
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
             tester.Config.History.Enabled = false;
             tester.Config.History.Data = false;
@@ -391,6 +381,7 @@ namespace Test.Integration
             dataTypes.AutoIdentifyTypes = false;
             dataTypes.MaxArraySize = 4;
             tester.WipeCustomHistory();
+            tester.ResetCustomServerValues();
         }
 
         [Theory]
@@ -445,7 +436,7 @@ namespace Test.Integration
 
             await extractor.Looper.WaitForNextPush();
 
-            await TerminateRunTask(runTask, extractor);
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
             // Only datapoints inserted after end should be returned, backfill is assumed to be complete.
             CountCustomValues(pusher, 2000);
@@ -457,6 +448,7 @@ namespace Test.Integration
             dataTypes.AutoIdentifyTypes = false;
             dataTypes.MaxArraySize = 4;
             tester.WipeCustomHistory();
+            tester.ResetCustomServerValues();
         }
 
         [Theory]
@@ -510,7 +502,7 @@ namespace Test.Integration
                 await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
 
                 await extractor.Looper.StoreState(tester.Source.Token);
-                await TerminateRunTask(runTask, extractor);
+                await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
 
                 CountCustomValues(pusher, 1000);
@@ -538,7 +530,7 @@ namespace Test.Integration
                 await extractor.Looper.WaitForNextPush();
 
                 await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
-                await TerminateRunTask(runTask, extractor);
+                await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
                 CountCustomValues(pusher, 1001);
                 pusher.Wipe();
@@ -555,6 +547,7 @@ namespace Test.Integration
             dataTypes.AutoIdentifyTypes = false;
             dataTypes.MaxArraySize = 4;
             tester.WipeCustomHistory();
+            tester.ResetCustomServerValues();
         }
         [Theory]
         [InlineData(true)]
@@ -594,7 +587,7 @@ namespace Test.Integration
 
                 await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 1000), 5);
 
-                await TerminateRunTask(runTask, extractor);
+                await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
                 CountCustomValues(pusher, 1000);
             }
@@ -621,7 +614,7 @@ namespace Test.Integration
 
                 await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Values.Any(dps => dps.Count >= 2000), 5);
 
-                await TerminateRunTask(runTask, extractor);
+                await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
                 if (backfill)
                 {
@@ -645,6 +638,7 @@ namespace Test.Integration
             dataTypes.AutoIdentifyTypes = false;
             dataTypes.MaxArraySize = 4;
             tester.WipeCustomHistory();
+            tester.ResetCustomServerValues();
         }
         #endregion
 
@@ -729,6 +723,7 @@ namespace Test.Integration
             Assert.Equal(1002, pusher.DataPoints[(ids.StringVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_buffer_num_points", 0));
+            tester.ResetCustomServerValues();
         }
         #endregion
     }

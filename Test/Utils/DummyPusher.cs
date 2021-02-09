@@ -40,7 +40,7 @@ namespace Test.Utils
 
         public ManualResetEvent OnReset { get; } = new ManualResetEvent(false);
 
-        public Dictionary<NodeId, TimeRange> EventTimeRange { get; set; }
+        public Dictionary<NodeId, TimeRange> EventTimeRange { get; set; } = new Dictionary<NodeId, TimeRange>();
 
         private object dpLock = new object();
         private object eventLock = new object();
