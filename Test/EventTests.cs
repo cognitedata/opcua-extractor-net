@@ -30,60 +30,8 @@ namespace Test
     [Collection("Extractor tests")]
     public class EventTests : MakeConsoleWork
     {
-        // private static readonly ILogger log = Log.Logger.ForContext(typeof(EventTests));
-
         public EventTests(ITestOutputHelper output) : base(output) { }
-        [Trait("Server", "events")]
-        [Trait("Target", "CDFPusher")]
-        [Trait("Test", "events")]
-        [Fact]
-        public async Task TestEventServer()
-        {
-            using var tester = new ExtractorTester(new ExtractorTestParameters
-            {
-                ServerName = ServerName.Events,
-                ConfigName = ConfigName.Events
-            });
-            await tester.ClearPersistentData();
 
-            tester.Config.History.Enabled = true;
-
-            await tester.StartServer();
-            tester.Server.PopulateEvents();
-
-            tester.StartExtractor();
-
-            await tester.WaitForCondition(() =>
-                    tester.Handler.Events.Count > 20 &&
-                    tester.Extractor.State.EmitterStates.All(state => !state.IsFrontfilling),
-                20, "Expected history read to finish");
-
-
-            await tester.WaitForCondition(() => tester.Handler.Events.Count == 900, 10);
-
-            var events = tester.Handler.Events.Values.ToList();
-            CommonTestUtils.TestEventCollection(events);
-
-            Assert.Equal(900, events.Count);
-
-            tester.Server.TriggerEvents(100);
-            await tester.WaitForCondition(() =>
-            {
-                events = tester.Handler.Events.Values.ToList();
-                return events.Any(ev => ev.description.StartsWith("prop-e3 ", StringComparison.InvariantCulture))
-                       && events.Any(ev => ev.description.StartsWith("basic-pass-3 ", StringComparison.InvariantCulture))
-                       && events.Count == 910;
-            }, 10, "Expected remaining event subscriptions to trigger");
-
-            await tester.TerminateRunTask(true);
-
-            events = tester.Handler.Events.Values.ToList();
-
-            foreach (var ev in events)
-            {
-                CommonTestUtils.TestEvent(ev, tester.Handler);
-            }
-        }
         [Trait("Server", "events")]
         [Trait("Target", "CDFPusher")]
         [Trait("Test", "eventsrestart")]

@@ -180,6 +180,64 @@ namespace Test.Integration
             tester.Config.Events.DestinationNameMap.Clear();
             tester.WipeEventHistory();
         }
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task TestHistoryContinuation(bool backfill)
+        {
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Backfill = backfill;
+            tester.Config.Events.History = true;
+            tester.Config.Events.ExcludeEventFilter = "2$";
+            tester.Config.Events.ExcludeProperties = new[] { "PropertyNum" };
+            tester.Config.Events.DestinationNameMap["TypeProp"] = "Type";
+
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var now = DateTime.UtcNow;
+
+            tester.Server.PopulateEvents(now.AddSeconds(-5));
+
+            var runTask = extractor.RunExtractor();
+            var ids = tester.Server.Ids.Event;
+
+            await extractor.WaitForSubscriptions();
+
+            await CommonTestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(state => !state.IsFrontfilling), 5);
+
+            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 700, 5,
+                () => $"Expected to get 700 events but got {pusher.Events[ObjectIds.Server].Count}");
+
+            Assert.Equal(700, pusher.Events[ObjectIds.Server].Count);
+            Assert.Equal(200, pusher.Events[ids.Obj1].Count);
+
+            tester.Server.PopulateEvents(now.AddSeconds(5));
+            tester.Server.PopulateEvents(now.AddSeconds(-15));
+
+            foreach (var state in extractor.State.EmitterStates)
+            {
+                state.RestartHistory();
+            }
+
+            await extractor.RestartHistory();
+
+            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 1407, 5,
+                () => $"Expected to get 1407 events but got {pusher.Events[ObjectIds.Server].Count}");
+            // One overlap per event type
+            Assert.Equal(1407, pusher.Events[ObjectIds.Server].Count);
+            Assert.Equal(402, pusher.Events[ids.Obj1].Count);
+
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
+
+            tester.Config.History.Enabled = false;
+            tester.Config.History.Backfill = false;
+            tester.Config.Events.History = false;
+            tester.Config.Events.ExcludeEventFilter = null;
+            tester.Config.Events.ExcludeProperties = new List<string>();
+            tester.Config.Events.DestinationNameMap.Clear();
+            tester.WipeEventHistory();
+        }
         #endregion
     }
 }

@@ -40,8 +40,6 @@ namespace Test.Utils
 
         public ManualResetEvent OnReset { get; } = new ManualResetEvent(false);
 
-        public Dictionary<NodeId, TimeRange> EventTimeRange { get; set; } = new Dictionary<NodeId, TimeRange>();
-
         private object dpLock = new object();
         private object eventLock = new object();
         public Dictionary<(NodeId, int), List<UADataPoint>> DataPoints { get; }
@@ -164,15 +162,16 @@ namespace Test.Utils
             {
                 foreach (var state in states)
                 {
-                    if (EventTimeRange.TryGetValue(state.SourceId, out var range))
+                    if (Events.TryGetValue(state.SourceId, out var events))
                     {
+                        var (min, max) = events.MinMax(evt => evt.Time);
                         if (backfillEnabled)
                         {
-                            state.InitExtractedRange(range.First, range.Last);
+                            state.InitExtractedRange(min, max);
                         }
                         else
                         {
-                            state.InitExtractedRange(CogniteTime.DateTimeEpoch, range.Last);
+                            state.InitExtractedRange(CogniteTime.DateTimeEpoch, max);
                         }
                     }
                     else
