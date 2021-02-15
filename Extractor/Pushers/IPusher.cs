@@ -66,7 +66,6 @@ namespace Cognite.OpcUa
         Task<bool> InitExtractedRanges(
             IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
-            bool initMissing,
             CancellationToken token)
         {
             return Task.FromResult(true);
@@ -80,7 +79,6 @@ namespace Cognite.OpcUa
         Task<bool> InitExtractedEventRanges(
             IEnumerable<EventExtractionState> states,
             bool backfillEnabled,
-            bool initMissing,
             CancellationToken token)
         {
             return Task.FromResult(true);

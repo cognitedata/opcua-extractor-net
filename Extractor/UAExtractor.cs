@@ -829,12 +829,11 @@ namespace Cognite.OpcUa
         /// <param name="timeseries">Variable type nodes to push</param>
         /// <param name="pusher">Destination to push to</param>
         /// <param name="initial">True if this counts as initialization of the pusher</param>
-        /// <param name="initMissing">Whether or not to initialize nodes with missing ranges to empty</param>
         public async Task PushNodes(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> timeseries,
             IEnumerable<UAReference> references,
-            IPusher pusher, bool initial, bool initMissing)
+            IPusher pusher, bool initial)
         {
             if (pusher == null) throw new ArgumentNullException(nameof(pusher));
             if (pusher.NoInit)
@@ -872,13 +871,13 @@ namespace Cognite.OpcUa
                     .Select(ts => ts.Id)
                     .Distinct()
                     .Select(id => State.GetNodeState(id))
-                    .Where(state => state != null && state.FrontfillEnabled);
+                    .Where(state => state != null && state.FrontfillEnabled && !state.Initialized);
 
-                var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled);
+                var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled && !state.Initialized);
 
                 var initResults = await Task.WhenAll(
-                    pusher.InitExtractedRanges(statesToSync, config.History.Backfill, initMissing, source.Token), 
-                    pusher.InitExtractedEventRanges(eventStatesToSync, config.History.Backfill, initMissing, source.Token));
+                    pusher.InitExtractedRanges(statesToSync, config.History.Backfill, source.Token), 
+                    pusher.InitExtractedEventRanges(eventStatesToSync, config.History.Backfill, source.Token));
 
                 if (!initResults.All(res => res))
                 {
@@ -957,7 +956,7 @@ namespace Cognite.OpcUa
 
             bool initial = objects.Count() + timeseries.Count() == State.NumActiveNodes;
 
-            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, references, pusher, initial, false));
+            var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, references, pusher, initial));
 
             if (StateStorage != null && config.StateStorage.Interval > 0)
             {

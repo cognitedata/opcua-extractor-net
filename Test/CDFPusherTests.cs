@@ -388,6 +388,8 @@ namespace Test
 
             var pusher = tester.Pusher;
 
+            tester.Handler.MockTimeseries("gp.efg:i=2");
+
             var badPoints = new List<UADataPoint>
             {
                 new UADataPoint(DateTime.UtcNow, "gp.efg:i=2", double.PositiveInfinity),

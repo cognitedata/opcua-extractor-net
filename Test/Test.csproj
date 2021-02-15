@@ -5,6 +5,7 @@
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
     <LangVersion>8.0</LangVersion>
+    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ConfigurationTool\ConfigurationTool.csproj" />

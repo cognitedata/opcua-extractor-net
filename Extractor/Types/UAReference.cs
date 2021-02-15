@@ -81,6 +81,21 @@ namespace Cognite.OpcUa.Types
         {
             return HashCode.Combine(Source, Target, Type.Id, IsForward);
         }
+
+        public CogniteSdk.Beta.RelationshipCreate ToRelationship(long? dataSetId, UAExtractor extractor)
+        {
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
+            var relationship = new CogniteSdk.Beta.RelationshipCreate
+            {
+                DataSetId = dataSetId,
+                SourceExternalId = extractor.GetUniqueId(Source.Id),
+                TargetExternalId = extractor.GetUniqueId(Target.Id),
+                SourceType = Source.GetVertexType(),
+                TargetType = Target.GetVertexType(),
+                ExternalId = extractor.GetRelationshipId(this)
+            };
+            return relationship;
+        }
     }
     public class ReferenceVertex
     {
@@ -104,6 +119,12 @@ namespace Cognite.OpcUa.Types
         public override int GetHashCode()
         {
             return HashCode.Combine(Id, IsTimeSeries);
+        }
+
+        public CogniteSdk.Beta.RelationshipVertexType GetVertexType()
+        {
+            if (IsTimeSeries) return CogniteSdk.Beta.RelationshipVertexType.TimeSeries;
+            return CogniteSdk.Beta.RelationshipVertexType.Asset;
         }
     }
 }

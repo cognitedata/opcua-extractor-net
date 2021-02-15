@@ -21,6 +21,8 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using Cognite.OpcUa.Pushers;
+using CogniteSdk;
 using Opc.Ua;
 
 namespace Cognite.OpcUa.Types
@@ -195,6 +197,103 @@ namespace Cognite.OpcUa.Types
             }
             ArrayChildren = children;
             return children;
+        }
+        private void HandleMetaMap(Dictionary<string, string> metaMap, TimeSeriesCreate writePoco, Action<string> parentIdHandler)
+        {
+            if (Properties == null || !Properties.Any() || metaMap == null || !metaMap.Any()) return;
+            foreach (var prop in Properties)
+            {
+                if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                {
+                    var value = prop.Value.StringValue;
+                    switch (mapped)
+                    {
+                        case "description": writePoco.Description = value; break;
+                        case "name": writePoco.Name = value; break;
+                        case "unit": writePoco.Unit = value; break;
+                        case "parentId":
+                            parentIdHandler(value);
+                            break;
+                    }
+                }
+            }
+        }
+
+        public StatelessTimeSeriesCreate ToStatelessTimeSeries(
+            UAExtractor extractor,
+            long? dataSetId,
+            Dictionary<string, string> metaMap)
+        {
+            if (extractor == null) return null;
+            string externalId = extractor.GetUniqueId(Id, Index);
+            var writePoco = new StatelessTimeSeriesCreate
+            {
+                Description = Description,
+                ExternalId = externalId,
+                AssetExternalId = extractor.GetUniqueId(ParentId),
+                Name = DisplayName,
+                LegacyName = externalId,
+                IsString = DataType.IsString,
+                IsStep = DataType.IsStep,
+                DataSetId = dataSetId
+            };
+
+            writePoco.Metadata = BuildMetadata(extractor);
+
+            HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value);
+            
+            return writePoco;
+        }
+        public TimeSeriesCreate ToTimeseries(
+            UAExtractor extractor,
+            long? dataSetId,
+            IDictionary<NodeId, long> nodeToAssetIds,
+            Dictionary<string, string> metaMap,
+            bool minimal = false)
+        {
+            if (extractor == null) return null;
+
+            string externalId = extractor.GetUniqueId(Id, Index);
+
+            if (minimal)
+            {
+                return new TimeSeriesCreate
+                {
+                    ExternalId = externalId,
+                    IsString = DataType.IsString,
+                    IsStep = DataType.IsStep,
+                    DataSetId = dataSetId
+                };
+            }
+
+            var writePoco = new TimeSeriesCreate
+            {
+                Description = Description,
+                ExternalId = externalId,
+                Name = DisplayName,
+                LegacyName = externalId,
+                IsString = DataType.IsString,
+                IsStep = DataType.IsStep,
+                DataSetId = dataSetId
+            };
+
+            if (nodeToAssetIds != null && nodeToAssetIds.TryGetValue(ParentId, out long parent))
+            {
+                writePoco.AssetId = parent;
+            }
+
+            writePoco.Metadata = BuildMetadata(extractor);
+
+            HandleMetaMap(metaMap, writePoco, value =>
+            {
+                var id = extractor.State.GetNodeId(value);
+                if (id != null && nodeToAssetIds != null && nodeToAssetIds.TryGetValue(id, out long assetId))
+                {
+                    writePoco.AssetId = assetId;
+                }
+            });
+
+            return writePoco;
         }
     }
 }

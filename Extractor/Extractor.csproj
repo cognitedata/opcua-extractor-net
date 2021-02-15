@@ -4,6 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <RootNamespace>Cognite.OpcUa</RootNamespace>
     <AssemblyName>Extractor</AssemblyName>
+    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
   </PropertyGroup>
   <!--ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />

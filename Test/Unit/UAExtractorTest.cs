@@ -30,16 +30,17 @@ namespace Test.Unit
         public FullConfig Config { get; }
         public ServerController Server { get; }
         public CancellationTokenSource Source { get; }
-        public IServiceProvider Provider { get; }
-        public BaseExtractorTestFixture(int port)
+        public IServiceProvider Provider { get; protected set; }
+        protected ServiceCollection Services { get; }
+        protected BaseExtractorTestFixture(int port)
         {
-            var services = new ServiceCollection();
-            Config = services.AddConfig<FullConfig>("config.test.yml", 1);
+            Services = new ServiceCollection();
+            Config = Services.AddConfig<FullConfig>("config.test.yml", 1);
             Console.WriteLine($"Add logger: {Config.Logger}");
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{port}";
-            services.AddLogger();
+            Services.AddLogger();
             LoggingUtils.Configure(Config.Logger);
-            Provider = services.BuildServiceProvider();
+            Provider = Services.BuildServiceProvider();
 
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
@@ -255,7 +256,7 @@ namespace Test.Unit
 
             try
             {
-                await extractor.PushNodes(nodes, variables, references, pusher, true, true);
+                await extractor.PushNodes(nodes, variables, references, pusher, true);
 
                 Assert.Equal(pushedObjects, pusher.PushedNodes.Count);
                 Assert.Equal(pushedVariables, pusher.PushedVariables.Count);
@@ -404,6 +405,30 @@ namespace Test.Unit
                     CommonTestUtils.TestRunResult(ex);
                 }
             }
+        }
+        [Fact]
+        public void TestGetExtraMetadata()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            Assert.Null(extractor.GetExtraMetadata(null));
+
+            tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
+            var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null);
+            variable.DataType = new UADataType(DataTypeIds.Double);
+            var fields = extractor.GetExtraMetadata(variable);
+            Assert.Single(fields);
+            Assert.Equal("Double", fields["dataType"]);
+
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            var node = new UANode(new NodeId("test"), "test", NodeId.Null);
+            node.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
+            fields = extractor.GetExtraMetadata(node);
+            Assert.Single(fields);
+            Assert.Equal("SomeType", fields["TypeDefinition"]);
+
+            tester.Config.Extraction.DataTypes.DataTypeMetadata = false;
+            tester.Config.Extraction.NodeTypes.Metadata = false;
         }
     }
 }

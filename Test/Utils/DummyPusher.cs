@@ -18,7 +18,7 @@ namespace Test.Utils
         public bool ReadExtractedRanges { get; set; } = true;
         public double? NonFiniteReplacement { get; set; }
 
-        public IPusher ToPusher(IServiceProvider _)
+        public IPusher ToPusher(IServiceProvider provider)
         {
             return new DummyPusher(this);
         }
@@ -85,8 +85,8 @@ namespace Test.Utils
         public Task<bool> PushNodes(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> variables,
-            UpdateConfig _,
-            CancellationToken __)
+            UpdateConfig update,
+            CancellationToken token)
         {
             if (!PushNodesResult) return Task.FromResult(false);
             if (objects != null)
@@ -119,8 +119,7 @@ namespace Test.Utils
         public Task<bool> InitExtractedRanges(
             IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
-            bool initMissing,
-            CancellationToken _)
+            CancellationToken token)
         {
             if (!config.ReadExtractedRanges) return Task.FromResult(true);
             if (!InitDpRangesResult) return Task.FromResult(InitDpRangesResult);
@@ -143,7 +142,7 @@ namespace Test.Utils
                             state.InitExtractedRange(CogniteTime.DateTimeEpoch, max);
                         }
                     }
-                    else if (initMissing)
+                    else
                     {
                         state.InitToEmpty();
                     }
@@ -155,7 +154,6 @@ namespace Test.Utils
         public Task<bool> InitExtractedEventRanges(
             IEnumerable<EventExtractionState> states,
             bool backfillEnabled,
-            bool initMissing,
             CancellationToken token)
         {
             if (!config.ReadExtractedRanges) return Task.FromResult(true);
@@ -176,7 +174,7 @@ namespace Test.Utils
                             state.InitExtractedRange(CogniteTime.DateTimeEpoch, range.Last);
                         }
                     }
-                    else if (initMissing)
+                    else
                     {
                         state.InitToEmpty();
                     }

@@ -91,8 +91,7 @@ namespace Cognite.Bridge
         /// <returns>True on success</returns>
         public async Task<bool> PushAssets(MqttApplicationMessage msg, CancellationToken token)
         {
-            if (msg == null) return true;
-            if (msg.Payload == null)
+            if (msg == null || msg.Payload == null)
             {
                 log.Warning("Null payload in assets");
                 return true;
@@ -293,8 +292,7 @@ namespace Cognite.Bridge
         /// <returns>True on success</returns>
         public async Task<bool> PushDatapoints(MqttApplicationMessage msg, CancellationToken token)
         {
-            if (msg == null) return true;
-            if (msg.Payload == null)
+            if (msg == null || msg.Payload == null)
             {
                 log.Warning("Null payload in datapoints");
                 return true;
@@ -309,7 +307,11 @@ namespace Cognite.Bridge
 
             if (missingTsIds.Any())
             {
-                if (!await RetrieveMissingTimeSeries(missingTsIds, token)) return false;
+                if (!await RetrieveMissingTimeSeries(missingTsIds, token))
+                {
+                    log.Debug("Failed to retrieve {cnt} missing ids from CDF", missingTsIds.Count);
+                    return false;
+                }
             }
 
             var req = new DataPointInsertionRequest();
@@ -366,9 +368,6 @@ namespace Cognite.Bridge
                 evt.AssetIds = evt.AssetExternalIds.Where(id => id != null && assetIds.ContainsKey(id) && assetIds[id] != null)
                     .Select(id => assetIds[id] ?? 0);
             }
-
-
-            events = events.Where(evt => evt.AssetIds.Any() || !evt.AssetExternalIds.Any());
 
             if (!events.Any()) return true;
 

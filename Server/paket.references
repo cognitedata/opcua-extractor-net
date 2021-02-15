@@ -1,6 +1,5 @@
 Microsoft.CSharp
 OPCFoundation.NetStandard.Opc.Ua
 YamlDotNet
-Microsoft.CodeAnalysis.FxCopAnalyzers
 LiteDB
 Cognite.Extractor.Logging

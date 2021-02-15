@@ -1,7 +1,6 @@
 Microsoft.CSharp
 OPCFoundation.NetStandard.Opc.Ua
 AdysTech.InfluxDB.Client.Net.Core
-Microsoft.CodeAnalysis.FxCopAnalyzers
 MQTTnet
 Cognite.Extractor.Configuration
 Cognite.Extractor.Logging

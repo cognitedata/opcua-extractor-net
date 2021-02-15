@@ -45,6 +45,9 @@ namespace Cognite.OpcUa
         public List<UANode> PendingNodes { get; } = new List<UANode>();
         public List<UAReference> PendingReferences { get; } = new List<UAReference>();
 
+        private readonly DateTime minTs = DateTime.Parse("1677-09-21T00:12:43.145224194Z");
+        private readonly DateTime maxTs = DateTime.Parse("2262-04-11T23:47:16.854775806Z");
+
 
         private readonly InfluxPusherConfig config;
         private InfluxDBClient client;
@@ -86,7 +89,7 @@ namespace Cognite.OpcUa
             foreach (var lBuffer in points)
             {
                 var buffer = lBuffer;
-                if (buffer.Timestamp <= DateTime.UnixEpoch)
+                if (buffer.Timestamp < minTs || buffer.Timestamp > maxTs)
                 {
                     skippedDatapoints.Inc();
                     continue;
@@ -118,7 +121,7 @@ namespace Cognite.OpcUa
             {
                 var ts = Extractor.State.GetNodeState(group.Key);
                 if (ts == null) continue;
-                ipoints.AddRange(group.Select(dp => BufferedDPToInflux(ts, dp)));
+                ipoints.AddRange(group.Select(dp => UADataPointToInflux(ts, dp)));
             }
 
             if (config.Debug) return null;
@@ -131,12 +134,27 @@ namespace Cognite.OpcUa
             }
             catch (Exception e)
             {
+                dataPointPushFailures.Inc();
                 if (e is InfluxDBException iex)
                 {
-                    log.Debug("Failed to insert datapoints into influxdb: {line}, {reason}", 
-                        iex.FailedLine, iex.Reason);
+                    log.Error("Failed to insert datapoints into influxdb: {line}, {reason}. Message: {msg}", 
+                        iex.FailedLine, iex.Reason, iex.Message);
+                    if (iex.Reason.StartsWith("partial write"))
+                    {
+                        dataPointPushes.Inc();
+                        int droppedIdx = iex.Message.LastIndexOf("dropped=");
+                        if (droppedIdx != -1)
+                        {
+                            string droppedRaw = iex.Message.Substring(droppedIdx + 8).Trim();
+                            if (int.TryParse(droppedRaw, out int num) && num > 0)
+                            {
+                                skippedDatapoints.Inc(num);
+                            }
+                        }
+                        return true;
+                    }
+                    return false;
                 }
-                dataPointPushFailures.Inc();
                 log.Error("Failed to insert {count} datapoints into influxdb: {msg}", count, e.Message);
                 return false;
             }
@@ -157,7 +175,7 @@ namespace Cognite.OpcUa
             int count = 0;
             foreach (var evt in events)
             {
-                if (evt.Time < DateTime.UnixEpoch)
+                if (evt.Time < minTs || evt.Time > maxTs)
                 {
                     skippedEvents.Inc();
                     continue;
@@ -169,8 +187,8 @@ namespace Cognite.OpcUa
 
             if (count == 0) return null;
 
-            var points = evts.Select(BufferedEventToInflux);
-            if (config.Debug) return true;
+            var points = evts.Select(UAEventToInflux);
+            if (config.Debug) return null;
             try
             {
                 await client.PostPointsAsync(config.Database, points, config.PointChunkSize);
@@ -195,17 +213,35 @@ namespace Cognite.OpcUa
         public async Task<bool> InitExtractedRanges(
             IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
-            bool initMissing,
             CancellationToken token)
         {
             if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
             var ranges = new ConcurrentDictionary<string, TimeRange>();
-            var getRangeTasks = states.Select(async state =>
+
+            var ids = new List<string>();
+            foreach (var state in states)
             {
-                var id = Extractor.GetUniqueId(state.SourceId,
-                    state.ArrayDimensions != null && state.ArrayDimensions.Count > 0 && state.ArrayDimensions[0] > 0 ? 0 : -1);
+                if (state.IsArray)
+                {
+                    for (int i = 0; i < state.ArrayDimensions[0]; i++)
+                    {
+                        ids.Add(Extractor.GetUniqueId(state.SourceId, i));
+                    }
+                }
+                else
+                {
+                    ids.Add(state.Id);
+                }
+            }
+
+            var getRangeTasks = ids.Select(async id =>
+            {
+                ranges[id] = TimeRange.Empty;
+
                 var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\"");
+
+                Console.WriteLine($"Got {last.Count} values from {id}");
 
                 if (last.Any() && last.First().HasEntries)
                 {
@@ -223,14 +259,6 @@ namespace Cognite.OpcUa
                         ranges[id] = new TimeRange(ts, ranges[id].Last);
                     }
                 }
-                if (ranges.TryGetValue(id, out var range))
-                {
-                    state.InitExtractedRange(range.First, range.Last);
-                }
-                else if (initMissing)
-                {
-                    state.InitToEmpty();
-                }
             });
             try
             {
@@ -241,6 +269,42 @@ namespace Cognite.OpcUa
                 log.Error(e, "Failed to get timestamps from influxdb");
                 return false;
             }
+
+            foreach (var state in states)
+            {
+                if (state.IsArray)
+                {
+                    for (int i = 0; i < state.ArrayDimensions[0]; i++)
+                    {
+                        if (ranges.TryGetValue(Extractor.GetUniqueId(state.SourceId, i), out var range))
+                        {
+                            if (range == TimeRange.Empty)
+                            {
+                                state.InitToEmpty();
+                            }
+                            else
+                            {
+                                state.InitExtractedRange(range.First, range.Last);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    if (ranges.TryGetValue(state.Id, out var range))
+                    {
+                        if (range == TimeRange.Empty)
+                        {
+                            state.InitToEmpty();
+                        }
+                        else
+                        {
+                            state.InitExtractedRange(range.First, range.Last);
+                        }
+                    }
+                }
+            }
+
             return true;
         }
         /// <summary>
@@ -255,14 +319,15 @@ namespace Cognite.OpcUa
         private async Task InitExtractedEventRange(EventExtractionState state,
             bool backfillEnabled,
             IEnumerable<string> seriesNames,
-            bool initMissing,
             CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
             var mutex = new object();
             var bestRange = TimeRange.Empty;
 
-            var ids = seriesNames.Where(name => name.StartsWith("events." + state.Id, StringComparison.InvariantCulture));
+            var ids = seriesNames
+                .Where(name => name.StartsWith("events." + state.Id + ":", StringComparison.InvariantCulture))
+                .Distinct().ToList();
 
             var tasks = ids.Select(async id =>
             {
@@ -274,7 +339,7 @@ namespace Cognite.OpcUa
                     DateTime ts = last.First().Entries[0].Time;
                     lock (mutex)
                     {
-                        bestRange = bestRange.Extend(null, ts);
+                        bestRange = bestRange.Extend(ts, ts);
                     }
                 }
 
@@ -288,24 +353,15 @@ namespace Cognite.OpcUa
                         DateTime ts = first.First().Entries[0].Time;
                         lock (mutex)
                         {
-                            bestRange = bestRange.Extend(ts, null);
+                            bestRange = bestRange.Extend(ts, ts);
                         }
                     }
                 }
             });
             await Task.WhenAll(tasks);
             token.ThrowIfCancellationRequested();
-            if (bestRange.Last == CogniteTime.DateTimeEpoch && backfillEnabled)
-            {
-                bestRange = new TimeRange(bestRange.First, DateTime.UtcNow);
-            }
 
-            if (bestRange.First == DateTime.MaxValue)
-            {
-                bestRange = new TimeRange(bestRange.Last, bestRange.Last);
-            }
-
-            if (initMissing && bestRange == TimeRange.Empty)
+            if (bestRange == TimeRange.Empty)
             {
                 state.InitToEmpty();
             }
@@ -323,10 +379,9 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool> InitExtractedEventRanges(IEnumerable<EventExtractionState> states,
             bool backfillEnabled,
-            bool initMissing,
             CancellationToken token)
         {
-            if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            if (!states.Any() || config.Debug || !config.ReadExtractedEventRanges) return true;
             IEnumerable<string> eventSeries;
             try
             {
@@ -341,7 +396,9 @@ namespace Cognite.OpcUa
                 return false;
             }
 
-            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, backfillEnabled, eventSeries, initMissing, token));
+            log.Information("Initializing extracted event ranges for {cnt} emitters", states.Count());
+
+            var getRangeTasks = states.Select(state => InitExtractedEventRange(state, backfillEnabled, eventSeries, token));
             try
             {
                 await Task.WhenAll(getRangeTasks);
@@ -350,6 +407,10 @@ namespace Cognite.OpcUa
             {
                 log.Error("Failed to get timestamps from influxdb: {msg}", e.Message);
                 return false;
+            }
+            foreach (var state in states)
+            {
+                log.Information("State: {id} initialized to {start}, {end}", state.Id, state.DestinationExtractedRange.First, state.DestinationExtractedRange.Last);
             }
             return true;
         }
@@ -396,9 +457,8 @@ namespace Cognite.OpcUa
                      || dataType == DataTypes.UInteger;
         }
 
-        private static IInfluxDatapoint BufferedDPToInflux(VariableExtractionState state, UADataPoint dp)
+        private static IInfluxDatapoint UADataPointToInflux(VariableExtractionState state, UADataPoint dp)
         {
-
             if (state.DataType.IsString)
             {
                 var idp = new InfluxDatapoint<string>
@@ -441,7 +501,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        private IInfluxDatapoint BufferedEventToInflux(UAEvent evt)
+        private IInfluxDatapoint UAEventToInflux(UAEvent evt)
         {
             var idp = new InfluxDatapoint<string>
             {
@@ -553,6 +613,11 @@ namespace Cognite.OpcUa
         }
 
 
+        private HashSet<string> ExcludeEventTags = new HashSet<string>
+        {
+            "id", "value", "source", "time", "type"
+        };
+
         /// <summary>
         /// Read events from influxdb back into BufferedEvents
         /// </summary>
@@ -590,6 +655,7 @@ namespace Cognite.OpcUa
                     // The client uses ExpandoObject as dynamic, which implements IDictionary
                     if (!(res is IDictionary<string, object> values)) return null;
                     var sourceNode = Extractor.State.GetNodeId((string)values["Source"]);
+                    var type = Extractor.State.GetNodeId(name.Substring(state.Id.Length + 1));
                     var evt = new UAEvent
                     {
                         Time = (DateTime)values["Time"],
@@ -597,13 +663,12 @@ namespace Cognite.OpcUa
                         Message = (string)values["Value"],
                         EmittingNode = state.SourceId,
                         SourceNode = sourceNode,
+                        EventType = type,
                         MetaData = new Dictionary<string, object>()
                     };
-                    evt.MetaData["Type"] = name.Substring(state.Id.Length + 1);
                     foreach (var kvp in values)
                     {
-                        if (kvp.Key == "Time" || kvp.Key == "Id" || kvp.Key == "Value"
-                            || kvp.Key == "Type" || string.IsNullOrEmpty(kvp.Value as string)) continue;
+                        if (string.IsNullOrEmpty(kvp.Value as string) || ExcludeEventTags.Contains(kvp.Key.ToLower())) continue;
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
                     log.Verbose(evt.ToString());

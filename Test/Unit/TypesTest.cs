@@ -1,7 +1,9 @@
-﻿using Cognite.OpcUa;
+﻿using Cognite.Extractor.Common;
+using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using CogniteSdk.Beta;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -191,6 +193,127 @@ namespace Test.Unit
                    + "}";
             Assert.Equal(refStr, str);
         }
+
+        [Fact]
+        public void TestBuildMetadata()
+        {
+            using var extractor = tester.BuildExtractor();
+            var node = new UANode(new NodeId("test"), "test", NodeId.Null);
+            Assert.Empty(node.BuildMetadata(null));
+            Assert.Empty(node.BuildMetadata(extractor));
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            node.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
+            // Test extras only
+            Assert.Single(node.BuildMetadata(extractor));
+
+            // Test properties only
+            tester.Config.Extraction.NodeTypes.Metadata = false;
+            var ts = DateTime.UtcNow;
+            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
+            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
+            propA.SetDataPoint("valueA", ts, tester.Client);
+            propB.SetDataPoint("valueB", ts, tester.Client);
+
+            node.Properties = new List<UAVariable>
+            {
+                propA, propB
+            };
+            var meta = node.BuildMetadata(extractor);
+            Assert.Equal(2, meta.Count);
+            Assert.Equal("valueA", meta["propA"]);
+            Assert.Equal("valueB", meta["propB"]);
+
+            // Test both
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            Assert.Equal(3, node.BuildMetadata(extractor).Count);
+
+            // Test nested properties
+            var nestedProp = new UAVariable(new NodeId("nestedProp"), "nestedProp", NodeId.Null);
+            nestedProp.SetDataPoint("nestedValue", ts, tester.Client);
+            propB.Properties = new List<UAVariable>
+            {
+                nestedProp
+            };
+            meta = node.BuildMetadata(extractor);
+            Assert.Equal(4, meta.Count);
+            Assert.Equal("nestedValue", meta["propB_nestedProp"]);
+
+            // Test null name
+            var nullNameProp = new UAVariable(new NodeId("nullName"), null, NodeId.Null);
+            node.Properties.Add(nullNameProp);
+            meta = node.BuildMetadata(extractor);
+            Assert.Equal(4, meta.Count);
+
+            // Test null value
+            var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", NodeId.Null);
+            node.Properties.Add(nullValueProp);
+            meta = node.BuildMetadata(extractor);
+            Assert.Equal(5, meta.Count);
+            Assert.Null(meta["nullValue"]);
+
+            // Test duplicated properties
+            var propA2 = new UAVariable(new NodeId("propA2"), "propA", NodeId.Null);
+            node.Properties.Add(propA2);
+            propA2.SetDataPoint("valueA2", ts, tester.Client);
+            meta = node.BuildMetadata(extractor);
+            Assert.Equal(5, meta.Count);
+            Assert.Equal("valueA2", meta["propA"]);
+
+            // Test overwrite extras
+            Assert.Equal("SomeType", meta["TypeDefinition"]);
+            var propNT = new UAVariable(new NodeId("TypeDef"), "TypeDefinition", NodeId.Null);
+            propNT.SetDataPoint("SomeOtherType", ts, tester.Client);
+            node.Properties.Add(propNT);
+            meta = node.BuildMetadata(extractor);
+            Assert.Equal(5, meta.Count);
+            Assert.Equal("SomeOtherType", meta["TypeDefinition"]);
+        }
+
+        [Fact]
+        public void TestToCDFAsset()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var node = new UANode(new NodeId("test"), "test", new NodeId("parent"));
+            node.Description = "description";
+            var ts = DateTime.UtcNow;
+            var propA = new UAVariable(new NodeId("propA"), "propA", NodeId.Null);
+            var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null);
+            propA.SetDataPoint("valueA", ts, tester.Client);
+            propB.SetDataPoint("valueB", ts, tester.Client);
+
+            node.Properties = new List<UAVariable>
+            {
+                propA, propB
+            };
+
+            var poco = node.ToCDFAsset(extractor, 123, null);
+            Assert.Equal(node.Description, poco.Description);
+            Assert.Equal(123, poco.DataSetId);
+            Assert.Equal("test", poco.Name);
+            Assert.Equal("gp.base:s=test", poco.ExternalId);
+            Assert.Equal("gp.base:s=parent", poco.ParentExternalId);
+            Assert.Equal(2, poco.Metadata.Count);
+
+            // Test meta-map
+            var propC = new UAVariable(new NodeId("propC"), "propC", NodeId.Null);
+            propC.SetDataPoint("valueC", ts, tester.Client);
+            node.Properties.Add(propC);
+
+            var metaMap = new Dictionary<string, string>
+            {
+                { "propA", "description" },
+                { "propB", "name" },
+                { "propC", "parentId" }
+            };
+            poco = node.ToCDFAsset(extractor, 123, metaMap);
+            Assert.Equal("valueA", poco.Description);
+            Assert.Equal(123, poco.DataSetId);
+            Assert.Equal("valueB", poco.Name);
+            Assert.Equal("gp.base:s=test", poco.ExternalId);
+            Assert.Equal("valueC", poco.ParentExternalId);
+            Assert.Equal(3, poco.Metadata.Count);
+        }
         #endregion
 
         #region uavariable
@@ -318,6 +441,118 @@ namespace Test.Unit
                 Assert.Equal(i, child.Index);
             }
 
+        }
+        [Fact]
+        public void TestToStatelessTimeseries()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent"));
+            node.Description = "description";
+            node.DataType = new UADataType(DataTypeIds.Boolean);
+            node.Properties = new List<UAVariable>();
+            var now = DateTime.UtcNow;
+            for (int i = 1; i < 5; i++)
+            {
+                var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
+                prop.SetDataPoint($"value{i}", now, tester.Client);
+                node.Properties.Add(prop);
+            }
+
+            var ts = node.ToStatelessTimeSeries(extractor, 123, null);
+            Assert.Equal("gp.base:s=test", ts.ExternalId);
+            Assert.Equal(123, ts.DataSetId);
+            Assert.Equal("test", ts.Name);
+            Assert.Equal("gp.base:s=test", ts.LegacyName);
+            Assert.Equal("gp.base:s=parent", ts.AssetExternalId);
+            Assert.True(ts.IsStep);
+            Assert.False(ts.IsString);
+            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Null(ts.Unit);
+            Assert.Equal("description", ts.Description);
+
+
+            var metaMap = new Dictionary<string, string>
+            {
+                { "prop1", "description" },
+                { "prop2", "name" },
+                { "prop3", "unit" },
+                { "prop4", "parentId" }
+            };
+            ts = node.ToStatelessTimeSeries(extractor, 123, metaMap);
+            Assert.Equal("gp.base:s=test", ts.ExternalId);
+            Assert.Equal(123, ts.DataSetId);
+            Assert.Equal("value2", ts.Name);
+            Assert.Equal("gp.base:s=test", ts.LegacyName);
+            Assert.Equal("value4", ts.AssetExternalId);
+            Assert.True(ts.IsStep);
+            Assert.False(ts.IsString);
+            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Equal("value1", ts.Description);
+            Assert.Equal("value3", ts.Unit);
+        }
+        [Fact]
+        public void TestToTimeseries()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent"));
+            node.Description = "description";
+            node.DataType = new UADataType(DataTypeIds.Boolean);
+            node.Properties = new List<UAVariable>();
+            var now = DateTime.UtcNow;
+            for (int i = 1; i < 5; i++)
+            {
+                var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
+                prop.SetDataPoint($"value{i}", now, tester.Client);
+                node.Properties.Add(prop);
+            }
+
+            var nodeToAssetIds = new Dictionary<NodeId, long>
+            {
+                { new NodeId("parent"), 111 },
+                { new NodeId("parent2"), 222 }
+            };
+            extractor.State.RegisterNode(new NodeId("parent2"), "value4");
+
+            var ts = node.ToTimeseries(extractor, 123, nodeToAssetIds, null);
+            Assert.Equal("gp.base:s=test", ts.ExternalId);
+            Assert.Equal(123, ts.DataSetId);
+            Assert.Equal("test", ts.Name);
+            Assert.Equal("gp.base:s=test", ts.LegacyName);
+            Assert.Equal(111, ts.AssetId);
+            Assert.True(ts.IsStep);
+            Assert.False(ts.IsString);
+            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Null(ts.Unit);
+            Assert.Equal("description", ts.Description);
+
+            ts = node.ToTimeseries(extractor, 123, nodeToAssetIds, null, true);
+            Assert.Null(ts.Name);
+            Assert.Null(ts.Metadata);
+            Assert.Null(ts.AssetId);
+            Assert.Equal("gp.base:s=test", ts.ExternalId);
+            Assert.True(ts.IsStep);
+            Assert.False(ts.IsString);
+
+            var metaMap = new Dictionary<string, string>
+            {
+                { "prop1", "description" },
+                { "prop2", "name" },
+                { "prop3", "unit" },
+                { "prop4", "parentId" }
+            };
+            ts = node.ToTimeseries(extractor, 123, nodeToAssetIds, metaMap);
+            Assert.Equal("gp.base:s=test", ts.ExternalId);
+            Assert.Equal(123, ts.DataSetId);
+            Assert.Equal("value2", ts.Name);
+            Assert.Equal("gp.base:s=test", ts.LegacyName);
+            Assert.Equal(222, ts.AssetId);
+            Assert.True(ts.IsStep);
+            Assert.False(ts.IsString);
+            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Equal("value1", ts.Description);
+            Assert.Equal("value3", ts.Unit);
         }
         #endregion
 
@@ -654,6 +889,124 @@ namespace Test.Unit
                 }
             }
         }
+        [Fact]
+        public void TestToStatelessCDFEvent()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var ts = DateTime.UtcNow;
+
+            var evt = new UAEvent
+            {
+                EmittingNode = new NodeId("emitter"),
+                MetaData = new Dictionary<string, object>(),
+                EventId = "eventid",
+                EventType = new NodeId("type"),
+                Message = "message",
+                SourceNode = new NodeId("source"),
+                Time = ts
+            };
+            evt.MetaData["field"] = "value";
+
+            // Plain
+            var conv = evt.ToStatelessCDFEvent(extractor, 123, null);
+            Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
+            Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
+            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("gp.base:s=type", conv.Type);
+            Assert.Equal("eventid", conv.ExternalId);
+            Assert.Equal("message", conv.Description);
+            Assert.Equal(ts.ToUnixTimeMilliseconds(), conv.StartTime);
+            Assert.Equal(ts.ToUnixTimeMilliseconds(), conv.EndTime);
+            Assert.Equal(123, conv.DataSetId);
+            Assert.Equal(new[] { "gp.base:s=source" }, conv.AssetExternalIds);
+
+            // With parentId mapping
+            conv = evt.ToStatelessCDFEvent(extractor, 123, new Dictionary<NodeId, string>
+            {
+                { new NodeId("source"), "source" }
+            });
+            Assert.Equal(new[] { "source" }, conv.AssetExternalIds);
+
+            // With mapped metadata
+            evt.MetaData["SubType"] = "SomeSubType";
+            evt.MetaData["StartTime"] = ts.AddDays(-1);
+            evt.MetaData["EndTime"] = ts.AddDays(1).ToUnixTimeMilliseconds();
+            evt.MetaData["Type"] = "SomeOtherType";
+
+            conv = evt.ToStatelessCDFEvent(extractor, 123, null);
+            Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
+            Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
+            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("SomeOtherType", conv.Type);
+            Assert.Equal("SomeSubType", conv.Subtype);
+            Assert.Equal("eventid", conv.ExternalId);
+            Assert.Equal("message", conv.Description);
+            Assert.Equal(ts.AddDays(-1).ToUnixTimeMilliseconds(), conv.StartTime);
+            Assert.Equal(ts.AddDays(1).ToUnixTimeMilliseconds(), conv.EndTime);
+            Assert.Equal(123, conv.DataSetId);
+            Assert.Equal(new[] { "gp.base:s=source" }, conv.AssetExternalIds);
+        }
+        [Fact]
+        public void TestToCDFEvent()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var ts = DateTime.UtcNow;
+
+            var evt = new UAEvent
+            {
+                EmittingNode = new NodeId("emitter"),
+                MetaData = new Dictionary<string, object>(),
+                EventId = "eventid",
+                EventType = new NodeId("type"),
+                Message = "message",
+                SourceNode = new NodeId("source"),
+                Time = ts
+            };
+            evt.MetaData["field"] = "value";
+
+            // Plain
+            var nodeToAsset = new Dictionary<NodeId, long>
+            {
+                { new NodeId("source"), 111 }
+            };
+
+            var conv = evt.ToCDFEvent(extractor, 123, null);
+            Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
+            Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
+            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("gp.base:s=type", conv.Type);
+            Assert.Equal("eventid", conv.ExternalId);
+            Assert.Equal("message", conv.Description);
+            Assert.Equal(ts.ToUnixTimeMilliseconds(), conv.StartTime);
+            Assert.Equal(ts.ToUnixTimeMilliseconds(), conv.EndTime);
+            Assert.Equal(123, conv.DataSetId);
+            Assert.Null(conv.AssetIds);
+
+            // With mapped metadata
+            evt.MetaData["SubType"] = "SomeSubType";
+            evt.MetaData["StartTime"] = ts.AddDays(-1);
+            evt.MetaData["EndTime"] = ts.AddDays(1).ToUnixTimeMilliseconds();
+            evt.MetaData["Type"] = "SomeOtherType";
+
+            conv = evt.ToCDFEvent(extractor, 123, nodeToAsset);
+            Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
+            Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
+            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("SomeOtherType", conv.Type);
+            Assert.Equal("SomeSubType", conv.Subtype);
+            Assert.Equal("eventid", conv.ExternalId);
+            Assert.Equal("message", conv.Description);
+            Assert.Equal(ts.AddDays(-1).ToUnixTimeMilliseconds(), conv.StartTime);
+            Assert.Equal(ts.AddDays(1).ToUnixTimeMilliseconds(), conv.EndTime);
+            Assert.Equal(123, conv.DataSetId);
+            Assert.Equal(new long[] { 111 }, conv.AssetIds);
+        }
         #endregion
 
         #region uareference
@@ -706,6 +1059,30 @@ namespace Test.Unit
             reference2 = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, false, mgr);
             Assert.Equal(reference, reference2);
             Assert.Equal(reference.GetHashCode(), reference2.GetHashCode());
+        }
+        [Fact]
+        public void TestToRelationship()
+        {
+            using var extractor = tester.BuildExtractor();
+            var manager = new ReferenceTypeManager(tester.Client, extractor);
+            var reference = new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), false, true, manager);
+            reference.Type.SetNames("Organizes", "OrganizedBy");
+            var rel = reference.ToRelationship(123, extractor);
+            Assert.Equal(123, rel.DataSetId);
+            Assert.Equal(RelationshipVertexType.Asset, rel.SourceType);
+            Assert.Equal(RelationshipVertexType.TimeSeries, rel.TargetType);
+            Assert.Equal("gp.base:s=source", rel.SourceExternalId);
+            Assert.Equal("gp.base:s=target", rel.TargetExternalId);
+            Assert.Equal("gp.Organizes;base:s=source;base:s=target", rel.ExternalId);
+
+            reference = new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("target"), new NodeId("source"), true, false, manager);
+            rel = reference.ToRelationship(123, extractor);
+            Assert.Equal(123, rel.DataSetId);
+            Assert.Equal(RelationshipVertexType.TimeSeries, rel.SourceType);
+            Assert.Equal(RelationshipVertexType.Asset, rel.TargetType);
+            Assert.Equal("gp.base:s=target", rel.SourceExternalId);
+            Assert.Equal("gp.base:s=source", rel.TargetExternalId);
+            Assert.Equal("gp.OrganizedBy;base:s=target;base:s=source", rel.ExternalId);
         }
         #endregion
     }

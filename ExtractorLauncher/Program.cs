@@ -29,6 +29,7 @@ using Cognite.Extractor.Metrics;
 using Cognite.Extractor.Utils;
 using Cognite.Extractor.StateStorage;
 
+[assembly: CLSCompliant(false)]
 namespace Cognite.OpcUa
 {
     /// <summary>

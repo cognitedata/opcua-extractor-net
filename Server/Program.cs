@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using Serilog;
 
+[assembly: CLSCompliant(false)]
 namespace Server
 {
     class Program

@@ -62,6 +62,27 @@ namespace Test
         public bool StoreDatapoints { get; set; }
         public MockMode mode { get; set; }
 
+
+        private HttpResponseMessage GetFailedRequest(HttpStatusCode code)
+        {
+            var res = new HttpResponseMessage(code)
+            {
+                Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
+                {
+                    error = new ErrorContent
+                    {
+                        code = (int)code,
+                        message = code.ToString()
+                    }
+                }))
+            };
+            res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
+            return res;
+        }
+
+        public HashSet<string> FailedRoutes { get; } = new HashSet<string>();
+
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFMockHandler));
 
         public enum MockMode
@@ -74,10 +95,12 @@ namespace Test
             this.mode = mode;
         }
 
-        public HttpMessageHandler GetHandler()
+        public HttpMessageHandler CreateHandler()
         {
             return new HttpMessageHandlerStub(MessageHandler);
         }
+
+
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
             Justification = "Messages should be disposed in the client")]
@@ -87,36 +110,39 @@ namespace Test
 
             if (BlockAllConnections)
             {
-                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
-                {
-                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
-                    {
-                        error = new ErrorContent
-                        {
-                            code = 501,
-                            message = "bad something or other"
-                        }
-                    }))
-                };
+                return GetFailedRequest(HttpStatusCode.InternalServerError);
             }
 
             if (req.RequestUri.AbsolutePath == "/login/status")
             {
-                return HandleLoginStatus();
+                var res = HandleLoginStatus();
+                res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
+                return res;
             }
             string reqPath = req.RequestUri.AbsolutePath.Replace($"/api/v1/projects/{project}", "", StringComparison.InvariantCulture);
 
+            log.Information("Request to {path}", reqPath);
+            if (FailedRoutes.Contains(reqPath))
+            {
+                log.Information("Failing request to {path}", reqPath);
+                return GetFailedRequest(HttpStatusCode.Forbidden);
+            }
+
             if (reqPath == "/timeseries/data" && req.Method == HttpMethod.Post && StoreDatapoints)
             {
-                var proto = await req.Content.ReadAsByteArrayAsync();
+                var proto = await req.Content.ReadAsByteArrayAsync(cancellationToken);
                 var data = DataPointInsertionRequest.Parser.ParseFrom(proto);
-                return HandleTimeseriesData(data);
+                var res = HandleTimeseriesData(data);
+                res.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
+                return res;
             }
 
             string content = "";
             try
             {
-                content = await req.Content.ReadAsStringAsync();
+                content = await req.Content.ReadAsStringAsync(cancellationToken);
             }
             catch { }
             lock (handlerLock)
@@ -413,6 +439,27 @@ namespace Test
             }
             else
             {
+                var timeseries = found.Select(id => Timeseries[id]).ToList();
+                foreach (var ts in timeseries)
+                {
+                    if (Datapoints.TryGetValue(ts.externalId, out var dps))
+                    {
+                        if (ts.isString && (dps.StringDatapoints?.Any() ?? false))
+                        {
+                            ts.datapoints = new[] { new DataPoint
+                            {
+                                timestamp = dps.StringDatapoints.Max(dp => dp.Timestamp)
+                            } };
+                        }
+                        else if (dps.NumericDatapoints?.Any() ?? false)
+                        {
+                            ts.datapoints = new[] { new DataPoint
+                            {
+                                timestamp = dps.NumericDatapoints.Max(dp => dp.Timestamp)
+                            } };
+                        }
+                    }
+                }
                 string result = JsonConvert.SerializeObject(new TimeseriesReadWrapper
                 {
                     items = found.Select(id => Timeseries[id])
@@ -463,6 +510,46 @@ namespace Test
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent("{}")
+                };
+            }
+            Console.WriteLine("Push points");
+
+            var missing = req.Items.Where(item => !Timeseries.ContainsKey(item.ExternalId)).Select(item => item.ExternalId);
+            var mismatched = req.Items.Where(item =>
+            {
+                if (!Timeseries.TryGetValue(item.ExternalId, out var ts)) return false;
+                bool isString = item.DatapointTypeCase == DataPointInsertionItem.DatapointTypeOneofCase.StringDatapoints;
+                return ts.isString != isString;
+            }).Select(item => item.ExternalId);
+
+            if (missing.Any())
+            {
+                Console.WriteLine($"Found {missing.Count()} missing timeseries");
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
+                    {
+                        error = new ErrorContent
+                        {
+                            code = 400,
+                            message = "missing",
+                            missing = missing.Select(id => new CdfIdentity { externalId = id })
+                        }
+                    }))
+                };
+            }
+            if (mismatched.Any())
+            {
+                return new HttpResponseMessage(HttpStatusCode.BadRequest)
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(new ErrorWrapper
+                    {
+                        error = new ErrorContent
+                        {
+                            code = 400,
+                            message = "Expected string value for datapoint"
+                        }
+                    }))
                 };
             }
 
@@ -603,19 +690,26 @@ namespace Test
                     ExternalId = id.externalId,
                     Id = Timeseries[id.externalId].id
                 };
-                if (Datapoints.ContainsKey(id.externalId))
+                if (Datapoints.TryGetValue(id.externalId, out var dps))
                 {
                     if (Timeseries[id.externalId].isString)
                     {
                         item.StringDatapoints = new StringDatapoints();
-                        item.StringDatapoints.Datapoints.Add(Datapoints[id.externalId].StringDatapoints.Aggregate((curMin, x) =>
-                            curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
+                        if (dps.StringDatapoints?.Any() ?? false)
+                        {
+                            item.StringDatapoints.Datapoints.Add(dps.StringDatapoints.Aggregate((curMin, x) =>
+                                curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
+                        }
                     }
                     else
                     {
                         item.NumericDatapoints = new NumericDatapoints();
-                        item.NumericDatapoints.Datapoints.Add(Datapoints[id.externalId].NumericDatapoints.Aggregate((curMin, x) =>
-                            curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
+                        if (dps.NumericDatapoints?.Any() ?? false)
+                        {
+                            item.NumericDatapoints.Datapoints.Add(Datapoints[id.externalId].NumericDatapoints.Aggregate((curMin, x) =>
+                                curMin == null || x.Timestamp < curMin.Timestamp ? x : curMin));
+                        }
+
                     }
                 }
 
@@ -857,7 +951,7 @@ namespace Test
             };
         }
 
-        private AssetDummy MockAsset(string externalId)
+        public AssetDummy MockAsset(string externalId)
         {
             var asset = new AssetDummy
             {
@@ -874,7 +968,7 @@ namespace Test
             return asset;
         }
 
-        private TimeseriesDummy MockTimeseries(string externalId)
+        public TimeseriesDummy MockTimeseries(string externalId)
         {
             var ts = new TimeseriesDummy(mode)
             {

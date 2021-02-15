@@ -7,6 +7,7 @@ using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
 
+[assembly: CLSCompliant(false)]
 namespace Cognite.Bridge
 {
     class Program
