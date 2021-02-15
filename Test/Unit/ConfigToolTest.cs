@@ -221,6 +221,52 @@ namespace Test.Unit
                 .GetField("history", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(tester.Explorer);
             Assert.False(history);
+
+            tester.Config.Extraction.RootNode = null;
+        }
+
+        [Fact]
+        public async Task TestGetSubscriptionChunkSizes()
+        {
+            bool generate = true;
+            var generateDpsTask = Task.Run(async () =>
+            {
+                double counter = 0;
+                while (!tester.Source.Token.IsCancellationRequested && generate)
+                {
+                    tester.Server.UpdateNode(tester.Server.Ids.Base.DoubleVar1, counter++);
+                    await Task.Delay(200);
+                }
+            });
+            // Test full hierarchy
+            tester.Explorer.ResetNodes();
+            await tester.Explorer.GetSubscriptionChunkSizes(tester.Source.Token);
+            var summary = tester.Explorer.GetSummary();
+            Assert.False(summary.SilentSubscriptionsWarning);
+            Assert.Equal(1000, summary.SubscriptionChunkSize);
+            Assert.False(summary.SubscriptionLimitWarning);
+
+            // Test only base hierarchy
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Base.Root.ToProtoNodeId(tester.Explorer);
+            tester.Explorer.ResetNodes();
+            tester.Explorer.ResetSummary();
+            await tester.Explorer.GetSubscriptionChunkSizes(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.False(summary.SilentSubscriptionsWarning);
+            Assert.Equal(1000, summary.SubscriptionChunkSize);
+            Assert.True(summary.SubscriptionLimitWarning);
+
+            // Test only custom hierarchy
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Custom.Root.ToProtoNodeId(tester.Explorer);
+            tester.Explorer.ResetNodes();
+            tester.Explorer.ResetSummary();
+            await tester.Explorer.GetSubscriptionChunkSizes(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.False(summary.SilentSubscriptionsWarning);
+            Assert.Equal(1000, summary.SubscriptionChunkSize);
+            Assert.True(summary.SubscriptionLimitWarning);
+
+            generate = false;
         }
     }
 }

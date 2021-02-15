@@ -48,6 +48,7 @@ namespace Cognite.OpcUa.Config
 
         private bool nodesRead;
         private bool dataTypesRead;
+        private bool nodeDataRead;
 
         private readonly List<int> testAttributeChunkSizes = new List<int>
         {
@@ -130,6 +131,7 @@ namespace Cognite.OpcUa.Config
             nodeList = new List<UANode>();
             dataTypesRead = false;
             dataTypes = new List<UANode>();
+            nodeDataRead = false;
         }
 
         /// <summary>
@@ -410,6 +412,7 @@ namespace Cognite.OpcUa.Config
         {
             if (dataTypesRead) return;
             dataTypes = new List<UANode>();
+            nodeDataRead = false;
             log.Information("Mapping out data type hierarchy");
             try
             {
@@ -428,6 +431,24 @@ namespace Cognite.OpcUa.Config
                 throw;
             }
             dataTypes = dataTypes.Distinct().ToList();
+        }
+
+        private void ReadNodeData(CancellationToken token)
+        {
+            if (nodeDataRead) return;
+            int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
+            bool oldEvents = config.Events.Enabled;
+            bool oldHistory = config.History.Enabled;
+            bool oldHistoryData = config.History.Data;
+            config.Extraction.DataTypes.MaxArraySize = 10;
+            config.Events.Enabled = true;
+            config.History.Enabled = true;
+            config.History.Data = true;
+            ReadNodeData(nodeList, token);
+            config.Extraction.DataTypes.MaxArraySize = oldArraySize;
+            config.Events.Enabled = oldEvents;
+            config.History.Enabled = oldHistory;
+            config.History.Data = oldHistoryData;
         }
 
         /// <summary>
@@ -650,15 +671,14 @@ namespace Cognite.OpcUa.Config
 
             await PopulateNodes(token);
             PopulateDataTypes(token);
+            ReadNodeData(token);
 
             log.Information("Mapping out variable datatypes");
 
-            var variables = nodeList.Where(node =>
-                node.IsVariable && (node is UAVariable variable) && !variable.IsProperty)
+            var variables = nodeList
+                .Where(node => node.IsVariable && (node is UAVariable variable) && !variable.IsProperty)
                 .Select(node => node as UAVariable)
                 .Where(node => node != null);
-
-            ReadNodeData(variables, token);
 
             history = false;
             bool stringVariables = false;
@@ -777,6 +797,9 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task GetSubscriptionChunkSizes(CancellationToken token)
         {
+            await PopulateNodes(token);
+            ReadNodeData(token);
+
             bool failed = true;
             var states = nodeList.Where(node =>
                     node.IsVariable && (node is UAVariable variable) && !variable.IsProperty
@@ -854,7 +877,7 @@ namespace Cognite.OpcUa.Config
             for (int i = 0; i < 50; i++)
             {
                 if (dps.Any()) break;
-                await Task.Delay(200, token);
+                await Task.Delay(100, token);
             }
 
             if (dps.Any())
