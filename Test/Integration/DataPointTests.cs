@@ -363,14 +363,15 @@ namespace Test.Integration
                 !node.IsFrontfilling && !node.IsBackfilling), 10);
 
             await extractor.Looper.WaitForNextPush();
+            await extractor.Looper.WaitForNextPush();
+
+            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
             CountCustomValues(pusher, 1000);
 
             TestContinuity(pusher.DataPoints[(ids.Array, 0)], false);
             TestContinuity(pusher.DataPoints[(ids.StringyVar, -1)], true);
             TestContinuity(pusher.DataPoints[(ids.MysteryVar, -1)], false);
-
-            await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
             tester.Config.History.Enabled = false;
             tester.Config.History.Data = false;

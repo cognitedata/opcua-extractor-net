@@ -46,6 +46,7 @@ namespace Test.Integration
             var runTask = extractor.RunExtractor();
 
             var ids = tester.Server.Ids.Event;
+            tester.Config.History.Enabled = false;
 
             await extractor.WaitForSubscriptions();
 
@@ -224,7 +225,8 @@ namespace Test.Integration
 
             await extractor.RestartHistory();
 
-            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 1407, 5,
+            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 1407
+                && pusher.Events[ids.Obj1].Count == 402, 5,
                 () => $"Expected to get 1407 events but got {pusher.Events[ObjectIds.Server].Count}");
             // One overlap per event type
             Assert.Equal(1407, pusher.Events[ObjectIds.Server].Count);
