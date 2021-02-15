@@ -123,5 +123,16 @@ namespace Test.Unit
             tester.Config.Source.BrowseNodesChunk = 1000;
             tester.Config.Source.BrowseChunk = 1000;
         }
+        [Fact]
+        public void TestGetCustomDataTypes()
+        {
+            // Config doesn't really impact this
+            tester.Explorer.ReadCustomTypes(tester.Source.Token);
+            var summary = tester.Explorer.GetSummary();
+            Assert.Equal(1, summary.CustomNumTypesCount);
+            Assert.True(tester.BaseConfig.Extraction.DataTypes.AutoIdentifyTypes);
+            Assert.True(summary.Enums);
+            Assert.Single(tester.BaseConfig.Extraction.DataTypes.CustomNumericTypes);
+        }
     }
 }

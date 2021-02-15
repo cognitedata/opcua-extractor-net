@@ -462,16 +462,19 @@ namespace Cognite.OpcUa.Config
             }
             if (dataTypeSwitch > 0)
             {
-                customNumericTypes.Add(new ProtoDataType
-                {
-                    IsStep = dataTypeSwitch == DataTypes.Boolean,
-                    Enum = dataTypeSwitch == DataTypes.Enumeration,
-                    NodeId = NodeIdToProto(type.Id)
-                });
                 if (inHierarchy)
                 {
                     log.Information("DataType {id} is correctly in hierarchy, auto discovery can be used instead", type.Id);
                     baseConfig.Extraction.DataTypes.AutoIdentifyTypes = true;
+                }
+                else
+                {
+                    customNumericTypes.Add(new ProtoDataType
+                    {
+                        IsStep = dataTypeSwitch == DataTypes.Boolean,
+                        Enum = dataTypeSwitch == DataTypes.Enumeration,
+                        NodeId = NodeIdToProto(type.Id)
+                    });
                 }
                 if (dataTypeSwitch == DataTypes.Enumeration)
                 {
@@ -487,6 +490,10 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public void ReadCustomTypes(CancellationToken token)
         {
+            if (Session == null || !Session.Connected)
+            {
+                Run(token).Wait();
+            }
             dataTypes = new List<UANode>();
 
             log.Information("Browsing data type hierarchy for custom datatypes");
@@ -515,7 +522,7 @@ namespace Cognite.OpcUa.Config
 
             if (!summary.Enums && dataTypes.Any(type => ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))) summary.Enums = true;
 
-            log.Information("Found {count} custom datatypes", customNumericTypes.Count);
+            log.Information("Found {count} custom datatypes outside of normal hierarchy", customNumericTypes.Count);
             summary.CustomNumTypesCount = customNumericTypes.Count;
             baseConfig.Extraction.DataTypes.CustomNumericTypes = customNumericTypes;
         }
