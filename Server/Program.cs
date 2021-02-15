@@ -1,6 +1,6 @@
-﻿using System;
+﻿using Serilog;
+using System;
 using System.Threading.Tasks;
-using Serilog;
 
 [assembly: CLSCompliant(false)]
 namespace Server
@@ -20,12 +20,12 @@ namespace Server
             server.PopulateEvents();
 
             int idx = 0;
-            while(true)
+            while (true)
             {
                 //server.TriggerEvents(0);
                 //server.DirectGrowth(idx++);
                 //server.ReferenceGrowth(idx++);
-				server.UpdateNode(server.Ids.Base.DoubleVar1, idx++);
+                server.UpdateNode(server.Ids.Base.DoubleVar1, idx++);
                 Task.Delay(1000).Wait();
             }
         }

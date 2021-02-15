@@ -15,24 +15,24 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using System;
-using System.Collections.ObjectModel;
-using System.Globalization;
+using Cognite.Extractor.Common;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
-using System.Linq;
 using Prometheus;
-using System.Threading;
 using Serilog;
-using Cognite.Extractor.Common;
-using System.Text;
+using System;
 using System.Collections;
-using Cognite.OpcUa.TypeCollectors;
-using Cognite.OpcUa.Types;
-using Cognite.OpcUa.HistoryStates;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
@@ -715,7 +715,7 @@ namespace Cognite.OpcUa
             foreach (var node in nodes)
             {
                 if (node == null) continue;
-                readValueIds.AddRange(common.Select(attribute => new ReadValueId {AttributeId = attribute, NodeId = node.Id}));
+                readValueIds.AddRange(common.Select(attribute => new ReadValueId { AttributeId = attribute, NodeId = node.Id }));
                 if (node.IsVariable)
                 {
                     if (node is UAVariable variable && variable.IsProperty)
@@ -1530,7 +1530,7 @@ namespace Cognite.OpcUa
                         return enumVal;
                     }
                 }
-                catch {}
+                catch { }
             }
 
             if (value.GetType() == typeof(NodeId))

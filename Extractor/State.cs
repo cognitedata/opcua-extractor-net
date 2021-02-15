@@ -15,13 +15,13 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace Cognite.OpcUa
 {
@@ -36,7 +36,7 @@ namespace Cognite.OpcUa
         private readonly ConcurrentDictionary<string, VariableExtractionState> nodeStatesByExtId =
             new ConcurrentDictionary<string, VariableExtractionState>();
 
-        private readonly ConcurrentDictionary<NodeId, EventExtractionState> emitterStates=
+        private readonly ConcurrentDictionary<NodeId, EventExtractionState> emitterStates =
             new ConcurrentDictionary<NodeId, EventExtractionState>();
 
         private readonly ConcurrentDictionary<string, NodeId> externalToNodeId =

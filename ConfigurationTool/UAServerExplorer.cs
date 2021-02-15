@@ -15,18 +15,18 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.Config
 {
@@ -163,7 +163,7 @@ namespace Cognite.OpcUa.Config
                     log.Debug(e, "Endpoint discovery failed");
                 }
             }
-            
+
 
             bool openExists = false;
             bool secureExists = false;
@@ -181,7 +181,8 @@ namespace Cognite.OpcUa.Config
                 if (!secureExists && !openExists)
                 {
                     log.Information("No endpoint found, make sure the given discovery url is correct");
-                } else if (!secureExists && config.Source.Secure)
+                }
+                else if (!secureExists && config.Source.Secure)
                 {
                     log.Information("No secure endpoint exists, so connection will fail if Secure is true");
                 }
@@ -241,7 +242,7 @@ namespace Cognite.OpcUa.Config
                 log.Information("Browse with BrowseNodesChunk: {bnc}, BrowseChunk: {bc}", browseNodesChunk,
                     browseChunk);
 
-                var result = new BrowseMapResult {BrowseNodesChunk = browseNodesChunk, BrowseChunk = browseChunk};
+                var result = new BrowseMapResult { BrowseNodesChunk = browseNodesChunk, BrowseChunk = browseChunk };
 
                 try
                 {
@@ -300,7 +301,7 @@ namespace Cognite.OpcUa.Config
                     useServer = true;
                 }
             }
-            log.Information("Successfully determined BrowseNodesChunk: {bnc}, BrowseChunk: {bc}", 
+            log.Information("Successfully determined BrowseNodesChunk: {bnc}, BrowseChunk: {bc}",
                 best.BrowseNodesChunk, best.BrowseChunk);
             config.Source.BrowseNodesChunk = best.BrowseNodesChunk;
             config.Source.BrowseChunk = best.BrowseChunk;
@@ -427,9 +428,9 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                BrowseDirectory(new List<NodeId> {DataTypes.BaseDataType}, ToolUtil.GetSimpleListWriterCallback(dataTypes, this),
+                BrowseDirectory(new List<NodeId> { DataTypes.BaseDataType }, ToolUtil.GetSimpleListWriterCallback(dataTypes, this),
                     token,
-                    ReferenceTypeIds.HasSubtype, (uint) NodeClass.DataType | (uint) NodeClass.ObjectType);
+                    ReferenceTypeIds.HasSubtype, (uint)NodeClass.DataType | (uint)NodeClass.ObjectType);
             }
             catch (Exception e)
             {
@@ -589,11 +590,12 @@ namespace Cognite.OpcUa.Config
                     && variable.ArrayDimensions[0] > maxLimitedArrayLength)
                 {
                     maxLimitedArrayLength = variable.ArrayDimensions[0];
-                } else if (variable.ArrayDimensions != null
-                           && (variable.ArrayDimensions.Count > 1
-                               || variable.ArrayDimensions.Count == 1 &&
-                               variable.ArrayDimensions[0] > arrayLimit)
-                           || variable.ValueRank >= ValueRanks.TwoDimensions)
+                }
+                else if (variable.ArrayDimensions != null
+                         && (variable.ArrayDimensions.Count > 1
+                             || variable.ArrayDimensions.Count == 1 &&
+                             variable.ArrayDimensions[0] > arrayLimit)
+                         || variable.ValueRank >= ValueRanks.TwoDimensions)
                 {
                     continue;
                 }
@@ -638,7 +640,8 @@ namespace Cognite.OpcUa.Config
             {
                 log.Information("Variables with string datatype were discovered, and the AllowStringVariables config option " +
                                 "will be set to true");
-            } else if (!baseConfig.Extraction.DataTypes.AllowStringVariables)
+            }
+            else if (!baseConfig.Extraction.DataTypes.AllowStringVariables)
             {
                 log.Information("No string variables found and the AllowStringVariables option will be set to false");
             }
@@ -921,10 +924,10 @@ namespace Cognite.OpcUa.Config
                 IsReadModified = false,
                 StartTime = DateTime.UtcNow,
                 EndTime = earliestTime,
-                NumValuesPerNode = (uint) config.History.DataChunk
+                NumValuesPerNode = (uint)config.History.DataChunk
             };
 
-            var backfillParams = new HistoryReadParams(new[] {nodeWithData}, backfillDetails);
+            var backfillParams = new HistoryReadParams(new[] { nodeWithData }, backfillDetails);
 
             try
             {
@@ -1066,9 +1069,9 @@ namespace Cognite.OpcUa.Config
             try
             {
                 VisitedNodes.Clear();
-                BrowseDirectory(new List<NodeId> {ObjectTypeIds.BaseEventType}, ToolUtil.GetSimpleListWriterCallback(eventTypes, this),
+                BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType }, ToolUtil.GetSimpleListWriterCallback(eventTypes, this),
                     token,
-                    ReferenceTypeIds.HasSubtype, (uint) NodeClass.ObjectType);
+                    ReferenceTypeIds.HasSubtype, (uint)NodeClass.ObjectType);
             }
             catch (Exception ex)
             {
@@ -1496,7 +1499,7 @@ namespace Cognite.OpcUa.Config
             if (summary.History)
             {
                 log.Information("Successfully read datapoint history");
-                log.Information("Settled on history chunk size {chunk} with granularity {g}", 
+                log.Information("Settled on history chunk size {chunk} with granularity {g}",
                     summary.HistoryChunkSize, summary.HistoryGranularity);
                 if (summary.BackfillRecommended)
                 {

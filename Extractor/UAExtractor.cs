@@ -15,13 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.HistoryStates;
@@ -31,6 +24,13 @@ using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
 using Serilog;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
@@ -244,7 +244,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                ExtractorUtils.LogException(log, ex, "Unexpected error in MapUAToDestinations", 
+                ExtractorUtils.LogException(log, ex, "Unexpected error in MapUAToDestinations",
                     "Handled service result exception in MapUAToDestinations");
                 throw;
             }
@@ -266,7 +266,8 @@ namespace Cognite.OpcUa
             subscribed = 0;
             subscribeFlag = false;
             historyReader.Terminate(source.Token, 30).Wait();
-            foreach (var state in State.NodeStates) {
+            foreach (var state in State.NodeStates)
+            {
                 state.RestartHistory();
             }
 
@@ -587,7 +588,7 @@ namespace Cognite.OpcUa
             /// <summary>
             /// All nodes that should be mapped to destination objects
             /// </summary>
-            public List<UANode> Objects { get;} = new List<UANode>();
+            public List<UANode> Objects { get; } = new List<UANode>();
             /// <summary>
             /// All nodes that should be mapped to destination variables
             /// </summary>
@@ -783,7 +784,7 @@ namespace Cognite.OpcUa
             }
 
             var update = config.Extraction.Update;
-            
+
             await GetNodeData(update, result);
 
             result.Objects.AddRange(FilterObjects(update, result.RawObjects));
@@ -876,7 +877,7 @@ namespace Cognite.OpcUa
                 var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled && !state.Initialized);
 
                 var initResults = await Task.WhenAll(
-                    pusher.InitExtractedRanges(statesToSync, config.History.Backfill, source.Token), 
+                    pusher.InitExtractedRanges(statesToSync, config.History.Backfill, source.Token),
                     pusher.InitExtractedEventRanges(eventStatesToSync, config.History.Backfill, source.Token));
 
                 if (!initResults.All(res => res))

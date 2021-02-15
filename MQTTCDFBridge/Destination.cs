@@ -1,22 +1,21 @@
-﻿using System;
+﻿using Cognite.Extensions;
+using Cognite.Extractor.Common;
+using Cognite.Extractor.Utils;
+using CogniteSdk;
+using Com.Cognite.V1.Timeseries.Proto;
+using Microsoft.Extensions.DependencyInjection;
+using MQTTnet;
+using Serilog;
+using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using CogniteSdk;
 using System.Threading;
 using System.Threading.Tasks;
-using Com.Cognite.V1.Timeseries.Proto;
-using MQTTnet;
-using Serilog;
-using Cognite.Extractor.Utils;
-using Microsoft.Extensions.DependencyInjection;
-using Cognite.Extractor.Common;
-using System.Buffers;
-using Cognite.Extensions;
-using System.ComponentModel;
 
 namespace Cognite.Bridge
 {
@@ -519,7 +518,7 @@ namespace Cognite.Bridge
                 {
                     var oldRow = JsonDocument.Parse(JsonSerializer.Serialize(row.Columns)).RootElement;
                     toUpsert[row.Key] = JsonDocument.Parse(Merge(oldRow, newRow)).RootElement;
-                    
+
                 }
             }
             log.Information("Creating or updating {cnt} raw rows in CDF", toUpsert.Count);

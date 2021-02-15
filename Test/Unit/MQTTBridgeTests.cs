@@ -1,23 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using Cognite.Bridge;
+﻿using Cognite.Bridge;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
 using CogniteSdk;
-using RelationshipCreate = CogniteSdk.Beta.RelationshipCreate;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Microsoft.Extensions.DependencyInjection;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
+using RelationshipCreate = CogniteSdk.Beta.RelationshipCreate;
 
 namespace Test.Unit
 {
@@ -483,7 +483,8 @@ namespace Test.Unit
             var roundOne = new DataPointInsertionRequest();
             var item1 = new DataPointInsertionItem
             {
-                ExternalId = "test-ts-1", NumericDatapoints = new NumericDatapoints()
+                ExternalId = "test-ts-1",
+                NumericDatapoints = new NumericDatapoints()
             };
             item1.NumericDatapoints.Datapoints.Add(new NumericDatapoint
             {
@@ -497,7 +498,8 @@ namespace Test.Unit
             });
             var item2 = new DataPointInsertionItem
             {
-                ExternalId = "test-ts-2", StringDatapoints = new StringDatapoints()
+                ExternalId = "test-ts-2",
+                StringDatapoints = new StringDatapoints()
             };
             item2.StringDatapoints.Datapoints.Add(new StringDatapoint
             {
@@ -515,7 +517,8 @@ namespace Test.Unit
             var roundTwo = new DataPointInsertionRequest();
             var item3 = new DataPointInsertionItem
             {
-                ExternalId = "test-ts-1", NumericDatapoints = new NumericDatapoints()
+                ExternalId = "test-ts-1",
+                NumericDatapoints = new NumericDatapoints()
             };
             item3.NumericDatapoints.Datapoints.Add(new NumericDatapoint
             {
@@ -524,7 +527,8 @@ namespace Test.Unit
             });
             var item4 = new DataPointInsertionItem
             {
-                ExternalId = "test-ts-2", NumericDatapoints = new NumericDatapoints()
+                ExternalId = "test-ts-2",
+                NumericDatapoints = new NumericDatapoints()
             };
             item4.NumericDatapoints.Datapoints.Add(new NumericDatapoint
             {
@@ -533,7 +537,8 @@ namespace Test.Unit
             });
             var item5 = new DataPointInsertionItem
             {
-                ExternalId = "test-ts-5", NumericDatapoints = new NumericDatapoints()
+                ExternalId = "test-ts-5",
+                NumericDatapoints = new NumericDatapoints()
             };
             item5.NumericDatapoints.Datapoints.Add(new NumericDatapoint
             {
@@ -547,7 +552,8 @@ namespace Test.Unit
             var roundThree = new DataPointInsertionRequest();
             var item6 = new DataPointInsertionItem
             {
-                ExternalId = "test-ts-1", NumericDatapoints = new NumericDatapoints()
+                ExternalId = "test-ts-1",
+                NumericDatapoints = new NumericDatapoints()
             };
             item6.NumericDatapoints.Datapoints.Add(new NumericDatapoint
             {
@@ -556,7 +562,8 @@ namespace Test.Unit
             });
             var item7 = new DataPointInsertionItem
             {
-                ExternalId = "test-ts-2", NumericDatapoints = new NumericDatapoints()
+                ExternalId = "test-ts-2",
+                NumericDatapoints = new NumericDatapoints()
             };
             item7.NumericDatapoints.Datapoints.Add(new NumericDatapoint
             {
@@ -565,7 +572,8 @@ namespace Test.Unit
             });
             var item8 = new DataPointInsertionItem
             {
-                ExternalId = "test-ts-5", NumericDatapoints = new NumericDatapoints()
+                ExternalId = "test-ts-5",
+                NumericDatapoints = new NumericDatapoints()
             };
             item8.NumericDatapoints.Datapoints.Add(new NumericDatapoint
             {

@@ -1,19 +1,19 @@
 ﻿using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
-using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit;
-using Xunit.Abstractions;
-using Test.Utils;
-using System.Linq;
-using System.Collections.Generic;
-using Opc.Ua;
+using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
-using Cognite.OpcUa.HistoryStates;
+using Microsoft.Extensions.DependencyInjection;
+using Opc.Ua;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Test.Utils;
+using Xunit;
+using Xunit.Abstractions;
 
 namespace Test.Unit
 {
@@ -218,7 +218,7 @@ namespace Test.Unit
             {
                 tester.Config.Extraction.Relationships.Enabled = false;
             }
-            
+
         }
 
         [Fact]

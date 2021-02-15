@@ -7,7 +7,6 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -17,7 +16,7 @@ namespace Test.Integration
 {
     public sealed class NodeExtractionTestFixture : BaseExtractorTestFixture
     {
-        public NodeExtractionTestFixture() : base(63200) 
+        public NodeExtractionTestFixture() : base(63200)
         {
             Config.History.Enabled = false;
         }

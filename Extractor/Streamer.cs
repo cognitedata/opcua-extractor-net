@@ -15,11 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
@@ -28,6 +23,11 @@ using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
@@ -232,7 +232,7 @@ namespace Cognite.OpcUa
                         pusher.EventsFailing = true;
                         failedPushers.Add(pusher);
                     }
-                    log.Warning("Pushers of types {types} failed while pushing events", 
+                    log.Warning("Pushers of types {types} failed while pushing events",
                         failedPushers.Select(pusher => pusher.GetType().ToString()).Aggregate((src, val) => src + ", " + val));
                 }
 

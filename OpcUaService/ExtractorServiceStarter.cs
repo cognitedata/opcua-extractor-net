@@ -1,14 +1,14 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Cognite.Extractor.Configuration;
-using Prometheus;
-using Serilog;
-using Cognite.OpcUa;
+﻿using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
-using Microsoft.Extensions.DependencyInjection;
 using Cognite.Extractor.Metrics;
 using Cognite.Extractor.Utils;
+using Cognite.OpcUa;
+using Microsoft.Extensions.DependencyInjection;
+using Prometheus;
+using Serilog;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpcUaService
 {

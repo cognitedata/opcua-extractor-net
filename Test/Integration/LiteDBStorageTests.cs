@@ -1,18 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-using Cognite.Extractor.Common;
-using Cognite.Extractor.StateStorage;
+﻿using Cognite.Extractor.Common;
 using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
-using Cognite.OpcUa.Types;
-using Opc.Ua;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 

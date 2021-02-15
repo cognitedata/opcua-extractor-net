@@ -15,17 +15,17 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Prometheus;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
@@ -265,7 +265,7 @@ namespace Cognite.OpcUa
                     int cnt = handler(res.RawData, readParams.Completed[res.Id], frontfill, res.Id, details);
 
                     total += cnt;
-                    log.Debug("{mode} {cnt} {type} for node {nodeId}", 
+                    log.Debug("{mode} {cnt} {type} for node {nodeId}",
                         frontfill ? "Frontfill" : "Backfill", cnt, data ? "datapoints" : "events", res.Id);
                 }
                 log.Information("{mode}ed {cnt} {type} for {nodeCount} states",
@@ -360,7 +360,7 @@ namespace Cognite.OpcUa
             };
             log.Information("Frontfill events from {start} for {cnt} emitters", finalTimeStamp, states.Count());
 
-            BaseHistoryReadOp(details, states.Select(node => node.SourceId), true, false, HistoryEventHandler, token); 
+            BaseHistoryReadOp(details, states.Select(node => node.SourceId), true, false, HistoryEventHandler, token);
 
         }
         /// <summary>

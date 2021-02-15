@@ -15,37 +15,37 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using AdysTech.InfluxDB.Client.Net;
+using Cognite.Bridge;
+using Cognite.Extractor.Configuration;
+using Cognite.Extractor.Logging;
+using Cognite.Extractor.Metrics;
+using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Utils;
+using Cognite.OpcUa;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
+using CogniteSdk;
+using LiteDB;
+using Microsoft.Extensions.DependencyInjection;
+using Opc.Ua;
+using Prometheus;
+using Serilog;
+using Server;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using AdysTech.InfluxDB.Client.Net;
-using Cognite.Bridge;
-using Cognite.OpcUa;
-using LiteDB;
-using Microsoft.Extensions.DependencyInjection;
-using Prometheus;
-using Serilog;
-using Xunit.Abstractions;
 using Xunit;
-using Server;
-using Opc.Ua;
-using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
-using System.Reflection;
-using System.Collections.Concurrent;
-using CogniteSdk;
-using Cognite.Extractor.StateStorage;
-using Cognite.Extractor.Utils;
+using Xunit.Abstractions;
 using File = System.IO.File;
-using Cognite.Extractor.Metrics;
-using System.Text;
-using Cognite.OpcUa.Types;
-using Cognite.OpcUa.HistoryStates;
-using System.Collections.ObjectModel;
 
 [assembly: CLSCompliant(false)]
 namespace Test
@@ -139,7 +139,7 @@ namespace Test
             };
             if (Math.Abs(val - value) > 0.01)
             {
-                log.Information("Expected {val} but got {value} for metric {name}", 
+                log.Information("Expected {val} but got {value} for metric {name}",
                     value, val, name);
                 return false;
             }
@@ -338,25 +338,6 @@ namespace Test
             {
                 throw new FatalException("Unknown event found");
             }
-        }
-
-        public static void TestEventCollection(IEnumerable<EventDummy> events)
-        {
-            Assert.True(events.Any());
-            Assert.Contains(events, ev => ev.description == "prop 0");
-            Assert.Contains(events, ev => ev.description == "basic-pass 0");
-            Assert.Contains(events, ev => ev.description == "basic-pass-2 0");
-            Assert.Contains(events, ev => ev.description == "mapped 0");
-            Assert.Contains(events, ev => ev.description == "basic-varsource 0");
-            Assert.Contains(events, ev => ev.description == "basic-excludeobj 0");
-            Assert.Contains(events, ev => ev.description == "basic-nosource 0");
-            Assert.Contains(events, ev => ev.description == "prop 99");
-            Assert.Contains(events, ev => ev.description == "basic-pass 99");
-            Assert.Contains(events, ev => ev.description == "basic-pass-2 99");
-            Assert.Contains(events, ev => ev.description == "mapped 99");
-            Assert.Contains(events, ev => ev.description == "basic-varsource 99");
-            Assert.Contains(events, ev => ev.description == "basic-excludeobj 99");
-            Assert.Contains(events, ev => ev.description == "basic-nosource 99");
         }
 
         private static bool EventSourceIs(EventDummy ev, CDFMockHandler handler, string name, bool rawSource)
@@ -828,12 +809,12 @@ namespace Test
             {
                 log.Error("Condition failed to appear within {sec} seconds", seconds);
             }
-            log.Information("Waited for {cnt} seconds", i/5.0);
+            log.Information("Waited for {cnt} seconds", i / 5.0);
             Assert.True(triggered, assertion());
         }
         public async Task WaitForCondition(Func<bool> condition, int seconds,
             string assertion = "Expected condition to trigger")
-        { 
+        {
             await WaitForCondition(() => Task.FromResult(condition()), seconds, () => assertion);
         }
         public async Task WaitForCondition(Func<bool> condition, int seconds,
@@ -908,7 +889,7 @@ namespace Test
                 }
                 last = dp;
             }
-            
+
             Assert.True(max - min == intdps.Count() - 1, $"Continuity impossible, min is {min}, max is {max}, count is {intdps.Count()}: {msg}");
         }
         /// <summary>

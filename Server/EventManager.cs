@@ -1,9 +1,8 @@
-﻿using Opc.Ua.Server;
-using Opc.Ua;
+﻿using Opc.Ua;
+using Opc.Ua.Server;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Serilog;
 
 namespace Server
 {
@@ -14,7 +13,7 @@ namespace Server
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:Uri properties should not be strings",
             Justification = "NamespaceUris are not necessarily Uris")]
-        public string NamespaceUri { get;}
+        public string NamespaceUri { get; }
         public TestEventManager(ServerSystemContext systemContext, BaseObjectTypeState eventType, string namespaceUri)
         {
             Context = systemContext;
@@ -22,7 +21,7 @@ namespace Server
             EventType = eventType;
         }
     }
-    public class TestEventManager<T> : TestEventManager where T : ManagedEvent 
+    public class TestEventManager<T> : TestEventManager where T : ManagedEvent
     {
         public TestEventManager(ServerSystemContext systemContext, BaseObjectTypeState eventType, string namespaceUri) :
             base(systemContext, eventType, namespaceUri)

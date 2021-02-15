@@ -1,6 +1,5 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
-using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -10,7 +9,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -675,7 +673,7 @@ namespace Test.Integration
 
             var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscriptions();
-            
+
             Assert.False(runTask.IsFaulted, $"Faulted! {runTask.Exception}");
 
             // expect no data to arrive in pusher

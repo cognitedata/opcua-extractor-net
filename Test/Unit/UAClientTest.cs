@@ -4,7 +4,6 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Server;
@@ -454,7 +453,8 @@ namespace Test.Unit
             try
             {
                 var values = tester.Client.ReadRawValues(nodes, tester.Source.Token);
-                Assert.All(nodes, node => {
+                Assert.All(nodes, node =>
+                {
                     Assert.True(values.TryGetValue(node, out var dv));
                     Assert.Null(dv.Value);
                 });
@@ -590,7 +590,7 @@ namespace Test.Unit
                 tester.Server.WipeHistory(tester.Server.Ids.Custom.MysteryVar, null);
                 tester.Server.WipeHistory(tester.Server.Ids.Base.StringVar, null);
             }
-            
+
 
         }
         [Fact]
@@ -623,7 +623,7 @@ namespace Test.Unit
                 tester.Client.SubscribeToNodes(nodes.Take(1000), handler, tester.Source.Token);
                 tester.Client.SubscribeToNodes(nodes.Skip(1000), handler, tester.Source.Token);
 
-                await CommonTestUtils.WaitForCondition(() => dps.Count == 2000, 5, 
+                await CommonTestUtils.WaitForCondition(() => dps.Count == 2000, 5,
                     () => $"Expected to get 2000 datapoints, but got {dps.Count}");
 
                 foreach (var node in nodes)

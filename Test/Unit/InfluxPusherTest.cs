@@ -428,7 +428,7 @@ namespace Test.Unit
                 extractor.State.SetEmitterState(state2);
                 return new[] { state, state2 };
             }
-            
+
             extractor.State.RegisterNode(new NodeId("source"), extractor.GetUniqueId(new NodeId("source")));
             extractor.State.RegisterNode(new NodeId("emitter"), extractor.GetUniqueId(new NodeId("emitter")));
             extractor.State.RegisterNode(new NodeId("emitter2"), extractor.GetUniqueId(new NodeId("emitter2")));

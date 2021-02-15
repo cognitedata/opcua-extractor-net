@@ -15,12 +15,12 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Types;
+using Opc.Ua;
 using Serilog;
 using System;
 using System.Collections.Generic;
-using Opc.Ua;
 using System.Linq;
-using Cognite.OpcUa.Types;
 
 namespace Cognite.OpcUa
 {
@@ -113,7 +113,7 @@ namespace Cognite.OpcUa
                     return;
                 }
                 log.Error(e, message + " - {msg}", aex?.InnerException?.Message ?? aex.Message);
-            } 
+            }
             else if (e is SilentServiceException silent)
             {
                 log.Debug(silent, silentMessage);
@@ -164,7 +164,7 @@ namespace Cognite.OpcUa
                     log.Error("There was an issue with the certificate: {code} at operation {op}", symId, op.ToString());
                     return new SilentServiceException("There was an issue with the certificate", ex, op);
                 case StatusCodes.BadNothingToDo:
-                    log.Error("Server had nothing to do, this is likely an issue with the extractor: {code} at operation {op}", 
+                    log.Error("Server had nothing to do, this is likely an issue with the extractor: {code} at operation {op}",
                         symId, op.ToString());
                     return new SilentServiceException("Server had nothing to do", ex, op);
                 case StatusCodes.BadSessionClosed:
@@ -172,7 +172,7 @@ namespace Cognite.OpcUa
                     log.Error("Service failed due to closed Session: {code} at operation {op}", symId, op.ToString());
                     return new SilentServiceException("Service failed due to closed Session", ex, op);
                 case StatusCodes.BadServerNotConnected:
-                    log.Error("The client attempted a connection without being connected to the server: {code} at operation {op}", 
+                    log.Error("The client attempted a connection without being connected to the server: {code} at operation {op}",
                         symId, op.ToString());
                     log.Error("This is most likely an issue with the extractor");
                     return new SilentServiceException("Attempted call to unconnected server", ex, op);
@@ -186,7 +186,7 @@ namespace Cognite.OpcUa
                             if (code == StatusCodes.BadNotConnected || code == StatusCodes.BadSecureChannelClosed)
                             {
                                 // The most common error, generally happens if the server cannot be found
-                                log.Error("Unable to connect to discovery server: {code} at operation {op}", 
+                                log.Error("Unable to connect to discovery server: {code} at operation {op}",
                                     symId, op.ToString());
                                 log.Error("Check the EndpointURL, and make sure that the server is accessible");
                                 return new SilentServiceException("Unable to connect to discovery server", ex, op);
@@ -196,7 +196,7 @@ namespace Cognite.OpcUa
                             switch (code)
                             {
                                 case StatusCodes.BadIdentityTokenInvalid:
-                                    log.Error("Invalid identity token, most likely a configuration issue: {code} at operation {op}", 
+                                    log.Error("Invalid identity token, most likely a configuration issue: {code} at operation {op}",
                                         symId, op.ToString());
                                     log.Error("Make sure that the username and password given are valid");
                                     return new SilentServiceException("Invalid identity token", ex, op);
@@ -213,7 +213,7 @@ namespace Cognite.OpcUa
                         case SourceOp.ReadRootNode:
                             if (code == StatusCodes.BadNodeIdInvalid || code == StatusCodes.BadNodeIdUnknown)
                             {
-                                log.Error("Root node not found, check configuration: {code} at operation {op}", 
+                                log.Error("Root node not found, check configuration: {code} at operation {op}",
                                     symId, op.ToString());
                                 return new SilentServiceException("Root node not found", ex, op);
                             }
@@ -350,7 +350,7 @@ namespace Cognite.OpcUa
                                     return new SilentServiceException($"{op.ToString()} unsupported", ex, op);
                                 case StatusCodes.BadNoContinuationPoints:
                                     log.Error("Server is out of continuationPoints, this may be the " +
-                                              "result of poor configuration of the extractor: {code} at operation {op}", 
+                                              "result of poor configuration of the extractor: {code} at operation {op}",
                                         symId, op.ToString());
                                     log.Error("If the chunk sizes for {op} are set very low, that may be the cause", op.ToString());
                                     return new SilentServiceException($"Too many continuationPoints for {op.ToString()}", ex, op);

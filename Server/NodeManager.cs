@@ -1,9 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Opc.Ua;
+﻿using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Server
 {
@@ -165,7 +165,7 @@ namespace Server
             var parent = PredefinedNodes[parentId];
             var obj = CreateObject(name);
             AddNodeRelation(obj, parent, ReferenceTypeIds.Organizes);
-            
+
             if (audit)
             {
                 var evtAdd = new AddNodesItem
@@ -332,7 +332,7 @@ namespace Server
                     }
 
                 }
-                
+
                 if (predefinedNodes != null)
                 {
                     foreach (var set in predefinedNodes)
@@ -366,7 +366,7 @@ namespace Server
                 log.Error(ex, "Failed to create address space");
             }
         }
-        
+
         private void CreateBaseSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)
@@ -419,7 +419,7 @@ namespace Server
                 Ids.Base.IntVar = myint.NodeId;
             }
         }
-        
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateFullAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -462,7 +462,7 @@ namespace Server
                 Ids.Full.DeepRoot = deeproot.NodeId;
             }
         }
-        
+
         private void CreateCustomAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)
@@ -627,14 +627,14 @@ namespace Server
                 Ids.Custom.VariableType = variableType.NodeId;
             }
         }
-        
+
         private void CreateEventAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)
             {
                 var root = CreateObject("EventRoot");
                 AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
-                
+
                 var obj1 = CreateObject("Object 1");
                 AddNodeRelation(obj1, root, ReferenceTypeIds.Organizes);
 
@@ -697,7 +697,7 @@ namespace Server
                 Ids.Event.CustomType = customType.NodeId;
             }
         }
-        
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateAuditAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -802,7 +802,8 @@ namespace Server
         {
             var state = new BaseObjectState(null)
             {
-                NodeId = GenerateNodeId(), BrowseName = new QualifiedName(name, NamespaceIndex)
+                NodeId = GenerateNodeId(),
+                BrowseName = new QualifiedName(name, NamespaceIndex)
             };
             state.DisplayName = state.BrowseName.Name;
             state.TypeDefinitionId = ObjectTypeIds.BaseObjectType;
@@ -813,7 +814,8 @@ namespace Server
         {
             var state = new BaseDataVariableState(null)
             {
-                NodeId = GenerateNodeId(), BrowseName = new QualifiedName(name, NamespaceIndex)
+                NodeId = GenerateNodeId(),
+                BrowseName = new QualifiedName(name, NamespaceIndex)
             };
             state.DisplayName = state.BrowseName.Name;
             state.TypeDefinitionId = VariableTypeIds.BaseDataVariableType;
@@ -822,7 +824,7 @@ namespace Server
             if (dim > -1)
             {
                 state.ValueRank = ValueRanks.OneDimension;
-                state.ArrayDimensions = new[] {(uint) dim};
+                state.ArrayDimensions = new[] { (uint)dim };
             }
 
             return state;
@@ -1073,7 +1075,7 @@ namespace Server
         }
 
         public override void HistoryRead(
-            OperationContext context, 
+            OperationContext context,
             HistoryReadDetails details,
             TimestampsToReturn timestampsToReturn,
             bool releaseContinuationPoints,

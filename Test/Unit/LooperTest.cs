@@ -1,16 +1,12 @@
-﻿using Cognite.Extractor.StateStorage;
-using Cognite.OpcUa;
+﻿using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Test.Utils;
@@ -51,7 +47,7 @@ namespace Test.Unit
                 .GetValue(extractor.Looper);
 
             var loopTask = extractor.Looper.InitTaskLoop(
-                new [] { Task.Run(() => synch1 = true), Task.Run(() => synch2 = true) }, source.Token);
+                new[] { Task.Run(() => synch1 = true), Task.Run(() => synch2 = true) }, source.Token);
 
             await CommonTestUtils.WaitForCondition(() => synch1 && synch2, 5);
             await CommonTestUtils.WaitForCondition(() => tasks.Count == 6, 5);
@@ -171,7 +167,7 @@ namespace Test.Unit
 
             extractor.Streamer.Enqueue(dps);
             extractor.Streamer.Enqueue(evts);
-            
+
             pusher1.PushDataPointResult = false;
             pusher1.PushEventResult = false;
             pusher1.TestConnectionResult = false;

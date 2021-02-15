@@ -15,26 +15,25 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using Cognite.Extractor.StateStorage;
+using Cognite.Extensions;
 using Cognite.Extractor.Common;
-using Cognite.Extractor.Utils;
+using Cognite.Extractor.StateStorage;
+using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
+using Opc.Ua;
 using Prometheus;
 using Serilog;
-using Cognite.Extensions;
-using Opc.Ua;
-using Cognite.OpcUa.Types;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.Pushers
 {
@@ -212,7 +211,7 @@ namespace Cognite.OpcUa.Pushers
             catch (Exception e)
             {
                 log.Warning("Failed to connect to MQTT broker: {msg}", e.Message);
-				return false;
+                return false;
             }
             log.Information("Connected to MQTT broker");
             return client.IsConnected;
@@ -385,7 +384,7 @@ namespace Cognite.OpcUa.Pushers
                     (state, poco) => state.Existing = true,
                     token);
 
-                
+
                 foreach (var node in states)
                 {
                     if (node.Value.Existing)
@@ -539,7 +538,7 @@ namespace Cognite.OpcUa.Pushers
             }
 
             var data = JsonSerializer.SerializeToUtf8Bytes(assets, null);
-            
+
             var msg = baseBuilder
                 .WithTopic(config.AssetTopic)
                 .WithPayload(data)

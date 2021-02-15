@@ -1,18 +1,13 @@
 ﻿using Cognite.Extractor.Common;
-using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
-using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -183,7 +178,8 @@ namespace Test.Unit
             // Test bad events
             CommonTestUtils.ResetMetricValue("opcua_bad_events");
             var badEvts = new HistoryEventFieldListCollection(Enumerable.Range(0, 100)
-                .Select(idx => {
+                .Select(idx =>
+                {
                     var values = EventUtils.GetEventValues(start.AddSeconds(-idx));
                     values[0] = Variant.Null;
                     return values;
@@ -229,8 +225,11 @@ namespace Test.Unit
             var states = new[] { tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Custom.Array,
                 tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.StringVar }
                 .Select((id, idx) => new VariableExtractionState(
-                    extractor, new UAVariable(id, "state", NodeId.Null) {
-                        DataType = idx == 3 ? dt2 : dt, ArrayDimensions = idx == 1 ? new Collection<int>(new[] { 4 }) : null }, true, true))
+                    extractor, new UAVariable(id, "state", NodeId.Null)
+                    {
+                        DataType = idx == 3 ? dt2 : dt,
+                        ArrayDimensions = idx == 1 ? new Collection<int>(new[] { 4 }) : null
+                    }, true, true))
                 .ToList();
 
             var start = tester.HistoryStart.AddSeconds(5);

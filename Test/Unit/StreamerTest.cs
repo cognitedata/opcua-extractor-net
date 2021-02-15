@@ -1,16 +1,13 @@
 ﻿using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
-using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Opc.Ua.Client;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Test.Utils;
