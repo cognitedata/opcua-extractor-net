@@ -42,23 +42,8 @@ namespace Cognite.OpcUa.Config
         private Dictionary<string, string> namespaceMap;
         private Dictionary<NodeId, HashSet<EventField>> activeEventFields;
         private bool history;
-        private bool useServer;
-
-        private const int ServerSizeBase = 125;
-        private const int ServerWidest = 47;
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAServerExplorer));
-
-        private readonly List<(int, int)> testBrowseChunkSizes = new List<(int, int)>
-        {
-            (1000, 0),
-            (1000, 1000),
-            (1000, 100),
-            (100, 1000),
-            (100, 100),
-            (1, 1000),
-            (1, 0),
-        };
 
         private readonly List<int> testAttributeChunkSizes = new List<int>
         {
@@ -91,7 +76,7 @@ namespace Cognite.OpcUa.Config
             public bool Secure;
             public int BrowseNodesChunk;
             public int BrowseChunk;
-            public bool BrowseLimitWarning;
+            public bool BrowseNextWarning;
             public int CustomNumTypesCount;
             public int MaxArraySize;
             public bool StringVariables;
@@ -214,54 +199,87 @@ namespace Cognite.OpcUa.Config
 
             Session.KeepAliveInterval = Math.Max(config.Source.KeepAliveInterval, 30000);
         }
-        /// <summary>
-        /// Browse multiple times with different combination of BrowseChunk and BrowseNodesChunk, to determine them.
-        /// Uses the result with the greatest successfull values for BrowseChunk and BrowseNodesChunk, with the greatest number of received nodes.
-        /// Will read from the server hierarchy if the number of nodes in the main hierarchy is too small.
-        /// </summary>
+
+        private IEnumerable<UANode> GetTestNodeChunk(int nodesChunk, CancellationToken token)
+        {
+            var root = ObjectIds.ObjectsFolder;
+
+            // Try to find at least 10000 nodes
+            var nodes = new List<UANode>();
+            var callback = ToolUtil.GetSimpleListWriterCallback(nodes, this);
+
+            var nextIds = new List<NodeId> { root };
+
+            var localVisitedNodes = new HashSet<NodeId>();
+            localVisitedNodes.Add(root);
+
+            int totalChildCount = 0;
+
+            log.Information("Get test node chunk with BrowseNodesChunk {cnt}", nodesChunk);
+
+            do
+            {
+                var references = new Dictionary<NodeId, ReferenceDescriptionCollection>();
+                var total = nextIds.Count;
+                int count = 0;
+                int countChildren = 0;
+                foreach (var chunk in nextIds.ChunkBy(nodesChunk))
+                {
+                    if (token.IsCancellationRequested) return nodes;
+                    var result = GetNodeChildren(chunk, ReferenceTypeIds.HierarchicalReferences,
+                        (uint)NodeClass.Object | (uint)NodeClass.Variable, token);
+                    foreach (var res in result)
+                    {
+                        references[res.Key] = res.Value;
+                        countChildren += res.Value.Count;
+                    }
+                    count += result.Count;
+                    log.Debug("Read node children {cnt} / {total}. Children: {childcnt}", count, total, countChildren);
+                    totalChildCount += countChildren;
+                    if (totalChildCount >= 10000) break;
+                }
+
+                nextIds.Clear();
+                foreach (var (parentId, children) in references)
+                {
+                    foreach (var rd in children)
+                    {
+                        var nodeId = ToNodeId(rd.NodeId);
+                        bool docb = true;
+                        if (docb)
+                        {
+                            log.Verbose("Discovered new node {nodeid}", nodeId);
+                            callback?.Invoke(rd, parentId);
+                        }
+                        if (rd.NodeClass == NodeClass.Variable) continue;
+                        if (localVisitedNodes.Add(nodeId))
+                        {
+                            nextIds.Add(nodeId);
+                        }
+                    }
+                }
+            } while (totalChildCount < 10001 && nextIds.Any());
+
+            return nodes;
+        }
         public async Task GetBrowseChunkSizes(CancellationToken token)
         {
-            var results = new List<BrowseMapResult>();
-
-            var root = useServer
-                ? ObjectIds.Server
-                : config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
-
-            foreach ((int lbrowseNodesChunk, int lbrowseChunk) in testBrowseChunkSizes)
+            if (Session == null || !Session.Connected)
             {
-                var nodes = new List<UANode>();
+                await Run(token);
+            }
 
-                VisitedNodes.Clear();
+            IEnumerable<UANode> testNodes = null;
 
-                int browseNodesChunk = Math.Min(lbrowseNodesChunk, baseConfig.Source.BrowseNodesChunk);
-                int browseChunk = Math.Min(lbrowseChunk, baseConfig.Source.BrowseChunk);
+            int browseChunkSize = 0;
 
-                if (results.Any(res => res.BrowseNodesChunk == browseNodesChunk && res.BrowseChunk == browseChunk))
-                {
-                    log.Information("Skipping {bnc}, {bc} due to having been browsed", browseNodesChunk, browseChunk);
-                    continue;
-                }
-                if (results.Any())
-                {
-                    var maxSize = results.Select(res => res.NumNodes).Max();
-                    if (maxSize > 100 * browseNodesChunk) continue;
-                }
-
-
-                config.Source.BrowseChunk = browseChunk;
-                config.Source.BrowseNodesChunk = browseNodesChunk;
-
-                log.Information("Browse with BrowseNodesChunk: {bnc}, BrowseChunk: {bc}", browseNodesChunk,
-                    browseChunk);
-
-                var result = new BrowseMapResult { BrowseNodesChunk = browseNodesChunk, BrowseChunk = browseChunk };
-
+            foreach (int chunkSize in new [] { 1000, 100, 10, 1 }.Where(chunk => chunk <= config.Source.BrowseNodesChunk))
+            {
                 try
                 {
-                    await ToolUtil.RunWithTimeout(BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodes, this), token), 120);
-                    log.Information("Browse succeeded, attempting to read children of all nodes, to further test operation limit");
-                    await ToolUtil.RunWithTimeout(() => BrowseDirectory(nodes.Select(node => node.Id).Take(browseNodesChunk),
-                        (_, __) => { }, token), 120);
+                    testNodes = await ToolUtil.RunWithTimeout(Task.Run(() => GetTestNodeChunk(chunkSize, token)), 60);
+                    browseChunkSize = chunkSize;
+                    break;
                 }
                 catch (Exception ex)
                 {
@@ -273,55 +291,92 @@ namespace Cognite.OpcUa.Config
                             "Browse unsupported by server, the extractor does not support servers without support for" +
                             " the \"Browse\" service");
                     }
-                    result.failed = true;
                 }
-
-                result.NumNodes = nodes.Count;
-                results.Add(result);
             }
+            var parents = testNodes.Select(node => node.ParentId).Distinct().ToList();
+            log.Information("Found {cnt} nodes over {cnt2} parents", testNodes.Count(), parents.Count);
 
-            var scResults = results.Where(res => !res.failed);
-            if (!scResults.Any())
+            // Test tolerance for large chunks
+            log.Information("Testing browseNodesChunk tolerance");
+            // We got some indication of max legal size before, here we choose a chunkSize that is reasonable
+            // for the discovered server size
+            var validSizes = new[] { 10000, 1000, 100, 10, 1 }
+                .Where(size => (browseChunkSize == 1000 || size <= browseChunkSize) && size <= testNodes.Count()).ToList();
+            foreach (int chunkSize in validSizes)
             {
-                throw new FatalException("No configuration resulted in successful browse, manual configuration may work.");
+                var ids = testNodes.Select(node => node.Id).Take(chunkSize).ToList();
+                try
+                {
+                    log.Information("Try to get the children of {cnt} nodes", ids.Count);
+                    var children = await ToolUtil.RunWithTimeout(Task.Run(() => GetNodeChildren(ids,
+                        ReferenceTypeIds.HierarchicalReferences,
+                        (uint)NodeClass.Object | (uint)NodeClass.Variable, token)), 30);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    log.Warning("Failed to browse node hierarchy");
+                    log.Debug(ex, "Failed to browse nodes");
+                }
+                browseChunkSize = chunkSize;
             }
+            log.Information("Settled on a BrowseNodesChunk of {chunk}", browseChunkSize);
+            summary.BrowseNodesChunk = browseChunkSize;
 
-            var best = scResults.Aggregate((agg, next) =>
-                next.NumNodes > agg.NumNodes
-                || next.NumNodes == agg.NumNodes && next.BrowseChunk > agg.BrowseChunk
-                || next.NumNodes == agg.NumNodes && next.BrowseChunk == agg.BrowseChunk && next.BrowseNodesChunk > agg.BrowseNodesChunk
-                ? next : agg);
-
-            if (best.NumNodes < best.BrowseNodesChunk)
+            // Test if there are issues with BrowseNext.
+            int originalChunkSize = config.Source.BrowseChunk;
+            foreach (int chunkSize in new[] { 10000, 1000, 100, 10, 1 })
             {
-                log.Warning("Size is smaller than BrowseNodesChunk, so it is not completely safe, the " +
-                            "largest known safe value of BrowseNodesChunk is {max}", best.NumNodes);
-                if (best.NumNodes < ServerWidest && !useServer)
+                var nodesByParent = testNodes.GroupBy(node => node.ParentId).OrderByDescending(group => group.Count()).Take(browseChunkSize);
+                int total = 0;
+                var toBrowse = nodesByParent.TakeWhile(chunk =>
                 {
-                    log.Information("The server hierarchy is generally wider than this, so retry browse mapping using the " +
-                                    "server hierarchy");
-                    useServer = true;
-                    await GetBrowseChunkSizes(token);
-                    return;
-                }
-                summary.BrowseLimitWarning = true;
+                    bool pass = (total + chunk.Count()) <= chunkSize * 2;
+                    if (pass)
+                    {
+                        total += chunk.Count();
+                    }
+                    return pass;
+                }).ToList();
 
-                if (best.NumNodes < ServerSizeBase && !useServer)
+                if (total < chunkSize) continue;
+
+                config.Source.BrowseChunk = chunkSize;
+                Dictionary<NodeId, ReferenceDescriptionCollection> children;
+                try
                 {
-                    log.Information("The server hierarchy is larger than the main hierarchy, so use the server to identify " +
-                                    "attribute chunk later");
-                    useServer = true;
+                    log.Information("Try to get the children of the {cnt} largest parent nodes, with return chunk size {size}", 
+                        toBrowse.Count, chunkSize);
+                    children = await ToolUtil.RunWithTimeout(Task.Run(() => GetNodeChildren(toBrowse.Select(group => group.Key),
+                        ReferenceTypeIds.HierarchicalReferences,
+                        (uint)NodeClass.Object | (uint)NodeClass.Variable, token)), 30);
                 }
+                catch (Exception ex)
+                {
+                    log.Warning("Failed to browse node hierarchy");
+                    log.Debug(ex, "Failed to browse nodes");
+                    continue;
+                }
+                int childCount = children.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count);
+                if (childCount < total)
+                {
+                    log.Warning("Expected to receive {cnt} nodes but only got {cnt2}!", total, childCount);
+                    log.Warning("There is likely an issue with returning large numbers of nodes from the server");
+                    summary.BrowseNextWarning = true;
+                    int largest = toBrowse.First().Count();
+                    // Usually we will have found the largest parent by this point, unless the server is extremely large
+                    // So we can try to choose a BrowseNodesChunk that lets us avoid the issue
+                    summary.BrowseNodesChunk = Math.Max(1, (int)Math.Floor((double)chunkSize / largest));
+                }
+                summary.BrowseChunk = Math.Min(chunkSize, originalChunkSize);
+                break;
             }
-            log.Information("Successfully determined BrowseNodesChunk: {bnc}, BrowseChunk: {bc}",
-                best.BrowseNodesChunk, best.BrowseChunk);
-            config.Source.BrowseNodesChunk = best.BrowseNodesChunk;
-            config.Source.BrowseChunk = best.BrowseChunk;
-            baseConfig.Source.BrowseNodesChunk = best.BrowseNodesChunk;
-            baseConfig.Source.BrowseChunk = best.BrowseChunk;
-            summary.BrowseNodesChunk = best.BrowseNodesChunk;
-            summary.BrowseChunk = best.BrowseChunk;
+            config.Source.BrowseChunk = summary.BrowseChunk;
+            config.Source.BrowseNodesChunk = summary.BrowseNodesChunk;
+            baseConfig.Source.BrowseChunk = summary.BrowseChunk;
+            baseConfig.Source.BrowseNodesChunk = summary.BrowseNodesChunk;
         }
+
         /// <summary>
         /// Transform a NodeId to a ProtoNodeId, for writing to yml config file.
         /// </summary>
@@ -469,9 +524,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task GetAttributeChunkSizes(CancellationToken token)
         {
-            var root = useServer
-                ? ObjectIds.Server
-                : config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
+            var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
 
             log.Information("Reading variable chunk sizes to determine the AttributeChunk property");
 
@@ -563,20 +616,17 @@ namespace Cognite.OpcUa.Config
 
             config.Extraction.DataTypes.MaxArraySize = 10;
 
-            if (useServer)
+            VisitedNodes.Clear();
+            log.Information("Filling common node information since this has not been done when identifying attribute chunk size");
+            nodeList = new List<UANode>();
+            try
             {
-                VisitedNodes.Clear();
-                log.Information("Filling common node information since this has not been done when identifying attribute chunk size");
-                nodeList = new List<UANode>();
-                try
-                {
-                    await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token);
-                }
-                catch (Exception e)
-                {
-                    log.Information(e, "Failed to map out hierarchy");
-                    throw;
-                }
+                await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token);
+            }
+            catch (Exception e)
+            {
+                log.Information(e, "Failed to map out hierarchy");
+                throw;
             }
 
 
@@ -680,13 +730,6 @@ namespace Cognite.OpcUa.Config
             summary.MaxArraySize = maxLimitedArrayLength;
         }
 
-        private struct BrowseMapResult
-        {
-            public int BrowseNodesChunk;
-            public int BrowseChunk;
-            public int NumNodes;
-            public bool failed;
-        }
         private bool AllowTSMap(UAVariable node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
@@ -1447,11 +1490,6 @@ namespace Cognite.OpcUa.Config
             {
                 log.Information("Settled on browsing the children of {bnc} nodes at a time and expecting {bc} results maximum for each request",
                     summary.BrowseNodesChunk, summary.BrowseChunk);
-            }
-            if (summary.BrowseLimitWarning)
-            {
-                log.Information("This is not a completely safe option, as the actual number of nodes is lower than the limit, so if " +
-                                "the number of nodes increases in the future, it may fail.");
             }
             log.Information("");
 

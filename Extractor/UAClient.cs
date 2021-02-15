@@ -636,7 +636,7 @@ namespace Cognite.OpcUa
                             callback?.Invoke(rd, parentId);
                         }
                         if (rd.NodeClass == NodeClass.Variable) continue;
-                        if (localVisitedNodes.Add(nodeId) || !ignoreVisited)
+                        if (localVisitedNodes.Add(nodeId))
                         {
                             nextIds.Add(nodeId);
                         }

@@ -86,5 +86,42 @@ namespace Test.Unit
             Assert.True(summary.Secure);
             Assert.Equal(7, summary.Endpoints.Count);
         }
+        [Fact]
+        public async Task TestGetBrowseChunkSizes()
+        {
+            // Test normal run
+            await tester.Explorer.GetBrowseChunkSizes(tester.Source.Token);
+            var summary = tester.Explorer.GetSummary();
+            Assert.Equal(1000, summary.BrowseChunk);
+            Assert.False(summary.BrowseNextWarning);
+            Assert.Equal(1000, summary.BrowseNodesChunk);
+
+            // Test with adjusted initial settings
+            tester.Explorer.ResetSummary();
+            tester.Config.Source.BrowseChunk = 100;
+            tester.Config.Source.BrowseNodesChunk = 100;
+            await tester.Explorer.GetBrowseChunkSizes(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.Equal(100, summary.BrowseChunk);
+            Assert.False(summary.BrowseNextWarning);
+            Assert.Equal(100, summary.BrowseNodesChunk);
+            Assert.Equal(100, tester.BaseConfig.Source.BrowseChunk);
+            Assert.Equal(100, tester.BaseConfig.Source.BrowseNodesChunk);
+
+            // Test with zero browse chunk
+            tester.Explorer.ResetSummary();
+            tester.Config.Source.BrowseChunk = 0;
+            tester.Config.Source.BrowseNodesChunk = 100;
+            await tester.Explorer.GetBrowseChunkSizes(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.Equal(0, summary.BrowseChunk);
+            Assert.False(summary.BrowseNextWarning);
+            Assert.Equal(100, summary.BrowseNodesChunk);
+            Assert.Equal(0, tester.BaseConfig.Source.BrowseChunk);
+            Assert.Equal(100, tester.BaseConfig.Source.BrowseNodesChunk);
+
+            tester.Config.Source.BrowseNodesChunk = 1000;
+            tester.Config.Source.BrowseChunk = 1000;
+        }
     }
 }
