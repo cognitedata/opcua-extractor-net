@@ -85,7 +85,7 @@ namespace Cognite.OpcUa.Config
             1
         };
 
-        private struct Summary
+        public struct Summary
         {
             public List<string> Endpoints;
             public bool Secure;
@@ -127,23 +127,20 @@ namespace Cognite.OpcUa.Config
             this.baseConfig.Source.Username = config.Source.Username;
             this.baseConfig.Source.Secure = config.Source.Secure;
         }
+        public Summary GetSummary()
+        {
+            return summary;
+        }
+        public void ResetSummary()
+        {
+            summary = new Summary();
+        }
+
         /// <summary>
         /// Try connecting to the server, and treating it as a discovery server, to list other endpoints on the same server.
         /// </summary>
         public async Task GetEndpoints(CancellationToken token)
         {
-            bool failed = false;
-            try
-            {
-                await Run(token);
-            }
-            catch (Exception ex)
-            {
-                failed = true;
-                log.Error("Failed to connect to server using initial options");
-                log.Debug(ex, "Failed to connect to endpoint");
-            }
-            Session.KeepAliveInterval = Math.Max(config.Source.KeepAliveInterval, 30000);
             log.Information("Attempting to list endpoints using given url as discovery server");
 
             var context = Appconfig.CreateMessageContext();
@@ -176,7 +173,20 @@ namespace Cognite.OpcUa.Config
                 summary.Secure = secureExists;
             }
 
-            if (failed)
+            if (Session == null || !Session.Connected)
+            {
+                try
+                {
+                    await Run(token);
+                }
+                catch (Exception ex)
+                {
+                    log.Error("Failed to connect to server using initial options");
+                    log.Debug(ex, "Failed to connect to endpoint");
+                }
+            }
+
+            if (Session == null || !Session.Connected)
             {
                 if (!secureExists && !openExists)
                 {
@@ -201,6 +211,8 @@ namespace Cognite.OpcUa.Config
 
                 throw new FatalException("Fatal: Provided configuration failed to connect to the server");
             }
+
+            Session.KeepAliveInterval = Math.Max(config.Source.KeepAliveInterval, 30000);
         }
         /// <summary>
         /// Browse multiple times with different combination of BrowseChunk and BrowseNodesChunk, to determine them.
