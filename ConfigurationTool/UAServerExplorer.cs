@@ -41,9 +41,13 @@ namespace Cognite.OpcUa.Config
         private List<UANode> eventTypes;
         private Dictionary<string, string> namespaceMap;
         private Dictionary<NodeId, HashSet<EventField>> activeEventFields;
+
         private bool history;
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAServerExplorer));
+
+        private bool nodesRead;
+        private bool dataTypesRead;
 
         private readonly List<int> testAttributeChunkSizes = new List<int>
         {
@@ -119,6 +123,13 @@ namespace Cognite.OpcUa.Config
         public void ResetSummary()
         {
             summary = new Summary();
+        }
+        public void ResetNodes()
+        {
+            nodesRead = false;
+            nodeList = new List<UANode>();
+            dataTypesRead = false;
+            dataTypes = new List<UANode>();
         }
 
         /// <summary>
@@ -377,6 +388,48 @@ namespace Cognite.OpcUa.Config
             baseConfig.Source.BrowseNodesChunk = summary.BrowseNodesChunk;
         }
 
+        private async Task PopulateNodes(CancellationToken token)
+        {
+            if (nodesRead) return;
+            nodeList = new List<UANode>();
+            log.Information("Mapping out node hierarchy");
+            var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
+            try
+            {
+                await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token, false);
+                nodesRead = true;
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex, "Failed to populate node hierarchy");
+                throw;
+            }
+        }
+
+        private void PopulateDataTypes(CancellationToken token)
+        {
+            if (dataTypesRead) return;
+            dataTypes = new List<UANode>();
+            log.Information("Mapping out data type hierarchy");
+            try
+            {
+                BrowseDirectory(
+                    new List<NodeId> { DataTypes.BaseDataType },
+                    ToolUtil.GetSimpleListWriterCallback(dataTypes, this),
+                    token,
+                    ReferenceTypeIds.HasSubtype,
+                    (uint)NodeClass.DataType | (uint)NodeClass.ObjectType,
+                    false);
+                dataTypesRead = true;
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex, "Failed to populate node hierarchy");
+                throw;
+            }
+            dataTypes = dataTypes.Distinct().ToList();
+        }
+
         /// <summary>
         /// Transform a NodeId to a ProtoNodeId, for writing to yml config file.
         /// </summary>
@@ -494,25 +547,7 @@ namespace Cognite.OpcUa.Config
             {
                 Run(token).Wait();
             }
-            dataTypes = new List<UANode>();
-
-            log.Information("Browsing data type hierarchy for custom datatypes");
-
-            VisitedNodes.Clear();
-
-            try
-            {
-                BrowseDirectory(new List<NodeId> { DataTypes.BaseDataType }, ToolUtil.GetSimpleListWriterCallback(dataTypes, this),
-                    token,
-                    ReferenceTypeIds.HasSubtype, (uint)NodeClass.DataType | (uint)NodeClass.ObjectType);
-            }
-            catch (Exception e)
-            {
-                log.Error(e, "Failed to browse data types");
-                throw;
-            }
-
-            dataTypes = dataTypes.Distinct().ToList();
+            PopulateDataTypes(token);
 
             customNumericTypes = new List<ProtoDataType>();
             foreach (var type in dataTypes)
@@ -531,28 +566,18 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task GetAttributeChunkSizes(CancellationToken token)
         {
-            var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
-
             log.Information("Reading variable chunk sizes to determine the AttributeChunk property");
 
-            config.History.Enabled = true;
-
-            VisitedNodes.Clear();
-
-            nodeList = new List<UANode>();
-
-            try
+            if (Session == null || !Session.Connected)
             {
-                await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token);
+                await Run(token);
             }
-            catch
-            {
-                log.Error("Failed to browse node hierarchy");
-                throw;
-            }
+
+            await PopulateNodes(token);
 
             int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
             int expectedAttributeReads = nodeList.Aggregate(0, (acc, node) => acc + (node.IsVariable ? 5 : 1));
+            config.History.Enabled = true;
             config.Extraction.DataTypes.MaxArraySize = 10;
 
             var testChunks = testAttributeChunkSizes.Where(chunkSize =>
@@ -561,7 +586,7 @@ namespace Cognite.OpcUa.Config
             if (expectedAttributeReads < 1000)
             {
                 log.Warning("Reading less than 1000 attributes maximum. Most servers should support more, but" +
-                            " this server only has enough variables to read {reads}", expectedAttributeReads);
+                            " this server only has enough node to read {reads}", expectedAttributeReads);
                 summary.VariableLimitWarning = true;
             }
 
@@ -618,24 +643,13 @@ namespace Cognite.OpcUa.Config
             var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
 
             int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
-
             int arrayLimit = config.Extraction.DataTypes.MaxArraySize == 0 ? 10 : config.Extraction.DataTypes.MaxArraySize;
+            if (arrayLimit < 0) arrayLimit = int.MaxValue;
 
             config.Extraction.DataTypes.MaxArraySize = 10;
 
-            VisitedNodes.Clear();
-            log.Information("Filling common node information since this has not been done when identifying attribute chunk size");
-            nodeList = new List<UANode>();
-            try
-            {
-                await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token);
-            }
-            catch (Exception e)
-            {
-                log.Information(e, "Failed to map out hierarchy");
-                throw;
-            }
-
+            await PopulateNodes(token);
+            PopulateDataTypes(token);
 
             log.Information("Mapping out variable datatypes");
 
@@ -648,9 +662,10 @@ namespace Cognite.OpcUa.Config
 
             history = false;
             bool stringVariables = false;
-            int maxLimitedArrayLength = 1;
+            int maxLimitedArrayLength = 0;
 
             var identifiedTypes = new List<UANode>();
+            var missingTypes = new HashSet<NodeId>();
             foreach (var variable in variables)
             {
                 if (variable.ArrayDimensions != null
@@ -682,7 +697,7 @@ namespace Cognite.OpcUa.Config
 
                 var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.DataType.Raw);
 
-                if (dataType == null)
+                if (dataType == null && missingTypes.Add(variable.DataType.Raw))
                 {
                     log.Warning("DataType found on node but not in hierarchy, " +
                                 "this may mean that some datatypes are defined outside of the main datatype hierarchy: {type}", variable.DataType);
@@ -697,9 +712,16 @@ namespace Cognite.OpcUa.Config
 
             foreach (var dataType in identifiedTypes)
             {
-                string identifier = dataType.Id.IdType == IdType.String ? (string)dataType.Id.Identifier : null;
-                if (!ToolUtil.NodeNameContains(dataType, "picture")
-                    && !ToolUtil.NodeNameContains(dataType, "image"))
+                if (dataType.Id.NamespaceIndex == 0)
+                {
+                    uint identifier = (uint)dataType.Id.Identifier;
+                    if ((identifier < DataTypes.Boolean || identifier > DataTypes.Double)
+                           && identifier != DataTypes.Integer && identifier != DataTypes.UInteger)
+                    {
+                        stringVariables = true;
+                    }
+                }
+                else
                 {
                     stringVariables = true;
                 }
@@ -715,7 +737,7 @@ namespace Cognite.OpcUa.Config
                 log.Information("No string variables found and the AllowStringVariables option will be set to false");
             }
 
-            if (maxLimitedArrayLength > 1)
+            if (maxLimitedArrayLength > 0)
             {
                 log.Information("Arrays of length {max} were found, which will be used to set the MaxArraySize option", maxLimitedArrayLength);
             }
@@ -731,7 +753,7 @@ namespace Cognite.OpcUa.Config
             config.Extraction.DataTypes.MaxArraySize = oldArraySize;
 
             baseConfig.Extraction.DataTypes.AllowStringVariables = baseConfig.Extraction.DataTypes.AllowStringVariables || stringVariables;
-            baseConfig.Extraction.DataTypes.MaxArraySize = maxLimitedArrayLength > 1 ? maxLimitedArrayLength : oldArraySize;
+            baseConfig.Extraction.DataTypes.MaxArraySize = maxLimitedArrayLength > 0 ? maxLimitedArrayLength : oldArraySize;
 
             summary.StringVariables = stringVariables;
             summary.MaxArraySize = maxLimitedArrayLength;

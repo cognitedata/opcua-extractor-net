@@ -9,6 +9,7 @@ using Server;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -133,6 +134,93 @@ namespace Test.Unit
             Assert.True(tester.BaseConfig.Extraction.DataTypes.AutoIdentifyTypes);
             Assert.True(summary.Enums);
             Assert.Single(tester.BaseConfig.Extraction.DataTypes.CustomNumericTypes);
+        }
+        [Fact]
+        public async Task TestAttributeChunkSizes()
+        {
+            // Test no root
+            tester.Explorer.ResetNodes();
+            await tester.Explorer.GetAttributeChunkSizes(tester.Source.Token);
+            var summary = tester.Explorer.GetSummary();
+            Assert.Equal(10000, summary.AttributeChunkSize);
+            Assert.False(summary.VariableLimitWarning);
+
+            // Test smaller root
+            tester.Explorer.ResetSummary();
+            tester.Explorer.ResetNodes();
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Base.Root.ToProtoNodeId(tester.Explorer);
+            await tester.Explorer.GetAttributeChunkSizes(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.Equal(1000, summary.AttributeChunkSize);
+            Assert.True(summary.VariableLimitWarning);
+            tester.Config.Extraction.RootNode = null;
+        }
+        [Fact]
+        public async Task TestGetDataTypeSettings()
+        {
+            // First for all nodes
+            tester.Explorer.ResetNodes();
+            await tester.Explorer.IdentifyDataTypeSettings(tester.Source.Token);
+            var summary = tester.Explorer.GetSummary();
+            Assert.True(summary.StringVariables);
+            Assert.Equal(4, summary.MaxArraySize);
+            bool history = (bool)tester.Explorer.GetType()
+                .GetField("history", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(tester.Explorer);
+            Assert.True(history);
+
+            // Limit max array size a bit
+            tester.Explorer.ResetNodes();
+            tester.Explorer.ResetSummary();
+            tester.Config.Extraction.DataTypes.MaxArraySize = 2;
+            await tester.Explorer.IdentifyDataTypeSettings(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.True(summary.StringVariables);
+            Assert.Equal(2, summary.MaxArraySize);
+            history = (bool)tester.Explorer.GetType()
+                .GetField("history", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(tester.Explorer);
+            Assert.True(history);
+
+            // Limit max array size more
+            tester.Explorer.ResetNodes();
+            tester.Explorer.ResetSummary();
+            tester.Config.Extraction.DataTypes.MaxArraySize = 1;
+            await tester.Explorer.IdentifyDataTypeSettings(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.True(summary.StringVariables);
+            Assert.Equal(0, summary.MaxArraySize);
+            history = (bool)tester.Explorer.GetType()
+                .GetField("history", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(tester.Explorer);
+            Assert.True(history);
+
+            // Map base hierarchy
+            tester.Explorer.ResetNodes();
+            tester.Explorer.ResetSummary();
+            tester.Config.Extraction.DataTypes.MaxArraySize = 4;
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Base.Root.ToProtoNodeId(tester.Explorer);
+            await tester.Explorer.IdentifyDataTypeSettings(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.True(summary.StringVariables);
+            Assert.Equal(0, summary.MaxArraySize);
+            history = (bool)tester.Explorer.GetType()
+                .GetField("history", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(tester.Explorer);
+            Assert.True(history);
+
+            // Map event hierarchy
+            tester.Explorer.ResetNodes();
+            tester.Explorer.ResetSummary();
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Event.Root.ToProtoNodeId(tester.Explorer);
+            await tester.Explorer.IdentifyDataTypeSettings(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.False(summary.StringVariables);
+            Assert.Equal(0, summary.MaxArraySize);
+            history = (bool)tester.Explorer.GetType()
+                .GetField("history", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(tester.Explorer);
+            Assert.False(history);
         }
     }
 }
