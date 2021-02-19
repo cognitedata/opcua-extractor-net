@@ -4,7 +4,6 @@ using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
 using System;
 using System.Linq;
-using Test.Unit;
 
 namespace Test.Utils
 {

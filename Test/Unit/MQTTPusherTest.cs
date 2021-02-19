@@ -16,8 +16,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
+using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -528,8 +528,9 @@ namespace Test.Unit
         {
             try
             {
-                File.Delete("mqtt-state-store.db");
-            } catch { }
+                File.Delete("mqtt-state-store-1.db");
+            }
+            catch { }
 
             var stateStoreConfig = new StateStoreConfig
             {

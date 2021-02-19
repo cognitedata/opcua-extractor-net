@@ -1,9 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Opc.Ua;
+﻿using Opc.Ua;
 using Opc.Ua.Server;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Server
 {
@@ -31,13 +31,13 @@ namespace Server
             this.predefinedNodes = predefinedNodes;
         }
         #region access
-        public void UpdateNode(NodeId id, object value)
+        public void UpdateNode(NodeId id, object value, DateTime? timestamp = null)
         {
             PredefinedNodes.TryGetValue(id, out var pstate);
             var state = pstate as BaseDataVariableState;
             if (state == null) return;
             state.Value = value;
-            state.Timestamp = DateTime.UtcNow;
+            state.Timestamp = timestamp ?? DateTime.UtcNow;
             if (state.Historizing)
             {
                 store.UpdateNode(state);
@@ -120,7 +120,7 @@ namespace Server
                 }
                 if (i == count - 1 && start > DateTime.UtcNow.AddSeconds(-1))
                 {
-                    UpdateNode(id, dv.Value);
+                    UpdateNode(id, dv.Value, start);
                 }
                 else
                 {
@@ -165,7 +165,7 @@ namespace Server
             var parent = PredefinedNodes[parentId];
             var obj = CreateObject(name);
             AddNodeRelation(obj, parent, ReferenceTypeIds.Organizes);
-            
+
             if (audit)
             {
                 var evtAdd = new AddNodesItem
@@ -264,6 +264,15 @@ namespace Server
             AddPredefinedNode(SystemContext, prop);
             return prop.NodeId;
         }
+        public void RemoveProperty(NodeId parentId, string name)
+        {
+            var parent = PredefinedNodes[parentId];
+            var children = new List<BaseInstanceState>();
+            parent.GetChildren(SystemContext, children);
+            var prop = children.First(child => child.DisplayName.Text == name);
+            parent.RemoveChild(prop);
+            prop.Delete(SystemContext);
+        }
 
         public void ReContextualize(NodeId id, NodeId oldParentId, NodeId newParentId, NodeId referenceType)
         {
@@ -323,7 +332,7 @@ namespace Server
                     }
 
                 }
-                
+
                 if (predefinedNodes != null)
                 {
                     foreach (var set in predefinedNodes)
@@ -357,7 +366,7 @@ namespace Server
                 log.Error(ex, "Failed to create address space");
             }
         }
-        
+
         private void CreateBaseSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)
@@ -410,7 +419,7 @@ namespace Server
                 Ids.Base.IntVar = myint.NodeId;
             }
         }
-        
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateFullAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -453,7 +462,7 @@ namespace Server
                 Ids.Full.DeepRoot = deeproot.NodeId;
             }
         }
-        
+
         private void CreateCustomAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)
@@ -546,6 +555,7 @@ namespace Server
                 AddNodeRelation(enumVar1, root, ReferenceTypeIds.HasComponent);
 
                 var enumVar2 = CreateVariable("EnumVar2", enumType2.NodeId);
+                enumVar2.NodeId = new NodeId("enumvar", NamespaceIndex);
                 enumVar2.Value = 123;
                 AddNodeRelation(enumVar2, root, ReferenceTypeIds.HasComponent);
 
@@ -583,6 +593,7 @@ namespace Server
 
                 store.AddHistorizingNode(myarray);
                 store.AddHistorizingNode(mysteryVar);
+                store.AddHistorizingNode(stringyVar);
 
                 AddPredefinedNodes(SystemContext, root, myarray, mystrarray, stringyType, ignoreType, numberType, numberType2, stringyVar,
                     ignoreVar, mysteryVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2, arrprop, arrprop2,
@@ -616,14 +627,14 @@ namespace Server
                 Ids.Custom.VariableType = variableType.NodeId;
             }
         }
-        
+
         private void CreateEventAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)
             {
                 var root = CreateObject("EventRoot");
                 AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
-                
+
                 var obj1 = CreateObject("Object 1");
                 AddNodeRelation(obj1, root, ReferenceTypeIds.Organizes);
 
@@ -686,7 +697,7 @@ namespace Server
                 Ids.Event.CustomType = customType.NodeId;
             }
         }
-        
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
             "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateAuditAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -756,13 +767,17 @@ namespace Server
                 tooLargeDimProp.NodeId = GenerateNodeId();
                 tooLargeDimProp.ArrayDimensions = new ReadOnlyList<uint>(new List<uint> { 20 });
 
-                AddPredefinedNodes(SystemContext, root, rankImp, rankImpNoDim, wrongDim, tooLargeDimProp);
+                var nullType = CreateVariable("NullType", NodeId.Null);
+                AddNodeRelation(nullType, root, ReferenceTypeIds.HasComponent);
+
+                AddPredefinedNodes(SystemContext, root, rankImp, rankImpNoDim, wrongDim, tooLargeDimProp, nullType);
 
                 Ids.Wrong.Root = root.NodeId;
                 Ids.Wrong.RankImprecise = rankImp.NodeId;
                 Ids.Wrong.RankImpreciseNoDim = rankImpNoDim.NodeId;
                 Ids.Wrong.WrongDim = wrongDim.NodeId;
                 Ids.Wrong.TooLargeProp = tooLargeDimProp.NodeId;
+                Ids.Wrong.NullType = nullType.NodeId;
             }
         }
 
@@ -787,7 +802,8 @@ namespace Server
         {
             var state = new BaseObjectState(null)
             {
-                NodeId = GenerateNodeId(), BrowseName = new QualifiedName(name, NamespaceIndex)
+                NodeId = GenerateNodeId(),
+                BrowseName = new QualifiedName(name, NamespaceIndex)
             };
             state.DisplayName = state.BrowseName.Name;
             state.TypeDefinitionId = ObjectTypeIds.BaseObjectType;
@@ -798,7 +814,8 @@ namespace Server
         {
             var state = new BaseDataVariableState(null)
             {
-                NodeId = GenerateNodeId(), BrowseName = new QualifiedName(name, NamespaceIndex)
+                NodeId = GenerateNodeId(),
+                BrowseName = new QualifiedName(name, NamespaceIndex)
             };
             state.DisplayName = state.BrowseName.Name;
             state.TypeDefinitionId = VariableTypeIds.BaseDataVariableType;
@@ -807,7 +824,7 @@ namespace Server
             if (dim > -1)
             {
                 state.ValueRank = ValueRanks.OneDimension;
-                state.ArrayDimensions = new[] {(uint) dim};
+                state.ArrayDimensions = new[] { (uint)dim };
             }
 
             return state;
@@ -1058,7 +1075,7 @@ namespace Server
         }
 
         public override void HistoryRead(
-            OperationContext context, 
+            OperationContext context,
             HistoryReadDetails details,
             TimestampsToReturn timestampsToReturn,
             bool releaseContinuationPoints,
@@ -1080,7 +1097,6 @@ namespace Server
                             var server = (BaseObjectState)cfnm.Find(ObjectIds.Server);
                             serverHandle = new NodeHandle(ObjectIds.Server, server);
                         }
-                        if (serverHandle == null) continue;
                         nodeToRead.Processed = true;
 
                         serverHandle.Index = i;
@@ -1411,6 +1427,7 @@ namespace Server
         public NodeId RankImpreciseNoDim { get; set; }
         public NodeId WrongDim { get; set; }
         public NodeId TooLargeProp { get; set; }
+        public NodeId NullType { get; set; }
     }
     #endregion
 }

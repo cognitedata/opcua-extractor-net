@@ -15,17 +15,17 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
+using Opc.Ua;
+using Opc.Ua.Client;
+using Serilog;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Cognite.OpcUa.HistoryStates;
-using Cognite.OpcUa.Types;
-using Opc.Ua;
-using Opc.Ua.Client;
-using Serilog;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization.TypeInspectors;
@@ -260,7 +260,7 @@ namespace Cognite.OpcUa.Config
             return result.ToArray();
         }
 
-        
+
         /// <summary>
         /// Intelligently converts an instance of FullConfig to a string config file. Only writing entries that differ from the default values.
         /// </summary>

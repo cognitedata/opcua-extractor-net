@@ -15,16 +15,16 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Opc.Ua;
-using System;
-using System.Collections.Generic;
-using Cognite.OpcUa.Pushers;
+using Cognite.Extensions;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Metrics;
-using Cognite.Extractor.Utils;
 using Cognite.Extractor.StateStorage;
-using Cognite.Extensions;
+using Cognite.Extractor.Utils;
+using Cognite.OpcUa.Pushers;
+using Opc.Ua;
+using System;
+using System.Collections.Generic;
 
 namespace Cognite.OpcUa
 {

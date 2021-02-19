@@ -15,24 +15,24 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using Cognite.Extensions;
+using Cognite.Extractor.Common;
+using Cognite.Extractor.Utils;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Prometheus;
 using Serilog;
-using Cognite.Extractor.Utils;
-using TimeRange = Cognite.Extractor.Common.TimeRange;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
-using Cognite.Extensions;
-using Cognite.Extractor.Common;
-using Cognite.OpcUa.Types;
-using Cognite.OpcUa.HistoryStates;
+using System.Threading;
+using System.Threading.Tasks;
+using TimeRange = Cognite.Extractor.Common.TimeRange;
 
 namespace Cognite.OpcUa.Pushers
 {
@@ -43,7 +43,7 @@ namespace Cognite.OpcUa.Pushers
     {
         private readonly CognitePusherConfig config;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
-        
+
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
         public bool Initialized { get; set; }
@@ -85,7 +85,7 @@ namespace Cognite.OpcUa.Pushers
         private static readonly Gauge missingTimeseriesCnt = Metrics
             .CreateGauge("opcua_missing_timeseries", "Number of distinct timeseries that have been found to be missing in CDF");
         private static readonly Gauge mismatchedTimeseriesCnt = Metrics
-            .CreateGauge("opcua_mismatched_timeseries","Number of distinct timeseries that have been found to have different types in OPC-UA and in CDF");
+            .CreateGauge("opcua_mismatched_timeseries", "Number of distinct timeseries that have been found to have different types in OPC-UA and in CDF");
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusher));
         #region Interface
@@ -375,7 +375,7 @@ namespace Cognite.OpcUa.Pushers
             }
             catch (Exception ex)
             {
-                log.Error("Failed to get CDF login status, this is likely a problem with the network or configuration. Project {project} at {url}: {msg}", 
+                log.Error("Failed to get CDF login status, this is likely a problem with the network or configuration. Project {project} at {url}: {msg}",
                     this.config.Project, this.config.Host, ex.Message);
                 return false;
             }
@@ -557,7 +557,7 @@ namespace Cognite.OpcUa.Pushers
             else
             {
                 var assets = await CreateAssets(assetIds, token);
-                
+
                 if (update.AnyUpdate)
                 {
                     await UpdateAssets(assetIds, assets, update, token);
@@ -736,7 +736,8 @@ namespace Cognite.OpcUa.Pushers
                     }
                     cursor = result.NextCursor;
                 }
-                catch (ResponseException ex) when (ex.Code == 404) {
+                catch (ResponseException ex) when (ex.Code == 404)
+                {
                     log.Warning("Table or database not found: {msg}", ex.Message);
                     break;
                 }

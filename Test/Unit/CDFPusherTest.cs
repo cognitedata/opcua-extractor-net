@@ -1,22 +1,22 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Xunit.Abstractions;
+﻿using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
-using Cognite.OpcUa.Pushers;
-using Xunit;
-using Cognite.OpcUa.Types;
-using Cognite.Extractor.Common;
-using Opc.Ua;
-using System.Reflection;
 using Cognite.OpcUa.HistoryStates;
-using System.Collections.ObjectModel;
-using Com.Cognite.V1.Timeseries.Proto;
+using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
+using Com.Cognite.V1.Timeseries.Proto;
+using Microsoft.Extensions.DependencyInjection;
+using Opc.Ua;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+using Test.Utils;
+using Xunit;
+using Xunit.Abstractions;
 
 namespace Test.Unit
 {
@@ -165,7 +165,7 @@ namespace Test.Unit
             invalidDps = new[]
             {
                 new UADataPoint(DateTime.UtcNow, "test-ts-double", 123),
-                new UADataPoint(time, "test-ts-double", 123),                
+                new UADataPoint(time, "test-ts-double", 123),
                 new UADataPoint(time, "test-ts-missing", "value")
             };
             Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));

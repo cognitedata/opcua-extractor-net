@@ -15,15 +15,15 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Pushers;
+using CogniteSdk;
+using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Text;
-using Cognite.OpcUa.Pushers;
-using CogniteSdk;
-using Opc.Ua;
 
 namespace Cognite.OpcUa.Types
 {
@@ -144,20 +144,7 @@ namespace Cognite.OpcUa.Types
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (value == null) return;
-            if (IsProperty || (DataType?.IsString ?? true))
-            {
-                Value = new UADataPoint(
-                    sourceTimestamp <= DateTime.MinValue ? DateTime.UtcNow : sourceTimestamp,
-                    client.GetUniqueId(Id),
-                    client.ConvertToString(value));
-            }
-            else
-            {
-                Value = new UADataPoint(
-                    sourceTimestamp <= DateTime.MinValue ? DateTime.UtcNow : sourceTimestamp,
-                    client.GetUniqueId(Id),
-                    UAClient.ConvertToDouble(value));
-            }
+            Value = DataType.ToDataPoint(client, value, sourceTimestamp, client.GetUniqueId(Id), IsProperty);
         }
         /// <summary>
         /// Create an array-element variable.
@@ -241,7 +228,7 @@ namespace Cognite.OpcUa.Types
             writePoco.Metadata = BuildMetadata(extractor);
 
             HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value);
-            
+
             return writePoco;
         }
         public TimeSeriesCreate ToTimeseries(

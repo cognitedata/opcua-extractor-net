@@ -15,37 +15,37 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using AdysTech.InfluxDB.Client.Net;
+using Cognite.Bridge;
+using Cognite.Extractor.Configuration;
+using Cognite.Extractor.Logging;
+using Cognite.Extractor.Metrics;
+using Cognite.Extractor.StateStorage;
+using Cognite.Extractor.Utils;
+using Cognite.OpcUa;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
+using CogniteSdk;
+using LiteDB;
+using Microsoft.Extensions.DependencyInjection;
+using Opc.Ua;
+using Prometheus;
+using Serilog;
+using Server;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using AdysTech.InfluxDB.Client.Net;
-using Cognite.Bridge;
-using Cognite.OpcUa;
-using LiteDB;
-using Microsoft.Extensions.DependencyInjection;
-using Prometheus;
-using Serilog;
-using Xunit.Abstractions;
 using Xunit;
-using Server;
-using Opc.Ua;
-using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
-using System.Reflection;
-using System.Collections.Concurrent;
-using CogniteSdk;
-using Cognite.Extractor.StateStorage;
-using Cognite.Extractor.Utils;
+using Xunit.Abstractions;
 using File = System.IO.File;
-using Cognite.Extractor.Metrics;
-using System.Text;
-using Cognite.OpcUa.Types;
-using Cognite.OpcUa.HistoryStates;
-using System.Collections.ObjectModel;
 
 [assembly: CLSCompliant(false)]
 namespace Test
@@ -139,7 +139,7 @@ namespace Test
             };
             if (Math.Abs(val - value) > 0.01)
             {
-                log.Information("Expected {val} but got {value} for metric {name}", 
+                log.Information("Expected {val} but got {value} for metric {name}",
                     value, val, name);
                 return false;
             }
@@ -340,25 +340,6 @@ namespace Test
             }
         }
 
-        public static void TestEventCollection(IEnumerable<EventDummy> events)
-        {
-            Assert.True(events.Any());
-            Assert.Contains(events, ev => ev.description == "prop 0");
-            Assert.Contains(events, ev => ev.description == "basic-pass 0");
-            Assert.Contains(events, ev => ev.description == "basic-pass-2 0");
-            Assert.Contains(events, ev => ev.description == "mapped 0");
-            Assert.Contains(events, ev => ev.description == "basic-varsource 0");
-            Assert.Contains(events, ev => ev.description == "basic-excludeobj 0");
-            Assert.Contains(events, ev => ev.description == "basic-nosource 0");
-            Assert.Contains(events, ev => ev.description == "prop 99");
-            Assert.Contains(events, ev => ev.description == "basic-pass 99");
-            Assert.Contains(events, ev => ev.description == "basic-pass-2 99");
-            Assert.Contains(events, ev => ev.description == "mapped 99");
-            Assert.Contains(events, ev => ev.description == "basic-varsource 99");
-            Assert.Contains(events, ev => ev.description == "basic-excludeobj 99");
-            Assert.Contains(events, ev => ev.description == "basic-nosource 99");
-        }
-
         private static bool EventSourceIs(EventDummy ev, CDFMockHandler handler, string name, bool rawSource)
         {
             var asset = handler.Assets.Values.FirstOrDefault(ast => ast.name == name);
@@ -372,41 +353,54 @@ namespace Test
             Dictionary<string, AssetDummy> assets,
             Dictionary<string, TimeseriesDummy> timeseries,
             UpdateConfig upd,
+            IUAClientAccess client,
+            CustomNodeReference ids,
             bool raw)
         {
             if (assets == null) throw new ArgumentNullException(nameof(assets));
             if (timeseries == null) throw new ArgumentNullException(nameof(timeseries));
             if (upd == null) upd = new UpdateConfig();
-            Assert.Equal(7, assets.Count);
+            if (client == null) throw new ArgumentNullException(nameof(client));
+            if (ids == null) throw new ArgumentNullException(nameof(ids));
+            Assert.Equal(6, assets.Count);
             Assert.Equal(16, timeseries.Count);
 
-            if (!upd.Objects.Name) Assert.Equal("CustomRoot", assets["gp.tl:i=1"].name);
-            if (!upd.Objects.Description) Assert.True(string.IsNullOrEmpty(assets["gp.tl:i=1"].description));
+            var rootId = client.GetUniqueId(ids.Root);
+            var obj1Id = client.GetUniqueId(ids.Obj1);
+            var obj2Id = client.GetUniqueId(ids.Obj2);
+            var stringyId = client.GetUniqueId(ids.StringyVar);
+            var mysteryId = client.GetUniqueId(ids.MysteryVar);
 
-            if (!upd.Variables.Name) Assert.Equal("StringyVar", timeseries["gp.tl:i=8"].name);
-            if (!upd.Variables.Description) Assert.True(string.IsNullOrEmpty(timeseries["gp.tl:i=8"].description));
+            if (!upd.Objects.Name) Assert.Equal("CustomRoot", assets[rootId].name);
+            if (!upd.Objects.Description) Assert.True(string.IsNullOrEmpty(assets[rootId].description));
+
+
+            if (!upd.Variables.Name) Assert.Equal("StringyVar", timeseries[stringyId].name);
+            if (!upd.Variables.Description) Assert.True(string.IsNullOrEmpty(timeseries[stringyId].description));
 
             if (raw)
             {
-                if (!upd.Variables.Context) Assert.Equal("gp.tl:i=1", (timeseries["gp.tl:i=8"] as StatelessTimeseriesDummy).assetExternalId);
+                if (!upd.Variables.Context) Assert.Equal(rootId, (timeseries[stringyId] as StatelessTimeseriesDummy).assetExternalId);
             }
             else
             {
-                if (!upd.Variables.Context) Assert.Equal(assets["gp.tl:i=1"].id, timeseries["gp.tl:i=8"].assetId);
+                if (!upd.Variables.Context) Assert.Equal(assets[rootId].id, timeseries[stringyId].assetId);
             }
-            if (!upd.Objects.Context) Assert.Equal("gp.tl:i=1", assets["gp.tl:i=15"].parentExternalId);
+
+            if (!upd.Objects.Context) Assert.Equal(rootId, assets[obj2Id].parentExternalId);
 
             if (!upd.Objects.Metadata)
             {
-                Assert.True(assets["gp.tl:i=14"].metadata == null || !assets["gp.tl:i=14"].metadata.Any());
-                Assert.Equal(2, assets["gp.tl:i=15"].metadata.Count);
-                Assert.Equal("1234", assets["gp.tl:i=15"].metadata["NumericProp"]);
+                Assert.True(assets[obj1Id].metadata == null
+                    || !assets[obj1Id].metadata.Any());
+                Assert.Equal(2, assets[obj2Id].metadata.Count);
+                Assert.Equal("1234", assets[obj2Id].metadata["NumericProp"]);
             }
             if (!upd.Variables.Metadata)
             {
-                Assert.True(timeseries["gp.tl:i=8"].metadata == null || !timeseries["gp.tl:i=8"].metadata.Any());
-                Assert.Equal(2, timeseries["gp.tl:i=10"].metadata.Count);
-                Assert.Equal("(0, 100)", timeseries["gp.tl:i=10"].metadata["EURange"]);
+                Assert.True(timeseries[stringyId].metadata == null || !timeseries[stringyId].metadata.Any());
+                Assert.Equal(2, timeseries[mysteryId].metadata.Count);
+                Assert.Equal("(0, 100)", timeseries[mysteryId].metadata["EURange"]);
             }
         }
 
@@ -414,46 +408,56 @@ namespace Test
             Dictionary<string, AssetDummy> assets,
             Dictionary<string, TimeseriesDummy> timeseries,
             UpdateConfig upd,
+            IUAClientAccess client,
+            CustomNodeReference ids,
             bool raw)
         {
             if (assets == null) throw new ArgumentNullException(nameof(assets));
             if (timeseries == null) throw new ArgumentNullException(nameof(timeseries));
             if (upd == null) upd = new UpdateConfig();
-            Assert.Equal(7, assets.Count);
+            if (client == null) throw new ArgumentNullException(nameof(client));
+            if (ids == null) throw new ArgumentNullException(nameof(ids));
+            Assert.Equal(6, assets.Count);
             Assert.Equal(16, timeseries.Count);
 
-            if (upd.Objects.Name) Assert.Equal("CustomRoot updated", assets["gp.tl:i=1"].name);
-            if (upd.Objects.Description) Assert.Equal("custom root description", assets["gp.tl:i=1"].description);
+            var rootId = client.GetUniqueId(ids.Root);
+            var obj1Id = client.GetUniqueId(ids.Obj1);
+            var obj2Id = client.GetUniqueId(ids.Obj2);
+            var stringyId = client.GetUniqueId(ids.StringyVar);
+            var mysteryId = client.GetUniqueId(ids.MysteryVar);
 
-            if (upd.Variables.Name) Assert.Equal("StringyVar updated", timeseries["gp.tl:i=8"].name);
-            if (upd.Variables.Description) Assert.Equal("Stringy var description", timeseries["gp.tl:i=8"].description);
+            if (upd.Objects.Name) Assert.Equal("CustomRoot updated", assets[rootId].name);
+            if (upd.Objects.Description) Assert.Equal("custom root description", assets[rootId].description);
+
+            if (upd.Variables.Name) Assert.Equal("StringyVar updated", timeseries[stringyId].name);
+            if (upd.Variables.Description) Assert.Equal("Stringy var description", timeseries[stringyId].description);
             if (raw)
             {
-                if (upd.Objects.Context) Assert.Equal("gp.tl:i=14", assets["gp.tl:i=15"].parentExternalId);
-                if (upd.Variables.Context) Assert.Equal("gp.tl:i=14", (timeseries["gp.tl:i=8"] as StatelessTimeseriesDummy).assetExternalId);
+                if (upd.Objects.Context) Assert.Equal(obj1Id, assets[obj2Id].parentExternalId);
+                if (upd.Variables.Context) Assert.Equal(obj1Id, (timeseries[stringyId] as StatelessTimeseriesDummy).assetExternalId);
             }
             else
             {
-                if (upd.Objects.Context) Assert.Equal("gp.tl:i=14", assets["gp.tl:i=15"].parentExternalId);
-                if (upd.Variables.Context) Assert.Equal(assets["gp.tl:i=14"].id, timeseries["gp.tl:i=8"].assetId);
+                if (upd.Objects.Context) Assert.Equal(obj1Id, assets[obj2Id].parentExternalId);
+                if (upd.Variables.Context) Assert.Equal(assets[obj1Id].id, timeseries[stringyId].assetId);
             }
 
 
             if (upd.Objects.Metadata)
             {
-                Assert.Single(assets["gp.tl:i=14"].metadata);
-                Assert.Equal("New asset prop value", assets["gp.tl:i=14"].metadata["NewAssetProp"]);
-                Assert.Equal(3, assets["gp.tl:i=15"].metadata.Count);
-                Assert.Equal("4321", assets["gp.tl:i=15"].metadata["NumericProp"]);
-                Assert.True(assets["gp.tl:i=15"].metadata.ContainsKey("StringProp"));
-                Assert.True(assets["gp.tl:i=15"].metadata.ContainsKey("StringProp updated"));
+                Assert.Single(assets[obj1Id].metadata);
+                Assert.Equal("New asset prop value", assets[obj1Id].metadata["NewAssetProp"]);
+                Assert.Equal(3, assets[obj2Id].metadata.Count);
+                Assert.Equal("4321", assets[obj2Id].metadata["NumericProp"]);
+                Assert.True(assets[obj2Id].metadata.ContainsKey("StringProp"));
+                Assert.True(assets[obj2Id].metadata.ContainsKey("StringProp updated"));
             }
             if (upd.Variables.Metadata)
             {
-                Assert.Single(timeseries["gp.tl:i=8"].metadata);
-                Assert.Equal("New prop value", timeseries["gp.tl:i=8"].metadata["NewProp"]);
-                Assert.Equal(3, timeseries["gp.tl:i=10"].metadata.Count);
-                Assert.Equal("(0, 200)", timeseries["gp.tl:i=10"].metadata["EURange"]);
+                Assert.Single(timeseries[stringyId].metadata);
+                Assert.Equal("New prop value", timeseries[stringyId].metadata["NewProp"]);
+                Assert.Equal(3, timeseries[mysteryId].metadata.Count);
+                Assert.Equal("(0, 200)", timeseries[mysteryId].metadata["EURange"]);
             }
         }
         public static async Task WaitForCondition(Func<Task<bool>> condition, int seconds, Func<string> assertion)
@@ -805,12 +809,12 @@ namespace Test
             {
                 log.Error("Condition failed to appear within {sec} seconds", seconds);
             }
-            log.Information("Waited for {cnt} seconds", i/5.0);
+            log.Information("Waited for {cnt} seconds", i / 5.0);
             Assert.True(triggered, assertion());
         }
         public async Task WaitForCondition(Func<bool> condition, int seconds,
             string assertion = "Expected condition to trigger")
-        { 
+        {
             await WaitForCondition(() => Task.FromResult(condition()), seconds, () => assertion);
         }
         public async Task WaitForCondition(Func<bool> condition, int seconds,
@@ -885,7 +889,7 @@ namespace Test
                 }
                 last = dp;
             }
-            
+
             Assert.True(max - min == intdps.Count() - 1, $"Continuity impossible, min is {min}, max is {max}, count is {intdps.Count()}: {msg}");
         }
         /// <summary>

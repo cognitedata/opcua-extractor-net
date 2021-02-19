@@ -4,7 +4,6 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Server;
@@ -126,6 +125,17 @@ namespace Test.Unit
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62001";
             tester.Config.Source.KeepAliveInterval = 1000;
 
+            bool connected = true;
+
+            tester.Client.OnServerDisconnect += (client, args) =>
+            {
+                connected = false;
+            };
+            tester.Client.OnServerReconnect += (client, args) =>
+            {
+                connected = true;
+            };
+
             try
             {
                 using var process = CommonTestUtils.GetProxyProcess(62001, 62000);
@@ -136,9 +146,11 @@ namespace Test.Unit
                 CommonTestUtils.StopProxyProcess();
                 await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 0), 10,
                     "Expected client to disconnect");
+                Assert.False(connected);
                 process.Start();
                 await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_connected", 1), 10,
                     "Expected client to reconnect");
+                Assert.True(connected);
             }
             finally
             {
@@ -441,7 +453,8 @@ namespace Test.Unit
             try
             {
                 var values = tester.Client.ReadRawValues(nodes, tester.Source.Token);
-                Assert.All(nodes, node => {
+                Assert.All(nodes, node =>
+                {
                     Assert.True(values.TryGetValue(node, out var dv));
                     Assert.Null(dv.Value);
                 });
@@ -542,7 +555,7 @@ namespace Test.Unit
 
             var start = DateTime.UtcNow.AddSeconds(-20);
 
-            tester.Server.PopulateArrayHistory(start);
+            tester.Server.PopulateCustomHistory(start);
             tester.Server.Server.PopulateHistory(tester.Server.Ids.Base.StringVar, 1000, start, "string");
 
             try
@@ -577,7 +590,7 @@ namespace Test.Unit
                 tester.Server.WipeHistory(tester.Server.Ids.Custom.MysteryVar, null);
                 tester.Server.WipeHistory(tester.Server.Ids.Base.StringVar, null);
             }
-            
+
 
         }
         [Fact]
@@ -610,7 +623,7 @@ namespace Test.Unit
                 tester.Client.SubscribeToNodes(nodes.Take(1000), handler, tester.Source.Token);
                 tester.Client.SubscribeToNodes(nodes.Skip(1000), handler, tester.Source.Token);
 
-                await CommonTestUtils.WaitForCondition(() => dps.Count == 2000, 5, 
+                await CommonTestUtils.WaitForCondition(() => dps.Count == 2000, 5,
                     () => $"Expected to get 2000 datapoints, but got {dps.Count}");
 
                 foreach (var node in nodes)

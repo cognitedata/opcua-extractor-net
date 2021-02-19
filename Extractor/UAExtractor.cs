@@ -15,13 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.HistoryStates;
@@ -31,13 +24,20 @@ using Opc.Ua;
 using Opc.Ua.Client;
 using Prometheus;
 using Serilog;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
     /// <summary>
     /// Main extractor class, tying together the <see cref="uaClient"/> and CDF client.
     /// </summary>
-    public class UAExtractor : IDisposable
+    public class UAExtractor : IDisposable, IUAClientAccess
     {
         private readonly UAClient uaClient;
         private readonly FullConfig config;
@@ -244,7 +244,7 @@ namespace Cognite.OpcUa
             }
             catch (Exception ex)
             {
-                ExtractorUtils.LogException(log, ex, "Unexpected error in MapUAToDestinations", 
+                ExtractorUtils.LogException(log, ex, "Unexpected error in MapUAToDestinations",
                     "Handled service result exception in MapUAToDestinations");
                 throw;
             }
@@ -266,7 +266,8 @@ namespace Cognite.OpcUa
             subscribed = 0;
             subscribeFlag = false;
             historyReader.Terminate(source.Token, 30).Wait();
-            foreach (var state in State.NodeStates) {
+            foreach (var state in State.NodeStates)
+            {
                 state.RestartHistory();
             }
 
@@ -331,10 +332,10 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Closes the extractor, mainly just shutting down the opcua client and waiting for a clean loss of connection.
         /// </summary>
-        public void Close()
+        public void Close(bool closeClient = true)
         {
             source.Cancel();
-            if (!uaClient.Started) return;
+            if (!uaClient.Started || !closeClient) return;
             try
             {
                 uaClient.Close();
@@ -355,7 +356,7 @@ namespace Cognite.OpcUa
         /// <param name="id">NodeId to convert</param>
         /// <param name="index">Index to use for uniqueId</param>
         /// <returns>Converted uniqueId</returns>
-        public string GetUniqueId(NodeId id, int index = -1)
+        public string GetUniqueId(ExpandedNodeId id, int index = -1)
         {
             return uaClient.GetUniqueId(id, index);
         }
@@ -374,9 +375,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="value">Value to convert</param>
         /// <returns>Converted value</returns>
-        public string ConvertToString(object value)
+        public string ConvertToString(object value, IDictionary<long, string> enumValues = null)
         {
-            return uaClient.ConvertToString(value);
+            return uaClient.ConvertToString(value, enumValues);
         }
         /// <summary>
         /// Read properties for the given list of BufferedNode. This is intelligent,
@@ -395,7 +396,7 @@ namespace Cognite.OpcUa
                 nodes = nodes.Where(node => !pendingProperties.Contains(node.Id) && !node.PropertiesRead).ToList();
                 if (nodes.Any())
                 {
-                    newTask = Task.Run(() => uaClient.GetNodeProperties(nodes, source.Token));
+                    newTask = Task.Run(async () => await uaClient.GetNodeProperties(nodes, source.Token));
                     propertyReadTasks.Add(newTask);
                 }
 
@@ -587,7 +588,7 @@ namespace Cognite.OpcUa
             /// <summary>
             /// All nodes that should be mapped to destination objects
             /// </summary>
-            public List<UANode> Objects { get;} = new List<UANode>();
+            public List<UANode> Objects { get; } = new List<UANode>();
             /// <summary>
             /// All nodes that should be mapped to destination variables
             /// </summary>
@@ -783,7 +784,7 @@ namespace Cognite.OpcUa
             }
 
             var update = config.Extraction.Update;
-            
+
             await GetNodeData(update, result);
 
             result.Objects.AddRange(FilterObjects(update, result.RawObjects));
@@ -876,7 +877,7 @@ namespace Cognite.OpcUa
                 var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled && !state.Initialized);
 
                 var initResults = await Task.WhenAll(
-                    pusher.InitExtractedRanges(statesToSync, config.History.Backfill, source.Token), 
+                    pusher.InitExtractedRanges(statesToSync, config.History.Backfill, source.Token),
                     pusher.InitExtractedEventRanges(eventStatesToSync, config.History.Backfill, source.Token));
 
                 if (!initResults.All(res => res))
@@ -954,7 +955,7 @@ namespace Cognite.OpcUa
                 .Distinct()
                 .Select(id => State.GetNodeState(id));
 
-            bool initial = objects.Count() + timeseries.Count() == State.NumActiveNodes;
+            bool initial = objects.Count() + timeseries.Count() >= State.NumActiveNodes;
 
             var pushTasks = pushers.Select(pusher => PushNodes(objects, timeseries, references, pusher, initial));
 
@@ -1281,5 +1282,11 @@ namespace Cognite.OpcUa
                 uaClient.OnServerReconnect -= UaClient_OnServerReconnect;
             }
         }
+    }
+    public interface IUAClientAccess
+    {
+        string GetUniqueId(ExpandedNodeId id, int index = -1);
+        string ConvertToString(object value, IDictionary<long, string> enumValues = null);
+        string GetRelationshipId(UAReference reference);
     }
 }

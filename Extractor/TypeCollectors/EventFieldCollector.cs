@@ -89,8 +89,14 @@ namespace Cognite.OpcUa.TypeCollectors
                 DisplayName = "BaseEventType"
             };
 
-            uaClient.BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType },
-                EventTypeCallback, token, ReferenceTypeIds.HierarchicalReferences, (uint)NodeClass.ObjectType | (uint)NodeClass.Variable);
+            uaClient.BrowseDirectory(
+                new List<NodeId> { ObjectTypeIds.BaseEventType },
+                EventTypeCallback,
+                token,
+                ReferenceTypeIds.HierarchicalReferences,
+                (uint)NodeClass.ObjectType | (uint)NodeClass.Variable,
+                true,
+                false);
 
             var result = new Dictionary<NodeId, HashSet<EventField>>();
 

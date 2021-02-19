@@ -15,21 +15,17 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Configuration;
+using Cognite.OpcUa;
+using Cognite.OpcUa.Config;
+using Server;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Cognite.OpcUa;
 using Xunit;
 using Xunit.Abstractions;
-using Cognite.OpcUa.Config;
-using Cognite.Extractor.Configuration;
-using Server;
-using Microsoft.Extensions.DependencyInjection;
-using Cognite.Extractor.Utils;
-using Cognite.Extractor.Logging;
-using Cognite.Extractor.Metrics;
 
 namespace Test
 {
@@ -71,7 +67,7 @@ namespace Test
 
             if (serverName == ServerName.Array)
             {
-                server.PopulateArrayHistory();
+                server.PopulateCustomHistory();
             }
 
             if (serverName == ServerName.Basic)
@@ -206,7 +202,7 @@ namespace Test
                 "test.Upper.Case.Duplicatetwo"
             };
 
-            var expectedKeys = new []
+            var expectedKeys = new[]
             {
                 "tno:",
                 "tnt:",

@@ -15,6 +15,10 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Com.Cognite.V1.Timeseries.Proto;
+using Google.Protobuf;
+using Newtonsoft.Json;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -22,14 +26,8 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Com.Cognite.V1.Timeseries.Proto;
-using Google.Protobuf;
-using Newtonsoft.Json;
-using Serilog;
-using Xunit;
 
 #pragma warning disable IDE1006 // Naming Styles
 
@@ -61,8 +59,6 @@ namespace Test
         public bool AllowConnectionTest { get; set; } = true;
         public bool StoreDatapoints { get; set; }
         public MockMode mode { get; set; }
-
-
         private HttpResponseMessage GetFailedRequest(HttpStatusCode code)
         {
             var res = new HttpResponseMessage(code)
@@ -80,7 +76,6 @@ namespace Test
             res.Headers.Add("x-request-id", (requestIdCounter++).ToString(CultureInfo.InvariantCulture));
             return res;
         }
-
         public HashSet<string> FailedRoutes { get; } = new HashSet<string>();
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFMockHandler));

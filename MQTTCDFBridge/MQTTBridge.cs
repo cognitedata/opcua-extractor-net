@@ -1,13 +1,12 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using MQTTnet;
+﻿using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
 using MQTTnet.Client.Subscribing;
 using MQTTnet.Protocol;
-using Polly;
 using Serilog;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.Bridge
 {

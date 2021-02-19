@@ -1,7 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using Opc.Ua;
+﻿using Opc.Ua;
 using Opc.Ua.Server;
+using System;
+using System.Collections.Generic;
 
 namespace Server
 {
@@ -104,6 +104,10 @@ namespace Server
         public NodeId AddProperty<T>(NodeId parentId, string name, NodeId dataType, object value, int rank = -1)
         {
             return custom.AddProperty<T>(parentId, name, dataType, value, rank);
+        }
+        public void RemoveProperty(NodeId parentId, string name)
+        {
+            custom.RemoveProperty(parentId, name);
         }
         public void MutateNode(NodeId id, Action<NodeState> mutation)
         {

@@ -15,31 +15,31 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using System;
-using System.Collections.ObjectModel;
-using System.Globalization;
+using Cognite.Extractor.Common;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
-using System.Linq;
 using Prometheus;
-using System.Threading;
 using Serilog;
-using Cognite.Extractor.Common;
-using System.Text;
+using System;
 using System.Collections;
-using Cognite.OpcUa.TypeCollectors;
-using Cognite.OpcUa.Types;
-using Cognite.OpcUa.HistoryStates;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
     /// <summary>
     /// Client managing the connection to the opcua server, and providing wrapper methods to simplify interaction with the server.
     /// </summary>
-    public class UAClient : IDisposable
+    public class UAClient : IDisposable, IUAClientAccess
     {
         private readonly UAClientConfig config;
         private readonly ExtractionConfig extractionConfig;
@@ -554,6 +554,14 @@ namespace Cognite.OpcUa
                 VisitedNodes.Clear();
             }
         }
+        public bool NameFilter(string displayName)
+        {
+            if (extractionConfig.IgnoreNamePrefix != null && extractionConfig.IgnoreNamePrefix.Any(prefix =>
+                displayName.StartsWith(prefix, StringComparison.CurrentCulture))) return false;
+            if (extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(displayName)) return false;
+            return true;
+        }
+
         /// <summary>
         /// Get all children of root nodes recursively and invoke the callback for each.
         /// </summary>
@@ -567,7 +575,8 @@ namespace Cognite.OpcUa
             CancellationToken token,
             NodeId referenceTypes = null,
             uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
-            bool ignoreVisited = true)
+            bool ignoreVisited = true,
+            bool doFilter = true)
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
             var nextIds = roots.ToList();
@@ -606,9 +615,7 @@ namespace Cognite.OpcUa
                     {
                         var nodeId = ToNodeId(rd.NodeId);
                         if (rd.NodeId == ObjectIds.Server || rd.NodeId == ObjectIds.Aliases) continue;
-                        if (extractionConfig.IgnoreNamePrefix != null && extractionConfig.IgnoreNamePrefix.Any(prefix =>
-                            rd.DisplayName.Text.StartsWith(prefix, StringComparison.CurrentCulture))
-                            || extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(rd.DisplayName.Text))
+                        if (doFilter && !NameFilter(rd.DisplayName.Text))
                         {
                             log.Verbose("Ignoring filtered {nodeId}", nodeId);
                             continue;
@@ -708,7 +715,7 @@ namespace Cognite.OpcUa
             foreach (var node in nodes)
             {
                 if (node == null) continue;
-                readValueIds.AddRange(common.Select(attribute => new ReadValueId {AttributeId = attribute, NodeId = node.Id}));
+                readValueIds.AddRange(common.Select(attribute => new ReadValueId { AttributeId = attribute, NodeId = node.Id }));
                 if (node.IsVariable)
                 {
                     if (node is UAVariable variable && variable.IsProperty)
@@ -887,7 +894,7 @@ namespace Cognite.OpcUa
         /// Gets properties for variables in nodes given, then updates all properties in given list of nodes with relevant data and values.
         /// </summary>
         /// <param name="nodes">Nodes to be updated with properties</param>
-        public void GetNodeProperties(IEnumerable<UANode> nodes, CancellationToken token)
+        public async Task GetNodeProperties(IEnumerable<UANode> nodes, CancellationToken token)
         {
             if (nodes == null || !nodes.Any()) return;
 
@@ -946,6 +953,7 @@ namespace Cognite.OpcUa
                 if (!result.TryGetValue(parent.Id, out var children)) continue;
                 foreach (var child in children)
                 {
+                    if (!NameFilter(child.DisplayName.Text)) continue;
                     var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
                     properties.Add(property);
                     if (parent.Properties == null)
@@ -975,6 +983,7 @@ namespace Cognite.OpcUa
 
             ReadNodeData(properties, token);
             var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true));
+            await DataTypeManager.GetDataTypeMetadataAsync(toGetValue.Select(prop => prop.DataType?.Raw), token);
             ReadNodeValues(toGetValue, token);
         }
         #endregion
@@ -1092,12 +1101,12 @@ namespace Cognite.OpcUa
                             {
                                 var monitor = builder(node);
                                 monitor.Notification += handler;
-                                count++;
                                 lcount++;
                                 return monitor;
                             })
                         );
                         log.Debug("Add subscriptions for {numnodes} nodes, {subscribed} / {total} done.", lcount, count, total);
+                        count += lcount;
 
                         if (lcount > 0 && subscription.Created)
                         {
@@ -1212,6 +1221,7 @@ namespace Cognite.OpcUa
         /// <param name="name"></param>
         public void RemoveSubscription(string name)
         {
+            if (Session == null || Session.Subscriptions == null) return;
             var subscription = Session.Subscriptions.FirstOrDefault(sub =>
                                        sub.DisplayName.StartsWith(name, StringComparison.InvariantCulture));
             if (subscription == null || !subscription.Created) return;
@@ -1492,7 +1502,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="value">Object to convert</param>
         /// <returns>Metadata suitable string</returns>
-        public string ConvertToString(object value)
+        public string ConvertToString(object value, IDictionary<long, string> enumValues = null)
         {
             if (value == null) return "";
             if (value is string strValue)
@@ -1505,18 +1515,31 @@ namespace Cognite.OpcUa
                 int count = 0;
                 foreach (var dvalue in value as IEnumerable)
                 {
-                    builder.Append(((count++ > 0) ? ", " : "") + ConvertToString(dvalue));
+                    builder.Append(((count++ > 0) ? ", " : "") + ConvertToString(dvalue, enumValues));
                 }
                 builder.Append(']');
                 return builder.ToString();
             }
+            if (enumValues != null)
+            {
+                try
+                {
+                    var longVal = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                    if (enumValues.TryGetValue(longVal, out string enumVal))
+                    {
+                        return enumVal;
+                    }
+                }
+                catch { }
+            }
+
             if (value.GetType() == typeof(NodeId))
             {
                 return GetUniqueId((NodeId)value);
             }
             if (value.GetType() == typeof(ExpandedNodeId))
             {
-                return GetUniqueId(ToNodeId((ExpandedNodeId)value));
+                return GetUniqueId((ExpandedNodeId)value);
             }
             if (value.GetType() == typeof(LocalizedText))
             {

@@ -17,16 +17,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
-using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 
 namespace Cognite.OpcUa.Pushers
@@ -124,7 +121,7 @@ namespace Cognite.OpcUa.Pushers
                             }
                         }
                         ret["metadata"] = newMetaData;
-                        
+
                     }
                 }
                 else
@@ -145,7 +142,7 @@ namespace Cognite.OpcUa.Pushers
         }
 
         public static JsonElement? CreateRawTsUpdate(
-            UAVariable variable, 
+            UAVariable variable,
             UAExtractor extractor,
             RawRow raw,
             TypeUpdateConfig update,
@@ -168,7 +165,7 @@ namespace Cognite.OpcUa.Pushers
                 string newAssetExtId = extractor.GetUniqueId(variable.ParentId);
                 UpdateIfModified(ret, raw, newAssetExtId, "assetExternalId");
             }
-            return CreateRawUpdateCommon(extractor, variable, raw, update, ret);   
+            return CreateRawUpdateCommon(extractor, variable, raw, update, ret);
         }
 
         public static JsonElement? CreateRawAssetUpdate(

@@ -15,18 +15,17 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Common;
+using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.Types;
+using Prometheus;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Cognite.Extractor.Common;
-using Cognite.OpcUa.HistoryStates;
-using Cognite.OpcUa.Types;
-using Opc.Ua;
-using Prometheus;
-using Serilog;
 
 namespace Cognite.OpcUa
 {

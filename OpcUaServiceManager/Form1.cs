@@ -1,16 +1,12 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.ServiceProcess;
-using Microsoft.Win32;
 using System.IO;
+using System.Linq;
 using System.Management;
+using System.ServiceProcess;
+using System.Windows.Forms;
 
 namespace OpcUaServiceManager
 {

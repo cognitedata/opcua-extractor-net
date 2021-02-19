@@ -6,7 +6,6 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -39,8 +38,6 @@ namespace Test.Utils
         public bool PushReferenceResult { get; set; } = true;
 
         public ManualResetEvent OnReset { get; } = new ManualResetEvent(false);
-
-        public Dictionary<NodeId, TimeRange> EventTimeRange { get; set; }
 
         private object dpLock = new object();
         private object eventLock = new object();
@@ -82,13 +79,14 @@ namespace Test.Utils
             return Task.FromResult(TestConnectionResult);
         }
 
-        public Task<bool> PushNodes(
+        public async Task<bool> PushNodes(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> variables,
             UpdateConfig update,
             CancellationToken token)
         {
-            if (!PushNodesResult) return Task.FromResult(false);
+            if (!PushNodesResult) return false;
+            await Extractor.ReadProperties(objects.Concat(variables));
             if (objects != null)
             {
                 foreach (var obj in objects)
@@ -113,7 +111,7 @@ namespace Test.Utils
                 }
             }
 
-            return Task.FromResult(PushNodesResult);
+            return PushNodesResult;
         }
 
         public Task<bool> InitExtractedRanges(
@@ -163,15 +161,16 @@ namespace Test.Utils
             {
                 foreach (var state in states)
                 {
-                    if (EventTimeRange.TryGetValue(state.SourceId, out var range))
+                    if (Events.TryGetValue(state.SourceId, out var events))
                     {
+                        var (min, max) = events.MinMax(evt => evt.Time);
                         if (backfillEnabled)
                         {
-                            state.InitExtractedRange(range.First, range.Last);
+                            state.InitExtractedRange(min, max);
                         }
                         else
                         {
-                            state.InitExtractedRange(CogniteTime.DateTimeEpoch, range.Last);
+                            state.InitExtractedRange(CogniteTime.DateTimeEpoch, max);
                         }
                     }
                     else
@@ -238,6 +237,15 @@ namespace Test.Utils
         public void Reset()
         {
             OnReset.Set();
+        }
+        public void Wipe()
+        {
+            PushedNodes.Clear();
+            PushedReferences.Clear();
+            PushedVariables.Clear();
+            DataPoints.Clear();
+            Events.Clear();
+            UniqueToNodeId.Clear();
         }
     }
 }

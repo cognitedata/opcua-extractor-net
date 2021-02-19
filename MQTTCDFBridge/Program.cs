@@ -1,11 +1,11 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
-using Serilog;
-using Cognite.Extractor.Configuration;
+﻿using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Serilog;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 [assembly: CLSCompliant(false)]
 namespace Cognite.Bridge

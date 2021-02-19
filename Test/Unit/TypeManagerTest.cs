@@ -2,12 +2,11 @@
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
+using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -468,7 +467,10 @@ namespace Test.Unit
         {
             tester.Client.ResetVisitedNodes();
             var eventIds = tester.Server.Ids.Event;
-            var config = new EventConfig { Enabled = true, AllEvents = false,
+            var config = new EventConfig
+            {
+                Enabled = true,
+                AllEvents = false,
                 EventIds = new List<ProtoNodeId>
                 {
                     eventIds.BasicType1.ToProtoNodeId(tester.Client),

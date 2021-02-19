@@ -15,9 +15,9 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System;
 using Cognite.OpcUa.TypeCollectors;
 using Opc.Ua;
+using System;
 
 namespace Cognite.OpcUa.Types
 {
@@ -113,7 +113,7 @@ namespace Cognite.OpcUa.Types
         public override bool Equals(object obj)
         {
             if (!(obj is ReferenceVertex other)) return false;
-            return other.Id == Id && other.IsTimeSeries == IsTimeSeries; 
+            return other.Id == Id && other.IsTimeSeries == IsTimeSeries;
         }
 
         public override int GetHashCode()

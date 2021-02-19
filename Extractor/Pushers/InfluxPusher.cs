@@ -15,12 +15,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using AdysTech.InfluxDB.Client.Net;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.HistoryStates;
@@ -28,6 +22,12 @@ using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Prometheus;
 using Serilog;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
@@ -137,7 +137,7 @@ namespace Cognite.OpcUa
                 dataPointPushFailures.Inc();
                 if (e is InfluxDBException iex)
                 {
-                    log.Error("Failed to insert datapoints into influxdb: {line}, {reason}. Message: {msg}", 
+                    log.Error("Failed to insert datapoints into influxdb: {line}, {reason}. Message: {msg}",
                         iex.FailedLine, iex.Reason, iex.Message);
                     if (iex.Reason.StartsWith("partial write"))
                     {
@@ -575,7 +575,7 @@ namespace Cognite.OpcUa
                 {
                     if (isString)
                     {
-                        return new UADataPoint(dp.Time, id, (string) dp.Value);
+                        return new UADataPoint(dp.Time, id, (string)dp.Value);
                     }
 
                     double convVal;

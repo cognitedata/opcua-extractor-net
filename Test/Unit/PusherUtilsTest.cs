@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
+using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -63,10 +64,12 @@ namespace Test.Unit
             node.Description = "description";
             node.Properties = new List<UAVariable>();
             node.DataType = new UADataType(DataTypeIds.Boolean);
+            var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
+                prop.DataType = pdt;
                 prop.SetDataPoint($"value{i}", now, tester.Client);
                 node.Properties.Add(prop);
             }
@@ -93,7 +96,7 @@ namespace Test.Unit
             node.Description = "description2";
             node.Properties = oldProperties;
             oldProperties.RemoveAt(1);
-            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null));
+            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
             oldProperties[3].SetDataPoint("value-new", now, tester.Client);
             oldProperties[2].SetDataPoint("value4-new", now, tester.Client);
 
@@ -143,10 +146,12 @@ namespace Test.Unit
             var node = new UANode(new NodeId("test"), "test", new NodeId("parent"));
             node.Description = "description";
             node.Properties = new List<UAVariable>();
+            var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
+                prop.DataType = pdt;
                 prop.SetDataPoint($"value{i}", now, tester.Client);
                 node.Properties.Add(prop);
             }
@@ -170,7 +175,7 @@ namespace Test.Unit
             node.Description = "description2";
             node.Properties = oldProperties;
             oldProperties.RemoveAt(1);
-            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null));
+            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
             oldProperties[3].SetDataPoint("value-new", now, tester.Client);
             oldProperties[2].SetDataPoint("value4-new", now, tester.Client);
 
@@ -216,10 +221,12 @@ namespace Test.Unit
             node.Description = "description";
             node.Properties = new List<UAVariable>();
             node.DataType = new UADataType(DataTypeIds.Boolean);
+            var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
+                prop.DataType = pdt;
                 prop.SetDataPoint($"value{i}", now, tester.Client);
                 node.Properties.Add(prop);
             }
@@ -269,7 +276,7 @@ namespace Test.Unit
             node.Description = "description2";
             node.Properties = oldProperties;
             oldProperties.RemoveAt(1);
-            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null));
+            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
             oldProperties[3].SetDataPoint("value-new", now, tester.Client);
             oldProperties[2].SetDataPoint("value4-new", now, tester.Client);
 
@@ -306,10 +313,12 @@ namespace Test.Unit
             var node = new UANode(new NodeId("test"), "test", new NodeId("parent"));
             node.Description = "description";
             node.Properties = new List<UAVariable>();
+            var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
+                prop.DataType = pdt;
                 prop.SetDataPoint($"value{i}", now, tester.Client);
                 node.Properties.Add(prop);
             }
@@ -353,7 +362,7 @@ namespace Test.Unit
             node.Description = "description2";
             node.Properties = oldProperties;
             oldProperties.RemoveAt(1);
-            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null));
+            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
             oldProperties[3].SetDataPoint("value-new", now, tester.Client);
             oldProperties[2].SetDataPoint("value4-new", now, tester.Client);
 

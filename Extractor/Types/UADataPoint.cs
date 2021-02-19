@@ -15,11 +15,11 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using Cognite.Extensions;
 
 namespace Cognite.OpcUa.Types
 {

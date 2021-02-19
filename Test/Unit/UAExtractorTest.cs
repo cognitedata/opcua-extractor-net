@@ -1,84 +1,25 @@
 ﻿using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
-using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
-using Microsoft.Extensions.DependencyInjection;
-using Server;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit;
-using Xunit.Abstractions;
-using Test.Utils;
-using System.Linq;
-using System.Collections.Generic;
-using Opc.Ua;
+using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
-using Cognite.OpcUa.HistoryStates;
+using Microsoft.Extensions.DependencyInjection;
+using Opc.Ua;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Test.Utils;
+using Xunit;
+using Xunit.Abstractions;
 
 namespace Test.Unit
 {
     public sealed class ExtractorTestFixture : BaseExtractorTestFixture
     {
         public ExtractorTestFixture() : base(62100) { }
-    }
-    public abstract class BaseExtractorTestFixture : IDisposable
-    {
-        public UAClient Client { get; }
-        public FullConfig Config { get; }
-        public ServerController Server { get; }
-        public CancellationTokenSource Source { get; }
-        public IServiceProvider Provider { get; protected set; }
-        protected ServiceCollection Services { get; }
-        protected BaseExtractorTestFixture(int port)
-        {
-            Services = new ServiceCollection();
-            Config = Services.AddConfig<FullConfig>("config.test.yml", 1);
-            Console.WriteLine($"Add logger: {Config.Logger}");
-            Config.Source.EndpointUrl = $"opc.tcp://localhost:{port}";
-            Services.AddLogger();
-            LoggingUtils.Configure(Config.Logger);
-            Provider = Services.BuildServiceProvider();
-
-            Server = new ServerController(new[] {
-                PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
-                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, port);
-            Server.Start().Wait();
-
-            Client = new UAClient(Config);
-            Source = new CancellationTokenSource();
-            Client.Run(Source.Token).Wait();
-        }
-
-        public UAExtractor BuildExtractor(bool clear = true, IExtractionStateStore stateStore = null, params IPusher[] pushers)
-        {
-            if (clear)
-            {
-                Client.ClearNodeOverrides();
-                Client.ClearEventFields();
-                Client.ResetVisitedNodes();
-            }
-            return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                Source.Cancel();
-                Source.Dispose();
-            }
-        }
-
-
-        public void Dispose()
-        {
-            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
-        }
     }
     public class UAExtractorTest : MakeConsoleWork, IClassFixture<ExtractorTestFixture>
     {
@@ -277,7 +218,7 @@ namespace Test.Unit
             {
                 tester.Config.Extraction.Relationships.Enabled = false;
             }
-            
+
         }
 
         [Fact]
@@ -429,6 +370,25 @@ namespace Test.Unit
 
             tester.Config.Extraction.DataTypes.DataTypeMetadata = false;
             tester.Config.Extraction.NodeTypes.Metadata = false;
+        }
+        [Fact]
+        public async Task TestNodeMapping()
+        {
+            tester.Config.Extraction.NodeMap = new Dictionary<string, ProtoNodeId>
+            {
+                { "Test1", new NodeId("test").ToProtoNodeId(tester.Client) },
+                { "Test2", new NodeId("test2", 2).ToProtoNodeId(tester.Client) }
+            };
+            using var extractor = tester.BuildExtractor();
+
+            // Run the configure extractor method...
+            await extractor.RunExtractor(true);
+
+            Assert.Equal("Test1", extractor.GetUniqueId(new NodeId("test")));
+            Assert.Equal("Test2", tester.Client.GetUniqueId(new NodeId("test2", 2)));
+            Assert.Equal("Test1[0]", extractor.GetUniqueId(new NodeId("test"), 0));
+
+            tester.Config.Extraction.NodeMap = null;
         }
     }
 }
