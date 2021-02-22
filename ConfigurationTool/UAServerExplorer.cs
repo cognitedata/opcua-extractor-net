@@ -612,7 +612,7 @@ namespace Cognite.OpcUa.Config
             if (expectedAttributeReads < 1000)
             {
                 log.Warning("Reading less than 1000 attributes maximum. Most servers should support more, but" +
-                            " this server only has enough node to read {reads}", expectedAttributeReads);
+                            " this server only has enough nodes to read {reads}", expectedAttributeReads);
                 summary.VariableLimitWarning = true;
             }
 
@@ -624,9 +624,10 @@ namespace Cognite.OpcUa.Config
                 var toCheck = nodeList.TakeWhile(node =>
                 {
                     count += node.IsVariable ? 5 : 1;
-                    return count > chunkSize + 10;
-                });
-                log.Information("Attempting to read attributes with ChunkSize {chunkSize}", chunkSize);
+                    return count < chunkSize + 10;
+                }).ToList();
+                log.Information("Total {tot}", nodeList.Count);
+                log.Information("Attempting to read attributes for {cnt} nodes with ChunkSize {chunkSize}", toCheck.Count(), chunkSize);
                 config.Source.AttributesChunk = chunkSize;
                 try
                 {

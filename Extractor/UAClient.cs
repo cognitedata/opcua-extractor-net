@@ -810,6 +810,7 @@ namespace Cognite.OpcUa
                 }
                 return seed + 1;
             });
+            log.Information("Retrieved {total}/{expected} attributes", total, expected);
             if (total < expected)
             {
                 throw new ExtractorFailureException(
@@ -1040,6 +1041,10 @@ namespace Cognite.OpcUa
                 int idx = 0;
                 foreach (var data in results)
                 {
+                    if (StatusCode.IsBad(data.StatusCode))
+                    {
+                        throw new ServiceResultException(data.StatusCode);
+                    }
                     var nodeId = nodesIndices[idx];
                     result.Add((nodeId, ExtensionObject.ToEncodeable(data.HistoryData)));
                     if (data.ContinuationPoint == null)

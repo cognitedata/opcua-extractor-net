@@ -40,6 +40,7 @@ namespace Server
             {
                 values = new DataValueCollection { new DataValue { StatusCode = StatusCodes.BadTooManyOperations } };
                 diagnosticInfos = new DiagnosticInfoCollection();
+                return;
             }
             base.Read(context, maxAge, timestampsToReturn, nodesToRead, out values, out diagnosticInfos);
         }
@@ -96,7 +97,6 @@ namespace Server
             if (nodesToBrowse == null) throw new ArgumentNullException(nameof(nodesToBrowse));
             if (issues.MaxBrowseNodes > 0 && nodesToBrowse.Count > issues.MaxBrowseNodes)
             {
-                Console.WriteLine("Triggered issue too many browse");
                 results = new BrowseResultCollection() { new BrowseResult { StatusCode = StatusCodes.BadTooManyOperations } };
                 diagnosticInfos = new DiagnosticInfoCollection();
                 return;

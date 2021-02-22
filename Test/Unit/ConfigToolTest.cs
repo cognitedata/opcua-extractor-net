@@ -169,6 +169,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestAttributeChunkSizes()
         {
+            tester.Config.Extraction.RootNode = null;
             // Test no root
             tester.Explorer.ResetNodes();
             await tester.Explorer.GetAttributeChunkSizes(tester.Source.Token);
@@ -185,11 +186,26 @@ namespace Test.Unit
             Assert.Equal(1000, summary.AttributeChunkSize);
             Assert.True(summary.VariableLimitWarning);
             tester.Config.Extraction.RootNode = null;
+
+            // Test max size issues
+            tester.Explorer.ResetSummary();
+            tester.Explorer.ResetNodes();
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Full.Root.ToProtoNodeId(tester.Explorer);
+            tester.Server.Issues.MaxAttributes = 100;
+            await tester.Explorer.GetAttributeChunkSizes(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.Equal(100, summary.AttributeChunkSize);
+            Assert.False(summary.VariableLimitWarning);
+            
+            tester.Config.Extraction.RootNode = null;
+            tester.Server.Issues.MaxAttributes = 0;
+            tester.Config.Source.AttributesChunk = 1000;
         }
         [Fact]
         public async Task TestGetDataTypeSettings()
         {
             // First for all nodes
+            tester.Config.Extraction.RootNode = null;
             tester.Explorer.ResetNodes();
             await tester.Explorer.IdentifyDataTypeSettings(tester.Source.Token);
             var summary = tester.Explorer.GetSummary();
@@ -269,6 +285,7 @@ namespace Test.Unit
                     await Task.Delay(200);
                 }
             });
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Full.Root.ToProtoNodeId(tester.Explorer);
             // Test full hierarchy
             tester.Explorer.ResetNodes();
             await tester.Explorer.GetSubscriptionChunkSizes(tester.Source.Token);
@@ -297,8 +314,21 @@ namespace Test.Unit
             Assert.Equal(1000, summary.SubscriptionChunkSize);
             Assert.True(summary.SubscriptionLimitWarning);
 
+            // Test issue with chunk sizes
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Full.Root.ToProtoNodeId(tester.Explorer);
+            tester.Server.Issues.MaxSubscriptions = 100;
+            tester.Explorer.ResetNodes();
+            tester.Explorer.ResetSummary();
+            await tester.Explorer.GetSubscriptionChunkSizes(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.False(summary.SilentSubscriptionsWarning);
+            Assert.Equal(100, summary.SubscriptionChunkSize);
+            Assert.False(summary.SubscriptionLimitWarning);
+
             generate = false;
             tester.Server.WipeHistory(tester.Server.Ids.Base.DoubleVar1, 0);
+            tester.Config.Source.SubscriptionChunk = 1000;
+            tester.Server.Issues.MaxSubscriptions = 0;
         }
         [Fact]
         public async Task TestGetHistoryChunkSizes()
@@ -320,6 +350,19 @@ namespace Test.Unit
             Assert.True(summary.History);
             Assert.Equal(100, summary.HistoryChunkSize);
             Assert.Equal(TimeSpan.Zero, summary.HistoryGranularity);
+
+            // Test with issues
+            tester.Server.Issues.MaxHistoryNodes = 1;
+            tester.Explorer.ResetNodes();
+            tester.Explorer.ResetSummary();
+            await tester.Explorer.GetHistoryReadConfig(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.False(summary.NoHistorizingNodes);
+            Assert.True(summary.History);
+            Assert.Equal(1, summary.HistoryChunkSize);
+            Assert.Equal(TimeSpan.Zero, summary.HistoryGranularity);
+
+            tester.Server.Issues.MaxHistoryNodes = 0;
 
             // Test with data
             tester.Explorer.ResetSummary();
