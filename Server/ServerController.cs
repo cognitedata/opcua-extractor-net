@@ -15,6 +15,7 @@ namespace Server
         public TestServer Server { get; private set; }
         private IEnumerable<PredefinedSetup> setups;
         private int port;
+        public ServerIssueConfig Issues => Server.Issues;
 
         public ServerController(IEnumerable<PredefinedSetup> setups, int port = 62546)
         {
