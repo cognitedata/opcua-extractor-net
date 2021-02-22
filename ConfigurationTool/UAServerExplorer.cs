@@ -37,7 +37,6 @@ namespace Cognite.OpcUa.Config
         private List<UANode> dataTypes;
         private List<ProtoDataType> customNumericTypes;
         private List<UANode> nodeList;
-        private List<NodeId> emittedEvents;
         private List<UANode> eventTypes;
         private Dictionary<string, string> namespaceMap;
         private Dictionary<NodeId, HashSet<EventField>> activeEventFields;
@@ -94,9 +93,9 @@ namespace Cognite.OpcUa.Config
             public bool NoHistorizingNodes;
             public bool BackfillRecommended;
             public bool HistoricalEvents;
-            public bool GenericEvents;
-            public int NumEventTypes;
-            public bool BaseEventWarning;
+            public bool AnyEvents;
+            public int NumEmitters;
+            public int NumHistEmitters;
             public List<string> NamespaceMap;
             public TimeSpan HistoryGranularity;
             public bool Enums;
@@ -132,6 +131,7 @@ namespace Cognite.OpcUa.Config
             dataTypesRead = false;
             dataTypes = new List<UANode>();
             nodeDataRead = false;
+            activeEventFields = null;
         }
 
         /// <summary>
@@ -1086,86 +1086,7 @@ namespace Cognite.OpcUa.Config
             }
 
         }
-        private UAEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
-        {
-            int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
-                                                                       && atr.BrowsePath[0] == BrowseNames.EventType);
-            if (eventTypeIndex < 0)
-            {
-                log.Warning("Triggered event has no type, ignoring.");
-                return null;
-            }
-            var eventType = eventFields[eventTypeIndex].Value as NodeId;
-            // Many servers don't handle filtering on history data.
-            if (eventType == null || !activeEventFields.ContainsKey(eventType))
-            {
-                log.Verbose("Invalid event type: {eventType}", eventType);
-                return null;
-            }
-            var targetEventFields = activeEventFields[eventType];
 
-            var extractedProperties = new Dictionary<string, object>();
-
-            for (int i = 0; i < filter.SelectClauses.Count; i++)
-            {
-                var clause = filter.SelectClauses[i];
-                if (clause.BrowsePath.Count != 1
-                    || !targetEventFields.Contains(new EventField(clause.TypeDefinitionId, clause.BrowsePath[0]))) continue;
-
-                string name = clause.BrowsePath[0].Name;
-                if (config.Events.DestinationNameMap.ContainsKey(name) && name != "EventId" && name != "SourceNode" && name != "EventType")
-                {
-                    name = config.Events.DestinationNameMap[name];
-                }
-                if (!extractedProperties.ContainsKey(name) || extractedProperties[name] == null)
-                {
-                    extractedProperties[name] = eventFields[i].Value;
-                }
-            }
-            try
-            {
-                var buffEvent = new UAEvent
-                {
-                    Message = ConvertToString(extractedProperties.GetValueOrDefault("Message")),
-                    EventId = config.Extraction.IdPrefix + Convert.ToBase64String((byte[])extractedProperties["EventId"]),
-                    SourceNode = (NodeId)extractedProperties["SourceNode"],
-                    Time = (DateTime)extractedProperties.GetValueOrDefault("Time"),
-                    EventType = (NodeId)extractedProperties["EventType"],
-                    MetaData = extractedProperties
-                        .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
-                                      && kvp.Key != "Time" && kvp.Key != "EventType")
-                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-                    EmittingNode = emitter
-                };
-                return buffEvent;
-            }
-            catch (Exception e)
-            {
-                log.Error(e, "Failed to construct bufferedEvent from Raw fields");
-                return null;
-            }
-        }
-
-        private IEnumerable<UAEvent> ReadResultToEvents(IEncodeable rawEvts, NodeId emitterId, ReadEventDetails details)
-        {
-            if (rawEvts == null) return Array.Empty<UAEvent>();
-            if (!(rawEvts is HistoryEvent evts))
-            {
-                log.Warning("Incorrect return type of history read events");
-                return Array.Empty<UAEvent>();
-            }
-
-            var filter = details.Filter;
-            if (filter == null)
-            {
-                log.Warning("No event filter, ignoring");
-                return Array.Empty<UAEvent>();
-            }
-
-            if (evts.Events == null) return Array.Empty<UAEvent>();
-
-            return evts.Events.Select(evt => ConstructEvent(filter, evt.EventFields, emitterId)).ToArray();
-        }
         /// <summary>
         /// Look for emitter relationships, and attempt to listen to events on any identified emitters. Also look through the event hierarchy and find any
         /// custom events that may be interesting for cognite. Then attempt to listen for audit events on the server node, if any at all are detected
@@ -1173,15 +1094,17 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task GetEventConfig(CancellationToken token)
         {
+            await PopulateNodes(token);
+            ReadNodeData(token);
+
             log.Information("Test for event configuration");
             eventTypes = new List<UANode>();
 
             try
             {
-                VisitedNodes.Clear();
-                BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType }, ToolUtil.GetSimpleListWriterCallback(eventTypes, this),
-                    token,
-                    ReferenceTypeIds.HasSubtype, (uint)NodeClass.ObjectType);
+                config.Events.AllEvents = true;
+                config.Events.Enabled = true;
+                activeEventFields = GetEventFields(token);
             }
             catch (Exception ex)
             {
@@ -1189,48 +1112,18 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
+            var server = GetServerNode(token);
 
-            var notifierPairs = new List<(NodeId id, byte notifier)>();
-
-            log.Information("Read EventNotifier property for each node");
-
-            try
-            {
-                var readValueIds = nodeList.Select(node => new ReadValueId
-                {
-                    AttributeId = Attributes.EventNotifier,
-                    NodeId = node.Id
-                }).Append(new ReadValueId { AttributeId = Attributes.EventNotifier, NodeId = ObjectIds.Server });
-                foreach (var chunk in readValueIds.ChunkBy(baseConfig.Source.AttributesChunk))
-                {
-                    Session.Read(
-                        null,
-                        0,
-                        TimestampsToReturn.Neither,
-                        new ReadValueIdCollection(chunk),
-                        out var results,
-                        out var _
-                        );
-                    var chunkEnum = chunk.GetEnumerator();
-                    foreach (var result in results)
-                    {
-                        chunkEnum.MoveNext();
-                        notifierPairs.Add((chunkEnum.Current.NodeId, result.GetValue((byte)0)));
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                log.Warning(ex, "Failed to read EventNotifier property, the server most likely does not support events");
-                return;
-            }
-
-            var emitters = notifierPairs.Where(pair => (pair.notifier & EventNotifiers.SubscribeToEvents) != 0);
-            var historizingEmitters = emitters.Where(pair => (pair.notifier & EventNotifiers.HistoryRead) != 0);
+            var emitters = nodeList.Append(server).Where(node => (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0);
+            var historizingEmitters = emitters.Where(node => (node.EventNotifier & EventNotifiers.HistoryRead) != 0);
 
             if (emitters.Any())
             {
                 log.Information("Discovered {cnt} emitters, of which {cnt2} are historizing", emitters.Count(), historizingEmitters.Count());
+                summary.NumEmitters = emitters.Count();
+                summary.NumHistEmitters = historizingEmitters.Count();
+                summary.AnyEvents = true;
+                baseConfig.Events.Enabled = true;
                 if (historizingEmitters.Any())
                 {
                     summary.HistoricalEvents = true;
@@ -1244,7 +1137,6 @@ namespace Cognite.OpcUa.Config
             var emitterReferences = new List<UANode>();
             try
             {
-                VisitedNodes.Clear();
                 BrowseDirectory(nodeList.Select(node => node.Id).Append(ObjectIds.Server).ToList(),
                     ToolUtil.GetSimpleListWriterCallback(emitterReferences, this),
                     token,
@@ -1255,66 +1147,67 @@ namespace Cognite.OpcUa.Config
                 log.Warning(ex, "Failed to look for GeneratesEvent references, this tool will not be able to identify emitted event types this way");
             }
 
-            VisitedNodes.Clear();
-
             var referencedEvents = emitterReferences.Select(evt => evt.Id)
-                .Distinct()
-                .Where(id => IsCustomObject(id) || id == ObjectTypeIds.BaseEventType).ToHashSet();
+                .Distinct().ToHashSet();
 
-            emittedEvents = referencedEvents.ToList();
+            var emittedEvents = referencedEvents.ToList();
 
-
-            log.Information("Identified {cnt} events by looking at GeneratesEvent references", emittedEvents.Count);
-
-            bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server
+            if (emittedEvents.Any())
+            {
+                log.Information("Identified {cnt} events by looking at GeneratesEvent references", emittedEvents.Count);
+                bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server
                 && (evt.Id == ObjectTypeIds.AuditAddNodesEventType || evt.Id == ObjectTypeIds.AuditAddReferencesEventType));
 
-            baseConfig.Extraction.EnableAuditDiscovery |= auditReferences;
-            summary.Auditing = auditReferences;
+                summary.AnyEvents = true;
 
-            if (auditReferences)
-            {
-                log.Information("Audit events on the server node detected, auditing can be enabled");
+                baseConfig.Extraction.EnableAuditDiscovery |= auditReferences;
+                summary.Auditing = auditReferences;
+
+                if (auditReferences)
+                {
+                    log.Information("Audit events on the server node detected, auditing can be enabled");
+                }
             }
 
-            log.Information("Listening to events on the server node a little while in order to find further events");
+            if (!summary.Auditing)
+            {
+                try
+                {
+                    Session.Read(
+                        null,
+                        0,
+                        TimestampsToReturn.Neither,
+                        new ReadValueIdCollection(new[] { new ReadValueId { NodeId = VariableIds.Server_Auditing, AttributeId = Attributes.Value } }),
+                        out var results,
+                        out var _
+                        );
+                    var result = (bool)results.First().GetValue(typeof(bool));
+                    if (result)
+                    {
+                        log.Information("Server capabilities indicate that auditing is enabled");
+                        summary.Auditing = true;
+                        baseConfig.Extraction.EnableAuditDiscovery = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log.Warning(ex, "Failed to read auditing server configuration");
+                }
+            }
 
-            config.Events.AllEvents = true;
-            config.Events.Enabled = true;
+            if (!emitters.Any() || !historizingEmitters.Any())
+            {
+                log.Information("No event configuration found");
+                return;
+            }
 
-            activeEventFields = GetEventFields(token);
+            log.Information("Try subscribing to events on emitting nodes");
 
-            var events = new List<UAEvent>();
-
-            object listLock = new object();
+            var states = emitters.Select(emitter => new EventExtractionState(this, emitter.Id, false, false));
 
             try
             {
-                await ToolUtil.RunWithTimeout(() => SubscribeToEvents(new[] { new EventExtractionState(this, ObjectIds.Server, false, false) },
-                    (item, args) =>
-                    {
-                        if (!(args.NotificationValue is EventFieldList triggeredEvent))
-                        {
-                            log.Warning("No event in event subscription notification: {}", item.StartNodeId);
-                            return;
-                        }
-                        var eventFields = triggeredEvent.EventFields;
-                        if (!(item.Filter is EventFilter filter))
-                        {
-                            log.Warning("Triggered event without filter");
-                            return;
-                        }
-                        var buffEvent = ConstructEvent(filter, eventFields, item.ResolvedNodeId);
-                        if (buffEvent == null) return;
-
-                        lock (listLock)
-                        {
-                            events.Add(buffEvent);
-                        }
-
-                        log.Verbose(buffEvent.ToString());
-
-                    }, token), 120);
+                await ToolUtil.RunWithTimeout(() => SubscribeToEvents(states.Take(baseConfig.Source.SubscriptionChunk), (item, args) => { }, token), 120);
             }
             catch (Exception ex)
             {
@@ -1322,128 +1215,7 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            try
-            {
-                await ToolUtil.RunWithTimeout(() => SubscribeToAuditEvents(
-                    (item, args) =>
-                    {
-                        if (!(args.NotificationValue is EventFieldList triggeredEvent))
-                        {
-                            log.Warning("No event in event subscription notification: {}", item.StartNodeId);
-                            return;
-                        }
-
-                        var eventFields = triggeredEvent.EventFields;
-                        if (!(item.Filter is EventFilter filter))
-                        {
-                            log.Warning("Triggered event without filter");
-                            return;
-                        }
-                        int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
-                                                                                    && atr.BrowsePath[0] == BrowseNames.EventType);
-                        if (eventTypeIndex < 0)
-                        {
-                            log.Warning("Triggered event has no type, ignoring");
-                            return;
-                        }
-                        var eventType = eventFields[eventTypeIndex].Value as NodeId;
-                        if (eventType == null || eventType != ObjectTypeIds.AuditAddNodesEventType && eventType != ObjectTypeIds.AuditAddReferencesEventType)
-                        {
-                            log.Warning("Non-audit event triggered on audit event listener");
-                            return;
-                        }
-
-                        var buffEvent = new UAEvent
-                        {
-                            EventType = eventType
-                        };
-                        lock (listLock)
-                        {
-                            events.Add(buffEvent);
-                        }
-
-                        log.Verbose(buffEvent.ToString());
-
-                    }), 120);
-            }
-            catch (Exception ex)
-            {
-                log.Warning(ex, "Failed to subscribe to audit events. The extractor will not be able to support auditing.");
-            }
-
-
-            await Task.Delay(5000, token);
-
             Session.RemoveSubscriptions(Session.Subscriptions.ToList());
-
-            if (!events.Any())
-            {
-                log.Information("No events detected after 5 seconds");
-            }
-            else
-            {
-                log.Information("Detected {cnt} events in 5 seconds", events.Count);
-                var discoveredEvents = events.Select(evt => evt.EventType).Distinct();
-
-                if (discoveredEvents.Any(id =>
-                    ToolUtil.IsChildOf(eventTypes, eventTypes.Find(type => type.Id == id), ObjectTypeIds.AuditEventType)))
-                {
-                    log.Information("Audit events detected on server node, auditing can be enabled");
-                    baseConfig.Extraction.EnableAuditDiscovery = true;
-                    summary.Auditing = true;
-                }
-
-                emittedEvents = emittedEvents
-                    .Concat(discoveredEvents)
-                    .Distinct()
-                    .Where(id => !ToolUtil.IsChildOf(eventTypes, eventTypes.Find(type => type.Id == id), ObjectTypeIds.AuditEventType))
-                    .ToList();
-            }
-
-            if (emittedEvents.Any(id => id == ObjectTypeIds.BaseEventType))
-            {
-                log.Warning("Using BaseEventType directly is not recommended, consider switching to a custom event type instead.");
-                summary.BaseEventWarning = true;
-            }
-
-            log.Information("Detected a total of {cnt} event types", emittedEvents.Count);
-
-            if (emittedEvents.Count > 0)
-            {
-                log.Information("Detected potential events, the server should discover events");
-                baseConfig.Events.Enabled = true;
-                summary.NumEventTypes = emittedEvents.Count;
-                if (emittedEvents.Any(id => id.NamespaceIndex == 0))
-                {
-                    log.Information("Detected non-custom events");
-                    baseConfig.Events.AllEvents = true;
-                    summary.GenericEvents = true;
-                }
-            }
-
-            try
-            {
-                Session.Read(
-                    null,
-                    0,
-                    TimestampsToReturn.Neither,
-                    new ReadValueIdCollection(new[] { new ReadValueId { NodeId = VariableIds.Server_Auditing, AttributeId = Attributes.Value } }),
-                    out var results,
-                    out var _
-                    );
-                var result = (bool)results.First().GetValue(typeof(bool));
-                if (result)
-                {
-                    log.Information("Server capabilities indicate that auditing is enabled");
-                    summary.Auditing = true;
-                }
-            }
-            catch (Exception ex)
-            {
-                log.Warning(ex, "Failed to read auditing server configuration");
-            }
-
-            summary.NumEventTypes = emittedEvents.Count;
         }
 
         public static Dictionary<string, string> GenerateNamespaceMap(IEnumerable<string> namespaces)
@@ -1624,19 +1396,18 @@ namespace Cognite.OpcUa.Config
             }
             log.Information("");
 
-            if (summary.NumEventTypes > 0)
+            if (summary.AnyEvents)
             {
                 log.Information("Successfully found support for events on the server");
-                log.Information("{types} different event types were found", summary.NumEventTypes);
+                log.Information("Found {cnt} nodes emitting events", summary.NumEmitters);
                 if (summary.HistoricalEvents)
                 {
-                    log.Information("Historizing event emitters were found and successfully read from");
+                    log.Information("{cnt} historizing event emitters were found", summary.NumHistEmitters);
                 }
-
-                if (summary.BaseEventWarning)
+                if (summary.NumEmitters == 0)
                 {
-                    log.Information("BaseEventType events were observed to be emitted directly. This is not ideal, it is better to " +
-                                    "only use custom or predefined event types.");
+                    log.Warning("Found GeneratesEvent references, but no nodes had correctly configured EventNotifier");
+                    log.Warning("Any emitters must be configured manually");
                 }
             }
             else

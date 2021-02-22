@@ -75,6 +75,10 @@ namespace Server
             custom.PopulateHistory(id, count, start, type, msdiff, valueBuilder);
         }
 
+        public void SetEventConfig(bool auditing, bool server, bool serverAuditing)
+        {
+            custom.SetEventConfig(auditing, server, serverAuditing);
+        }
         public void PopulateEventHistory<T>(NodeId eventId,
             NodeId emitter,
             NodeId source,

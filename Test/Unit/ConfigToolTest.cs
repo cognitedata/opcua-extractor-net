@@ -33,6 +33,7 @@ namespace Test.Unit
             Console.WriteLine($"Add logger: {Config.Logger}");
             Config.Source.EndpointUrl = $"opc.tcp://localhost:63500";
             BaseConfig = ConfigurationUtils.Read<FullConfig>("config.test.yml");
+            BaseConfig.GenerateDefaults();
 
             services.AddLogger();
             LoggingUtils.Configure(Config.Logger);
@@ -312,6 +313,58 @@ namespace Test.Unit
             Assert.Equal(100, summary.HistoryChunkSize);
             Assert.Equal(TimeSpan.FromSeconds(1), summary.HistoryGranularity);
             Assert.True(summary.BackfillRecommended);
+        }
+        [Fact]
+        public async Task TestGetEventConfig()
+        {
+            tester.Explorer.ResetNodes();
+            tester.Explorer.ResetSummary();
+
+            // Test no events
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Base.Root.ToProtoNodeId(tester.Explorer);
+            tester.Server.SetEventConfig(false, false, false);
+            await tester.Explorer.GetEventConfig(tester.Source.Token);
+            var summary = tester.Explorer.GetSummary();
+            Assert.False(summary.AnyEvents);
+            Assert.False(summary.Auditing);
+            Assert.False(summary.HistoricalEvents);
+            Assert.Equal(0, summary.NumEmitters);
+            Assert.Equal(0, summary.NumHistEmitters);
+
+            // Test events and auditing set on server
+            tester.Server.SetEventConfig(true, true, false);
+            tester.Explorer.ResetSummary();
+            await tester.Explorer.GetEventConfig(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.True(summary.AnyEvents);
+            Assert.True(summary.Auditing);
+            Assert.True(summary.HistoricalEvents);
+            Assert.Equal(1, summary.NumEmitters);
+            Assert.Equal(1, summary.NumHistEmitters);
+
+            // Test auditing set on server
+            tester.Server.SetEventConfig(false, false, true);
+            tester.Explorer.ResetSummary();
+            await tester.Explorer.GetEventConfig(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.True(summary.AnyEvents);
+            Assert.True(summary.Auditing);
+            Assert.False(summary.HistoricalEvents);
+            Assert.Equal(0, summary.NumEmitters);
+            Assert.Equal(0, summary.NumHistEmitters);
+
+            // Test discover on event hierarchy
+            tester.Server.SetEventConfig(false, false, false);
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Event.Root.ToProtoNodeId(tester.Explorer);
+            tester.Explorer.ResetSummary();
+            tester.Explorer.ResetNodes();
+            await tester.Explorer.GetEventConfig(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.True(summary.AnyEvents);
+            Assert.False(summary.Auditing);
+            Assert.True(summary.HistoricalEvents);
+            Assert.Equal(2, summary.NumEmitters);
+            Assert.Equal(1, summary.NumHistEmitters);
 
         }
     }

@@ -272,5 +272,9 @@ namespace Server
         {
             Server.WipeEventHistory(id);
         }
+        public void SetEventConfig(bool auditing, bool server, bool serverAuditing)
+        {
+            Server.SetEventConfig(auditing, server, serverAuditing);
+        }
     }
 }
