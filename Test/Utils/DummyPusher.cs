@@ -36,6 +36,7 @@ namespace Test.Utils
         public bool? PushDataPointResult { get; set; } = true;
         public bool? PushEventResult { get; set; } = true;
         public bool PushReferenceResult { get; set; } = true;
+        public bool ReadProperties { get; set; } = true;
 
         public ManualResetEvent OnReset { get; } = new ManualResetEvent(false);
 
@@ -86,7 +87,10 @@ namespace Test.Utils
             CancellationToken token)
         {
             if (!PushNodesResult) return false;
-            await Extractor.ReadProperties(objects.Concat(variables));
+            if (ReadProperties)
+            {
+                await Extractor.ReadProperties(objects.Concat(variables));
+            }
             if (objects != null)
             {
                 foreach (var obj in objects)
