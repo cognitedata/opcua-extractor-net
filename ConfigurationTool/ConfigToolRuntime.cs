@@ -58,7 +58,7 @@ namespace Cognite.OpcUa.Config
             catch (Exception e)
             {
                 log.Error(e, "ConfigurationTool failed fatally");
-                return;
+                throw;
             }
             explorer.Close();
 

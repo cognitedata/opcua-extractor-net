@@ -39,7 +39,6 @@ namespace Cognite.OpcUa.Config
         private List<UANode> nodeList;
         private List<UANode> eventTypes;
         private Dictionary<string, string> namespaceMap;
-        private Dictionary<NodeId, HashSet<EventField>> activeEventFields;
 
         private bool history;
 
@@ -131,7 +130,7 @@ namespace Cognite.OpcUa.Config
             dataTypesRead = false;
             dataTypes = new List<UANode>();
             nodeDataRead = false;
-            activeEventFields = null;
+            eventFields = null;
         }
 
         /// <summary>
@@ -141,8 +140,13 @@ namespace Cognite.OpcUa.Config
         {
             log.Information("Attempting to list endpoints using given url as discovery server");
 
-            var context = Appconfig.CreateMessageContext();
-            var endpointConfig = EndpointConfiguration.Create(Appconfig);
+            if (AppConfig == null)
+            {
+                await LoadAppConfig();
+            }
+
+            var context = AppConfig.CreateMessageContext();
+            var endpointConfig = EndpointConfiguration.Create(AppConfig);
             var endpoints = new EndpointDescriptionCollection();
             using (var channel = DiscoveryChannel.Create(new Uri(config.Source.EndpointUrl), endpointConfig, context))
             {
@@ -1104,7 +1108,7 @@ namespace Cognite.OpcUa.Config
             {
                 config.Events.AllEvents = true;
                 config.Events.Enabled = true;
-                activeEventFields = GetEventFields(token);
+                GetEventFields(token);
             }
             catch (Exception ex)
             {

@@ -313,6 +313,10 @@ namespace Test.Unit
             Assert.Equal(100, summary.HistoryChunkSize);
             Assert.Equal(TimeSpan.FromSeconds(1), summary.HistoryGranularity);
             Assert.True(summary.BackfillRecommended);
+
+            tester.Server.WipeHistory(tester.Server.Ids.Base.DoubleVar1, 0.0);
+            tester.Server.WipeHistory(tester.Server.Ids.Base.DoubleVar1, 0.0);
+
         }
         [Fact]
         public async Task TestGetEventConfig()
@@ -365,7 +369,64 @@ namespace Test.Unit
             Assert.True(summary.HistoricalEvents);
             Assert.Equal(2, summary.NumEmitters);
             Assert.Equal(1, summary.NumHistEmitters);
+        }
+        [Fact]
+        public void TestNamespaceMapping()
+        {
+            var namespaces = new List<string>
+            {
+                "opc.tcp://test.namespace.onet",
+                "test.namespace.twot",
+                "test.namespace.duplicateone",
+                "test.namespace.duplicatetwo",
+                "http://test.namespace.http",
+                "http://opcfoundation.org/UA/",
+                "test.Upper.Case.Duplicate",
+                "test.Upper.Case.Duplicatetwo"
+            };
 
+            var expectedKeys = new[]
+            {
+                "tno:",
+                "tnt:",
+                "tnd:",
+                "tnd1:",
+                "tnh:",
+                "base:",
+                "tucd:",
+                "tucd1:"
+            };
+
+            var dict = UAServerExplorer.GenerateNamespaceMap(namespaces);
+            var keys = namespaces.Select(ns => dict[ns]).ToArray();
+            for (int i = 0; i < keys.Length; i++)
+            {
+                Assert.Equal(expectedKeys[i], keys[i]);
+            }
+        }
+        [Fact]
+        public async Task TestConfigToolRuntime()
+        {
+            var fullConfig = ConfigurationUtils.Read<FullConfig>("config.config-tool-test.yml");
+            fullConfig.GenerateDefaults();
+            var baseConfig = ConfigurationUtils.Read<FullConfig>("config.config-tool-test.yml");
+            baseConfig.GenerateDefaults();
+
+            fullConfig.Source.EndpointUrl = tester.Config.Source.EndpointUrl;
+            baseConfig.Source.EndpointUrl = tester.Config.Source.EndpointUrl;
+
+            var runTime = new ConfigToolRuntime(fullConfig, baseConfig, "config.config-tool-output.yml");
+
+            var runTask = runTime.Run();
+
+            try
+            {
+                await runTask;
+            }
+            catch (Exception ex)
+            {
+                if (!CommonTestUtils.TestRunResult(ex)) throw;
+            }
         }
     }
 }

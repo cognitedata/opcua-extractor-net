@@ -46,7 +46,7 @@ namespace Cognite.OpcUa
         private readonly EventConfig eventConfig;
         private readonly HistoryConfig historyConfig;
         protected Session Session { get; set; }
-        protected ApplicationConfiguration Appconfig { get; set; }
+        protected ApplicationConfiguration AppConfig { get; set; }
         private SessionReconnectHandler reconnectHandler;
         public DataTypeManager DataTypeManager { get; }
         public NodeTypeManager ObjectTypeManager { get; }
@@ -56,7 +56,7 @@ namespace Cognite.OpcUa
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         private CancellationToken liveToken;
-        private Dictionary<NodeId, HashSet<EventField>> eventFields;
+        protected Dictionary<NodeId, HashSet<EventField>> eventFields;
 
         private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
@@ -129,6 +129,46 @@ namespace Cognite.OpcUa
             connected.Set(0);
             Started = false;
         }
+
+        protected async Task LoadAppConfig()
+        {
+            var application = new ApplicationInstance
+            {
+                ApplicationName = ".NET OPC-UA Extractor",
+                ApplicationType = ApplicationType.Client,
+                ConfigSectionName = "opc.ua.net.extractor"
+            };
+            log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.ConfigRoot);
+            try
+            {
+                AppConfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
+            }
+            catch (ServiceResultException exc)
+            {
+                throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
+            }
+            string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
+            if (!string.IsNullOrEmpty(certificateDir))
+            {
+                AppConfig.SecurityConfiguration.TrustedIssuerCertificates.StorePath = $"{certificateDir}/pki/issuer";
+                AppConfig.SecurityConfiguration.TrustedPeerCertificates.StorePath = $"{certificateDir}/pki/trusted";
+                AppConfig.SecurityConfiguration.RejectedCertificateStore.StorePath = $"{certificateDir}/pki/rejected";
+            }
+
+            bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
+            if (!validAppCert)
+            {
+                log.Warning("Missing application certificate, using insecure connection.");
+            }
+            else
+            {
+                AppConfig.ApplicationUri = X509Utils.GetApplicationUriFromCertificate(
+                    AppConfig.SecurityConfiguration.ApplicationCertificate.Certificate);
+                config.AutoAccept |= AppConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
+                AppConfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
+            }
+        }
+
         /// <summary>
         /// Load security configuration for the Session, then start the server.
         /// </summary>
@@ -143,41 +183,8 @@ namespace Cognite.OpcUa
             eventFields?.Clear();
             nodeOverrides?.Clear();
 
-            var application = new ApplicationInstance
-            {
-                ApplicationName = ".NET OPC-UA Extractor",
-                ApplicationType = ApplicationType.Client,
-                ConfigSectionName = "opc.ua.net.extractor"
-            };
-            log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.ConfigRoot);
-            try
-            {
-                Appconfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
-            }
-            catch (ServiceResultException exc)
-            {
-                throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
-            }
-            string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
-            if (!string.IsNullOrEmpty(certificateDir))
-            {
-                Appconfig.SecurityConfiguration.TrustedIssuerCertificates.StorePath = $"{certificateDir}/pki/issuer";
-                Appconfig.SecurityConfiguration.TrustedPeerCertificates.StorePath = $"{certificateDir}/pki/trusted";
-                Appconfig.SecurityConfiguration.RejectedCertificateStore.StorePath = $"{certificateDir}/pki/rejected";
-            }
-
-            bool validAppCert = await application.CheckApplicationInstanceCertificate(false, 0);
-            if (!validAppCert)
-            {
-                log.Warning("Missing application certificate, using insecure connection.");
-            }
-            else
-            {
-                Appconfig.ApplicationUri = X509Utils.GetApplicationUriFromCertificate(
-                    Appconfig.SecurityConfiguration.ApplicationCertificate.Certificate);
-                config.AutoAccept |= Appconfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
-                Appconfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
-            }
+            await LoadAppConfig();
+            
             log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointUrl);
             EndpointDescription selectedEndpoint;
             try
@@ -188,14 +195,14 @@ namespace Cognite.OpcUa
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
             }
-            var endpointConfiguration = EndpointConfiguration.Create(Appconfig);
+            var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
             log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri}", endpoint.Description.SecurityPolicyUri);
             try
             {
                 Session?.Dispose();
                 Session = await Session.Create(
-                    Appconfig,
+                    AppConfig,
                     endpoint,
                     false,
                     ".NET OPC-UA Extractor Client",
@@ -1711,9 +1718,9 @@ namespace Cognite.OpcUa
                 log.Warning("Failed to close UAClient: {msg}", ex.Message);
             }
             reconnectHandler?.Dispose();
-            if (Appconfig != null)
+            if (AppConfig != null)
             {
-                Appconfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
+                AppConfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
             }
             if (Session != null)
             {
