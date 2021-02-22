@@ -96,6 +96,7 @@ namespace Server
             if (nodesToBrowse == null) throw new ArgumentNullException(nameof(nodesToBrowse));
             if (issues.MaxBrowseNodes > 0 && nodesToBrowse.Count > issues.MaxBrowseNodes)
             {
+                Console.WriteLine("Triggered issue too many browse");
                 results = new BrowseResultCollection() { new BrowseResult { StatusCode = StatusCodes.BadTooManyOperations } };
                 diagnosticInfos = new DiagnosticInfoCollection();
                 return;
@@ -119,6 +120,7 @@ namespace Server
                     {
                         result.References = new ReferenceDescriptionCollection(result.References.Take(remaining));
                     }
+                    count += result.References.Count;
                 }
             }
         }

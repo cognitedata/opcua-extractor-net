@@ -497,6 +497,10 @@ namespace Cognite.OpcUa
                 int bindex = 0;
                 foreach (var result in results)
                 {
+                    if (StatusCode.IsBad(result.StatusCode))
+                    {
+                        throw new ServiceResultException(result.StatusCode);
+                    }
                     var nodeId = parents.ElementAt(bindex++);
                     log.Verbose("GetNodeChildren Browse result {nodeId}: {cnt}", nodeId, result.References.Count);
                     finalResults[nodeId] = result.References;
@@ -529,6 +533,10 @@ namespace Cognite.OpcUa
                     continuationPoints.Clear();
                     foreach (var result in results)
                     {
+                        if (StatusCode.IsBad(result.StatusCode))
+                        {
+                            throw new ServiceResultException(result.StatusCode);
+                        }
                         var nodeId = indexMap[pindex++];
                         log.Verbose("GetNodeChildren BrowseNext result {nodeId}", nodeId);
                         finalResults[nodeId].AddRange(result.References);

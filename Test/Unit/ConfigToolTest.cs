@@ -122,8 +122,38 @@ namespace Test.Unit
             Assert.Equal(0, tester.BaseConfig.Source.BrowseChunk);
             Assert.Equal(100, tester.BaseConfig.Source.BrowseNodesChunk);
 
+            // Test with browseNext issues.
+            tester.Explorer.ResetSummary();
             tester.Config.Source.BrowseNodesChunk = 1000;
             tester.Config.Source.BrowseChunk = 1000;
+            tester.Server.Issues.MaxBrowseResults = 100;
+            await tester.Explorer.GetBrowseChunkSizes(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.Equal(1, summary.BrowseNodesChunk);
+            Assert.True(summary.BrowseNextWarning);
+            Assert.Equal(100, summary.BrowseChunk);
+            Assert.Equal(100, tester.BaseConfig.Source.BrowseChunk);
+            Assert.Equal(1, tester.BaseConfig.Source.BrowseNodesChunk);
+
+            // Test with browseNodes issues
+            tester.Explorer.ResetSummary();
+            tester.Config.Source.BrowseNodesChunk = 1000;
+            tester.Config.Source.BrowseChunk = 1000;
+            tester.Server.Issues.MaxBrowseResults = 0;
+            tester.Server.Issues.MaxBrowseNodes = 10;
+            await tester.Explorer.GetBrowseChunkSizes(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.Equal(10, summary.BrowseNodesChunk);
+            Assert.False(summary.BrowseNextWarning);
+            Assert.Equal(1000, summary.BrowseChunk);
+            Assert.Equal(1000, tester.BaseConfig.Source.BrowseChunk);
+            Assert.Equal(10, tester.BaseConfig.Source.BrowseNodesChunk);
+
+            tester.Config.Source.BrowseNodesChunk = 1000;
+            tester.Config.Source.BrowseChunk = 1000;
+            tester.BaseConfig.Source.BrowseNodesChunk = 1000;
+            tester.BaseConfig.Source.BrowseChunk = 1000;
+            tester.Server.Issues.MaxBrowseNodes = 0;
         }
         [Fact]
         public void TestGetCustomDataTypes()

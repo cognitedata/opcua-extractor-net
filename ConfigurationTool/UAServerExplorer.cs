@@ -348,7 +348,7 @@ namespace Cognite.OpcUa.Config
                 int total = 0;
                 var toBrowse = nodesByParent.TakeWhile(chunk =>
                 {
-                    bool pass = (total + chunk.Count()) <= chunkSize * 2;
+                    bool pass = total <= chunkSize * 2;
                     if (pass)
                     {
                         total += chunk.Count();
@@ -366,7 +366,7 @@ namespace Cognite.OpcUa.Config
                         toBrowse.Count, chunkSize);
                     children = await ToolUtil.RunWithTimeout(Task.Run(() => GetNodeChildren(toBrowse.Select(group => group.Key),
                         ReferenceTypeIds.HierarchicalReferences,
-                        (uint)NodeClass.Object | (uint)NodeClass.Variable, token)), 30);
+                        (uint)NodeClass.Object | (uint)NodeClass.Variable, token)), 60);
                 }
                 catch (Exception ex)
                 {
@@ -381,6 +381,7 @@ namespace Cognite.OpcUa.Config
                     log.Warning("There is likely an issue with returning large numbers of nodes from the server");
                     summary.BrowseNextWarning = true;
                     int largest = toBrowse.First().Count();
+                    log.Information("The largest discovered node has {cnt} children", largest);
                     // Usually we will have found the largest parent by this point, unless the server is extremely large
                     // So we can try to choose a BrowseNodesChunk that lets us avoid the issue
                     summary.BrowseNodesChunk = Math.Max(1, (int)Math.Floor((double)chunkSize / largest));
