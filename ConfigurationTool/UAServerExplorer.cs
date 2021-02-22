@@ -897,8 +897,11 @@ namespace Cognite.OpcUa.Config
         /// Attempts history read if possible, getting chunk sizes. It also determines granularity, and sets backfill to true if it works and it estimates that there
         /// are a lot of points in some variables.
         /// </summary>
-        public async Task GetHistoryReadConfig()
+        public async Task GetHistoryReadConfig(CancellationToken token)
         {
+            await PopulateNodes(token);
+            ReadNodeData(token);
+
             var historizingStates = nodeList.Where(node =>
                     node.IsVariable && (node is UAVariable variable) && !variable.IsProperty && variable.Historizing)
                 .Select(node => new VariableExtractionState(this, node as UAVariable, true, true)).ToList();
@@ -1019,7 +1022,7 @@ namespace Cognite.OpcUa.Config
 
             log.Information("Average distance between timestamps across all nodes with history: {dist}",
                 TimeSpan.FromTicks(totalAvgDistance));
-            var granularity = Math.Max(TimeSpan.FromTicks(totalAvgDistance).Seconds, 1) * 10;
+            var granularity = TimeSpan.FromTicks(totalAvgDistance * 10).Seconds + 1;
             log.Information("Suggested granularity is: {gran} seconds", granularity);
             config.History.Granularity = granularity;
             summary.HistoryGranularity = TimeSpan.FromSeconds(granularity);

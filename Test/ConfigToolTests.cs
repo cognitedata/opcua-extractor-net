@@ -114,7 +114,7 @@ namespace Test
             await explorer.GetSubscriptionChunkSizes(source.Token);
             Assert.Equal(1000, baseConfig.Source.SubscriptionChunk);
 
-            await explorer.GetHistoryReadConfig();
+            await explorer.GetHistoryReadConfig(source.Token);
             Assert.Equal(100, baseConfig.History.DataNodesChunk);
             if (serverName == ServerName.Audit || serverName == ServerName.Full || serverName == ServerName.Events)
             {

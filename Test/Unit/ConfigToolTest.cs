@@ -267,6 +267,52 @@ namespace Test.Unit
             Assert.True(summary.SubscriptionLimitWarning);
 
             generate = false;
+            tester.Server.WipeHistory(tester.Server.Ids.Base.DoubleVar1, 0);
+        }
+        [Fact]
+        public async Task TestGetHistoryChunkSizes()
+        {
+            tester.Explorer.ResetNodes();
+            // Test for non-historizing nodes
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Event.Root.ToProtoNodeId(tester.Explorer);
+            await tester.Explorer.GetHistoryReadConfig(tester.Source.Token);
+            var summary = tester.Explorer.GetSummary();
+            Assert.True(summary.NoHistorizingNodes);
+
+            // Test for regular analysis, with no data
+            tester.Config.Extraction.RootNode = tester.Server.Ids.Base.Root.ToProtoNodeId(tester.Explorer);
+            tester.Explorer.ResetNodes();
+            tester.Explorer.ResetSummary();
+            await tester.Explorer.GetHistoryReadConfig(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.False(summary.NoHistorizingNodes);
+            Assert.True(summary.History);
+            Assert.Equal(100, summary.HistoryChunkSize);
+            Assert.Equal(TimeSpan.Zero, summary.HistoryGranularity);
+
+            // Test with data
+            tester.Explorer.ResetSummary();
+            var now = DateTime.UtcNow;
+            tester.Server.PopulateBaseHistory(now.AddSeconds(-100));
+            await tester.Explorer.GetHistoryReadConfig(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.False(summary.NoHistorizingNodes);
+            Assert.True(summary.History);
+            Assert.Equal(100, summary.HistoryChunkSize);
+            Assert.Equal(TimeSpan.FromSeconds(1), summary.HistoryGranularity);
+            Assert.False(summary.BackfillRecommended);
+
+            // Test with more data
+            tester.Explorer.ResetSummary();
+            tester.Server.PopulateBaseHistory(now.AddSeconds(-10000));
+            await tester.Explorer.GetHistoryReadConfig(tester.Source.Token);
+            summary = tester.Explorer.GetSummary();
+            Assert.False(summary.NoHistorizingNodes);
+            Assert.True(summary.History);
+            Assert.Equal(100, summary.HistoryChunkSize);
+            Assert.Equal(TimeSpan.FromSeconds(1), summary.HistoryGranularity);
+            Assert.True(summary.BackfillRecommended);
+
         }
     }
 }
