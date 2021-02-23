@@ -19,6 +19,7 @@ using Cognite.Extractor.Common;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using Newtonsoft.Json;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
@@ -884,7 +885,7 @@ namespace Cognite.OpcUa
             {
                 node.DataRead = true;
                 enumerator.MoveNext();
-                node.SetDataPoint(enumerator.Current?.Value,
+                node.SetDataPoint(enumerator.Current?.WrappedValue,
                     enumerator.Current?.SourceTimestamp ?? DateTime.MinValue,
                     this);
             }
@@ -1479,6 +1480,7 @@ namespace Cognite.OpcUa
         public static double ConvertToDouble(object datavalue)
         {
             if (datavalue == null) return 0;
+            if (datavalue is Variant variant) return ConvertToDouble(variant.Value);
             // Check if the value is somehow an array
             if (typeof(IEnumerable).IsAssignableFrom(datavalue.GetType()))
             {
@@ -1497,17 +1499,37 @@ namespace Cognite.OpcUa
                 return 0;
             }
         }
+        private HashSet<Type> customHandledTypes = new HashSet<Type>
+        {
+            typeof(NodeId), typeof(DataValue), typeof(ExpandedNodeId), typeof(LocalizedText),
+            typeof(QualifiedName), typeof(Opc.Ua.Range), typeof(Opc.Ua.KeyValuePair), typeof(System.Xml.XmlElement),
+            typeof(EUInformation), typeof(EnumValueType), typeof(Variant)
+        };
         /// <summary>
         /// Converts object fetched from ua server to string, contains cases for special types we want to represent in CDF
         /// </summary>
         /// <param name="value">Object to convert</param>
         /// <returns>Metadata suitable string</returns>
-        public string ConvertToString(object value, IDictionary<long, string> enumValues = null)
+        public string ConvertToString(object value, IDictionary<long, string> enumValues = null, TypeInfo typeInfo = null)
         {
             if (value == null) return "";
+            if (value is Variant variantValue)
+            {
+                return ConvertToString(variantValue.Value, enumValues, variantValue.TypeInfo);
+            }
             if (value is string strValue)
             {
                 return strValue;
+            }
+            if (typeInfo != null && ShouldUseJson(value))
+            {
+                try
+                {
+                    var encoder = new JsonEncoder(Session.MessageContext, false);
+                    encoder.WriteVariantContents(value, typeInfo);
+                    return encoder.CloseAndReturnText();
+                }
+                catch { }
             }
             if (typeof(IEnumerable).IsAssignableFrom(value.GetType()))
             {
@@ -1533,35 +1555,53 @@ namespace Cognite.OpcUa
                 catch { }
             }
 
-            if (value.GetType() == typeof(NodeId))
+            if (value is NodeId nodeId) return GetUniqueId(nodeId);
+            if (value is DataValue dv) return ConvertToString(dv.WrappedValue, enumValues);
+            if (value is ExpandedNodeId expandedNodeId) return GetUniqueId(expandedNodeId);
+            if (value is LocalizedText localizedText) return localizedText.Text;
+            if (value is QualifiedName qualifiedName) return qualifiedName.Name;
+            if (value is Opc.Ua.Range range) return $"({range.Low}, {range.High})";
+            if (value is EUInformation euInfo) return $"{euInfo.DisplayName?.Text}: {euInfo.Description?.Text}";
+            if (value is EnumValueType enumType) return $"{enumType.DisplayName?.Text}: {enumType.Value}";
+            if (value is Opc.Ua.KeyValuePair kvp) return $"{kvp.Key?.Name}: {ConvertToString(kvp.Value, enumValues)}";
+            if (value is System.Xml.XmlElement xml) return JsonConvert.SerializeXmlNode(xml);
+            if (value is ExtensionObject extensionObject)
             {
-                return GetUniqueId((NodeId)value);
+                var body = extensionObject.Body;
+                if (typeof(IEnumerable).IsAssignableFrom(body.GetType())
+                    || customHandledTypes.Contains(body.GetType())
+                    || typeInfo == null)
+                {
+                    return ConvertToString(extensionObject.Body, enumValues);
+                }
             }
-            if (value.GetType() == typeof(ExpandedNodeId))
-            {
-                return GetUniqueId((ExpandedNodeId)value);
-            }
-            if (value.GetType() == typeof(LocalizedText))
-            {
-                return ((LocalizedText)value).Text;
-            }
-            if (value.GetType() == typeof(ExtensionObject))
-            {
-                return ConvertToString(((ExtensionObject)value).Body);
-            }
-            if (value.GetType() == typeof(Opc.Ua.Range))
-            {
-                return $"({((Opc.Ua.Range)value).Low}, {((Opc.Ua.Range)value).High})";
-            }
-            if (value.GetType() == typeof(EUInformation))
-            {
-                return $"{((EUInformation)value).DisplayName}: {((EUInformation)value).Description}";
-            }
-            if (value.GetType() == typeof(EnumValueType))
-            {
-                return $"{((EnumValueType)value).DisplayName}: {((EnumValueType)value).Value}";
-            }
+            
             return value.ToString();
+        }
+
+        private bool ShouldUseJson(object value)
+        {
+            // Go through the value to check if we can parse it ourselves.
+            // i.e. this is either an enumerable of a handled type, or an extensionobject
+            // around a handled type.
+            // If not, use the converter.
+            var type = value.GetType();
+            if (typeof(IEnumerable).IsAssignableFrom(type))
+            {
+                var enumerable = value as IEnumerable;
+                var enumerator = enumerable.GetEnumerator();
+                if (enumerator.MoveNext())
+                {
+                    return ShouldUseJson(enumerator.Current);
+                }
+                return false;
+            }
+            if (value is ExtensionObject extensionObject)
+            {
+                return ShouldUseJson(extensionObject.Body);
+            }
+            if (customHandledTypes.Contains(type)) return false;
+            return true;
         }
 
         /// <summary>

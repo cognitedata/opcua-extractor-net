@@ -368,7 +368,7 @@ namespace Cognite.OpcUa
                 uniqueId = GetArrayUniqueId(uniqueId, 0);
             }
 
-            var sdp = variable.DataType.ToDataPoint(extractor, value.Value, value.SourceTimestamp, uniqueId);
+            var sdp = variable.DataType.ToDataPoint(extractor, value.WrappedValue, value.SourceTimestamp, uniqueId);
             return new[] { sdp };
         }
         /// <summary>
