@@ -351,7 +351,6 @@ namespace Test.Unit
             Assert.Equal(0, dps2.First().DoubleValue);
             Assert.False(dps2.First().Id.EndsWith(']'));
 
-
             // Test array data
             var dps3 = extractor.Streamer.ToDataPoint(new DataValue(new[] { 1.0, 2.0, 3.0 }, StatusCodes.Good, ts), node1);
             Assert.Single(dps3);
@@ -390,6 +389,15 @@ namespace Test.Unit
             Assert.EndsWith("[0]", dps6.First().Id, StringComparison.InvariantCulture);
             Assert.EndsWith("[3]", dps6.Last().Id, StringComparison.InvariantCulture);
 
+            // Variant array
+            dps6 = extractor.Streamer.ToDataPoint(new DataValue(new Variant(new List<double> { 1.0, 2.0, 3.0, 4.0 }),
+                StatusCodes.Good, ts), node2);
+            Assert.Equal(4, dps6.Count());
+            Assert.Equal(1.0, dps6.First().DoubleValue);
+            Assert.Equal(4.0, dps6.Last().DoubleValue);
+            Assert.EndsWith("[0]", dps6.First().Id, StringComparison.InvariantCulture);
+            Assert.EndsWith("[3]", dps6.Last().Id, StringComparison.InvariantCulture);
+
             // Too many values
             var dps7 = extractor.Streamer.ToDataPoint(new DataValue(new[] { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 }, StatusCodes.Good, ts), node2);
             Assert.Equal(4, dps7.Count());
@@ -415,7 +423,6 @@ namespace Test.Unit
             Assert.EndsWith("[19]", dps8.Last().Id, StringComparison.InvariantCulture);
             Assert.Equal(255, dps8.First().Id.Length);
             Assert.Equal(255, dps8.Last().Id.Length);
-
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_array_points_missed", 4));
         }

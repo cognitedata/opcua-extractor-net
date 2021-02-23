@@ -24,6 +24,7 @@ using Opc.Ua.Client;
 using Prometheus;
 using Serilog;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -320,6 +321,7 @@ namespace Cognite.OpcUa
             if (baseId.Length + idxStr.Length < 255) return baseId + idxStr;
             return baseId.Substring(0, 255 - idxStr.Length) + idxStr;
         }
+
         /// <summary>
         /// Transform a given DataValue into a datapoint or a list of datapoints if the variable in question has array type.
         /// </summary>
@@ -337,6 +339,7 @@ namespace Cognite.OpcUa
             if (value.Value is Array values)
             {
                 int dim = 1;
+                if (values.Length == 0) return Enumerable.Empty<UADataPoint>();
                 if (!variable.IsArray)
                 {
                     log.Debug("Array values returned for scalar variable {id}", variable.Id);
@@ -453,7 +456,7 @@ namespace Cognite.OpcUa
                 }
                 if (!extractedProperties.TryGetValue(name, out var extracted) || extracted == null)
                 {
-                    extractedProperties[name] = eventFields[i].Value;
+                    extractedProperties[name] = eventFields[i];
                 }
             }
 
