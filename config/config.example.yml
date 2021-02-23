@@ -137,10 +137,14 @@ cognite:
     # Config for authentication if a bearer access token has to be used for authentication.
     # Leave empty to disable.
     idp-authentication:
-        # Application Id
-        client-id:
+        # URL to fetch tokens from. Either this or tenant must be present.
+        token-url:
+        # Identity provider authority endpoint (optional, only used in combination with tenant)
+        authority: "https://login.microsoftonline.com/"
         # Directory tenant
         tenant:
+        # Application Id
+        client-id:
         # Client secret
         secret:
         # List of resource scopes, ex:
@@ -149,12 +153,10 @@ cognite:
         #   - scopeB
         scopes:
         # Which implementation to use in the authenticator. One of
-        # MSAL (recommended) - Microsoft Authentication Library
-        # Basic - Post to authentication endpoint and parse JSON response
+        # MSAL (recommended) - Microsoft Authentication Library, works only with authority/tenant
+        # Basic - Post to authentication endpoint and parse JSON response, works with both authority/tenant and token-url
         # Default is MSAL
         implementation: MSAL
-        # Identity provider authority endpoint (optional)
-        authority: "https://login.microsoftonline.com/"
         # Minimum time-to-live in seconds for the token (optional)
         min-ttl: 30
     # Configure automatic retries on requests to CDF. Can be left out to keep default values.
