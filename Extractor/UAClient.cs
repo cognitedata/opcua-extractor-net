@@ -1600,6 +1600,7 @@ namespace Cognite.OpcUa
             {
                 return ShouldUseJson(extensionObject.Body);
             }
+            if (!type.Namespace.StartsWith("Opc.Ua")) return false;
             if (customHandledTypes.Contains(type)) return false;
             return true;
         }
