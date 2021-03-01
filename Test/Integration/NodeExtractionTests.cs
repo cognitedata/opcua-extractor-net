@@ -484,7 +484,7 @@ namespace Test.Integration
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
-            extraction.PropertyNameFilter = "ble Str|ble Arr|[0-9]$";
+            extraction.PropertyNameFilter = "ble Str|ble Arr|r[0-9]$";
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var ids = tester.Server.Ids.Custom;
@@ -525,7 +525,7 @@ namespace Test.Integration
         [Fact]
         public async Task TestPropertyIdFilter()
         {
-            var pusher = new DummyPusher(new DummyPusherConfig());
+            using var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
             extraction.PropertyIdFilter = "enum";
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -1008,6 +1008,77 @@ namespace Test.Integration
             Assert.Equal("[0, 1, 2, 3, 4]", handler.Assets[id].metadata["TooLargeDim"]);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
+        }
+        #endregion
+
+        #region transformations
+        [Fact]
+        public async Task TestPropertyInheritance()
+        {
+            // The IsProperty attribute is inherited by deeper nodes.
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            extraction.Transformations = new List<RawNodeTransformation>
+            {
+                new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = "^CustomRoot$"
+                    },
+                    Type = "property"
+                }
+            };
+
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.ObjectsFolder, tester.Client);
+
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+
+            await extractor.RunExtractor(true);
+
+            var root = pusher.PushedNodes[ObjectIds.ObjectsFolder];
+            var meta = root.BuildMetadata(null);
+            Assert.Equal(15, meta.Count);
+            // Verify that the metadata fields get values
+            Assert.Equal("[0, 0, 0, 0]", meta["CustomRoot_Variable Array"]);
+            Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
+        }
+        [Fact]
+        public async Task TestLateIgnore()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            extraction.Transformations = new List<RawNodeTransformation>
+            {
+                new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Parent = new RawNodeFilter
+                        {
+                            Name = "^CustomRoot$"
+                        }
+                    },
+                    Type = "ignore"
+                }
+            };
+
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+
+            await extractor.RunExtractor(true);
+
+            Assert.Single(pusher.PushedNodes);
+            Assert.Empty(pusher.PushedVariables);
         }
         #endregion
     }

@@ -1,5 +1,6 @@
 ﻿using Cognite.OpcUa.Types;
 using Opc.Ua;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -77,7 +78,9 @@ namespace Cognite.OpcUa
     {
         public NodeFilter Filter { get; }
         public TransformationType Type { get; }
-        public NodeTransformation(RawNodeTransformation raw)
+        private readonly ILogger log = Log.Logger.ForContext(typeof(UAExtractor));
+        private readonly int index;
+        public NodeTransformation(RawNodeTransformation raw, int index)
         {
             Filter = new NodeFilter(raw.Filter);
             switch (raw.Type)
@@ -91,6 +94,7 @@ namespace Cognite.OpcUa
                 default:
                     throw new ConfigurationException("Unknown transformation type: " + raw.Type);
             }
+            this.index = index;
         }
         public void ApplyTransformation(UANode node, NamespaceTable ns)
         {
@@ -105,9 +109,11 @@ namespace Cognite.OpcUa
                 {
                     case TransformationType.Ignore:
                         node.Ignore = true;
+                        log.Debug("Ignoring node {name} {id} due to matching ignore filter {idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.Property:
                         node.IsProperty = true;
+                        log.Debug("Treating node {name} {id} as property due to matching filter {idx}", node.DisplayName, node.Id, index);
                         break;
                 }
             }

@@ -219,6 +219,18 @@ namespace Cognite.OpcUa.Types
 
             return result;
         }
+        public IEnumerable<UANode> GetAllProperties()
+        {
+            if (Properties == null) return Enumerable.Empty<UANode>();
+            var result = new List<UANode>();
+            result.AddRange(Properties);
+            foreach (var prop in Properties)
+            {
+                result.AddRange(prop.GetAllProperties());
+            }
+            return result;
+        }
+
         public AssetCreate ToCDFAsset(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
         {
             if (extractor == null) return null;

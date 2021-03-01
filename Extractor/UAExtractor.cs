@@ -518,6 +518,15 @@ namespace Cognite.OpcUa
         private void BuildTransformations()
         {
             var transformations = new List<NodeTransformation>();
+            int idx = 0;
+
+            if (config.Extraction.Transformations != null)
+            {
+                foreach (var raw in config.Extraction.Transformations)
+                {
+                    transformations.Add(new NodeTransformation(raw, idx++));
+                }
+            }
 
             if (!string.IsNullOrEmpty(config.Extraction.PropertyIdFilter))
             {
@@ -529,7 +538,7 @@ namespace Cognite.OpcUa
                         Id = config.Extraction.PropertyIdFilter
                     },
                     Type = "property"
-                }));
+                }, idx++));
             }
             if (!string.IsNullOrEmpty(config.Extraction.PropertyNameFilter))
             {
@@ -541,19 +550,20 @@ namespace Cognite.OpcUa
                         Name = config.Extraction.PropertyNameFilter
                     },
                     Type = "property"
-                }));
+                }, idx++));
             }
             if (config.Extraction.IgnoreName != null && config.Extraction.IgnoreName.Any())
             {
                 log.Warning("Ignore name is deprecated, use transformations instead");
-                var filterStr = string.Join('|', config.Extraction.IgnoreName);
+                var filterStr = string.Join('|', config.Extraction.IgnoreName.Select(str => $"^{str}$"));
                 transformations.Add(new NodeTransformation(new RawNodeTransformation
                 {
                     Filter = new RawNodeFilter
                     {
                         Name = filterStr
-                    }
-                }));
+                    },
+                    Type = "ignore"
+                }, idx++));
             }
             if (config.Extraction.IgnoreNamePrefix != null && config.Extraction.IgnoreNamePrefix.Any())
             {
@@ -564,17 +574,12 @@ namespace Cognite.OpcUa
                     Filter = new RawNodeFilter
                     {
                         Name = filterStr
-                    }
-                }));
+                    },
+                    Type = "ignore"
+                }, idx++));
             }
 
-            if (config.Extraction.Transformations != null)
-            {
-                foreach (var raw in config.Extraction.Transformations)
-                {
-                    transformations.Add(new NodeTransformation(raw));
-                }
-            }
+            
             uaClient.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
             this.transformations = transformations;
         }
@@ -833,11 +838,19 @@ namespace Cognite.OpcUa
 
             foreach (var node in nodeMap.Values)
             {
-                if (nodeMap.TryGetValue(node.ParentId, out var parent))
+                if (node.ParentId != null && !node.ParentId.IsNullNodeId && nodeMap.TryGetValue(node.ParentId, out var parent))
                 {
                     node.Parent = parent;
                 }
 
+                if (transformations != null)
+                {
+                    foreach (var trns in transformations)
+                    {
+                        if (node.Ignore) break;
+                        trns.ApplyTransformation(node, uaClient.NamespaceTable);
+                    }
+                }
                 // Transformations here
 
                 if (node.Ignore) continue;

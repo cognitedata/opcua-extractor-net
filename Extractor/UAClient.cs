@@ -921,7 +921,7 @@ namespace Cognite.OpcUa
 
             var properties = new HashSet<UAVariable>();
             log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
-            var idsToCheck = new List<NodeId>();
+            var idsToCheck = new HashSet<NodeId>();
             foreach (var node in nodes)
             {
                 if (node.IsVariable)
@@ -933,13 +933,13 @@ namespace Cognite.OpcUa
                 }
                 if (node.Properties != null)
                 {
-                    foreach (var property in node.Properties)
+                    foreach (var property in node.GetAllProperties())
                     {
                         if (!node.IsVariable && property is UAVariable propertyVar)
                         {
                             properties.Add(propertyVar);
                         }
-                        if (!property.PropertiesRead && property.NodeType?.Id != VariableTypeIds.PropertyType)
+                        if (!property.PropertiesRead)
                         {
                             idsToCheck.Add(property.Id);
                             nodeList.Add(property);
@@ -947,7 +947,6 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            idsToCheck = idsToCheck.Distinct().ToList();
 
             var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             var total = idsToCheck.Count;
