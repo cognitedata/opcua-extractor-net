@@ -965,6 +965,8 @@ namespace Cognite.OpcUa
 
             nodeList = nodeList.DistinctBy(node => node.Id).ToList();
 
+            var newProperties = new List<UAVariable>();
+
             foreach (var parent in nodeList)
             {
                 if (!result.TryGetValue(parent.Id, out var children)) continue;
@@ -972,7 +974,7 @@ namespace Cognite.OpcUa
                 {
                     if (!NameFilter(child.DisplayName.Text)) continue;
                     var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
-                    properties.Add(property);
+                    newProperties.Add(property);
                     if (parent.Properties == null)
                     {
                         parent.Properties = new List<UANode>();
@@ -998,8 +1000,8 @@ namespace Cognite.OpcUa
                 }
             }
 
-            ReadNodeData(properties, token);
-            var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true));
+            ReadNodeData(newProperties, token);
+            var toGetValue = properties.Concat(newProperties).Where(node => DataTypeManager.AllowTSMap(node, 10, true)).ToList();
             await DataTypeManager.GetDataTypeMetadataAsync(toGetValue.Select(prop => prop.DataType?.Raw), token);
             ReadNodeValues(toGetValue, token);
         }

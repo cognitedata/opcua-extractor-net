@@ -615,12 +615,24 @@ namespace Cognite.OpcUa
             }
         }
 
-        private async Task GetNodeData(UpdateConfig update, BrowseResult result)
+        private async Task GetNodeData(UpdateConfig update, IEnumerable<UANode> nodes)
         {
-            log.Information("Getting data for {NumVariables} variables and {NumObjects} objects",
-                result.RawVariables.Count, result.RawObjects.Count);
+            var variables = new List<UAVariable>();
+            var objects = new List<UANode>();
+            foreach (var node in nodes)
+            {
+                if (node is UAVariable variable)
+                {
+                    variables.Add(variable);
+                }
+                else
+                {
+                    objects.Add(node);
+                }
+            }
 
-            var nodes = result.RawObjects.Concat(result.RawVariables);
+            log.Information("Getting data for {NumVariables} variables and {NumObjects} objects",
+                variables.Count, objects.Count);
 
             if (update.Objects.Metadata || update.Variables.Metadata)
             {
@@ -637,7 +649,7 @@ namespace Cognite.OpcUa
             await Task.Run(() => uaClient.ReadNodeData(nodes, source.Token));
 
             var extraMetaTasks = new List<Task>();
-            extraMetaTasks.Add(DataTypeManager.GetDataTypeMetadataAsync(result.RawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token));
+            extraMetaTasks.Add(DataTypeManager.GetDataTypeMetadataAsync(variables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token));
             if (config.Extraction.NodeTypes.Metadata)
             {
                 extraMetaTasks.Add(uaClient.ObjectTypeManager.GetObjectTypeMetadataAsync(source.Token));
@@ -757,35 +769,44 @@ namespace Cognite.OpcUa
             var result = new BrowseResult();
             var nodeMap = new Dictionary<NodeId, UANode>();
 
-            while (commonQueue.TryDequeue(out UANode buffer))
+            while (commonQueue.TryDequeue(out UANode node))
             {
-                if (buffer.IsVariable && buffer is UAVariable buffVar)
-                {
-                    if (buffVar.IsProperty)
-                    {
-                        nodeMap.TryGetValue(buffVar.ParentId, out UANode parent);
-                        if (parent == null) continue;
-                        if (parent.Properties == null)
-                        {
-                            parent.Properties = new List<UANode>();
-                        }
-                        parent.Properties.Add(buffVar);
-                    }
-                    else
-                    {
-                        result.RawVariables.Add(buffVar);
-                    }
-                }
-                else
-                {
-                    result.RawObjects.Add(buffer);
-                }
-                nodeMap.Add(buffer.Id, buffer);
+                if (node.Ignore) continue;
+                nodeMap[node.Id] = node;
             }
 
             var update = config.Extraction.Update;
+            await GetNodeData(update, nodeMap.Values);
 
-            await GetNodeData(update, result);
+            foreach (var node in nodeMap.Values)
+            {
+                if (nodeMap.TryGetValue(node.ParentId, out var parent))
+                {
+                    node.Parent = parent;
+                }
+
+                // Transformations here
+
+                if (node.Ignore) continue;
+
+                if (node.IsProperty)
+                {
+                    if (node.Parent == null) continue;
+                    if (node.Parent.Properties == null)
+                    {
+                        node.Parent.Properties = new List<UANode>();
+                    }
+                    node.Parent.Properties.Add(node);
+                }
+                else if (node.IsVariable && node is UAVariable variable)
+                {
+                    result.RawVariables.Add(variable);
+                }
+                else
+                {
+                    result.RawObjects.Add(node);
+                }
+            }
 
             result.Objects.AddRange(FilterObjects(update, result.RawObjects));
             InitEventStates(result);
