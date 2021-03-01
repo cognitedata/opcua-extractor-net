@@ -326,6 +326,19 @@ namespace Cognite.OpcUa
         public string EventStore { get; set; } = "event_states";
         public string InfluxVariableStore { get; set; } = "influx_variable_states";
         public string InfluxEventStore { get; set; } = "influx_event_states";
-
+    }
+    public class RawNodeFilter
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public string Id { get; set; }
+        public bool? IsArray { get; set; }
+        public string Namespace { get; set; }
+        public RawNodeFilter Parent { get; set; }
+    }
+    public class RawNodeTransformation
+    {
+        public string Type { get; set; }
+        public RawNodeFilter Filter { get; set; }
     }
 }
