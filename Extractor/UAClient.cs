@@ -61,6 +61,8 @@ namespace Cognite.OpcUa
 
         private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
+        public IEnumerable<NodeFilter> IgnoreFilters { get; set; }
+
         public event EventHandler OnServerDisconnect;
         public event EventHandler OnServerReconnect;
 
@@ -570,11 +572,10 @@ namespace Cognite.OpcUa
                 VisitedNodes.Clear();
             }
         }
-        public bool NameFilter(string displayName)
+        public bool NodeFilter(string displayName, NodeId id)
         {
-            if (extractionConfig.IgnoreNamePrefix != null && extractionConfig.IgnoreNamePrefix.Any(prefix =>
-                displayName.StartsWith(prefix, StringComparison.CurrentCulture))) return false;
-            if (extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(displayName)) return false;
+            if (IgnoreFilters == null) return true;
+            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, NamespaceTable))) return false;
             return true;
         }
 
@@ -631,7 +632,7 @@ namespace Cognite.OpcUa
                     {
                         var nodeId = ToNodeId(rd.NodeId);
                         if (rd.NodeId == ObjectIds.Server || rd.NodeId == ObjectIds.Aliases) continue;
-                        if (doFilter && !NameFilter(rd.DisplayName.Text))
+                        if (doFilter && !NodeFilter(rd.DisplayName.Text, ToNodeId(rd.NodeId)))
                         {
                             log.Verbose("Ignoring filtered {nodeId}", nodeId);
                             continue;
@@ -753,7 +754,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         public void ReadNodeData(IEnumerable<UANode> nodes, CancellationToken token)
         {
-            nodes = nodes.Where(node => !node.IsVariable || node is UAVariable variable && variable.Index == -1);
+            nodes = nodes.Where(node => (!node.IsVariable || node is UAVariable variable && variable.Index == -1) && !node.DataRead);
             var variableAttributes = new List<uint>
             {
                 Attributes.DataType,
@@ -852,6 +853,7 @@ namespace Cognite.OpcUa
                         }
                     }
                 }
+                node.DataRead = true;
             }
             enumerator.Dispose();
         }
@@ -937,7 +939,7 @@ namespace Cognite.OpcUa
                         {
                             properties.Add(propertyVar);
                         }
-                        if (!property.PropertiesRead)
+                        if (!property.PropertiesRead && property.NodeType?.Id != VariableTypeIds.PropertyType)
                         {
                             idsToCheck.Add(property.Id);
                             nodeList.Add(property);
@@ -965,16 +967,14 @@ namespace Cognite.OpcUa
 
             nodeList = nodeList.DistinctBy(node => node.Id).ToList();
 
-            var newProperties = new List<UAVariable>();
-
             foreach (var parent in nodeList)
             {
                 if (!result.TryGetValue(parent.Id, out var children)) continue;
                 foreach (var child in children)
                 {
-                    if (!NameFilter(child.DisplayName.Text)) continue;
+                    if (!NodeFilter(child.DisplayName.Text, ToNodeId(child.NodeId))) continue;
                     var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
-                    newProperties.Add(property);
+                    properties.Add(property);
                     if (parent.Properties == null)
                     {
                         parent.Properties = new List<UANode>();
@@ -1000,8 +1000,8 @@ namespace Cognite.OpcUa
                 }
             }
 
-            ReadNodeData(newProperties, token);
-            var toGetValue = properties.Concat(newProperties).Where(node => DataTypeManager.AllowTSMap(node, 10, true)).ToList();
+            ReadNodeData(properties, token);
+            var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true)).ToList();
             await DataTypeManager.GetDataTypeMetadataAsync(toGetValue.Select(prop => prop.DataType?.Raw), token);
             ReadNodeValues(toGetValue, token);
         }

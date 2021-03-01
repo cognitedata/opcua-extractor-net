@@ -50,6 +50,10 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public bool PropertiesRead { get; set; }
         /// <summary>
+        /// True if node data has been read
+        /// </summary>
+        public bool DataRead { get; set; }
+        /// <summary>
         /// Description in OPC-UA
         /// </summary>
         public string Description { get; set; }

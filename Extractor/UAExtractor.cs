@@ -62,14 +62,13 @@ namespace Cognite.OpcUa
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
 
+        private IEnumerable<NodeTransformation> transformations;
+
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
 
         private int subscribed;
         private bool subscribeFlag;
-
-        private readonly Regex propertyNameFilter;
-        private readonly Regex propertyIdFilter;
 
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
@@ -137,9 +136,6 @@ namespace Cognite.OpcUa
                 pusher.Extractor = this;
             }
             Looper = new Looper(this, config, pushers);
-
-            propertyNameFilter = CreatePropertyFilterRegex(config.Extraction.PropertyNameFilter);
-            propertyIdFilter = CreatePropertyFilterRegex(config.Extraction.PropertyIdFilter);
         }
 
         private void UaClient_OnServerDisconnect(object sender, EventArgs e)
@@ -161,15 +157,6 @@ namespace Cognite.OpcUa
                 client.ResetVisitedNodes();
                 RestartExtractor();
             }
-        }
-
-        private static Regex CreatePropertyFilterRegex(string regex)
-        {
-            if (string.IsNullOrEmpty(regex))
-            {
-                return null;
-            }
-            return new Regex(regex, RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.CultureInvariant);
         }
 
         /// <summary>
@@ -527,6 +514,71 @@ namespace Cognite.OpcUa
             Starting.Set(0);
             return historyTasks;
         }
+
+        private void BuildTransformations()
+        {
+            var transformations = new List<NodeTransformation>();
+
+            if (!string.IsNullOrEmpty(config.Extraction.PropertyIdFilter))
+            {
+                log.Warning("Property Id filter is deprecated, use transformations instead");
+                transformations.Add(new NodeTransformation(new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Id = config.Extraction.PropertyIdFilter
+                    },
+                    Type = "property"
+                }));
+            }
+            if (!string.IsNullOrEmpty(config.Extraction.PropertyNameFilter))
+            {
+                log.Warning("Property Name filter is deprecated, use transformations instead");
+                transformations.Add(new NodeTransformation(new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = config.Extraction.PropertyNameFilter
+                    },
+                    Type = "property"
+                }));
+            }
+            if (config.Extraction.IgnoreName != null && config.Extraction.IgnoreName.Any())
+            {
+                log.Warning("Ignore name is deprecated, use transformations instead");
+                var filterStr = string.Join('|', config.Extraction.IgnoreName);
+                transformations.Add(new NodeTransformation(new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = filterStr
+                    }
+                }));
+            }
+            if (config.Extraction.IgnoreNamePrefix != null && config.Extraction.IgnoreNamePrefix.Any())
+            {
+                log.Warning("Ignore name prefix is deprecated, use transformations instead");
+                var filterStr = string.Join('|', config.Extraction.IgnoreNamePrefix.Select(str => $"^{str}"));
+                transformations.Add(new NodeTransformation(new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = filterStr
+                    }
+                }));
+            }
+
+            if (config.Extraction.Transformations != null)
+            {
+                foreach (var raw in config.Extraction.Transformations)
+                {
+                    transformations.Add(new NodeTransformation(raw));
+                }
+            }
+            uaClient.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
+            this.transformations = transformations;
+        }
+
         /// <summary>
         /// Set up extractor once UAClient is started. This resets the internal state of the extractor.
         /// </summary>
@@ -581,6 +633,7 @@ namespace Cognite.OpcUa
                         history && config.History.Backfill));
                 }
             }
+            BuildTransformations();
         }
 
         private class BrowseResult
@@ -1159,22 +1212,6 @@ namespace Cognite.OpcUa
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
             if (node.TypeDefinition == VariableTypeIds.PropertyType)
-            {
-                return true;
-            }
-
-            var name = node.DisplayName?.Text;
-            if (propertyNameFilter != null
-                && name != null
-                && propertyNameFilter.IsMatch(name))
-            {
-                return true;
-            }
-
-            if (propertyIdFilter != null
-                && node.NodeId.IdType == IdType.String
-                && node.NodeId.Identifier is string id
-                && propertyIdFilter.IsMatch(id))
             {
                 return true;
             }

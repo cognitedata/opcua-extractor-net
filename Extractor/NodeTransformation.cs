@@ -19,10 +19,10 @@ namespace Cognite.OpcUa
         {
             // Filter with no elements applies to everything, which may be bizarre, but that's on the user.
             if (filter == null) return;
-            if (!string.IsNullOrEmpty(filter.Name)) Name = new Regex(filter.Name);
-            if (!string.IsNullOrEmpty(filter.Description)) Description = new Regex(filter.Description);
-            if (!string.IsNullOrEmpty(filter.Id)) Id = new Regex(filter.Id);
-            if (!string.IsNullOrEmpty(filter.Namespace)) Namespace = new Regex(filter.Namespace);
+            Name = CreateRegex(filter.Name);
+            Description = CreateRegex(filter.Description);
+            Id = CreateRegex(filter.Id);
+            Namespace = CreateRegex(filter.Namespace);
             if (filter.Parent != null)
             {
                 Parent = new NodeFilter(filter.Parent);
@@ -34,8 +34,20 @@ namespace Cognite.OpcUa
             NodeId.Format(builder, id.Identifier, id.IdType, 0);
             return builder.ToString();
         }
+        private Regex CreateRegex(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return null;
+
+            return new Regex(raw, RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.CultureInvariant);
+        }
 
         public bool IsBasicMatch(string name, NodeId id, NamespaceTable namespaces)
+        {
+            if (Description != null || IsArray != null || Parent != null) return false;
+            return MatchBasic(name, id, namespaces);
+        }
+
+        private bool MatchBasic(string name, NodeId id, NamespaceTable namespaces)
         {
             if (Name != null && (string.IsNullOrEmpty(name) || !Name.IsMatch(name))) return false;
             if (Id != null)
@@ -53,7 +65,7 @@ namespace Cognite.OpcUa
 
         public bool IsMatch(UANode node, NamespaceTable ns)
         {
-            if (!IsBasicMatch(node.DisplayName, node.Id, ns)) return false;
+            if (!MatchBasic(node.DisplayName, node.Id, ns)) return false;
             if (Description != null && (string.IsNullOrEmpty(node.Description) || !Description.IsMatch(node.Description))) return false;
             if (IsArray != null && (!(node is UAVariable variable) || variable.IsArray != IsArray)) return false;
             if (Parent != null && (node.Parent == null || !Parent.IsMatch(node.Parent, ns))) return false;
