@@ -933,9 +933,9 @@ namespace Cognite.OpcUa
                 {
                     foreach (var property in node.Properties)
                     {
-                        if (!node.IsVariable)
+                        if (!node.IsVariable && property is UAVariable propertyVar)
                         {
-                            properties.Add(property);
+                            properties.Add(propertyVar);
                         }
                         if (!property.PropertiesRead)
                         {
@@ -975,7 +975,7 @@ namespace Cognite.OpcUa
                     properties.Add(property);
                     if (parent.Properties == null)
                     {
-                        parent.Properties = new List<UAVariable>();
+                        parent.Properties = new List<UANode>();
                     }
                     parent.Properties.Add(property);
                 }

@@ -767,7 +767,7 @@ namespace Cognite.OpcUa
                         if (parent == null) continue;
                         if (parent.Properties == null)
                         {
-                            parent.Properties = new List<UAVariable>();
+                            parent.Properties = new List<UANode>();
                         }
                         parent.Properties.Add(buffVar);
                     }
