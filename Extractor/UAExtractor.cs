@@ -375,7 +375,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="value">Value to convert</param>
         /// <returns>Converted value</returns>
-        public string ConvertToString(object value, IDictionary<long, string> enumValues = null)
+        public string ConvertToString(object value, IDictionary<long, string> enumValues = null, TypeInfo typeInfo = null)
         {
             return uaClient.ConvertToString(value, enumValues);
         }
@@ -1286,7 +1286,7 @@ namespace Cognite.OpcUa
     public interface IUAClientAccess
     {
         string GetUniqueId(ExpandedNodeId id, int index = -1);
-        string ConvertToString(object value, IDictionary<long, string> enumValues = null);
+        string ConvertToString(object value, IDictionary<long, string> enumValues = null, TypeInfo typeInfo = null);
         string GetRelationshipId(UAReference reference);
     }
 }

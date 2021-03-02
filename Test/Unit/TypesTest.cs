@@ -766,6 +766,22 @@ namespace Test.Unit
             Assert.Equal("id", dp.Id);
             Assert.Equal("124", dp.StringValue);
             Assert.Equal(now, dp.Timestamp);
+
+            // Use variant
+            dt = new UADataType(DataTypeIds.String);
+            dp = dt.ToDataPoint(extractor, new Variant("test"), now, "id");
+            Assert.Equal("id", dp.Id);
+            Assert.Equal("test", dp.StringValue);
+            Assert.Equal(now, dp.Timestamp);
+
+            // Test complex type
+            dt = new UADataType(DataTypeIds.ReadValueId);
+            var value = new Variant(new ReadValueId { AttributeId = Attributes.Value, NodeId = new NodeId("test") });
+            Console.WriteLine(value.TypeInfo);
+            dp = dt.ToDataPoint(extractor, value, now, "id");
+            Assert.Equal("id", dp.Id);
+            Assert.Equal(@"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}", dp.StringValue);
+            Assert.Equal(now, dp.Timestamp);
         }
         [Fact]
         public void TestDataTypeDebugDescription()
