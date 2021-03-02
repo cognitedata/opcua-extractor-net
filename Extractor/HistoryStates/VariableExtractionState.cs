@@ -50,20 +50,7 @@ namespace Cognite.OpcUa.HistoryStates
         /// Constructor. Copies relevant data from BufferedVariable, initializes the buffer if Historizing is true.
         /// </summary>
         /// <param name="variable">Variable to be used as base</param>
-        public VariableExtractionState(UAExtractor extractor, UAVariable variable, bool frontfill, bool backfill)
-            : base(extractor, variable?.Id, frontfill, backfill)
-        {
-            if (variable == null) throw new ArgumentNullException(nameof(variable));
-            DataType = variable.DataType;
-            ArrayDimensions = variable.ArrayDimensions;
-            DisplayName = variable.DisplayName;
-            if (frontfill)
-            {
-                buffer = new List<UADataPoint>();
-            }
-        }
-
-        public VariableExtractionState(UAClient client, UAVariable variable, bool frontfill, bool backfill)
+        public VariableExtractionState(IUAClientAccess client, UAVariable variable, bool frontfill, bool backfill)
             : base(client, variable?.Id, frontfill, backfill)
         {
             if (variable == null) throw new ArgumentNullException(nameof(variable));

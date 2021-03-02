@@ -35,16 +35,7 @@ namespace Cognite.OpcUa.HistoryStates
         /// </summary>
         private IList<UAEvent> buffer;
 
-        public EventExtractionState(UAExtractor extractor, NodeId emitterId, bool frontfill, bool backfill)
-            : base(extractor, emitterId, frontfill, backfill)
-        {
-            if (frontfill)
-            {
-                buffer = new List<UAEvent>();
-            }
-        }
-
-        public EventExtractionState(UAClient client, NodeId emitterId, bool frontfill, bool backfill)
+        public EventExtractionState(IUAClientAccess client, NodeId emitterId, bool frontfill, bool backfill)
             : base(client, emitterId, frontfill, backfill)
         {
             if (frontfill)

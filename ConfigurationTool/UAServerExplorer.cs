@@ -37,28 +37,16 @@ namespace Cognite.OpcUa.Config
         private List<UANode> dataTypes;
         private List<ProtoDataType> customNumericTypes;
         private List<UANode> nodeList;
-        private List<NodeId> emittedEvents;
         private List<UANode> eventTypes;
         private Dictionary<string, string> namespaceMap;
-        private Dictionary<NodeId, HashSet<EventField>> activeEventFields;
-        private bool history;
-        private bool useServer;
 
-        private const int ServerSizeBase = 125;
-        private const int ServerWidest = 47;
+        private bool history;
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAServerExplorer));
 
-        private readonly List<(int, int)> testBrowseChunkSizes = new List<(int, int)>
-        {
-            (1000, 0),
-            (1000, 1000),
-            (1000, 100),
-            (100, 1000),
-            (100, 100),
-            (1, 1000),
-            (1, 0),
-        };
+        private bool nodesRead;
+        private bool dataTypesRead;
+        private bool nodeDataRead;
 
         private readonly List<int> testAttributeChunkSizes = new List<int>
         {
@@ -85,13 +73,13 @@ namespace Cognite.OpcUa.Config
             1
         };
 
-        private struct Summary
+        public struct Summary
         {
             public List<string> Endpoints;
             public bool Secure;
             public int BrowseNodesChunk;
             public int BrowseChunk;
-            public bool BrowseLimitWarning;
+            public bool BrowseNextWarning;
             public int CustomNumTypesCount;
             public int MaxArraySize;
             public bool StringVariables;
@@ -104,9 +92,9 @@ namespace Cognite.OpcUa.Config
             public bool NoHistorizingNodes;
             public bool BackfillRecommended;
             public bool HistoricalEvents;
-            public bool GenericEvents;
-            public int NumEventTypes;
-            public bool BaseEventWarning;
+            public bool AnyEvents;
+            public int NumEmitters;
+            public int NumHistEmitters;
             public List<string> NamespaceMap;
             public TimeSpan HistoryGranularity;
             public bool Enums;
@@ -127,27 +115,38 @@ namespace Cognite.OpcUa.Config
             this.baseConfig.Source.Username = config.Source.Username;
             this.baseConfig.Source.Secure = config.Source.Secure;
         }
+        public Summary GetSummary()
+        {
+            return summary;
+        }
+        public void ResetSummary()
+        {
+            summary = new Summary();
+        }
+        public void ResetNodes()
+        {
+            nodesRead = false;
+            nodeList = new List<UANode>();
+            dataTypesRead = false;
+            dataTypes = new List<UANode>();
+            nodeDataRead = false;
+            eventFields = null;
+        }
+
         /// <summary>
         /// Try connecting to the server, and treating it as a discovery server, to list other endpoints on the same server.
         /// </summary>
         public async Task GetEndpoints(CancellationToken token)
         {
-            bool failed = false;
-            try
-            {
-                await Run(token);
-            }
-            catch (Exception ex)
-            {
-                failed = true;
-                log.Error("Failed to connect to server using initial options");
-                log.Debug(ex, "Failed to connect to endpoint");
-            }
-            Session.KeepAliveInterval = Math.Max(config.Source.KeepAliveInterval, 30000);
             log.Information("Attempting to list endpoints using given url as discovery server");
 
-            var context = Appconfig.CreateMessageContext();
-            var endpointConfig = EndpointConfiguration.Create(Appconfig);
+            if (AppConfig == null)
+            {
+                await LoadAppConfig();
+            }
+
+            var context = AppConfig.CreateMessageContext();
+            var endpointConfig = EndpointConfiguration.Create(AppConfig);
             var endpoints = new EndpointDescriptionCollection();
             using (var channel = DiscoveryChannel.Create(new Uri(config.Source.EndpointUrl), endpointConfig, context))
             {
@@ -176,7 +175,20 @@ namespace Cognite.OpcUa.Config
                 summary.Secure = secureExists;
             }
 
-            if (failed)
+            if (Session == null || !Session.Connected)
+            {
+                try
+                {
+                    await Run(token);
+                }
+                catch (Exception ex)
+                {
+                    log.Error("Failed to connect to server using initial options");
+                    log.Debug(ex, "Failed to connect to endpoint");
+                }
+            }
+
+            if (Session == null || !Session.Connected)
             {
                 if (!secureExists && !openExists)
                 {
@@ -201,55 +213,90 @@ namespace Cognite.OpcUa.Config
 
                 throw new FatalException("Fatal: Provided configuration failed to connect to the server");
             }
+
+            Session.KeepAliveInterval = Math.Max(config.Source.KeepAliveInterval, 30000);
         }
-        /// <summary>
-        /// Browse multiple times with different combination of BrowseChunk and BrowseNodesChunk, to determine them.
-        /// Uses the result with the greatest successfull values for BrowseChunk and BrowseNodesChunk, with the greatest number of received nodes.
-        /// Will read from the server hierarchy if the number of nodes in the main hierarchy is too small.
-        /// </summary>
+
+        private IEnumerable<UANode> GetTestNodeChunk(int nodesChunk, CancellationToken token)
+        {
+            var root = ObjectIds.ObjectsFolder;
+
+            // Try to find at least 10000 nodes
+            var nodes = new List<UANode>();
+            var callback = ToolUtil.GetSimpleListWriterCallback(nodes, this);
+
+            var nextIds = new List<NodeId> { root };
+
+            var localVisitedNodes = new HashSet<NodeId>();
+            localVisitedNodes.Add(root);
+
+            int totalChildCount = 0;
+
+            log.Information("Get test node chunk with BrowseNodesChunk {cnt}", nodesChunk);
+
+            do
+            {
+                var references = new Dictionary<NodeId, ReferenceDescriptionCollection>();
+                var total = nextIds.Count;
+                int count = 0;
+                int countChildren = 0;
+                foreach (var chunk in nextIds.ChunkBy(nodesChunk))
+                {
+                    if (token.IsCancellationRequested) return nodes;
+                    var result = GetNodeChildren(chunk, ReferenceTypeIds.HierarchicalReferences,
+                        (uint)NodeClass.Object | (uint)NodeClass.Variable, token);
+                    foreach (var res in result)
+                    {
+                        references[res.Key] = res.Value;
+                        countChildren += res.Value.Count;
+                    }
+                    count += result.Count;
+                    log.Debug("Read node children {cnt} / {total}. Children: {childcnt}", count, total, countChildren);
+                    totalChildCount += countChildren;
+                    if (totalChildCount >= 10000) break;
+                }
+
+                nextIds.Clear();
+                foreach (var (parentId, children) in references)
+                {
+                    foreach (var rd in children)
+                    {
+                        var nodeId = ToNodeId(rd.NodeId);
+                        bool docb = true;
+                        if (docb)
+                        {
+                            log.Verbose("Discovered new node {nodeid}", nodeId);
+                            callback?.Invoke(rd, parentId);
+                        }
+                        if (rd.NodeClass == NodeClass.Variable) continue;
+                        if (localVisitedNodes.Add(nodeId))
+                        {
+                            nextIds.Add(nodeId);
+                        }
+                    }
+                }
+            } while (totalChildCount < 10001 && nextIds.Any());
+
+            return nodes;
+        }
         public async Task GetBrowseChunkSizes(CancellationToken token)
         {
-            var results = new List<BrowseMapResult>();
-
-            var root = useServer
-                ? ObjectIds.Server
-                : config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
-
-            foreach ((int lbrowseNodesChunk, int lbrowseChunk) in testBrowseChunkSizes)
+            if (Session == null || !Session.Connected)
             {
-                var nodes = new List<UANode>();
+                await Run(token);
+            }
 
-                VisitedNodes.Clear();
+            IEnumerable<UANode> testNodes = null;
 
-                int browseNodesChunk = Math.Min(lbrowseNodesChunk, baseConfig.Source.BrowseNodesChunk);
-                int browseChunk = Math.Min(lbrowseChunk, baseConfig.Source.BrowseChunk);
+            int browseChunkSize = 0;
 
-                if (results.Any(res => res.BrowseNodesChunk == browseNodesChunk && res.BrowseChunk == browseChunk))
-                {
-                    log.Information("Skipping {bnc}, {bc} due to having been browsed", browseNodesChunk, browseChunk);
-                    continue;
-                }
-                if (results.Any())
-                {
-                    var maxSize = results.Select(res => res.NumNodes).Max();
-                    if (maxSize > 100 * browseNodesChunk) continue;
-                }
-
-
-                config.Source.BrowseChunk = browseChunk;
-                config.Source.BrowseNodesChunk = browseNodesChunk;
-
-                log.Information("Browse with BrowseNodesChunk: {bnc}, BrowseChunk: {bc}", browseNodesChunk,
-                    browseChunk);
-
-                var result = new BrowseMapResult { BrowseNodesChunk = browseNodesChunk, BrowseChunk = browseChunk };
-
+            foreach (int chunkSize in new [] { 1000, 100, 10, 1 }.Where(chunk => chunk <= config.Source.BrowseNodesChunk))
+            {
                 try
                 {
-                    await ToolUtil.RunWithTimeout(BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodes, this), token), 120);
-                    log.Information("Browse succeeded, attempting to read children of all nodes, to further test operation limit");
-                    await ToolUtil.RunWithTimeout(() => BrowseDirectory(nodes.Select(node => node.Id).Take(browseNodesChunk),
-                        (_, __) => { }, token), 120);
+                    testNodes = await ToolUtil.RunWithTimeout(Task.Run(() => GetTestNodeChunk(chunkSize, token)), 60);
+                    browseChunkSize = chunkSize;
+                    break;
                 }
                 catch (Exception ex)
                 {
@@ -261,55 +308,154 @@ namespace Cognite.OpcUa.Config
                             "Browse unsupported by server, the extractor does not support servers without support for" +
                             " the \"Browse\" service");
                     }
-                    result.failed = true;
                 }
-
-                result.NumNodes = nodes.Count;
-                results.Add(result);
             }
+            var parents = testNodes.Select(node => node.ParentId).Distinct().ToList();
+            log.Information("Found {cnt} nodes over {cnt2} parents", testNodes.Count(), parents.Count);
 
-            var scResults = results.Where(res => !res.failed);
-            if (!scResults.Any())
+            // Test tolerance for large chunks
+            log.Information("Testing browseNodesChunk tolerance");
+            // We got some indication of max legal size before, here we choose a chunkSize that is reasonable
+            // for the discovered server size
+            var validSizes = new[] { 10000, 1000, 100, 10, 1 }
+                .Where(size => (browseChunkSize == 1000 || size <= browseChunkSize) && size <= testNodes.Count()).ToList();
+            foreach (int chunkSize in validSizes)
             {
-                throw new FatalException("No configuration resulted in successful browse, manual configuration may work.");
+                var ids = testNodes.Select(node => node.Id).Take(chunkSize).ToList();
+                try
+                {
+                    log.Information("Try to get the children of {cnt} nodes", ids.Count);
+                    var children = await ToolUtil.RunWithTimeout(Task.Run(() => GetNodeChildren(ids,
+                        ReferenceTypeIds.HierarchicalReferences,
+                        (uint)NodeClass.Object | (uint)NodeClass.Variable, token)), 30);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    log.Warning("Failed to browse node hierarchy");
+                    log.Debug(ex, "Failed to browse nodes");
+                }
+                browseChunkSize = chunkSize;
             }
+            log.Information("Settled on a BrowseNodesChunk of {chunk}", browseChunkSize);
+            summary.BrowseNodesChunk = browseChunkSize;
 
-            var best = scResults.Aggregate((agg, next) =>
-                next.NumNodes > agg.NumNodes
-                || next.NumNodes == agg.NumNodes && next.BrowseChunk > agg.BrowseChunk
-                || next.NumNodes == agg.NumNodes && next.BrowseChunk == agg.BrowseChunk && next.BrowseNodesChunk > agg.BrowseNodesChunk
-                ? next : agg);
-
-            if (best.NumNodes < best.BrowseNodesChunk)
+            // Test if there are issues with BrowseNext.
+            int originalChunkSize = config.Source.BrowseChunk;
+            foreach (int chunkSize in new[] { 10000, 1000, 100, 10, 1 })
             {
-                log.Warning("Size is smaller than BrowseNodesChunk, so it is not completely safe, the " +
-                            "largest known safe value of BrowseNodesChunk is {max}", best.NumNodes);
-                if (best.NumNodes < ServerWidest && !useServer)
+                var nodesByParent = testNodes.GroupBy(node => node.ParentId).OrderByDescending(group => group.Count()).Take(browseChunkSize);
+                int total = 0;
+                var toBrowse = nodesByParent.TakeWhile(chunk =>
                 {
-                    log.Information("The server hierarchy is generally wider than this, so retry browse mapping using the " +
-                                    "server hierarchy");
-                    useServer = true;
-                    await GetBrowseChunkSizes(token);
-                    return;
-                }
-                summary.BrowseLimitWarning = true;
+                    bool pass = total <= chunkSize * 2;
+                    if (pass)
+                    {
+                        total += chunk.Count();
+                    }
+                    return pass;
+                }).ToList();
 
-                if (best.NumNodes < ServerSizeBase && !useServer)
+                if (total < chunkSize) continue;
+
+                config.Source.BrowseChunk = chunkSize;
+                Dictionary<NodeId, ReferenceDescriptionCollection> children;
+                try
                 {
-                    log.Information("The server hierarchy is larger than the main hierarchy, so use the server to identify " +
-                                    "attribute chunk later");
-                    useServer = true;
+                    log.Information("Try to get the children of the {cnt} largest parent nodes, with return chunk size {size}", 
+                        toBrowse.Count, chunkSize);
+                    children = await ToolUtil.RunWithTimeout(Task.Run(() => GetNodeChildren(toBrowse.Select(group => group.Key),
+                        ReferenceTypeIds.HierarchicalReferences,
+                        (uint)NodeClass.Object | (uint)NodeClass.Variable, token)), 60);
                 }
+                catch (Exception ex)
+                {
+                    log.Warning("Failed to browse node hierarchy");
+                    log.Debug(ex, "Failed to browse nodes");
+                    continue;
+                }
+                int childCount = children.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count);
+                if (childCount < total)
+                {
+                    log.Warning("Expected to receive {cnt} nodes but only got {cnt2}!", total, childCount);
+                    log.Warning("There is likely an issue with returning large numbers of nodes from the server");
+                    summary.BrowseNextWarning = true;
+                    int largest = toBrowse.First().Count();
+                    log.Information("The largest discovered node has {cnt} children", largest);
+                    // Usually we will have found the largest parent by this point, unless the server is extremely large
+                    // So we can try to choose a BrowseNodesChunk that lets us avoid the issue
+                    summary.BrowseNodesChunk = Math.Max(1, (int)Math.Floor((double)chunkSize / largest));
+                }
+                summary.BrowseChunk = Math.Min(chunkSize, originalChunkSize);
+                break;
             }
-            log.Information("Successfully determined BrowseNodesChunk: {bnc}, BrowseChunk: {bc}",
-                best.BrowseNodesChunk, best.BrowseChunk);
-            config.Source.BrowseNodesChunk = best.BrowseNodesChunk;
-            config.Source.BrowseChunk = best.BrowseChunk;
-            baseConfig.Source.BrowseNodesChunk = best.BrowseNodesChunk;
-            baseConfig.Source.BrowseChunk = best.BrowseChunk;
-            summary.BrowseNodesChunk = best.BrowseNodesChunk;
-            summary.BrowseChunk = best.BrowseChunk;
+            config.Source.BrowseChunk = summary.BrowseChunk;
+            config.Source.BrowseNodesChunk = summary.BrowseNodesChunk;
+            baseConfig.Source.BrowseChunk = summary.BrowseChunk;
+            baseConfig.Source.BrowseNodesChunk = summary.BrowseNodesChunk;
         }
+
+        private async Task PopulateNodes(CancellationToken token)
+        {
+            if (nodesRead) return;
+            nodeList = new List<UANode>();
+            log.Information("Mapping out node hierarchy");
+            var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
+            try
+            {
+                await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token, false);
+                nodesRead = true;
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex, "Failed to populate node hierarchy");
+                throw;
+            }
+        }
+
+        private void PopulateDataTypes(CancellationToken token)
+        {
+            if (dataTypesRead) return;
+            dataTypes = new List<UANode>();
+            nodeDataRead = false;
+            log.Information("Mapping out data type hierarchy");
+            try
+            {
+                BrowseDirectory(
+                    new List<NodeId> { DataTypes.BaseDataType },
+                    ToolUtil.GetSimpleListWriterCallback(dataTypes, this),
+                    token,
+                    ReferenceTypeIds.HasSubtype,
+                    (uint)NodeClass.DataType | (uint)NodeClass.ObjectType,
+                    false);
+                dataTypesRead = true;
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex, "Failed to populate node hierarchy");
+                throw;
+            }
+            dataTypes = dataTypes.Distinct().ToList();
+        }
+
+        private void ReadNodeData(CancellationToken token)
+        {
+            if (nodeDataRead) return;
+            int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
+            bool oldEvents = config.Events.Enabled;
+            bool oldHistory = config.History.Enabled;
+            bool oldHistoryData = config.History.Data;
+            config.Extraction.DataTypes.MaxArraySize = 10;
+            config.Events.Enabled = true;
+            config.History.Enabled = true;
+            config.History.Data = true;
+            ReadNodeData(nodeList, token);
+            config.Extraction.DataTypes.MaxArraySize = oldArraySize;
+            config.Events.Enabled = oldEvents;
+            config.History.Enabled = oldHistory;
+            config.History.Data = oldHistoryData;
+        }
+
         /// <summary>
         /// Transform a NodeId to a ProtoNodeId, for writing to yml config file.
         /// </summary>
@@ -395,16 +541,19 @@ namespace Cognite.OpcUa.Config
             }
             if (dataTypeSwitch > 0)
             {
-                customNumericTypes.Add(new ProtoDataType
-                {
-                    IsStep = dataTypeSwitch == DataTypes.Boolean,
-                    Enum = dataTypeSwitch == DataTypes.Enumeration,
-                    NodeId = NodeIdToProto(type.Id)
-                });
                 if (inHierarchy)
                 {
                     log.Information("DataType {id} is correctly in hierarchy, auto discovery can be used instead", type.Id);
                     baseConfig.Extraction.DataTypes.AutoIdentifyTypes = true;
+                }
+                else
+                {
+                    customNumericTypes.Add(new ProtoDataType
+                    {
+                        IsStep = dataTypeSwitch == DataTypes.Boolean,
+                        Enum = dataTypeSwitch == DataTypes.Enumeration,
+                        NodeId = NodeIdToProto(type.Id)
+                    });
                 }
                 if (dataTypeSwitch == DataTypes.Enumeration)
                 {
@@ -420,25 +569,11 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public void ReadCustomTypes(CancellationToken token)
         {
-            dataTypes = new List<UANode>();
-
-            log.Information("Browsing data type hierarchy for custom datatypes");
-
-            VisitedNodes.Clear();
-
-            try
+            if (Session == null || !Session.Connected)
             {
-                BrowseDirectory(new List<NodeId> { DataTypes.BaseDataType }, ToolUtil.GetSimpleListWriterCallback(dataTypes, this),
-                    token,
-                    ReferenceTypeIds.HasSubtype, (uint)NodeClass.DataType | (uint)NodeClass.ObjectType);
+                Run(token).Wait();
             }
-            catch (Exception e)
-            {
-                log.Error(e, "Failed to browse data types");
-                throw;
-            }
-
-            dataTypes = dataTypes.Distinct().ToList();
+            PopulateDataTypes(token);
 
             customNumericTypes = new List<ProtoDataType>();
             foreach (var type in dataTypes)
@@ -448,7 +583,7 @@ namespace Cognite.OpcUa.Config
 
             if (!summary.Enums && dataTypes.Any(type => ToolUtil.IsChildOf(dataTypes, type, DataTypes.Enumeration))) summary.Enums = true;
 
-            log.Information("Found {count} custom datatypes", customNumericTypes.Count);
+            log.Information("Found {count} custom datatypes outside of normal hierarchy", customNumericTypes.Count);
             summary.CustomNumTypesCount = customNumericTypes.Count;
             baseConfig.Extraction.DataTypes.CustomNumericTypes = customNumericTypes;
         }
@@ -457,30 +592,18 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task GetAttributeChunkSizes(CancellationToken token)
         {
-            var root = useServer
-                ? ObjectIds.Server
-                : config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
-
             log.Information("Reading variable chunk sizes to determine the AttributeChunk property");
 
-            config.History.Enabled = true;
-
-            VisitedNodes.Clear();
-
-            nodeList = new List<UANode>();
-
-            try
+            if (Session == null || !Session.Connected)
             {
-                await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token);
+                await Run(token);
             }
-            catch
-            {
-                log.Error("Failed to browse node hierarchy");
-                throw;
-            }
+
+            await PopulateNodes(token);
 
             int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
             int expectedAttributeReads = nodeList.Aggregate(0, (acc, node) => acc + (node.IsVariable ? 5 : 1));
+            config.History.Enabled = true;
             config.Extraction.DataTypes.MaxArraySize = 10;
 
             var testChunks = testAttributeChunkSizes.Where(chunkSize =>
@@ -489,7 +612,7 @@ namespace Cognite.OpcUa.Config
             if (expectedAttributeReads < 1000)
             {
                 log.Warning("Reading less than 1000 attributes maximum. Most servers should support more, but" +
-                            " this server only has enough variables to read {reads}", expectedAttributeReads);
+                            " this server only has enough nodes to read {reads}", expectedAttributeReads);
                 summary.VariableLimitWarning = true;
             }
 
@@ -501,9 +624,10 @@ namespace Cognite.OpcUa.Config
                 var toCheck = nodeList.TakeWhile(node =>
                 {
                     count += node.IsVariable ? 5 : 1;
-                    return count > chunkSize + 10;
-                });
-                log.Information("Attempting to read attributes with ChunkSize {chunkSize}", chunkSize);
+                    return count < chunkSize + 10;
+                }).ToList();
+                log.Information("Total {tot}", nodeList.Count);
+                log.Information("Attempting to read attributes for {cnt} nodes with ChunkSize {chunkSize}", toCheck.Count(), chunkSize);
                 config.Source.AttributesChunk = chunkSize;
                 try
                 {
@@ -546,42 +670,28 @@ namespace Cognite.OpcUa.Config
             var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
 
             int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
-
             int arrayLimit = config.Extraction.DataTypes.MaxArraySize == 0 ? 10 : config.Extraction.DataTypes.MaxArraySize;
+            if (arrayLimit < 0) arrayLimit = int.MaxValue;
 
             config.Extraction.DataTypes.MaxArraySize = 10;
 
-            if (useServer)
-            {
-                VisitedNodes.Clear();
-                log.Information("Filling common node information since this has not been done when identifying attribute chunk size");
-                nodeList = new List<UANode>();
-                try
-                {
-                    await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token);
-                }
-                catch (Exception e)
-                {
-                    log.Information(e, "Failed to map out hierarchy");
-                    throw;
-                }
-            }
-
+            await PopulateNodes(token);
+            PopulateDataTypes(token);
+            ReadNodeData(token);
 
             log.Information("Mapping out variable datatypes");
 
-            var variables = nodeList.Where(node =>
-                node.IsVariable && (node is UAVariable variable) && !variable.IsProperty)
+            var variables = nodeList
+                .Where(node => node.IsVariable && (node is UAVariable variable) && !variable.IsProperty)
                 .Select(node => node as UAVariable)
                 .Where(node => node != null);
 
-            ReadNodeData(variables, token);
-
             history = false;
             bool stringVariables = false;
-            int maxLimitedArrayLength = 1;
+            int maxLimitedArrayLength = 0;
 
             var identifiedTypes = new List<UANode>();
+            var missingTypes = new HashSet<NodeId>();
             foreach (var variable in variables)
             {
                 if (variable.ArrayDimensions != null
@@ -613,7 +723,7 @@ namespace Cognite.OpcUa.Config
 
                 var dataType = dataTypes.FirstOrDefault(type => type.Id == variable.DataType.Raw);
 
-                if (dataType == null)
+                if (dataType == null && missingTypes.Add(variable.DataType.Raw))
                 {
                     log.Warning("DataType found on node but not in hierarchy, " +
                                 "this may mean that some datatypes are defined outside of the main datatype hierarchy: {type}", variable.DataType);
@@ -628,9 +738,16 @@ namespace Cognite.OpcUa.Config
 
             foreach (var dataType in identifiedTypes)
             {
-                string identifier = dataType.Id.IdType == IdType.String ? (string)dataType.Id.Identifier : null;
-                if (!ToolUtil.NodeNameContains(dataType, "picture")
-                    && !ToolUtil.NodeNameContains(dataType, "image"))
+                if (dataType.Id.NamespaceIndex == 0)
+                {
+                    uint identifier = (uint)dataType.Id.Identifier;
+                    if ((identifier < DataTypes.Boolean || identifier > DataTypes.Double)
+                           && identifier != DataTypes.Integer && identifier != DataTypes.UInteger)
+                    {
+                        stringVariables = true;
+                    }
+                }
+                else
                 {
                     stringVariables = true;
                 }
@@ -646,7 +763,7 @@ namespace Cognite.OpcUa.Config
                 log.Information("No string variables found and the AllowStringVariables option will be set to false");
             }
 
-            if (maxLimitedArrayLength > 1)
+            if (maxLimitedArrayLength > 0)
             {
                 log.Information("Arrays of length {max} were found, which will be used to set the MaxArraySize option", maxLimitedArrayLength);
             }
@@ -662,19 +779,12 @@ namespace Cognite.OpcUa.Config
             config.Extraction.DataTypes.MaxArraySize = oldArraySize;
 
             baseConfig.Extraction.DataTypes.AllowStringVariables = baseConfig.Extraction.DataTypes.AllowStringVariables || stringVariables;
-            baseConfig.Extraction.DataTypes.MaxArraySize = maxLimitedArrayLength > 1 ? maxLimitedArrayLength : oldArraySize;
+            baseConfig.Extraction.DataTypes.MaxArraySize = maxLimitedArrayLength > 0 ? maxLimitedArrayLength : oldArraySize;
 
             summary.StringVariables = stringVariables;
             summary.MaxArraySize = maxLimitedArrayLength;
         }
 
-        private struct BrowseMapResult
-        {
-            public int BrowseNodesChunk;
-            public int BrowseChunk;
-            public int NumNodes;
-            public bool failed;
-        }
         private bool AllowTSMap(UAVariable node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
@@ -693,6 +803,9 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task GetSubscriptionChunkSizes(CancellationToken token)
         {
+            await PopulateNodes(token);
+            ReadNodeData(token);
+
             bool failed = true;
             var states = nodeList.Where(node =>
                     node.IsVariable && (node is UAVariable variable) && !variable.IsProperty
@@ -770,7 +883,7 @@ namespace Cognite.OpcUa.Config
             for (int i = 0; i < 50; i++)
             {
                 if (dps.Any()) break;
-                await Task.Delay(200, token);
+                await Task.Delay(100, token);
             }
 
             if (dps.Any())
@@ -790,8 +903,11 @@ namespace Cognite.OpcUa.Config
         /// Attempts history read if possible, getting chunk sizes. It also determines granularity, and sets backfill to true if it works and it estimates that there
         /// are a lot of points in some variables.
         /// </summary>
-        public async Task GetHistoryReadConfig()
+        public async Task GetHistoryReadConfig(CancellationToken token)
         {
+            await PopulateNodes(token);
+            ReadNodeData(token);
+
             var historizingStates = nodeList.Where(node =>
                     node.IsVariable && (node is UAVariable variable) && !variable.IsProperty && variable.Historizing)
                 .Select(node => new VariableExtractionState(this, node as UAVariable, true, true)).ToList();
@@ -912,7 +1028,7 @@ namespace Cognite.OpcUa.Config
 
             log.Information("Average distance between timestamps across all nodes with history: {dist}",
                 TimeSpan.FromTicks(totalAvgDistance));
-            var granularity = Math.Max(TimeSpan.FromTicks(totalAvgDistance).Seconds, 1) * 10;
+            var granularity = TimeSpan.FromTicks(totalAvgDistance * 10).Seconds + 1;
             log.Information("Suggested granularity is: {gran} seconds", granularity);
             config.History.Granularity = granularity;
             summary.HistoryGranularity = TimeSpan.FromSeconds(granularity);
@@ -976,86 +1092,7 @@ namespace Cognite.OpcUa.Config
             }
 
         }
-        private UAEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
-        {
-            int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
-                                                                       && atr.BrowsePath[0] == BrowseNames.EventType);
-            if (eventTypeIndex < 0)
-            {
-                log.Warning("Triggered event has no type, ignoring.");
-                return null;
-            }
-            var eventType = eventFields[eventTypeIndex].Value as NodeId;
-            // Many servers don't handle filtering on history data.
-            if (eventType == null || !activeEventFields.ContainsKey(eventType))
-            {
-                log.Verbose("Invalid event type: {eventType}", eventType);
-                return null;
-            }
-            var targetEventFields = activeEventFields[eventType];
 
-            var extractedProperties = new Dictionary<string, object>();
-
-            for (int i = 0; i < filter.SelectClauses.Count; i++)
-            {
-                var clause = filter.SelectClauses[i];
-                if (clause.BrowsePath.Count != 1
-                    || !targetEventFields.Contains(new EventField(clause.TypeDefinitionId, clause.BrowsePath[0]))) continue;
-
-                string name = clause.BrowsePath[0].Name;
-                if (config.Events.DestinationNameMap.ContainsKey(name) && name != "EventId" && name != "SourceNode" && name != "EventType")
-                {
-                    name = config.Events.DestinationNameMap[name];
-                }
-                if (!extractedProperties.ContainsKey(name) || extractedProperties[name] == null)
-                {
-                    extractedProperties[name] = eventFields[i].Value;
-                }
-            }
-            try
-            {
-                var buffEvent = new UAEvent
-                {
-                    Message = ConvertToString(extractedProperties.GetValueOrDefault("Message")),
-                    EventId = config.Extraction.IdPrefix + Convert.ToBase64String((byte[])extractedProperties["EventId"]),
-                    SourceNode = (NodeId)extractedProperties["SourceNode"],
-                    Time = (DateTime)extractedProperties.GetValueOrDefault("Time"),
-                    EventType = (NodeId)extractedProperties["EventType"],
-                    MetaData = extractedProperties
-                        .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
-                                      && kvp.Key != "Time" && kvp.Key != "EventType")
-                        .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-                    EmittingNode = emitter
-                };
-                return buffEvent;
-            }
-            catch (Exception e)
-            {
-                log.Error(e, "Failed to construct bufferedEvent from Raw fields");
-                return null;
-            }
-        }
-
-        private IEnumerable<UAEvent> ReadResultToEvents(IEncodeable rawEvts, NodeId emitterId, ReadEventDetails details)
-        {
-            if (rawEvts == null) return Array.Empty<UAEvent>();
-            if (!(rawEvts is HistoryEvent evts))
-            {
-                log.Warning("Incorrect return type of history read events");
-                return Array.Empty<UAEvent>();
-            }
-
-            var filter = details.Filter;
-            if (filter == null)
-            {
-                log.Warning("No event filter, ignoring");
-                return Array.Empty<UAEvent>();
-            }
-
-            if (evts.Events == null) return Array.Empty<UAEvent>();
-
-            return evts.Events.Select(evt => ConstructEvent(filter, evt.EventFields, emitterId)).ToArray();
-        }
         /// <summary>
         /// Look for emitter relationships, and attempt to listen to events on any identified emitters. Also look through the event hierarchy and find any
         /// custom events that may be interesting for cognite. Then attempt to listen for audit events on the server node, if any at all are detected
@@ -1063,15 +1100,17 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task GetEventConfig(CancellationToken token)
         {
+            await PopulateNodes(token);
+            ReadNodeData(token);
+
             log.Information("Test for event configuration");
             eventTypes = new List<UANode>();
 
             try
             {
-                VisitedNodes.Clear();
-                BrowseDirectory(new List<NodeId> { ObjectTypeIds.BaseEventType }, ToolUtil.GetSimpleListWriterCallback(eventTypes, this),
-                    token,
-                    ReferenceTypeIds.HasSubtype, (uint)NodeClass.ObjectType);
+                config.Events.AllEvents = true;
+                config.Events.Enabled = true;
+                GetEventFields(token);
             }
             catch (Exception ex)
             {
@@ -1079,48 +1118,18 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
+            var server = GetServerNode(token);
 
-            var notifierPairs = new List<(NodeId id, byte notifier)>();
-
-            log.Information("Read EventNotifier property for each node");
-
-            try
-            {
-                var readValueIds = nodeList.Select(node => new ReadValueId
-                {
-                    AttributeId = Attributes.EventNotifier,
-                    NodeId = node.Id
-                }).Append(new ReadValueId { AttributeId = Attributes.EventNotifier, NodeId = ObjectIds.Server });
-                foreach (var chunk in readValueIds.ChunkBy(baseConfig.Source.AttributesChunk))
-                {
-                    Session.Read(
-                        null,
-                        0,
-                        TimestampsToReturn.Neither,
-                        new ReadValueIdCollection(chunk),
-                        out var results,
-                        out var _
-                        );
-                    var chunkEnum = chunk.GetEnumerator();
-                    foreach (var result in results)
-                    {
-                        chunkEnum.MoveNext();
-                        notifierPairs.Add((chunkEnum.Current.NodeId, result.GetValue((byte)0)));
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                log.Warning(ex, "Failed to read EventNotifier property, the server most likely does not support events");
-                return;
-            }
-
-            var emitters = notifierPairs.Where(pair => (pair.notifier & EventNotifiers.SubscribeToEvents) != 0);
-            var historizingEmitters = emitters.Where(pair => (pair.notifier & EventNotifiers.HistoryRead) != 0);
+            var emitters = nodeList.Append(server).Where(node => (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0);
+            var historizingEmitters = emitters.Where(node => (node.EventNotifier & EventNotifiers.HistoryRead) != 0);
 
             if (emitters.Any())
             {
                 log.Information("Discovered {cnt} emitters, of which {cnt2} are historizing", emitters.Count(), historizingEmitters.Count());
+                summary.NumEmitters = emitters.Count();
+                summary.NumHistEmitters = historizingEmitters.Count();
+                summary.AnyEvents = true;
+                baseConfig.Events.Enabled = true;
                 if (historizingEmitters.Any())
                 {
                     summary.HistoricalEvents = true;
@@ -1134,7 +1143,6 @@ namespace Cognite.OpcUa.Config
             var emitterReferences = new List<UANode>();
             try
             {
-                VisitedNodes.Clear();
                 BrowseDirectory(nodeList.Select(node => node.Id).Append(ObjectIds.Server).ToList(),
                     ToolUtil.GetSimpleListWriterCallback(emitterReferences, this),
                     token,
@@ -1145,66 +1153,67 @@ namespace Cognite.OpcUa.Config
                 log.Warning(ex, "Failed to look for GeneratesEvent references, this tool will not be able to identify emitted event types this way");
             }
 
-            VisitedNodes.Clear();
-
             var referencedEvents = emitterReferences.Select(evt => evt.Id)
-                .Distinct()
-                .Where(id => IsCustomObject(id) || id == ObjectTypeIds.BaseEventType).ToHashSet();
+                .Distinct().ToHashSet();
 
-            emittedEvents = referencedEvents.ToList();
+            var emittedEvents = referencedEvents.ToList();
 
-
-            log.Information("Identified {cnt} events by looking at GeneratesEvent references", emittedEvents.Count);
-
-            bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server
+            if (emittedEvents.Any())
+            {
+                log.Information("Identified {cnt} events by looking at GeneratesEvent references", emittedEvents.Count);
+                bool auditReferences = emitterReferences.Any(evt => evt.ParentId == ObjectIds.Server
                 && (evt.Id == ObjectTypeIds.AuditAddNodesEventType || evt.Id == ObjectTypeIds.AuditAddReferencesEventType));
 
-            baseConfig.Extraction.EnableAuditDiscovery |= auditReferences;
-            summary.Auditing = auditReferences;
+                summary.AnyEvents = true;
 
-            if (auditReferences)
-            {
-                log.Information("Audit events on the server node detected, auditing can be enabled");
+                baseConfig.Extraction.EnableAuditDiscovery |= auditReferences;
+                summary.Auditing = auditReferences;
+
+                if (auditReferences)
+                {
+                    log.Information("Audit events on the server node detected, auditing can be enabled");
+                }
             }
 
-            log.Information("Listening to events on the server node a little while in order to find further events");
+            if (!summary.Auditing)
+            {
+                try
+                {
+                    Session.Read(
+                        null,
+                        0,
+                        TimestampsToReturn.Neither,
+                        new ReadValueIdCollection(new[] { new ReadValueId { NodeId = VariableIds.Server_Auditing, AttributeId = Attributes.Value } }),
+                        out var results,
+                        out var _
+                        );
+                    var result = (bool)results.First().GetValue(typeof(bool));
+                    if (result)
+                    {
+                        log.Information("Server capabilities indicate that auditing is enabled");
+                        summary.Auditing = true;
+                        baseConfig.Extraction.EnableAuditDiscovery = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log.Warning(ex, "Failed to read auditing server configuration");
+                }
+            }
 
-            config.Events.AllEvents = true;
-            config.Events.Enabled = true;
+            if (!emitters.Any() || !historizingEmitters.Any())
+            {
+                log.Information("No event configuration found");
+                return;
+            }
 
-            activeEventFields = GetEventFields(token);
+            log.Information("Try subscribing to events on emitting nodes");
 
-            var events = new List<UAEvent>();
-
-            object listLock = new object();
+            var states = emitters.Select(emitter => new EventExtractionState(this, emitter.Id, false, false));
 
             try
             {
-                await ToolUtil.RunWithTimeout(() => SubscribeToEvents(new[] { new EventExtractionState(this, ObjectIds.Server, false, false) },
-                    (item, args) =>
-                    {
-                        if (!(args.NotificationValue is EventFieldList triggeredEvent))
-                        {
-                            log.Warning("No event in event subscription notification: {}", item.StartNodeId);
-                            return;
-                        }
-                        var eventFields = triggeredEvent.EventFields;
-                        if (!(item.Filter is EventFilter filter))
-                        {
-                            log.Warning("Triggered event without filter");
-                            return;
-                        }
-                        var buffEvent = ConstructEvent(filter, eventFields, item.ResolvedNodeId);
-                        if (buffEvent == null) return;
-
-                        lock (listLock)
-                        {
-                            events.Add(buffEvent);
-                        }
-
-                        log.Verbose(buffEvent.ToString());
-
-                    }, token), 120);
+                await ToolUtil.RunWithTimeout(() => SubscribeToEvents(states.Take(baseConfig.Source.SubscriptionChunk), (item, args) => { }, token), 120);
             }
             catch (Exception ex)
             {
@@ -1212,128 +1221,7 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            try
-            {
-                await ToolUtil.RunWithTimeout(() => SubscribeToAuditEvents(
-                    (item, args) =>
-                    {
-                        if (!(args.NotificationValue is EventFieldList triggeredEvent))
-                        {
-                            log.Warning("No event in event subscription notification: {}", item.StartNodeId);
-                            return;
-                        }
-
-                        var eventFields = triggeredEvent.EventFields;
-                        if (!(item.Filter is EventFilter filter))
-                        {
-                            log.Warning("Triggered event without filter");
-                            return;
-                        }
-                        int eventTypeIndex = filter.SelectClauses.FindIndex(atr => atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
-                                                                                    && atr.BrowsePath[0] == BrowseNames.EventType);
-                        if (eventTypeIndex < 0)
-                        {
-                            log.Warning("Triggered event has no type, ignoring");
-                            return;
-                        }
-                        var eventType = eventFields[eventTypeIndex].Value as NodeId;
-                        if (eventType == null || eventType != ObjectTypeIds.AuditAddNodesEventType && eventType != ObjectTypeIds.AuditAddReferencesEventType)
-                        {
-                            log.Warning("Non-audit event triggered on audit event listener");
-                            return;
-                        }
-
-                        var buffEvent = new UAEvent
-                        {
-                            EventType = eventType
-                        };
-                        lock (listLock)
-                        {
-                            events.Add(buffEvent);
-                        }
-
-                        log.Verbose(buffEvent.ToString());
-
-                    }), 120);
-            }
-            catch (Exception ex)
-            {
-                log.Warning(ex, "Failed to subscribe to audit events. The extractor will not be able to support auditing.");
-            }
-
-
-            await Task.Delay(5000, token);
-
             Session.RemoveSubscriptions(Session.Subscriptions.ToList());
-
-            if (!events.Any())
-            {
-                log.Information("No events detected after 5 seconds");
-            }
-            else
-            {
-                log.Information("Detected {cnt} events in 5 seconds", events.Count);
-                var discoveredEvents = events.Select(evt => evt.EventType).Distinct();
-
-                if (discoveredEvents.Any(id =>
-                    ToolUtil.IsChildOf(eventTypes, eventTypes.Find(type => type.Id == id), ObjectTypeIds.AuditEventType)))
-                {
-                    log.Information("Audit events detected on server node, auditing can be enabled");
-                    baseConfig.Extraction.EnableAuditDiscovery = true;
-                    summary.Auditing = true;
-                }
-
-                emittedEvents = emittedEvents
-                    .Concat(discoveredEvents)
-                    .Distinct()
-                    .Where(id => !ToolUtil.IsChildOf(eventTypes, eventTypes.Find(type => type.Id == id), ObjectTypeIds.AuditEventType))
-                    .ToList();
-            }
-
-            if (emittedEvents.Any(id => id == ObjectTypeIds.BaseEventType))
-            {
-                log.Warning("Using BaseEventType directly is not recommended, consider switching to a custom event type instead.");
-                summary.BaseEventWarning = true;
-            }
-
-            log.Information("Detected a total of {cnt} event types", emittedEvents.Count);
-
-            if (emittedEvents.Count > 0)
-            {
-                log.Information("Detected potential events, the server should discover events");
-                baseConfig.Events.Enabled = true;
-                summary.NumEventTypes = emittedEvents.Count;
-                if (emittedEvents.Any(id => id.NamespaceIndex == 0))
-                {
-                    log.Information("Detected non-custom events");
-                    baseConfig.Events.AllEvents = true;
-                    summary.GenericEvents = true;
-                }
-            }
-
-            try
-            {
-                Session.Read(
-                    null,
-                    0,
-                    TimestampsToReturn.Neither,
-                    new ReadValueIdCollection(new[] { new ReadValueId { NodeId = VariableIds.Server_Auditing, AttributeId = Attributes.Value } }),
-                    out var results,
-                    out var _
-                    );
-                var result = (bool)results.First().GetValue(typeof(bool));
-                if (result)
-                {
-                    log.Information("Server capabilities indicate that auditing is enabled");
-                    summary.Auditing = true;
-                }
-            }
-            catch (Exception ex)
-            {
-                log.Warning(ex, "Failed to read auditing server configuration");
-            }
-
-            summary.NumEventTypes = emittedEvents.Count;
         }
 
         public static Dictionary<string, string> GenerateNamespaceMap(IEnumerable<string> namespaces)
@@ -1436,11 +1324,6 @@ namespace Cognite.OpcUa.Config
                 log.Information("Settled on browsing the children of {bnc} nodes at a time and expecting {bc} results maximum for each request",
                     summary.BrowseNodesChunk, summary.BrowseChunk);
             }
-            if (summary.BrowseLimitWarning)
-            {
-                log.Information("This is not a completely safe option, as the actual number of nodes is lower than the limit, so if " +
-                                "the number of nodes increases in the future, it may fail.");
-            }
             log.Information("");
 
             if (summary.CustomNumTypesCount > 0)
@@ -1519,19 +1402,18 @@ namespace Cognite.OpcUa.Config
             }
             log.Information("");
 
-            if (summary.NumEventTypes > 0)
+            if (summary.AnyEvents)
             {
                 log.Information("Successfully found support for events on the server");
-                log.Information("{types} different event types were found", summary.NumEventTypes);
+                log.Information("Found {cnt} nodes emitting events", summary.NumEmitters);
                 if (summary.HistoricalEvents)
                 {
-                    log.Information("Historizing event emitters were found and successfully read from");
+                    log.Information("{cnt} historizing event emitters were found", summary.NumHistEmitters);
                 }
-
-                if (summary.BaseEventWarning)
+                if (summary.NumEmitters == 0)
                 {
-                    log.Information("BaseEventType events were observed to be emitted directly. This is not ideal, it is better to " +
-                                    "only use custom or predefined event types.");
+                    log.Warning("Found GeneratesEvent references, but no nodes had correctly configured EventNotifier");
+                    log.Warning("Any emitters must be configured manually");
                 }
             }
             else

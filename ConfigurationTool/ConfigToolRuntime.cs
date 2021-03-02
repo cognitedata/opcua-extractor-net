@@ -50,7 +50,7 @@ namespace Cognite.OpcUa.Config
                 explorer.ReadCustomTypes(source.Token);
                 await explorer.IdentifyDataTypeSettings(source.Token);
                 await explorer.GetSubscriptionChunkSizes(source.Token);
-                await explorer.GetHistoryReadConfig();
+                await explorer.GetHistoryReadConfig(source.Token);
                 await explorer.GetEventConfig(source.Token);
                 explorer.GetNamespaceMap();
                 explorer.LogSummary();
@@ -58,7 +58,7 @@ namespace Cognite.OpcUa.Config
             catch (Exception e)
             {
                 log.Error(e, "ConfigurationTool failed fatally");
-                return;
+                throw;
             }
             explorer.Close();
 
