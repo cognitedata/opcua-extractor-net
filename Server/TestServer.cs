@@ -9,6 +9,7 @@ namespace Server
     {
         private TestNodeManager custom;
         public NodeIdReference Ids => custom.Ids;
+        public ServerIssueConfig Issues { get; } = new ServerIssueConfig();
 
         private IEnumerable<PredefinedSetup> setups;
 
@@ -24,7 +25,7 @@ namespace Server
             // create the custom node managers.
 
             // create master node manager.
-            return new MasterNodeManager(server, configuration, null, nodeManagers.ToArray());
+            return new DebugMasterNodeManager(server, configuration, null, Issues, nodeManagers.ToArray());
         }
         protected override ServerProperties LoadServerProperties()
         {
@@ -60,8 +61,6 @@ namespace Server
             return custom.FetchEventHistory(id);
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1062:Validate arguments of public methods",
-            Justification = "Handled later")]
         public void TriggerEvent<T>(NodeId eventId, NodeId emitter, NodeId source, string message, Action<ManagedEvent> builder = null)
             where T : ManagedEvent
         {
@@ -75,6 +74,10 @@ namespace Server
             custom.PopulateHistory(id, count, start, type, msdiff, valueBuilder);
         }
 
+        public void SetEventConfig(bool auditing, bool server, bool serverAuditing)
+        {
+            custom.SetEventConfig(auditing, server, serverAuditing);
+        }
         public void PopulateEventHistory<T>(NodeId eventId,
             NodeId emitter,
             NodeId source,

@@ -24,6 +24,7 @@ using Opc.Ua.Client;
 using Prometheus;
 using Serilog;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -320,6 +321,7 @@ namespace Cognite.OpcUa
             if (baseId.Length + idxStr.Length < 255) return baseId + idxStr;
             return baseId.Substring(0, 255 - idxStr.Length) + idxStr;
         }
+
         /// <summary>
         /// Transform a given DataValue into a datapoint or a list of datapoints if the variable in question has array type.
         /// </summary>
@@ -337,6 +339,7 @@ namespace Cognite.OpcUa
             if (value.Value is Array values)
             {
                 int dim = 1;
+                if (values.Length == 0) return Enumerable.Empty<UADataPoint>();
                 if (!variable.IsArray)
                 {
                     log.Debug("Array values returned for scalar variable {id}", variable.Id);
@@ -368,7 +371,7 @@ namespace Cognite.OpcUa
                 uniqueId = GetArrayUniqueId(uniqueId, 0);
             }
 
-            var sdp = variable.DataType.ToDataPoint(extractor, value.Value, value.SourceTimestamp, uniqueId);
+            var sdp = variable.DataType.ToDataPoint(extractor, value.WrappedValue, value.SourceTimestamp, uniqueId);
             return new[] { sdp };
         }
         /// <summary>
@@ -409,6 +412,8 @@ namespace Cognite.OpcUa
                 Enqueue(buffEvent);
             }
         }
+        
+        
         /// <summary>
         /// Construct event from filter and collection of event fields
         /// </summary>
@@ -438,7 +443,7 @@ namespace Cognite.OpcUa
                 return null;
             }
 
-            var extractedProperties = new Dictionary<string, object>();
+            var extractedProperties = new Dictionary<string, Variant>();
 
             for (int i = 0; i < filter.SelectClauses.Count; i++)
             {
@@ -451,22 +456,25 @@ namespace Cognite.OpcUa
                 {
                     name = mapped;
                 }
-                if (!extractedProperties.TryGetValue(name, out var extracted) || extracted == null)
+                if (!extractedProperties.TryGetValue(name, out var extracted) || extracted == Variant.Null)
                 {
-                    extractedProperties[name] = eventFields[i].Value;
+                    extractedProperties[name] = eventFields[i];
                 }
             }
 
-            if (!(extractedProperties.GetValueOrDefault("EventId") is byte[] rawEventId))
+            if (!extractedProperties.TryGetValue("EventId", out var rawEventId) || !(rawEventId.Value is byte[] byteEventId))
             {
                 log.Verbose("Event of type {type} lacks id", eventType);
                 return null;
             }
 
-            string eventId = Convert.ToBase64String(rawEventId);
-            var sourceNode = extractedProperties.GetValueOrDefault("SourceNode") as NodeId;
+            string eventId = Convert.ToBase64String(byteEventId);
+            if (!extractedProperties.TryGetValue("SourceNode", out var rawSourceNode) || !(rawSourceNode.Value is NodeId sourceNode))
+            {
+                sourceNode = NodeId.Null;
+            }
 
-            if (!(extractedProperties.GetValueOrDefault("Time") is DateTime time))
+            if (!extractedProperties.TryGetValue("Time", out var rawTime) || !(rawTime.Value is DateTime time))
             {
                 log.Verbose("Event lacks specified time, type: {type}", eventType);
                 return null;
@@ -481,7 +489,7 @@ namespace Cognite.OpcUa
                 MetaData = extractedProperties
                     .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
                                   && kvp.Key != "Time" && kvp.Key != "EventType")
-                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                    .ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value),
                 EmittingNode = emitter
             };
             return buffEvent;

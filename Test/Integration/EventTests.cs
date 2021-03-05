@@ -52,7 +52,7 @@ namespace Test.Integration
 
             tester.Server.TriggerEvents(0);
 
-            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 3, 5);
+            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 3 && pusher.Events[ObjectIds.Server].Count == 8, 5);
 
             Assert.Single(pusher.Events[ids.Obj2]);
             Assert.Equal(2, pusher.Events[ids.Obj1].Count);
@@ -62,10 +62,10 @@ namespace Test.Integration
             Assert.Equal(ObjectIds.Server, evt.EmittingNode);
             Assert.Equal(ids.Obj1, evt.SourceNode);
             Assert.Equal(4, evt.MetaData.Count);
-            Assert.Equal("str 0", evt.MetaData["PropertyString"]);
-            Assert.Equal(0f, evt.MetaData["PropertyNum"]);
-            Assert.Equal("sub-type", evt.MetaData["SubType"]);
-            Assert.Equal((ushort)100, evt.MetaData["Severity"]);
+            Assert.Equal(new Variant("str 0"), evt.MetaData["PropertyString"]);
+            Assert.Equal(new Variant(0f), evt.MetaData["PropertyNum"]);
+            Assert.Equal(new Variant("sub-type"), evt.MetaData["SubType"]);
+            Assert.Equal(new Variant((ushort)100), evt.MetaData["Severity"]);
             Assert.True(evt.Time > DateTime.UtcNow.AddSeconds(-5));
             Assert.Equal(ids.PropType, evt.EventType);
             Assert.StartsWith(tester.Config.Extraction.IdPrefix, evt.EventId, StringComparison.InvariantCulture);
@@ -104,9 +104,9 @@ namespace Test.Integration
             Assert.Equal(ids.Obj1, evt.SourceNode);
             Assert.Equal(3, evt.MetaData.Count);
             Assert.False(evt.MetaData.ContainsKey("PropertyNum"));
-            Assert.Equal("str 0", evt.MetaData["PropertyString"]);
-            Assert.Equal("sub-type", evt.MetaData["SubType"]);
-            Assert.Equal((ushort)100, evt.MetaData["Severity"]);
+            Assert.Equal(new Variant("str 0"), evt.MetaData["PropertyString"]);
+            Assert.Equal(new Variant("sub-type"), evt.MetaData["SubType"]);
+            Assert.Equal(new Variant((ushort)100), evt.MetaData["Severity"]);
             Assert.True(evt.Time > DateTime.UtcNow.AddSeconds(-5));
             Assert.Equal(ids.PropType, evt.EventType);
             Assert.StartsWith(tester.Config.Extraction.IdPrefix, evt.EventId, StringComparison.InvariantCulture);
@@ -114,7 +114,7 @@ namespace Test.Integration
             evt = pusher.Events[ObjectIds.Server].First(evt => evt.Message == "mapped 0");
             Assert.Equal(ObjectIds.Server, evt.EmittingNode);
             Assert.Equal(2, evt.MetaData.Count);
-            Assert.Equal("CustomType", evt.MetaData["Type"]);
+            Assert.Equal(new Variant("CustomType"), evt.MetaData["Type"]);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
@@ -137,6 +137,7 @@ namespace Test.Integration
             tester.Config.Events.ExcludeEventFilter = "2$";
             tester.Config.Events.ExcludeProperties = new[] { "PropertyNum" };
             tester.Config.Events.DestinationNameMap["TypeProp"] = "Type";
+            tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -161,16 +162,16 @@ namespace Test.Integration
             Assert.Equal(ids.Obj1, evt.SourceNode);
             Assert.Equal(3, evt.MetaData.Count);
             Assert.False(evt.MetaData.ContainsKey("PropertyNum"));
-            Assert.Equal("str 0", evt.MetaData["PropertyString"]);
-            Assert.Equal("sub-type", evt.MetaData["SubType"]);
-            Assert.Equal((ushort)100, evt.MetaData["Severity"]);
+            Assert.Equal(new Variant("str 0"), evt.MetaData["PropertyString"]);
+            Assert.Equal(new Variant("sub-type"), evt.MetaData["SubType"]);
+            Assert.Equal(new Variant((ushort)100), evt.MetaData["Severity"]);
             Assert.Equal(ids.PropType, evt.EventType);
             Assert.StartsWith(tester.Config.Extraction.IdPrefix, evt.EventId, StringComparison.InvariantCulture);
 
             evt = pusher.Events[ObjectIds.Server].First(evt => evt.Message == "mapped 0");
             Assert.Equal(ObjectIds.Server, evt.EmittingNode);
             Assert.Equal(2, evt.MetaData.Count);
-            Assert.Equal("CustomType", evt.MetaData["Type"]);
+            Assert.Equal(new Variant("CustomType"), evt.MetaData["Type"]);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
@@ -193,6 +194,7 @@ namespace Test.Integration
             tester.Config.Events.ExcludeEventFilter = "2$";
             tester.Config.Events.ExcludeProperties = new[] { "PropertyNum" };
             tester.Config.Events.DestinationNameMap["TypeProp"] = "Type";
+            tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -288,7 +290,8 @@ namespace Test.Integration
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.Events[ObjectIds.Server].Count == 700, 5);
+                await CommonTestUtils.WaitForCondition(() => pusher.Events.ContainsKey(ObjectIds.Server)
+                    && pusher.Events[ObjectIds.Server].Count == 700, 5);
 
                 await extractor.Looper.StoreState(tester.Source.Token);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
@@ -318,7 +321,8 @@ namespace Test.Integration
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.Events[ObjectIds.Server].Count == 707, 5);
+                await CommonTestUtils.WaitForCondition(() => pusher.Events.ContainsKey(ObjectIds.Server)
+                    && pusher.Events[ObjectIds.Server].Count == 707, 5);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
                 Assert.Equal(707, pusher.Events[ObjectIds.Server].Count);
@@ -372,7 +376,8 @@ namespace Test.Integration
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.Events[ObjectIds.Server].Count == 700, 5);
+                await CommonTestUtils.WaitForCondition(() => pusher.Events.ContainsKey(ObjectIds.Server)
+                    && pusher.Events[ObjectIds.Server].Count == 700, 5);
 
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
@@ -400,7 +405,8 @@ namespace Test.Integration
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.Events[ObjectIds.Server].Count >= 1400, 5);
+                await CommonTestUtils.WaitForCondition(() => pusher.Events.ContainsKey(ObjectIds.Server)
+                    && pusher.Events[ObjectIds.Server].Count >= 1400, 5);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
                 if (backfill)
@@ -439,6 +445,8 @@ namespace Test.Integration
 
             tester.Config.FailureBuffer.EventPath = "event-buffer-test.bin";
             tester.Config.FailureBuffer.Enabled = true;
+
+            tester.WipeEventHistory();
 
             using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
             using var extractor = tester.BuildExtractor(true, null, pusher);

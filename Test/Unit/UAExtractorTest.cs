@@ -142,6 +142,7 @@ namespace Test.Unit
         public async Task TestPushNodes(int failAt, int pushedObjects, int pushedVariables, int pushedRefs, int failedNodes, int failedRefs)
         {
             var pusher = new DummyPusher(new DummyPusherConfig());
+            pusher.ReadProperties = false;
             tester.Config.Extraction.Relationships.Enabled = true;
             using var extractor = tester.BuildExtractor(pushers: pusher);
 
@@ -165,6 +166,7 @@ namespace Test.Unit
             }
 
             var root = new NodeId(1);
+            var ids = tester.Server.Ids.Base;
             var nodes = new List<UANode>
             {
                 new UANode(new NodeId("object1"), "object1", root),

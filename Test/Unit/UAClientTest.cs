@@ -790,6 +790,8 @@ namespace Test.Unit
                 tester.Client.RemoveSubscription("AuditListener");
             }
         }
+        #endregion
+        #region utils
         [Fact]
         public void TestExpandedNodeIdConversion()
         {
@@ -823,6 +825,7 @@ namespace Test.Unit
             Assert.Equal(4, UAClient.ConvertToDouble(new[] { 4, 5 }));
             Assert.Equal(5, UAClient.ConvertToDouble(new[] { 4, 5, 6 }.Where(val => val >= 5)));
             Assert.Equal(0, UAClient.ConvertToDouble(new object()));
+            Assert.Equal(7, UAClient.ConvertToDouble(new Variant(7)));
         }
         [Fact]
         public void TestConvertToString()
@@ -841,6 +844,22 @@ namespace Test.Unit
             {
                 new NodeId(123u, 2), new NodeId(1234u, 2), new NodeId("abc", 2)
             }));
+            Assert.Equal("somekey: gp.tl:s=abc", tester.Client.ConvertToString(new Opc.Ua.KeyValuePair
+            {
+                Key = "somekey",
+                Value = new NodeId("abc", 2)
+            }));
+            var readValueId = new ReadValueId { AttributeId = Attributes.Value, NodeId = new NodeId("test") };
+            var readValueIdStr = @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}";
+            Assert.Equal(readValueIdStr, tester.Client.ConvertToString(new Variant(readValueId)));
+            var ids = new ReadValueIdCollection { readValueId, readValueId };
+            // Results in Variant(ExtensionObject[])
+            Assert.Equal($"{{{readValueIdStr},{readValueIdStr}}}", tester.Client.ConvertToString(new Variant(ids)));
+            var ids2 = new[] { readValueId, readValueId };
+            // Results in [Variant(ExtensionObject), Variant(ExtensionObject)], so it ends up using our system
+            // This is best, the other is at least better than nothing, either way the most important thing is to get something meaningful
+            // into CDF
+            Assert.Equal($"[{readValueIdStr}, {readValueIdStr}]", tester.Client.ConvertToString(new Variant(ids2)));
         }
         [Fact]
         public void TestGetUniqueId()

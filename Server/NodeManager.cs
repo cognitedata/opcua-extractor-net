@@ -253,8 +253,6 @@ namespace Server
             if (state == null) return;
             mutation(state);
         }
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
-            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public NodeId AddProperty<T>(NodeId parentId, string name, NodeId dataType, object value, int rank = -1)
         {
             var parent = PredefinedNodes[parentId];
@@ -286,6 +284,38 @@ namespace Server
             state.AddReference(referenceType, true, newParentId);
         }
 
+        public void SetEventConfig(bool auditing, bool server, bool serverAuditing)
+        {
+            var cfnm = (ConfigurationNodeManager)Server.NodeManager.NodeManagers.First(nm => nm.GetType() == typeof(ConfigurationNodeManager));
+            lock (cfnm.Lock)
+            {
+                var serverAud = (PropertyState)cfnm.Find(VariableIds.Server_Auditing);
+                serverAud.Value = auditing;
+            }
+            var serverNode = (BaseObjectState)cfnm.Find(ObjectIds.Server);
+            if (server)
+            {
+                serverNode.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
+                
+            }
+            else
+            {
+                serverNode.EventNotifier = EventNotifiers.None;
+            }
+            if (serverAuditing)
+            {
+                serverNode.AddReferences(new[]
+                {
+                    new NodeStateReference(ReferenceTypeIds.GeneratesEvent, false, ObjectTypeIds.AuditAddNodesEventType),
+                    new NodeStateReference(ReferenceTypeIds.GeneratesEvent, false, ObjectTypeIds.AuditAddReferencesEventType),
+                });
+            }
+            else
+            {
+                serverNode.RemoveReferences(ReferenceTypeIds.GeneratesEvent, true);
+                serverNode.RemoveReferences(ReferenceTypeIds.GeneratesEvent, false);
+            }
+        }
         #endregion
 
 
@@ -698,8 +728,6 @@ namespace Server
             }
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
-            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         private void CreateAuditAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)
@@ -722,19 +750,9 @@ namespace Server
                 {
                     externalReferences[ObjectIds.Server] = references = new List<IReference>();
                 }
-                if (!externalReferences.TryGetValue(ObjectTypeIds.AuditAddNodesEventType, out var addreferences))
-                {
-                    externalReferences[ObjectTypeIds.AuditAddNodesEventType] = addreferences = new List<IReference>();
-                }
-                if (!externalReferences.TryGetValue(ObjectTypeIds.AuditAddReferencesEventType, out var refreferences))
-                {
-                    externalReferences[ObjectTypeIds.AuditAddReferencesEventType] = refreferences = new List<IReference>();
-                }
 
                 references.Add(new NodeStateReference(ReferenceTypeIds.GeneratesEvent, false, ObjectTypeIds.AuditAddNodesEventType));
-                addreferences.Add(new NodeStateReference(ReferenceTypeIds.GeneratesEvent, true, ObjectTypeIds.AuditAddNodesEventType));
-                references.Add(new NodeStateReference(ReferenceTypeIds.GeneratesEvent, false, ObjectIds.Server));
-                refreferences.Add(new NodeStateReference(ReferenceTypeIds.GeneratesEvent, true, ObjectIds.Server));
+                references.Add(new NodeStateReference(ReferenceTypeIds.GeneratesEvent, false, ObjectTypeIds.AuditAddReferencesEventType));
 
                 Ids.Audit.Root = root.NodeId;
                 Ids.Audit.DirectAdd = addDirect.NodeId;
@@ -742,8 +760,6 @@ namespace Server
                 Ids.Audit.ExcludeObj = exclude.NodeId;
             }
         }
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
-            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
         public void CreateWrongAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)

@@ -214,9 +214,9 @@ namespace Test.Unit
         [Fact]
         public async Task TestLateInit()
         {
-            var pusher1 = new DummyPusher(new DummyPusherConfig());
-            var pusher2 = new DummyPusher(new DummyPusherConfig());
-            var pusher3 = new DummyPusher(new DummyPusherConfig());
+            var pusher1 = new DummyPusher(new DummyPusherConfig()) { ReadProperties = false };
+            var pusher2 = new DummyPusher(new DummyPusherConfig()) { ReadProperties = false };
+            var pusher3 = new DummyPusher(new DummyPusherConfig()) { ReadProperties = false };
             tester.Config.Extraction.Relationships.Enabled = true;
             using var extractor = tester.BuildExtractor(true, null, pusher1, pusher2, pusher3);
             tester.Config.Extraction.Relationships.Enabled = false;
