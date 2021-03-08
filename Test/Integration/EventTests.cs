@@ -290,8 +290,8 @@ namespace Test.Integration
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.Events.ContainsKey(ObjectIds.Server)
-                    && pusher.Events[ObjectIds.Server].Count == 700, 5);
+                await CommonTestUtils.WaitForCondition(() =>
+                    pusher.Events.ContainsKey(ObjectIds.Server) && pusher.Events[ObjectIds.Server].Count == 700, 5);
 
                 await extractor.Looper.StoreState(tester.Source.Token);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
@@ -321,8 +321,8 @@ namespace Test.Integration
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.Events.ContainsKey(ObjectIds.Server)
-                    && pusher.Events[ObjectIds.Server].Count == 707, 5);
+                await CommonTestUtils.WaitForCondition(() => 
+                    pusher.Events.ContainsKey(ObjectIds.Server) && pusher.Events[ObjectIds.Server].Count == 707, 5);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
                 Assert.Equal(707, pusher.Events[ObjectIds.Server].Count);
@@ -376,8 +376,8 @@ namespace Test.Integration
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.Events.ContainsKey(ObjectIds.Server)
-                    && pusher.Events[ObjectIds.Server].Count == 700, 5);
+                await CommonTestUtils.WaitForCondition(() =>
+                    pusher.Events.ContainsKey(ObjectIds.Server) && pusher.Events[ObjectIds.Server].Count == 700, 5);
 
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
@@ -405,8 +405,8 @@ namespace Test.Integration
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => pusher.Events.ContainsKey(ObjectIds.Server)
-                    && pusher.Events[ObjectIds.Server].Count >= 1400, 5);
+                await CommonTestUtils.WaitForCondition(() =>
+                    pusher.Events.ContainsKey(ObjectIds.Server) && pusher.Events[ObjectIds.Server].Count >= 1400, 5);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
                 if (backfill)

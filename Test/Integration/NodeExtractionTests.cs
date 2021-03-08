@@ -1026,7 +1026,7 @@ namespace Test.Integration
                     {
                         Name = "^CustomRoot$"
                     },
-                    Type = "property"
+                    Type = TransformationType.Property
                 }
             };
 
@@ -1068,7 +1068,7 @@ namespace Test.Integration
                             Name = "^CustomRoot$"
                         }
                     },
-                    Type = "ignore"
+                    Type = TransformationType.Ignore
                 }
             };
 

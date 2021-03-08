@@ -26,6 +26,7 @@ namespace Cognite.OpcUa
             Id = CreateRegex(filter.Id);
             Namespace = CreateRegex(filter.Namespace);
             TypeDefinition = CreateRegex(filter.TypeDefinition);
+            IsArray = filter.IsArray;
             if (filter.Parent != null)
             {
                 Parent = new NodeFilter(filter.Parent);
@@ -55,16 +56,19 @@ namespace Cognite.OpcUa
             if (Name != null && (string.IsNullOrEmpty(name) || !Name.IsMatch(name))) return false;
             if (Id != null)
             {
+                if (id == null || id.IsNullNodeId) return false;
                 var idstr = GetIdString(id);
                 if (!Id.IsMatch(idstr)) return false;
             }
             if (Namespace != null && namespaces != null)
             {
                 var ns = namespaces.GetString(id.NamespaceIndex);
+                if (string.IsNullOrEmpty(ns)) return false;
                 if (!Namespace.IsMatch(ns)) return false;
             }
-            if (TypeDefinition != null && typeDefinition != null && !typeDefinition.IsNullNodeId)
+            if (TypeDefinition != null)
             {
+                if (typeDefinition == null || typeDefinition.IsNullNodeId) return false;
                 var tdStr = GetIdString(typeDefinition);
                 if (!TypeDefinition.IsMatch(tdStr)) return false;
             }
@@ -135,17 +139,7 @@ namespace Cognite.OpcUa
         public NodeTransformation(RawNodeTransformation raw, int index)
         {
             Filter = new NodeFilter(raw.Filter);
-            switch (raw.Type)
-            {
-                case "ignore":
-                    Type = TransformationType.Ignore;
-                    break;
-                case "property":
-                    Type = TransformationType.Property;
-                    break;
-                default:
-                    throw new ConfigurationException("Unknown transformation type: " + raw.Type);
-            }
+            Type = raw.Type;
             this.index = index;
         }
         public void ApplyTransformation(UANode node, NamespaceTable ns)
@@ -155,6 +149,7 @@ namespace Cognite.OpcUa
                 node.Ignore |= node.Parent.Ignore;
                 node.IsProperty |= node.Parent.IsProperty;
             }
+            if (node.Ignore || node.IsProperty && Type == TransformationType.Property) return;
             if (Filter.IsMatch(node, ns))
             {
                 switch (Type)

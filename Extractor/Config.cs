@@ -340,7 +340,7 @@ namespace Cognite.OpcUa
     }
     public class RawNodeTransformation
     {
-        public string Type { get; set; }
+        public TransformationType Type { get; set; }
         public RawNodeFilter Filter { get; set; }
     }
 }

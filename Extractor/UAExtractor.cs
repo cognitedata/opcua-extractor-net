@@ -537,7 +537,7 @@ namespace Cognite.OpcUa
                     {
                         Id = config.Extraction.PropertyIdFilter
                     },
-                    Type = "property"
+                    Type = TransformationType.Property
                 }, idx++));
             }
             if (!string.IsNullOrEmpty(config.Extraction.PropertyNameFilter))
@@ -549,7 +549,7 @@ namespace Cognite.OpcUa
                     {
                         Name = config.Extraction.PropertyNameFilter
                     },
-                    Type = "property"
+                    Type = TransformationType.Property
                 }, idx++));
             }
             if (config.Extraction.IgnoreName != null && config.Extraction.IgnoreName.Any())
@@ -562,7 +562,7 @@ namespace Cognite.OpcUa
                     {
                         Name = filterStr
                     },
-                    Type = "ignore"
+                    Type = TransformationType.Ignore
                 }, idx++));
             }
             if (config.Extraction.IgnoreNamePrefix != null && config.Extraction.IgnoreNamePrefix.Any())
@@ -575,7 +575,7 @@ namespace Cognite.OpcUa
                     {
                         Name = filterStr
                     },
-                    Type = "ignore"
+                    Type = TransformationType.Ignore
                 }, idx++));
             }
             foreach (var trans in transformations)
