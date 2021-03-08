@@ -851,7 +851,6 @@ namespace Cognite.OpcUa
                         trns.ApplyTransformation(node, uaClient.NamespaceTable);
                     }
                 }
-                // Transformations here
 
                 if (node.Ignore) continue;
 
@@ -1177,41 +1176,41 @@ namespace Cognite.OpcUa
 
             if (node.NodeClass == NodeClass.Object)
             {
-                var bufferedNode = new UANode(uaClient.ToNodeId(node.NodeId),
+                var uaNode = new UANode(uaClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
 
                 if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
                 {
-                    bufferedNode.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), false);
+                    uaNode.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), false);
                 }
-                log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
-                State.RegisterNode(bufferedNode.Id, GetUniqueId(bufferedNode.Id));
-                commonQueue.Enqueue(bufferedNode);
+                log.Verbose("HandleNode Object {name}", uaNode.DisplayName);
+                State.RegisterNode(uaNode.Id, GetUniqueId(uaNode.Id));
+                commonQueue.Enqueue(uaNode);
                 mapped = true;
             }
             else if (node.NodeClass == NodeClass.Variable)
             {
-                var bufferedNode = new UAVariable(uaClient.ToNodeId(node.NodeId),
+                var variable = new UAVariable(uaClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
 
-                if (IsProperty(node))
+                if (node.TypeDefinition == VariableTypeIds.PropertyType)
                 {
-                    bufferedNode.IsProperty = true;
+                    variable.IsProperty = true;
                     // Properties do not have children themselves in OPC-UA,
                     // but mapped variables might.
-                    bufferedNode.PropertiesRead = node.TypeDefinition == VariableTypeIds.PropertyType;
+                    variable.PropertiesRead = node.TypeDefinition == VariableTypeIds.PropertyType;
                 }
                 else
                 {
                     mapped = true;
-                    if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
-                    {
-                        bufferedNode.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), true);
-                    }
                 }
-                State.RegisterNode(bufferedNode.Id, GetUniqueId(bufferedNode.Id));
-                log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
-                commonQueue.Enqueue(bufferedNode);
+                if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
+                {
+                    variable.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), true);
+                }
+                State.RegisterNode(variable.Id, GetUniqueId(variable.Id));
+                log.Verbose("HandleNode Variable {name}", variable.DisplayName);
+                commonQueue.Enqueue(variable);
             }
 
             if (mapped && config.Extraction.Relationships.Enabled && config.Extraction.Relationships.Hierarchical)
@@ -1219,17 +1218,6 @@ namespace Cognite.OpcUa
                 if (parentId == null || parentId.IsNullNodeId) return;
                 referenceQueue.Enqueue((node, parentId));
             }
-        }
-
-        public bool IsProperty(ReferenceDescription node)
-        {
-            if (node == null) throw new ArgumentNullException(nameof(node));
-            if (node.TypeDefinition == VariableTypeIds.PropertyType)
-            {
-                return true;
-            }
-
-            return false;
         }
 
         /// <summary>

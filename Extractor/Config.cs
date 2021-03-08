@@ -335,6 +335,7 @@ namespace Cognite.OpcUa
         public string Id { get; set; }
         public bool? IsArray { get; set; }
         public string Namespace { get; set; }
+        public string TypeDefinition { get; set; }
         public RawNodeFilter Parent { get; set; }
     }
     public class RawNodeTransformation

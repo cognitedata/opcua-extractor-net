@@ -10,12 +10,13 @@ namespace Cognite.OpcUa
 {
     public class NodeFilter
     {
-        public Regex Name { get; }
-        public Regex Description { get; }
-        public Regex Id { get; }
-        public bool? IsArray { get; }
-        public Regex Namespace { get; }
-        public NodeFilter Parent { get; }
+        private Regex Name { get; }
+        private Regex Description { get; }
+        private Regex Id { get; }
+        private bool? IsArray { get; }
+        private Regex Namespace { get; }
+        private Regex TypeDefinition { get; }
+        private NodeFilter Parent { get; }
         public NodeFilter(RawNodeFilter filter)
         {
             // Filter with no elements applies to everything, which may be bizarre, but that's on the user.
@@ -24,6 +25,7 @@ namespace Cognite.OpcUa
             Description = CreateRegex(filter.Description);
             Id = CreateRegex(filter.Id);
             Namespace = CreateRegex(filter.Namespace);
+            TypeDefinition = CreateRegex(filter.TypeDefinition);
             if (filter.Parent != null)
             {
                 Parent = new NodeFilter(filter.Parent);
@@ -42,13 +44,13 @@ namespace Cognite.OpcUa
             return new Regex(raw, RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.CultureInvariant);
         }
 
-        public bool IsBasicMatch(string name, NodeId id, NamespaceTable namespaces)
+        public bool IsBasicMatch(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces)
         {
             if (Description != null || IsArray != null || Parent != null) return false;
-            return MatchBasic(name, id, namespaces);
+            return MatchBasic(name, id, typeDefinition, namespaces);
         }
 
-        private bool MatchBasic(string name, NodeId id, NamespaceTable namespaces)
+        private bool MatchBasic(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces)
         {
             if (Name != null && (string.IsNullOrEmpty(name) || !Name.IsMatch(name))) return false;
             if (Id != null)
@@ -61,12 +63,17 @@ namespace Cognite.OpcUa
                 var ns = namespaces.GetString(id.NamespaceIndex);
                 if (!Namespace.IsMatch(ns)) return false;
             }
+            if (TypeDefinition != null && typeDefinition != null && !typeDefinition.IsNullNodeId)
+            {
+                var tdStr = GetIdString(typeDefinition);
+                if (!TypeDefinition.IsMatch(tdStr)) return false;
+            }
             return true;
         }
 
         public bool IsMatch(UANode node, NamespaceTable ns)
         {
-            if (!MatchBasic(node.DisplayName, node.Id, ns)) return false;
+            if (!MatchBasic(node.DisplayName, node.Id, node.NodeType?.Id, ns)) return false;
             if (Description != null && (string.IsNullOrEmpty(node.Description) || !Description.IsMatch(node.Description))) return false;
             if (IsArray != null && (!(node is UAVariable variable) || variable.IsArray != IsArray)) return false;
             if (Parent != null && (node.Parent == null || !Parent.IsMatch(node.Parent, ns))) return false;

@@ -572,10 +572,10 @@ namespace Cognite.OpcUa
                 VisitedNodes.Clear();
             }
         }
-        public bool NodeFilter(string displayName, NodeId id)
+        public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition)
         {
             if (IgnoreFilters == null) return true;
-            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, NamespaceTable))) return false;
+            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, NamespaceTable))) return false;
             return true;
         }
 
@@ -632,7 +632,7 @@ namespace Cognite.OpcUa
                     {
                         var nodeId = ToNodeId(rd.NodeId);
                         if (rd.NodeId == ObjectIds.Server || rd.NodeId == ObjectIds.Aliases) continue;
-                        if (doFilter && !NodeFilter(rd.DisplayName.Text, ToNodeId(rd.NodeId)))
+                        if (doFilter && !NodeFilter(rd.DisplayName.Text, ToNodeId(rd.TypeDefinition), ToNodeId(rd.NodeId)))
                         {
                             log.Verbose("Ignoring filtered {nodeId}", nodeId);
                             continue;
