@@ -276,7 +276,11 @@ namespace Cognite.OpcUa
         public string ExcludeEventFilter { get; set; }
         public IEnumerable<string> ExcludeProperties { get => excludeProperties; set => excludeProperties = value ?? excludeProperties; }
         private IEnumerable<string> excludeProperties = new List<string>();
-        public IEnumerable<string> BaseExcludeProperties { get; } = new List<string> { "LocalTime", "ReceiveTime", "SourceName" };
+        public IEnumerable<string> BaseExcludeProperties {
+            get => baseExcludeProperties;
+            set => baseExcludeProperties = value ?? baseExcludeProperties;
+        }
+        private IEnumerable<string> baseExcludeProperties = new List<string> { "LocalTime", "ReceiveTime" };
         public Dictionary<string, string> DestinationNameMap { get => destinationNameMap; set => destinationNameMap = value ?? destinationNameMap; }
         private Dictionary<string, string> destinationNameMap = new Dictionary<string, string>();
     }
