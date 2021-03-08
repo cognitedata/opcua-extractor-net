@@ -115,7 +115,7 @@ namespace Test.Integration
 
             evt = pusher.Events[ObjectIds.Server].First(evt => evt.Message == "mapped 0");
             Assert.Equal(ObjectIds.Server, evt.EmittingNode);
-            Assert.Equal(2, evt.MetaData.Count);
+            Assert.Equal(3, evt.MetaData.Count);
             Assert.Equal(new Variant("CustomType"), evt.MetaData["Type"]);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
