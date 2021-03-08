@@ -50,6 +50,7 @@ namespace Test.Utils
                 Client.RemoveSubscription("EventListener");
                 Client.RemoveSubscription("DataChangeListener");
                 Client.RemoveSubscription("AuditListener");
+                Client.IgnoreFilters = null;
             }
             return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
         }

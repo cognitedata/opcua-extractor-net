@@ -567,7 +567,7 @@ namespace Cognite.OpcUa
             }
             if (config.Extraction.IgnoreNamePrefix != null && config.Extraction.IgnoreNamePrefix.Any())
             {
-                log.Warning("Ignore name prefix is deprecated, use transformations instead");
+                log.Warning("Ignore name prefix is deprecated, use transformations instead: {cnf}", string.Join(',', config.Extraction.IgnoreNamePrefix));
                 var filterStr = string.Join('|', config.Extraction.IgnoreNamePrefix.Select(str => $"^{str}"));
                 transformations.Add(new NodeTransformation(new RawNodeTransformation
                 {
@@ -578,7 +578,10 @@ namespace Cognite.OpcUa
                     Type = "ignore"
                 }, idx++));
             }
-
+            foreach (var trans in transformations)
+            {
+                log.Debug(trans.ToString());
+            }
             
             uaClient.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
             this.transformations = transformations;
@@ -673,24 +676,12 @@ namespace Cognite.OpcUa
             }
         }
 
-        private async Task GetNodeData(UpdateConfig update, IEnumerable<UANode> nodes)
+        private async Task GetExtraNodeData(UpdateConfig update, BrowseResult result)
         {
-            var variables = new List<UAVariable>();
-            var objects = new List<UANode>();
-            foreach (var node in nodes)
-            {
-                if (node is UAVariable variable)
-                {
-                    variables.Add(variable);
-                }
-                else
-                {
-                    objects.Add(node);
-                }
-            }
-
             log.Information("Getting data for {NumVariables} variables and {NumObjects} objects",
-                variables.Count, objects.Count);
+                result.RawVariables.Count, result.RawObjects.Count);
+
+            var nodes = result.RawObjects.Concat(result.RawVariables);
 
             if (update.Objects.Metadata || update.Variables.Metadata)
             {
@@ -704,10 +695,10 @@ namespace Cognite.OpcUa
                     await ReadProperties(toReadProperties);
                 }
             }
-            await Task.Run(() => uaClient.ReadNodeData(nodes, source.Token));
 
             var extraMetaTasks = new List<Task>();
-            extraMetaTasks.Add(DataTypeManager.GetDataTypeMetadataAsync(variables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token));
+            extraMetaTasks.Add(DataTypeManager.GetDataTypeMetadataAsync(
+                result.RawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token));
             if (config.Extraction.NodeTypes.Metadata)
             {
                 extraMetaTasks.Add(uaClient.ObjectTypeManager.GetObjectTypeMetadataAsync(source.Token));
@@ -833,8 +824,7 @@ namespace Cognite.OpcUa
                 nodeMap[node.Id] = node;
             }
 
-            var update = config.Extraction.Update;
-            await GetNodeData(update, nodeMap.Values);
+            await Task.Run(() => uaClient.ReadNodeData(nodeMap.Values, source.Token));
 
             foreach (var node in nodeMap.Values)
             {
@@ -872,6 +862,9 @@ namespace Cognite.OpcUa
                     result.RawObjects.Add(node);
                 }
             }
+
+            var update = config.Extraction.Update;
+            await GetExtraNodeData(update, result);
 
             result.Objects.AddRange(FilterObjects(update, result.RawObjects));
             InitEventStates(result);
@@ -1196,9 +1189,7 @@ namespace Cognite.OpcUa
                 if (node.TypeDefinition == VariableTypeIds.PropertyType)
                 {
                     variable.IsProperty = true;
-                    // Properties do not have children themselves in OPC-UA,
-                    // but mapped variables might.
-                    variable.PropertiesRead = node.TypeDefinition == VariableTypeIds.PropertyType;
+                    variable.PropertiesRead = true;
                 }
                 else
                 {

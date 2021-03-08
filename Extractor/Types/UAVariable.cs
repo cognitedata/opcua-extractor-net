@@ -151,6 +151,8 @@ namespace Cognite.OpcUa.Types
             ValueRank = other.ValueRank;
             ArrayDimensions = other.ArrayDimensions;
             NodeType = other.NodeType;
+            Properties = other.Properties;
+            PropertiesRead = other.PropertiesRead;
         }
         /// <summary>
         /// Returns given variable if it is not null, otherwise throws an error.

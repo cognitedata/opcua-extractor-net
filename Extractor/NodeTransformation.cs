@@ -79,6 +79,51 @@ namespace Cognite.OpcUa
             if (Parent != null && (node.Parent == null || !Parent.IsMatch(node.Parent, ns))) return false;
             return true;
         }
+        public void Format(StringBuilder builder, int idx)
+        {
+            if (Name != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("Name: {0}\n", Name);
+            }
+            if (Description != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("Description: {0}\n", Description);
+            }
+            if (Id != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("Id: {0}\n", Id);
+            }
+            if (IsArray != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("IsArray: {0}\n", IsArray);
+            }
+            if (Namespace != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("Namespace: {0}\n", Namespace);
+            }
+            if (Namespace != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("TypeDefinition: {0}\n", TypeDefinition);
+            }
+            if (Parent != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.Append("Parent:\n");
+                Parent.Format(builder, idx + 1);
+            }
+        }
+        public override string ToString()
+        {
+            var builder = new StringBuilder();
+            Format(builder, 0);
+            return builder.ToString();
+        }
     }
 
     public class NodeTransformation
@@ -124,6 +169,15 @@ namespace Cognite.OpcUa
                         break;
                 }
             }
+        }
+        public override string ToString()
+        {
+            var builder = new StringBuilder();
+            builder.AppendFormat("Transformation {0}:\n", index);
+            builder.AppendFormat("Type: {0}\n", Type);
+            builder.Append("Filter:\n");
+            Filter.Format(builder, 0);
+            return builder.ToString();
         }
     }
 

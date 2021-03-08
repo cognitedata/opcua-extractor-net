@@ -985,13 +985,15 @@ namespace Cognite.OpcUa
                     if (variable.IsProperty) continue;
                     UAVariable arrayParent = variable.Index == -1 ? variable : variable.ArrayParent;
 
-                    if (arrayParent != null && arrayParent.Index == -1 && arrayParent.ArrayDimensions != null
-                        && arrayParent.ArrayDimensions.Count == 1 && arrayParent.ArrayDimensions[0] > 0)
+                    if (arrayParent != null && arrayParent.Index == -1 && arrayParent.IsArray)
                     {
-                        foreach (var child in arrayParent.ArrayChildren)
+                        if (arrayParent.ArrayChildren != null)
                         {
-                            child.PropertiesRead = true;
-                            child.Properties = parent.Properties;
+                            foreach (var child in arrayParent.ArrayChildren)
+                            {
+                                child.PropertiesRead = true;
+                                child.Properties = parent.Properties;
+                            }
                         }
                         arrayParent.PropertiesRead = true;
                         arrayParent.Properties = parent.Properties;

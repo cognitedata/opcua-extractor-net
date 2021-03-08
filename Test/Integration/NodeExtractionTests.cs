@@ -1046,6 +1046,11 @@ namespace Test.Integration
             // Verify that the metadata fields get values
             Assert.Equal("[0, 0, 0, 0]", meta["CustomRoot_Variable Array"]);
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
+
+            extraction.Transformations = null;
+            extraction.DataTypes.AllowStringVariables = false;
+            extraction.DataTypes.MaxArraySize = 0;
+            extraction.DataTypes.AutoIdentifyTypes = false;
         }
         [Fact]
         public async Task TestLateIgnore()
@@ -1076,6 +1081,11 @@ namespace Test.Integration
             extraction.DataTypes.AutoIdentifyTypes = true;
 
             await extractor.RunExtractor(true);
+
+            extraction.Transformations = null;
+            extraction.DataTypes.AllowStringVariables = false;
+            extraction.DataTypes.MaxArraySize = 0;
+            extraction.DataTypes.AutoIdentifyTypes = false;
 
             Assert.Single(pusher.PushedNodes);
             Assert.Empty(pusher.PushedVariables);
