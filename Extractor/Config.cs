@@ -297,7 +297,6 @@ namespace Cognite.OpcUa
         public long StartTime { get; set; }
         public int Granularity { get; set; } = 600;
     }
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:Uri properties should not be strings", Justification = "Yaml Deserialization")]
     public class ProtoNodeId
     {
         public string NamespaceUri { get; set; }

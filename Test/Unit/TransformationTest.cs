@@ -299,7 +299,6 @@ namespace Test.Unit
                 Type = TransformationType.Ignore
             };
             
-
             var node1 = new UANode(new NodeId("parent"), null, NodeId.Null);
             var node2 = new UANode(new NodeId(1), null, new NodeId("parent"));
             node2.Parent = node1;
