@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.TypeCollectors;
+using CogniteSdk;
 using Opc.Ua;
 using System;
 
@@ -82,10 +83,10 @@ namespace Cognite.OpcUa.Types
             return HashCode.Combine(Source, Target, Type.Id, IsForward);
         }
 
-        public CogniteSdk.Beta.RelationshipCreate ToRelationship(long? dataSetId, UAExtractor extractor)
+        public RelationshipCreate ToRelationship(long? dataSetId, UAExtractor extractor)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
-            var relationship = new CogniteSdk.Beta.RelationshipCreate
+            var relationship = new RelationshipCreate
             {
                 DataSetId = dataSetId,
                 SourceExternalId = extractor.GetUniqueId(Source.Id),
@@ -121,10 +122,10 @@ namespace Cognite.OpcUa.Types
             return HashCode.Combine(Id, IsTimeSeries);
         }
 
-        public CogniteSdk.Beta.RelationshipVertexType GetVertexType()
+        public RelationshipVertexType GetVertexType()
         {
-            if (IsTimeSeries) return CogniteSdk.Beta.RelationshipVertexType.TimeSeries;
-            return CogniteSdk.Beta.RelationshipVertexType.Asset;
+            if (IsTimeSeries) return RelationshipVertexType.TimeSeries;
+            return RelationshipVertexType.Asset;
         }
     }
 }

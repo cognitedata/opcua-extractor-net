@@ -398,7 +398,7 @@ namespace Cognite.Bridge
                 log.Warning("Null payload in relationships");
                 return true;
             }
-            var relationships = JsonSerializer.Deserialize<IEnumerable<CogniteSdk.Beta.RelationshipCreate>>(Encoding.UTF8.GetString(msg.Payload));
+            var relationships = JsonSerializer.Deserialize<IEnumerable<RelationshipCreate>>(Encoding.UTF8.GetString(msg.Payload));
 
             var tasks = relationships.ChunkBy(1000).Select(chunk => PushRelationshipsChunk(chunk, token));
             try
@@ -419,11 +419,11 @@ namespace Cognite.Bridge
             return true;
         }
 
-        private async Task PushRelationshipsChunk(IEnumerable<CogniteSdk.Beta.RelationshipCreate> relationships, CancellationToken token)
+        private async Task PushRelationshipsChunk(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
             try
             {
-                await destination.CogniteClient.Beta.Relationships.CreateAsync(relationships, token);
+                await destination.CogniteClient.Relationships.CreateAsync(relationships, token);
             }
             catch (ResponseException ex)
             {

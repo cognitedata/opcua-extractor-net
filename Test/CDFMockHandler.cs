@@ -15,9 +15,11 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -47,7 +49,7 @@ namespace Test
         public Dictionary<string, StatelessTimeseriesDummy> TimeseriesRaw { get; } = new Dictionary<string, StatelessTimeseriesDummy>();
         public Dictionary<string, RelationshipDummy> Relationships { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, RelationshipDummy> RelationshipsRaw { get; } = new Dictionary<string, RelationshipDummy>();
-
+        public Dictionary<string, DataSet> DataSets { get; } = new Dictionary<string, DataSet>();
         long assetIdCounter = 1;
         long timeseriesIdCounter = 1;
         long eventIdCounter = 1;
@@ -205,6 +207,9 @@ namespace Test
                         case "/relationships":
                             res = HandleCreateRelationships(content);
                             break;
+                        case "/datasets/byids":
+                            res = HandleRetrieveDataSets(content);
+                            break;
                         default:
                             log.Warning("Unknown path: {DummyFactoryUnknownPath}", reqPath);
                             res = new HttpResponseMessage(HttpStatusCode.InternalServerError);
@@ -265,7 +270,7 @@ namespace Test
                     {
                         MockAsset(id);
                     }
-                    string res = JsonConvert.SerializeObject(new AssetReadWrapper
+                    string res = JsonConvert.SerializeObject(new ReadWrapper<AssetDummy>
                     {
                         items = found.Concat(missing).Select(aid => Assets[aid])
                     });
@@ -311,7 +316,7 @@ namespace Test
             }
             else
             {
-                string result = JsonConvert.SerializeObject(new AssetReadWrapper
+                string result = JsonConvert.SerializeObject(new ReadWrapper<AssetDummy>
                 {
                     items = found.Select(id => Assets[id])
                 });
@@ -324,7 +329,7 @@ namespace Test
 
         private HttpResponseMessage HandleCreateAssets(string content)
         {
-            var newAssets = JsonConvert.DeserializeObject<AssetReadWrapper>(content);
+            var newAssets = JsonConvert.DeserializeObject<ReadWrapper<AssetDummy>>(content);
             foreach (var asset in newAssets.items)
             {
                 asset.id = assetIdCounter++;
@@ -342,7 +347,7 @@ namespace Test
 
         private static HttpResponseMessage HandleListEvents()
         {
-            string res = JsonConvert.SerializeObject(new EventsReadWrapper
+            string res = JsonConvert.SerializeObject(new ReadWrapper<EventDummy>
             {
                 items = new List<EventDummy>()
             });
@@ -354,7 +359,7 @@ namespace Test
 
         private static HttpResponseMessage HandleListTimeseries()
         {
-            string res = JsonConvert.SerializeObject(new TimeseriesReadWrapper
+            string res = JsonConvert.SerializeObject(new ReadWrapper<TimeseriesDummy>
             {
                 items = new List<TimeseriesDummy>()
             });
@@ -389,7 +394,7 @@ namespace Test
                     {
                         MockTimeseries(id);
                     }
-                    string res = JsonConvert.SerializeObject(new TimeseriesReadWrapper
+                    string res = JsonConvert.SerializeObject(new ReadWrapper<TimeseriesDummy>
                     {
                         items = found.Concat(missing).Select(tid => Timeseries[tid])
                     });
@@ -455,7 +460,7 @@ namespace Test
                         }
                     }
                 }
-                string result = JsonConvert.SerializeObject(new TimeseriesReadWrapper
+                string result = JsonConvert.SerializeObject(new ReadWrapper<TimeseriesDummy>
                 {
                     items = found.Select(id => Timeseries[id])
                 });
@@ -468,7 +473,7 @@ namespace Test
 
         private HttpResponseMessage HandleCreateTimeseries(string content)
         {
-            var newTimeseries = JsonConvert.DeserializeObject<TimeseriesReadWrapper>(content);
+            var newTimeseries = JsonConvert.DeserializeObject<ReadWrapper<TimeseriesDummy>>(content);
             foreach (var ts in newTimeseries.items)
             {
                 ts.id = timeseriesIdCounter++;
@@ -856,7 +861,7 @@ namespace Test
                 }
                 ret.Add(old);
             }
-            var result = new AssetReadWrapper
+            var result = new ReadWrapper<AssetDummy>
             {
                 items = ret,
             };
@@ -935,7 +940,7 @@ namespace Test
                 }
                 ret.Add(old);
             }
-            var result = new TimeseriesReadWrapper
+            var result = new ReadWrapper<TimeseriesDummy>
             {
                 items = ret,
             };
@@ -1021,6 +1026,27 @@ namespace Test
                 Content = new StringContent(result)
             };
         }
+
+        private HttpResponseMessage HandleRetrieveDataSets(string content)
+        {
+            var ids = JsonConvert.DeserializeObject<IdentityListWrapper>(content);
+            var items = new List<DataSet>();
+
+            foreach (var id in ids.items)
+            {
+                items.Add(DataSets[id.externalId]);
+            }
+            var data = JsonConvert.SerializeObject(new ItemWrapper<DataSet>
+            {
+                Items = items
+            }, new JsonSerializerSettings {
+                ContractResolver = new DefaultContractResolver { NamingStrategy = new CamelCaseNamingStrategy() }
+            });
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(data)
+            };
+        }
     }
     public class AssetDummy
     {
@@ -1034,11 +1060,6 @@ namespace Test
         public long rootId { get; set; }
         public string parentExternalId { get; set; }
     }
-    public class AssetReadWrapper
-    {
-        public IEnumerable<AssetDummy> items { get; set; }
-    }
-
     public class NullableSet<T>
     {
         public T set { get; set; }
@@ -1096,13 +1117,9 @@ namespace Test
     {
         public ErrorContent error { get; set; }
     }
-    public class TimeseriesReadWrapper
+    public class ReadWrapper<T>
     {
-        public IEnumerable<TimeseriesDummy> items { get; set; }
-    }
-    public class EventsReadWrapper
-    {
-        public IEnumerable<EventDummy> items { get; set; }
+        public IEnumerable<T> items { get; set; }
     }
     public class TimeseriesDummy
     {
