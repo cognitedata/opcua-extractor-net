@@ -1011,22 +1011,21 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="readParams"></param>
         /// <returns>Pairs of NodeId and history read results as IEncodable</returns>
-        public IEnumerable<(NodeId Id, IEncodeable RawData)> DoHistoryRead(HistoryReadParams readParams)
+        public IEnumerable<(HistoryReadNode Node, IEncodeable RawData)> DoHistoryRead(HistoryReadParams readParams)
         {
             if (readParams == null) throw new ArgumentNullException(nameof(readParams));
             IncOperations();
             var ids = new HistoryReadValueIdCollection();
-            var nodesIndices = readParams.Nodes.ToArray();
-            foreach (var id in readParams.Nodes)
+            foreach (var node in readParams.Nodes)
             {
                 ids.Add(new HistoryReadValueId
                 {
-                    NodeId = id,
-                    ContinuationPoint = readParams.ContinuationPoints[id]
+                    NodeId = node.Id,
+                    ContinuationPoint = node.ContinuationPoint
                 });
             }
 
-            var result = new List<(NodeId, IEncodeable)>();
+            var result = new List<(HistoryReadNode, IEncodeable)>();
             try
             {
                 Session.HistoryRead(
@@ -1039,25 +1038,23 @@ namespace Cognite.OpcUa
                     out _
                 );
                 numHistoryReads.Inc();
-                int idx = 0;
-                foreach (var data in results)
+                for (int i = 0; i < readParams.Nodes.Count; i++)
                 {
+                    var data = results[i];
+                    var node = readParams.Nodes[i];
                     if (StatusCode.IsBad(data.StatusCode))
                     {
                         throw new ServiceResultException(data.StatusCode);
                     }
-                    var nodeId = nodesIndices[idx];
-                    result.Add((nodeId, ExtensionObject.ToEncodeable(data.HistoryData)));
+                    result.Add((node, ExtensionObject.ToEncodeable(data.HistoryData)));
                     if (data.ContinuationPoint == null)
                     {
-                        readParams.Completed[nodeId] = true;
+                        node.Completed = true;
                     }
                     else
                     {
-                        readParams.ContinuationPoints[nodeId] = data.ContinuationPoint;
+                        node.ContinuationPoint = data.ContinuationPoint;
                     }
-
-                    idx++;
                 }
 
                 log.Debug("Fetched historical "
@@ -1789,21 +1786,18 @@ namespace Cognite.OpcUa
     public class HistoryReadParams
     {
         public HistoryReadDetails Details { get; }
-        public IEnumerable<NodeId> Nodes { get; set; }
-        public IDictionary<NodeId, byte[]> ContinuationPoints { get; }
-        public IDictionary<NodeId, bool> Completed { get; }
+        public List<HistoryReadNode> Nodes { get; set; }
 
         public HistoryReadParams(IEnumerable<NodeId> nodes, HistoryReadDetails details)
         {
-            Nodes = nodes ?? throw new ArgumentNullException(nameof(nodes));
-            ContinuationPoints = new Dictionary<NodeId, byte[]>();
-            Completed = new Dictionary<NodeId, bool>();
+            Nodes = nodes.Select(node => new HistoryReadNode { Id = node }).ToList();
             Details = details;
-            foreach (var node in nodes)
-            {
-                ContinuationPoints[node] = null;
-                Completed[node] = false;
-            }
         }
+    }
+    public class HistoryReadNode
+    {
+        public NodeId Id { get; set; }
+        public byte[] ContinuationPoint { get; set; }
+        public bool Completed { get; set; }
     }
 }

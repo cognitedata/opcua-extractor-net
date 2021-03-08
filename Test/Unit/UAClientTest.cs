@@ -491,7 +491,7 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestGetNodeProperties()
+        public async Task TestGetNodeProperties()
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests", "opcua_browse_operations");
             var arrayVar = new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root)
@@ -521,7 +521,7 @@ namespace Test.Unit
                 }
             };
 
-            tester.Client.GetNodeProperties(nodes, tester.Source.Token);
+            await tester.Client.GetNodeProperties(nodes, tester.Source.Token);
             Assert.Equal(2, nodes[0].Properties.Count);
             Assert.Equal(2, nodes[1].Properties.Count);
             Assert.Equal(2, nodes[2].Properties.Count);
@@ -569,8 +569,8 @@ namespace Test.Unit
                 {
                     var historyData = result.RawData as HistoryData;
                     Assert.Equal(600, historyData.DataValues.Count);
-                    Assert.False(req.Completed[result.Id]);
-                    Assert.NotNull(req.ContinuationPoints[result.Id]);
+                    Assert.False(result.Node.Completed);
+                    Assert.NotNull(result.Node.ContinuationPoint);
                 }
 
                 results = tester.Client.DoHistoryRead(req);
@@ -581,7 +581,7 @@ namespace Test.Unit
                 {
                     var historyData = result.RawData as HistoryData;
                     Assert.Equal(400, historyData.DataValues.Count);
-                    Assert.True(req.Completed[result.Id]);
+                    Assert.True(result.Node.Completed);
                 }
             }
             finally

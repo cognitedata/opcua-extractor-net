@@ -951,16 +951,16 @@ namespace Cognite.OpcUa.Config
                 {
                     var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
 
-                    foreach (var (id, rawData) in result)
+                    foreach (var (node, rawData) in result)
                     {
-                        var data = ToolUtil.ReadResultToDataPoints(rawData, stateMap[id], this);
+                        var data = ToolUtil.ReadResultToDataPoints(rawData, stateMap[node.Id], this);
                         // If we want to do analysis of how best to read history, we need some number of datapoints
                         // If this number is too low, it typically means that there is no real history to read.
                         // Some servers write a single datapoint to history on startup, having a decently large number here
                         // means that we don't base our history analysis on those.
                         if (data.Length > 100 && nodeWithData == null)
                         {
-                            nodeWithData = id;
+                            nodeWithData = node.Id;
                         }
 
 
@@ -969,12 +969,12 @@ namespace Cognite.OpcUa.Config
                         long avgTicks = (data.Last().Timestamp.Ticks - data.First().Timestamp.Ticks) / (data.Length - 1);
                         sumDistance += avgTicks;
 
-                        if (historyParams.Completed[id]) continue;
+                        if (node.Completed) continue;
                         if (avgTicks == 0) continue;
                         long estimate = (DateTime.UtcNow.Ticks - data.First().Timestamp.Ticks) / avgTicks;
                         if (estimate > largestEstimate)
                         {
-                            nodeWithData = id;
+                            nodeWithData = node.Id;
                             largestEstimate = estimate;
                         }
                     }
@@ -1049,7 +1049,7 @@ namespace Cognite.OpcUa.Config
             {
                 var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(backfillParams), 10);
 
-                var data = ToolUtil.ReadResultToDataPoints(result.First().RawData, stateMap[result.First().Id], this);
+                var data = ToolUtil.ReadResultToDataPoints(result.First().RawData, stateMap[result.First().Node.Id], this);
 
                 log.Information("Last ts: {ts}, {now}", data.First().Timestamp, DateTime.UtcNow);
 
