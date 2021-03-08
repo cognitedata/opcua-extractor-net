@@ -96,7 +96,6 @@ namespace Cognite.OpcUa
                 return 0;
             }
 
-            if (data.DataValues == null) return 0;
             var nodeState = extractor.State.GetNodeState(nodeId);
 
             if (nodeState == null)
@@ -105,23 +104,28 @@ namespace Cognite.OpcUa
                 return 0;
             }
 
-            var datapoints = data.DataValues.Where(dp =>
+
+            List<DataValue> dataPoints = new List<DataValue>(data.DataValues?.Count ?? 0);
+            if (data.DataValues != null)
             {
-                if (StatusCode.IsNotGood(dp.StatusCode))
+                foreach (var dp in data.DataValues)
                 {
-                    UAExtractor.BadDataPoints.Inc();
-                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", nodeState.Id, dp.SourceTimestamp);
-                    return false;
+                    if (StatusCode.IsNotGood(dp.StatusCode))
+                    {
+                        UAExtractor.BadDataPoints.Inc();
+                        log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", nodeState.Id, dp.SourceTimestamp);
+                        continue;
+                    }
+                    dataPoints.Add(dp);
                 }
-                return true;
-            }).ToList();
+            }
 
             var last = DateTime.MinValue;
             var first = DateTime.MaxValue;
 
-            if (datapoints.Any())
+            if (dataPoints.Any())
             {
-                (first, last) = datapoints.MinMax(dp => dp.SourceTimestamp);
+                (first, last) = dataPoints.MinMax(dp => dp.SourceTimestamp);
             }
 
             if (frontfill)
@@ -136,7 +140,7 @@ namespace Cognite.OpcUa
             }
 
             int cnt = 0;
-            foreach (var datapoint in datapoints)
+            foreach (var datapoint in dataPoints)
             {
                 var buffDps = extractor.Streamer.ToDataPoint(datapoint, nodeState);
                 foreach (var buffDp in buffDps)
@@ -183,7 +187,6 @@ namespace Cognite.OpcUa
                 log.Warning("No event filter when reading from history, ignoring");
                 return 0;
             }
-            if (evts.Events == null) return 0;
             var emitterState = extractor.State.GetEmitterState(nodeId);
 
             if (emitterState == null)
@@ -192,16 +195,19 @@ namespace Cognite.OpcUa
                 return 0;
             }
 
-            var createdEvents = new List<UAEvent>(evts.Events.Count);
-            foreach (var evt in evts.Events)
+            var createdEvents = new List<UAEvent>(evts.Events?.Count ?? 0);
+            if (evts.Events != null)
             {
-                var buffEvt = extractor.Streamer.ConstructEvent(filter, evt.EventFields, nodeId);
-                if (buffEvt == null)
+                foreach (var evt in evts.Events)
                 {
-                    UAExtractor.BadEvents.Inc();
-                    continue;
+                    var buffEvt = extractor.Streamer.ConstructEvent(filter, evt.EventFields, nodeId);
+                    if (buffEvt == null)
+                    {
+                        UAExtractor.BadEvents.Inc();
+                        continue;
+                    }
+                    createdEvents.Add(buffEvt);
                 }
-                createdEvents.Add(buffEvt);
             }
 
             var last = DateTime.MinValue;
