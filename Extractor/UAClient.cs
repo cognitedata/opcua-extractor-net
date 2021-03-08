@@ -881,7 +881,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">List of variables to be updated</param>
         public void ReadNodeValues(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
-            nodes = nodes.Where(node => !node.DataRead && node.Index == -1).ToList();
+            nodes = nodes.Where(node => !node.ValueRead && node.Index == -1).ToList();
             IEnumerable<DataValue> values;
             try
             {
@@ -901,7 +901,7 @@ namespace Cognite.OpcUa
             var enumerator = values.GetEnumerator();
             foreach (var node in nodes)
             {
-                node.DataRead = true;
+                node.ValueRead = true;
                 enumerator.MoveNext();
                 node.SetDataPoint(enumerator.Current?.WrappedValue,
                     enumerator.Current?.SourceTimestamp ?? DateTime.MinValue,
@@ -971,7 +971,7 @@ namespace Cognite.OpcUa
                 if (!result.TryGetValue(parent.Id, out var children)) continue;
                 foreach (var child in children)
                 {
-                    if (!NodeFilter(child.DisplayName.Text, ToNodeId(child.NodeId))) continue;
+                    if (!NodeFilter(child.DisplayName.Text, ToNodeId(child.TypeDefinition), ToNodeId(child.NodeId))) continue;
                     var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
                     properties.Add(property);
                     if (parent.Properties == null)
@@ -1464,6 +1464,7 @@ namespace Cognite.OpcUa
         /// <returns>Resulting NodeId</returns>
         public NodeId ToNodeId(ExpandedNodeId nodeid)
         {
+            if (nodeid == null || nodeid.IsNull) return NodeId.Null;
             return ExpandedNodeId.ToNodeId(nodeid, Session.NamespaceUris);
         }
         /// <summary>

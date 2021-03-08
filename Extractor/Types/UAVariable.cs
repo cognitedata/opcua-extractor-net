@@ -50,9 +50,9 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public UADataPoint Value { get; private set; }
         /// <summary>
-        /// True if attributes have been read from OPC-UA for this variable
+        /// Whether the value of this variable has been read from the server.
         /// </summary>
-        public bool DataRead { get; set; }
+        public bool ValueRead { get; set; }
         public override string ToString()
         {
             var builder = new StringBuilder();
