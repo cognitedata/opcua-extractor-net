@@ -5,6 +5,7 @@ using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
+using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
@@ -79,6 +80,30 @@ namespace Test.Unit
             Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
 
             tester.Config.Events.Enabled = false;
+
+            Assert.Null(tester.Config.Cognite.DataSetId);
+            handler.DataSets.Add("test-data-set", new DataSet
+            {
+                ExternalId = "test-data-set",
+                Id = 123,
+                CreatedTime = 1000,
+                LastUpdatedTime = 1000
+            });
+            tester.Config.Cognite.DataSetExternalId = "test-data-set";
+
+            Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
+            Assert.Equal(123, tester.Config.Cognite.DataSetId);
+
+            handler.FailedRoutes.Add("/datasets/byids");
+            Assert.True(await pusher.TestConnection(tester.Config, tester.Source.Token));
+
+            tester.Config.Cognite.DataSetId = null;
+
+            Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
+            Assert.Null(tester.Config.Cognite.DataSetId);
+
+            handler.FailedRoutes.Clear();
+            tester.Config.Cognite.DataSetExternalId = null;
         }
         [Fact]
         public async Task TestPushDatapoints()
@@ -622,7 +647,8 @@ namespace Test.Unit
             // Normal init
             handler.FailedRoutes.Clear();
             Assert.True(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
-            var range = new TimeRange(CogniteTime.FromUnixTimeMilliseconds(1000), CogniteTime.FromUnixTimeMilliseconds(3000));
+            var range = new Cognite.Extractor.Common.TimeRange(CogniteTime.FromUnixTimeMilliseconds(1000), 
+                CogniteTime.FromUnixTimeMilliseconds(3000));
             Assert.Equal(range, states[0].DestinationExtractedRange);
             Assert.Equal(range, states[1].DestinationExtractedRange);
             Assert.Equal(states[2].DestinationExtractedRange.First, states[2].DestinationExtractedRange.Last);

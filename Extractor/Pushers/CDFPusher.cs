@@ -365,10 +365,10 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
 
-        public async Task<bool?> TestConnection(FullConfig config, CancellationToken token)
+        public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
-            if (this.config.Debug) return true;
+            if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
+            if (config.Debug) return true;
             try
             {
                 await destination.TestCogniteConfig(token);
@@ -376,7 +376,7 @@ namespace Cognite.OpcUa.Pushers
             catch (Exception ex)
             {
                 log.Error("Failed to get CDF login status, this is likely a problem with the network or configuration. Project {project} at {url}: {msg}",
-                    this.config.Project, this.config.Host, ex.Message);
+                    config.Project, config.Host, ex.Message);
                 return false;
             }
 
@@ -388,22 +388,39 @@ namespace Cognite.OpcUa.Pushers
             {
                 log.Error("Could not access CDF Time Series - most likely due " +
                           "to insufficient access rights on API key. Project {project} at {host}: {msg}",
-                    this.config.Project, this.config.Host, ex.Message);
+                    config.Project, config.Host, ex.Message);
                 return false;
             }
 
-            if (!config.Events.Enabled) return true;
-
-            try
+            if (fullConfig.Events.Enabled)
             {
-                await destination.CogniteClient.Events.ListAsync(new EventQuery { Limit = 1 }, token);
+                try
+                {
+                    await destination.CogniteClient.Events.ListAsync(new EventQuery { Limit = 1 }, token);
+                }
+                catch (ResponseException ex)
+                {
+                    log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
+                              "to insufficient access rights on API key. Project {project} at {host}: {msg}",
+                        config.Project, config.Host, ex.Message);
+                    return false;
+                }
             }
-            catch (ResponseException ex)
+
+            if (!config.DataSetId.HasValue && !string.IsNullOrEmpty(config.DataSetExternalId))
             {
-                log.Error("Could not access CDF Events, though event emitters are specified - most likely due " +
-                          "to insufficient acces rights on API key. Project {project} at {host}: {msg}",
-                    this.config.Project, this.config.Host, ex.Message);
-                return false;
+                try
+                {
+                    var dataSet = await destination.CogniteClient.DataSets.RetrieveAsync(new[] { config.DataSetExternalId }, false, token);
+                    config.DataSetId = dataSet.First().Id;
+                }
+                catch (ResponseException ex)
+                {
+                    log.Error("Could not fetch data set by external id. It may not exist, or the user may lack" +
+                        " sufficient access rights. Project {project} at {host}, id {id}: {msg}",
+                        config.Project, config.Host, config.DataSetExternalId, ex.Message);
+                    return false;
+                }
             }
 
             return true;
@@ -442,7 +459,6 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
         #endregion
-
 
         #region assets
 
@@ -792,12 +808,12 @@ namespace Cognite.OpcUa.Pushers
 
         #region references
 
-        private async Task PushReferencesChunk(IEnumerable<CogniteSdk.Beta.RelationshipCreate> relationships, CancellationToken token)
+        private async Task PushReferencesChunk(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
             if (!relationships.Any()) return;
             try
             {
-                await destination.CogniteClient.Beta.Relationships.CreateAsync(relationships, token);
+                await destination.CogniteClient.Relationships.CreateAsync(relationships, token);
             }
             catch (ResponseException ex)
             {
@@ -822,7 +838,7 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
         }
-        private async Task PushRawReferences(IEnumerable<CogniteSdk.Beta.RelationshipCreate> relationships, CancellationToken token)
+        private async Task PushRawReferences(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
             await EnsureRawRows(
                 config.RawMetadata.Database,
@@ -831,7 +847,7 @@ namespace Cognite.OpcUa.Pushers
                 ids =>
                 {
                     var idSet = ids.ToHashSet();
-                    return Task.FromResult((IDictionary<string, CogniteSdk.Beta.RelationshipCreate>)
+                    return Task.FromResult((IDictionary<string, RelationshipCreate>)
                         relationships.Where(rel => idSet.Contains(rel.ExternalId)).ToDictionary(rel => rel.ExternalId));
                 },
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase },

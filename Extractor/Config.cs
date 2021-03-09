@@ -130,6 +130,7 @@ namespace Cognite.OpcUa
     public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
         public long? DataSetId { get; set; }
+        public string DataSetExternalId { get; set; }
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; } = true;
         public bool SkipMetadata { get; set; }
