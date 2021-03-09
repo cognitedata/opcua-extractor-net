@@ -3,7 +3,7 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
-using CogniteSdk.Beta;
+using CogniteSdk;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;

@@ -718,7 +718,7 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
 
-        private async Task<bool> PushReferencesChunk(IEnumerable<CogniteSdk.Beta.RelationshipCreate> references, CancellationToken token)
+        private async Task<bool> PushReferencesChunk(IEnumerable<RelationshipCreate> references, CancellationToken token)
         {
             var data = JsonSerializer.SerializeToUtf8Bytes(references, null);
 
