@@ -100,7 +100,8 @@ cognite:
     read-extracted-ranges: true
     # Data set to use for new objects. Existing objects will not be updated
     data-set-id:
-
+    # Data set to use for new objects, overridden by data-set-id. Requires the capability datasets:read for the given data set.
+    data-set-external-id:
     # Do not push any metadata at all. If this is true, plain timeseries without metadata will be created,
     # similarly to raw-metadata, and datapoints will be pushed. Nothing will be written to raw, and no assets will be created.
     # Events will be created, but without asset context.
@@ -376,14 +377,6 @@ extraction:
     # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.
     # The externalId is: IdPrefix + NamespaceMap[nodeId.NamespaceUri] + nodeId.Identifier
     id-prefix: # ex: "gp:"
-    
-    # Specify prefixes on DisplayName to ignore.
-    ignore-name-prefix:
-        # -prefix1
-    
-    # Specify specific DisplayNames to ignore.
-    ignore-name:
-        # -name1
 
     # Delay in ms between each push of data points to targets
     data-push-delay: 1000
@@ -511,6 +504,38 @@ extraction:
     node-types:
         # Add the TypeDefinition as a metadata field to all nodes 
         metadata: false
+
+    # A list of transformations to be applied to the source nodes before pushing
+    # The possible transformations are
+    # "Ignore", ignore the node. This will ignore all descendants of the node.
+    # If the filter does not use "is-array", "description" or "parent", this is done
+    # while reading, and so children will not be read at all. Otherwise, the filtering happens later.
+    # "Property", turn the node into a property, which is treated as metadata.
+    # This also applies to descendants. Nested metadata is give a name like "grandparent_parent_variable", for
+    # each variable in the tree.
+    # There is some overhead associated with the filters. They are applied sequentially, so it can help performance to put
+    # "Ignore" filters first.
+    # It is possible to have multiple of each filter type.
+    transformations:
+      # Type, either "Ignore" or "Property"
+      # - type:
+      #  NodeFilter. All non-null filters must match each node for the transformation to be applied.
+      #  filter:
+            # Regex on node DisplayName
+            # name:
+            # Regex on node Description. If this is set, requires description to be non-null.
+            # description:
+            # Regex on node id. Ids on the form "i=123" or "s=string" are matched.
+            # id:
+            # Whether the node is an array. If this is set, the filter only matches varables.
+            # is-array:
+            # Regex on the full namespace of the node id.
+            # namespace:
+            # Regex on the id of the type definition. On the form "i=123" or "s=string"
+            # type-definition:
+            # Another instance of NodeFilter which is applied to the parent node.
+            # parent:
+
 
 events:
     # Events are extracted with the following rules: By default all events are extracted.

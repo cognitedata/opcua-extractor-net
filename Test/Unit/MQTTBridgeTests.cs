@@ -17,7 +17,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
-using RelationshipCreate = CogniteSdk.Beta.RelationshipCreate;
 
 namespace Test.Unit
 {
@@ -792,17 +791,17 @@ namespace Test.Unit
                 new RelationshipCreate
                 {
                     SourceExternalId = "test-1",
-                    SourceType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    SourceType = RelationshipVertexType.Asset,
                     TargetExternalId = "test-2",
-                    TargetType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    TargetType = RelationshipVertexType.Asset,
                     ExternalId = "test-1"
                 },
                 new RelationshipCreate
                 {
                     SourceExternalId = "test-3",
-                    SourceType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    SourceType = RelationshipVertexType.Asset,
                     TargetExternalId = "test-4",
-                    TargetType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    TargetType = RelationshipVertexType.Asset,
                     ExternalId = "test-2"
                 }
             };
@@ -812,17 +811,17 @@ namespace Test.Unit
                 new RelationshipCreate
                 {
                     SourceExternalId = "test-5",
-                    SourceType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    SourceType = RelationshipVertexType.Asset,
                     TargetExternalId = "test-6",
-                    TargetType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    TargetType = RelationshipVertexType.Asset,
                     ExternalId = "test-2"
                 },
                 new RelationshipCreate
                 {
                     SourceExternalId = "test-7",
-                    SourceType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    SourceType = RelationshipVertexType.Asset,
                     TargetExternalId = "test-8",
-                    TargetType = CogniteSdk.Beta.RelationshipVertexType.Asset,
+                    TargetType = RelationshipVertexType.Asset,
                     ExternalId = "test-3"
                 }
             };

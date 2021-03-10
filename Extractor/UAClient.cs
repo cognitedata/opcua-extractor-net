@@ -61,6 +61,8 @@ namespace Cognite.OpcUa
 
         private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
+        public IEnumerable<NodeFilter> IgnoreFilters { get; set; }
+
         public event EventHandler OnServerDisconnect;
         public event EventHandler OnServerReconnect;
 
@@ -570,11 +572,10 @@ namespace Cognite.OpcUa
                 VisitedNodes.Clear();
             }
         }
-        public bool NameFilter(string displayName)
+        public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition)
         {
-            if (extractionConfig.IgnoreNamePrefix != null && extractionConfig.IgnoreNamePrefix.Any(prefix =>
-                displayName.StartsWith(prefix, StringComparison.CurrentCulture))) return false;
-            if (extractionConfig.IgnoreName != null && extractionConfig.IgnoreName.Contains(displayName)) return false;
+            if (IgnoreFilters == null) return true;
+            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, NamespaceTable))) return false;
             return true;
         }
 
@@ -631,7 +632,7 @@ namespace Cognite.OpcUa
                     {
                         var nodeId = ToNodeId(rd.NodeId);
                         if (rd.NodeId == ObjectIds.Server || rd.NodeId == ObjectIds.Aliases) continue;
-                        if (doFilter && !NameFilter(rd.DisplayName.Text))
+                        if (doFilter && !NodeFilter(rd.DisplayName.Text, ToNodeId(rd.TypeDefinition), ToNodeId(rd.NodeId)))
                         {
                             log.Verbose("Ignoring filtered {nodeId}", nodeId);
                             continue;
@@ -753,7 +754,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         public void ReadNodeData(IEnumerable<UANode> nodes, CancellationToken token)
         {
-            nodes = nodes.Where(node => !node.IsVariable || node is UAVariable variable && variable.Index == -1);
+            nodes = nodes.Where(node => (!node.IsVariable || node is UAVariable variable && variable.Index == -1) && !node.DataRead);
             var variableAttributes = new List<uint>
             {
                 Attributes.DataType,
@@ -852,6 +853,7 @@ namespace Cognite.OpcUa
                         }
                     }
                 }
+                node.DataRead = true;
             }
             enumerator.Dispose();
         }
@@ -879,7 +881,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">List of variables to be updated</param>
         public void ReadNodeValues(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
-            nodes = nodes.Where(node => !node.DataRead && node.Index == -1).ToList();
+            nodes = nodes.Where(node => !node.ValueRead && node.Index == -1).ToList();
             IEnumerable<DataValue> values;
             try
             {
@@ -899,7 +901,7 @@ namespace Cognite.OpcUa
             var enumerator = values.GetEnumerator();
             foreach (var node in nodes)
             {
-                node.DataRead = true;
+                node.ValueRead = true;
                 enumerator.MoveNext();
                 node.SetDataPoint(enumerator.Current?.WrappedValue,
                     enumerator.Current?.SourceTimestamp ?? DateTime.MinValue,
@@ -919,7 +921,7 @@ namespace Cognite.OpcUa
 
             var properties = new HashSet<UAVariable>();
             log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
-            var idsToCheck = new List<NodeId>();
+            var idsToCheck = new HashSet<NodeId>();
             foreach (var node in nodes)
             {
                 if (node.IsVariable)
@@ -931,11 +933,11 @@ namespace Cognite.OpcUa
                 }
                 if (node.Properties != null)
                 {
-                    foreach (var property in node.Properties)
+                    foreach (var property in node.GetAllProperties())
                     {
-                        if (!node.IsVariable)
+                        if (!node.IsVariable && property is UAVariable propertyVar)
                         {
-                            properties.Add(property);
+                            properties.Add(propertyVar);
                         }
                         if (!property.PropertiesRead)
                         {
@@ -945,7 +947,6 @@ namespace Cognite.OpcUa
                     }
                 }
             }
-            idsToCheck = idsToCheck.Distinct().ToList();
 
             var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             var total = idsToCheck.Count;
@@ -970,12 +971,12 @@ namespace Cognite.OpcUa
                 if (!result.TryGetValue(parent.Id, out var children)) continue;
                 foreach (var child in children)
                 {
-                    if (!NameFilter(child.DisplayName.Text)) continue;
+                    if (!NodeFilter(child.DisplayName.Text, ToNodeId(child.TypeDefinition), ToNodeId(child.NodeId))) continue;
                     var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
                     properties.Add(property);
                     if (parent.Properties == null)
                     {
-                        parent.Properties = new List<UAVariable>();
+                        parent.Properties = new List<UANode>();
                     }
                     parent.Properties.Add(property);
                 }
@@ -984,13 +985,15 @@ namespace Cognite.OpcUa
                     if (variable.IsProperty) continue;
                     UAVariable arrayParent = variable.Index == -1 ? variable : variable.ArrayParent;
 
-                    if (arrayParent != null && arrayParent.Index == -1 && arrayParent.ArrayDimensions != null
-                        && arrayParent.ArrayDimensions.Count == 1 && arrayParent.ArrayDimensions[0] > 0)
+                    if (arrayParent != null && arrayParent.Index == -1 && arrayParent.IsArray)
                     {
-                        foreach (var child in arrayParent.ArrayChildren)
+                        if (arrayParent.ArrayChildren != null)
                         {
-                            child.PropertiesRead = true;
-                            child.Properties = parent.Properties;
+                            foreach (var child in arrayParent.ArrayChildren)
+                            {
+                                child.PropertiesRead = true;
+                                child.Properties = parent.Properties;
+                            }
                         }
                         arrayParent.PropertiesRead = true;
                         arrayParent.Properties = parent.Properties;
@@ -999,7 +1002,7 @@ namespace Cognite.OpcUa
             }
 
             ReadNodeData(properties, token);
-            var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true));
+            var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true)).ToList();
             await DataTypeManager.GetDataTypeMetadataAsync(toGetValue.Select(prop => prop.DataType?.Raw), token);
             ReadNodeValues(toGetValue, token);
         }
@@ -1460,6 +1463,7 @@ namespace Cognite.OpcUa
         /// <returns>Resulting NodeId</returns>
         public NodeId ToNodeId(ExpandedNodeId nodeid)
         {
+            if (nodeid == null || nodeid.IsNull) return NodeId.Null;
             return ExpandedNodeId.ToNodeId(nodeid, Session.NamespaceUris);
         }
         /// <summary>
