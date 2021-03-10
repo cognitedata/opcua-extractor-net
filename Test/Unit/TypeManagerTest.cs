@@ -345,7 +345,6 @@ namespace Test.Unit
             Assert.Equal("VEnum2", et2.EnumValues[123]);
         }
         #endregion
-
         #region EventFieldCollector
         [Fact]
         public void TestEventFieldEquality()

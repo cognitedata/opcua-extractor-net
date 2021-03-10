@@ -62,14 +62,13 @@ namespace Cognite.OpcUa
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
 
+        private IEnumerable<NodeTransformation> transformations;
+
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
 
         private int subscribed;
         private bool subscribeFlag;
-
-        private readonly Regex propertyNameFilter;
-        private readonly Regex propertyIdFilter;
 
         private static readonly Gauge startTime = Metrics
             .CreateGauge("opcua_start_time", "Start time for the extractor");
@@ -137,9 +136,6 @@ namespace Cognite.OpcUa
                 pusher.Extractor = this;
             }
             Looper = new Looper(this, config, pushers);
-
-            propertyNameFilter = CreatePropertyFilterRegex(config.Extraction.PropertyNameFilter);
-            propertyIdFilter = CreatePropertyFilterRegex(config.Extraction.PropertyIdFilter);
         }
 
         private void UaClient_OnServerDisconnect(object sender, EventArgs e)
@@ -161,15 +157,6 @@ namespace Cognite.OpcUa
                 client.ResetVisitedNodes();
                 RestartExtractor();
             }
-        }
-
-        private static Regex CreatePropertyFilterRegex(string regex)
-        {
-            if (string.IsNullOrEmpty(regex))
-            {
-                return null;
-            }
-            return new Regex(regex, RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.CultureInvariant);
         }
 
         /// <summary>
@@ -527,6 +514,79 @@ namespace Cognite.OpcUa
             Starting.Set(0);
             return historyTasks;
         }
+
+        private void BuildTransformations()
+        {
+            var transformations = new List<NodeTransformation>();
+            int idx = 0;
+
+            if (config.Extraction.Transformations != null)
+            {
+                foreach (var raw in config.Extraction.Transformations)
+                {
+                    transformations.Add(new NodeTransformation(raw, idx++));
+                }
+            }
+
+            if (!string.IsNullOrEmpty(config.Extraction.PropertyIdFilter))
+            {
+                log.Warning("Property Id filter is deprecated, use transformations instead");
+                transformations.Add(new NodeTransformation(new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Id = config.Extraction.PropertyIdFilter
+                    },
+                    Type = TransformationType.Property
+                }, idx++));
+            }
+            if (!string.IsNullOrEmpty(config.Extraction.PropertyNameFilter))
+            {
+                log.Warning("Property Name filter is deprecated, use transformations instead");
+                transformations.Add(new NodeTransformation(new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = config.Extraction.PropertyNameFilter
+                    },
+                    Type = TransformationType.Property
+                }, idx++));
+            }
+            if (config.Extraction.IgnoreName != null && config.Extraction.IgnoreName.Any())
+            {
+                log.Warning("Ignore name is deprecated, use transformations instead");
+                var filterStr = string.Join('|', config.Extraction.IgnoreName.Select(str => $"^{str}$"));
+                transformations.Add(new NodeTransformation(new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = filterStr
+                    },
+                    Type = TransformationType.Ignore
+                }, idx++));
+            }
+            if (config.Extraction.IgnoreNamePrefix != null && config.Extraction.IgnoreNamePrefix.Any())
+            {
+                log.Warning("Ignore name prefix is deprecated, use transformations instead: {cnf}", string.Join(',', config.Extraction.IgnoreNamePrefix));
+                var filterStr = string.Join('|', config.Extraction.IgnoreNamePrefix.Select(str => $"^{str}"));
+                transformations.Add(new NodeTransformation(new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = filterStr
+                    },
+                    Type = TransformationType.Ignore
+                }, idx++));
+            }
+            foreach (var trans in transformations)
+            {
+                log.Debug(trans.ToString());
+            }
+            
+            uaClient.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
+            this.transformations = transformations;
+        }
+
         /// <summary>
         /// Set up extractor once UAClient is started. This resets the internal state of the extractor.
         /// </summary>
@@ -581,6 +641,7 @@ namespace Cognite.OpcUa
                         history && config.History.Backfill));
                 }
             }
+            BuildTransformations();
         }
 
         private class BrowseResult
@@ -615,7 +676,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        private async Task GetNodeData(UpdateConfig update, BrowseResult result)
+        private async Task GetExtraNodeData(UpdateConfig update, BrowseResult result)
         {
             log.Information("Getting data for {NumVariables} variables and {NumObjects} objects",
                 result.RawVariables.Count, result.RawObjects.Count);
@@ -634,10 +695,10 @@ namespace Cognite.OpcUa
                     await ReadProperties(toReadProperties);
                 }
             }
-            await Task.Run(() => uaClient.ReadNodeData(nodes, source.Token));
 
             var extraMetaTasks = new List<Task>();
-            extraMetaTasks.Add(DataTypeManager.GetDataTypeMetadataAsync(result.RawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token));
+            extraMetaTasks.Add(DataTypeManager.GetDataTypeMetadataAsync(
+                result.RawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token));
             if (config.Extraction.NodeTypes.Metadata)
             {
                 extraMetaTasks.Add(uaClient.ObjectTypeManager.GetObjectTypeMetadataAsync(source.Token));
@@ -757,35 +818,53 @@ namespace Cognite.OpcUa
             var result = new BrowseResult();
             var nodeMap = new Dictionary<NodeId, UANode>();
 
-            while (commonQueue.TryDequeue(out UANode buffer))
+            while (commonQueue.TryDequeue(out UANode node))
             {
-                if (buffer.IsVariable && buffer is UAVariable buffVar)
+                if (node.Ignore) continue;
+                nodeMap[node.Id] = node;
+            }
+
+            await Task.Run(() => uaClient.ReadNodeData(nodeMap.Values, source.Token));
+
+            foreach (var node in nodeMap.Values)
+            {
+                if (node.ParentId != null && !node.ParentId.IsNullNodeId && nodeMap.TryGetValue(node.ParentId, out var parent))
                 {
-                    if (buffVar.IsProperty)
+                    node.Parent = parent;
+                }
+
+                if (transformations != null)
+                {
+                    foreach (var trns in transformations)
                     {
-                        nodeMap.TryGetValue(buffVar.ParentId, out UANode parent);
-                        if (parent == null) continue;
-                        if (parent.Properties == null)
-                        {
-                            parent.Properties = new List<UAVariable>();
-                        }
-                        parent.Properties.Add(buffVar);
+                        if (node.Ignore) break;
+                        trns.ApplyTransformation(node, uaClient.NamespaceTable);
                     }
-                    else
+                }
+
+                if (node.Ignore) continue;
+
+                if (node.IsProperty)
+                {
+                    if (node.Parent == null) continue;
+                    if (node.Parent.Properties == null)
                     {
-                        result.RawVariables.Add(buffVar);
+                        node.Parent.Properties = new List<UANode>();
                     }
+                    node.Parent.Properties.Add(node);
+                }
+                else if (node.IsVariable && node is UAVariable variable)
+                {
+                    result.RawVariables.Add(variable);
                 }
                 else
                 {
-                    result.RawObjects.Add(buffer);
+                    result.RawObjects.Add(node);
                 }
-                nodeMap.Add(buffer.Id, buffer);
             }
 
             var update = config.Extraction.Update;
-
-            await GetNodeData(update, result);
+            await GetExtraNodeData(update, result);
 
             result.Objects.AddRange(FilterObjects(update, result.RawObjects));
             InitEventStates(result);
@@ -1090,41 +1169,39 @@ namespace Cognite.OpcUa
 
             if (node.NodeClass == NodeClass.Object)
             {
-                var bufferedNode = new UANode(uaClient.ToNodeId(node.NodeId),
+                var uaNode = new UANode(uaClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
 
                 if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
                 {
-                    bufferedNode.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), false);
+                    uaNode.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), false);
                 }
-                log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
-                State.RegisterNode(bufferedNode.Id, GetUniqueId(bufferedNode.Id));
-                commonQueue.Enqueue(bufferedNode);
+                log.Verbose("HandleNode Object {name}", uaNode.DisplayName);
+                State.RegisterNode(uaNode.Id, GetUniqueId(uaNode.Id));
+                commonQueue.Enqueue(uaNode);
                 mapped = true;
             }
             else if (node.NodeClass == NodeClass.Variable)
             {
-                var bufferedNode = new UAVariable(uaClient.ToNodeId(node.NodeId),
+                var variable = new UAVariable(uaClient.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId);
 
-                if (IsProperty(node))
+                if (node.TypeDefinition == VariableTypeIds.PropertyType)
                 {
-                    bufferedNode.IsProperty = true;
-                    // Properties do not have children themselves in OPC-UA,
-                    // but mapped variables might.
-                    bufferedNode.PropertiesRead = node.TypeDefinition == VariableTypeIds.PropertyType;
+                    variable.IsProperty = true;
+                    variable.PropertiesRead = true;
                 }
                 else
                 {
                     mapped = true;
-                    if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
-                    {
-                        bufferedNode.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), true);
-                    }
                 }
-                State.RegisterNode(bufferedNode.Id, GetUniqueId(bufferedNode.Id));
-                log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
-                commonQueue.Enqueue(bufferedNode);
+                if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
+                {
+                    variable.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), true);
+                }
+                State.RegisterNode(variable.Id, GetUniqueId(variable.Id));
+                log.Verbose("HandleNode Variable {name}", variable.DisplayName);
+                commonQueue.Enqueue(variable);
             }
 
             if (mapped && config.Extraction.Relationships.Enabled && config.Extraction.Relationships.Hierarchical)
@@ -1132,33 +1209,6 @@ namespace Cognite.OpcUa
                 if (parentId == null || parentId.IsNullNodeId) return;
                 referenceQueue.Enqueue((node, parentId));
             }
-        }
-
-        public bool IsProperty(ReferenceDescription node)
-        {
-            if (node == null) throw new ArgumentNullException(nameof(node));
-            if (node.TypeDefinition == VariableTypeIds.PropertyType)
-            {
-                return true;
-            }
-
-            var name = node.DisplayName?.Text;
-            if (propertyNameFilter != null
-                && name != null
-                && propertyNameFilter.IsMatch(name))
-            {
-                return true;
-            }
-
-            if (propertyIdFilter != null
-                && node.NodeId.IdType == IdType.String
-                && node.NodeId.Identifier is string id
-                && propertyIdFilter.IsMatch(id))
-            {
-                return true;
-            }
-
-            return false;
         }
 
         /// <summary>

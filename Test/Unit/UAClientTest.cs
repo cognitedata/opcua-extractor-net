@@ -285,7 +285,13 @@ namespace Test.Unit
             tester.Client.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
-            tester.Config.Extraction.IgnoreName = new[] { "WideRoot" };
+            tester.Client.IgnoreFilters = new List<NodeFilter>
+            {
+                new NodeFilter(new RawNodeFilter
+                {
+                    Name = "WideRoot"
+                })
+            };
             try
             {
                 await tester.Client.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
@@ -293,7 +299,7 @@ namespace Test.Unit
             finally
             {
                 tester.Client.ResetVisitedNodes();
-                tester.Config.Extraction.IgnoreName = null;
+                tester.Client.IgnoreFilters = null;
             }
             Assert.False(nodes.ContainsKey(tester.Server.Ids.Full.WideRoot));
             Assert.Equal(152, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
@@ -307,7 +313,14 @@ namespace Test.Unit
             tester.Client.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
-            tester.Config.Extraction.IgnoreNamePrefix = new[] { "Sub", "Deep" };
+            tester.Client.IgnoreFilters = new List<NodeFilter>
+            {
+                new NodeFilter(new RawNodeFilter
+                {
+                    Name = "^Sub|^Deep"
+                })
+            };
+
             try
             {
                 await tester.Client.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
@@ -315,7 +328,7 @@ namespace Test.Unit
             finally
             {
                 tester.Client.ResetVisitedNodes();
-                tester.Config.Extraction.IgnoreNamePrefix = null;
+                tester.Client.IgnoreFilters = null;
             }
             Assert.Equal(2, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 3));
@@ -328,14 +341,21 @@ namespace Test.Unit
             tester.Client.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
-            tester.Config.Extraction.IgnoreName = new[] { "WideRoot" };
+            tester.Client.IgnoreFilters = new List<NodeFilter>
+            {
+                new NodeFilter(new RawNodeFilter
+                {
+                    Name = "WideRoot"
+                })
+            };
+
             try
             {
                 await tester.Client.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
             }
             finally
             {
-                tester.Config.Extraction.IgnoreName = null;
+                tester.Client.IgnoreFilters = null;
             }
             Assert.False(nodes.ContainsKey(tester.Server.Ids.Full.WideRoot));
             Assert.Equal(152, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
@@ -491,7 +511,7 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestGetNodeProperties()
+        public async Task TestGetNodeProperties()
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests", "opcua_browse_operations");
             var arrayVar = new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root)
@@ -513,7 +533,7 @@ namespace Test.Unit
                 // object with properties
                 new UANode(tester.Server.Ids.Custom.Obj2, "Object", tester.Server.Ids.Custom.Root)
                 {
-                    Properties = new List<UAVariable>
+                    Properties = new List<UANode>
                     {
                         new UAVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Obj2) { IsProperty = true },
                         new UAVariable(tester.Server.Ids.Custom.RangeProp, "Range", tester.Server.Ids.Custom.Obj2) { IsProperty = true },
@@ -521,7 +541,7 @@ namespace Test.Unit
                 }
             };
 
-            tester.Client.GetNodeProperties(nodes, tester.Source.Token);
+            await tester.Client.GetNodeProperties(nodes, tester.Source.Token);
             Assert.Equal(2, nodes[0].Properties.Count);
             Assert.Equal(2, nodes[1].Properties.Count);
             Assert.Equal(2, nodes[2].Properties.Count);
@@ -529,8 +549,8 @@ namespace Test.Unit
             Assert.Equal(2, nodes[3].Properties.Count);
             Assert.Null(nodes[4].Properties);
             Assert.Equal(2, nodes[5].Properties.Count);
-            Assert.NotNull(nodes[5].Properties.First().Value);
-            Assert.NotNull(nodes[5].Properties.Last().Value);
+            Assert.NotNull((nodes[5].Properties.First() as UAVariable).Value);
+            Assert.NotNull((nodes[5].Properties.Last() as UAVariable).Value);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 2));

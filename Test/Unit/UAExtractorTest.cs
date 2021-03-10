@@ -234,13 +234,13 @@ namespace Test.Unit
             var var1 = new UAVariable(custIds.MysteryVar, "MysteryVar", custIds.Root);
             var var2 = new UAVariable(custIds.Array, "Array", custIds.Root);
             var obj1 = new UANode(custIds.Obj1, "Object1", custIds.Root);
-            obj1.Properties = new List<UAVariable>
+            obj1.Properties = new List<UANode>
             {
                 new UAVariable(custIds.StringArray, "StringArray", custIds.Obj1) { IsProperty = true, PropertiesRead = true },
                 new UAVariable(tester.Server.Ids.Base.DoubleVar1, "VarProp1", custIds.Obj1) { IsProperty = true }
             };
             var obj2 = new UANode(custIds.Obj2, "Object2", custIds.Root);
-            obj2.Properties = new List<UAVariable>
+            obj2.Properties = new List<UANode>
             {
                 new UAVariable(custIds.ObjProp, "ObjProp1", custIds.Obj2) { IsProperty = true, PropertiesRead = true },
                 new UAVariable(custIds.ObjProp2, "ObjProp2", custIds.Obj2) { IsProperty = true, PropertiesRead = true }
@@ -267,8 +267,9 @@ namespace Test.Unit
                 Assert.Equal(2, node.Properties.Count);
                 foreach (var prop in node.Properties)
                 {
-                    Assert.NotNull(prop.Value);
-                    Assert.False(string.IsNullOrEmpty(prop.Value.StringValue));
+                    var propVar = prop as UAVariable;
+                    Assert.NotNull(propVar.Value);
+                    Assert.False(string.IsNullOrEmpty(propVar.Value.StringValue));
                 }
             }
         }

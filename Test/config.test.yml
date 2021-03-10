@@ -27,10 +27,6 @@ history:
 extraction:
     # Global prefix for externalId. Should be unique to prevent name conflicts.
     id-prefix: "gp."
-  
-    # Specify specific DisplayNames to ignore.
-    ignore-name-prefix:
-        - EXCLUDE
 
     namespace-map:
         # Map OPC-UA namespaces to prefixes in CDF. 
@@ -39,3 +35,8 @@ extraction:
         # If not specified, the full URI is used instead.
         "opc.tcp://test.localhost": "tl:"
         "http://opcfoundation.org/UA/": "base:"
+
+    transformations:
+      - filter:
+            name: "^EXCLUDE"
+        type: "Ignore"

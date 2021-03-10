@@ -44,18 +44,15 @@ namespace Cognite.OpcUa.Types
         /// ValueRank in opcua
         /// </summary>
         public int ValueRank { get; set; }
-        /// <summary>
-        /// True if variable is a property
-        /// </summary>
-        public bool IsProperty { get; set; }
+
         /// <summary>
         /// Value of variable as string or double
         /// </summary>
         public UADataPoint Value { get; private set; }
         /// <summary>
-        /// True if attributes have been read from OPC-UA for this variable
+        /// Whether the value of this variable has been read from the server.
         /// </summary>
-        public bool DataRead { get; set; }
+        public bool ValueRead { get; set; }
         public override string ToString()
         {
             var builder = new StringBuilder();
@@ -93,18 +90,11 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
+                var meta = BuildMetadata(null);
                 builder.Append("Properties: {\n");
-                foreach (var prop in Properties)
+                foreach (var prop in meta)
                 {
-                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", prop.DisplayName, prop.Value?.StringValue ?? "??");
-                    if (prop.Properties != null && prop.Properties.Any())
-                    {
-                        foreach (var prop2 in prop.Properties)
-                        {
-                            builder.AppendFormat(CultureInfo.InvariantCulture, "        {0}: {1}\n",
-                                prop2.DisplayName, prop2.Value?.StringValue ?? "??");
-                        }
-                    }
+                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", prop.Key, prop.Value ?? "??");
                 }
                 builder.Append('}');
             }
@@ -161,6 +151,8 @@ namespace Cognite.OpcUa.Types
             ValueRank = other.ValueRank;
             ArrayDimensions = other.ArrayDimensions;
             NodeType = other.NodeType;
+            Properties = other.Properties;
+            PropertiesRead = other.PropertiesRead;
         }
         /// <summary>
         /// Returns given variable if it is not null, otherwise throws an error.
@@ -190,9 +182,10 @@ namespace Cognite.OpcUa.Types
             if (Properties == null || !Properties.Any() || metaMap == null || !metaMap.Any()) return;
             foreach (var prop in Properties)
             {
-                if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                if (!prop.IsVariable || !(prop is UAVariable propVar)) continue;
+                if (!string.IsNullOrWhiteSpace(propVar.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
                 {
-                    var value = prop.Value.StringValue;
+                    var value = propVar.Value.StringValue;
                     switch (mapped)
                     {
                         case "description": writePoco.Description = value; break;

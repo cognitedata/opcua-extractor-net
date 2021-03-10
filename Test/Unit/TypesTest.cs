@@ -113,17 +113,17 @@ namespace Test.Unit
             propD.SetDataPoint("valueC", DateTime.UtcNow, tester.Client);
 
             // Test metadata
-            nodeA.Properties = new List<UAVariable>
+            nodeA.Properties = new List<UANode>
             {
                 propA, propB
             };
-            nodeB.Properties = new List<UAVariable>
+            nodeB.Properties = new List<UANode>
             {
                 propC, propD
             };
             (csA, csB) = Update(nodeA, nodeB);
             AssertNotEqualIf(update.Metadata);
-            nodeB.Properties[1].SetDataPoint("valueB", DateTime.UtcNow, tester.Client);
+            (nodeB.Properties[1] as UAVariable).SetDataPoint("valueB", DateTime.UtcNow, tester.Client);
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
 
@@ -140,8 +140,8 @@ namespace Test.Unit
             var nestProp = new UAVariable(new NodeId("nestProp"), "nestProp", NodeId.Null) { DataType = pdt };
             var nestProp2 = new UAVariable(new NodeId("nestProp"), "nestProp", NodeId.Null) { DataType = pdt };
 
-            nestProp.Properties = new List<UAVariable> { propA };
-            nestProp2.Properties = new List<UAVariable> { propB };
+            nestProp.Properties = new List<UANode> { propA };
+            nestProp2.Properties = new List<UANode> { propB };
             nodeA.Properties.Add(nestProp);
             nodeB.Properties.Add(nestProp2);
 
@@ -172,9 +172,9 @@ namespace Test.Unit
             var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null) { DataType = pdt };
             var nestedProp = new UAVariable(new NodeId("propN"), "propN", NodeId.Null) { DataType = pdt };
             nestedProp.SetDataPoint("nProp", DateTime.UtcNow, tester.Client);
-            nestedProp.Properties = new List<UAVariable> { propA };
+            nestedProp.Properties = new List<UANode> { propA };
 
-            node.Properties = new List<UAVariable>
+            node.Properties = new List<UANode>
             {
                 propA, nestedProp, propB
             };
@@ -190,7 +190,7 @@ namespace Test.Unit
                    + "Properties: {\n"
                    + "    propA: valueA\n"
                    + "    propN: nProp\n"
-                   + "        propA: valueA\n"
+                   + "    propN_propA: valueA\n"
                    + "    propB: ??\n"
                    + "}";
             Assert.Equal(refStr, str);
@@ -218,7 +218,7 @@ namespace Test.Unit
             propA.SetDataPoint("valueA", ts, tester.Client);
             propB.SetDataPoint("valueB", ts, tester.Client);
 
-            node.Properties = new List<UAVariable>
+            node.Properties = new List<UANode>
             {
                 propA, propB
             };
@@ -234,7 +234,7 @@ namespace Test.Unit
             // Test nested properties
             var nestedProp = new UAVariable(new NodeId("nestedProp"), "nestedProp", NodeId.Null) { DataType = pdt };
             nestedProp.SetDataPoint("nestedValue", ts, tester.Client);
-            propB.Properties = new List<UAVariable>
+            propB.Properties = new List<UANode>
             {
                 nestedProp
             };
@@ -288,7 +288,7 @@ namespace Test.Unit
             propA.SetDataPoint("valueA", ts, tester.Client);
             propB.SetDataPoint("valueB", ts, tester.Client);
 
-            node.Properties = new List<UAVariable>
+            node.Properties = new List<UANode>
             {
                 propA, propB
             };
@@ -350,9 +350,9 @@ namespace Test.Unit
             var propB = new UAVariable(new NodeId("propB"), "propB", NodeId.Null) { DataType = pdt };
             var nestedProp = new UAVariable(new NodeId("propN"), "propN", NodeId.Null) { DataType = pdt };
             nestedProp.SetDataPoint("nProp", DateTime.UtcNow, tester.Client);
-            nestedProp.Properties = new List<UAVariable> { propA };
+            nestedProp.Properties = new List<UANode> { propA };
 
-            node.Properties = new List<UAVariable>
+            node.Properties = new List<UANode>
             {
                 propA, nestedProp, propB
             };
@@ -373,7 +373,7 @@ namespace Test.Unit
                    + "Properties: {\n"
                    + "    propA: valueA\n"
                    + "    propN: nProp\n"
-                   + "        propA: valueA\n"
+                   + "    propN_propA: valueA\n"
                    + "    propB: ??\n"
                    + "}";
             Assert.Equal(refStr, str);
@@ -462,7 +462,7 @@ namespace Test.Unit
             var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent")) { DataType = pdt };
             node.Description = "description";
             node.DataType = new UADataType(DataTypeIds.Boolean);
-            node.Properties = new List<UAVariable>();
+            node.Properties = new List<UANode>();
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
             {
@@ -511,7 +511,7 @@ namespace Test.Unit
             var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent"));
             node.Description = "description";
             node.DataType = new UADataType(DataTypeIds.Boolean);
-            node.Properties = new List<UAVariable>();
+            node.Properties = new List<UANode>();
 
             var pdt = new UADataType(DataTypeIds.String);
 
