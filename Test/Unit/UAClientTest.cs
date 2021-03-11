@@ -589,8 +589,8 @@ namespace Test.Unit
                 {
                     var historyData = result.RawData as HistoryData;
                     Assert.Equal(600, historyData.DataValues.Count);
-                    Assert.False(req.Completed[result.Id]);
-                    Assert.NotNull(req.ContinuationPoints[result.Id]);
+                    Assert.False(result.Node.Completed);
+                    Assert.NotNull(result.Node.ContinuationPoint);
                 }
 
                 results = tester.Client.DoHistoryRead(req);
@@ -601,7 +601,7 @@ namespace Test.Unit
                 {
                     var historyData = result.RawData as HistoryData;
                     Assert.Equal(400, historyData.DataValues.Count);
-                    Assert.True(req.Completed[result.Id]);
+                    Assert.True(result.Node.Completed);
                 }
             }
             finally

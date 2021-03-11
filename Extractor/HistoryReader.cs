@@ -268,11 +268,11 @@ namespace Cognite.OpcUa
                 if (aborting) break;
                 foreach (var res in results)
                 {
-                    int cnt = handler(res.RawData, readParams.Completed[res.Id], frontfill, res.Id, details);
+                    int cnt = handler(res.RawData, res.Node.Completed, frontfill, res.Node.Id, details);
 
                     total += cnt;
                     log.Debug("{mode} {cnt} {type} for node {nodeId}",
-                        frontfill ? "Frontfill" : "Backfill", cnt, data ? "datapoints" : "events", res.Id);
+                        frontfill ? "Frontfill" : "Backfill", cnt, data ? "datapoints" : "events", res.Node.Id);
                 }
                 log.Information("{mode}ed {cnt} {type} for {nodeCount} states",
                     frontfill ? "Frontfill" : "Backfill", total, data ? "datapoints" : "events", count);
@@ -298,14 +298,14 @@ namespace Cognite.OpcUa
                     numBackfillEvents.Inc(total);
                 }
 
-                int termCount = readParams.Nodes.Count(id => readParams.Completed[id]);
+                int termCount = readParams.Nodes.Count(node => node.Completed);
                 if (termCount > 0)
                 {
                     log.Debug("Terminate {mode} of {type} for {count} states", frontfill ? "Frontfill" : "Backfill",
                         data ? "datapoints" : "events", termCount);
                 }
 
-                readParams.Nodes = readParams.Nodes.Where(id => !readParams.Completed[id]).ToList();
+                readParams.Nodes = readParams.Nodes.Where(node => !node.Completed).ToList();
             }
         }
         /// <summary>
