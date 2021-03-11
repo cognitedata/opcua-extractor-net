@@ -329,7 +329,7 @@ namespace Cognite.OpcUa.Config
                 // Some config objects have private properties, since this is a write-back of config we shouldn't save those
                 if (!p.CanWrite) return false;
                 // Some custom properties are kept on the config object for convenience
-                if (name == "ConfigDir") return false;
+                if (name == "ConfigDir" || name == "BaseExcludeProperties") return false;
                 // A few properties are kept in order to encourage the user to define them
                 if (name == "IdPrefix") return true;
                 // Compare the value of each property with its default, and check for empty arrays, don't save those.
