@@ -50,6 +50,10 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public bool PropertiesRead { get; set; }
         /// <summary>
+        /// True if node data has been read
+        /// </summary>
+        public bool DataRead { get; set; }
+        /// <summary>
         /// Description in OPC-UA
         /// </summary>
         public string Description { get; set; }
@@ -65,6 +69,18 @@ namespace Cognite.OpcUa.Types
         /// OPC-UA node type
         /// </summary>
         public UANodeType NodeType { get; set; }
+        /// <summary>
+        /// True if node is a property
+        /// </summary>
+        public bool IsProperty { get; set; }
+        /// <summary>
+        /// Parent node
+        /// </summary>
+        public UANode Parent { get; set; }
+        /// <summary>
+        /// True if this node should not be pushed to destinations.
+        /// </summary>
+        public bool Ignore { get; set; }
 
         /// <summary>
         /// Return a string description, for logging
@@ -94,18 +110,11 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
+                var meta = BuildMetadata(null);
                 builder.Append("Properties: {\n");
-                foreach (var prop in Properties)
+                foreach (var prop in meta)
                 {
-                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", prop.DisplayName, prop.Value?.StringValue ?? "??");
-                    if (prop.Properties != null && prop.Properties.Any())
-                    {
-                        foreach (var prop2 in prop.Properties)
-                        {
-                            builder.AppendFormat(CultureInfo.InvariantCulture, "        {0}: {1}\n",
-                                prop2.DisplayName, prop2.Value?.StringValue ?? "??");
-                        }
-                    }
+                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", prop.Key, prop.Value ?? "??");
                 }
                 builder.Append('}');
             }
@@ -114,7 +123,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Properties in OPC-UA
         /// </summary>
-        public IList<UAVariable> Properties { get; set; }
+        public IList<UANode> Properties { get; set; }
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
@@ -157,7 +166,10 @@ namespace Cognite.OpcUa.Types
                         {
                             metaHash *= 31;
                             if (prop.DisplayName == null) continue;
-                            metaHash += (prop.DisplayName, prop.Value?.StringValue).GetHashCode();
+                            if (prop.IsVariable && prop is UAVariable propVariable)
+                            {
+                                metaHash += (prop.DisplayName, propVariable.Value?.StringValue).GetHashCode();
+                            }
                             if (prop.Properties?.Any() ?? false)
                             {
                                 metaHash += prop.GetUpdateChecksum(new TypeUpdateConfig { Metadata = true }, false, false);
@@ -188,10 +200,11 @@ namespace Cognite.OpcUa.Types
             {
                 if (prop != null && !string.IsNullOrEmpty(prop.DisplayName))
                 {
-                    result[prop.DisplayName] = prop.Value?.StringValue;
+                    if (prop.IsVariable && prop is UAVariable variable)
+                    {
+                        result[prop.DisplayName] = variable.Value?.StringValue;
+                    }
 
-                    // Handles one layer of nested properties. This only happens if variables that have their own properties are mapped
-                    // to properties.
                     if (prop.Properties != null)
                     {
                         // Null extractor to not get extra metadata
@@ -206,6 +219,18 @@ namespace Cognite.OpcUa.Types
 
             return result;
         }
+        public IEnumerable<UANode> GetAllProperties()
+        {
+            if (Properties == null) return Enumerable.Empty<UANode>();
+            var result = new List<UANode>();
+            result.AddRange(Properties);
+            foreach (var prop in Properties)
+            {
+                result.AddRange(prop.GetAllProperties());
+            }
+            return result;
+        }
+
         public AssetCreate ToCDFAsset(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
         {
             if (extractor == null) return null;
@@ -229,9 +254,10 @@ namespace Cognite.OpcUa.Types
             {
                 foreach (var prop in Properties)
                 {
-                    if (!string.IsNullOrWhiteSpace(prop.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                    if (!prop.IsVariable || !(prop is UAVariable propVar)) continue;
+                    if (!string.IsNullOrWhiteSpace(propVar.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
                     {
-                        var value = prop.Value.StringValue;
+                        var value = propVar.Value.StringValue;
                         switch (mapped)
                         {
                             case "description": writePoco.Description = value; break;

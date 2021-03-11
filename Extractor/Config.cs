@@ -77,6 +77,7 @@ namespace Cognite.OpcUa
         private RelationshipConfig relationships = new RelationshipConfig();
         public NodeTypeConfig NodeTypes { get => nodeTypes; set => nodeTypes = value ?? nodeTypes; }
         private NodeTypeConfig nodeTypes = new NodeTypeConfig();
+        public IEnumerable<RawNodeTransformation> Transformations { get; set; }
     }
     public class DataTypeConfig
     {
@@ -129,6 +130,7 @@ namespace Cognite.OpcUa
     public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
         public long? DataSetId { get; set; }
+        public string DataSetExternalId { get; set; }
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; } = true;
         public bool SkipMetadata { get; set; }
@@ -300,7 +302,6 @@ namespace Cognite.OpcUa
         public long StartTime { get; set; }
         public int Granularity { get; set; } = 600;
     }
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:Uri properties should not be strings", Justification = "Yaml Deserialization")]
     public class ProtoNodeId
     {
         public string NamespaceUri { get; set; }
@@ -330,6 +331,20 @@ namespace Cognite.OpcUa
         public string EventStore { get; set; } = "event_states";
         public string InfluxVariableStore { get; set; } = "influx_variable_states";
         public string InfluxEventStore { get; set; } = "influx_event_states";
-
+    }
+    public class RawNodeFilter
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public string Id { get; set; }
+        public bool? IsArray { get; set; }
+        public string Namespace { get; set; }
+        public string TypeDefinition { get; set; }
+        public RawNodeFilter Parent { get; set; }
+    }
+    public class RawNodeTransformation
+    {
+        public TransformationType Type { get; set; }
+        public RawNodeFilter Filter { get; set; }
     }
 }

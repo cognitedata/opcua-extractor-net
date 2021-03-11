@@ -62,7 +62,7 @@ namespace Test.Unit
             // First get the result directly, when the passed RawRow is null
             var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent"));
             node.Description = "description";
-            node.Properties = new List<UAVariable>();
+            node.Properties = new List<UANode>();
             node.DataType = new UADataType(DataTypeIds.Boolean);
             var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
@@ -97,8 +97,8 @@ namespace Test.Unit
             node.Properties = oldProperties;
             oldProperties.RemoveAt(1);
             oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
-            oldProperties[3].SetDataPoint("value-new", now, tester.Client);
-            oldProperties[2].SetDataPoint("value4-new", now, tester.Client);
+            (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
+            (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
 
             var result2 = PusherUtils.CreateRawTsUpdate(node, extractor, ToRawRow(result1.Value), update, null);
             Assert.Null(result2);
@@ -145,7 +145,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var node = new UANode(new NodeId("test"), "test", new NodeId("parent"));
             node.Description = "description";
-            node.Properties = new List<UAVariable>();
+            node.Properties = new List<UANode>();
             var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
@@ -176,8 +176,8 @@ namespace Test.Unit
             node.Properties = oldProperties;
             oldProperties.RemoveAt(1);
             oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
-            oldProperties[3].SetDataPoint("value-new", now, tester.Client);
-            oldProperties[2].SetDataPoint("value4-new", now, tester.Client);
+            (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
+            (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
 
             var result2 = PusherUtils.CreateRawAssetUpdate(node, extractor, ToRawRow(result1.Value), update, null);
             Assert.Null(result2);
@@ -219,7 +219,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent"));
             node.Description = "description";
-            node.Properties = new List<UAVariable>();
+            node.Properties = new List<UANode>();
             node.DataType = new UADataType(DataTypeIds.Boolean);
             var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
@@ -277,8 +277,8 @@ namespace Test.Unit
             node.Properties = oldProperties;
             oldProperties.RemoveAt(1);
             oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
-            oldProperties[3].SetDataPoint("value-new", now, tester.Client);
-            oldProperties[2].SetDataPoint("value4-new", now, tester.Client);
+            (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
+            (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
 
             result = PusherUtils.GetTSUpdate(extractor, ts, node, new TypeUpdateConfig(), nodeToAssetIds);
             Assert.Null(result.AssetId);
@@ -312,7 +312,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var node = new UANode(new NodeId("test"), "test", new NodeId("parent"));
             node.Description = "description";
-            node.Properties = new List<UAVariable>();
+            node.Properties = new List<UANode>();
             var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
@@ -363,8 +363,8 @@ namespace Test.Unit
             node.Properties = oldProperties;
             oldProperties.RemoveAt(1);
             oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
-            oldProperties[3].SetDataPoint("value-new", now, tester.Client);
-            oldProperties[2].SetDataPoint("value4-new", now, tester.Client);
+            (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
+            (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
 
             result = PusherUtils.GetAssetUpdate(asset, node, extractor, new TypeUpdateConfig());
             Assert.Null(result.ParentExternalId);

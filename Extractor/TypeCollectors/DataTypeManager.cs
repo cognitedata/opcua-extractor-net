@@ -130,19 +130,21 @@ namespace Cognite.OpcUa.TypeCollectors
             if (node == null) throw new ArgumentNullException(nameof(node));
             if (node.DataType == null)
             {
-                log.Warning("Skipping variable {id} due to missing datatype", node.Id);
+                log.Warning("Skipping variable {name} {id} due to missing datatype", node.DisplayName, node.Id);
                 return false;
             }
             var dt = node.DataType;
 
             if (dt.IsString && !config.AllowStringVariables && !overrideString)
             {
-                log.Debug("Skipping variable {id} due to string datatype and allow-string-variables being set to false", node.Id);
+                log.Debug("Skipping variable {name} {id} due to string datatype and allow-string-variables being set to false",
+                    node.DisplayName, node.Id);
                 return false;
             }
             if (ignoreDataTypes.Contains(dt.Raw))
             {
-                log.Debug("Skipping variable {id} due to raw datatype {raw} being in list of ignored data types", node.Id, dt.Raw);
+                log.Debug("Skipping variable {name} {id} due to raw datatype {raw} being in list of ignored data types",
+                    node.DisplayName, node.Id, dt.Raw);
                 return false;
             }
             if (node.ValueRank == ValueRanks.Scalar) return true;
@@ -156,8 +158,8 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
                 else
                 {
-                    log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and too large dimension {dim}",
-                        node.Id, node.ValueRank, length);
+                    log.Debug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and too large dimension {dim}",
+                        node.DisplayName, node.Id, node.ValueRank, length);
                     return false;
                 }
             }
@@ -165,13 +167,14 @@ namespace Cognite.OpcUa.TypeCollectors
             {
                 if (config.UnknownAsScalar && (node.ValueRank == ValueRanks.ScalarOrOneDimension
                     || node.ValueRank == ValueRanks.Any)) return true;
-                log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and null ArrayDimensions", node.Id, node.ValueRank);
+                log.Debug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and null ArrayDimensions",
+                    node.DisplayName, node.Id, node.ValueRank);
                 return false;
             }
             else
             {
-                log.Debug("Skipping variable {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
-                    node.Id, node.ArrayDimensions.Count);
+                log.Debug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
+                    node.DisplayName, node.Id, node.ArrayDimensions.Count);
                 return false;
             }
         }
