@@ -38,6 +38,10 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public string DisplayName { get; }
         /// <summary>
+        /// Node Class in OPC-UA
+        /// </summary>
+        public NodeClass NodeClass { get; }
+        /// <summary>
         /// True if this is also a BufferedVariable.
         /// </summary>
         public bool IsVariable { get; }
@@ -127,17 +131,19 @@ namespace Cognite.OpcUa.Types
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public UANode(NodeId id, string displayName, NodeId parentId) : this(id, displayName, false, parentId) { }
+        public UANode(NodeId id, string displayName, NodeId parentId, NodeClass nodeClass = NodeClass.Object)
+            : this(id, displayName, false, parentId, nodeClass) { }
         /// <param name="id">NodeId of buffered node</param>
         /// <param name="displayName">DisplayName of buffered node</param>
         /// <param name="isVariable">True if this is a variable</param>
         /// <param name="parentId">Id of parent of buffered node</param>
-        protected UANode(NodeId id, string displayName, bool isVariable, NodeId parentId)
+        protected UANode(NodeId id, string displayName, bool isVariable, NodeId parentId, NodeClass nodeClass)
         {
             Id = id;
             DisplayName = displayName;
             IsVariable = isVariable;
             ParentId = parentId;
+            NodeClass = nodeClass;
         }
         public int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {

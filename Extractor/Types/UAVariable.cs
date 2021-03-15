@@ -119,7 +119,8 @@ namespace Cognite.OpcUa.Types
         /// <param name="Id">NodeId of buffered node</param>
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
-        public UAVariable(NodeId id, string displayName, NodeId parentId) : base(id, displayName, true, parentId) { }
+        public UAVariable(NodeId id, string displayName, NodeId parentId, NodeClass nodeClass = NodeClass.Variable)
+            : base(id, displayName, true, parentId, nodeClass) { }
         /// <summary>
         /// True if this node represents an array
         /// </summary>
@@ -142,7 +143,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="other">Parent variable</param>
         /// <param name="index">Index in the array</param>
         private UAVariable(UAVariable other, int index)
-            : base(OtherNonNull(other).Id, other.DisplayName + $"[{index}]", true, other.Id)
+            : base(OtherNonNull(other).Id, other.DisplayName + $"[{index}]", true, other.Id, other.NodeClass)
         {
             ArrayParent = other;
             Index = index;

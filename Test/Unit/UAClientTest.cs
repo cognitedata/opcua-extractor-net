@@ -372,9 +372,30 @@ namespace Test.Unit
             tester.Client.ResetVisitedNodes();
         }
         [Fact]
+        public async Task TestBrowseTypes()
+        {
+            CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
+            tester.Client.ResetVisitedNodes();
+            var (callback, nodes) = UAClientTestFixture.GetCallback();
+
+            tester.Config.Extraction.Types = true;
+
+            try
+            {
+                await tester.Client.BrowseNodeHierarchy(ObjectIds.TypesFolder, callback, tester.Source.Token);
+            }
+            finally
+            {
+                tester.Config.Extraction.Types = false;
+            }
+            Assert.Equal(353, nodes.Count);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 10));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 10));
+        }
         #endregion
 
         #region nodedata
+        [Fact]
         public void TestReadNodeData()
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests");

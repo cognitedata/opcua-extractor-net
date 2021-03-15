@@ -128,6 +128,8 @@ namespace Cognite.OpcUa.TypeCollectors
         public bool AllowTSMap(UAVariable node, int? arraySizeOverride = null, bool overrideString = false)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
+            // We don't care about the data type of variable types except for as metadata.
+            if (node.NodeClass == NodeClass.VariableType) return true;
             if (node.DataType == null)
             {
                 log.Warning("Skipping variable {name} {id} due to missing datatype", node.DisplayName, node.Id);

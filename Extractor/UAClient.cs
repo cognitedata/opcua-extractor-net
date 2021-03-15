@@ -358,8 +358,13 @@ namespace Cognite.OpcUa
                     callback?.Invoke(rootNode, null);
                 }
             }
+            uint classMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
+            if (extractionConfig.Types)
+            {
+                classMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
+            }
             await Task.Run(() => BrowseDirectory(roots, callback, token, null,
-                (uint)NodeClass.Variable | (uint)NodeClass.Object, ignoreVisited), token);
+                classMask, ignoreVisited), token);
         }
         /// <summary>
         /// Get the root node and return it as a reference description.
@@ -420,7 +425,7 @@ namespace Cognite.OpcUa
         public UANode GetServerNode(CancellationToken token)
         {
             var desc = GetRootNode(ObjectIds.Server);
-            var node = new UANode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null);
+            var node = new UANode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null, NodeClass.Object);
             ReadNodeData(new[] { node }, token);
             return node;
         }
@@ -641,7 +646,7 @@ namespace Cognite.OpcUa
                         bool docb = true;
                         lock (visitedNodesLock)
                         {
-                            if (!VisitedNodes.Add(nodeId) && ignoreVisited)
+                            if (ignoreVisited && !VisitedNodes.Add(nodeId))
                             {
                                 docb = false;
                                 log.Verbose("Ignoring visited {nodeId}", nodeId);
@@ -725,6 +730,7 @@ namespace Cognite.OpcUa
             IEnumerable<uint> common,
             IEnumerable<uint> variables,
             IEnumerable<uint> properties,
+            bool historizing,
             CancellationToken token)
         {
             if (!nodes.Any()) return new List<DataValue>();
@@ -742,6 +748,10 @@ namespace Cognite.OpcUa
                     else
                     {
                         readValueIds.AddRange(variables.Select(attribute => new ReadValueId { AttributeId = attribute, NodeId = node.Id }));
+                        if (historizing && node.NodeClass == NodeClass.Variable)
+                        {
+                            readValueIds.Add(new ReadValueId { AttributeId = Attributes.Historizing, NodeId = node.Id });
+                        }
                     }
                 }
             }
@@ -773,10 +783,7 @@ namespace Cognite.OpcUa
 
             bool arraysEnabled = extractionConfig.DataTypes.MaxArraySize != 0;
 
-            if (historyConfig.Enabled && historyConfig.Data)
-            {
-                variableAttributes.Add(Attributes.Historizing);
-            }
+            bool history = historyConfig.Enabled && historyConfig.Data;
             if (arraysEnabled)
             {
                 variableAttributes.Add(Attributes.ArrayDimensions);
@@ -790,7 +797,7 @@ namespace Cognite.OpcUa
             IEnumerable<DataValue> values;
             try
             {
-                values = GetNodeAttributes(nodes, commonAttributes, variableAttributes, propertyAttributes, token);
+                values = GetNodeAttributes(nodes, commonAttributes, variableAttributes, propertyAttributes, history, token);
             }
             catch (ServiceResultException ex)
             {
@@ -804,6 +811,10 @@ namespace Cognite.OpcUa
                     if (variable.IsProperty)
                     {
                         return seed + propertyAttributes.Count + 1;
+                    }
+                    else if (variable.NodeClass == NodeClass.Variable)
+                    {
+                        return seed + variableAttributes.Count + 1 + (history ? 1 : 0);
                     }
                     else
                     {
@@ -838,11 +849,7 @@ namespace Cognite.OpcUa
 
                     enumerator.MoveNext();
                     vnode.ValueRank = enumerator.Current.GetValue(0);
-                    if (historyConfig.Enabled && historyConfig.Data && !vnode.IsProperty)
-                    {
-                        enumerator.MoveNext();
-                        vnode.Historizing = enumerator.Current.GetValue(false);
-                    }
+                
                     if (vnode.IsProperty || arraysEnabled)
                     {
                         enumerator.MoveNext();
@@ -851,6 +858,11 @@ namespace Cognite.OpcUa
                         {
                             vnode.ArrayDimensions = new Collection<int>((int[])enumerator.Current.GetValue(typeof(int[])));
                         }
+                    }
+                    if (historyConfig.Enabled && historyConfig.Data && !vnode.IsProperty && node.NodeClass == NodeClass.Variable)
+                    {
+                        enumerator.MoveNext();
+                        vnode.Historizing = enumerator.Current.GetValue(false);
                     }
                 }
                 node.DataRead = true;
@@ -890,6 +902,7 @@ namespace Cognite.OpcUa
                     new List<uint>(),
                     attributes,
                     attributes,
+                    false,
                     token
                 );
             }
@@ -972,7 +985,8 @@ namespace Cognite.OpcUa
                 foreach (var child in children)
                 {
                     if (!NodeFilter(child.DisplayName.Text, ToNodeId(child.TypeDefinition), ToNodeId(child.NodeId))) continue;
-                    var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id) { IsProperty = true };
+                    var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text,
+                        parent.Id, NodeClass.Variable) { IsProperty = true };
                     properties.Add(property);
                     if (parent.Properties == null)
                     {

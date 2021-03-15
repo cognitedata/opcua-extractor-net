@@ -507,7 +507,8 @@ namespace Cognite.OpcUa.Pushers
                         .Where(asset => asset != null);
                 }, RetryMode.None, SanitationMode.Clean, token);
 
-                var fatalError = assetChunk.Errors?.FirstOrDefault(err => err.Type == ErrorType.FatalFailure);
+                var fatalError = assetChunk.Errors?.FirstOrDefault(err => err.Type == ErrorType.FatalFailure
+                    || err.Type == ErrorType.ItemMissing);
                 if (fatalError != null) throw fatalError.Exception;
 
                 if (assetChunk.Results == null) continue;
