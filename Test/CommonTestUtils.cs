@@ -69,6 +69,7 @@ namespace Test
         private readonly ITestOutputHelper _output;
         private readonly TextWriter _originalOut;
         private readonly TextWriter _textWriter;
+        private object lck = new object();
 
         public MakeConsoleWork(ITestOutputHelper output)
         {
@@ -87,7 +88,10 @@ namespace Test
 
         protected virtual void Dispose(bool disposing)
         {
-            _output.WriteLine(_textWriter.ToString());
+            lock (lck)
+            {
+                _output.WriteLine(_textWriter.ToString());
+            }
             _textWriter.Dispose();
             Console.SetOut(_originalOut);
         }
