@@ -135,7 +135,8 @@ namespace Cognite.OpcUa.Types
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (value == null) return;
-            Value = DataType.ToDataPoint(client, value, sourceTimestamp, client.GetUniqueId(Id), IsProperty);
+            Value = DataType.ToDataPoint(client, value, sourceTimestamp, client.GetUniqueId(Id),
+                IsProperty || NodeClass == NodeClass.VariableType);
         }
         /// <summary>
         /// Create an array-element variable.

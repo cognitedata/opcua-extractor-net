@@ -78,7 +78,6 @@ namespace Cognite.OpcUa
         public NodeTypeConfig NodeTypes { get => nodeTypes; set => nodeTypes = value ?? nodeTypes; }
         private NodeTypeConfig nodeTypes = new NodeTypeConfig();
         public IEnumerable<RawNodeTransformation> Transformations { get; set; }
-        public bool Types { get; set; }
     }
     public class DataTypeConfig
     {
@@ -102,6 +101,7 @@ namespace Cognite.OpcUa
     public class NodeTypeConfig
     {
         public bool Metadata { get; set; }
+        public bool AsNodes { get; set; }
     }
 
     public class UpdateConfig

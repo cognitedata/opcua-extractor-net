@@ -464,6 +464,10 @@ namespace Cognite.OpcUa
             if (node is UAVariable variable)
             {
                 fields = DataTypeManager.GetAdditionalMetadata(variable);
+                if (variable.NodeClass == NodeClass.VariableType)
+                {
+                    fields["Value"] = variable.Value?.StringValue;
+                }
             }
             if (config.Extraction.NodeTypes.Metadata)
             {
@@ -703,6 +707,14 @@ namespace Cognite.OpcUa
             {
                 extraMetaTasks.Add(uaClient.ObjectTypeManager.GetObjectTypeMetadataAsync(source.Token));
             }
+            if (config.Extraction.NodeTypes.AsNodes)
+            {
+                var toRead = nodes.Where(node => node.NodeClass == NodeClass.VariableType)
+                    .Select(node => node as UAVariable)
+                    .Where(node => node != null)
+                    .ToList();
+                extraMetaTasks.Add(Task.Run(() => uaClient.ReadNodeValues(toRead, source.Token)));
+            }
             await Task.WhenAll(extraMetaTasks);
         }
 
@@ -739,7 +751,7 @@ namespace Cognite.OpcUa
         {
             foreach (var node in result.Objects.Concat(result.Variables))
             {
-                if ((node.EventNotifier & EventNotifiers.HistoryRead) == 0) continue;
+                if ((node.EventNotifier & EventNotifiers.SubscribeToEvents) == 0) continue;
                 if (State.GetEmitterState(node.Id) != null) continue;
                 bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
                 var eventState = new EventExtractionState(this, node.Id, history, history && config.History.Backfill);
@@ -1177,7 +1189,7 @@ namespace Cognite.OpcUa
             bool mapped = false;
             log.Verbose("HandleNode {parent} {node}", parentId, node);
 
-            if (node.NodeClass == NodeClass.Object || config.Extraction.Types && node.NodeClass == NodeClass.ObjectType)
+            if (node.NodeClass == NodeClass.Object || config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
             {
                 var uaNode = new UANode(uaClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
 
@@ -1190,7 +1202,7 @@ namespace Cognite.OpcUa
                 commonQueue.Enqueue(uaNode);
                 mapped = true;
             }
-            else if (node.NodeClass == NodeClass.Variable || config.Extraction.Types && node.NodeClass == NodeClass.VariableType)
+            else if (node.NodeClass == NodeClass.Variable || config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
             {
                 var variable = new UAVariable(uaClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
 

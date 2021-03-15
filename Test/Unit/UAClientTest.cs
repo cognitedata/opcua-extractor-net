@@ -378,7 +378,7 @@ namespace Test.Unit
             tester.Client.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
-            tester.Config.Extraction.Types = true;
+            tester.Config.Extraction.NodeTypes.AsNodes = true;
 
             try
             {
@@ -386,7 +386,7 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Config.Extraction.Types = false;
+                tester.Config.Extraction.NodeTypes.AsNodes = false;
             }
             Assert.Equal(353, nodes.Count);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 10));

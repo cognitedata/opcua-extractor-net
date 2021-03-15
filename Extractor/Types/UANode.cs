@@ -181,10 +181,18 @@ namespace Cognite.OpcUa.Types
                                 metaHash += prop.GetUpdateChecksum(new TypeUpdateConfig { Metadata = true }, false, false);
                             }
                         }
-                        if (dataTypeMetadata && this is UAVariable variable)
+                        if (this is UAVariable variable)
                         {
-                            metaHash = metaHash * 31 + variable.DataType.Raw.GetHashCode();
+                            if (dataTypeMetadata)
+                            {
+                                metaHash = metaHash * 31 + variable.DataType.Raw.GetHashCode();
+                            }
+                            if (NodeClass == NodeClass.VariableType)
+                            {
+                                metaHash = metaHash * 31 + variable.Value?.StringValue?.GetHashCode() ?? 0;
+                            }
                         }
+
                         if (nodeTypeMetadata)
                         {
                             metaHash = metaHash * 31 + (NodeType?.Id?.GetHashCode() ?? 0);

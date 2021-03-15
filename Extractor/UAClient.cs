@@ -359,7 +359,7 @@ namespace Cognite.OpcUa
                 }
             }
             uint classMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
-            if (extractionConfig.Types)
+            if (extractionConfig.NodeTypes.AsNodes)
             {
                 classMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
             }
