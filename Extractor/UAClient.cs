@@ -592,7 +592,8 @@ namespace Cognite.OpcUa
             NodeId referenceTypes = null,
             uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
             bool ignoreVisited = true,
-            bool doFilter = true)
+            bool doFilter = true,
+            bool readVariableChildren = false)
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
             var nextIds = roots.ToList();
@@ -651,7 +652,8 @@ namespace Cognite.OpcUa
                             log.Verbose("Discovered new node {nodeid}", nodeId);
                             callback?.Invoke(rd, parentId);
                         }
-                        if (rd.NodeClass == NodeClass.Variable) continue;
+                        if (!readVariableChildren && rd.NodeClass == NodeClass.Variable) continue;
+                        if (readVariableChildren && rd.TypeDefinition == VariableTypeIds.PropertyType) continue;
                         if (localVisitedNodes.Add(nodeId))
                         {
                             nextIds.Add(nodeId);
@@ -810,68 +812,63 @@ namespace Cognite.OpcUa
         {
             if (nodes == null || !nodes.Any()) return;
 
-            var nodeList = nodes.ToList();
-
             var properties = new HashSet<UAVariable>();
             log.Information("Get properties for {NumNodesToPropertyRead} nodes", nodes.Count());
             var idsToCheck = new HashSet<NodeId>();
+            var nodeDict = new Dictionary<NodeId, UANode>();
             foreach (var node in nodes)
             {
-                if (node is UAVariable variable && variable.Index <= 0)
+                if ((node is UAVariable variable) && !node.PropertiesRead && variable.Index <= 0)
                 {
                     idsToCheck.Add(node.Id);
+                    nodeDict[node.Id] = node;
                 }
                 if (node.Properties != null)
                 {
                     foreach (var property in node.GetAllProperties())
                     {
-                        if (!(node is UAVariable) && property is UAVariable propertyVar)
+                        if (property is UAVariable propertyVar)
                         {
                             properties.Add(propertyVar);
                         }
                         if (!property.PropertiesRead)
                         {
                             idsToCheck.Add(property.Id);
-                            nodeList.Add(property);
+                            nodeDict[node.Id] = node;
                         }
                     }
                 }
             }
 
-            var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            var total = idsToCheck.Count;
-            int found = 0;
-            int readCount = 0;
-            foreach (var chunk in idsToCheck.ChunkBy(config.Source.BrowseNodesChunk))
+            Action<ReferenceDescription, NodeId> cb = (desc, parentId) =>
             {
-                var read = GetNodeChildren(chunk, ReferenceTypeIds.HasProperty, (uint)NodeClass.Variable, token);
-                foreach (var kvp in read)
-                {
-                    result[kvp.Key] = kvp.Value;
-                    found += kvp.Value.Count;
-                }
-                readCount += chunk.Count();
-                log.Debug("Read properties for {cnt} / {total} nodes. Found: {found}", readCount, total, found);
-            }
+                var id = ToNodeId(desc.NodeId);
+                var parent = nodeDict[parentId];
+                if (nodeDict.ContainsKey(id)) return;
 
-            nodeList = nodeList.DistinctBy(node => node.Id).ToList();
+                UANode prop;
 
-            foreach (var parent in nodeList)
-            {
-                if (!result.TryGetValue(parent.Id, out var children)) continue;
-                foreach (var child in children)
+                if (desc.NodeClass == NodeClass.Object)
                 {
-                    if (!NodeFilter(child.DisplayName.Text, ToNodeId(child.TypeDefinition), ToNodeId(child.NodeId), child.NodeClass)) continue;
-                    var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id, NodeClass.Variable);
-                    property.Attributes.IsProperty = true;
-                    properties.Add(property);
-                    if (parent.Properties == null)
-                    {
-                        parent.Attributes.Properties = new List<UANode>();
-                    }
-                    parent.AddProperty(property);
+                    prop = new UANode(id, desc.DisplayName.Text, parentId, desc.NodeClass);
                 }
-            }
+                else if (desc.NodeClass == NodeClass.Variable)
+                {
+                    prop = new UAVariable(id, desc.DisplayName.Text, parentId, desc.NodeClass);
+                    properties.Add(prop as UAVariable);
+                }
+                else return;
+
+                prop.SetNodeType(this, desc.TypeDefinition);
+
+                prop.Attributes.IsProperty = true;
+                prop.Attributes.PropertiesRead = true;
+
+                parent.AddProperty(prop);
+            };
+
+            BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
+                (uint)NodeClass.Object | (uint)NodeClass.Variable, true, true, true);
 
             ReadNodeData(properties, token);
             var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true)).ToList();
