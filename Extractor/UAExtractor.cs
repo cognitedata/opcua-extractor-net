@@ -466,6 +466,7 @@ namespace Cognite.OpcUa
                 fields = DataTypeManager.GetAdditionalMetadata(variable);
                 if (variable.NodeClass == NodeClass.VariableType)
                 {
+                    fields ??= new Dictionary<string, string>();
                     fields["Value"] = variable.Value?.StringValue;
                 }
             }

@@ -617,6 +617,7 @@ namespace Server
                 var objType = CreateObjectType("CustomObjectType", ObjectTypeIds.BaseObjectType, externalReferences);
                 var variableType = CreateVariableType("CustomVariableType", VariableTypeIds.BaseDataVariableType,
                     externalReferences, DataTypeIds.Double);
+                variableType.Value = 123.123;
 
                 AddTypesToTypeTree(objType);
                 AddTypesToTypeTree(variableType);

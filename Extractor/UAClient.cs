@@ -577,10 +577,10 @@ namespace Cognite.OpcUa
                 VisitedNodes.Clear();
             }
         }
-        public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition)
+        public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition, NodeClass nc)
         {
             if (IgnoreFilters == null) return true;
-            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, NamespaceTable))) return false;
+            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, NamespaceTable, nc))) return false;
             return true;
         }
 
@@ -637,7 +637,7 @@ namespace Cognite.OpcUa
                     {
                         var nodeId = ToNodeId(rd.NodeId);
                         if (rd.NodeId == ObjectIds.Server || rd.NodeId == ObjectIds.Aliases) continue;
-                        if (doFilter && !NodeFilter(rd.DisplayName.Text, ToNodeId(rd.TypeDefinition), ToNodeId(rd.NodeId)))
+                        if (doFilter && !NodeFilter(rd.DisplayName.Text, ToNodeId(rd.TypeDefinition), ToNodeId(rd.NodeId), rd.NodeClass))
                         {
                             log.Verbose("Ignoring filtered {nodeId}", nodeId);
                             continue;
@@ -984,7 +984,7 @@ namespace Cognite.OpcUa
                 if (!result.TryGetValue(parent.Id, out var children)) continue;
                 foreach (var child in children)
                 {
-                    if (!NodeFilter(child.DisplayName.Text, ToNodeId(child.TypeDefinition), ToNodeId(child.NodeId))) continue;
+                    if (!NodeFilter(child.DisplayName.Text, ToNodeId(child.TypeDefinition), ToNodeId(child.NodeId), child.NodeClass)) continue;
                     var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text,
                         parent.Id, NodeClass.Variable) { IsProperty = true };
                     properties.Add(property);

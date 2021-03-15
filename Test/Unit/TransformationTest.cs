@@ -36,7 +36,8 @@ namespace Test.Unit
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
-            var matchedBasic = nodes.Where(node => filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss)).ToList();
+            var matchedBasic = nodes.Where(node =>
+                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Equal(2, matchedBasic.Count);
@@ -60,7 +61,8 @@ namespace Test.Unit
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
-            var matchedBasic = nodes.Where(node => filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss)).ToList();
+            var matchedBasic = nodes.Where(node =>
+                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Single(matched);
             Assert.Empty(matchedBasic);
@@ -84,7 +86,8 @@ namespace Test.Unit
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
-            var matchedBasic = nodes.Where(node => filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss)).ToList();
+            var matchedBasic = nodes.Where(node =>
+                            filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(3, matched.Count);
             Assert.Equal(3, matchedBasic.Count);
@@ -107,7 +110,8 @@ namespace Test.Unit
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
-            var matchedBasic = nodes.Where(node => filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss)).ToList();
+            var matchedBasic = nodes.Where(node =>
+                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Equal(2, matchedBasic.Count);
@@ -132,7 +136,8 @@ namespace Test.Unit
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
-            var matchedBasic = nodes.Where(node => filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss)).ToList();
+            var matchedBasic = nodes.Where(node =>
+                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Equal(2, matchedBasic.Count);
@@ -161,7 +166,8 @@ namespace Test.Unit
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
-            var matchedBasic = nodes.Where(node => filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss)).ToList();
+            var matchedBasic = nodes.Where(node =>
+                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Empty(matchedBasic);
@@ -200,13 +206,40 @@ namespace Test.Unit
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
-            var matchedBasic = nodes.Where(node => filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss)).ToList();
+            var matchedBasic = nodes.Where(node =>
+                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Equal(2, matched.Count);
             Assert.Empty(matchedBasic);
 
             Assert.Contains(matched, node => (uint)node.Id.Identifier == 1u);
             Assert.Contains(matched, node => (uint)node.Id.Identifier == 2u);
+        }
+        [Fact]
+        public void TestNodeClassFilter()
+        {
+            var raw = new RawNodeFilter
+            {
+                NodeClass = NodeClass.Object
+            };
+
+            var nodes = new[]
+            {
+                new UANode(new NodeId(1), "TestTest", new NodeId("parent"), NodeClass.VariableType),
+                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Unspecified),
+            };
+            var filter = new NodeFilter(raw);
+            var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
+            var matchedBasic = nodes.Where(node =>
+                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
+
+            Assert.Equal(2, matched.Count);
+            Assert.Equal(2, matchedBasic.Count);
+
+            Assert.Contains(matched, node => (uint)node.Id.Identifier == 2u);
+            Assert.Contains(matched, node => (uint)node.Id.Identifier == 3u);
         }
         [Fact]
         public void TestMultipleFilter()
@@ -222,14 +255,17 @@ namespace Test.Unit
                 {
                     Name = "parent1"
                 },
-                Namespace = "test-"
+                Namespace = "test-",
+                NodeClass = NodeClass.Variable
             };
             var parent1 = new UANode(new NodeId("parent1"), "parent1", NodeId.Null);
             var parent2 = new UANode(new NodeId("parent2"), "parent2", NodeId.Null);
             // Each node deviates on only one point.
             var nodes = new List<UANode>();
-            for (int i = 0; i < 8; i++)
+            for (int i = 0; i < 9; i++)
             {
+                NodeClass nodeClass = i == 7 ? NodeClass.VariableType : NodeClass.Variable;
+
                 NodeId id;
                 if (i == 0)
                 {
@@ -243,7 +279,7 @@ namespace Test.Unit
                 {
                     id = new NodeId(1, 1);
                 }
-                var node = new UAVariable(id, i == 4 ? "not" : "target", NodeId.Null);
+                var node = new UAVariable(id, i == 4 ? "not" : "target", NodeId.Null, nodeClass);
                 node.Description = i == 1 ? "not" : "target";
                 node.NodeType = new UANodeType(i == 2 ? new NodeId(2) : new NodeId(1), true);
                 node.ArrayDimensions = i == 3 ? null : new Collection<int>(new[] { 4 });
@@ -254,7 +290,8 @@ namespace Test.Unit
 
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
-            var matchedBasic = nodes.Where(node => filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss)).ToList();
+            var matchedBasic = nodes.Where(node =>
+                filter.IsBasicMatch(node.DisplayName, node.Id, node.NodeType?.Id, nss, node.NodeClass)).ToList();
 
             Assert.Single(matched);
             Assert.Empty(matchedBasic);

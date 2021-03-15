@@ -176,7 +176,7 @@ namespace Cognite.OpcUa.TypeCollectors
             else
             {
                 log.Debug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
-                    node.DisplayName, node.Id, node.ArrayDimensions.Count);
+                    node.DisplayName, node.Id, node.ValueRank, node.ArrayDimensions.Count);
                 return false;
             }
         }

@@ -388,7 +388,7 @@ namespace Test.Unit
             {
                 tester.Config.Extraction.NodeTypes.AsNodes = false;
             }
-            Assert.Equal(353, nodes.Count);
+            Assert.Equal(1436, nodes.Sum(kvp => kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 10));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 10));
         }

@@ -373,6 +373,15 @@ namespace Test.Unit
 
             tester.Config.Extraction.DataTypes.DataTypeMetadata = false;
             tester.Config.Extraction.NodeTypes.Metadata = false;
+
+            tester.Config.Extraction.NodeTypes.AsNodes = true;
+            var type = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.VariableType);
+            type.DataType = new UADataType(DataTypeIds.String);
+            type.SetDataPoint("value", DateTime.UtcNow, tester.Client);
+            fields = extractor.GetExtraMetadata(type);
+            Assert.Single(fields);
+            Assert.Equal("value", fields["Value"]);
+            tester.Config.Extraction.NodeTypes.AsNodes = false;
         }
         [Fact]
         public async Task TestNodeMapping()
