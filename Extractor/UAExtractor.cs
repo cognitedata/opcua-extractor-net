@@ -50,7 +50,7 @@ namespace Cognite.OpcUa
 
         private readonly HistoryReader historyReader;
         private readonly ReferenceTypeManager referenceTypeManager;
-        public NodeId RootNode { get; private set; }
+        public IEnumerable<NodeId> RootNodes { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<UANode> commonQueue = new ConcurrentQueue<UANode>();
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
@@ -214,7 +214,7 @@ namespace Cognite.OpcUa
             log.Debug("Begin mapping directory");
             try
             {
-                await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, source.Token);
+                await uaClient.BrowseNodeHierarchy(RootNodes, HandleNode, source.Token);
             }
             catch (Exception ex)
             {
@@ -284,7 +284,7 @@ namespace Cognite.OpcUa
             await uaClient.WaitForOperations();
             ConfigureExtractor();
             uaClient.ResetVisitedNodes();
-            await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, source.Token);
+            await uaClient.BrowseNodeHierarchy(RootNodes, HandleNode, source.Token);
             var synchTasks = await MapUAToDestinations();
             Looper.ScheduleTasks(synchTasks);
             Started = true;
@@ -441,7 +441,7 @@ namespace Cognite.OpcUa
         public async Task Rebrowse()
         {
             // If we are updating we want to re-discover nodes in order to run them through mapping again.
-            await uaClient.BrowseNodeHierarchy(RootNode, HandleNode, source.Token,
+            await uaClient.BrowseNodeHierarchy(RootNodes, HandleNode, source.Token,
                 !config.Extraction.Update.AnyUpdate && !config.Extraction.Relationships.Enabled);
             var historyTasks = await MapUAToDestinations();
             Looper.ScheduleTasks(historyTasks);
@@ -592,7 +592,22 @@ namespace Cognite.OpcUa
         /// </summary>
         private void ConfigureExtractor()
         {
-            RootNode = config.Extraction.RootNode.ToNodeId(uaClient, ObjectIds.ObjectsFolder);
+            var roots = new List<NodeId>();
+            if (config.Extraction.RootNode != null)
+            {
+                roots.Add(config.Extraction.RootNode.ToNodeId(uaClient, ObjectIds.ObjectsFolder));
+            }
+            if (config.Extraction.RootNodes != null)
+            {
+                roots.AddRange(config.Extraction.RootNodes.Select(proto =>
+                    proto.ToNodeId(uaClient, ObjectIds.ObjectsFolder)));
+            }
+            if (!roots.Any())
+            {
+                roots.Add(ObjectIds.ObjectsFolder);
+            }
+
+            RootNodes = roots.Distinct().ToArray();
 
             DataTypeManager.Configure();
 
