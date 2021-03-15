@@ -41,7 +41,7 @@ namespace Cognite.OpcUa
             var objects = new List<UANode>();
             foreach (var node in nodes)
             {
-                if (node.IsVariable && node is UAVariable variable)
+                if (node is UAVariable variable)
                 {
                     if (variable.IsArray && variable.Index == -1)
                     {

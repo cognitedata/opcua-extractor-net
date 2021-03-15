@@ -152,8 +152,8 @@ namespace Cognite.OpcUa
         {
             if (node.Parent != null)
             {
-                node.Ignore |= node.Parent.Ignore;
-                node.IsProperty |= node.Parent.IsProperty;
+                node.Attributes.Ignore |= node.Parent.Ignore;
+                node.Attributes.IsProperty |= node.Parent.IsProperty;
             }
             if (node.Ignore || node.IsProperty && Type == TransformationType.Property) return;
             if (Filter.IsMatch(node, ns))
@@ -161,11 +161,11 @@ namespace Cognite.OpcUa
                 switch (Type)
                 {
                     case TransformationType.Ignore:
-                        node.Ignore = true;
+                        node.Attributes.Ignore = true;
                         log.Debug("Ignoring node {name} {id} due to matching ignore filter {idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.Property:
-                        node.IsProperty = true;
+                        node.Attributes.IsProperty = true;
                         log.Debug("Treating node {name} {id} as property due to matching filter {idx}", node.DisplayName, node.Id, index);
                         break;
                 }
