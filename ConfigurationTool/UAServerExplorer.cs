@@ -279,6 +279,7 @@ namespace Cognite.OpcUa.Config
 
             return nodes;
         }
+
         public async Task GetBrowseChunkSizes(CancellationToken token)
         {
             if (Session == null || !Session.Connected)
@@ -400,10 +401,10 @@ namespace Cognite.OpcUa.Config
             if (nodesRead) return;
             nodeList = new List<UANode>();
             log.Information("Mapping out node hierarchy");
-            var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
+            var roots = config.Extraction.GetRootNodes(this);
             try
             {
-                await BrowseNodeHierarchy(root, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token, false);
+                await BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token, false);
                 nodesRead = true;
             }
             catch (Exception ex)
@@ -667,7 +668,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         public async Task IdentifyDataTypeSettings(CancellationToken token)
         {
-            var root = config.Extraction.RootNode.ToNodeId(this, ObjectIds.ObjectsFolder);
+            var roots = config.Extraction.GetRootNodes(this);
 
             int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
             int arrayLimit = config.Extraction.DataTypes.MaxArraySize == 0 ? 10 : config.Extraction.DataTypes.MaxArraySize;

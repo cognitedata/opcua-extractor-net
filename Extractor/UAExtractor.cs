@@ -592,22 +592,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private void ConfigureExtractor()
         {
-            var roots = new List<NodeId>();
-            if (config.Extraction.RootNode != null)
-            {
-                roots.Add(config.Extraction.RootNode.ToNodeId(uaClient, ObjectIds.ObjectsFolder));
-            }
-            if (config.Extraction.RootNodes != null)
-            {
-                roots.AddRange(config.Extraction.RootNodes.Select(proto =>
-                    proto.ToNodeId(uaClient, ObjectIds.ObjectsFolder)));
-            }
-            if (!roots.Any())
-            {
-                roots.Add(ObjectIds.ObjectsFolder);
-            }
-
-            RootNodes = roots.Distinct().ToArray();
+            RootNodes = config.Extraction.GetRootNodes(uaClient);
 
             DataTypeManager.Configure();
 
