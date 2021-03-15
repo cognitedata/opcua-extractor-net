@@ -726,12 +726,12 @@ namespace Cognite.OpcUa.Pushers
 
             if (useRawStore)
             {
-                var rawObj = new RawRequestWrapper<CogniteSdk.Beta.RelationshipCreate>
+                var rawObj = new RawRequestWrapper<RelationshipCreate>
                 {
                     Database = config.RawMetadata.Database,
                     Table = config.RawMetadata.RelationshipsTable,
                     Rows = references.Select(rel =>
-                        new RawRowCreateDto<CogniteSdk.Beta.RelationshipCreate> { Key = rel.ExternalId, Columns = rel })
+                        new RawRowCreateDto<RelationshipCreate> { Key = rel.ExternalId, Columns = rel })
                 };
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
