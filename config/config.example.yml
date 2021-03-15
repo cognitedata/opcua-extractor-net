@@ -291,6 +291,8 @@ mqtt:
         assets-table:
         # Table to store timeseries in.
         timeseries-table:
+        # Table to store relationships in
+        relationships-table:
     # Map metadata to asset/timeseries attributes. Each of "assets" and "timeseries" is a map from property DisplayName to
     # CDF attribute. Legal attributes are "name, description, parentId" and "unit" for timeseries. "parentId" must somehow refer to
     # an existing asset. For timeseries it must be a mapped asset, for assets it can be any asset.

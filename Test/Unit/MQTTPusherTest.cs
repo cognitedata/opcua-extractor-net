@@ -522,6 +522,67 @@ namespace Test.Unit
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
         }
+        [Fact]
+        public async Task TestCreateRawRelationships()
+        {
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+            var mgr = new ReferenceTypeManager(tester.Client, extractor);
+            CommonTestUtils.ResetMetricValue("opcua_node_ensure_failures_mqtt");
+
+            tester.Config.Mqtt.RawMetadata = new RawMetadataConfig
+            {
+                RelationshipsTable = "relationships",
+                Database = "metadata"
+            };
+
+            // Push none
+            var waitTask = bridge.WaitForNextMessage(1);
+            Assert.True(await pusher.PushReferences(Enumerable.Empty<UAReference>(), tester.Source.Token));
+            await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
+
+            var references = new List<UAReference>
+            {
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr),
+            };
+            await mgr.GetReferenceTypeDataAsync(tester.Source.Token);
+
+            // Push successful
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushReferences(references, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(2, handler.RelationshipsRaw.Count);
+
+            // Push again, with duplicates
+            var references2 = new List<UAReference>
+            {
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target"), true, true, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target2"), false, false, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, true, new NodeId("source"), new NodeId("target2"), true, false, mgr),
+                new UAReference(ReferenceTypeIds.Organizes, false, new NodeId("source2"), new NodeId("target"), false, true, mgr)
+            };
+            waitTask = bridge.WaitForNextMessage();
+            Assert.True(await pusher.PushReferences(references2, tester.Source.Token));
+            await waitTask;
+            Assert.Equal(4, handler.RelationshipsRaw.Count);
+            var ids = new List<string>
+            {
+                "gp.Organizes;base:s=source;base:s=target",
+                "gp.OrganizedBy;base:s=source2;base:s=target2",
+                "gp.Organizes;base:s=source;base:s=target2",
+                "gp.OrganizedBy;base:s=source2;base:s=target",
+            };
+            Assert.All(ids, id => Assert.Contains(handler.RelationshipsRaw, rel => rel.Key == id));
+
+            // Test pushing all duplicates
+            waitTask = bridge.WaitForNextMessage(1);
+            Assert.True(await pusher.PushReferences(references, tester.Source.Token));
+            await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
+
+            tester.Config.Mqtt.RawMetadata = null;
+        }
 
         [Fact]
         public async Task TestNodesState()

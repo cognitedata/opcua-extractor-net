@@ -720,7 +720,40 @@ namespace Cognite.OpcUa.Pushers
 
         private async Task<bool> PushReferencesChunk(IEnumerable<RelationshipCreate> references, CancellationToken token)
         {
+            bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.RelationshipsTable);
             var data = JsonSerializer.SerializeToUtf8Bytes(references, null);
+
+            if (useRawStore)
+            {
+                var rawObj = new RawRequestWrapper<RelationshipCreate>
+                {
+                    Database = config.RawMetadata.Database,
+                    Table = config.RawMetadata.RelationshipsTable,
+                    Rows = references.Select(rel =>
+                        new RawRowCreateDto<RelationshipCreate> { Key = rel.ExternalId, Columns = rel })
+                };
+                var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+                var rawMsg = baseBuilder
+                    .WithTopic(config.RawTopic)
+                    .WithPayload(rawData)
+                    .Build();
+
+                try
+                {
+                    await client.PublishAsync(rawMsg, token);
+                    createdRelationships.Inc(references.Count());
+                }
+                catch (Exception ex)
+                {
+                    log.Error("Failed to write relationships to raw over MQTT: {msg}", ex.Message);
+                }
+
+                return true;
+            }
 
             var msg = baseBuilder
                 .WithPayload(data)
