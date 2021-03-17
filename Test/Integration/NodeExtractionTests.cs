@@ -553,8 +553,35 @@ namespace Test.Integration
             extraction.DataTypes.MaxArraySize = 0;
             extraction.DataTypes.AutoIdentifyTypes = false;
         }
+        [Fact]
+        public async Task TestMultipleSourceNodes()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            using var extractor = tester.BuildExtractor(true, null, pusher);
 
+            // Duplicates should be handled
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
+            tester.Config.Extraction.RootNodes = new[]
+            {
+                CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client),
+                CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Base.Root, tester.Client),
+            };
 
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+
+            await extractor.RunExtractor(true);
+
+            extraction.DataTypes.AllowStringVariables = false;
+            extraction.DataTypes.MaxArraySize = 0;
+            extraction.DataTypes.AutoIdentifyTypes = false;
+            extraction.RootNodes = null;
+
+            Assert.Equal(7, pusher.PushedNodes.Count);
+            Assert.Equal(21, pusher.PushedVariables.Count);
+        }
         #endregion
 
         #region custommetadata

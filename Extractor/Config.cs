@@ -25,6 +25,7 @@ using Cognite.OpcUa.Pushers;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Cognite.OpcUa
 {
@@ -59,8 +60,8 @@ namespace Cognite.OpcUa
         public string IdPrefix { get; set; }
         public IEnumerable<string> IgnoreNamePrefix { get; set; }
         public IEnumerable<string> IgnoreName { get; set; }
-        public ProtoNodeId RootNode { get => rootNode; set => rootNode = value ?? rootNode; }
-        private ProtoNodeId rootNode = new ProtoNodeId();
+        public ProtoNodeId RootNode { get; set; }
+        public IEnumerable<ProtoNodeId> RootNodes { get; set; }
         public Dictionary<string, ProtoNodeId> NodeMap { get; set; }
         public Dictionary<string, string> NamespaceMap { get => namespaceMap; set => namespaceMap = value ?? namespaceMap; }
         private Dictionary<string, string> namespaceMap = new Dictionary<string, string>();
@@ -78,6 +79,24 @@ namespace Cognite.OpcUa
         public NodeTypeConfig NodeTypes { get => nodeTypes; set => nodeTypes = value ?? nodeTypes; }
         private NodeTypeConfig nodeTypes = new NodeTypeConfig();
         public IEnumerable<RawNodeTransformation> Transformations { get; set; }
+        public IEnumerable<NodeId> GetRootNodes(UAClient client)
+        {
+            var roots = new List<NodeId>();
+            if (RootNode != null)
+            {
+                roots.Add(RootNode.ToNodeId(client, ObjectIds.ObjectsFolder));
+            }
+            if (RootNodes != null)
+            {
+                roots.AddRange(RootNodes.Select(proto =>
+                    proto.ToNodeId(client, ObjectIds.ObjectsFolder)));
+            }
+            if (!roots.Any())
+            {
+                roots.Add(ObjectIds.ObjectsFolder);
+            }
+            return roots.Distinct().ToArray();
+        }
     }
     public class DataTypeConfig
     {
