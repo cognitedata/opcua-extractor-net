@@ -95,7 +95,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 token,
                 ReferenceTypeIds.HierarchicalReferences,
                 (uint)NodeClass.ObjectType | (uint)NodeClass.Variable,
-                true,
+                false,
                 false);
 
             var result = new Dictionary<NodeId, HashSet<EventField>>();

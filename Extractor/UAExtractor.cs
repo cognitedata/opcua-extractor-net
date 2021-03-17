@@ -464,6 +464,11 @@ namespace Cognite.OpcUa
             if (node is UAVariable variable)
             {
                 fields = DataTypeManager.GetAdditionalMetadata(variable);
+                if (variable.NodeClass == NodeClass.VariableType)
+                {
+                    fields ??= new Dictionary<string, string>();
+                    fields["Value"] = variable.Value?.StringValue;
+                }
             }
             if (config.Extraction.NodeTypes.Metadata)
             {
@@ -703,6 +708,14 @@ namespace Cognite.OpcUa
             {
                 extraMetaTasks.Add(uaClient.ObjectTypeManager.GetObjectTypeMetadataAsync(source.Token));
             }
+            if (config.Extraction.NodeTypes.AsNodes)
+            {
+                var toRead = nodes.Where(node => node.NodeClass == NodeClass.VariableType)
+                    .Select(node => node as UAVariable)
+                    .Where(node => node != null)
+                    .ToList();
+                extraMetaTasks.Add(Task.Run(() => uaClient.ReadNodeValues(toRead, source.Token)));
+            }
             await Task.WhenAll(extraMetaTasks);
         }
 
@@ -763,6 +776,7 @@ namespace Cognite.OpcUa
                         if (node.Changed)
                         {
                             var oldState = State.GetNodeState(node.Id);
+                            if (oldState == null) continue;
                             State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata,
                                 config.Extraction.NodeTypes.Metadata);
                             if (oldState.IsArray)
@@ -786,27 +800,36 @@ namespace Cognite.OpcUa
                 }
                 log.Verbose(node.ToString());
                 result.Variables.Add(node);
-                var state = new VariableExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill);
-
                 State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata,
                     config.Extraction.NodeTypes.Metadata);
-                if (state.IsArray)
+
+                if (node.NodeClass == NodeClass.Variable)
                 {
-                    var children = node.CreateArrayChildren();
-                    foreach (var child in children)
+                    var state = new VariableExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill);
+                    if (state.IsArray)
                     {
-                        result.Timeseries.Add(child);
-                        var uniqueId = GetUniqueId(child.Id, child.Index);
-                        State.SetNodeState(state, uniqueId);
-                        State.RegisterNode(node.Id, uniqueId);
+                        var children = node.CreateArrayChildren();
+                        foreach (var child in children)
+                        {
+                            result.Timeseries.Add(child);
+                            var uniqueId = GetUniqueId(child.Id, child.Index);
+                            State.SetNodeState(state, uniqueId);
+                            State.RegisterNode(node.Id, uniqueId);
+                        }
+                        result.Objects.Add(node);
                     }
-                    result.Objects.Add(node);
+                    else
+                    {
+                        State.SetNodeState(state);
+                        result.Timeseries.Add(node);
+                    }
                 }
                 else
                 {
-                    State.SetNodeState(state);
-                    result.Timeseries.Add(node);
+                    result.Objects.Add(node);
                 }
+
+               
             }
         }
 
@@ -1133,7 +1156,7 @@ namespace Cognite.OpcUa
         /// <returns>Two tasks, one for data and one for events</returns>
         private IEnumerable<Task> Synchronize(IEnumerable<UAVariable> variables)
         {
-            var states = variables.Select(ts => ts.Id).Distinct().Select(id => State.GetNodeState(id));
+            var states = variables.Select(ts => ts.Id).Distinct().Select(id => State.GetNodeState(id)).Where(state => state != null);
 
             log.Information("Synchronize {NumNodesToSynch} nodes", variables.Count());
             var tasks = new List<Task>();
@@ -1167,10 +1190,9 @@ namespace Cognite.OpcUa
             bool mapped = false;
             log.Verbose("HandleNode {parent} {node}", parentId, node);
 
-            if (node.NodeClass == NodeClass.Object)
+            if (node.NodeClass == NodeClass.Object || config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
             {
-                var uaNode = new UANode(uaClient.ToNodeId(node.NodeId),
-                        node.DisplayName.Text, parentId);
+                var uaNode = new UANode(uaClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
 
                 if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
                 {
@@ -1181,10 +1203,9 @@ namespace Cognite.OpcUa
                 commonQueue.Enqueue(uaNode);
                 mapped = true;
             }
-            else if (node.NodeClass == NodeClass.Variable)
+            else if (node.NodeClass == NodeClass.Variable || config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
             {
-                var variable = new UAVariable(uaClient.ToNodeId(node.NodeId),
-                        node.DisplayName.Text, parentId);
+                var variable = new UAVariable(uaClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
 
                 if (node.TypeDefinition == VariableTypeIds.PropertyType)
                 {
@@ -1202,6 +1223,10 @@ namespace Cognite.OpcUa
                 State.RegisterNode(variable.Id, GetUniqueId(variable.Id));
                 log.Verbose("HandleNode Variable {name}", variable.DisplayName);
                 commonQueue.Enqueue(variable);
+            }
+            else
+            {
+                log.Warning("Node of unknown type received: {type}, {id}", node.NodeClass, node.NodeId);
             }
 
             if (mapped && config.Extraction.Relationships.Enabled && config.Extraction.Relationships.Hierarchical)

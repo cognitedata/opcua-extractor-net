@@ -150,6 +150,19 @@ namespace Test.Unit
             nestProp2.Properties = nestProp.Properties;
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
+
+            // Test variable types
+            var typeA = new UAVariable(new NodeId("typeA"), "typeA", NodeId.Null, NodeClass.VariableType);
+            typeA.DataType = pdt;
+            typeA.SetDataPoint("value1", DateTime.UtcNow, tester.Client);
+            var typeB = new UAVariable(new NodeId("typeA"), "typeA", NodeId.Null, NodeClass.VariableType);
+            typeB.DataType = pdt;
+            typeB.SetDataPoint("value2", DateTime.UtcNow, tester.Client);
+            (csA, csB) = Update(typeA, typeB);
+            AssertNotEqualIf(update.Metadata);
+            typeB.SetDataPoint("value1", DateTime.UtcNow, tester.Client);
+            (csA, csB) = Update(typeA, typeB);
+            Assert.Equal(csA, csB);
         }
         [Fact]
         public void TestDebugDescription()

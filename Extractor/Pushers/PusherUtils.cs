@@ -259,10 +259,10 @@ namespace Cognite.OpcUa.Pushers
             }
 
             if (update.Description && !string.IsNullOrEmpty(newAsset.Description) && newAsset.Description != old.Description)
-                assetUpdate.Description = new UpdateNullable<string>(newAsset.Description);
+                assetUpdate.Description = new UpdateNullable<string>(newAsset.Description.Truncate(Sanitation.AssetDescriptionMax));
 
             if (update.Name && !string.IsNullOrEmpty(newAsset.DisplayName) && newAsset.DisplayName != old.Name)
-                assetUpdate.Name = new UpdateNullable<string>(newAsset.DisplayName);
+                assetUpdate.Name = new UpdateNullable<string>(newAsset.DisplayName.Truncate(Sanitation.AssetNameMax));
 
             if (update.Metadata)
             {
