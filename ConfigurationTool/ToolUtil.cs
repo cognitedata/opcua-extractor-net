@@ -123,14 +123,14 @@ namespace Cognite.OpcUa.Config
                 if (node.NodeClass == NodeClass.Object || node.NodeClass == NodeClass.DataType || node.NodeClass == NodeClass.ObjectType)
                 {
                     var bufferedNode = new UANode(client.ToNodeId(node.NodeId),
-                        node.DisplayName.Text, parentId);
+                        node.DisplayName.Text, parentId, node.NodeClass);
                     log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
                     target.Add(bufferedNode);
                 }
-                else if (node.NodeClass == NodeClass.Variable)
+                else if (node.NodeClass == NodeClass.Variable || node.NodeClass == NodeClass.VariableType)
                 {
                     var bufferedNode = new UAVariable(client.ToNodeId(node.NodeId),
-                        node.DisplayName.Text, parentId);
+                        node.DisplayName.Text, parentId, node.NodeClass);
                     if (node.TypeDefinition == VariableTypeIds.PropertyType)
                     {
                         bufferedNode.IsProperty = true;

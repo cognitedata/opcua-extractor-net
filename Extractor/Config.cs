@@ -101,6 +101,7 @@ namespace Cognite.OpcUa
     public class NodeTypeConfig
     {
         public bool Metadata { get; set; }
+        public bool AsNodes { get; set; }
     }
 
     public class UpdateConfig
@@ -340,6 +341,7 @@ namespace Cognite.OpcUa
         public bool? IsArray { get; set; }
         public string Namespace { get; set; }
         public string TypeDefinition { get; set; }
+        public NodeClass? NodeClass { get; set; }
         public RawNodeFilter Parent { get; set; }
     }
     public class RawNodeTransformation

@@ -725,6 +725,7 @@ namespace Test.Integration
             tester.Config.Extraction.Relationships.InverseHierarchical = false;
         }
         #endregion
+
         #region lateinit
         [Fact]
         public async Task TestLateInitInitialFail()
@@ -1089,6 +1090,44 @@ namespace Test.Integration
 
             Assert.Single(pusher.PushedNodes);
             Assert.Empty(pusher.PushedVariables);
+        }
+        #endregion
+
+        #region types
+        [Fact]
+        public async Task TestReadTypes()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.TypesFolder, tester.Client);
+            extraction.NodeTypes.AsNodes = true;
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = -1;
+            extraction.DataTypes.AutoIdentifyTypes = true;
+
+            await extractor.RunExtractor(true);
+
+            extraction.NodeTypes.AsNodes = false;
+            extraction.DataTypes.AllowStringVariables = false;
+            extraction.DataTypes.MaxArraySize = 0;
+            extraction.DataTypes.AutoIdentifyTypes = false;
+
+            Assert.Equal(447, pusher.PushedNodes.Count);
+            Assert.Equal(366, pusher.PushedVariables.Count);
+
+            var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType];
+            Assert.Equal("CustomVariableType", customVarType.DisplayName);
+            Assert.Equal(NodeClass.VariableType, customVarType.NodeClass);
+            var meta = customVarType.BuildMetadata(extractor);
+            Assert.Single(meta);
+            Assert.Equal("123.123", meta["Value"]);
+
+            var customObjType = pusher.PushedNodes[tester.Server.Ids.Custom.ObjectType];
+            Assert.Equal("CustomObjectType", customObjType.DisplayName);
+            Assert.Equal(NodeClass.ObjectType, customObjType.NodeClass);
         }
         #endregion
     }

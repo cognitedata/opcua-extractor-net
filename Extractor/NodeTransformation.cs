@@ -14,6 +14,7 @@ namespace Cognite.OpcUa
         private Regex Description { get; }
         private Regex Id { get; }
         private bool? IsArray { get; }
+        private NodeClass? NodeClass { get; }
         private Regex Namespace { get; }
         private Regex TypeDefinition { get; }
         private NodeFilter Parent { get; }
@@ -27,6 +28,7 @@ namespace Cognite.OpcUa
             Namespace = CreateRegex(filter.Namespace);
             TypeDefinition = CreateRegex(filter.TypeDefinition);
             IsArray = filter.IsArray;
+            NodeClass = filter.NodeClass;
             if (filter.Parent != null)
             {
                 Parent = new NodeFilter(filter.Parent);
@@ -45,13 +47,13 @@ namespace Cognite.OpcUa
             return new Regex(raw, RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.CultureInvariant);
         }
 
-        public bool IsBasicMatch(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces)
+        public bool IsBasicMatch(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces, NodeClass nc)
         {
             if (Description != null || IsArray != null || Parent != null) return false;
-            return MatchBasic(name, id, typeDefinition, namespaces);
+            return MatchBasic(name, id, typeDefinition, namespaces, nc);
         }
 
-        private bool MatchBasic(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces)
+        private bool MatchBasic(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces, NodeClass nc)
         {
             if (Name != null && (string.IsNullOrEmpty(name) || !Name.IsMatch(name))) return false;
             if (Id != null)
@@ -72,12 +74,16 @@ namespace Cognite.OpcUa
                 var tdStr = GetIdString(typeDefinition);
                 if (!TypeDefinition.IsMatch(tdStr)) return false;
             }
+            if (NodeClass != null)
+            {
+                if (nc != NodeClass.Value) return false;
+            }
             return true;
         }
 
         public bool IsMatch(UANode node, NamespaceTable ns)
         {
-            if (!MatchBasic(node.DisplayName, node.Id, node.NodeType?.Id, ns)) return false;
+            if (!MatchBasic(node.DisplayName, node.Id, node.NodeType?.Id, ns, node.NodeClass)) return false;
             if (Description != null && (string.IsNullOrEmpty(node.Description) || !Description.IsMatch(node.Description))) return false;
             if (IsArray != null && (!(node is UAVariable variable) || variable.IsArray != IsArray)) return false;
             if (Parent != null && (node.Parent == null || !Parent.IsMatch(node.Parent, ns))) return false;
