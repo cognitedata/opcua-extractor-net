@@ -69,7 +69,7 @@ namespace Test
         private readonly ITestOutputHelper _output;
         private readonly TextWriter _originalOut;
         private readonly TextWriter _textWriter;
-        private object lck = new object();
+        private bool disposed;
 
         public MakeConsoleWork(ITestOutputHelper output)
         {
@@ -81,19 +81,20 @@ namespace Test
 
         public void Dispose()
         {
-
             Dispose(true);
             GC.SuppressFinalize(this);
         }
 
         protected virtual void Dispose(bool disposing)
         {
-            lock (lck)
+            if (disposed) return;
+            if (disposing)
             {
                 _output.WriteLine(_textWriter.ToString());
+                _textWriter.Dispose();
+                Console.SetOut(_originalOut);
             }
-            _textWriter.Dispose();
-            Console.SetOut(_originalOut);
+            disposed = true;
         }
     }
     public static class CommonTestUtils
