@@ -169,8 +169,8 @@ namespace Test.Unit
             var ids = tester.Server.Ids.Base;
             var nodes = new List<UANode>
             {
-                new UANode(new NodeId("object1"), "object1", root),
-                new UANode(new NodeId("object2"), "object2", root)
+                new UANode(new NodeId("object1"), "object1", root, NodeClass.Object),
+                new UANode(new NodeId("object2"), "object2", root, NodeClass.Object)
             };
             var variables = new List<UAVariable>
             {
@@ -233,18 +233,26 @@ namespace Test.Unit
             var custIds = tester.Server.Ids.Custom;
             var var1 = new UAVariable(custIds.MysteryVar, "MysteryVar", custIds.Root);
             var var2 = new UAVariable(custIds.Array, "Array", custIds.Root);
-            var obj1 = new UANode(custIds.Obj1, "Object1", custIds.Root);
-            obj1.Properties = new List<UANode>
+            var obj1 = new UANode(custIds.Obj1, "Object1", custIds.Root, NodeClass.Object);
+            obj1.Attributes.Properties = new List<UANode>
             {
-                new UAVariable(custIds.StringArray, "StringArray", custIds.Obj1) { IsProperty = true, PropertiesRead = true },
-                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "VarProp1", custIds.Obj1) { IsProperty = true }
+                new UAVariable(custIds.StringArray, "StringArray", custIds.Obj1),
+                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "VarProp1", custIds.Obj1)
             };
-            var obj2 = new UANode(custIds.Obj2, "Object2", custIds.Root);
-            obj2.Properties = new List<UANode>
+            obj1.Attributes.Properties[0].Attributes.IsProperty = true;
+            obj1.Attributes.Properties[0].Attributes.PropertiesRead = true;
+            obj1.Attributes.Properties[1].Attributes.IsProperty = true;
+
+            var obj2 = new UANode(custIds.Obj2, "Object2", custIds.Root, NodeClass.Object);
+            obj2.Attributes.Properties = new List<UANode>
             {
-                new UAVariable(custIds.ObjProp, "ObjProp1", custIds.Obj2) { IsProperty = true, PropertiesRead = true },
-                new UAVariable(custIds.ObjProp2, "ObjProp2", custIds.Obj2) { IsProperty = true, PropertiesRead = true }
+                new UAVariable(custIds.ObjProp, "ObjProp1", custIds.Obj2),
+                new UAVariable(custIds.ObjProp2, "ObjProp2", custIds.Obj2)
             };
+            obj2.Attributes.Properties[0].Attributes.IsProperty = true;
+            obj2.Attributes.Properties[0].Attributes.PropertiesRead = true;
+            obj2.Attributes.Properties[1].Attributes.IsProperty = true;
+            obj2.Attributes.Properties[1].Attributes.PropertiesRead = true;
 
             var chunks = new List<List<UANode>>
             {
@@ -260,11 +268,11 @@ namespace Test.Unit
             Assert.True(tasks[0].IsCompleted);
             Assert.True(tasks[1].IsCompleted);
 
-            Assert.Equal(2, var1.Properties.Count);
-            Assert.Equal(2, var2.Properties.Count);
+            Assert.Equal(2, var1.Properties.Count());
+            Assert.Equal(2, var2.Properties.Count());
             foreach (var node in chunks.SelectMany(chunk => chunk))
             {
-                Assert.Equal(2, node.Properties.Count);
+                Assert.Equal(2, node.Properties.Count());
                 foreach (var prop in node.Properties)
                 {
                     var propVar = prop as UAVariable;
@@ -359,14 +367,14 @@ namespace Test.Unit
 
             tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
             var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null);
-            variable.DataType = new UADataType(DataTypeIds.Double);
+            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
             var fields = extractor.GetExtraMetadata(variable);
             Assert.Single(fields);
             Assert.Equal("Double", fields["dataType"]);
 
             tester.Config.Extraction.NodeTypes.Metadata = true;
-            var node = new UANode(new NodeId("test"), "test", NodeId.Null);
-            node.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
+            var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
+            node.Attributes.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
             fields = extractor.GetExtraMetadata(node);
             Assert.Single(fields);
             Assert.Equal("SomeType", fields["TypeDefinition"]);
@@ -376,7 +384,7 @@ namespace Test.Unit
 
             tester.Config.Extraction.NodeTypes.AsNodes = true;
             var type = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.VariableType);
-            type.DataType = new UADataType(DataTypeIds.String);
+            type.VariableAttributes.DataType = new UADataType(DataTypeIds.String);
             type.SetDataPoint("value", DateTime.UtcNow, tester.Client);
             fields = extractor.GetExtraMetadata(type);
             Assert.Single(fields);

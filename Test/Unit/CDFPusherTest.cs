@@ -291,14 +291,14 @@ namespace Test.Unit
             Assert.True(await pusher.PushNodes(Enumerable.Empty<UANode>(), tss, update, tester.Source.Token));
 
             // Test debug mode
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             tester.Config.Cognite.Debug = true;
             Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
             tester.Config.Cognite.Debug = false;
             Assert.Empty(handler.Assets);
 
             // Fail to create assets
-            node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             handler.FailedRoutes.Add("/assets");
             Assert.False(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
             handler.FailedRoutes.Clear();
@@ -309,7 +309,7 @@ namespace Test.Unit
 
             // Do nothing here, due to no update configured.
             handler.FailedRoutes.Add("/assets/update");
-            node.Description = "description";
+            node.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
 
             // Do nothing again, due to no changes on the node
@@ -317,12 +317,12 @@ namespace Test.Unit
             update.Objects.Description = true;
             update.Objects.Metadata = true;
             update.Objects.Name = true;
-            node.Description = null;
+            node.Attributes.Description = null;
             Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
 
             // Fail due to failed update, but the other will still be created
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null);
-            node.Description = "description";
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
+            node.Attributes.Description = "description";
             Assert.False(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             Assert.Equal(2, handler.Assets.Count);
             Assert.Null(handler.Assets.First().Value.description);
@@ -330,7 +330,7 @@ namespace Test.Unit
 
             // Update both nodes
             handler.FailedRoutes.Clear();
-            node2.Description = "description";
+            node2.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             Assert.Equal(2, handler.Assets.Count);
             Assert.Equal("description", handler.Assets.First().Value.description);
@@ -349,7 +349,7 @@ namespace Test.Unit
                 AssetsTable = "assets",
                 Database = "metadata"
             };
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
             // Fail to create
@@ -364,8 +364,8 @@ namespace Test.Unit
             Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.name);
 
             // Create another, do not overwrite the existing one, due to no update settings
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null);
-            node.Description = "description";
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
+            node.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             Assert.Equal(2, handler.AssetRaw.Count);
             Assert.Null(handler.AssetRaw.First().Value.description);
@@ -385,7 +385,7 @@ namespace Test.Unit
                 AssetsTable = "assets",
                 Database = "metadata"
             };
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
             update.Objects.Context = true;
@@ -405,8 +405,8 @@ namespace Test.Unit
             Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.name);
 
             // Create another, overwrite the existing one
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null);
-            node.Description = "description";
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
+            node.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             Assert.Equal(2, handler.AssetRaw.Count);
             Assert.Single(handler.AssetRaw, asset => asset.Value.description == "description");
@@ -432,18 +432,20 @@ namespace Test.Unit
             var update = new UpdateConfig();
 
             // Test debug mode
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
+            node.VariableAttributes.DataType = dt;
             tester.Config.Cognite.Debug = true;
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
-            Assert.Equal(2, node.Properties.Count);
+            Assert.Equal(2, node.Properties.Count());
             tester.Config.Cognite.Debug = false;
             Assert.Empty(handler.Timeseries);
 
             // Fail to create timeseries, should still result in properties being read.
-            node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+            node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
+            node.VariableAttributes.DataType = dt;
             handler.FailedRoutes.Add("/timeseries");
             Assert.False(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
-            Assert.Equal(2, node.Properties.Count);
+            Assert.Equal(2, node.Properties.Count());
             handler.FailedRoutes.Clear();
             Assert.Empty(handler.Timeseries);
 
@@ -454,7 +456,7 @@ namespace Test.Unit
 
             // Do nothing due to no configured update
             handler.FailedRoutes.Add("/timeseries/update");
-            node.Description = "description";
+            node.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
 
             // Do nothing again due to no changes on the node
@@ -462,12 +464,13 @@ namespace Test.Unit
             update.Variables.Description = true;
             update.Variables.Metadata = true;
             update.Variables.Name = true;
-            node.Description = null;
+            node.Attributes.Description = null;
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
 
             // Create one, fail to update the other
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent")) { DataType = dt };
-            node.Description = "description";
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
+            node2.VariableAttributes.DataType = dt;
+            node.Attributes.Description = "description";
             Assert.False(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             Assert.Equal(2, handler.Timeseries.Count);
             Assert.Null(handler.Timeseries.First().Value.description);
@@ -475,7 +478,7 @@ namespace Test.Unit
 
             // Update both nodes
             handler.FailedRoutes.Clear();
-            node2.Description = "description";
+            node2.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             Assert.Equal(2, handler.Timeseries.Count);
             Assert.Equal("description", handler.Timeseries.First().Value.description);
@@ -499,7 +502,8 @@ namespace Test.Unit
 
             var assets = Enumerable.Empty<UANode>();
             var update = new UpdateConfig();
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
+            node.VariableAttributes.DataType = dt;
 
             // Fail to create
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/timeseries/rows");
@@ -513,8 +517,9 @@ namespace Test.Unit
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.name);
 
             // Create another, do not overwrite the existing one, due to no update settings
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent")) { DataType = dt };
-            node.Description = "description";
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
+            node2.VariableAttributes.DataType = dt;
+            node.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             Assert.Equal(2, handler.TimeseriesRaw.Count);
             Assert.Null(handler.TimeseriesRaw.First().Value.description);
@@ -548,7 +553,8 @@ namespace Test.Unit
             update.Variables.Description = true;
             update.Variables.Metadata = true;
             update.Variables.Name = true;
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
+            node.VariableAttributes.DataType = dt;
 
             // Fail to upsert
             handler.FailedRoutes.Add("/raw/dbs/metadata/tables/timeseries/rows");
@@ -562,8 +568,9 @@ namespace Test.Unit
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.name);
 
             // Create another, overwrite the existing due to update settings
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent")) { DataType = dt };
-            node.Description = "description";
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
+            node2.VariableAttributes.DataType = dt;
+            node.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             Assert.Equal(2, handler.TimeseriesRaw.Count);
             Assert.Contains(handler.TimeseriesRaw, ts => ts.Value.description == "description");
@@ -580,15 +587,11 @@ namespace Test.Unit
             VariableExtractionState[] GetStates()
             {
                 var state1 = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("double"), "double", NodeId.Null) { DataType = new UADataType(DataTypeIds.Double) }, true, true);
+                    CommonTestUtils.GetSimpleVariable("double", new UADataType(DataTypeIds.Double)), true, true);
                 var state2 = new VariableExtractionState(tester.Client,
-                    new UAVariable(new NodeId("string"), "string", NodeId.Null) { DataType = new UADataType(DataTypeIds.String) }, true, true);
-                var state3 = new VariableExtractionState(tester.Client,
-                    new UAVariable(new NodeId("array"), "array", NodeId.Null)
-                    {
-                        DataType = new UADataType(DataTypeIds.Double),
-                        ArrayDimensions = new Collection<int> { 3 }
-                    }, true, true);
+                    CommonTestUtils.GetSimpleVariable("string", new UADataType(DataTypeIds.String)), true, true);
+                var state3 = new VariableExtractionState(tester.Client, 
+                    CommonTestUtils.GetSimpleVariable("array", new UADataType(DataTypeIds.Double), 3), true, true);
                 return new[] { state1, state2, state3 };
             }
 

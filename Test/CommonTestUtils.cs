@@ -516,6 +516,16 @@ namespace Test
                 NamespaceUri = ns
             };
         }
+        public static UAVariable GetSimpleVariable(string name, UADataType dt, int dim = 0, NodeId id = null)
+        {
+            var variable = new UAVariable(id ?? new NodeId(name), name, NodeId.Null);
+            variable.VariableAttributes.DataType = dt;
+            if (dim > 0)
+            {
+                variable.VariableAttributes.ArrayDimensions = new Collection<int> { dim };
+            }
+            return variable;
+        }
     }
     public enum ServerName { Basic, Full, Array, Events, Audit, Proxy, Wrong }
     public enum ConfigName { Events, Test }

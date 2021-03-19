@@ -124,6 +124,8 @@ namespace Cognite.OpcUa.Config
                 {
                     var bufferedNode = new UANode(client.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId, node.NodeClass);
+                    bufferedNode.SetNodeType(client, node.NodeId);
+
                     log.Verbose("HandleNode Object {name}", bufferedNode.DisplayName);
                     target.Add(bufferedNode);
                 }
@@ -131,10 +133,7 @@ namespace Cognite.OpcUa.Config
                 {
                     var bufferedNode = new UAVariable(client.ToNodeId(node.NodeId),
                         node.DisplayName.Text, parentId, node.NodeClass);
-                    if (node.TypeDefinition == VariableTypeIds.PropertyType)
-                    {
-                        bufferedNode.IsProperty = true;
-                    }
+                    bufferedNode.SetNodeType(client, node.NodeId);
 
                     log.Verbose("HandleNode Variable {name}", bufferedNode.DisplayName);
                     target.Add(bufferedNode);

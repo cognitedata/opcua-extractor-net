@@ -16,7 +16,7 @@ namespace Cognite.OpcUa.Types
         public IList<UANode> Properties { get; set; }
         public NodeClass NodeClass { get; }
         public bool PropertiesRead { get; set; }
-        public bool DataRead { get; set; }
+        public bool DataRead { get; protected set; }
         public NodeAttributes(NodeClass nc)
         {
             NodeClass = nc;

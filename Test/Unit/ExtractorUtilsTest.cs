@@ -30,20 +30,24 @@ namespace Test.Unit
             // Null
             Assert.Throws<ArgumentNullException>(() => ExtractorUtils.SortNodes(null));
 
-            var arrParent = new UAVariable(new NodeId("arr1"), "arr1", NodeId.Null) { ValueRank = 1, ArrayDimensions = new Collection<int>(new[] { 2 }) };
+            var arrParent = new UAVariable(new NodeId("arr1"), "arr1", NodeId.Null);
+            arrParent.VariableAttributes.ValueRank = 1;
+            arrParent.VariableAttributes.ArrayDimensions = new Collection<int> { 2 };
             var children = arrParent.CreateArrayChildren();
             // Populated
             var nodes = new UANode[]
             {
-                new UANode(new NodeId("object1"), "obj1", NodeId.Null),
-                new UANode(new NodeId("object2"), "obj2", NodeId.Null),
+                new UANode(new NodeId("object1"), "obj1", NodeId.Null, NodeClass.Object),
+                new UANode(new NodeId("object2"), "obj2", NodeId.Null, NodeClass.Object),
                 new UAVariable(new NodeId("var1"), "var1", NodeId.Null),
                 new UAVariable(new NodeId("var2"), "var2", NodeId.Null),
                 arrParent,
-                new UAVariable(new NodeId("arr2"), "arr2", NodeId.Null) { ValueRank = 1, ArrayDimensions = new Collection<int>(new [] { 2 }) },
-            }.Concat(children);
+                new UAVariable(new NodeId("arr2"), "arr2", NodeId.Null)
+            };
+            (nodes[5].Attributes as Cognite.OpcUa.Types.VariableAttributes).ValueRank = 1;
+            (nodes[5].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new Collection<int> { 2 };
 
-            (objects, variables) = ExtractorUtils.SortNodes(nodes);
+            (objects, variables) = ExtractorUtils.SortNodes(nodes.Concat(children));
             Assert.Equal(4, objects.Count());
             Assert.Equal(4, variables.Count());
 

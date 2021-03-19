@@ -603,7 +603,7 @@ namespace Cognite.OpcUa.Config
             await PopulateNodes(token);
 
             int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
-            int expectedAttributeReads = nodeList.Aggregate(0, (acc, node) => acc + (node.IsVariable ? 5 : 1));
+            int expectedAttributeReads = nodeList.Sum(node => node.Attributes.GetAttributeIds(config).Count());
             config.History.Enabled = true;
             config.Extraction.DataTypes.MaxArraySize = 10;
 
@@ -624,7 +624,7 @@ namespace Cognite.OpcUa.Config
                 int count = 0;
                 var toCheck = nodeList.TakeWhile(node =>
                 {
-                    count += node.IsVariable ? 5 : 1;
+                    count += node.Attributes.GetAttributeIds(config).Count();
                     return count < chunkSize + 10;
                 }).ToList();
                 log.Information("Total {tot}", nodeList.Count);
@@ -683,7 +683,7 @@ namespace Cognite.OpcUa.Config
             log.Information("Mapping out variable datatypes");
 
             var variables = nodeList
-                .Where(node => node.IsVariable && (node is UAVariable variable) && !variable.IsProperty)
+                .Where(node => (node is UAVariable variable) && !variable.IsProperty)
                 .Select(node => node as UAVariable)
                 .Where(node => node != null);
 
@@ -809,7 +809,7 @@ namespace Cognite.OpcUa.Config
 
             bool failed = true;
             var states = nodeList.Where(node =>
-                    node.IsVariable && (node is UAVariable variable) && !variable.IsProperty
+                    (node is UAVariable variable) && !variable.IsProperty
                     && AllowTSMap(variable))
                 .Select(node => new VariableExtractionState(this, node as UAVariable, false, false)).ToList();
 
@@ -910,7 +910,7 @@ namespace Cognite.OpcUa.Config
             ReadNodeData(token);
 
             var historizingStates = nodeList.Where(node =>
-                    node.IsVariable && (node is UAVariable variable) && !variable.IsProperty && variable.Historizing)
+                    (node is UAVariable variable) && !variable.IsProperty && variable.Historizing)
                 .Select(node => new VariableExtractionState(this, node as UAVariable, true, true)).ToList();
 
             var stateMap = historizingStates.ToDictionary(state => state.SourceId);
