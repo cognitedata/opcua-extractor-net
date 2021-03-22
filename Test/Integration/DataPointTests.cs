@@ -435,6 +435,7 @@ namespace Test.Integration
             await extractor.RestartHistory();
 
             await extractor.Looper.WaitForNextPush();
+            await extractor.Looper.WaitForNextPush();
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
