@@ -237,6 +237,7 @@ void packProject(String configuration, String version, boolean linux) {
     sh("mv ExtractorLauncher/bin/Release/net5.0/${configuration}/publish/* ./${configuration}/")
     sh("cp -r ./config ./${configuration}/")
     sh("cp ./LICENSE.md ./${configuration}/")
+    sh("cp ./CHANGELOG.md ./${configuration}/")
     if (linux) {
         sh("chmod +x ./${configuration}/OpcuaExtractor")
     }
