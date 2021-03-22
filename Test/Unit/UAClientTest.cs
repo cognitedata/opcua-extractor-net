@@ -555,12 +555,14 @@ namespace Test.Unit
                 // object with no children
                 new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder, NodeClass.Object),
                 // object with properties
-                new UANode(tester.Server.Ids.Custom.Obj2, "Object", tester.Server.Ids.Custom.Root, NodeClass.Object)
+                new UANode(tester.Server.Ids.Custom.Obj2, "Object", tester.Server.Ids.Custom.Root, NodeClass.Object),
+                // variable with nested properties
+                new UAVariable(tester.Server.Ids.Custom.NumberVar, "NumberVar2", tester.Server.Ids.Custom.Root)
             };
             nodes[5].Attributes.Properties = new List<UANode>
             {
-                new UAVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Obj2),
-                new UAVariable(tester.Server.Ids.Custom.RangeProp, "Range", tester.Server.Ids.Custom.Obj2)
+                new UAVariable(tester.Server.Ids.Custom.ObjProp, "prop1", tester.Server.Ids.Custom.Obj2),
+                new UAVariable(tester.Server.Ids.Custom.ObjProp2, "prop2", tester.Server.Ids.Custom.Obj2)
             };
 
             await tester.Client.GetNodeProperties(nodes, tester.Source.Token);
@@ -573,8 +575,13 @@ namespace Test.Unit
             Assert.Equal(2, nodes[5].Properties.Count());
             Assert.NotNull((nodes[5].Properties.First() as UAVariable).Value);
             Assert.NotNull((nodes[5].Properties.Last() as UAVariable).Value);
+            Assert.Equal(4, nodes[6].GetAllProperties().Count());
+            var meta = nodes[6].BuildMetadata(null);
+            Assert.Equal(2, meta.Count);
+            Assert.Equal("value 1", meta["DeepProp_DeepProp2_val1"]);
+            Assert.Equal("value 2", meta["DeepProp_DeepProp2_val2"]);
 
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 1));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 3));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 2));
         }
         #endregion

@@ -834,7 +834,7 @@ namespace Cognite.OpcUa
                         if (!property.PropertiesRead)
                         {
                             idsToCheck.Add(property.Id);
-                            nodeDict[node.Id] = node;
+                            nodeDict[property.Id] = property;
                         }
                     }
                 }
@@ -865,10 +865,14 @@ namespace Cognite.OpcUa
                 prop.Attributes.PropertiesRead = true;
 
                 parent.AddProperty(prop);
+                if (desc.TypeDefinition != VariableTypeIds.PropertyType)
+                {
+                    nodeDict[id] = prop;
+                }
             };
 
             BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
-                (uint)NodeClass.Object | (uint)NodeClass.Variable, true, true, true);
+                (uint)NodeClass.Object | (uint)NodeClass.Variable, false, true, true);
 
             ReadNodeData(properties, token);
             var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true)).ToList();

@@ -111,7 +111,8 @@ namespace Test.Integration
             Assert.Equal(DataTypeIds.Range, prop.DataType.Raw);
             Assert.Equal("(0, 100)", prop.Value.StringValue);
 
-            Assert.All(pusher.PushedVariables.Values.Where(variable => variable.DisplayName != "MysteryVar"),
+            Assert.All(pusher.PushedVariables.Values.Where(variable => variable.DisplayName != "MysteryVar"
+                && variable.DisplayName != "NumberVar"),
                 variable => Assert.True(variable.Properties == null || !variable.Properties.Any()));
 
             dataTypes.AllowStringVariables = false;
@@ -234,6 +235,9 @@ namespace Test.Integration
 
             var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
             Assert.False(vnode.DataType.IsString);
+
+            var nnode = pusher.PushedVariables[(ids.NumberVar, -1)];
+            Assert.Equal(4, nnode.GetAllProperties().Count());
 
             dataTypes.AllowStringVariables = false;
             dataTypes.MaxArraySize = 0;
@@ -1070,7 +1074,7 @@ namespace Test.Integration
 
             var root = pusher.PushedNodes[ObjectIds.ObjectsFolder];
             var meta = root.BuildMetadata(null);
-            Assert.Equal(15, meta.Count);
+            Assert.Equal(17, meta.Count);
             // Verify that the metadata fields get values
             Assert.Equal("[0, 0, 0, 0]", meta["CustomRoot_Variable Array"]);
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
