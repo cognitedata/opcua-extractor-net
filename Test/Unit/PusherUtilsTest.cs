@@ -7,6 +7,7 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using Test.Utils;
 using Xunit;
@@ -61,17 +62,17 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             // First get the result directly, when the passed RawRow is null
             var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent"));
-            node.Description = "description";
-            node.Properties = new List<UANode>();
-            node.DataType = new UADataType(DataTypeIds.Boolean);
+            node.Attributes.Description = "description";
+            node.Attributes.Properties = new List<UANode>();
+            node.VariableAttributes.DataType = new UADataType(DataTypeIds.Boolean);
             var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
-                prop.DataType = pdt;
+                prop.VariableAttributes.DataType = pdt;
                 prop.SetDataPoint($"value{i}", now, tester.Client);
-                node.Properties.Add(prop);
+                node.AddProperty(prop);
             }
 
             var update = new TypeUpdateConfig();
@@ -91,12 +92,12 @@ namespace Test.Unit
 
 
             // Update, but keep the TypeUpdateConfig at default
-            var oldProperties = node.Properties;
+            var oldProperties = node.Properties.ToList();
             node = new UAVariable(new NodeId("test2"), "test2", new NodeId("parent2"));
-            node.Description = "description2";
-            node.Properties = oldProperties;
+            node.Attributes.Description = "description2";
+            node.Attributes.Properties = oldProperties;
             oldProperties.RemoveAt(1);
-            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
+            oldProperties.Add(CommonTestUtils.GetSimpleVariable("prop-new", pdt));
             (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
             (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
 
@@ -126,7 +127,7 @@ namespace Test.Unit
 
             // Try to update, but all fields are null except description
             node = new UAVariable(new NodeId("test3"), null, NodeId.Null);
-            node.Description = "description3";
+            node.Attributes.Description = "description3";
             result2 = PusherUtils.CreateRawTsUpdate(node, extractor, ToRawRow(result1.Value), update, null);
             Assert.NotNull(result2);
             Assert.Equal("test", GetStringValue(result2, "name"));
@@ -143,17 +144,17 @@ namespace Test.Unit
         public void TestCreateRawAssetUpdate()
         {
             using var extractor = tester.BuildExtractor();
-            var node = new UANode(new NodeId("test"), "test", new NodeId("parent"));
-            node.Description = "description";
-            node.Properties = new List<UANode>();
+            var node = new UANode(new NodeId("test"), "test", new NodeId("parent"), NodeClass.Object);
+            node.Attributes.Description = "description";
+            node.Attributes.Properties = new List<UANode>();
             var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
-                prop.DataType = pdt;
+                prop.VariableAttributes.DataType = pdt;
                 prop.SetDataPoint($"value{i}", now, tester.Client);
-                node.Properties.Add(prop);
+                node.AddProperty(prop);
             }
 
             var update = new TypeUpdateConfig();
@@ -170,12 +171,12 @@ namespace Test.Unit
             Assert.Equal("value4", GetStringValue(meta, "prop4"));
 
             // Update, but keep TypeUpdateConfig at default
-            var oldProperties = node.Properties;
-            node = new UANode(new NodeId("test2"), "test2", new NodeId("parent2"));
-            node.Description = "description2";
-            node.Properties = oldProperties;
+            var oldProperties = node.Properties.ToList();
+            node = new UANode(new NodeId("test2"), "test2", new NodeId("parent2"), NodeClass.Object);
+            node.Attributes.Description = "description2";
+            node.Attributes.Properties = oldProperties;
             oldProperties.RemoveAt(1);
-            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
+            oldProperties.Add(CommonTestUtils.GetSimpleVariable("prop-new", pdt));
             (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
             (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
 
@@ -201,8 +202,8 @@ namespace Test.Unit
             Assert.Equal("value-new", GetStringValue(meta, "prop-new"));
 
             // Try to update, but all fields are null except description
-            node = new UANode(new NodeId("test3"), null, NodeId.Null);
-            node.Description = "description3";
+            node = new UANode(new NodeId("test3"), null, NodeId.Null, NodeClass.Object);
+            node.Attributes.Description = "description3";
             result2 = PusherUtils.CreateRawAssetUpdate(node, extractor, ToRawRow(result1.Value), update, null);
             Assert.NotNull(result2);
             Assert.Equal("test", GetStringValue(result2, "name"));
@@ -218,17 +219,17 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var node = new UAVariable(new NodeId("test"), "test", new NodeId("parent"));
-            node.Description = "description";
-            node.Properties = new List<UANode>();
-            node.DataType = new UADataType(DataTypeIds.Boolean);
+            node.Attributes.Description = "description";
+            node.Attributes.Properties = new List<UANode>();
+            node.VariableAttributes.DataType = new UADataType(DataTypeIds.Boolean);
             var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
-                prop.DataType = pdt;
+                prop.VariableAttributes.DataType = pdt;
                 prop.SetDataPoint($"value{i}", now, tester.Client);
-                node.Properties.Add(prop);
+                node.AddProperty(prop);
             }
             // Need to create this manually to match
             var ts = new TimeSeries
@@ -271,12 +272,12 @@ namespace Test.Unit
             Assert.Null(result.Name);
 
             // Update everything
-            var oldProperties = node.Properties;
+            var oldProperties = node.Properties.ToList();
             node = new UAVariable(new NodeId("test2"), "test2", new NodeId("parent2"));
-            node.Description = "description2";
-            node.Properties = oldProperties;
+            node.Attributes.Description = "description2";
+            node.Attributes.Properties = oldProperties;
             oldProperties.RemoveAt(1);
-            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
+            oldProperties.Add(CommonTestUtils.GetSimpleVariable("prop-new", pdt));
             (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
             (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
 
@@ -310,17 +311,17 @@ namespace Test.Unit
         public void TestGetAssetUpdate()
         {
             using var extractor = tester.BuildExtractor();
-            var node = new UANode(new NodeId("test"), "test", new NodeId("parent"));
-            node.Description = "description";
-            node.Properties = new List<UANode>();
+            var node = new UANode(new NodeId("test"), "test", new NodeId("parent"), NodeClass.Object);
+            node.Attributes.Description = "description";
+            node.Attributes.Properties = new List<UANode>();
             var pdt = new UADataType(DataTypeIds.String);
             var now = DateTime.UtcNow;
             for (int i = 1; i < 5; i++)
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
-                prop.DataType = pdt;
+                prop.VariableAttributes.DataType = pdt;
                 prop.SetDataPoint($"value{i}", now, tester.Client);
-                node.Properties.Add(prop);
+                node.AddProperty(prop);
             }
 
             var asset = new Asset
@@ -357,12 +358,12 @@ namespace Test.Unit
             Assert.Null(result.Name);
 
             // Update everything
-            var oldProperties = node.Properties;
-            node = new UANode(new NodeId("test2"), "test2", new NodeId("parent2"));
-            node.Description = "description2";
-            node.Properties = oldProperties;
+            var oldProperties = node.Properties.ToList();
+            node = new UANode(new NodeId("test2"), "test2", new NodeId("parent2"), NodeClass.Object);
+            node.Attributes.Description = "description2";
+            node.Attributes.Properties = oldProperties;
             oldProperties.RemoveAt(1);
-            oldProperties.Add(new UAVariable(new NodeId("prop-new"), "prop-new", NodeId.Null) { DataType = pdt });
+            oldProperties.Add(CommonTestUtils.GetSimpleVariable("prop-new", pdt));
             (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
             (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
 
@@ -384,7 +385,7 @@ namespace Test.Unit
             Assert.Equal("value-new", result.Metadata.Add["prop-new"]);
             Assert.Null(result.ExternalId);
 
-            node = new UANode(new NodeId("test3"), null, NodeId.Null);
+            node = new UANode(new NodeId("test3"), null, NodeId.Null, NodeClass.Object);
             result = PusherUtils.GetAssetUpdate(asset, node, extractor, update);
             Assert.Null(result.ParentExternalId);
             Assert.Null(result.Description);

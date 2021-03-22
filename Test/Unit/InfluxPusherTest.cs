@@ -111,10 +111,10 @@ namespace Test.Unit
                 "opcua_skipped_datapoints_influx");
 
             var state1 = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("test-ts-double"), "test-ts-double", NodeId.Null) { DataType = new UADataType(DataTypeIds.Double) },
+                CommonTestUtils.GetSimpleVariable("test-ts-double", new UADataType(DataTypeIds.Double)),
                 true, true);
             var state2 = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("test-ts-string"), "test-ts-string", NodeId.Null) { DataType = new UADataType(DataTypeIds.String) },
+                CommonTestUtils.GetSimpleVariable("test-ts-string", new UADataType(DataTypeIds.String)),
                 true, true);
 
 
@@ -196,7 +196,7 @@ namespace Test.Unit
             extractor.State.SetNodeState(state2, "test-ts-double");
 
             var state3 = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("test-ts-double-2"), "test-ts-double-2", NodeId.Null) { DataType = new UADataType(DataTypeIds.Double) },
+                CommonTestUtils.GetSimpleVariable("test-ts-double-2", new UADataType(DataTypeIds.Double)),
                 true, true);
             extractor.State.SetNodeState(state3, "test-ts-double-2");
 
@@ -327,15 +327,11 @@ namespace Test.Unit
             VariableExtractionState[] GetStates()
             {
                 var state1 = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("double"), "double", NodeId.Null) { DataType = new UADataType(DataTypeIds.Double) }, true, true);
+                    CommonTestUtils.GetSimpleVariable("double", new UADataType(DataTypeIds.Double)), true, true);
                 var state2 = new VariableExtractionState(tester.Client,
-                    new UAVariable(new NodeId("string"), "string", NodeId.Null) { DataType = new UADataType(DataTypeIds.String) }, true, true);
+                    CommonTestUtils.GetSimpleVariable("string", new UADataType(DataTypeIds.String)), true, true);
                 var state3 = new VariableExtractionState(tester.Client,
-                    new UAVariable(new NodeId("array"), "array", NodeId.Null)
-                    {
-                        DataType = new UADataType(DataTypeIds.Double),
-                        ArrayDimensions = new Collection<int> { 3 }
-                    }, true, true);
+                    CommonTestUtils.GetSimpleVariable("array", new UADataType(DataTypeIds.Double), 3), true, true);
                 extractor.State.SetNodeState(state1, state1.Id);
                 extractor.State.SetNodeState(state2, state2.Id);
                 extractor.State.SetNodeState(state3, state3.Id);

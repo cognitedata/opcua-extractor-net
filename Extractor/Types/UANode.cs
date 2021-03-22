@@ -40,27 +40,24 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Node Class in OPC-UA
         /// </summary>
-        public NodeClass NodeClass { get; }
-        /// <summary>
-        /// True if this is also a BufferedVariable.
-        /// </summary>
-        public bool IsVariable { get; }
+        public NodeClass NodeClass => Attributes.NodeClass;
         /// <summary>
         /// NodeId of the parent. May be NodeId.Null for rootNodes
         /// </summary>
         public NodeId ParentId { get; }
+        public virtual NodeAttributes Attributes { get; }
         /// <summary>
         /// True if the properties of this object has been read.
         /// </summary>
-        public bool PropertiesRead { get; set; }
+        public bool PropertiesRead => Attributes.PropertiesRead;
         /// <summary>
         /// True if node data has been read
         /// </summary>
-        public bool DataRead { get; set; }
+        public bool DataRead => Attributes.DataRead;
         /// <summary>
         /// Description in OPC-UA
         /// </summary>
-        public string Description { get; set; }
+        public string Description => Attributes.Description;
         /// <summary>
         /// True if the node has been modified after pushing.
         /// </summary>
@@ -68,15 +65,15 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Raw OPC-UA EventNotifier attribute.
         /// </summary>
-        public byte EventNotifier { get; set; }
+        public byte EventNotifier => Attributes.EventNotifier;
         /// <summary>
         /// OPC-UA node type
         /// </summary>
-        public UANodeType NodeType { get; set; }
+        public UANodeType NodeType => Attributes.NodeType;
         /// <summary>
         /// True if node is a property
         /// </summary>
-        public bool IsProperty { get; set; }
+        public bool IsProperty => Attributes.IsProperty;
         /// <summary>
         /// Parent node
         /// </summary>
@@ -84,7 +81,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// True if this node should not be pushed to destinations.
         /// </summary>
-        public bool Ignore { get; set; }
+        public bool Ignore => Attributes.Ignore;
 
         /// <summary>
         /// Return a string description, for logging
@@ -127,24 +124,18 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Properties in OPC-UA
         /// </summary>
-        public IList<UANode> Properties { get; set; }
-        /// <param name="Id">NodeId of buffered node</param>
-        /// <param name="DisplayName">DisplayName of buffered node</param>
-        /// <param name="ParentId">Id of parent of buffered node</param>
-        public UANode(NodeId id, string displayName, NodeId parentId, NodeClass nodeClass = NodeClass.Object)
-            : this(id, displayName, false, parentId, nodeClass) { }
-        /// <param name="id">NodeId of buffered node</param>
-        /// <param name="displayName">DisplayName of buffered node</param>
-        /// <param name="isVariable">True if this is a variable</param>
-        /// <param name="parentId">Id of parent of buffered node</param>
-        protected UANode(NodeId id, string displayName, bool isVariable, NodeId parentId, NodeClass nodeClass)
+        public IEnumerable<UANode> Properties => Attributes.Properties;
+        public UANode(NodeId id, string displayName, NodeId parentId, NodeClass nodeClass) : this(id, displayName, parentId)
+        {
+            Attributes = new NodeAttributes(nodeClass);
+        }
+        protected UANode(NodeId id, string displayName, NodeId parentId)
         {
             Id = id;
             DisplayName = displayName;
-            IsVariable = isVariable;
             ParentId = parentId;
-            NodeClass = nodeClass;
         }
+
         public int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             if (update == null || !update.AnyUpdate) return 0;
@@ -172,7 +163,7 @@ namespace Cognite.OpcUa.Types
                         {
                             metaHash *= 31;
                             if (prop.DisplayName == null) continue;
-                            if (prop.IsVariable && prop is UAVariable propVariable)
+                            if (prop is UAVariable propVariable)
                             {
                                 metaHash += (prop.DisplayName, propVariable.Value?.StringValue).GetHashCode();
                             }
@@ -214,7 +205,7 @@ namespace Cognite.OpcUa.Types
             {
                 if (prop != null && !string.IsNullOrEmpty(prop.DisplayName))
                 {
-                    if (prop.IsVariable && prop is UAVariable variable)
+                    if (prop is UAVariable variable)
                     {
                         result[prop.DisplayName] = variable.Value?.StringValue;
                     }
@@ -244,7 +235,6 @@ namespace Cognite.OpcUa.Types
             }
             return result;
         }
-
         public AssetCreate ToCDFAsset(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
         {
             if (extractor == null) return null;
@@ -268,7 +258,7 @@ namespace Cognite.OpcUa.Types
             {
                 foreach (var prop in Properties)
                 {
-                    if (!prop.IsVariable || !(prop is UAVariable propVar)) continue;
+                    if (!(prop is UAVariable propVar)) continue;
                     if (!string.IsNullOrWhiteSpace(propVar.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
                     {
                         var value = propVar.Value.StringValue;
@@ -283,6 +273,28 @@ namespace Cognite.OpcUa.Types
             }
 
             return writePoco;
+        }
+
+        public void AddProperty(UANode prop)
+        {
+            if (Properties == null)
+            {
+                Attributes.Properties = new List<UANode> { prop };
+                return;
+            }
+            if (Properties.Any(oldProp => oldProp.Id == prop.Id)) return;
+            Attributes.Properties.Add(prop);
+        }
+        public void SetNodeType(UAClient client, ExpandedNodeId nodeId)
+        {
+            if (nodeId == null || nodeId.IsNull) return;
+            var id = client.ToNodeId(nodeId);
+            Attributes.NodeType = client.ObjectTypeManager.GetObjectType(id, NodeClass == NodeClass.Variable);
+            if (NodeClass == NodeClass.Variable && id == VariableTypeIds.PropertyType)
+            {
+                Attributes.IsProperty = true;
+                Attributes.PropertiesRead = true;
+            }
         }
     }
 }

@@ -272,7 +272,7 @@ namespace Test.Unit
 
             var nodes = new List<UANode>
             {
-                new UANode(new NodeId("missing1"), "missing1", new NodeId("test")),
+                new UANode(new NodeId("missing1"), "missing1", new NodeId("test"), NodeClass.Object),
                 new UAVariable(new NodeId("missing2"), "missing2", new NodeId("test"))
             };
 

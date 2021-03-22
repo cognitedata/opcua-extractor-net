@@ -274,9 +274,9 @@ namespace Test.Unit
         public void TestDataHandler()
         {
             using var extractor = tester.BuildExtractor();
-            var node = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("id"), "node", NodeId.Null) { DataType = new UADataType(DataTypeIds.Double) },
-                true, true);
+            var var1 = new UAVariable(new NodeId("id"), "node", NodeId.Null);
+            var1.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
+            var node = new VariableExtractionState(tester.Client, var1, true, true);
             extractor.State.SetNodeState(node, "id");
 
             var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
@@ -333,9 +333,9 @@ namespace Test.Unit
         {
             CommonTestUtils.ResetMetricValue("opcua_array_points_missed");
             using var extractor = tester.BuildExtractor();
-            var node1 = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("node1"), "node1", NodeId.Null) { DataType = new UADataType(DataTypeIds.Double) },
-                true, true);
+            var var1 = new UAVariable(new NodeId("id"), "node", NodeId.Null);
+            var1.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
+            var node1 = new VariableExtractionState(tester.Client, var1, true, true);
 
             var ts = DateTime.UtcNow;
 
@@ -360,11 +360,7 @@ namespace Test.Unit
 
             // array node
             var node2 = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId("node2"), "node2", NodeId.Null)
-                {
-                    DataType = new UADataType(DataTypeIds.Double),
-                    ArrayDimensions = new Collection<int>(new[] { 4 })
-                },
+                CommonTestUtils.GetSimpleVariable("node2", new UADataType(DataTypeIds.Double), 4),
                 true, true);
 
             // scalar value on array
@@ -408,11 +404,7 @@ namespace Test.Unit
 
             // Very long array name
             var node3 = new VariableExtractionState(tester.Client,
-                new UAVariable(new NodeId(new string('x', 300)), new string('x', 300), NodeId.Null)
-                {
-                    DataType = new UADataType(DataTypeIds.Double),
-                    ArrayDimensions = new Collection<int>(new[] { 20 })
-                },
+                CommonTestUtils.GetSimpleVariable(new string('x', 300), new UADataType(DataTypeIds.Double), 20),
                 true, true);
             var dps8 = extractor.Streamer.ToDataPoint(new DataValue(Enumerable.Range(1, 20).Select(val => (double)val).ToArray(),
                 StatusCodes.Good, ts), node3);

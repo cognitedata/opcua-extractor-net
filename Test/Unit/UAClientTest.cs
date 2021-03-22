@@ -401,13 +401,14 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests");
             var nodes = new UANode[]
             {
-                new UANode(tester.Server.Ids.Full.Root, "FullRoot", ObjectIds.ObjectsFolder),
-                new UANode(tester.Server.Ids.Event.Obj1, "Object 1", tester.Server.Ids.Event.Root),
-                new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder),
+                new UANode(tester.Server.Ids.Full.Root, "FullRoot", ObjectIds.ObjectsFolder, NodeClass.Object),
+                new UANode(tester.Server.Ids.Event.Obj1, "Object 1", tester.Server.Ids.Event.Root, NodeClass.Object),
+                new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder, NodeClass.Object),
                 new UAVariable(tester.Server.Ids.Custom.StringyVar, "StringyVar", tester.Server.Ids.Custom.Root),
                 new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root),
-                new UAVariable(tester.Server.Ids.Custom.ObjProp, "ObjProp", tester.Server.Ids.Custom.Obj2) { IsProperty = true }
+                new UAVariable(tester.Server.Ids.Custom.ObjProp, "ObjProp", tester.Server.Ids.Custom.Obj2)
             };
+            nodes[5].Attributes.IsProperty = true;
             tester.Config.History.Enabled = true;
             tester.Config.History.Data = true;
             tester.Config.Extraction.DataTypes.MaxArraySize = -1;
@@ -514,11 +515,15 @@ namespace Test.Unit
             var nodes = new[]
             {
                 new UAVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar", tester.Server.Ids.Base.Root),
-                new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root) { IsProperty = true },
-                new UAVariable(tester.Server.Ids.Custom.StringArray, "StringArray", tester.Server.Ids.Custom.Root) { IsProperty = true },
-                new UAVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Root) { IsProperty = true },
-                new UAVariable(tester.Server.Ids.Custom.RangeProp, "RangeProp", tester.Server.Ids.Custom.Root) { IsProperty = true }
+                new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root),
+                new UAVariable(tester.Server.Ids.Custom.StringArray, "StringArray", tester.Server.Ids.Custom.Root),
+                new UAVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Root),
+                new UAVariable(tester.Server.Ids.Custom.RangeProp, "RangeProp", tester.Server.Ids.Custom.Root)
             };
+            nodes[1].Attributes.IsProperty = true;
+            nodes[2].Attributes.IsProperty = true;
+            nodes[3].Attributes.IsProperty = true;
+            nodes[4].Attributes.IsProperty = true;
 
             // Need to read attributes first for this, to get proper conversion we need the datatype.
             tester.Client.ReadNodeData(nodes, tester.Source.Token);
@@ -535,10 +540,8 @@ namespace Test.Unit
         public async Task TestGetNodeProperties()
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests", "opcua_browse_operations");
-            var arrayVar = new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root)
-            {
-                ArrayDimensions = new Collection<int> { 4 }
-            };
+            var arrayVar = new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root);
+            arrayVar.VariableAttributes.ArrayDimensions = new Collection<int> { 4 };
             var nodes = new[]
             {
                 // Normal variable
@@ -550,26 +553,24 @@ namespace Test.Unit
                 // Variable with properties
                 new UAVariable(tester.Server.Ids.Custom.MysteryVar, "NumberVar", tester.Server.Ids.Custom.Root),
                 // object with no children
-                new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder),
+                new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", ObjectIds.ObjectsFolder, NodeClass.Object),
                 // object with properties
-                new UANode(tester.Server.Ids.Custom.Obj2, "Object", tester.Server.Ids.Custom.Root)
-                {
-                    Properties = new List<UANode>
-                    {
-                        new UAVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Obj2) { IsProperty = true },
-                        new UAVariable(tester.Server.Ids.Custom.RangeProp, "Range", tester.Server.Ids.Custom.Obj2) { IsProperty = true },
-                    }
-                }
+                new UANode(tester.Server.Ids.Custom.Obj2, "Object", tester.Server.Ids.Custom.Root, NodeClass.Object)
+            };
+            nodes[5].Attributes.Properties = new List<UANode>
+            {
+                new UAVariable(tester.Server.Ids.Custom.EUProp, "EUProp", tester.Server.Ids.Custom.Obj2),
+                new UAVariable(tester.Server.Ids.Custom.RangeProp, "Range", tester.Server.Ids.Custom.Obj2)
             };
 
             await tester.Client.GetNodeProperties(nodes, tester.Source.Token);
-            Assert.Equal(2, nodes[0].Properties.Count);
-            Assert.Equal(2, nodes[1].Properties.Count);
-            Assert.Equal(2, nodes[2].Properties.Count);
+            Assert.Equal(2, nodes[0].Properties.Count());
+            Assert.Equal(2, nodes[1].Properties.Count());
+            Assert.Equal(2, nodes[2].Properties.Count());
             Assert.Equal(nodes[1].Properties, nodes[2].Properties);
-            Assert.Equal(2, nodes[3].Properties.Count);
+            Assert.Equal(2, nodes[3].Properties.Count());
             Assert.Null(nodes[4].Properties);
-            Assert.Equal(2, nodes[5].Properties.Count);
+            Assert.Equal(2, nodes[5].Properties.Count());
             Assert.NotNull((nodes[5].Properties.First() as UAVariable).Value);
             Assert.NotNull((nodes[5].Properties.Last() as UAVariable).Value);
 

@@ -29,10 +29,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1), null, new NodeId("parent")),
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent")),
-                new UANode(new NodeId(3), "Test", new NodeId("parent")),
-                new UANode(new NodeId(4), "Other", new NodeId("parent")),
+                new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
@@ -54,11 +54,15 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1), "TestTest", new NodeId("parent")) { Description = "Some Test" },
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent")) { Description = "Some Other test" },
-                new UANode(new NodeId(3), "Test", new NodeId("parent")) { Description = null },
-                new UANode(new NodeId(4), "Other", new NodeId("parent")) { Description = "" },
+                new UANode(new NodeId(1), "TestTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object)
             };
+            nodes[0].Attributes.Description = "Some Test";
+            nodes[1].Attributes.Description = "Some Other test";
+            nodes[2].Attributes.Description = null;
+            nodes[3].Attributes.Description = "";
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
@@ -79,10 +83,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1), "TestTest", new NodeId("parent")),
-                new UANode(new NodeId("id"), "OtherTest", new NodeId("parent")),
-                new UANode(new NodeId(3), "Test", new NodeId("parent")),
-                new UANode(new NodeId(4), "Other", new NodeId("parent")),
+                new UANode(new NodeId(1), "TestTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId("id"), "OtherTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
@@ -103,10 +107,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1, 1), "TestTest", new NodeId("parent")),
-                new UANode(new NodeId(2, 2), "OtherTest", new NodeId("parent")),
-                new UANode(new NodeId(3, 2), "Test", new NodeId("parent")),
-                new UANode(new NodeId(4, 3), "Other", new NodeId("parent")),
+                new UANode(new NodeId(1, 1), "TestTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(2, 2), "OtherTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(3, 2), "Test", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(4, 3), "Other", new NodeId("parent"), NodeClass.Object),
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
@@ -129,11 +133,15 @@ namespace Test.Unit
 
             var nodes = new[]
             {
-                new UANode(new NodeId(1), "TestTest", new NodeId("parent")) { NodeType = new UANodeType(new NodeId(1), false) },
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent")) { NodeType = new UANodeType(new NodeId(2), false) },
-                new UANode(new NodeId(3), "Test", new NodeId("parent")) { NodeType = null },
-                new UANode(new NodeId(4), "Other", new NodeId("parent")) { NodeType = new UANodeType(new NodeId("test"), false) },
+                new UANode(new NodeId(1), "TestTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
             };
+            nodes[0].Attributes.NodeType = new UANodeType(new NodeId(1), false);
+            nodes[1].Attributes.NodeType = new UANodeType(new NodeId(2), false);
+            nodes[2].Attributes.NodeType = null;
+            nodes[3].Attributes.NodeType = new UANodeType(new NodeId("test"), false);
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
@@ -160,10 +168,13 @@ namespace Test.Unit
             {
                 new UAVariable(new NodeId(1), "TestTest", new NodeId("parent")),
                 new UAVariable(new NodeId(2), "OtherTest", new NodeId("parent")),
-                new UAVariable(new NodeId(3), "Test", new NodeId("parent")) { ArrayDimensions = new Collection<int>(new [] { 4 }) },
-                new UANode(new NodeId(4), "Other", new NodeId("parent")),
-                new UAVariable(new NodeId(5), "Test", new NodeId("parent")) { ArrayDimensions = new Collection<int>(new [] { 4 }) }
+                new UAVariable(new NodeId(3), "Test", new NodeId("parent")),
+                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
+                new UAVariable(new NodeId(5), "Test", new NodeId("parent"))
             };
+            (nodes[2].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new Collection<int> { 4 };
+            (nodes[4].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new Collection<int> { 4 };
+
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
             var matchedBasic = nodes.Where(node =>
@@ -194,15 +205,15 @@ namespace Test.Unit
                 }
             };
 
-            var parent1 = new UANode(new NodeId("parent1"), "parent1", NodeId.Null);
-            var parent2 = new UANode(new NodeId("parent2"), "parent2", NodeId.Null);
+            var parent1 = new UANode(new NodeId("parent1"), "parent1", NodeId.Null, NodeClass.Object);
+            var parent2 = new UANode(new NodeId("parent2"), "parent2", NodeId.Null, NodeClass.Object);
 
             var nodes = new[]
             {
-                new UANode(new NodeId(1, 1), "TestTest", new NodeId("parent1")) { Parent = parent1 },
-                new UANode(new NodeId(2, 2), "OtherTest", new NodeId("parent1")) { Parent = parent1 },
-                new UANode(new NodeId(3, 2), "Test", new NodeId("parent2")) { Parent = parent2 },
-                new UANode(new NodeId(4, 3), "Other", new NodeId("parent2")) { Parent = parent2 },
+                new UANode(new NodeId(1, 1), "TestTest", new NodeId("parent1"), NodeClass.Object) { Parent = parent1 },
+                new UANode(new NodeId(2, 2), "OtherTest", new NodeId("parent1"), NodeClass.Object) { Parent = parent1 },
+                new UANode(new NodeId(3, 2), "Test", new NodeId("parent2"), NodeClass.Object) { Parent = parent2 },
+                new UANode(new NodeId(4, 3), "Other", new NodeId("parent2"), NodeClass.Object) { Parent = parent2 },
             };
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
@@ -258,8 +269,8 @@ namespace Test.Unit
                 Namespace = "test-",
                 NodeClass = NodeClass.Variable
             };
-            var parent1 = new UANode(new NodeId("parent1"), "parent1", NodeId.Null);
-            var parent2 = new UANode(new NodeId("parent2"), "parent2", NodeId.Null);
+            var parent1 = new UANode(new NodeId("parent1"), "parent1", NodeId.Null, NodeClass.Object);
+            var parent2 = new UANode(new NodeId("parent2"), "parent2", NodeId.Null, NodeClass.Object);
             // Each node deviates on only one point.
             var nodes = new List<UANode>();
             for (int i = 0; i < 9; i++)
@@ -280,9 +291,9 @@ namespace Test.Unit
                     id = new NodeId(1, 1);
                 }
                 var node = new UAVariable(id, i == 4 ? "not" : "target", NodeId.Null, nodeClass);
-                node.Description = i == 1 ? "not" : "target";
-                node.NodeType = new UANodeType(i == 2 ? new NodeId(2) : new NodeId(1), true);
-                node.ArrayDimensions = i == 3 ? null : new Collection<int>(new[] { 4 });
+                node.Attributes.Description = i == 1 ? "not" : "target";
+                node.Attributes.NodeType = new UANodeType(i == 2 ? new NodeId(2) : new NodeId(1), true);
+                node.VariableAttributes.ArrayDimensions = i == 3 ? null : new Collection<int> { 4 };
                 node.Parent = i == 5 ? parent2 : parent1;
 
                 nodes.Add(node);
@@ -309,10 +320,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1), null, new NodeId("parent")),
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent")),
-                new UANode(new NodeId(3), "Test", new NodeId("parent")),
-                new UANode(new NodeId(4), "Other", new NodeId("parent")),
+                new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
             };
             var trans = new NodeTransformation(raw, 0);
             foreach (var node in nodes)
@@ -336,8 +347,8 @@ namespace Test.Unit
                 Type = TransformationType.Ignore
             };
             
-            var node1 = new UANode(new NodeId("parent"), null, NodeId.Null);
-            var node2 = new UANode(new NodeId(1), null, new NodeId("parent"));
+            var node1 = new UANode(new NodeId("parent"), null, NodeId.Null, NodeClass.Object);
+            var node2 = new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Object);
             node2.Parent = node1;
             var nodes = new[]
             {
@@ -365,10 +376,10 @@ namespace Test.Unit
             };
             var nodes = new[]
             {
-                new UANode(new NodeId(1), null, new NodeId("parent")),
-                new UANode(new NodeId(2), "OtherTest", new NodeId("parent")),
-                new UANode(new NodeId(3), "Test", new NodeId("parent")),
-                new UANode(new NodeId(4), "Other", new NodeId("parent")),
+                new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(2), "OtherTest", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(3), "Test", new NodeId("parent"), NodeClass.Object),
+                new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
             };
             var trans = new NodeTransformation(raw, 0);
             foreach (var node in nodes)
@@ -393,8 +404,8 @@ namespace Test.Unit
             };
 
 
-            var node1 = new UANode(new NodeId("parent"), null, NodeId.Null);
-            var node2 = new UANode(new NodeId(1), null, new NodeId("parent"));
+            var node1 = new UANode(new NodeId("parent"), null, NodeId.Null, NodeClass.Object);
+            var node2 = new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Object);
             node2.Parent = node1;
             var nodes = new[]
             {

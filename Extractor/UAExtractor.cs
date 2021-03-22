@@ -405,7 +405,7 @@ namespace Cognite.OpcUa
                 if (!pendingProperties.Any()) return;
                 foreach (var node in nodes)
                 {
-                    node.PropertiesRead = true;
+                    node.Attributes.PropertiesRead = true;
                     pendingProperties.Remove(node.Id);
                 }
             }
@@ -692,8 +692,8 @@ namespace Cognite.OpcUa
             {
                 var toReadProperties = nodes
                     .Where(node => State.IsMappedNode(node.Id)
-                        && (update.Objects.Metadata && !node.IsVariable
-                            || update.Variables.Metadata && node.IsVariable))
+                        && update.Objects.Metadata && !(node is UAVariable)
+                            || update.Variables.Metadata && (node is UAVariable))
                     .ToList();
                 if (toReadProperties.Any())
                 {
@@ -870,13 +870,9 @@ namespace Cognite.OpcUa
                 if (node.IsProperty)
                 {
                     if (node.Parent == null) continue;
-                    if (node.Parent.Properties == null)
-                    {
-                        node.Parent.Properties = new List<UANode>();
-                    }
-                    node.Parent.Properties.Add(node);
+                    node.Parent.AddProperty(node);
                 }
-                else if (node.IsVariable && node is UAVariable variable)
+                else if (node is UAVariable variable)
                 {
                     result.RawVariables.Add(variable);
                 }
@@ -1193,33 +1189,21 @@ namespace Cognite.OpcUa
             if (node.NodeClass == NodeClass.Object || config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
             {
                 var uaNode = new UANode(uaClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
+                uaNode.SetNodeType(uaClient, node.TypeDefinition);
 
-                if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
-                {
-                    uaNode.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), false);
-                }
-                log.Verbose("HandleNode Object {name}", uaNode.DisplayName);
+                mapped = !uaNode.IsProperty;
+
+                log.Verbose("HandleNode {class} {name}", uaNode.NodeClass, uaNode.DisplayName);
                 State.RegisterNode(uaNode.Id, GetUniqueId(uaNode.Id));
                 commonQueue.Enqueue(uaNode);
-                mapped = true;
             }
             else if (node.NodeClass == NodeClass.Variable || config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
             {
                 var variable = new UAVariable(uaClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
+                variable.SetNodeType(uaClient, node.TypeDefinition);
 
-                if (node.TypeDefinition == VariableTypeIds.PropertyType)
-                {
-                    variable.IsProperty = true;
-                    variable.PropertiesRead = true;
-                }
-                else
-                {
-                    mapped = true;
-                }
-                if (node.TypeDefinition != null && !node.TypeDefinition.IsNull)
-                {
-                    variable.NodeType = uaClient.ObjectTypeManager.GetObjectType(uaClient.ToNodeId(node.TypeDefinition), true);
-                }
+                mapped = !variable.IsProperty;
+              
                 State.RegisterNode(variable.Id, GetUniqueId(variable.Id));
                 log.Verbose("HandleNode Variable {name}", variable.DisplayName);
                 commonQueue.Enqueue(variable);

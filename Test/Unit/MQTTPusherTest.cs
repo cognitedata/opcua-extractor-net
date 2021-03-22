@@ -243,21 +243,21 @@ namespace Test.Unit
             Assert.True(await pusher.PushNodes(Enumerable.Empty<UANode>(), tss, update, tester.Source.Token));
 
             // Test debug mode
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             tester.Config.Mqtt.Debug = true;
             Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
             tester.Config.Mqtt.Debug = false;
             Assert.Empty(handler.Assets);
 
             // Create the asset
-            node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             var waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
             await waitTask;
             Assert.Single(handler.Assets);
 
             // Do nothing here, due to no update configured.
-            node.Description = "description";
+            node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage(1);
             Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
@@ -267,13 +267,13 @@ namespace Test.Unit
             update.Objects.Description = true;
             update.Objects.Metadata = true;
             update.Objects.Name = true;
-            node.Description = null;
+            node.Attributes.Description = null;
             waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
             await waitTask;
 
             // Create new node
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null);
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
             waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             await waitTask;
@@ -282,8 +282,8 @@ namespace Test.Unit
             Assert.Null(handler.Assets.Last().Value.description);
 
             // Update both nodes
-            node.Description = "description";
-            node2.Description = "description";
+            node.Attributes.Description = "description";
+            node2.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             await waitTask;
@@ -303,7 +303,7 @@ namespace Test.Unit
                 AssetsTable = "assets",
                 Database = "metadata"
             };
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
             var tss = Enumerable.Empty<UAVariable>();
             var update = new UpdateConfig();
 
@@ -315,8 +315,8 @@ namespace Test.Unit
             Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.name);
 
             // Create another, do not overwrite the existing one, due to no update settings
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null);
-            node.Description = "description";
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
+            node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             await waitTask;
@@ -334,7 +334,7 @@ namespace Test.Unit
 
             // Update due to update settings
             update.Objects.Description = true;
-            node2.Description = "description";
+            node2.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             await waitTask;
@@ -360,12 +360,13 @@ namespace Test.Unit
             handler.MockAsset(tester.Client.GetUniqueId(new NodeId("parent")));
 
             // Test debug mode
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
+            node.VariableAttributes.DataType = dt;
             tester.Config.Mqtt.Debug = true;
             var waitTask = bridge.WaitForNextMessage(1);
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
-            Assert.Equal(2, node.Properties.Count);
+            Assert.Equal(2, node.Properties.Count());
             tester.Config.Mqtt.Debug = false;
             Assert.Empty(handler.Timeseries);
 
@@ -377,7 +378,7 @@ namespace Test.Unit
             Assert.Equal(1, handler.Timeseries.First().Value.assetId);
 
             // Do nothing due to no configured update
-            node.Description = "description";
+            node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage(1);
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
@@ -387,13 +388,14 @@ namespace Test.Unit
             update.Variables.Description = true;
             update.Variables.Metadata = true;
             update.Variables.Name = true;
-            node.Description = null;
+            node.Attributes.Description = null;
             waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
             await waitTask;
 
             // Create new node
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent")) { DataType = dt };
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
+            node2.VariableAttributes.DataType = dt;
             waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             await waitTask;
@@ -402,8 +404,8 @@ namespace Test.Unit
             Assert.Null(handler.Timeseries.Last().Value.description);
 
             // Update both nodes
-            node2.Description = "description";
-            node.Description = "description";
+            node2.Attributes.Description = "description";
+            node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             await waitTask;
@@ -429,7 +431,8 @@ namespace Test.Unit
 
             var assets = Enumerable.Empty<UANode>();
             var update = new UpdateConfig();
-            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
+            var node = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
+            node.VariableAttributes.DataType = dt;
 
             // Create one
             var waitTask = bridge.WaitForNextMessage();
@@ -439,8 +442,9 @@ namespace Test.Unit
             Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.name);
 
             // Create another, do not overwrite the existing one, due to no update settings
-            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent")) { DataType = dt };
-            node.Description = "description";
+            var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
+            node2.VariableAttributes.DataType = dt;
+            node.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             await waitTask;
@@ -458,7 +462,7 @@ namespace Test.Unit
 
             // Update due to update settings
             update.Variables.Description = true;
-            node2.Description = "description";
+            node2.Attributes.Description = "description";
             waitTask = bridge.WaitForNextMessage();
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             await waitTask;
@@ -607,10 +611,12 @@ namespace Test.Unit
 
             var dt = new UADataType(DataTypeIds.Double);
 
-            var ts = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent")) { DataType = dt };
-            var ts2 = new UAVariable(tester.Server.Ids.Base.DoubleVar2, "Variable 2", new NodeId("parent")) { DataType = dt };
-            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null);
-            var node2 = new UANode(tester.Server.Ids.Custom.Root, "BaseRoot", NodeId.Null);
+            var ts = new UAVariable(tester.Server.Ids.Base.DoubleVar1, "Variable 1", new NodeId("parent"));
+            ts.VariableAttributes.DataType = dt;
+            var ts2 = new UAVariable(tester.Server.Ids.Base.DoubleVar2, "Variable 2", new NodeId("parent"));
+            ts2.VariableAttributes.DataType = dt;
+            var node = new UANode(tester.Server.Ids.Base.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
+            var node2 = new UANode(tester.Server.Ids.Custom.Root, "BaseRoot", NodeId.Null, NodeClass.Object);
 
             await pusher.PushNodes(new[] { node, node2 }, new[] { ts, ts2 }, new UpdateConfig(), tester.Source.Token);
 

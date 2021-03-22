@@ -32,18 +32,20 @@ namespace Cognite.OpcUa.Types
     /// </summary>
     public class UAVariable : UANode
     {
+        public override NodeAttributes Attributes => VariableAttributes;
+        public VariableAttributes VariableAttributes { get; }
         /// <summary>
         /// Data type of this variable
         /// </summary>
-        public UADataType DataType { get; set; }
+        public UADataType DataType => VariableAttributes.DataType;
         /// <summary>
         /// True if the opcua node stores its own history
         /// </summary>
-        public bool Historizing { get; set; }
+        public bool Historizing => VariableAttributes.Historizing;
         /// <summary>
         /// ValueRank in opcua
         /// </summary>
-        public int ValueRank { get; set; }
+        public int ValueRank => VariableAttributes.ValueRank;
 
         /// <summary>
         /// Value of variable as string or double
@@ -111,7 +113,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Fixed dimensions of the array-type variable, if any
         /// </summary>
-        public Collection<int> ArrayDimensions { get; set; }
+        public Collection<int> ArrayDimensions => VariableAttributes.ArrayDimensions;
         /// <summary>
         /// Index of the variable in array, if relevant. -1 if the variable is scalar.
         /// </summary>
@@ -120,7 +122,10 @@ namespace Cognite.OpcUa.Types
         /// <param name="DisplayName">DisplayName of buffered node</param>
         /// <param name="ParentId">Id of parent of buffered node</param>
         public UAVariable(NodeId id, string displayName, NodeId parentId, NodeClass nodeClass = NodeClass.Variable)
-            : base(id, displayName, true, parentId, nodeClass) { }
+            : base(id, displayName, parentId)
+        {
+            VariableAttributes = new VariableAttributes(nodeClass);
+        }
         /// <summary>
         /// True if this node represents an array
         /// </summary>
@@ -144,17 +149,11 @@ namespace Cognite.OpcUa.Types
         /// <param name="other">Parent variable</param>
         /// <param name="index">Index in the array</param>
         private UAVariable(UAVariable other, int index)
-            : base(OtherNonNull(other).Id, other.DisplayName + $"[{index}]", true, other.Id, other.NodeClass)
+            : base(OtherNonNull(other).Id, other.DisplayName + $"[{index}]", other.Id)
         {
             ArrayParent = other;
             Index = index;
-            Historizing = other.Historizing;
-            DataType = other.DataType;
-            ValueRank = other.ValueRank;
-            ArrayDimensions = other.ArrayDimensions;
-            NodeType = other.NodeType;
-            Properties = other.Properties;
-            PropertiesRead = other.PropertiesRead;
+            VariableAttributes = other.VariableAttributes;
         }
         /// <summary>
         /// Returns given variable if it is not null, otherwise throws an error.
@@ -184,7 +183,7 @@ namespace Cognite.OpcUa.Types
             if (Properties == null || !Properties.Any() || metaMap == null || !metaMap.Any()) return;
             foreach (var prop in Properties)
             {
-                if (!prop.IsVariable || !(prop is UAVariable propVar)) continue;
+                if (!(prop is UAVariable propVar)) continue;
                 if (!string.IsNullOrWhiteSpace(propVar.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
                 {
                     var value = propVar.Value.StringValue;

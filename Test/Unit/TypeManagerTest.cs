@@ -159,16 +159,16 @@ namespace Test.Unit
                 new NodeId("ignore").ToProtoNodeId(tester.Client)
             };
             var node = new UAVariable(new NodeId("node"), "node", NodeId.Null);
-            node.ValueRank = ValueRanks.Scalar;
+            node.VariableAttributes.ValueRank = ValueRanks.Scalar;
             var mgr = new DataTypeManager(tester.Client, config);
             mgr.Configure();
 
             // Basic, passing
-            node.DataType = new UADataType(DataTypeIds.Double);
+            node.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
             Assert.True(mgr.AllowTSMap(node));
 
             // String, failing
-            node.DataType = new UADataType(DataTypeIds.String);
+            node.VariableAttributes.DataType = new UADataType(DataTypeIds.String);
             Assert.False(mgr.AllowTSMap(node));
 
             // Override string
@@ -179,12 +179,12 @@ namespace Test.Unit
             Assert.True(mgr.AllowTSMap(node));
 
             // Ignored datatype
-            node.DataType = new UADataType(new NodeId("ignore"));
+            node.VariableAttributes.DataType = new UADataType(new NodeId("ignore"));
             Assert.False(mgr.AllowTSMap(node));
 
             // Non-scalar value rank
-            node.DataType = new UADataType(DataTypeIds.Double);
-            node.ValueRank = ValueRanks.Any;
+            node.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
+            node.VariableAttributes.ValueRank = ValueRanks.Any;
             Assert.False(mgr.AllowTSMap(node));
 
             // Set unknown-as-scalar
@@ -192,15 +192,15 @@ namespace Test.Unit
             Assert.True(mgr.AllowTSMap(node));
 
             // Missing dimensions
-            node.ValueRank = ValueRanks.OneDimension;
+            node.VariableAttributes.ValueRank = ValueRanks.OneDimension;
             Assert.False(mgr.AllowTSMap(node));
 
             // Too high dimension
-            node.ArrayDimensions = new System.Collections.ObjectModel.Collection<int> { 4, 4 };
+            node.VariableAttributes.ArrayDimensions = new System.Collections.ObjectModel.Collection<int> { 4, 4 };
             Assert.False(mgr.AllowTSMap(node));
 
             // Too large array
-            node.ArrayDimensions = new System.Collections.ObjectModel.Collection<int> { 4 };
+            node.VariableAttributes.ArrayDimensions = new System.Collections.ObjectModel.Collection<int> { 4 };
             Assert.False(mgr.AllowTSMap(node));
 
             // Override size
@@ -230,7 +230,7 @@ namespace Test.Unit
 
             Assert.Null(mgr.GetAdditionalMetadata(node));
 
-            node.DataType = mgr.GetDataType(DataTypeIds.Double);
+            node.VariableAttributes.DataType = mgr.GetDataType(DataTypeIds.Double);
             Assert.Null(mgr.GetAdditionalMetadata(node));
 
             // Built in type
@@ -241,17 +241,17 @@ namespace Test.Unit
 
             // Custom type
             customTypeNames[new NodeId("type", 2)] = "SomeType";
-            node.DataType = mgr.GetDataType(new NodeId("type", 2));
+            node.VariableAttributes.DataType = mgr.GetDataType(new NodeId("type", 2));
             meta = mgr.GetAdditionalMetadata(node);
             Assert.Equal("SomeType", meta["dataType"]);
 
             // Custom type, not mapped
-            node.DataType = mgr.GetDataType(new NodeId("type2", 2));
+            node.VariableAttributes.DataType = mgr.GetDataType(new NodeId("type2", 2));
             meta = mgr.GetAdditionalMetadata(node);
             Assert.Equal("gp.tl:s=type2", meta["dataType"]);
 
             // Enum type
-            node.DataType = mgr.GetDataType(new NodeId("enum", 2));
+            node.VariableAttributes.DataType = mgr.GetDataType(new NodeId("enum", 2));
             customTypeNames[new NodeId("enum", 2)] = "EnumType";
             node.DataType.EnumValues = new Dictionary<long, string>
             {
@@ -535,7 +535,7 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var mgr = new ReferenceTypeManager(tester.Client, extractor);
 
-            var nodes = ids.Select(id => new UANode(id, "Node", NodeId.Null)).ToList();
+            var nodes = ids.Select(id => new UANode(id, "Node", NodeId.Null, NodeClass.Object)).ToList();
             foreach (var node in nodes)
             {
                 extractor.State.RegisterNode(node.Id, tester.Client.GetUniqueId(node.Id));
