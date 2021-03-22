@@ -1,5 +1,43 @@
 # OPC-UA Extractor Changelog
 
+2.2.0 2021-04-06
+------------------
+* Reduce memory usage.
+* Support pushing OPC-UA references as CDF relationships.
+* Add option to get metadata for OPC-UA type definition.
+* Better support for complex OPC-UA structures, built in types should now be written in a readable format even if the extractor lacks explicit support.
+* Improve performance of configuration tool.
+* Add support for dataset external id.
+* Add new system for specifying flexible transformations to the server hierarchy, to ignore or treat nodes as properties.
+* Add support for arbitrarily nested properties.
+* Add support for nested event properties.
+* Include SourceName when pushing events.
+* The extractor now allows reading object- and variable types as assets.
+* Allow specifying multiple source nodes.
+* Fix issue with the extractor generating multiple log files.
+* Fix issue caused by the server returning null from history read.
+* Fix empty values on non-base inherited event properties.
+* Numerous small fixes and improvements.
+
+2.1.0 2020-09-11
+------------------
+* Performance improvements
+* Automatic configuration of events, it is no longer necessary to manually configure each event type.
+* Automatic detection of event emitters, using the EventNotifier attribute.
+* Fix crash on rebrowse if there are properties with null value in the server.
+* Add support for token based authentication to CDF.
+* Add option to skip pushing asset and timeseries data entirely, only creating basic timeseries.
+* Update to .NET 5.0.
+
+2.0.0 2020-07-17
+------------------
+* New config schema
+* Use common libraries with other .NET extractors.
+* Option to push asset hierarchy and timeseries data to CDF Raw.
+* Update metadata in both Raw and Clean.
+* Dynamic handling of data types.
+* Improvements for very large servers.
+
 1.2.0 2020-06-08
 ------------------
 * Add new MQTT Pusher
