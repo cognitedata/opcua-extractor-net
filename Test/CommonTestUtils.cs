@@ -90,9 +90,9 @@ namespace Test
             if (disposed) return;
             if (disposing)
             {
+                Console.SetOut(_originalOut);
                 _output.WriteLine(_textWriter.ToString());
                 _textWriter.Dispose();
-                Console.SetOut(_originalOut);
             }
             disposed = true;
         }
