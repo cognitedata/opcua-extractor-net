@@ -156,12 +156,9 @@ namespace Test.Unit
             // Test restore nonexisting states
             var dt = new UADataType(DataTypeIds.Double);
 
-            var state1 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
-            var state2 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt }, false, false);
-            var state3 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, true, true);
+            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false);
+            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt), false, false);
+            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), true, true);
             var nodeStates = new[] { state1, state2, state3 };
 
             var nodeInfluxStates = nodeStates.Select(state => new InfluxBufferState(state)).ToList();
@@ -231,12 +228,11 @@ namespace Test.Unit
 
             var dt = new UADataType(DataTypeIds.Double);
 
-            var state1 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
-            var state2 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt }, false, false);
-            var state3 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, true, true);
+            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false);
+            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt), false, false);
+            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), true, true);
+            var nodeStates = new[] { state1, state2, state3 };
+
             extractor.State.SetNodeState(state1, "state1");
             extractor.State.SetNodeState(state2, "state2");
             extractor.State.SetNodeState(state3, "state3");
@@ -389,12 +385,11 @@ namespace Test.Unit
 
             var dt = new UADataType(DataTypeIds.Double);
 
-            var state1 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
-            var state2 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt }, false, false);
-            var state3 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, true, true);
+            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false);
+            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt), false, false);
+            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), true, true);
+            var nodeStates = new[] { state1, state2, state3 };
+
             extractor.State.SetNodeState(state1, "state1");
             extractor.State.SetNodeState(state2, "state2");
             extractor.State.SetNodeState(state3, "state3");
@@ -580,12 +575,11 @@ namespace Test.Unit
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
 
-            var state1 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, false, false);
-            var state2 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state2"), "state2", NodeId.Null) { DataType = dt2 }, false, false);
-            var state3 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state3"), "state3", NodeId.Null) { DataType = dt }, false, false);
+            var state1 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state1", dt), false, false);
+            var state2 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state2", dt2), false, false);
+            var state3 = new VariableExtractionState(extractor, CommonTestUtils.GetSimpleVariable("state3", dt), false, false);
+            var nodeStates = new[] { state1, state2, state3 };
+
             extractor.State.SetNodeState(state1, "state1");
             extractor.State.SetNodeState(state2, "state2");
             extractor.State.SetNodeState(state3, "state3");

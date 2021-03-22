@@ -42,10 +42,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public class UAClient : IDisposable, IUAClientAccess
     {
-        private readonly UAClientConfig config;
-        private readonly ExtractionConfig extractionConfig;
-        private readonly EventConfig eventConfig;
-        private readonly HistoryConfig historyConfig;
+        protected FullConfig config { get; set; }
         protected Session Session { get; set; }
         protected ApplicationConfiguration AppConfig { get; set; }
         private SessionReconnectHandler reconnectHandler;
@@ -100,12 +97,9 @@ namespace Cognite.OpcUa
         public UAClient(FullConfig config)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
-            this.config = config.Source;
+            this.config = config;
             DataTypeManager = new DataTypeManager(this, config.Extraction.DataTypes);
             ObjectTypeManager = new NodeTypeManager(this);
-            extractionConfig = config.Extraction;
-            eventConfig = config.Events;
-            historyConfig = config.History;
         }
         #region Session management
         /// <summary>
@@ -141,10 +135,10 @@ namespace Cognite.OpcUa
                 ApplicationType = ApplicationType.Client,
                 ConfigSectionName = "opc.ua.net.extractor"
             };
-            log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.ConfigRoot);
+            log.Information("Load OPC-UA Configuration from {root}/opc.ua.net.extractor.Config.xml", config.Source.ConfigRoot);
             try
             {
-                AppConfig = await application.LoadApplicationConfiguration($"{config.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
+                AppConfig = await application.LoadApplicationConfiguration($"{config.Source.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
             }
             catch (ServiceResultException exc)
             {
@@ -167,7 +161,7 @@ namespace Cognite.OpcUa
             {
                 AppConfig.ApplicationUri = X509Utils.GetApplicationUriFromCertificate(
                     AppConfig.SecurityConfiguration.ApplicationCertificate.Certificate);
-                config.AutoAccept |= AppConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
+                config.Source.AutoAccept |= AppConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 AppConfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
         }
@@ -188,11 +182,11 @@ namespace Cognite.OpcUa
 
             await LoadAppConfig();
             
-            log.Information("Attempt to select endpoint from: {EndpointURL}", config.EndpointUrl);
+            log.Information("Attempt to select endpoint from: {EndpointURL}", config.Source.EndpointUrl);
             EndpointDescription selectedEndpoint;
             try
             {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(config.EndpointUrl, config.Secure);
+                selectedEndpoint = CoreClientUtils.SelectEndpoint(config.Source.EndpointUrl, config.Source.Secure);
             }
             catch (ServiceResultException ex)
             {
@@ -210,12 +204,12 @@ namespace Cognite.OpcUa
                     false,
                     ".NET OPC-UA Extractor Client",
                     0,
-                    (config.Username == null || !config.Username.Trim().Any())
+                    (config.Source.Username == null || !config.Source.Username.Trim().Any())
                         ? new UserIdentity(new AnonymousIdentityToken())
-                        : new UserIdentity(config.Username, config.Password),
+                        : new UserIdentity(config.Source.Username, config.Source.Password),
                     null
                 );
-                Session.KeepAliveInterval = config.KeepAliveInterval;
+                Session.KeepAliveInterval = config.Source.KeepAliveInterval;
             }
             catch (ServiceResultException ex)
             {
@@ -227,7 +221,7 @@ namespace Cognite.OpcUa
             Started = true;
             connects.Inc();
             connected.Set(1);
-            log.Information("Successfully connected to server at {EndpointURL}", config.EndpointUrl);
+            log.Information("Successfully connected to server at {EndpointURL}", config.Source.EndpointUrl);
         }
         /// <summary>
         /// Event triggered after a succesfull reconnect.
@@ -257,7 +251,7 @@ namespace Cognite.OpcUa
             if (reconnectHandler != null) return;
             connected.Set(0);
             log.Warning("--- RECONNECTING ---");
-            if (!config.ForceRestart && !liveToken.IsCancellationRequested)
+            if (!config.Source.ForceRestart && !liveToken.IsCancellationRequested)
             {
                 reconnectHandler = new SessionReconnectHandler();
                 reconnectHandler.BeginReconnect(sender, 5000, ClientReconnectComplete);
@@ -282,7 +276,7 @@ namespace Cognite.OpcUa
             CertificateValidationEventArgs eventArgs)
         {
             if (eventArgs.Error.StatusCode != StatusCodes.BadCertificateUntrusted) return;
-            eventArgs.Accept = config.AutoAccept;
+            eventArgs.Accept = config.Source.AutoAccept;
             // TODO Verify client acceptance here somehow?
             if (eventArgs.Accept)
             {
@@ -359,7 +353,7 @@ namespace Cognite.OpcUa
                 }
             }
             uint classMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
-            if (extractionConfig.NodeTypes.AsNodes)
+            if (config.Extraction.NodeTypes.AsNodes)
             {
                 classMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
             }
@@ -397,7 +391,7 @@ namespace Cognite.OpcUa
             refd.DisplayName = results[2].GetValue(LocalizedText.Null);
             refd.NodeClass = (NodeClass)results[3].GetValue(0);
 
-            if (extractionConfig.NodeTypes.Metadata)
+            if (config.Extraction.NodeTypes.Metadata)
             {
                 try
                 {
@@ -488,7 +482,7 @@ namespace Cognite.OpcUa
                     Session.Browse(
                         null,
                         null,
-                        (uint)config.BrowseChunk,
+                        (uint)config.Source.BrowseChunk,
                         tobrowse,
                         out results,
                         out diagnostics
@@ -615,7 +609,7 @@ namespace Cognite.OpcUa
                 var total = nextIds.Count;
                 int count = 0;
                 int countChildren = 0;
-                foreach (var chunk in nextIds.ChunkBy(config.BrowseNodesChunk))
+                foreach (var chunk in nextIds.ChunkBy(config.Source.BrowseNodesChunk))
                 {
                     if (token.IsCancellationRequested) return;
                     var result = GetNodeChildren(chunk, referenceTypes, nodeClassMask, token);
@@ -682,7 +676,7 @@ namespace Cognite.OpcUa
             try
             {
                 int count = 0;
-                foreach (var nextValues in readValueIds.ChunkBy(config.AttributesChunk))
+                foreach (var nextValues in readValueIds.ChunkBy(config.Source.AttributesChunk))
                 {
                     if (token.IsCancellationRequested) break;
                     count++;
@@ -718,111 +712,34 @@ namespace Cognite.OpcUa
             return values;
         }
 
-
-        /// <summary>
-        /// Generates DataValueId pairs, then fetches a list of <see cref="DataValue"/>s from the opcua server 
-        /// </summary>
-        /// <param name="nodes">List of nodes to fetch attributes for</param>
-        /// <param name="common">List of attributes to fetch for all nodes</param>
-        /// <param name="variables">List of attributes to fetch for variable nodes only</param>
-        /// <returns>A list of <see cref="DataValue"/>s</returns>
-        private IEnumerable<DataValue> GetNodeAttributes(IEnumerable<UANode> nodes,
-            IEnumerable<uint> common,
-            IEnumerable<uint> variables,
-            IEnumerable<uint> properties,
-            bool historizing,
-            CancellationToken token)
-        {
-            if (!nodes.Any()) return new List<DataValue>();
-            var readValueIds = new ReadValueIdCollection();
-            foreach (var node in nodes)
-            {
-                if (node == null) continue;
-                readValueIds.AddRange(common.Select(attribute => new ReadValueId { AttributeId = attribute, NodeId = node.Id }));
-                if (node.IsVariable)
-                {
-                    if (node is UAVariable variable && variable.IsProperty)
-                    {
-                        readValueIds.AddRange(properties.Select(attribute => new ReadValueId { AttributeId = attribute, NodeId = node.Id }));
-                    }
-                    else
-                    {
-                        readValueIds.AddRange(variables.Select(attribute => new ReadValueId { AttributeId = attribute, NodeId = node.Id }));
-                        if (historizing && node.NodeClass == NodeClass.Variable)
-                        {
-                            readValueIds.Add(new ReadValueId { AttributeId = Attributes.Historizing, NodeId = node.Id });
-                        }
-                    }
-                }
-            }
-            var values = ReadAttributes(readValueIds, nodes.Count(), token);
-            return values;
-        }
         /// <summary>
         /// Gets Description for all nodes, and DataType, Historizing and ValueRank for Variable nodes, then updates the given list of nodes
         /// </summary>
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         public void ReadNodeData(IEnumerable<UANode> nodes, CancellationToken token)
         {
-            nodes = nodes.Where(node => (!node.IsVariable || node is UAVariable variable && variable.Index == -1) && !node.DataRead);
-            var variableAttributes = new List<uint>
-            {
-                Attributes.DataType,
-                Attributes.ValueRank
-            };
-            var commonAttributes = new List<uint>
-            {
-                Attributes.Description
-            };
-            var propertyAttributes = new List<uint>
-            {
-                Attributes.DataType,
-                Attributes.ValueRank,
-                Attributes.ArrayDimensions
-            };
+            nodes = nodes.Where(node => (!(node is UAVariable variable) || variable.Index == -1) && !node.DataRead).ToList();
 
-            bool arraysEnabled = extractionConfig.DataTypes.MaxArraySize != 0;
-
-            bool history = historyConfig.Enabled && historyConfig.Data;
-            if (arraysEnabled)
+            int expected = 0;
+            var readValueIds = new ReadValueIdCollection();
+            foreach (var node in nodes)
             {
-                variableAttributes.Add(Attributes.ArrayDimensions);
-            }
-            if (eventConfig.Enabled)
-            {
-                commonAttributes.Add(Attributes.EventNotifier);
+                var attributes = node.Attributes.GetAttributeIds(config);
+                readValueIds.AddRange(attributes.Select(attr => new ReadValueId { AttributeId = attr, NodeId = node.Id }));
+                expected += attributes.Count();
             }
 
-
-            IEnumerable<DataValue> values;
+            IList<DataValue> values;
             try
             {
-                values = GetNodeAttributes(nodes, commonAttributes, variableAttributes, propertyAttributes, history, token);
+                values = ReadAttributes(readValueIds, nodes.Count(), token);
             }
             catch (ServiceResultException ex)
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
             int total = values.Count();
-            int expected = nodes.Aggregate(0, (seed, node) =>
-            {
-                if (node.IsVariable && node is UAVariable variable)
-                {
-                    if (variable.IsProperty)
-                    {
-                        return seed + propertyAttributes.Count + 1;
-                    }
-                    else if (variable.NodeClass == NodeClass.Variable)
-                    {
-                        return seed + variableAttributes.Count + 1 + (history ? 1 : 0);
-                    }
-                    else
-                    {
-                        return seed + variableAttributes.Count + 1;
-                    }
-                }
-                return seed + 1;
-            });
+
             log.Information("Retrieved {total}/{expected} attributes", total, expected);
             if (total < expected)
             {
@@ -830,44 +747,11 @@ namespace Cognite.OpcUa
                     $"Too few results in ReadNodeData, this is a bug in the OPC-UA server implementation, total : {total}, expected: {expected}");
             }
 
-            var enumerator = values.GetEnumerator();
+            int idx = 0;
             foreach (var node in nodes)
             {
-                if (token.IsCancellationRequested) return;
-                enumerator.MoveNext();
-                node.Description = enumerator.Current.GetValue(new LocalizedText("")).Text;
-                if (eventConfig.Enabled)
-                {
-                    enumerator.MoveNext();
-                    node.EventNotifier = enumerator.Current.GetValue(EventNotifiers.None);
-                }
-                if (node.IsVariable && node is UAVariable vnode)
-                {
-                    enumerator.MoveNext();
-                    NodeId dataType = enumerator.Current.GetValue(NodeId.Null);
-                    vnode.DataType = DataTypeManager.GetDataType(dataType) ?? new UADataType(dataType);
-
-                    enumerator.MoveNext();
-                    vnode.ValueRank = enumerator.Current.GetValue(0);
-                
-                    if (vnode.IsProperty || arraysEnabled)
-                    {
-                        enumerator.MoveNext();
-                        var dimVal = enumerator.Current.GetValue(typeof(int[])) as int[];
-                        if (dimVal != null)
-                        {
-                            vnode.ArrayDimensions = new Collection<int>((int[])enumerator.Current.GetValue(typeof(int[])));
-                        }
-                    }
-                    if (historyConfig.Enabled && historyConfig.Data && !vnode.IsProperty && node.NodeClass == NodeClass.Variable)
-                    {
-                        enumerator.MoveNext();
-                        vnode.Historizing = enumerator.Current.GetValue(false);
-                    }
-                }
-                node.DataRead = true;
+                idx = node.Attributes.HandleAttributeRead(config, values, idx, this);
             }
-            enumerator.Dispose();
         }
         /// <summary>
         /// Get the raw values for each given node id.
@@ -894,17 +778,13 @@ namespace Cognite.OpcUa
         public void ReadNodeValues(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
             nodes = nodes.Where(node => !node.ValueRead && node.Index == -1).ToList();
+            var readValueIds = new ReadValueIdCollection(
+                nodes.Select(node => new ReadValueId { AttributeId = Attributes.Value, NodeId = node.Id }));
             IEnumerable<DataValue> values;
             try
             {
                 var attributes = new List<uint> { Attributes.Value };
-                values = GetNodeAttributes(nodes,
-                    new List<uint>(),
-                    attributes,
-                    attributes,
-                    false,
-                    token
-                );
+                values = ReadAttributes(readValueIds, nodes.Count(), token);
             }
             catch (ServiceResultException ex)
             {
@@ -937,18 +817,15 @@ namespace Cognite.OpcUa
             var idsToCheck = new HashSet<NodeId>();
             foreach (var node in nodes)
             {
-                if (node.IsVariable)
+                if (node is UAVariable variable && variable.Index <= 0)
                 {
-                    if (node is UAVariable variable && variable.Index <= 0)
-                    {
-                        idsToCheck.Add(node.Id);
-                    }
+                    idsToCheck.Add(node.Id);
                 }
                 if (node.Properties != null)
                 {
                     foreach (var property in node.GetAllProperties())
                     {
-                        if (!node.IsVariable && property is UAVariable propertyVar)
+                        if (!(node is UAVariable) && property is UAVariable propertyVar)
                         {
                             properties.Add(propertyVar);
                         }
@@ -965,7 +842,7 @@ namespace Cognite.OpcUa
             var total = idsToCheck.Count;
             int found = 0;
             int readCount = 0;
-            foreach (var chunk in idsToCheck.ChunkBy(config.BrowseNodesChunk))
+            foreach (var chunk in idsToCheck.ChunkBy(config.Source.BrowseNodesChunk))
             {
                 var read = GetNodeChildren(chunk, ReferenceTypeIds.HasProperty, (uint)NodeClass.Variable, token);
                 foreach (var kvp in read)
@@ -985,33 +862,14 @@ namespace Cognite.OpcUa
                 foreach (var child in children)
                 {
                     if (!NodeFilter(child.DisplayName.Text, ToNodeId(child.TypeDefinition), ToNodeId(child.NodeId), child.NodeClass)) continue;
-                    var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text,
-                        parent.Id, NodeClass.Variable) { IsProperty = true };
+                    var property = new UAVariable(ToNodeId(child.NodeId), child.DisplayName.Text, parent.Id, NodeClass.Variable);
+                    property.Attributes.IsProperty = true;
                     properties.Add(property);
                     if (parent.Properties == null)
                     {
-                        parent.Properties = new List<UANode>();
+                        parent.Attributes.Properties = new List<UANode>();
                     }
-                    parent.Properties.Add(property);
-                }
-                if (parent.IsVariable && parent is UAVariable variable)
-                {
-                    if (variable.IsProperty) continue;
-                    UAVariable arrayParent = variable.Index == -1 ? variable : variable.ArrayParent;
-
-                    if (arrayParent != null && arrayParent.Index == -1 && arrayParent.IsArray)
-                    {
-                        if (arrayParent.ArrayChildren != null)
-                        {
-                            foreach (var child in arrayParent.ArrayChildren)
-                            {
-                                child.PropertiesRead = true;
-                                child.Properties = parent.Properties;
-                            }
-                        }
-                        arrayParent.PropertiesRead = true;
-                        arrayParent.Properties = parent.Properties;
-                    }
+                    parent.AddProperty(property);
                 }
             }
 
@@ -1114,7 +972,7 @@ namespace Cognite.OpcUa
 #pragma warning disable CA2000 // Dispose objects before losing scope. The subscription is disposed properly or added to the client.
                     subscription = new Subscription(Session.DefaultSubscription)
                     {
-                        PublishingInterval = config.PublishingInterval,
+                        PublishingInterval = config.Source.PublishingInterval,
                         DisplayName = subName
                     };
 #pragma warning restore CA2000 // Dispose objects before losing scope
@@ -1126,7 +984,7 @@ namespace Cognite.OpcUa
                 IncOperations();
                 try
                 {
-                    foreach (var chunk in nodeList.ChunkBy(config.SubscriptionChunk))
+                    foreach (var chunk in nodeList.ChunkBy(config.Source.SubscriptionChunk))
                     {
                         if (token.IsCancellationRequested) break;
                         int lcount = 0;
@@ -1204,11 +1062,11 @@ namespace Cognite.OpcUa
                 {
                     StartNodeId = node.SourceId,
                     DisplayName = "Value: " + (node as VariableExtractionState).DisplayName,
-                    SamplingInterval = config.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, config.QueueLength),
+                    SamplingInterval = config.Source.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, config.Source.QueueLength),
                     AttributeId = Attributes.Value,
                     NodeClass = NodeClass.Variable,
-                    CacheQueueSize = Math.Max(0, config.QueueLength)
+                    CacheQueueSize = Math.Max(0, config.Source.QueueLength)
                 }, token);
 #pragma warning restore CA2000 // Dispose objects before losing scope
 
@@ -1239,8 +1097,8 @@ namespace Cognite.OpcUa
                     StartNodeId = node.SourceId,
                     AttributeId = Attributes.EventNotifier,
                     DisplayName = "Events: " + node.Id,
-                    SamplingInterval = config.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, config.QueueLength),
+                    SamplingInterval = config.Source.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, config.Source.QueueLength),
                     Filter = filter,
                     NodeClass = NodeClass.Object
                 },
@@ -1278,7 +1136,7 @@ namespace Cognite.OpcUa
         public Dictionary<NodeId, HashSet<EventField>> GetEventFields(CancellationToken token)
         {
             if (eventFields != null) return eventFields;
-            var collector = new EventFieldCollector(this, eventConfig);
+            var collector = new EventFieldCollector(this, config.Events);
             eventFields = collector.GetEventIdFields(token);
             foreach (var pair in eventFields)
             {
@@ -1311,7 +1169,7 @@ namespace Cognite.OpcUa
              */
             var whereClause = new ContentFilter();
 
-            if (eventFields.Keys.Any() && ((eventConfig.EventIds?.Any() ?? false) || !eventConfig.AllEvents))
+            if (eventFields.Keys.Any() && ((config.Events.EventIds?.Any() ?? false) || !config.Events.AllEvents))
             {
                 log.Debug("Limit event results to the following ids: {ids}", string.Join(", ", eventFields.Keys));
                 var eventListOperand = new SimpleAttributeOperand
@@ -1341,8 +1199,8 @@ namespace Cognite.OpcUa
             var selectClauses = new SimpleAttributeOperandCollection();
             foreach (var field in fieldList)
             {
-                if (eventConfig.ExcludeProperties.Contains(field.BrowseName.Name)
-                    || eventConfig.BaseExcludeProperties.Contains(field.BrowseName.Name) && field.TypeId == ObjectTypeIds.BaseEventType) continue;
+                if (config.Events.ExcludeProperties.Contains(field.BrowseName.Name)
+                    || config.Events.BaseExcludeProperties.Contains(field.BrowseName.Name) && field.TypeId == ObjectTypeIds.BaseEventType) continue;
                 var operand = new SimpleAttributeOperand
                 {
                     AttributeId = Attributes.Value,
@@ -1417,7 +1275,7 @@ namespace Cognite.OpcUa
 #pragma warning disable CA2000 // Dispose objects before losing scope
                                ?? new Subscription(Session.DefaultSubscription)
                                {
-                                   PublishingInterval = config.PublishingInterval,
+                                   PublishingInterval = config.Source.PublishingInterval,
                                    DisplayName = "AuditListener"
                                };
 #pragma warning restore CA2000 // Dispose objects before losing scope
@@ -1427,8 +1285,8 @@ namespace Cognite.OpcUa
                     StartNodeId = ObjectIds.Server,
                     Filter = filter,
                     AttributeId = Attributes.EventNotifier,
-                    SamplingInterval = config.SamplingInterval,
-                    QueueSize = (uint)Math.Max(0, config.QueueLength),
+                    SamplingInterval = config.Source.SamplingInterval,
+                    QueueSize = (uint)Math.Max(0, config.Source.QueueLength),
                     NodeClass = NodeClass.Object
                 };
                 item.Notification += callback;
@@ -1492,9 +1350,9 @@ namespace Cognite.OpcUa
             int idx = Session.NamespaceUris.GetIndex(namespaceUri);
             if (idx < 0)
             {
-                if (extractionConfig.NamespaceMap.ContainsValue(namespaceUri))
+                if (config.Extraction.NamespaceMap.ContainsValue(namespaceUri))
                 {
-                    string readNs = extractionConfig.NamespaceMap.First(kvp => kvp.Value == namespaceUri).Key;
+                    string readNs = config.Extraction.NamespaceMap.First(kvp => kvp.Value == namespaceUri).Key;
                     idx = Session.NamespaceUris.GetIndex(readNs);
                     if (idx < 0) return NodeId.Null;
                 }
@@ -1663,12 +1521,12 @@ namespace Cognite.OpcUa
 
             // ExternalIds shorter than 32 chars are unlikely, this will generally avoid at least 1 re-allocation of the buffer,
             // and usually boost performance.
-            var buffer = new StringBuilder(extractionConfig.IdPrefix, 32);
+            var buffer = new StringBuilder(config.Extraction.IdPrefix, 32);
 
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
                 var namespaceUri = rNodeId.NamespaceUri ?? Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
-                string newPrefix = extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
+                string newPrefix = config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
 
@@ -1720,7 +1578,7 @@ namespace Cognite.OpcUa
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
                 var namespaceUri = Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
-                string newPrefix = extractionConfig.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
+                string newPrefix = config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
 
@@ -1746,7 +1604,7 @@ namespace Cognite.OpcUa
         public string GetRelationshipId(UAReference reference)
         {
             if (reference == null) throw new ArgumentNullException(nameof(reference));
-            var buffer = new StringBuilder(extractionConfig.IdPrefix, 64);
+            var buffer = new StringBuilder(config.Extraction.IdPrefix, 64);
             buffer.Append(reference.GetName());
             buffer.Append(';');
             AppendNodeId(buffer, reference.Source.Id);
@@ -1760,7 +1618,7 @@ namespace Cognite.OpcUa
                 // system.subsystem.sensor.measurement...
                 // so cutting from the start is less likely to cause conflicts
                 var overflow = (int)Math.Ceiling((buffer.Length - 255) / 2.0);
-                buffer = new StringBuilder(extractionConfig.IdPrefix, 255);
+                buffer = new StringBuilder(config.Extraction.IdPrefix, 255);
                 buffer.Append(reference.GetName());
                 buffer.Append(';');
                 buffer.Append(GetNodeIdString(reference.Source.Id).Substring(overflow));

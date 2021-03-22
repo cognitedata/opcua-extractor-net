@@ -58,25 +58,25 @@ namespace Test.Integration
             Assert.Equal("CustomRoot", node.DisplayName);
             Assert.True(node.ParentId == null || node.ParentId.IsNullNodeId);
             Assert.True(node.Properties == null || !node.Properties.Any());
-            Assert.False(node.IsVariable);
+            Assert.False(node is UAVariable);
 
             node = pusher.PushedNodes[ids.Obj1];
             Assert.Equal("ChildObject", node.DisplayName);
             Assert.Equal(ids.Root, node.ParentId);
             Assert.True(node.Properties == null || !node.Properties.Any());
-            Assert.False(node.IsVariable);
+            Assert.False(node is UAVariable);
 
             node = pusher.PushedNodes[ids.Obj2];
             Assert.Equal("ChildObject2", node.DisplayName);
             Assert.Equal(ids.Root, node.ParentId);
-            Assert.Equal(2, node.Properties.Count);
+            Assert.Equal(2, node.Properties.Count());
             var prop = node.Properties.First(prop => prop.DisplayName == "NumericProp") as UAVariable;
             Assert.Equal(DataTypeIds.Int64, prop.DataType.Raw);
             Assert.Equal("1234", prop.Value.StringValue);
             prop = node.Properties.First(prop => prop.DisplayName == "StringProp") as UAVariable;
             Assert.Equal(DataTypeIds.String, prop.DataType.Raw);
             Assert.Equal("String prop value", prop.Value.StringValue);
-            Assert.False(node.IsVariable);
+            Assert.False(node is UAVariable);
 
             // No normal datatypes here
             Assert.Empty(pusher.PushedVariables);
@@ -103,7 +103,7 @@ namespace Test.Integration
             Assert.Equal("MysteryVar", vnode.DisplayName);
             Assert.Equal(ids.MysteryType, vnode.DataType.Raw);
             Assert.Equal(ids.Root, vnode.ParentId);
-            Assert.Equal(2, vnode.Properties.Count);
+            Assert.Equal(2, vnode.Properties.Count());
             var prop = vnode.Properties.First(prop => prop.DisplayName == "EngineeringUnits") as UAVariable;
             Assert.Equal(DataTypeIds.EUInformation, prop.DataType.Raw);
             Assert.Equal("°C: degree Celsius", prop.Value.StringValue);
@@ -137,7 +137,7 @@ namespace Test.Integration
             var node = pusher.PushedNodes[ids.StringArray];
             Assert.Equal("Variable StringArray", node.DisplayName);
             var arr = Assert.IsType<UAVariable>(node);
-            Assert.True(arr.IsVariable);
+            Assert.True(arr is UAVariable);
             Assert.True(arr.Properties == null || !arr.Properties.Any());
             Assert.True(arr.IsArray);
             Assert.Equal(2, arr.ArrayDimensions[0]);
@@ -183,8 +183,8 @@ namespace Test.Integration
             var node = pusher.PushedNodes[ids.Array];
             Assert.Equal("Variable Array", node.DisplayName);
             var arr = Assert.IsType<UAVariable>(node);
-            Assert.True(arr.IsVariable);
-            Assert.Equal(2, arr.Properties.Count);
+            Assert.True(arr is UAVariable);
+            Assert.Equal(2, arr.Properties.Count());
             var prop = arr.Properties.First(prop => prop.DisplayName == "EngineeringUnits") as UAVariable;
             Assert.Equal(DataTypeIds.EUInformation, prop.DataType.Raw);
             Assert.Equal("°C: degree Celsius", prop.Value.StringValue);
@@ -433,11 +433,11 @@ namespace Test.Integration
             Assert.False(pusher.PushedVariables.ContainsKey((ids.Array, 1)));
 
             var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
-            Assert.Equal(1, vnode.Properties.Count);
+            Assert.Single(vnode.Properties);
             Assert.DoesNotContain(vnode.Properties, prop => prop.DisplayName == "EURange");
 
             var node = pusher.PushedNodes[ids.Obj2];
-            Assert.Equal(1, node.Properties.Count);
+            Assert.Single(node.Properties);
 
             extraction.IgnoreName = null;
             extraction.DataTypes.AllowStringVariables = false;
@@ -469,11 +469,11 @@ namespace Test.Integration
             Assert.False(pusher.PushedVariables.ContainsKey((ids.Array, 1)));
 
             var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
-            Assert.Equal(1, vnode.Properties.Count);
+            Assert.Single(vnode.Properties);
             Assert.DoesNotContain(vnode.Properties, prop => prop.DisplayName == "EURange");
 
             var node = pusher.PushedNodes[ids.Obj2];
-            Assert.Equal(1, node.Properties.Count);
+            Assert.Single(node.Properties);
 
             extraction.IgnoreNamePrefix = null;
             extraction.DataTypes.AllowStringVariables = false;
@@ -505,7 +505,7 @@ namespace Test.Integration
             Assert.False(pusher.PushedVariables.ContainsKey((ids.Array, 1)));
 
             var node = pusher.PushedNodes[ids.Root];
-            Assert.Equal(5, node.Properties.Count);
+            Assert.Equal(5, node.Properties.Count());
             var prop = node.Properties.First(prop => prop.DisplayName == "Variable StringArray") as UAVariable;
             Assert.Equal("[test1, test2]", prop.Value.StringValue);
             prop = node.Properties.First(prop => prop.DisplayName == "Variable Array") as UAVariable;

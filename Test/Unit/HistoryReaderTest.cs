@@ -48,8 +48,9 @@ namespace Test.Unit
 
             var dt = new UADataType(DataTypeIds.Double);
 
-            var state1 = new VariableExtractionState(extractor,
-                new UAVariable(new NodeId("state1"), "state1", NodeId.Null) { DataType = dt }, true, true);
+            var var1 = new UAVariable(new NodeId("state1"), "state1", NodeId.Null);
+            var1.VariableAttributes.DataType = dt;
+            var state1 = new VariableExtractionState(extractor, var1, true, true);
             extractor.State.SetNodeState(state1, "state1");
 
             state1.FinalizeRangeInit();
@@ -225,11 +226,12 @@ namespace Test.Unit
             var states = new[] { tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Custom.Array,
                 tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.StringVar }
                 .Select((id, idx) => new VariableExtractionState(
-                    extractor, new UAVariable(id, "state", NodeId.Null)
-                    {
-                        DataType = idx == 3 ? dt2 : dt,
-                        ArrayDimensions = idx == 1 ? new Collection<int>(new[] { 4 }) : null
-                    }, true, true))
+                    extractor,
+                    CommonTestUtils.GetSimpleVariable("state",
+                        idx == 3 ? dt2 : dt,
+                        idx == 1 ? 4 : 0,
+                        id),
+                    true, true))
                 .ToList();
 
             var start = tester.HistoryStart.AddSeconds(5);
@@ -305,11 +307,12 @@ namespace Test.Unit
             var states = new[] { tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Custom.Array,
                 tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.StringVar }
                 .Select((id, idx) => new VariableExtractionState(
-                    extractor, new UAVariable(id, "state", NodeId.Null)
-                    {
-                        DataType = idx == 3 ? dt2 : dt,
-                        ArrayDimensions = idx == 1 ? new Collection<int>(new[] { 4 }) : null
-                    }, true, true))
+                    extractor,
+                    CommonTestUtils.GetSimpleVariable("state",
+                        idx == 3 ? dt2 : dt,
+                        idx == 1 ? 4 : 0,
+                        id),
+                    true, true))
                 .ToList();
 
             var start = tester.HistoryStart.AddSeconds(5).AddMilliseconds(-10);
@@ -548,11 +551,12 @@ namespace Test.Unit
             var states = new[] { tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Custom.Array,
                 tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.StringVar }
                 .Select((id, idx) => new VariableExtractionState(
-                    extractor, new UAVariable(id, "state", NodeId.Null)
-                    {
-                        DataType = idx == 3 ? dt2 : dt,
-                        ArrayDimensions = idx == 1 ? new Collection<int>(new[] { 4 }) : null
-                    }, true, true))
+                    extractor,
+                    CommonTestUtils.GetSimpleVariable("state",
+                        idx == 3 ? dt2 : dt,
+                        idx == 1 ? 4 : 0,
+                        id),
+                    true, true))
                 .ToList();
 
             var start = tester.HistoryStart.AddSeconds(5);
