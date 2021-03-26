@@ -321,6 +321,7 @@ namespace Cognite.OpcUa
         private int eventNodesChunk = 100;
         public long StartTime { get; set; }
         public int Granularity { get; set; } = 600;
+        public bool IgnoreContinuationPoints { get; set; }
     }
     public class ProtoNodeId
     {
