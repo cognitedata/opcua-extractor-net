@@ -131,11 +131,14 @@ namespace Test.Integration
         public async Task TestDeepEvent()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
+            tester.Config.Events.ExcludeEventFilter = null;
+            tester.Config.Events.ExcludeProperties = new List<string>();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var runTask = extractor.RunExtractor();
 
             var ids = tester.Server.Ids.Event;
+
 
             await extractor.WaitForSubscriptions();
 
