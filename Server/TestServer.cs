@@ -61,7 +61,7 @@ namespace Server
             return custom.FetchEventHistory(id);
         }
 
-        public void TriggerEvent<T>(NodeId eventId, NodeId emitter, NodeId source, string message, Action<ManagedEvent> builder = null)
+        public void TriggerEvent<T>(NodeId eventId, NodeId emitter, NodeId source, string message, Action<T> builder = null)
             where T : ManagedEvent
         {
             custom.TriggerEvent<T>(eventId, emitter, source, message, builder);

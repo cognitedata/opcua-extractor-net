@@ -1144,7 +1144,7 @@ namespace Cognite.OpcUa
                 log.Verbose("Collected event field: {id}", pair.Key);
                 foreach (var fields in pair.Value)
                 {
-                    log.Verbose("    {root}: {browse}", fields.TypeId, fields.BrowseName);
+                    log.Verbose("    {browse}", fields.Name);
                 }
             }
             return eventFields;
@@ -1191,7 +1191,7 @@ namespace Cognite.OpcUa
 
             var fieldList = eventFields
                 .Aggregate((IEnumerable<EventField>)new List<EventField>(), (agg, kvp) => agg.Concat(kvp.Value))
-                .DistinctBy(variable => variable.BrowseName);
+                .Distinct();
 
             if (!fieldList.Any())
             {
@@ -1200,14 +1200,14 @@ namespace Cognite.OpcUa
             var selectClauses = new SimpleAttributeOperandCollection();
             foreach (var field in fieldList)
             {
-                if (config.Events.ExcludeProperties.Contains(field.BrowseName.Name)
-                    || config.Events.BaseExcludeProperties.Contains(field.BrowseName.Name) && field.TypeId == ObjectTypeIds.BaseEventType) continue;
+                if (config.Events.ExcludeProperties.Contains(field.Name)
+                    || config.Events.BaseExcludeProperties.Contains(field.Name)) continue;
                 var operand = new SimpleAttributeOperand
                 {
                     AttributeId = Attributes.Value,
-                    TypeDefinitionId = field.TypeId
+                    TypeDefinitionId = ObjectTypeIds.BaseEventType
                 };
-                operand.BrowsePath.Add(field.BrowseName);
+                operand.BrowsePath = field.BrowsePath;
                 selectClauses.Add(operand);
             }
             return new EventFilter

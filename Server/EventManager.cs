@@ -216,4 +216,41 @@ namespace Server
         }
         private PropertyState<string> typeProp;
     }
+
+    public class DeepEvent : PropertyEvent
+    {
+        public BaseObjectState DeepObj
+        {
+            get { return deepObj; }
+            set
+            {
+                if (!ReferenceEquals(deepObj, value))
+                {
+                    ChangeMasks |= NodeStateChangeMasks.Children;
+                }
+                deepObj = value;
+            }
+        }
+        private BaseObjectState deepObj;
+
+        public PropertyState DeepProp { get; }
+
+        public DeepEvent(NodeState parent, TestEventManager manager) : base(parent, manager)
+        {
+            PropertyNum = new PropertyState<float>(this);
+            PropertyString = new PropertyState<string>(this);
+            SubType = new PropertyState<string>(this);
+            DeepObj = new BaseObjectState(this);
+            DeepProp = DeepObj.AddProperty<string>(nameof(DeepProp), DataTypeIds.String, ValueRanks.Scalar);
+        }
+
+        public DeepEvent(NodeState parent, TestEventManager manager, float propNum, string propStr, string subtype, string deepVal)
+            : base(parent, manager, propNum, propStr, subtype)
+        {
+            PropertyNum.Value = propNum;
+            PropertyString.Value = propStr;
+            SubType.Value = subtype;
+            DeepProp.Value = deepVal;
+        }
+    }
 }

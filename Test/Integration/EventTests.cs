@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
+using Server;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -123,6 +124,45 @@ namespace Test.Integration
             tester.Config.Events.ExcludeEventFilter = null;
             tester.Config.Events.ExcludeProperties = new List<string>();
             tester.Config.Events.DestinationNameMap.Clear();
+            tester.WipeEventHistory();
+        }
+        [Fact]
+        public async Task TestDeepEvent()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var runTask = extractor.RunExtractor();
+
+            var ids = tester.Server.Ids.Event;
+
+            await extractor.WaitForSubscriptions();
+
+            tester.Server.Server.TriggerEvent<DeepEvent>(ids.DeepType, ObjectIds.Server, ids.Root, "TestMessage",
+                evt =>
+                {
+                    evt.PropertyNum.Value = 123.123f;
+                    evt.PropertyString.Value = "string";
+                    evt.SubType.Value = "subType";
+                    evt.DeepProp.Value = "deepValue";
+                });
+
+            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 1, 5);
+
+            Assert.Single(pusher.Events[ObjectIds.Server]);
+            var evt = pusher.Events[ObjectIds.Server].First();
+            Assert.Equal(ObjectIds.Server, evt.EmittingNode);
+            Assert.Equal(ids.Root, evt.SourceNode);
+            Assert.Equal(6, evt.MetaData.Count);
+            Assert.Equal(new Variant(123.123f), evt.MetaData["PropertyNum"]);
+            Assert.Equal(new Variant("string"), evt.MetaData["PropertyString"]);
+            Assert.Equal(new Variant("subType"), evt.MetaData["SubType"]);
+            Assert.Equal(new Variant((ushort)100), evt.MetaData["Severity"]);
+            Assert.Equal(new Variant("EventRoot"), evt.MetaData["SourceName"]);
+            Assert.Equal(new Variant("deepValue"), evt.MetaData["DeepObj_DeepProp"]);
+            Assert.True(evt.Time > DateTime.UtcNow.AddSeconds(-5));
+            Assert.Equal(ids.DeepType, evt.EventType);
+
             tester.WipeEventHistory();
         }
         #endregion
