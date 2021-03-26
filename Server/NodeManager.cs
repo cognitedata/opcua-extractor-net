@@ -567,6 +567,20 @@ namespace Server
                 arrprop2.NodeId = GenerateNodeId();
                 arrprop2.Value = eurange;
 
+                var deepProp = CreateObject("DeepProp");
+                AddNodeRelation(deepProp, numberVar2, ReferenceTypeIds.Organizes);
+
+                var deepProp2 = CreateObject("DeepProp2");
+                AddNodeRelation(deepProp2, deepProp, ReferenceTypeIds.Organizes);
+
+                var deepPropVal1 = deepProp2.AddProperty<string>("val1", DataTypeIds.String, -1);
+                deepPropVal1.NodeId = GenerateNodeId();
+                deepPropVal1.Value = "value 1";
+
+                var deepPropVal2 = deepProp2.AddProperty<string>("val2", DataTypeIds.String, -1);
+                deepPropVal2.NodeId = GenerateNodeId();
+                deepPropVal2.Value = "value 2";
+
                 var enumType1 = CreateDataType("CustomEnumType1", DataTypes.Enumeration, externalReferences);
                 var enumProp1 = enumType1.AddProperty<LocalizedText[]>("EnumStrings", DataTypes.LocalizedText, ValueRanks.OneDimension);
                 enumProp1.NodeId = GenerateNodeId();
@@ -628,7 +642,8 @@ namespace Server
 
                 AddPredefinedNodes(SystemContext, root, myarray, mystrarray, stringyType, ignoreType, numberType, numberType2, stringyVar,
                     ignoreVar, mysteryVar, numberVar2, euprop, rangeprop, obj, obj2, objProp, objProp2, arrprop, arrprop2,
-                    enumType1, enumType2, enumProp1, enumProp2, enumVar1, enumVar2, enumVar3, refType1, refType2, objType, variableType);
+                    enumType1, enumType2, enumProp1, enumProp2, enumVar1, enumVar2, enumVar3, refType1, refType2, objType, variableType,
+                    deepProp, deepProp2);
 
                 Ids.Custom.Root = root.NodeId;
                 Ids.Custom.Array = myarray.NodeId;
