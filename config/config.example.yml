@@ -77,6 +77,12 @@ history:
     # be read together. Should not be smaller than usual average update rate
     # Leave at 0 to always read a single node each time.
     granularity: 600
+    # Set to true to attempt to read history without using continationPoints, instead using the Time of events, and
+    # SourceTimestamp of datapoints to incrementally change the start time of the request until no points are returned.
+    # Since history reads are chunked, this can cause a lot of duplicated points unless all timeseries are very well synced.
+    # It is therefore recommended to set data-nodes-chunk and event-nodes-chunk to 1 if this is used, although it will work without.
+    # If points/events are generated at close to the same rate for all nodes, using a larger chunk size may work fine.
+    ignore-continuation-points: false
 
 
 # Configuration for the pusher to CDF.

@@ -84,36 +84,33 @@ namespace Cognite.OpcUa
         /// Handle the result of a historyReadRaw. Takes information about the read, updates states and pushes datapoints.
         /// </summary>
         /// <param name="rawData">Data to be transformed into events</param>
-        /// <param name="final">True if this is the last read</param>
+        /// <param name="node">Active HistoryReadNode</param>
         /// <param name="frontfill">True if this is frontfill, false for backfill</param>
-        /// <param name="nodeId">NodeId being read</param>
         /// <returns>Number of points read</returns>
-        private int HistoryDataHandler(IEncodeable rawData, bool final, bool frontfill, NodeId nodeId, HistoryReadDetails _)
+        private int HistoryDataHandler(IEncodeable rawData, HistoryReadNode node, bool frontfill, HistoryReadDetails _)
         {
-            if (!(rawData is HistoryData data))
+            var data = rawData as HistoryData;
+
+            if (node.State == null)
             {
-                log.Warning("Incorrect result type of history read data");
+                node.State = extractor.State.GetNodeState(node.Id);
+            }
+
+            if (node.State == null)
+            {
+                log.Warning("History data for unknown node received: {id}", node.Id);
                 return 0;
             }
 
-            var nodeState = extractor.State.GetNodeState(nodeId);
-
-            if (nodeState == null)
-            {
-                log.Warning("History data for unknown node received: {id}", nodeId);
-                return 0;
-            }
-
-
-            List<DataValue> dataPoints = new List<DataValue>(data.DataValues?.Count ?? 0);
-            if (data.DataValues != null)
+            List<DataValue> dataPoints = new List<DataValue>(data?.DataValues?.Count ?? 0);
+            if (data?.DataValues != null)
             {
                 foreach (var dp in data.DataValues)
                 {
                     if (StatusCode.IsNotGood(dp.StatusCode))
                     {
                         UAExtractor.BadDataPoints.Inc();
-                        log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", nodeState.Id, dp.SourceTimestamp);
+                        log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", node.State.Id, dp.SourceTimestamp);
                         continue;
                     }
                     dataPoints.Add(dp);
@@ -128,18 +125,28 @@ namespace Cognite.OpcUa
                 (first, last) = dataPoints.MinMax(dp => dp.SourceTimestamp);
             }
 
+            if (config.IgnoreContinuationPoints)
+            {
+                node.Completed = !dataPoints.Any()
+                    || frontfill && first == last && last == node.State.SourceExtractedRange.Last
+                    || !frontfill && first == last && last == node.State.SourceExtractedRange.First;
+            }
+
             if (frontfill)
             {
-                nodeState.UpdateFromFrontfill(last, final);
-                log.Debug("Frontfill of data for {id} at {ts}", nodeState.Id, last);
+                node.State.UpdateFromFrontfill(last, node.Completed);
+                log.Debug("Frontfill of data for {id} at {ts}", node.State.Id, last);
             }
             else
             {
-                nodeState.UpdateFromBackfill(first, final);
-                log.Debug("Backfill of data for {id} at {ts}", nodeState.Id, first);
+                node.State.UpdateFromBackfill(first, node.Completed);
+                log.Debug("Backfill of data for {id} at {ts}", node.State.Id, first);
             }
 
             int cnt = 0;
+
+            var nodeState = node.State as VariableExtractionState;
+
             foreach (var datapoint in dataPoints)
             {
                 var buffDps = extractor.Streamer.ToDataPoint(datapoint, nodeState);
@@ -151,7 +158,7 @@ namespace Cognite.OpcUa
                 extractor.Streamer.Enqueue(buffDps);
             }
 
-            if (!final || !frontfill) return cnt;
+            if (!node.Completed || !frontfill) return cnt;
 
             var buffered = nodeState.FlushBuffer();
             nodeState.UpdateFromStream(buffered);
@@ -160,22 +167,32 @@ namespace Cognite.OpcUa
             return cnt;
         }
 
+        private DateTime? GetTimeAttribute(VariantCollection evt, EventFilter filter)
+        {
+            int index = filter.SelectClauses.FindIndex(atr =>
+                atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
+                && atr.BrowsePath.Count == 1
+                && atr.BrowsePath[0] == BrowseNames.Time);
+
+            if (index < 0 || evt.Count <= index) return null;
+
+            var raw = evt[index].Value;
+
+            if (!(raw is DateTime dt)) return null;
+            return dt;
+        }
+
         /// <summary>
         /// Handler for HistoryRead of events. Simply pushes all events to the queue.
         /// </summary>
         /// <param name="rawEvts">Collection of events to be handled as IEncodable</param>
-        /// <param name="final">True if this is the final call for this node, and the lock may be removed</param>
+        /// <param name="node">Active HistoryReadNode</param>
         /// <param name="frontfill">True if frontfill, false for backfill</param>
-        /// <param name="nodeId">Id of the emitter in question.</param>
         /// <param name="details">History read details used to generate this HistoryRead result</param>
         /// <returns>Number of events read</returns>
-        private int HistoryEventHandler(IEncodeable rawEvts, bool final, bool frontfill, NodeId nodeId, HistoryReadDetails details)
+        private int HistoryEventHandler(IEncodeable rawEvts, HistoryReadNode node, bool frontfill, HistoryReadDetails details)
         {
-            if (!(rawEvts is HistoryEvent evts))
-            {
-                log.Warning("Incorrect return type of history read events");
-                return 0;
-            }
+            var evts = rawEvts as HistoryEvent;
             if (!(details is ReadEventDetails eventDetails))
             {
                 log.Warning("Incorrect details type of history read events");
@@ -187,51 +204,77 @@ namespace Cognite.OpcUa
                 log.Warning("No event filter when reading from history, ignoring");
                 return 0;
             }
-            var emitterState = extractor.State.GetEmitterState(nodeId);
-
-            if (emitterState == null)
+            if (node.State == null)
             {
-                log.Warning("History events for unknown emitter received: {id}", nodeId);
-                return 0;
+                node.State = extractor.State.GetEmitterState(node.Id);
             }
 
-            var createdEvents = new List<UAEvent>(evts.Events?.Count ?? 0);
-            if (evts.Events != null)
+            if (node.State == null)
             {
-                foreach (var evt in evts.Events)
-                {
-                    var buffEvt = extractor.Streamer.ConstructEvent(filter, evt.EventFields, nodeId);
-                    if (buffEvt == null)
-                    {
-                        UAExtractor.BadEvents.Inc();
-                        continue;
-                    }
-                    createdEvents.Add(buffEvt);
-                }
+                log.Warning("History events for unknown emitter received: {id}", node.Id);
+                return 0;
             }
 
             var last = DateTime.MinValue;
             var first = DateTime.MaxValue;
 
-            if (createdEvents.Any())
+            bool any = false;
+            var createdEvents = new List<UAEvent>(evts?.Events?.Count ?? 0);
+            if (evts?.Events != null)
             {
-                (first, last) = createdEvents.MinMax(dp => dp.Time);
+                foreach (var evt in evts.Events)
+                {
+                    var buffEvt = extractor.Streamer.ConstructEvent(filter, evt.EventFields, node.Id);
+                    if (buffEvt == null)
+                    {
+                        var dt = GetTimeAttribute(evt.EventFields, filter);
+                        if (dt != null)
+                        {
+                            // If the server somehow returns a full list of events that the extractor cannot parse,
+                            // AND lacks a time attribute completely, then this may cause the extraction to end prematurely.
+                            // That is probably unlikely, however, and at that point we can safely say that the server is
+                            // not compliant enough for the extractor.
+                            any = true;
+                            if (dt > last) last = dt.Value;
+                            if (dt < first) first = dt.Value;
+                        }
+                        UAExtractor.BadEvents.Inc();
+                        continue;
+                    }
+                    else
+                    {
+                        if (buffEvt.Time > last) last = buffEvt.Time;
+                        if (buffEvt.Time < first) first = buffEvt.Time;
+                    }
+                    any = true;
+                    createdEvents.Add(buffEvt);
+                }
+            }
+
+            if (config.IgnoreContinuationPoints)
+            {
+                // If all the returned events are at the end point, then we are receiving duplicates.
+                node.Completed = !any
+                    || frontfill && first == last && last == node.State.SourceExtractedRange.Last
+                    || !frontfill && first == last && last == node.State.SourceExtractedRange.First;
             }
 
             if (frontfill)
             {
-                emitterState.UpdateFromFrontfill(last, final);
-                log.Debug("Frontfill of events for {id} at: {end}", nodeId, last);
+                node.State.UpdateFromFrontfill(last, node.Completed);
+                log.Debug("Frontfill of events for {id} at: {end}", node.Id, last);
             }
             else
             {
-                emitterState.UpdateFromBackfill(first, final);
-                log.Debug("Backfill of events for {id} at: {end}", nodeId, first);
+                node.State.UpdateFromBackfill(first, node.Completed);
+                log.Debug("Backfill of events for {id} at: {end}", node.Id, first);
             }
 
             extractor.Streamer.Enqueue(createdEvents);
 
-            if (!final || !frontfill) return createdEvents.Count;
+            if (!node.Completed || !frontfill) return createdEvents.Count;
+
+            var emitterState = node.State as EventExtractionState;
 
             var buffered = emitterState.FlushBuffer();
             if (buffered.Any())
@@ -256,7 +299,7 @@ namespace Cognite.OpcUa
             IEnumerable<NodeId> nodes,
             bool frontfill,
             bool data,
-            Func<IEncodeable, bool, bool, NodeId, HistoryReadDetails, int> handler,
+            Func<IEncodeable, HistoryReadNode, bool, HistoryReadDetails, int> handler,
             CancellationToken token)
         {
             var readParams = new HistoryReadParams(nodes, details);
@@ -266,13 +309,19 @@ namespace Cognite.OpcUa
                 int count = readParams.Nodes.Count();
                 var results = uaClient.DoHistoryRead(readParams);
                 if (aborting) break;
+
                 foreach (var res in results)
                 {
-                    int cnt = handler(res.RawData, res.Node.Completed, frontfill, res.Node.Id, details);
+                    int cnt = handler(res.RawData, res.Node, frontfill, details);
 
                     total += cnt;
                     log.Debug("{mode} {cnt} {type} for node {nodeId}",
                         frontfill ? "Frontfill" : "Backfill", cnt, data ? "datapoints" : "events", res.Node.Id);
+
+                    if (config.IgnoreContinuationPoints)
+                    {
+                        res.Node.ContinuationPoint = null;
+                    }
                 }
                 log.Information("{mode}ed {cnt} {type} for {nodeCount} states",
                     frontfill ? "Frontfill" : "Backfill", total, data ? "datapoints" : "events", count);
@@ -306,6 +355,44 @@ namespace Cognite.OpcUa
                 }
 
                 readParams.Nodes = readParams.Nodes.Where(node => !node.Completed).ToList();
+
+                if (config.IgnoreContinuationPoints)
+                {
+                    DateTime newMin;
+                    if (frontfill)
+                    {
+                        newMin = readParams.Nodes
+                            .Where(node => node.State != null)
+                            .Select(node => node.State.SourceExtractedRange.Last)
+                            .Min();
+                    }
+                    else
+                    {
+                        newMin = readParams.Nodes
+                            .Where(node => node.State != null)
+                            .Select(node => node.State.SourceExtractedRange.First)
+                            .Max();
+                        if (newMin <= historyStartTime)
+                        {
+                            foreach (var node in readParams.Nodes)
+                            {
+                                node.Completed = true;
+                                handler(null, node, frontfill, details);
+                            }
+                        }
+                    }
+                    if (data)
+                    {
+                        // Since datapoints all have distinct time, we can add a tick here to avoid reading the same again
+                        // The same does not hold for events. Either way we also have a fallback check in the handlers 
+                        // for cases when the server operates on a lower resolution than ticks.
+                        (details as ReadRawModifiedDetails).StartTime = newMin.AddTicks(frontfill ? 1 : -1);
+                    }
+                    else
+                    {
+                        (details as ReadEventDetails).StartTime = newMin;
+                    }
+                }
             }
         }
         /// <summary>

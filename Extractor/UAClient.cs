@@ -1673,6 +1673,7 @@ namespace Cognite.OpcUa
     }
     public class HistoryReadNode
     {
+        public UAHistoryExtractionState State { get; set; }
         public NodeId Id { get; set; }
         public byte[] ContinuationPoint { get; set; }
         public bool Completed { get; set; }

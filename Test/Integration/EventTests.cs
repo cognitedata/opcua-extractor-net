@@ -42,12 +42,13 @@ namespace Test.Integration
         public async Task TestBasicSubscriptions()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
+            tester.Config.History.Enabled = false;
+            tester.Config.Events.History = false;
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var runTask = extractor.RunExtractor();
 
             var ids = tester.Server.Ids.Event;
-            tester.Config.History.Enabled = false;
 
             await extractor.WaitForSubscriptions();
 
@@ -254,7 +255,8 @@ namespace Test.Integration
             await CommonTestUtils.WaitForCondition(() => extractor.State.EmitterStates.All(state => !state.IsFrontfilling
                 && !state.IsBackfilling), 5);
 
-            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 700, 5,
+            await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 700
+                && pusher.Events[ids.Obj1].Count == 200, 5,
                 () => $"Expected to get 700 events but got {pusher.Events[ObjectIds.Server].Count}");
 
             Assert.Equal(700, pusher.Events[ObjectIds.Server].Count);
