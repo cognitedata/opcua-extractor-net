@@ -425,8 +425,7 @@ namespace Cognite.OpcUa
             if (eventFields == null) throw new ArgumentNullException(nameof(eventFields));
 
             int eventTypeIndex = filter.SelectClauses.FindIndex(atr =>
-                atr.TypeDefinitionId == ObjectTypeIds.BaseEventType
-                && atr.BrowsePath.Count == 1
+                atr.BrowsePath.Count == 1
                 && atr.BrowsePath[0] == BrowseNames.EventType);
 
             if (eventTypeIndex < 0 || eventFields.Count <= eventTypeIndex)
@@ -448,10 +447,9 @@ namespace Cognite.OpcUa
             for (int i = 0; i < filter.SelectClauses.Count; i++)
             {
                 var clause = filter.SelectClauses[i];
-                if (clause.BrowsePath.Count != 1
-                    || !targetEventFields.Contains(new EventField(clause.TypeDefinitionId, clause.BrowsePath[0]))) continue;
+                if (!targetEventFields.Contains(new EventField(clause.BrowsePath))) continue;
 
-                string name = clause.BrowsePath[0].Name;
+                string name = string.Join('_', clause.BrowsePath.Select(name => name.Name));
                 if (name != "EventId" && name != "SourceNode" && name != "EventType" && config.Events.DestinationNameMap.TryGetValue(name, out var mapped))
                 {
                     name = mapped;

@@ -26,24 +26,42 @@ namespace Cognite.OpcUa.TypeCollectors
 {
     public class EventField
     {
-        public NodeId TypeId { get; }
-        public QualifiedName BrowseName { get; }
-        public EventField(NodeId typeId, QualifiedName browseName)
+        public QualifiedNameCollection BrowsePath { get; }
+        public string Name => string.Join('_', BrowsePath.Select(name => name.Name));
+        public EventField(QualifiedName browseName)
         {
-            TypeId = typeId;
-            BrowseName = browseName;
+            BrowsePath = new QualifiedNameCollection() { browseName };
+        }
+        public EventField(QualifiedNameCollection browsePath)
+        {
+            BrowsePath = browsePath;
         }
         // The default hash code of browsename does not include the namespaceindex for some reason.
         public override int GetHashCode()
         {
-            return HashCode.Combine(TypeId, BrowseName.Name, BrowseName.NamespaceIndex);
+            unchecked
+            {
+                int hash = 0;
+                foreach (var name in BrowsePath)
+                {
+                    hash *= 31;
+                    hash += HashCode.Combine(name.Name, name.NamespaceIndex);
+                }
+                return hash;
+            }
         }
         public override bool Equals(object other)
         {
             if (!(other is EventField otherField)) return false;
-            return otherField.TypeId == TypeId
-                && otherField.BrowseName.Name == BrowseName.Name
-                && otherField.BrowseName.NamespaceIndex == BrowseName.NamespaceIndex;
+            if (BrowsePath.Count != otherField.BrowsePath.Count) return false;
+
+            for (int i = 0; i < BrowsePath.Count; i++)
+            {
+                if (BrowsePath[i].Name != otherField.BrowsePath[i].Name
+                    || BrowsePath[i].NamespaceIndex != otherField.BrowsePath[i].NamespaceIndex) return false;
+            }
+
+            return true;
         }
     }
 
@@ -55,6 +73,7 @@ namespace Cognite.OpcUa.TypeCollectors
     {
         private readonly UAClient uaClient;
         private readonly Dictionary<NodeId, UAEventType> types = new Dictionary<NodeId, UAEventType>();
+        private readonly Dictionary<NodeId, ChildNode> nodes = new Dictionary<NodeId, ChildNode>();
         private readonly EventConfig config;
         private readonly Regex ignoreFilter;
         private HashSet<string> excludeProperties;
@@ -94,9 +113,10 @@ namespace Cognite.OpcUa.TypeCollectors
                 EventTypeCallback,
                 token,
                 ReferenceTypeIds.HierarchicalReferences,
-                (uint)NodeClass.ObjectType | (uint)NodeClass.Variable,
+                (uint)NodeClass.ObjectType | (uint)NodeClass.Variable | (uint)NodeClass.Object,
                 false,
-                false);
+                false,
+                true);
 
             var result = new Dictionary<NodeId, HashSet<EventField>>();
 
@@ -127,10 +147,10 @@ namespace Cognite.OpcUa.TypeCollectors
         private void EventTypeCallback(ReferenceDescription child, NodeId parent)
         {
             var id = uaClient.ToNodeId(child.NodeId);
-            var parentType = types.GetValueOrDefault(parent);
 
             if (child.NodeClass == NodeClass.ObjectType)
             {
+                var parentType = types.GetValueOrDefault(parent);
                 types[id] = new UAEventType
                 {
                     Id = id,
@@ -138,12 +158,29 @@ namespace Cognite.OpcUa.TypeCollectors
                     DisplayName = child.DisplayName
                 };
             }
-            else if (child.ReferenceTypeId == ReferenceTypeIds.HasProperty)
+            else if (child.NodeClass == NodeClass.Object
+                || child.NodeClass == NodeClass.Variable)
             {
-                if (parentType == null) return;
-                if (parent == ObjectTypeIds.BaseEventType && baseExcludeProperties.Contains(child.BrowseName.Name)
-                    || excludeProperties.Contains(child.BrowseName.Name)) return;
-                parentType.AddField(child);
+                ChildNode node;
+                if (types.TryGetValue(parent, out var parentType))
+                {
+                    if (parent == ObjectTypeIds.BaseEventType && baseExcludeProperties.Contains(child.BrowseName.Name)
+                        || excludeProperties.Contains(child.BrowseName.Name)) return;
+                    node = parentType.AddChild(child);
+                }
+                else if (nodes.TryGetValue(parent, out var parentNode))
+                {
+                    node = parentNode.AddChild(child);
+                }
+                else
+                {
+                    return;
+                }
+                if (child.NodeClass != NodeClass.Variable
+                    || child.TypeDefinition != VariableTypeIds.PropertyType)
+                {
+                    nodes[id] = node;
+                }
             }
         }
         private class UAEventType
@@ -151,12 +188,60 @@ namespace Cognite.OpcUa.TypeCollectors
             public NodeId Id { get; set; }
             public LocalizedText DisplayName { get; set; }
             public UAEventType Parent { get; set; }
-            public void AddField(ReferenceDescription desc)
+            private IList<ChildNode> children = new List<ChildNode>();
+            public ChildNode AddChild(ReferenceDescription desc)
             {
-                fields.Add(new EventField(Id, desc.BrowseName));
+                var node = new ChildNode(desc.BrowseName, desc.NodeClass);
+                children.Add(node);
+                return node;
             }
-            public IEnumerable<EventField> CollectedFields { get => Parent?.CollectedFields?.Concat(fields) ?? fields; }
-            private List<EventField> fields = new List<EventField>();
+            public IEnumerable<EventField> CollectedFields { get
+            {
+                var childFields = children.SelectMany(child => child.ToFields());
+                return Parent?.CollectedFields?.Concat(childFields) ?? childFields;
+            } }
+        }
+        private class ChildNode
+        {
+            private NodeClass nodeClass;
+            private QualifiedName browseName;
+            private IList<ChildNode> children;
+
+            public ChildNode(QualifiedName browseName, NodeClass nc)
+            {
+                this.browseName = browseName;
+                nodeClass = nc;
+            }
+            public ChildNode AddChild(ReferenceDescription desc)
+            {
+                var node = new ChildNode(desc.BrowseName, desc.NodeClass);
+                if (children == null)
+                {
+                    children = new List<ChildNode> { node };
+                }
+                children.Add(node);
+                return node;
+            }
+            public IEnumerable<EventField> ToFields()
+            {
+                if (nodeClass == NodeClass.Object && children == null) yield break;
+                if (nodeClass == NodeClass.Variable)
+                {
+                    yield return new EventField(browseName);
+                }
+                if (children != null)
+                {
+                    foreach (var child in children)
+                    {
+                        var childFields = child.ToFields();
+                        foreach (var childField in childFields)
+                        {
+                            childField.BrowsePath.Insert(0, browseName);
+                            yield return childField;
+                        }
+                    }
+                }
+            }
         }
     }
 }

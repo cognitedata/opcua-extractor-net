@@ -73,7 +73,7 @@ namespace Server
             return store.GetFullEventHistory(id);
         }
 
-        public void TriggerEvent<T>(NodeId eventId, NodeId emitter, NodeId source, string message, Action<ManagedEvent> builder = null)
+        public void TriggerEvent<T>(NodeId eventId, NodeId emitter, NodeId source, string message, Action<T> builder = null)
             where T : ManagedEvent
         {
             var eventState = (BaseObjectTypeState)PredefinedNodes[eventId];
@@ -713,6 +713,13 @@ namespace Server
                 var prop4 = customType.AddProperty<string>("TypeProp", DataTypes.String, -1);
                 prop4.NodeId = GenerateNodeId();
 
+                var deepType = CreateObjectType("EventDeepProperties", null, null);
+                var deepObj = CreateObject("DeepObj");
+                var deepProp = deepObj.AddProperty<string>("DeepProp", DataTypeIds.String, -1);
+                deepProp.NodeId = GenerateNodeId();
+
+                AddNodeRelation(deepType, propType, ReferenceTypeIds.HasSubtype);
+                AddNodeRelation(deepObj, deepType, ReferenceTypeIds.HasComponent);
 
                 AddNodeRelation(propType, obj1, ReferenceTypeIds.GeneratesEvent);
                 AddNodeRelation(basicType1, obj1, ReferenceTypeIds.GeneratesEvent);
@@ -722,7 +729,8 @@ namespace Server
                 AddNodeToExt(basicType2, ObjectIds.Server, ReferenceTypeIds.GeneratesEvent, externalReferences);
                 AddNodeToExt(customType, ObjectIds.Server, ReferenceTypeIds.GeneratesEvent, externalReferences);
 
-                AddPredefinedNodes(SystemContext, root, obj1, obj2, objexclude, var1, var2, propType, basicType1, basicType2, customType);
+                AddPredefinedNodes(SystemContext, root, obj1, obj2, objexclude, var1, var2, propType, basicType1, basicType2, customType,
+                    deepType, deepObj);
 
                 var testEmitter = new TestEventManager<PropertyEvent>(SystemContext, propType, NamespaceUris.First());
 
@@ -741,6 +749,8 @@ namespace Server
                 Ids.Event.BasicType1 = basicType1.NodeId;
                 Ids.Event.BasicType2 = basicType2.NodeId;
                 Ids.Event.CustomType = customType.NodeId;
+                Ids.Event.DeepType = deepType.NodeId;
+                Ids.Event.DeepObj = deepObj.NodeId;
             }
         }
 
@@ -889,6 +899,7 @@ namespace Server
                 BrowseName = new QualifiedName(name, NamespaceIndex)
             };
             type.DisplayName = type.BrowseName.Name;
+            if (parent == null) return type;
             if (!externalReferences.TryGetValue(parent, out var references))
             {
                 externalReferences[parent] = references = new List<IReference>();
@@ -1442,6 +1453,8 @@ namespace Server
         public NodeId BasicType1 { get; set; }
         public NodeId BasicType2 { get; set; }
         public NodeId CustomType { get; set; }
+        public NodeId DeepType { get; set; }
+        public NodeId DeepObj { get; set; }
     }
 
     public class AuditNodeReference

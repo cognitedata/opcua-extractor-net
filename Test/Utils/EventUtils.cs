@@ -27,8 +27,8 @@ namespace Test.Utils
             }
             extractor.State.SetEmitterState(state);
 
-            var fields = baseFields.Select(field => new EventField(ObjectTypeIds.BaseEventType, new QualifiedName(field)));
-            fields = fields.Append(new EventField(tester.Server.Ids.Custom.EUProp, new QualifiedName("EUProp")));
+            var fields = baseFields.Select(field => new EventField(new QualifiedName(field)));
+            fields = fields.Append(new EventField(new QualifiedName("EUProp")));
             extractor.State.ActiveEvents[new NodeId("test")] = fields.ToHashSet();
 
             return state;
