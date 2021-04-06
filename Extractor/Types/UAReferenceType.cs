@@ -19,6 +19,9 @@ using Opc.Ua;
 
 namespace Cognite.OpcUa.Types
 {
+    /// <summary>
+    /// Represents a ReferenceType in the OPC-UA type hierarchy.
+    /// </summary>
     public class UAReferenceType
     {
         public NodeId Id { get; }
@@ -29,11 +32,21 @@ namespace Cognite.OpcUa.Types
         {
             Id = id;
         }
+        /// <summary>
+        /// Set the name and inverseName of this reference type.
+        /// </summary>
+        /// <param name="name">Forward name</param>
+        /// <param name="inverseName">Inverse name</param>
         public void SetNames(string name, string inverseName)
         {
             this.name = name;
             this.inverseName = inverseName;
         }
+        /// <summary>
+        /// Retrieve a descriptor for this reference type.
+        /// </summary>
+        /// <param name="isInverse">True to get the inverse name of this reference type.</param>
+        /// <returns>Descriptor for this reference, if set.</returns>
         public string GetName(bool isInverse)
         {
             if (isInverse && !string.IsNullOrEmpty(inverseName)) return inverseName;

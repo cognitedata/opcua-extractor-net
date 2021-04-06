@@ -24,6 +24,9 @@ using System.Threading;
 
 namespace Cognite.OpcUa.TypeCollectors
 {
+    /// <summary>
+    /// Represents a single property with value in the event hierarchy.
+    /// </summary>
     public class EventField
     {
         public QualifiedNameCollection BrowsePath { get; }
@@ -82,7 +85,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// Construct the collector.
         /// </summary>
         /// <param name="parent">UAClient to be used for browse calls.</param>
-        /// <param name="targetEventIds">Target event ids</param>
+        /// <param name="config">Event configuration to use</param>
         public EventFieldCollector(UAClient parent, EventConfig config)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
@@ -96,8 +99,8 @@ namespace Cognite.OpcUa.TypeCollectors
             baseExcludeProperties = new HashSet<string>(config.BaseExcludeProperties);
         }
         /// <summary>
-        /// Main collection function. Calls BrowseDirectory on BaseEventType, waits for it to complete, which should populate properties and localProperties,
-        /// then collects the resulting fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).
+        /// Main collection function. Browses the hierarchy and builds an internal tree of event types,
+        /// then builds a list of eventfields for each type by recursively collecting the properties of all parents.
         /// </summary>
         /// <returns>The collected fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).</returns>
         public Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token)
@@ -141,6 +144,8 @@ namespace Cognite.OpcUa.TypeCollectors
         }
         /// <summary>
         /// HandleNode callback for the event type mapping.
+        /// Adds new types to the internal tree, adds objects and variables
+        /// to their parents.
         /// </summary>
         /// <param name="child">Type or property to be handled</param>
         /// <param name="parent">Parent type id</param>
@@ -158,8 +163,7 @@ namespace Cognite.OpcUa.TypeCollectors
                     DisplayName = child.DisplayName
                 };
             }
-            else if (child.NodeClass == NodeClass.Object
-                || child.NodeClass == NodeClass.Variable)
+            else if (child.NodeClass == NodeClass.Object || child.NodeClass == NodeClass.Variable)
             {
                 ChildNode node;
                 if (types.TryGetValue(parent, out var parentType))
@@ -183,28 +187,42 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
             }
         }
+        /// <summary>
+        /// Internal representation of an event type.
+        /// </summary>
         private class UAEventType
         {
             public NodeId Id { get; set; }
             public LocalizedText DisplayName { get; set; }
             public UAEventType Parent { get; set; }
             private IList<ChildNode> children = new List<ChildNode>();
+            /// <summary>
+            /// Add a child node to the internal collection of children
+            /// </summary>
+            /// <param name="desc">ReferenceDescription of child</param>
+            /// <returns>Created child node</returns>
             public ChildNode AddChild(ReferenceDescription desc)
             {
                 var node = new ChildNode(desc.BrowseName, desc.NodeClass);
                 children.Add(node);
                 return node;
             }
+            /// <summary>
+            /// Retrieve all fields for this type, combining own fields with parent node fields.
+            /// </summary>
             public IEnumerable<EventField> CollectedFields { get
             {
                 var childFields = children.SelectMany(child => child.ToFields());
                 return Parent?.CollectedFields?.Concat(childFields) ?? childFields;
             } }
         }
+        /// <summary>
+        /// Internal representation of node in EventType hierarchy
+        /// </summary>
         private class ChildNode
         {
-            private NodeClass nodeClass;
-            private QualifiedName browseName;
+            private readonly NodeClass nodeClass;
+            private readonly QualifiedName browseName;
             private IList<ChildNode> children;
 
             public ChildNode(QualifiedName browseName, NodeClass nc)
@@ -212,6 +230,11 @@ namespace Cognite.OpcUa.TypeCollectors
                 this.browseName = browseName;
                 nodeClass = nc;
             }
+            /// <summary>
+            /// Add a child node to the internal collection of children
+            /// </summary>
+            /// <param name="desc">ReferenceDescription of child</param>
+            /// <returns>Created child node</returns>
             public ChildNode AddChild(ReferenceDescription desc)
             {
                 var node = new ChildNode(desc.BrowseName, desc.NodeClass);
@@ -222,6 +245,11 @@ namespace Cognite.OpcUa.TypeCollectors
                 children.Add(node);
                 return node;
             }
+            /// <summary>
+            /// Convert this node to a list of EventFields, also collects
+            /// fields for all its children, and appends its own browseName to their path.
+            /// </summary>
+            /// <returns>Full list of fields for this node and its children</returns>
             public IEnumerable<EventField> ToFields()
             {
                 if (nodeClass == NodeClass.Object && children == null) yield break;

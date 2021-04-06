@@ -62,6 +62,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="fullConfig"></param>
         /// <param name="extractor"></param>
+        /// <param name="influxPusher">InfluxPusher to use when reading from influxdb</param>
         public FailureBuffer(FullConfig fullConfig, UAExtractor extractor, InfluxPusher influxPusher)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
@@ -98,7 +99,13 @@ namespace Cognite.OpcUa
             nodeBufferStates = new Dictionary<string, InfluxBufferState>();
             eventBufferStates = new Dictionary<string, InfluxBufferState>();
         }
-
+        /// <summary>
+        /// Restore influx extraction states, called on startup if influxdb buffering is enabled.
+        /// </summary>
+        /// <param name="states">Active OPC-UA states to restore for.</param>
+        /// <param name="store">Name of store to restore from</param>
+        /// <param name="map">Output dictionary</param>
+        /// <returns>True if any were retrieved</returns>
         private async Task<bool> RestoreStates(
             IEnumerable<UAHistoryExtractionState> states,
             string store,
@@ -131,10 +138,12 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Load buffer states from state storage if influxdb buffering and state storage is enabled.
         /// </summary>
-        /// <param name="states">States to read into</param>
-        /// <param name="nodeIds">Nodes to read for</param>
-        public async Task InitializeBufferStates(IEnumerable<VariableExtractionState> states,
-            IEnumerable<EventExtractionState> evtStates, CancellationToken token)
+        /// <param name="states">Variable states to read into</param>
+        /// <param name="evtStates">Event emitter states to read into</param>
+        public async Task InitializeBufferStates(
+            IEnumerable<VariableExtractionState> states,
+            IEnumerable<EventExtractionState> evtStates,
+            CancellationToken token)
         {
             if (!config.Influx || influxPusher == null || !config.InfluxStateStore) return;
 
@@ -146,7 +155,10 @@ namespace Cognite.OpcUa
             anyPoints |= results[0];
             anyEvents |= results[1];
         }
-
+        /// <summary>
+        /// Registred that the given datapoint ranges have been written to influxdb, and are now buffered.
+        /// </summary>
+        /// <param name="pointRanges">Written ranges</param>
         private async Task WriteDatapointsInflux(IDictionary<string, TimeRange> pointRanges, CancellationToken token)
         {
             if (influxPusher.DataFailing)
@@ -260,7 +272,10 @@ namespace Cognite.OpcUa
 
             return success;
         }
-
+        /// <summary>
+        /// Register that given list of events have been written to influxdb, and are now buffered.
+        /// </summary>
+        /// <param name="events">Events to register</param>
         private async Task WriteEventsInflux(IEnumerable<UAEvent> events, CancellationToken token)
         {
             if (influxPusher.EventsFailing)

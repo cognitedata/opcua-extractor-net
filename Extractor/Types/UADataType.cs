@@ -24,7 +24,7 @@ using System.Text;
 namespace Cognite.OpcUa.Types
 {
     /// <summary>
-    /// Represents a simplified OPC-UA datatype, containing information relevant to us (isString, isStep)
+    /// Represents a simplified OPC-UA datatype, containing information relevant to us (isString, isStep, etc.)
     /// </summary>
     public class UADataType
     {
@@ -53,7 +53,16 @@ namespace Cognite.OpcUa.Types
                 IsString = true;
             }
         }
-
+        /// <summary>
+        /// Create the given value and timestamp to a new <see cref="UADataPoint"/>.
+        /// </summary>
+        /// <param name="client">Client to be used for converting to string</param>
+        /// <param name="value">Value to convert</param>
+        /// <param name="timestamp">Timestamp of created datapoint</param>
+        /// <param name="id">Id of created datapoint</param>
+        /// <param name="stringOverride">True to override the IsString parameter of this datatype, converting 
+        /// numerical datavalues to string as well.</param>
+        /// <returns>Created UADataPoint</returns>
         public UADataPoint ToDataPoint(IUAClientAccess client, object value, DateTime timestamp, string id, bool stringOverride = false)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
@@ -82,7 +91,11 @@ namespace Cognite.OpcUa.Types
                 IsStep = !config.EnumsAsStrings;
             }
         }
-
+        /// <summary>
+        /// Construct datatype from a parent datatype and a NodeId.
+        /// </summary>
+        /// <param name="rawDataType">NodeId of new datatype</param>
+        /// <param name="other">Parent datatype</param>
         public UADataType(NodeId rawDataType, UADataType other) : this(rawDataType)
         {
             if (other == null) throw new ArgumentNullException(nameof(other));

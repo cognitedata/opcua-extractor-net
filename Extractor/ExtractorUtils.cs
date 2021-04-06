@@ -372,8 +372,6 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Used to indicate a serviceException that has been recognized and properly logged.
     /// </summary>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1032:Implement standard exception constructors",
-        Justification = "Not a standard exception, throwing with default exception parameters would be incorrect usage")]
     public class SilentServiceException : Exception
     {
         public ExtractorUtils.SourceOp Operation { get; }

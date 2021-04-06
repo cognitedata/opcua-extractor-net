@@ -160,8 +160,15 @@ namespace Cognite.OpcUa.Types
 
             return evt;
         }
-
-        private void ToCDFEventBase(UAExtractor extractor, EventCreate evt, long? dataSetId)
+        /// <summary>
+        /// Convert common properties to a CDF event, this does not handle
+        /// assetId, as that will depend on whether we are converting to <see cref="StatelessEventCreate"/>
+        /// or <see cref="EventCreate"/>.
+        /// </summary>
+        /// <param name="client">Access to client for converting properties to string</param>
+        /// <param name="evt">Event to populate</param>
+        /// <param name="dataSetId">Optional dataSetId to set</param>
+        private void ToCDFEventBase(IUAClientAccess client, EventCreate evt, long? dataSetId)
         {
             evt.Description = Message;
             evt.StartTime = MetaData != null && MetaData.TryGetValue("StartTime", out var rawStartTime)
@@ -172,12 +179,12 @@ namespace Cognite.OpcUa.Types
                 : Time.ToUnixTimeMilliseconds();
             evt.ExternalId = EventId;
             evt.Type = MetaData != null && MetaData.TryGetValue("Type", out var rawType)
-                ? extractor.ConvertToString(rawType)
-                : extractor.GetUniqueId(EventType);
+                ? client.ConvertToString(rawType)
+                : client.GetUniqueId(EventType);
             evt.DataSetId = dataSetId;
 
             var finalMetaData = new Dictionary<string, string>();
-            finalMetaData["Emitter"] = extractor.GetUniqueId(EmittingNode);
+            finalMetaData["Emitter"] = client.GetUniqueId(EmittingNode);
             if (MetaData == null)
             {
                 evt.Metadata = finalMetaData;
@@ -185,18 +192,18 @@ namespace Cognite.OpcUa.Types
             }
             if (!MetaData.ContainsKey("SourceNode") && SourceNode != null && !SourceNode.IsNullNodeId)
             {
-                finalMetaData["SourceNode"] = extractor.GetUniqueId(SourceNode);
+                finalMetaData["SourceNode"] = client.GetUniqueId(SourceNode);
             }
             if (MetaData.TryGetValue("SubType", out var subtype))
             {
-                evt.Subtype = extractor.ConvertToString(subtype);
+                evt.Subtype = client.ConvertToString(subtype);
             }
 
             foreach (var dt in MetaData)
             {
                 if (!excludeMetaData.Contains(dt.Key))
                 {
-                    finalMetaData[dt.Key] = extractor.ConvertToString(dt.Value);
+                    finalMetaData[dt.Key] = client.ConvertToString(dt.Value);
                 }
             }
 
@@ -209,12 +216,19 @@ namespace Cognite.OpcUa.Types
         private static readonly HashSet<string> excludeMetaData = new HashSet<string> {
             "StartTime", "EndTime", "Type", "SubType"
         };
+        /// <summary>
+        /// Convert event to stateless CDF event.
+        /// </summary>
+        /// <param name="client">Access to OPC-UA client for converting to string</param>
+        /// <param name="dataSetId">Optional dataSetId</param>
+        /// <param name="parentIdMap">Map from parent NodeIds to externalIds</param>
+        /// <returns>Converted event or null</returns>
         public StatelessEventCreate ToStatelessCDFEvent(
-            UAExtractor extractor,
+            IUAClientAccess client,
             long? dataSetId,
             IDictionary<NodeId, string> parentIdMap)
         {
-            if (extractor == null) return null;
+            if (client == null) return null;
 
             string sourceId = null;
             if (SourceNode != null && !SourceNode.IsNullNodeId)
@@ -225,7 +239,7 @@ namespace Cognite.OpcUa.Types
                 }
                 else
                 {
-                    sourceId = extractor.GetUniqueId(SourceNode);
+                    sourceId = client.GetUniqueId(SourceNode);
                 }
             }
 
@@ -235,17 +249,23 @@ namespace Cognite.OpcUa.Types
                     ? Enumerable.Empty<string>()
                     : new string[] { sourceId }
             };
-            ToCDFEventBase(extractor, evt, dataSetId);
+            ToCDFEventBase(client, evt, dataSetId);
 
             return evt;
         }
-
+        /// <summary>
+        /// Convert event to CDF event.
+        /// </summary>
+        /// <param name="client">Access to OPC-UA client for converting to string</param>
+        /// <param name="dataSetId">Optional dataSetId</param>
+        /// <param name="nodeToAssetIds">Map from parent NodeIds to internalIds</param>
+        /// <returns>Converted event or null</returns>
         public EventCreate ToCDFEvent(
-            UAExtractor extractor,
+            IUAClientAccess client,
             long? dataSetId,
             IDictionary<NodeId, long> nodeToAssetIds)
         {
-            if (extractor == null) return null;
+            if (client == null) return null;
             var evt = new EventCreate();
 
             if (nodeToAssetIds != null
@@ -255,7 +275,7 @@ namespace Cognite.OpcUa.Types
             {
                 evt.AssetIds = new List<long> { assetId };
             }
-            ToCDFEventBase(extractor, evt, dataSetId);
+            ToCDFEventBase(client, evt, dataSetId);
             return evt;
         }
     }

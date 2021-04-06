@@ -183,6 +183,13 @@ namespace Cognite.OpcUa
             if (token.IsCancellationRequested) throw new TaskCanceledException();
             ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
         }
+        /// <summary>
+        /// Wait until the manual event is triggered, the token is canceled, or a timeout has occured.
+        /// </summary>
+        /// <param name="manual">Manual event</param>
+        /// <param name="delay">Maximum time to wait</param>
+        /// <param name="token">CancellationToken</param>
+        /// <returns>Task that terminates when the delay has passed, the event has triggered, or the token is cancelled.</returns>
         private static Task SafeWait(EventWaitHandle manual, TimeSpan delay, CancellationToken token)
         {
             return Task.Run(() => WaitHandle.WaitAny(new[] { manual, token.WaitHandle }, delay));
@@ -268,7 +275,11 @@ namespace Cognite.OpcUa
                 nextPushFlag = true;
             }
         }
-
+        /// <summary>
+        /// Store the current state to the state store.
+        /// </summary>
+        /// <param name="token"></param>
+        /// <returns></returns>
         public async Task StoreState(CancellationToken token)
         {
             await Task.WhenAll(

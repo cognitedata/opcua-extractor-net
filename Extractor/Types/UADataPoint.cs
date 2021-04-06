@@ -34,7 +34,7 @@ namespace Cognite.OpcUa.Types
         public string StringValue { get; }
         public bool IsString { get => !DoubleValue.HasValue; }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
-        /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
+        /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
         public UADataPoint(DateTime timestamp, string id, double value)
         {
@@ -43,7 +43,7 @@ namespace Cognite.OpcUa.Types
             DoubleValue = value;
         }
         /// <param name="timestamp">Timestamp in ms since epoch</param>
-        /// <param name="Id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
+        /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
         public UADataPoint(DateTime timestamp, string id, string value)
         {

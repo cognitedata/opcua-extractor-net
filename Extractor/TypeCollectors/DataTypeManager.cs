@@ -27,6 +27,11 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.TypeCollectors
 {
+    /// <summary>
+    /// Maps out the data type hierarchy to differentiate between numeric and string datatypes,
+    /// and fetch extra information used both for metadata, and for alternative ways to convert the
+    /// raw datavalues to destination datapoints.
+    /// </summary>
     public class DataTypeManager
     {
         private readonly ILogger log = Log.Logger.ForContext<DataTypeManager>();
@@ -44,6 +49,9 @@ namespace Cognite.OpcUa.TypeCollectors
             uaClient = client;
             this.config = config;
         }
+        /// <summary>
+        /// Configure the manager from the config object.
+        /// </summary>
         public void Configure()
         {
             if (config.CustomNumericTypes != null)
@@ -74,7 +82,13 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
             }
         }
-
+        /// <summary>
+        /// Return a list of NodeIds for each of the ancestors of <paramref name="id"/>
+        /// in reverse order, starting with the Id itself.
+        /// Requires the hierarchy to be populated.
+        /// </summary>
+        /// <param name="id">NodeId to find ancestors for</param>
+        /// <returns></returns>
         private IEnumerable<NodeId> GetAncestors(NodeId id)
         {
             yield return id;
@@ -84,7 +98,12 @@ namespace Cognite.OpcUa.TypeCollectors
                 id = parent;
             }
         }
-
+        /// <summary>
+        /// Create a new datatype from <paramref name="id"/>, using built in types and knowledge of the hierarchy
+        /// to configure it.
+        /// </summary>
+        /// <param name="id">Id to create datatype for</param>
+        /// <returns>UADataType for <paramref name="id"/></returns>
         private UADataType CreateDataType(NodeId id)
         {
             if (id.IsNullNodeId)
@@ -111,6 +130,11 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             return new UADataType(id);
         }
+        /// <summary>
+        /// Get or create a <see cref="UADataType"/> from <paramref name="id"/>.
+        /// </summary>
+        /// <param name="id">Id to create or retrieve a datatype for.</param>
+        /// <returns>UADataType for <paramref name="id"/></returns>
         public UADataType GetDataType(NodeId id)
         {
             if (id == null) id = NodeId.Null;
@@ -181,6 +205,11 @@ namespace Cognite.OpcUa.TypeCollectors
             }
         }
 
+        /// <summary>
+        /// Build a dictionary of extra metadata for the datatype of the given variable.
+        /// </summary>
+        /// <param name="variable">Variable to get metadata for</param>
+        /// <returns>Dictionary containing datatype-related metadata for the given variable.</returns>
         public Dictionary<string, string> GetAdditionalMetadata(UAVariable variable)
         {
             if (variable == null || variable.DataType == null) return null;
@@ -208,6 +237,10 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             return ret;
         }
+        /// <summary>
+        /// Retrieve metadata for the given list of datatypes.
+        /// </summary>
+        /// <param name="types">Ids of types to retrieve metadata for</param>
         public async Task GetDataTypeMetadataAsync(IEnumerable<NodeId> types, CancellationToken token)
         {
             var typeSet = new HashSet<NodeId>(types.Where(type =>
@@ -263,7 +296,10 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
             }
         }
-
+        /// <summary>
+        /// Map out the datatype hierarchy and build the tree internally,
+        /// necessary for automatic identification of datatypes later.
+        /// </summary>
         public async Task GetDataTypeStructureAsync(CancellationToken token)
         {
             if (!config.AutoIdentifyTypes) return;
@@ -288,6 +324,9 @@ namespace Cognite.OpcUa.TypeCollectors
                 false,
                 false), CancellationToken.None);
         }
+        /// <summary>
+        /// Reset the manager, GetDataTypeStructure and GetDataTypeMetadata will need to be re-run.
+        /// </summary>
         public void Reset()
         {
             parentIds.Clear();

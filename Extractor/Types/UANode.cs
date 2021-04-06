@@ -135,7 +135,14 @@ namespace Cognite.OpcUa.Types
             DisplayName = displayName;
             ParentId = parentId;
         }
-
+        /// <summary>
+        /// Build checksum based on current properties, used for efficiently checking for changes without
+        /// having to store the entire event.
+        /// </summary>
+        /// <param name="update">Configuration for which fields should be considered.</param>
+        /// <param name="dataTypeMetadata">True if the dataType should be considered</param>
+        /// <param name="nodeTypeMetadata">True if the nodeType should be considered.</param>
+        /// <returns>Integer checksum</returns>
         public int GetUpdateChecksum(TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             if (update == null || !update.AnyUpdate) return 0;
@@ -194,6 +201,12 @@ namespace Cognite.OpcUa.Types
             }
             return checksum;
         }
+        /// <summary>
+        /// Return a dictionary of metadata fields for this node.
+        /// </summary>
+        /// <param name="extractor">Active extractor, used for building extra metadata.
+        /// Can be null to not fetch any extra metadata at all.</param>
+        /// <returns>Created metadata dictionary.</returns>
         public Dictionary<string, string> BuildMetadata(UAExtractor extractor)
         {
             Dictionary<string, string> extras = extractor?.GetExtraMetadata(this);
@@ -224,6 +237,11 @@ namespace Cognite.OpcUa.Types
 
             return result;
         }
+        /// <summary>
+        /// Retrieve a full list of properties for this node,
+        /// recursively fetching properties of properties.
+        /// </summary>
+        /// <returns>Full list of properties</returns>
         public IEnumerable<UANode> GetAllProperties()
         {
             if (Properties == null) return Enumerable.Empty<UANode>();
@@ -235,6 +253,13 @@ namespace Cognite.OpcUa.Types
             }
             return result;
         }
+        /// <summary>
+        /// Convert to CDF Asset.
+        /// </summary>
+        /// <param name="extractor">Active extractor, used for fetching extra metadata</param>
+        /// <param name="dataSetId">Optional dataSetId</param>
+        /// <param name="metaMap">Map from metadata to asset attributes.</param>
+        /// <returns></returns>
         public AssetCreate ToCDFAsset(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
         {
             if (extractor == null) return null;
@@ -274,7 +299,10 @@ namespace Cognite.OpcUa.Types
 
             return writePoco;
         }
-
+        /// <summary>
+        /// Add property to list, creating the list if it does not exist.
+        /// </summary>
+        /// <param name="prop">Property to add</param>
         public void AddProperty(UANode prop)
         {
             if (Properties == null)
@@ -285,6 +313,11 @@ namespace Cognite.OpcUa.Types
             if (Properties.Any(oldProp => oldProp.Id == prop.Id)) return;
             Attributes.Properties.Add(prop);
         }
+        /// <summary>
+        /// Set the node type to one given by <paramref name="nodeId"/>
+        /// </summary>
+        /// <param name="client">Active UAClient</param>
+        /// <param name="nodeId">NodeId of node type to set.</param>
         public void SetNodeType(UAClient client, ExpandedNodeId nodeId)
         {
             if (nodeId == null || nodeId.IsNull) return;

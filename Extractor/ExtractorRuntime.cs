@@ -49,7 +49,6 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Start the extractor. This creates pushers and tests their connection
         /// </summary>
-        /// <param name="source">CancellationTokenSource used to create tokens and terminate the run-task on failure</param>
         public async Task Run(CancellationToken token)
         {
             if (token == null) throw new ArgumentNullException(nameof(token));

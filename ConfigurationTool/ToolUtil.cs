@@ -140,7 +140,20 @@ namespace Cognite.OpcUa.Config
                 }
             };
         }
-        public static IEnumerable<UADataPoint> ToDataPoint(DataValue value, VariableExtractionState variable, string uniqueId, UAClient client)
+        /// <summary>
+        /// Transforms a data value into a list of <see cref="UADataPoint"/>,
+        /// given a <see cref="VariableExtractionState"/> representing the variable being extracted.
+        /// The number of datapoints is given by the smallest of the dimension of <paramref name="value"/>, and
+        /// the array dimensions of <paramref name="variable"/>.
+        /// </summary>
+        /// <param name="value">Value to convert</param>
+        /// <param name="variable">Variable that generated the data value</param>
+        /// <param name="client">IUAClientAccess with an active connection to the server, for conversions</param>
+        /// <returns>A collection of data points</returns>
+        public static IEnumerable<UADataPoint> ToDataPoint(
+            DataValue value,
+            VariableExtractionState variable,
+            IUAClientAccess client)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (variable == null || value == null) return Array.Empty<UADataPoint>();
@@ -149,7 +162,7 @@ namespace Cognite.OpcUa.Config
                 var ret = new List<UADataPoint>();
                 if (!(value.Value is Array))
                 {
-                    log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", uniqueId, value.Value.ToString());
+                    log.Debug("Bad array datapoint: {BadPointName} {BadPointValue}", variable.Id, value.Value.ToString());
                     return Enumerable.Empty<UADataPoint>();
                 }
                 var values = (Array)value.Value;
@@ -158,11 +171,11 @@ namespace Cognite.OpcUa.Config
                     var dp = variable.DataType.IsString
                         ? new UADataPoint(
                             value.SourceTimestamp,
-                            $"{uniqueId}[{i}]",
+                            $"{variable.Id}[{i}]",
                             client.ConvertToString(values.GetValue(i)))
                         : new UADataPoint(
                             value.SourceTimestamp,
-                            $"{uniqueId}[{i}]",
+                            $"{variable.Id}[{i}]",
                             UAClient.ConvertToDouble(values.GetValue(i)));
                     ret.Add(dp);
                 }
@@ -171,11 +184,11 @@ namespace Cognite.OpcUa.Config
             var sdp = variable.DataType.IsString
                 ? new UADataPoint(
                     value.SourceTimestamp,
-                    uniqueId,
+                    variable.Id,
                     client.ConvertToString(value.Value))
                 : new UADataPoint(
                     value.SourceTimestamp,
-                    uniqueId,
+                    variable.Id,
                     UAClient.ConvertToDouble(value.Value));
             return new[] { sdp };
         }
@@ -195,18 +208,17 @@ namespace Cognite.OpcUa.Config
             {
                 try
                 {
-                    string uniqueId = client.GetUniqueId(item.ResolvedNodeId);
                     var state = states[item.ResolvedNodeId];
                     foreach (var datapoint in item.DequeueValues())
                     {
                         if (StatusCode.IsNotGood(datapoint.StatusCode))
                         {
-                            log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
+                            log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", state.Id,
                                 datapoint.SourceTimestamp);
                             continue;
                         }
 
-                        var buffDps = ToDataPoint(datapoint, state, uniqueId, client);
+                        var buffDps = ToDataPoint(datapoint, state, client);
                         state.UpdateFromStream(buffDps);
                         foreach (var buffDp in buffDps)
                         {
@@ -223,8 +235,15 @@ namespace Cognite.OpcUa.Config
 
             };
         }
-
-        public static UADataPoint[] ReadResultToDataPoints(IEncodeable rawData, VariableExtractionState state, UAClient client)
+        /// <summary>
+        /// Transform the result of a history read into an array of <see cref="UADataPoint"/>,
+        /// given a <see cref="VariableExtractionState"/> representing the source variable.
+        /// </summary>
+        /// <param name="rawData">Raw data to be converted</param>
+        /// <param name="state">State representing the source variable</param>
+        /// <param name="client">Access to a connection to the OPC-UA server</param>
+        /// <returns>Array of <see cref="UADataPoint"/> representing the DataValues in the IEncodable</returns>
+        public static UADataPoint[] ReadResultToDataPoints(IEncodeable rawData, VariableExtractionState state, IUAClientAccess client)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (rawData == null || state == null) return Array.Empty<UADataPoint>();
@@ -235,20 +254,18 @@ namespace Cognite.OpcUa.Config
             }
 
             if (data.DataValues == null) return Array.Empty<UADataPoint>();
-            string uniqueId = state.Id;
-
             var result = new List<UADataPoint>();
 
             foreach (var datapoint in data.DataValues)
             {
                 if (StatusCode.IsNotGood(datapoint.StatusCode))
                 {
-                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", uniqueId,
+                    log.Debug("Bad history datapoint: {BadDatapointExternalId} {SourceTimestamp}", state.Id,
                         datapoint.SourceTimestamp);
                     continue;
                 }
 
-                var buffDps = ToDataPoint(datapoint, state, uniqueId, client);
+                var buffDps = ToDataPoint(datapoint, state, client);
                 foreach (var buffDp in buffDps)
                 {
                     log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
@@ -289,14 +306,28 @@ namespace Cognite.OpcUa.Config
 
             return configText;
         }
-        public static bool NodeNameContains(UANode node, string str)
+        /// <summary>
+        /// Method to check if a given UANode starts with the given string,
+        /// this checks both a potential string identifier on the Id, and the DisplayName.
+        /// </summary>
+        /// <param name="node">Node to test</param>
+        /// <param name="str">String to check</param>
+        /// <returns>True if the node name or identifier starts with the given string.</returns>
+        public static bool NodeNameStartsWith(UANode node, string str)
         {
             if (node == null) return false;
             string identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
             return identifier != null && identifier.StartsWith(str, StringComparison.InvariantCultureIgnoreCase)
                 || node.DisplayName != null && node.DisplayName.StartsWith(str, StringComparison.InvariantCultureIgnoreCase);
         }
-        public static bool NodeNameStartsWith(UANode node, string str)
+        /// <summary>
+        /// Method to check if a given UANode contains the given string,
+        /// this checks both a potential string identifier on the Id, and the DisplayName.
+        /// </summary>
+        /// <param name="node">Node to test</param>
+        /// <param name="str">String to check</param>
+        /// <returns>True if the node name or identifier contains the given string.</returns>
+        public static bool NodeNameContains(UANode node, string str)
         {
             if (node == null) return false;
             string identifier = node.Id.IdType == IdType.String ? (string)node.Id.Identifier : null;
@@ -304,6 +335,12 @@ namespace Cognite.OpcUa.Config
                         || node.DisplayName != null && node.DisplayName.Contains(str, StringComparison.InvariantCultureIgnoreCase);
         }
     }
+    /// <summary>
+    /// YamlDotNet type inspector, used to filter out default values from the generated config.
+    /// Instead of serializing the entire config file, which ends up being complicated and difficult to read,
+    /// this just serializes the properties that do not simply equal the default values.
+    /// This does sometimes produce empty arrays, but we can strip those later.
+    /// </summary>
     public class DefaultFilterTypeInspector : TypeInspectorSkeleton
     {
         private readonly ITypeInspector innerTypeDescriptor;

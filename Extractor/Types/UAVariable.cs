@@ -178,6 +178,14 @@ namespace Cognite.OpcUa.Types
             ArrayChildren = children;
             return children;
         }
+        /// <summary>
+        /// Set special timeseries attributes from metadata, as given by <paramref name="metaMap"/>.
+        /// </summary>
+        /// <param name="metaMap">Configured mapping from property name to one of the special timeseries attributes:
+        /// description, name, unit or parentId</param>
+        /// <param name="writePoco">TimeSeries to write to</param>
+        /// <param name="parentIdHandler">Method called for each string mapped to parentId, should set
+        /// parentId as dictated by external context.</param>
         private void HandleMetaMap(Dictionary<string, string> metaMap, TimeSeriesCreate writePoco, Action<string> parentIdHandler)
         {
             if (Properties == null || !Properties.Any() || metaMap == null || !metaMap.Any()) return;
@@ -199,7 +207,13 @@ namespace Cognite.OpcUa.Types
                 }
             }
         }
-
+        /// <summary>
+        /// Create a stateless timeseries, setting the AssetExternalId property, from this variable.
+        /// </summary>
+        /// <param name="extractor">Active extractor, used for metadata.</param>
+        /// <param name="dataSetId">Optional dataSetId</param>
+        /// <param name="metaMap">Configured mapping from property name to timeseries attribute</param>
+        /// <returns>Stateless timeseries to create or null.</returns>
         public StatelessTimeSeriesCreate ToStatelessTimeSeries(
             UAExtractor extractor,
             long? dataSetId,
@@ -225,6 +239,15 @@ namespace Cognite.OpcUa.Types
 
             return writePoco;
         }
+        /// <summary>
+        /// Create a timeseries object, setting assetId based from <paramref name="nodeToAssetIds"/>.
+        /// </summary>
+        /// <param name="extractor">Active extractor, used for metadata.</param>
+        /// <param name="dataSetId">Optional dataSetId</param>
+        /// <param name="nodeToAssetIds">Mapping from ids to assets, used for creating AssetId</param>
+        /// <param name="metaMap">Configured mapping from property name to timeseries attribute</param>
+        /// <param name="minimal">True to only add minimal metadata.</param>
+        /// <returns>Timeseries to create or null</returns>
         public TimeSeriesCreate ToTimeseries(
             UAExtractor extractor,
             long? dataSetId,

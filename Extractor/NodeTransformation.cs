@@ -1,13 +1,31 @@
-﻿using Cognite.OpcUa.Types;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2020 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
-using System;
-using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Cognite.OpcUa
 {
+    /// <summary>
+    /// Class used to apply a complex filter to nodes.
+    /// </summary>
     public class NodeFilter
     {
         private Regex Name { get; }
@@ -34,12 +52,25 @@ namespace Cognite.OpcUa
                 Parent = new NodeFilter(filter.Parent);
             }
         }
+
+        /// <summary>
+        /// Return a representation if the identifier of <paramref name="id"/>, 
+        /// on the form i=123, or s=string, etc.
+        /// </summary>
+        /// <param name="id">Identifier to get representation of</param>
+        /// <returns>String representation of identifier of <paramref name="id"/></returns>
         private string GetIdString(NodeId id)
         {
             var builder = new StringBuilder();
             NodeId.Format(builder, id.Identifier, id.IdType, 0);
             return builder.ToString();
         }
+
+        /// <summary>
+        /// Create regex from configured string.
+        /// </summary>
+        /// <param name="raw">Raw string to create regex for.</param>
+        /// <returns>Created regex.</returns>
         private Regex CreateRegex(string raw)
         {
             if (string.IsNullOrEmpty(raw)) return null;
@@ -47,12 +78,30 @@ namespace Cognite.OpcUa
             return new Regex(raw, RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.CultureInvariant);
         }
 
+        /// <summary>
+        /// Test for match using only basic properties available in when reading from the server.
+        /// Will always return false if there are filters on not yet available fields.
+        /// </summary>
+        /// <param name="name">DisplayName</param>
+        /// <param name="id">Raw NodeId</param>
+        /// <param name="typeDefinition">TypeDefinition Id</param>
+        /// <param name="namespaces">Source namespacetable</param>
+        /// <param name="nc">NodeClass</param>
+        /// <returns>True if match</returns>
         public bool IsBasicMatch(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces, NodeClass nc)
         {
             if (Description != null || IsArray != null || Parent != null) return false;
             return MatchBasic(name, id, typeDefinition, namespaces, nc);
         }
-
+        /// <summary>
+        /// Test for match using only basic properties available in when reading from the server.
+        /// </summary>
+        /// <param name="name">DisplayName</param>
+        /// <param name="id">Raw NodeId</param>
+        /// <param name="typeDefinition">TypeDefinition Id</param>
+        /// <param name="namespaces">Source namespacetable</param>
+        /// <param name="nc">NodeClass</param>
+        /// <returns>True if match</returns>
         private bool MatchBasic(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces, NodeClass nc)
         {
             if (Name != null && (string.IsNullOrEmpty(name) || !Name.IsMatch(name))) return false;
@@ -80,7 +129,12 @@ namespace Cognite.OpcUa
             }
             return true;
         }
-
+        /// <summary>
+        /// Return true if the given node matches the filter.
+        /// </summary>
+        /// <param name="node">Node to test</param>
+        /// <param name="ns">Currently active namespace table</param>
+        /// <returns>True if match</returns>
         public bool IsMatch(UANode node, NamespaceTable ns)
         {
             if (!MatchBasic(node.DisplayName, node.Id, node.NodeType?.Id, ns, node.NodeClass)) return false;
@@ -89,6 +143,11 @@ namespace Cognite.OpcUa
             if (Parent != null && (node.Parent == null || !Parent.IsMatch(node.Parent, ns))) return false;
             return true;
         }
+        /// <summary>
+        /// Create string representation, for logging.
+        /// </summary>
+        /// <param name="builder">StringBuilder to write to</param>
+        /// <param name="idx">Level of nesting, for clean indentation.</param>
         public void Format(StringBuilder builder, int idx)
         {
             if (Name != null)
@@ -128,6 +187,7 @@ namespace Cognite.OpcUa
                 Parent.Format(builder, idx + 1);
             }
         }
+
         public override string ToString()
         {
             var builder = new StringBuilder();
@@ -136,6 +196,9 @@ namespace Cognite.OpcUa
         }
     }
 
+    /// <summary>
+    /// Describes a transformation to the source hierarchy. Consists of a filter and a transformation type.
+    /// </summary>
     public class NodeTransformation
     {
         public NodeFilter Filter { get; }
@@ -148,6 +211,11 @@ namespace Cognite.OpcUa
             Type = raw.Type;
             this.index = index;
         }
+        /// <summary>
+        /// Modify the given node if it passes the filter.
+        /// </summary>
+        /// <param name="node">Node to test</param>
+        /// <param name="ns">Active NamespaceTable</param>
         public void ApplyTransformation(UANode node, NamespaceTable ns)
         {
             if (node.Parent != null)

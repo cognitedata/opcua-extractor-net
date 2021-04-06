@@ -40,6 +40,12 @@ namespace Cognite.OpcUa.TypeCollectors
             if (client == null) throw new ArgumentNullException(nameof(client));
             uaClient = client;
         }
+        /// <summary>
+        /// Get or create UANodeType for <paramref name="id"/>.
+        /// </summary>
+        /// <param name="id">TypeDefinitionId to use</param>
+        /// <param name="isVariableType">True if this should be a variableType</param>
+        /// <returns>Unique UANodeType given by <paramref name="id"/></returns>
         public UANodeType GetObjectType(NodeId id, bool isVariableType)
         {
             if (id == null) id = NodeId.Null;
@@ -48,6 +54,9 @@ namespace Cognite.OpcUa.TypeCollectors
             mappedTypes[id] = type;
             return type;
         }
+        /// <summary>
+        /// Fetch the names and other metadata for all constructed node types.
+        /// </summary>
         public async Task GetObjectTypeMetadataAsync(CancellationToken token)
         {
             var toRead = mappedTypes.Values.Where(type => !type.Id.IsNullNodeId && type.Name == null).ToList();
