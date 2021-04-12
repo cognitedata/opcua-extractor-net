@@ -7,6 +7,13 @@ using System.Linq;
 
 namespace Server
 {
+    /// <summary>
+    /// Node manager containing necessary code for services in the extractor.
+    /// CustomNodeManager2 is a built in class that contains a lot of default code for an in-memory
+    /// OPC-UA server. It handles most of the use cases for the test server, the exceptions are:
+    /// 
+    /// Generating new nodes, History, and setting up the node hierarchy.
+    /// </summary>
     class TestNodeManager : CustomNodeManager2
     {
         private ApplicationConfiguration config;
@@ -325,7 +332,10 @@ namespace Server
         }
 
         #region address_space
-
+        /// <summary>
+        /// This method calls the various methods to create the test address spaces.
+        /// </summary>
+        /// <param name="externalReferences"></param>
         public override void CreateAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             log.Information("Create address space");
@@ -786,6 +796,7 @@ namespace Server
                 Ids.Audit.ExcludeObj = exclude.NodeId;
             }
         }
+        
         public void CreateWrongAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)
@@ -823,6 +834,7 @@ namespace Server
             }
         }
 
+        // Utility methods to create nodes
         private static void AddNodeToExt(NodeState state, NodeId id, NodeId typeId,
             IDictionary<NodeId, IList<IReference>> externalReferences)
         {

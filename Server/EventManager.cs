@@ -6,6 +6,12 @@ using System.Linq;
 
 namespace Server
 {
+    /// <summary>
+    /// Creating events in the SDK can be a bit of a pain, the purpose of these classes is to
+    /// create wrappers for building events easily, so that we don't have to repeat ourselves that much.
+    /// The EventManager is responsible for creating events, and managing the event type, so that the
+    /// events have access to information they need.
+    /// </summary>
     public class TestEventManager
     {
         protected ServerSystemContext Context { get; }
@@ -35,7 +41,11 @@ namespace Server
             return evt;
         }
     }
-
+    /// <summary>
+    /// An implementation of events using reflection. Fields are generated from public properties
+    /// which extends BaseInstanceState, then the name is just generated directly from those.
+    /// This is convenient, as it makes creating new test event types much easier.
+    /// </summary>
     public abstract class ManagedEvent : BaseEventState
     {
         private TestEventManager manager;
@@ -118,6 +128,10 @@ namespace Server
             return base.FindChild(context, browseName, createOrReplace, replacement);
         }
     }
+
+    /// <summary>
+    /// Event with a few basic properties
+    /// </summary>
     public class PropertyEvent : ManagedEvent
     {
         public PropertyEvent(NodeState parent, TestEventManager manager) : base(parent, manager)
@@ -178,17 +192,27 @@ namespace Server
             }
         }
         private PropertyState<string> subType;
-
-
     }
+    
+    /// <summary>
+    /// Plain event type
+    /// </summary>
     public class BasicEvent1 : ManagedEvent
     {
         public BasicEvent1(NodeState parent, TestEventManager manager) : base(parent, manager) { }
     }
+    
+    /// <summary>
+    /// Alternative plain event type.
+    /// </summary>
     public class BasicEvent2 : ManagedEvent
     {
         public BasicEvent2(NodeState parent, TestEventManager manager) : base(parent, manager) { }
     }
+    
+    /// <summary>
+    /// Event with a custom "TypeProp" field, used for testing mapping in the extractor.
+    /// </summary>
     public class CustomEvent : ManagedEvent
     {
         public CustomEvent(NodeState parent, TestEventManager manager) : base(parent, manager)
@@ -217,6 +241,10 @@ namespace Server
         private PropertyState<string> typeProp;
     }
 
+    /// <summary>
+    /// "Deep" Event in two ways, it is a subtype of the PropertyEvent, and it contains an object property with its own
+    /// children, so that we get deep properties.
+    /// </summary>
     public class DeepEvent : PropertyEvent
     {
         public BaseObjectState DeepObj

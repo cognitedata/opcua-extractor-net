@@ -14,7 +14,11 @@ namespace Server
         public int MaxSubscriptions { get; set; }
         public int MaxHistoryNodes { get; set; }
     }
-
+    /// <summary>
+    /// The master node manager is called from the server with most "regular" service calls.
+    /// It can be extended to override some behavior. Here the reason for overriding is to mock
+    /// bad or irregular behavior for some services, for testing.
+    /// </summary>
     public class DebugMasterNodeManager : MasterNodeManager
     {
         private ServerIssueConfig issues;

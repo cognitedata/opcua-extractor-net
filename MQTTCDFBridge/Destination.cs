@@ -19,6 +19,9 @@ using System.Threading.Tasks;
 
 namespace Cognite.Bridge
 {
+    /// <summary>
+    /// Contains methods for pushing contents of MQTT payload to CDF.
+    /// </summary>
     public class Destination
     {
         private readonly IServiceProvider provider;
@@ -38,6 +41,13 @@ namespace Cognite.Bridge
             destination = provider.GetRequiredService<CogniteDestination>();
         }
 
+        /// <summary>
+        /// Create an asset update from a new asset and an old.
+        /// This is conservative, meaning that if new fields are null, they will be ignored and the old will be kept.
+        /// </summary>
+        /// <param name="update">New asset</param>
+        /// <param name="old">Old asset</param>
+        /// <returns>Asset update or null if no updates are necessary</returns>
         private static AssetUpdateItem GetAssetUpdate(AssetCreate update, Asset old)
         {
             if (update == null || old == null) return null;
@@ -59,6 +69,13 @@ namespace Cognite.Bridge
             return new AssetUpdateItem(update.ExternalId) { Update = upd };
         }
 
+        /// <summary>
+        /// Create an timeseries update from a new timeseries and an old.
+        /// This is conservative, meaning that if new fields are null, they will be ignored and the old will be kept.
+        /// </summary>
+        /// <param name="update">New timeseries</param>
+        /// <param name="old">Old timeseries</param>
+        /// <returns>Asset update or null if no updates are necessary</returns>
         private static TimeSeriesUpdateItem GetTimeSeriesUpdate(StatelessTimeSeriesCreate update, TimeSeries old)
         {
             if (update == null || old == null) return null;
@@ -84,7 +101,8 @@ namespace Cognite.Bridge
         }
 
         /// <summary>
-        /// Retrieve assets from CDF, push any that do not exist.
+        /// Retrieve assets from CDF, push any that do not exist. If updates are enabled,
+        /// conservatively update existing assets with any changes.
         /// </summary>
         /// <param name="msg">Raw message from MQTT</param>
         /// <returns>True on success</returns>
@@ -150,6 +168,11 @@ namespace Cognite.Bridge
 
             return true;
         }
+        /// <summary>
+        /// Retrieve a list of assets by externalId.
+        /// </summary>
+        /// <param name="ids">Asset externalIds to retrieve</param>
+        /// <returns>True on success</returns>
         private async Task<bool> RetrieveMissingAssets(IEnumerable<string> ids, CancellationToken token)
         {
             if (!ids.Any()) return true;
@@ -169,6 +192,11 @@ namespace Cognite.Bridge
             return true;
         }
 
+        /// <summary>
+        /// Retrieve a list of timeseries by externalId.
+        /// </summary>
+        /// <param name="ids">Timeseries externalIds to retrieve</param>
+        /// <returns>True on success</returns>
         private async Task<bool> RetrieveMissingTimeSeries(IEnumerable<string> ids, CancellationToken token)
         {
             if (!ids.Any()) return true;
@@ -284,6 +312,7 @@ namespace Cognite.Bridge
 
             return true;
         }
+
         /// <summary>
         /// Find unknown timeseries, then push datapoints with matching, existing, timeseries to CDF.
         /// </summary>
@@ -336,6 +365,7 @@ namespace Cognite.Bridge
 
             return true;
         }
+
         /// <summary>
         /// Find unknown assets, then push events with any assetIds remaining (or none to begin with) to CDF.
         /// </summary>
@@ -384,6 +414,7 @@ namespace Cognite.Bridge
 
             return true;
         }
+
         /// <summary>
         /// Try to push relationships to CDF, then remove duplicates. 
         /// </summary>
@@ -419,6 +450,10 @@ namespace Cognite.Bridge
             return true;
         }
 
+        /// <summary>
+        /// Push chunk of relationships to CDF, retries on duplicates.
+        /// </summary>
+        /// <param name="relationships">Relationships to create</param>
         private async Task PushRelationshipsChunk(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
             try
@@ -449,6 +484,13 @@ namespace Cognite.Bridge
             }
         }
 
+        /// <summary>
+        /// Push contents of message to raw, the message should contain both the Raw database and table.
+        /// If update is enabled, existing rows are updated.
+        /// </summary>
+        /// <param name="msg"></param>
+        /// <param name="token"></param>
+        /// <returns></returns>
         public async Task<bool> PushRaw(MqttApplicationMessage msg, CancellationToken token)
         {
             if (msg == null) throw new ArgumentNullException(nameof(msg));
@@ -484,6 +526,12 @@ namespace Cognite.Bridge
             return true;
         }
 
+        /// <summary>
+        /// Method to create or update a collection of raw rows.
+        /// </summary>
+        /// <param name="dbName">Raw database</param>
+        /// <param name="tableName">Raw table</param>
+        /// <param name="toUpsert">Rows to update, by key</param>
         private async Task UpsertRawRows(
             string dbName,
             string tableName,
@@ -525,8 +573,10 @@ namespace Cognite.Bridge
 
             await destination.InsertRawRowsAsync(dbName, tableName, toUpsert, token);
         }
-
-        // Adapted from https://stackoverflow.com/a/59574030/9946909
+        /// <summary>
+        /// Adapted from https://stackoverflow.com/a/59574030/9946909. 
+        /// Merge two JsonElements, producing a json encoded string with the merged contents.
+        /// </summary>
         private static string Merge(JsonElement r1, JsonElement r2)
         {
             var outputBuffer = new ArrayBufferWriter<byte>();
@@ -550,6 +600,12 @@ namespace Cognite.Bridge
             return Encoding.UTF8.GetString(outputBuffer.WrittenSpan);
         }
 
+        /// <summary>
+        /// Merge two json objects, write the result to <paramref name="jsonWriter"/>.
+        /// </summary>
+        /// <param name="jsonWriter">Output writer</param>
+        /// <param name="root1">First object</param>
+        /// <param name="root2">Second object</param>
         private static void MergeObjects(Utf8JsonWriter jsonWriter, JsonElement root1, JsonElement root2)
         {
             jsonWriter.WriteStartObject();
@@ -597,6 +653,12 @@ namespace Cognite.Bridge
             jsonWriter.WriteEndObject();
         }
 
+        /// <summary>
+        /// Merge two JSON arrays, write the result to <paramref name="jsonWriter"/>.
+        /// </summary>
+        /// <param name="jsonWriter">Output writer</param>
+        /// <param name="root1">First array</param>
+        /// <param name="root2">Second array</param>
         private static void MergeArrays(Utf8JsonWriter jsonWriter, JsonElement root1, JsonElement root2)
         {
             jsonWriter.WriteStartArray();
