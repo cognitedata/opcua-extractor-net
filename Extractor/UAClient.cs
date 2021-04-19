@@ -1277,8 +1277,11 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Return systemContext. Can be used by SDK-tools for converting events.
         /// </summary>
-        /// <returns>ISystemContext for given session, or null if no session exists</returns>
         public ISystemContext SystemContext => Session?.SystemContext;
+        /// <summary>
+        /// Return MessageContext, used for serialization
+        /// </summary>
+        public ServiceMessageContext MessageContext => Session?.MessageContext;
         /// <summary>
         /// Fetch event fields from the server and store them on the client
         /// </summary>
@@ -1567,13 +1570,25 @@ namespace Cognite.OpcUa
             }
             if (typeInfo != null && ShouldUseJson(value))
             {
+                Console.WriteLine("Trying to use json on type " + typeInfo + ", " + typeInfo.ValueRank);
                 try
                 {
-                    using var encoder = new JsonEncoder(Session.MessageContext, false);
+                    bool topLevelIsArray = typeInfo.ValueRank >= ValueRanks.OneDimension;
+
+                    var encoder = new JsonEncoder(Session.MessageContext, false, null, topLevelIsArray);
                     encoder.WriteVariantContents(value, typeInfo);
-                    return encoder.CloseAndReturnText();
+                    var result = encoder.CloseAndReturnText();
+                    if (topLevelIsArray)
+                    {
+                        return result[1..^1];
+                    }
+
+                    return result;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    log.Warning("Failed to serialize built in type: {err}", ex.Message);
+                }
             }
             if (typeof(IEnumerable).IsAssignableFrom(value.GetType()))
             {

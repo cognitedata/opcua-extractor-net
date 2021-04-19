@@ -993,12 +993,20 @@ namespace Test.Unit
             Assert.Equal(readValueIdStr, tester.Client.ConvertToString(new Variant(readValueId)));
             var ids = new ReadValueIdCollection { readValueId, readValueId };
             // Results in Variant(ExtensionObject[])
-            Assert.Equal($"{{{readValueIdStr},{readValueIdStr}}}", tester.Client.ConvertToString(new Variant(ids)));
+            Assert.Equal($"[{readValueIdStr},{readValueIdStr}]", tester.Client.ConvertToString(new Variant(ids)));
             var ids2 = new[] { readValueId, readValueId };
             // Results in [Variant(ExtensionObject), Variant(ExtensionObject)], so it ends up using our system
-            // This is best, the other is at least better than nothing, either way the most important thing is to get something meaningful
-            // into CDF
             Assert.Equal($"[{readValueIdStr}, {readValueIdStr}]", tester.Client.ConvertToString(new Variant(ids2)));
+            // Simple matrix
+#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
+            var m1 = new Matrix(new int[3, 3] { { 1, 2, 3 }, { 4, 5, 6 }, { 7, 8, 9 } }, BuiltInType.Int32);
+            Assert.Equal("[[1,2,3],[4,5,6],[7,8,9]]", tester.Client.ConvertToString(new Variant(m1)));
+            // Complex matrix
+            var m2 = new Matrix(new Variant[2, 2] {
+                { new Variant(readValueId), new Variant(readValueId) },
+                { new Variant(readValueId), new Variant(readValueId) } }, BuiltInType.Variant);
+            Assert.Equal($"[[{readValueIdStr},{readValueIdStr}],[{readValueIdStr},{readValueIdStr}]]", tester.Client.ConvertToString(new Variant(m2)));
+#pragma warning restore CA1814 // Prefer jagged arrays over multidimensional
         }
         [Fact]
         public void TestGetUniqueId()

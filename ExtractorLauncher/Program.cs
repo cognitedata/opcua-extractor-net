@@ -136,7 +136,11 @@ namespace Cognite.OpcUa
             {
                 if (config.Cognite != null)
                 {
+<<<<<<< HEAD
                     services.AddCogniteClient("OPC-UA Extractor", $"CogniteOPCUAExtractor/{Version.GetVersion()}", true, true, true);
+=======
+                    services.AddCogniteClient("OPC-UA Extractor", null, true, true, true);
+>>>>>>> 9b3a6b0 (Temp commit)
                 }
                 services.AddStateStore();
             }
