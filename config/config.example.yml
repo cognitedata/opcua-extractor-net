@@ -380,6 +380,15 @@ metrics:
           job:
           username:
           password: 
+    # Configuration to treat OPC-UA nodes as metrics.
+    # Values will be mapped to opcua_nodes_NODE-DISPLAY-NAME in prometheus.
+    nodes:
+        # Map relevant static diagnostics contained in ServerDiagnosticsSummary.
+        server-metrics: false
+        # Map other nodes, given by a list of ProtoNodeIds.
+        other-metrics:
+            # - namespace-uri:
+            #   node-id:
 
 extraction:
     # Global prefix for externalId towards pushers. Should be unique to prevent name conflicts in the push destinations.

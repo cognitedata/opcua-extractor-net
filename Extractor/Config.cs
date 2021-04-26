@@ -259,7 +259,7 @@ namespace Cognite.OpcUa
     {
         public UAClientConfig Source { get; set; }
         public LoggerConfig Logger { get; set; }
-        public MetricsConfig Metrics { get; set; }
+        public UAMetricsConfig Metrics { get; set; }
         public CognitePusherConfig Cognite { get; set; }
         public MqttPusherConfig Mqtt { get; set; }
         public InfluxPusherConfig Influx { get; set; }
@@ -272,7 +272,7 @@ namespace Cognite.OpcUa
         {
             if (Source == null) Source = new UAClientConfig();
             if (Logger == null) Logger = new LoggerConfig();
-            if (Metrics == null) Metrics = new MetricsConfig();
+            if (Metrics == null) Metrics = new UAMetricsConfig();
             if (Cognite != null)
             {
                 if (Cognite.CdfChunking == null) Cognite.CdfChunking = new ChunkingConfig();
@@ -368,5 +368,15 @@ namespace Cognite.OpcUa
     {
         public TransformationType Type { get; set; }
         public RawNodeFilter Filter { get; set; }
+    }
+
+    public class UAMetricsConfig : MetricsConfig
+    {
+        public NodeMetricsConfig Nodes { get; set; }
+    }
+    public class NodeMetricsConfig
+    {
+        public bool ServerMetrics { get; set; }
+        public IEnumerable<ProtoNodeId> OtherMetrics { get; set; }
     }
 }

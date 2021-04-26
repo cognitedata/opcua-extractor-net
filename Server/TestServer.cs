@@ -2,6 +2,7 @@
 using Opc.Ua.Server;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Server
 {
@@ -128,6 +129,10 @@ namespace Server
         public void WipeEventHistory(NodeId id = null)
         {
             custom.WipeEventHistory(id);
+        }
+        public void SetDiagnosticsEnabled(bool value)
+        {
+            ServerInternal.NodeManager.DiagnosticsNodeManager.SetDiagnosticsEnabled(ServerInternal.DefaultSystemContext, value);
         }
     }
 }
