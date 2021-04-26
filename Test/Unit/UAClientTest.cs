@@ -933,5 +933,58 @@ namespace Test.Unit
 
         #endregion
 
+        #region metrics
+        [Fact]
+        public async Task TestServerMetrics()
+        {
+            // I wanted better tests here, but this is a nightmare to hack, so this will do. It verifies that
+            // if diagnostics are enabled we do get some metric values.
+            CommonTestUtils.ResetMetricValues("opcua_node_CurrentSessionCount");
+            tester.Config.Metrics.Nodes = new NodeMetricsConfig
+            {
+                ServerMetrics = true
+            };
+            var mgr = new NodeMetricsManager(tester.Client, tester.Config);
+            await mgr.StartNodeMetrics(tester.Source.Token);
+
+            tester.Server.SetDiagnosticsEnabled(true);
+            
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_CurrentSessionCount", 1), 5);
+            tester.Client.RemoveSubscription("NodeMetrics");
+            tester.Server.SetDiagnosticsEnabled(false);
+            tester.Config.Metrics.Nodes = null;
+        }
+        [Fact]
+        public async Task TestCustomNodeMetrics()
+        {
+            CommonTestUtils.ResetMetricValues("opcua_node_DoubleVar1", "opcua_node_DoubleVar2");
+            var ids = tester.Server.Ids.Base;
+            tester.Config.Metrics.Nodes = new NodeMetricsConfig
+            {
+                OtherMetrics = new List<ProtoNodeId>
+                {
+                    ids.DoubleVar1.ToProtoNodeId(tester.Client),
+                    ids.DoubleVar2.ToProtoNodeId(tester.Client)
+                }
+            };
+            tester.Server.UpdateNode(ids.DoubleVar1, 0);
+            tester.Server.UpdateNode(ids.DoubleVar2, 0);
+            var mgr = new NodeMetricsManager(tester.Client, tester.Config);
+            await mgr.StartNodeMetrics(tester.Source.Token);
+
+            tester.Server.UpdateNode(ids.DoubleVar1, 15);
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_Variable_1", 15), 5);
+
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_node_Variable_2", 0));
+
+            tester.Server.UpdateNode(ids.DoubleVar2, 25);
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_Variable_2", 25), 5);
+
+            tester.Server.UpdateNode(ids.DoubleVar1, 0);
+            tester.Server.UpdateNode(ids.DoubleVar2, 0);
+            tester.Client.RemoveSubscription("NodeMetrics");
+            tester.Config.Metrics.Nodes = null;
+        }
+        #endregion
     }
 }
