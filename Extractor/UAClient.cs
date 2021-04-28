@@ -86,6 +86,8 @@ namespace Cognite.OpcUa
         private static readonly Counter browseFailures = Metrics
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
+        private readonly NodeMetricsManager metricsManager;
+
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
 
 
@@ -100,6 +102,10 @@ namespace Cognite.OpcUa
             this.config = config;
             DataTypeManager = new DataTypeManager(this, config.Extraction.DataTypes);
             ObjectTypeManager = new NodeTypeManager(this);
+            if (config.Metrics.Nodes != null)
+            {
+                metricsManager = new NodeMetricsManager(this, config);
+            }
         }
         #region Session management
         /// <summary>
@@ -109,6 +115,7 @@ namespace Cognite.OpcUa
         {
             liveToken = token;
             await StartSession();
+            await StartNodeMetrics();
         }
         /// <summary>
         /// Close the Session, cleaning up any client data on the server
@@ -243,7 +250,6 @@ namespace Cognite.OpcUa
             connects.Inc();
             connected.Set(1);
             reconnectHandler = null;
-
         }
 
         /// <summary>
@@ -312,6 +318,15 @@ namespace Cognite.OpcUa
         public async Task WaitForOperations()
         {
             while (pendingOperations > 0) await Task.Delay(100);
+        }
+
+        /// <summary>
+        /// Start collecting metrics from configured nodes, if enabled.
+        /// </summary>
+        private async Task StartNodeMetrics()
+        {
+            if (metricsManager == null) return;
+            await metricsManager.StartNodeMetrics(liveToken);
         }
         #endregion
 
@@ -991,7 +1006,7 @@ namespace Cognite.OpcUa
         /// <param name="handler">Callback for the items</param>
         /// <param name="builder">Method to build monitoredItems from states</param>
         /// <returns>Constructed subscription</returns>
-        private Subscription AddSubscriptions(
+        public Subscription AddSubscriptions(
             IEnumerable<UAHistoryExtractionState> nodeList,
             string subName,
             MonitoredItemNotificationEventHandler handler,

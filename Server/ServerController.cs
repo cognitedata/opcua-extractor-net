@@ -281,5 +281,9 @@ namespace Server
         {
             Server.SetEventConfig(auditing, server, serverAuditing);
         }
+        public void SetDiagnosticsEnabled(bool value)
+        {
+            Server.SetDiagnosticsEnabled(value);
+        }
     }
 }
