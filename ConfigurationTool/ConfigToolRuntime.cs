@@ -23,6 +23,9 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.Config
 {
+    /// <summary>
+    /// Container class for the config tool. 
+    /// </summary>
     public class ConfigToolRuntime
     {
         private readonly ILogger log = Log.Logger.ForContext(typeof(ConfigToolRuntime));
@@ -36,7 +39,10 @@ namespace Cognite.OpcUa.Config
             this.baseConfig = baseConfig;
             this.output = output;
         }
-
+        /// <summary>
+        /// Start the config tool, then sequentially run the tests.
+        /// Produces a generated config file if it does not fail.
+        /// </summary>
         public async Task Run()
         {
             using var explorer = new UAServerExplorer(config, baseConfig);

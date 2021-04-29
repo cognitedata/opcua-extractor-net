@@ -6,6 +6,9 @@ using System.Linq;
 
 namespace Server
 {
+    /// <summary>
+    /// Class managing history in memory. Contains methods for reading and writing both datapoint and event history.
+    /// </summary>
     class HistoryMemoryStore
     {
         private const int maxHistoryDatapoints = 100000;
@@ -60,6 +63,11 @@ namespace Server
             eventHistoryStorage[emitter].Add(evt);
         }
 
+        /// <summary>
+        /// Read datapoint history
+        /// </summary>
+        /// <param name="request">Internal abstraction of history request</param>
+        /// <returns>A list of datavalues, and a boolean value indicating whether or not this is the final read.</returns>
         public (IEnumerable<DataValue>, bool) ReadHistory(InternalHistoryRequest request)
         {
             int idx = request.MemoryIndex;
@@ -133,6 +141,11 @@ namespace Server
             return (result, final);
         }
 
+        /// <summary>
+        /// Read event history
+        /// </summary>
+        /// <param name="request">Internal abstraction of history request</param>
+        /// <returns>A list of events, and a boolean value indicating whether or not this is the final read.</returns>
         public (IEnumerable<BaseEventState>, bool) ReadEventHistory(InternalEventHistoryRequest request)
         {
             int idx = request.MemoryIndex;

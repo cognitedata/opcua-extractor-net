@@ -81,7 +81,7 @@ namespace Cognite.OpcUa
                 : TimeSpan.FromSeconds(config.Granularity);
         }
         /// <summary>
-        /// Handle the result of a historyReadRaw. Takes information about the read, updates states and pushes datapoints.
+        /// Handle the result of a historyReadRaw. Takes information about the read, updates states and sends datapoints to the streamer.
         /// </summary>
         /// <param name="rawData">Data to be transformed into events</param>
         /// <param name="node">Active HistoryReadNode</param>

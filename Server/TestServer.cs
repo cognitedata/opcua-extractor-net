@@ -6,6 +6,10 @@ using System.Linq;
 
 namespace Server
 {
+    /// <summary>
+    /// The actual server itself, sets up the node managers and 
+    /// contains a few methods defering calls to the custom node manager.
+    /// </summary>
     public sealed class TestServer : StandardServer
     {
         private TestNodeManager custom;

@@ -1,11 +1,31 @@
-﻿using Opc.Ua;
-using System;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2020 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Opc.Ua;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Text;
 
 namespace Cognite.OpcUa.Types
 {
+    /// <summary>
+    /// Class containing the base attributes of an OPC-UA node,
+    /// managing its fields and properties externally, so that multiple instances
+    /// of <see cref="UANode"/> can share the same actual OPC-UA node.
+    /// </summary>
     public class NodeAttributes
     {
         public string Description { get; set; }
@@ -21,6 +41,11 @@ namespace Cognite.OpcUa.Types
         {
             NodeClass = nc;
         }
+        /// <summary>
+        /// Retrieve the list of attribute ids to fetch.
+        /// </summary>
+        /// <param name="config">Active configuration</param>
+        /// <returns>List of attributes</returns>
         public IEnumerable<uint> GetAttributeIds(FullConfig config)
         {
             var result = new List<uint> { Attributes.Description };
@@ -53,6 +78,14 @@ namespace Cognite.OpcUa.Types
             }
             return result;
         }
+        /// <summary>
+        /// Handle attribute read result. Should be overriden by subclasses to handle fields not found on the Object NodeClass.
+        /// </summary>
+        /// <param name="config">Active configuration</param>
+        /// <param name="values">Full list of datavalues retrieved</param>
+        /// <param name="idx">Current index in the list</param>
+        /// <param name="client">UAClient this is read from</param>
+        /// <returns>New index in list</returns>
         public virtual int HandleAttributeRead(FullConfig config, IList<DataValue> values, int idx, UAClient client)
         {
             Description = values[idx++].GetValue<LocalizedText>(null)?.Text;
@@ -64,7 +97,11 @@ namespace Cognite.OpcUa.Types
             return idx;
         }
     }
-
+    /// <summary>
+    /// Class containing the base attributes of an OPC-UA variable,
+    /// managing its fields and properties externally, so that multiple instances
+    /// of <see cref="UAVariable"/> can share the same actual OPC-UA node.
+    /// </summary>
     public class VariableAttributes : NodeAttributes
     {
         public bool Historizing { get; set; }
@@ -73,7 +110,14 @@ namespace Cognite.OpcUa.Types
         public Collection<int> ArrayDimensions { get; set; }
 
         public VariableAttributes(NodeClass nc) : base(nc) { }
-
+        /// <summary>
+        /// Handle attribute read result for a variable.
+        /// </summary>
+        /// <param name="config">Active configuration</param>
+        /// <param name="values">Full list of datavalues retrieved</param>
+        /// <param name="idx">Current index in the list</param>
+        /// <param name="client">UAClient this is read from</param>
+        /// <returns>New index in list</returns>
         public override int HandleAttributeRead(FullConfig config, IList<DataValue> values, int idx, UAClient client)
         {
             Description = values[idx++].GetValue<LocalizedText>(null)?.Text;

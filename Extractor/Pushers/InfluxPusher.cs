@@ -32,7 +32,7 @@ using System.Threading.Tasks;
 namespace Cognite.OpcUa
 {
     /// <summary>
-    /// Pusher for InfluxDb. Currently supports only double-valued datapoints
+    /// Pusher for InfluxDb, supports datapoints and events.
     /// </summary>
     public sealed class InfluxPusher : IPusher
     {
@@ -163,11 +163,10 @@ namespace Cognite.OpcUa
         }
         /// <summary>
         /// Push events to influxdb. Events are stored such that each event type on a given node has its own measurement,
-        /// on the form "events.[SourceNode uniqueId]:[Type uniqueId]"
+        /// on the form "events.[Emitter uniqueId]:[Type uniqueId]"
         /// </summary>
         /// <param name="events">Events to push</param>
-        /// <returns>True on success, null if none were pushed</returns>
-
+        /// <returns>True on success, null if none were pushed, false on failure</returns>
         public async Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
             if (events == null) return null;
@@ -205,7 +204,7 @@ namespace Cognite.OpcUa
             return true;
         }
         /// <summary>
-        /// Reads the first and last datapoint from influx for each timeseries, sending the timestamps to each passed state
+        /// Reads the first and optionally last datapoint from influx for each timeseries, sending the timestamps to each passed state
         /// </summary>
         /// <param name="states">List of historizing nodes</param>
         /// <param name="backfillEnabled">True if backfill is enabled, in which case the first timestamp will be read</param>
@@ -308,13 +307,12 @@ namespace Cognite.OpcUa
             return true;
         }
         /// <summary>
-        /// Read range of events for the given emitter, and the given nodes, for the given list of series.
-        /// The actual series to be read will be constructed from the series with any matching node in the given
-        /// list of nodes.
+        /// Read range of events for the given emitter in the given list of series.
+        /// Since each emitter can create an arbitrary number of series (one per type),
+        /// we must retrieve the series names first.
         /// </summary>
         /// <param name="state">State to read range for</param>
-        /// <param name="nodes">SourceNodes to use</param>
-        /// <param name="backfillEnabled">True to also read start</param>
+        /// <param name="backfillEnabled">True to also read first timestamp</param>
         /// <param name="seriesNames">List of all series to read for</param>
         private async Task InitExtractedEventRange(EventExtractionState state,
             bool backfillEnabled,
@@ -374,7 +372,6 @@ namespace Cognite.OpcUa
         /// Reads the first and last datapoint from influx for each emitter, sending the timestamps to each passed state
         /// </summary>
         /// <param name="states">List of historizing emitters</param>
-        /// <param name="nodes">Relevant nodes to consider events for (sourcenodes)</param>
         /// <param name="backfillEnabled">True if backfill is enabled, in which case the first timestamp will be read</param>
         /// <returns>True on success</returns>
         public async Task<bool> InitExtractedEventRanges(IEnumerable<EventExtractionState> states,
@@ -415,7 +412,7 @@ namespace Cognite.OpcUa
             return true;
         }
         /// <summary>
-        /// Test if the database is available
+        /// Test if the database is available, create it if it does not exist.
         /// </summary>
         /// <returns>True on success</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
@@ -449,14 +446,24 @@ namespace Cognite.OpcUa
             }
             return true;
         }
-
+        /// <summary>
+        /// True if the passed datatype should be treated as integer.
+        /// </summary>
+        /// <param name="dataType"></param>
+        /// <returns></returns>
         private static bool IsInteger(uint dataType)
         {
             return dataType >= DataTypes.SByte && dataType <= DataTypes.UInt64
                      || dataType == DataTypes.Integer
                      || dataType == DataTypes.UInteger;
         }
-
+        /// <summary>
+        /// Create an influx datapoint from the given <see cref="UADataPoint"/> for the given
+        /// <see cref="VariableExtractionState"/>.
+        /// </summary>
+        /// <param name="state">State the datapoint belongs to</param>
+        /// <param name="dp">Datapoint to convert</param>
+        /// <returns>Converted datapoint</returns>
         private static IInfluxDatapoint UADataPointToInflux(VariableExtractionState state, UADataPoint dp)
         {
             if (state.DataType.IsString)
@@ -500,7 +507,11 @@ namespace Cognite.OpcUa
                 return idp;
             }
         }
-
+        /// <summary>
+        /// Convert the given <see cref="UAEvent"/> to an influx datapoint.
+        /// </summary>
+        /// <param name="evt">Event to convert</param>
+        /// <returns>Converted event</returns>
         private IInfluxDatapoint UAEventToInflux(UAEvent evt)
         {
             var idp = new InfluxDatapoint<string>
@@ -594,6 +605,11 @@ namespace Cognite.OpcUa
 
             return finalPoints;
         }
+        /// <summary>
+        /// Build where clause for queries for reading datapoints.
+        /// </summary>
+        /// <param name="state">State to read from</param>
+        /// <returns>String where clause that can be appended to query.</returns>
         private static string GetWhereClause(InfluxBufferState state)
         {
             if (state.DestinationExtractedRange == TimeRange.Complete) return "";
@@ -612,17 +628,15 @@ namespace Cognite.OpcUa
             return ret;
         }
 
-
-        private HashSet<string> ExcludeEventTags = new HashSet<string>
+        private readonly HashSet<string> excludeEventTags = new HashSet<string>
         {
             "id", "value", "source", "time", "type"
         };
 
         /// <summary>
-        /// Read events from influxdb back into BufferedEvents
+        /// Read events from influxdb back into <see cref="UAEvent"/>s
         /// </summary>
-        /// <param name="startTime">Time to read from, reading forwards</param>
-        /// <param name="measurements">Nodes to read events from</param>
+        /// <param name="states">Nodes to read events from</param>
         /// <returns>A list of read events</returns>
         public async Task<IEnumerable<UAEvent>> ReadEvents(
             IDictionary<string, InfluxBufferState> states,
@@ -668,7 +682,7 @@ namespace Cognite.OpcUa
                     };
                     foreach (var kvp in values)
                     {
-                        if (string.IsNullOrEmpty(kvp.Value as string) || ExcludeEventTags.Contains(kvp.Key.ToLower())) continue;
+                        if (string.IsNullOrEmpty(kvp.Value as string) || excludeEventTags.Contains(kvp.Key.ToLower())) continue;
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
                     log.Verbose(evt.ToString());
@@ -680,7 +694,7 @@ namespace Cognite.OpcUa
             return finalEvents;
         }
         /// <summary>
-        /// Recreate the influxdbclient with new configuration.
+        /// Recreate the influxdbclient with new configuration. Used for testing.
         /// </summary>
         public void Reconfigure()
         {

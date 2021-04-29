@@ -17,7 +17,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.HistoryStates;
-using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
@@ -33,7 +32,6 @@ namespace Cognite.OpcUa.Config
     public class UAServerExplorer : UAClient
     {
         private readonly FullConfig baseConfig;
-        private readonly FullConfig config;
         private List<UANode> dataTypes;
         private List<ProtoDataType> customNumericTypes;
         private List<UANode> nodeList;
@@ -216,7 +214,11 @@ namespace Cognite.OpcUa.Config
 
             Session.KeepAliveInterval = Math.Max(config.Source.KeepAliveInterval, 30000);
         }
-
+        /// <summary>
+        /// Try to get at least 10k nodes using the given node chunk when browsing.
+        /// </summary>
+        /// <param name="nodesChunk">Chunk size to use when browsing</param>
+        /// <returns>A list of discovered UANodes</returns>
         private IEnumerable<UANode> GetTestNodeChunk(int nodesChunk, CancellationToken token)
         {
             var root = ObjectIds.ObjectsFolder;
@@ -236,6 +238,7 @@ namespace Cognite.OpcUa.Config
 
             do
             {
+                // Recursively browse the node hierarchy until we get at least 10k nodes, or there are no more nodes to browse.
                 var references = new Dictionary<NodeId, ReferenceDescriptionCollection>();
                 var total = nextIds.Count;
                 int count = 0;
@@ -279,7 +282,13 @@ namespace Cognite.OpcUa.Config
 
             return nodes;
         }
-
+        /// <summary>
+        /// Try to get the optimal values for the browse-chunk and browse-nodes-chunk config options.
+        /// This defaults to just using as large values as possible, then performs an extra test
+        /// to check for issues caused by lack of BrowseNext support.
+        /// </summary>
+        /// <param name="token"></param>
+        /// <returns></returns>
         public async Task GetBrowseChunkSizes(CancellationToken token)
         {
             if (Session == null || !Session.Connected)
@@ -291,6 +300,7 @@ namespace Cognite.OpcUa.Config
 
             int browseChunkSize = 0;
 
+            // First try to find a chunk size that works
             foreach (int chunkSize in new [] { 1000, 100, 10, 1 }.Where(chunk => chunk <= config.Source.BrowseNodesChunk))
             {
                 try
@@ -395,7 +405,9 @@ namespace Cognite.OpcUa.Config
             baseConfig.Source.BrowseChunk = summary.BrowseChunk;
             baseConfig.Source.BrowseNodesChunk = summary.BrowseNodesChunk;
         }
-
+        /// <summary>
+        /// Populate the nodeList if it has not already been populated.
+        /// </summary>
         private async Task PopulateNodes(CancellationToken token)
         {
             if (nodesRead) return;
@@ -413,7 +425,9 @@ namespace Cognite.OpcUa.Config
                 throw;
             }
         }
-
+        /// <summary>
+        /// Populate the dataTypes list with nodes representing data types if it has not already been populated.
+        /// </summary>
         private void PopulateDataTypes(CancellationToken token)
         {
             if (dataTypesRead) return;
@@ -438,7 +452,11 @@ namespace Cognite.OpcUa.Config
             }
             dataTypes = dataTypes.Distinct().ToList();
         }
-
+        /// <summary>
+        /// Read node data for the contents of the nodeList, if it has not already been read.
+        /// Reconfigures the extractor to extract as much data as possible, but resets configuration
+        /// before returning.
+        /// </summary>
         private void ReadNodeData(CancellationToken token)
         {
             if (nodeDataRead) return;
@@ -488,12 +506,20 @@ namespace Cognite.OpcUa.Config
             return id.NamespaceIndex != 0 || id.IdType != IdType.Numeric;
         }
 
+        /// <summary>
+        /// Try to identify the given UANode as a datatype, updating the summary and config
+        /// based on the outcome.
+        /// The goal is to identify enumerations and custom types, to determine whether
+        /// custom datatype configuration is needed.
+        /// </summary>
+        /// <param name="type">Type to test.</param>
         private void TestDataType(UANode type)
         {
             if (!IsCustomObject(type.Id)) return;
             uint dataTypeSwitch = 0;
             bool inHierarchy = false;
 
+            // The datatype may be placed correctly in the datatype hierarchy.
             if (ToolUtil.IsChildOf(dataTypes, type, DataTypes.Number))
             {
                 dataTypeSwitch = DataTypes.Number;
@@ -509,6 +535,7 @@ namespace Cognite.OpcUa.Config
                 dataTypeSwitch = DataTypes.Enumeration;
                 inHierarchy = true;
             }
+            // If not, it may be placed incorrectly but contain naming that indicates what type it is.
             if (dataTypeSwitch == 0)
             {
                 if (ToolUtil.NodeNameContains(type, "real")
@@ -527,6 +554,7 @@ namespace Cognite.OpcUa.Config
                     dataTypeSwitch = DataTypes.Enumeration;
                 }
             }
+            // Finally, log the results and update the summary.
             switch (dataTypeSwitch)
             {
                 case DataTypes.Number:
@@ -540,6 +568,7 @@ namespace Cognite.OpcUa.Config
                     summary.Enums = true;
                     break;
             }
+            // Update configuration based on whether or not the node was found in hierarchy.
             if (dataTypeSwitch > 0)
             {
                 if (inHierarchy)
@@ -563,7 +592,6 @@ namespace Cognite.OpcUa.Config
                 }
             }
         }
-
 
         /// <summary>
         /// Browse the datatype hierarchy, checking for custom numeric datatypes.
@@ -590,6 +618,9 @@ namespace Cognite.OpcUa.Config
         }
         /// <summary>
         /// Get AttributeChunk config value, by attempting to read for various chunk sizes.
+        /// Uses a value decently proportional to the server size, only 10k if the server is large enough
+        /// for that to make sense.
+        /// Terminates as soon as a read succeeds.
         /// </summary>
         public async Task GetAttributeChunkSizes(CancellationToken token)
         {
@@ -785,7 +816,11 @@ namespace Cognite.OpcUa.Config
             summary.StringVariables = stringVariables;
             summary.MaxArraySize = maxLimitedArrayLength;
         }
-
+        /// <summary>
+        /// Internal AllowTSMap, used to check whether a node should be mapped over or not.
+        /// </summary>
+        /// <param name="node">Node to test</param>
+        /// <returns>True if the config tool should keep the variable</returns>
         private bool AllowTSMap(UAVariable node)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
@@ -800,7 +835,8 @@ namespace Cognite.OpcUa.Config
 
         }
         /// <summary>
-        /// Attempts different chunk sizes for subscriptions. (number of created monitored items per attempt, most servers should support at least one subscription).
+        /// Attempts different chunk sizes for subscriptions. (number of created monitored items per attempt, 
+        /// most servers should support at least one subscription).
         /// </summary>
         public async Task GetSubscriptionChunkSizes(CancellationToken token)
         {
@@ -901,8 +937,8 @@ namespace Cognite.OpcUa.Config
             Session.RemoveSubscriptions(Session.Subscriptions.ToList());
         }
         /// <summary>
-        /// Attempts history read if possible, getting chunk sizes. It also determines granularity, and sets backfill to true if it works and it estimates that there
-        /// are a lot of points in some variables.
+        /// Attempts history read if possible, getting chunk sizes. It also determines granularity, 
+        /// and sets backfill to true if it works and it estimates that there are a lot of points in some variables.
         /// </summary>
         public async Task GetHistoryReadConfig(CancellationToken token)
         {
@@ -1096,8 +1132,8 @@ namespace Cognite.OpcUa.Config
 
         /// <summary>
         /// Look for emitter relationships, and attempt to listen to events on any identified emitters. Also look through the event hierarchy and find any
-        /// custom events that may be interesting for cognite. Then attempt to listen for audit events on the server node, if any at all are detected
-        /// assume that the server is auditing.
+        /// custom events that may be interesting for cognite.
+        /// Enables events if it seems like the server supports them.
         /// </summary>
         public async Task GetEventConfig(CancellationToken token)
         {
@@ -1224,7 +1260,13 @@ namespace Cognite.OpcUa.Config
 
             Session.RemoveSubscriptions(Session.Subscriptions.ToList());
         }
-
+        /// <summary>
+        /// Generate an abbreviated string for each namespace,
+        /// splits on non-numeric characters, then uses the first letter of each part,
+        /// finally appends numbers to make sure all are distinct.
+        /// </summary>
+        /// <param name="namespaces"></param>
+        /// <returns></returns>
         public static Dictionary<string, string> GenerateNamespaceMap(IEnumerable<string> namespaces)
         {
             var startRegex = new Regex("^.*://");
@@ -1247,7 +1289,6 @@ namespace Cognite.OpcUa.Config
 
                 int index = 1;
 
-#pragma warning disable CA1308 // Normalize strings to uppercase. Lowercase is prettier in externalId.
                 while (namespaceMap.Any(kvp => nextValue.ToLowerInvariant() == kvp.Value && mapped.Key != kvp.Key))
                 {
                     nextValue = baseValue + index;
@@ -1255,7 +1296,6 @@ namespace Cognite.OpcUa.Config
                 }
 
                 namespaceMap.Add(mapped.Key, nextValue.ToLowerInvariant());
-#pragma warning restore CA1308 // Normalize strings to uppercase
             }
 
             foreach (string key in namespaceMap.Keys.ToList())
@@ -1266,7 +1306,7 @@ namespace Cognite.OpcUa.Config
             return namespaceMap;
         }
         /// <summary>
-        /// Generate an intelligent namespace-map, with unique values, base for the base opcfoundation namespace (I think that appears in most servers).
+        /// Generate an intelligent namespace-map, with unique values, base for the base opcfoundation namespace.
         /// </summary>
         public void GetNamespaceMap()
         {

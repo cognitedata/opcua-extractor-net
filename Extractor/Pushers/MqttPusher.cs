@@ -82,7 +82,10 @@ namespace Cognite.OpcUa.Pushers
         private static readonly Counter createdRelationships = Metrics
             .CreateCounter("opcua_created_relationships_mqtt", "Number of relationships pushed over MQTT");
 
-
+        /// <summary>
+        /// Constructor, also starts the client and sets up correct disconnect handlers.
+        /// </summary>
+        /// <param name="config">Config to use</param>
         public MQTTPusher(MqttPusherConfig config)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
@@ -136,6 +139,11 @@ namespace Cognite.OpcUa.Pushers
             client.ConnectAsync(options, CancellationToken.None).Wait();
         }
         #region interface
+        /// <summary>
+        /// Push given list of datapoints over MQTT.
+        /// </summary>
+        /// <param name="points">Datapoints to push</param>
+        /// <returns>True on success, false on failure, null if no points were legal.</returns>
         public async Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             if (points == null) return null;
@@ -200,6 +208,10 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
+        /// <summary>
+        /// Check if the client is currently connected to MQTT, if not, try to reconnect.
+        /// </summary>
+        /// <returns>True if connected, false if not</returns>
         public async Task<bool?> TestConnection(FullConfig config, CancellationToken token)
         {
             if (client.IsConnected) return true;
@@ -216,7 +228,15 @@ namespace Cognite.OpcUa.Pushers
             log.Information("Connected to MQTT broker");
             return client.IsConnected;
         }
-
+        /// <summary>
+        /// Try to push the given lists of objects and variables to CDF over MQTT.
+        /// If enabled, stores the created object names in a local state store,
+        /// and only creates objects that are not already present.
+        /// </summary>
+        /// <param name="objects">Objects to create as assets</param>
+        /// <param name="variables">Variables to create as timeseries</param>
+        /// <param name="update">Configuration for how these should be updated, if enabled</param>
+        /// <returns>True on success, false on failure</returns>
         public async Task<bool> PushNodes(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> variables,
@@ -335,6 +355,11 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
+        /// <summary>
+        /// Create the given list of events in CDF over MQTT.
+        /// </summary>
+        /// <param name="events">Events to create</param>
+        /// <returns>True on success, false on failure, null if no events were pushed.</returns>
         public async Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
             if (events == null) return null;
@@ -364,7 +389,11 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-
+        /// <summary>
+        /// Create the given list of references in CDF over MQTT.
+        /// </summary>
+        /// <param name="references">References to create as relationships</param>
+        /// <returns>True on success, false on failure.</returns>
         public async Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
         {
             if (config.SkipMetadata) return true;
@@ -439,6 +468,12 @@ namespace Cognite.OpcUa.Pushers
 
         #endregion
         #region pushing
+        /// <summary>
+        /// Push a chunk of the full datapoint push over MQTT.
+        /// Handles the serialization and actual pushing.
+        /// </summary>
+        /// <param name="dataPointList">Datapoints to create, grouped by timeseries name.</param>
+        /// <returns>True on success, false on failure</returns>
         private async Task<bool> PushDataPointsChunk(IDictionary<string, IEnumerable<UADataPoint>> dataPointList, CancellationToken token)
         {
             int count = 0;
@@ -500,7 +535,13 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-
+        /// <summary>
+        /// Push the given list of assets over MQTT to CDF, optionally passing "update" to indicate that the
+        /// bridge should update the given assets.
+        /// </summary>
+        /// <param name="objects">Assets to create or update</param>
+        /// <param name="update">Configuration for how the assets should be updated.</param>
+        /// <returns>True on success, false on failure.</returns>
         private async Task<bool> PushAssets(IEnumerable<UANode> objects, TypeUpdateConfig update, CancellationToken token)
         {
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
@@ -557,7 +598,12 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-
+        /// <summary>
+        /// Convert nodes to assets, setting fields that should not be updated to null.
+        /// </summary>
+        /// <param name="nodes">Nodes to create or update</param>
+        /// <param name="update">Configuration for which fields should be updated.</param>
+        /// <returns>List of assets to create</returns>
         private IEnumerable<AssetCreate> ConvertNodes(IEnumerable<UANode> nodes, TypeUpdateConfig update)
         {
             foreach (var node in nodes)
@@ -576,7 +622,12 @@ namespace Cognite.OpcUa.Pushers
                 yield return create;
             }
         }
-
+        /// <summary>
+        /// Convert nodes to timeseries, setting fields that should not be updated to null.
+        /// </summary>
+        /// <param name="variables">Nodes to create or update</param>
+        /// <param name="update">Configuration for which fields should be updated.</param>
+        /// <returns>List of timeseries to create</returns>
         private IEnumerable<StatelessTimeSeriesCreate> ConvertVariables(IEnumerable<UAVariable> variables, TypeUpdateConfig update)
         {
             foreach (var variable in variables)
@@ -595,7 +646,13 @@ namespace Cognite.OpcUa.Pushers
                 yield return create;
             }
         }
-
+        /// <summary>
+        /// Push the given list of timeseries over MQTT to CDF, optionally passing "update" to indicate that the
+        /// bridge should update the given timeseries if they already exist.
+        /// </summary>
+        /// <param name="variables">Timeseries to push</param>
+        /// <param name="update">Configuration for which fields should be updated</param>
+        /// <returns>True on success</returns>
         private async Task<bool> PushTimeseries(IEnumerable<UAVariable> variables, TypeUpdateConfig update, CancellationToken token)
         {
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
@@ -688,7 +745,11 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-
+        /// <summary>
+        /// Push the given list of events over MQTT to CDF.
+        /// </summary>
+        /// <param name="evts">Events to create</param>
+        /// <returns>True on success</returns>
         private async Task<bool> PushEventsChunk(IEnumerable<UAEvent> evts, CancellationToken token)
         {
             if (config.Debug) return true;
@@ -717,7 +778,11 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-
+        /// <summary>
+        /// Push the given list of relationships over MQTT to CDF.
+        /// </summary>
+        /// <param name="references">Relationships to create</param>
+        /// <returns>True on success</returns>
         private async Task<bool> PushReferencesChunk(IEnumerable<RelationshipCreate> references, CancellationToken token)
         {
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)

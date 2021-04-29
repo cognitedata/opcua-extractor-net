@@ -19,6 +19,9 @@ using Opc.Ua;
 
 namespace Cognite.OpcUa.Types
 {
+    /// <summary>
+    /// Represents a node type in the OPC-UA type hierarchy.
+    /// </summary>
     public class UANodeType
     {
         public NodeId Id { get; }

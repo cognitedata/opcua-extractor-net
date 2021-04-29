@@ -134,6 +134,9 @@ namespace Cognite.OpcUa
             Started = false;
         }
 
+        /// <summary>
+        /// Load XML configuration file, override certain fields with environment variables if set.
+        /// </summary>
         protected async Task LoadAppConfig()
         {
             var application = new ApplicationInstance
@@ -230,6 +233,7 @@ namespace Cognite.OpcUa
             connected.Set(1);
             log.Information("Successfully connected to server at {EndpointURL}", config.Source.EndpointUrl);
         }
+
         /// <summary>
         /// Event triggered after a succesfull reconnect.
         /// </summary>
@@ -247,6 +251,7 @@ namespace Cognite.OpcUa
             connected.Set(1);
             reconnectHandler = null;
         }
+
         /// <summary>
         /// Called on client keep alive, handles the case where the server has stopped responding and the connection timed out.
         /// </summary>
@@ -331,6 +336,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="root">Root node to browse for</param>
         /// <param name="callback">Callback to call for each found node</param>
+        /// <param name="ignoreVisited">Default true, do not call callback for previously visited nodes</param>
         public Task BrowseNodeHierarchy(NodeId root,
             Action<ReferenceDescription, NodeId> callback,
             CancellationToken token,
@@ -343,6 +349,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="roots">Initial nodes to start mapping.</param>
         /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
+        /// <param name="ignoreVisited">Default true, do not call callback for previously visited nodes</param>
         public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots,
             Action<ReferenceDescription, NodeId> callback,
             CancellationToken token,
@@ -461,6 +468,7 @@ namespace Cognite.OpcUa
         /// <param name="parents">List of parents to browse</param>
         /// <param name="referenceTypes">Referencetype to browse, defaults to HierarchicalReferences</param>
         /// <param name="nodeClassMask">Mask for node classes, as specified in the OPC-UA specification</param>
+        /// <param name="direction">BrowseDirection, default forward</param>
         /// <returns>Dictionary from parent nodeId to collection of children as ReferenceDescriptions</returns>
         public Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(
             IEnumerable<NodeId> parents,
@@ -586,6 +594,14 @@ namespace Cognite.OpcUa
                 VisitedNodes.Clear();
             }
         }
+        /// <summary>
+        /// Apply ignore filters, if any are set.
+        /// </summary>
+        /// <param name="displayName">DisplayName of node to filter</param>
+        /// <param name="id">NodeId of node to filter</param>
+        /// <param name="typeDefinition">TypeDefinition of node to filter</param>
+        /// <param name="nc">NodeClass of node to filter</param>
+        /// <returns>True if the node should be kept</returns>
         public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition, NodeClass nc)
         {
             if (IgnoreFilters == null) return true;
@@ -600,6 +616,9 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback for each node</param>
         /// <param name="referenceTypes">Permitted reference types, defaults to HierarchicalReferences</param>
         /// <param name="nodeClassMask">Mask for node classes as described in the OPC-UA specification</param>
+        /// <param name="doFilter">True to apply the node filter to discovered nodes</param>
+        /// <param name="ignoreVisited">True to not call callback on already visited nodes.</param>
+        /// <param name="readVariableChildren">Read the children of variables.</param>
         public void BrowseDirectory(
             IEnumerable<NodeId> roots,
             Action<ReferenceDescription, NodeId> callback,
@@ -683,6 +702,13 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Get node data
+        /// <summary>
+        /// Call the Read service with the given <paramref name="readValueIds"/>.
+        /// </summary>
+        /// <param name="readValueIds">Attributes to read.</param>
+        /// <param name="distinctNodeCount">Number of distinct nodes</param>
+        /// <returns>List of retrieved datavalues,
+        /// if the server is compliant this will have length equal to <paramref name="readValueIds"/></returns>
         public IList<DataValue> ReadAttributes(ReadValueIdCollection readValueIds, int distinctNodeCount, CancellationToken token)
         {
             var values = new List<DataValue>();
@@ -730,7 +756,7 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Gets Description for all nodes, and DataType, Historizing and ValueRank for Variable nodes, then updates the given list of nodes
+        /// Gets attributes for the given list of nodes. The attributes retrieved for each node depends on its NodeClass.
         /// </summary>
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
         public void ReadNodeData(IEnumerable<UANode> nodes, CancellationToken token)
@@ -770,6 +796,7 @@ namespace Cognite.OpcUa
                 idx = node.Attributes.HandleAttributeRead(config, values, idx, this);
             }
         }
+
         /// <summary>
         /// Get the raw values for each given node id.
         /// Nodes must be variables
@@ -782,7 +809,6 @@ namespace Cognite.OpcUa
             var values = ReadAttributes(new ReadValueIdCollection(readValueIds), ids.Count(), token);
             return values.Select((dv, index) => (ids.ElementAt(index), dv)).ToDictionary(pair => pair.Item1, pair => pair.dv);
         }
-
 
         /// <summary>
         /// Gets the values of the given list of variables, then updates each variable with a BufferedDataPoint
@@ -819,6 +845,7 @@ namespace Cognite.OpcUa
             }
             enumerator.Dispose();
         }
+
         /// <summary>
         /// Gets properties for variables in nodes given, then updates all properties in given list of nodes with relevant data and values.
         /// </summary>
@@ -971,7 +998,14 @@ namespace Cognite.OpcUa
 
             return result;
         }
-
+        /// <summary>
+        /// Add MonitoredItems to the given list of states.
+        /// </summary>
+        /// <param name="nodeList">States to subscribe to</param>
+        /// <param name="subName">Name of subscription</param>
+        /// <param name="handler">Callback for the items</param>
+        /// <param name="builder">Method to build monitoredItems from states</param>
+        /// <returns>Constructed subscription</returns>
         public Subscription AddSubscriptions(
             IEnumerable<UAHistoryExtractionState> nodeList,
             string subName,
@@ -985,13 +1019,11 @@ namespace Cognite.OpcUa
                                        sub.DisplayName.StartsWith(subName, StringComparison.InvariantCulture));
                 if (subscription == null)
                 {
-#pragma warning disable CA2000 // Dispose objects before losing scope. The subscription is disposed properly or added to the client.
                     subscription = new Subscription(Session.DefaultSubscription)
                     {
                         PublishingInterval = config.Source.PublishingInterval,
                         DisplayName = subName
                     };
-#pragma warning restore CA2000 // Dispose objects before losing scope
                 }
                 int count = 0;
                 var hasSubscription = subscription.MonitoredItems.Select(sub => sub.ResolvedNodeId).ToHashSet();
@@ -1069,7 +1101,6 @@ namespace Cognite.OpcUa
         {
             if (!nodeList.Any()) return;
 
-#pragma warning disable CA2000 // Dispose objects before losing scope
             var sub = AddSubscriptions(
                 nodeList,
                 "DataChangeListener",
@@ -1084,7 +1115,6 @@ namespace Cognite.OpcUa
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = Math.Max(0, config.Source.QueueLength)
                 }, token);
-#pragma warning restore CA2000 // Dispose objects before losing scope
 
             numSubscriptions.Set(sub.MonitoredItemCount);
         }
@@ -1103,7 +1133,6 @@ namespace Cognite.OpcUa
 
             var filter = BuildEventFilter();
 
-#pragma warning disable CA2000 // Dispose objects before losing scope
             AddSubscriptions(
                 emitters,
                 "EventListener",
@@ -1119,7 +1148,6 @@ namespace Cognite.OpcUa
                     NodeClass = NodeClass.Object
                 },
                 token);
-#pragma warning restore CA2000 // Dispose objects before losing scope
         }
 
         /// <summary>
@@ -1288,13 +1316,11 @@ namespace Cognite.OpcUa
             lock (subscriptionLock)
             {
                 var subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener", StringComparison.InvariantCulture))
-#pragma warning disable CA2000 // Dispose objects before losing scope
                                ?? new Subscription(Session.DefaultSubscription)
                                {
                                    PublishingInterval = config.Source.PublishingInterval,
                                    DisplayName = "AuditListener"
                                };
-#pragma warning restore CA2000 // Dispose objects before losing scope
                 if (subscription.MonitoredItemCount != 0) return;
                 var item = new MonitoredItem
                 {
@@ -1487,7 +1513,11 @@ namespace Cognite.OpcUa
             
             return value.ToString();
         }
-
+        /// <summary>
+        /// True if this datavalue should use Json encoding, i.e. it is not natively supported by the extractor.
+        /// </summary>
+        /// <param name="value">Value to test</param>
+        /// <returns>True if fallback encoding must be used.</returns>
         private bool ShouldUseJson(object value)
         {
             // Go through the value to check if we can parse it ourselves.
@@ -1567,7 +1597,9 @@ namespace Cognite.OpcUa
             }
             return buffer.ToString();
         }
-        // Used to trim the whitespace off the end of a StringBuilder
+        /// <summary>
+        /// Used to trim the whitespace off the end of a StringBuilder
+        /// </summary> 
         private static void TrimEnd(StringBuilder sb)
         {
             if (sb == null || sb.Length == 0) return;
@@ -1583,6 +1615,11 @@ namespace Cognite.OpcUa
             return;
         }
 
+        /// <summary>
+        /// Append NodeId and namespace to the given StringBuilder.
+        /// </summary>
+        /// <param name="buffer">Builder to append to</param>
+        /// <param name="nodeId">NodeId to append</param>
         private void AppendNodeId(StringBuilder buffer, NodeId nodeId)
         {
             if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride))
@@ -1605,6 +1642,11 @@ namespace Cognite.OpcUa
             TrimEnd(buffer);
         }
 
+        /// <summary>
+        /// Get string representation of NodeId on the form i=123 or s=string, etc.
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
         private string GetNodeIdString(NodeId id)
         {
             var buffer = new StringBuilder();

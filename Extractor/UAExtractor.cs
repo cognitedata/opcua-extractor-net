@@ -138,6 +138,11 @@ namespace Cognite.OpcUa
             Looper = new Looper(this, config, pushers);
         }
 
+        /// <summary>
+        /// Event handler for UAClient disconnect
+        /// </summary>
+        /// <param name="sender">UAClient that generated this event</param>
+        /// <param name="e">EventArgs for this event</param>
         private void UaClient_OnServerDisconnect(object sender, EventArgs e)
         {
             if (config.Source.ForceRestart && !source.IsCancellationRequested)
@@ -146,6 +151,11 @@ namespace Cognite.OpcUa
             }
         }
 
+        /// <summary>
+        /// Event handler for UAClient reconnect
+        /// </summary>
+        /// <param name="sender">UAClient that generated this event</param>
+        /// <param name="e">EventArgs for this event</param>
         private void UaClient_OnServerReconnect(object sender, EventArgs e)
         {
             var client = sender as UAClient;
@@ -271,6 +281,7 @@ namespace Cognite.OpcUa
             Starting.Set(1);
             Looper.Restart();
         }
+
         /// <summary>
         /// Task for the actual extractor restart, performing it directly.
         /// Stops history, waits for UAClient to terminate, resets the extractor, rebrowses, then schedules history.
@@ -290,6 +301,7 @@ namespace Cognite.OpcUa
             Started = true;
             log.Information("Successfully restarted extractor");
         }
+
         /// <summary>
         /// Push nodes from the extraNodesToBrowse queue.
         /// </summary>
@@ -307,6 +319,7 @@ namespace Cognite.OpcUa
                 Looper.ScheduleTasks(historyTasks);
             }
         }
+
         /// <summary>
         /// Terminate history, waiting for timeout seconds
         /// </summary>
@@ -316,6 +329,7 @@ namespace Cognite.OpcUa
         {
             return historyReader.Terminate(source.Token, timeout);
         }
+
         /// <summary>
         /// Closes the extractor, mainly just shutting down the opcua client and waiting for a clean loss of connection.
         /// </summary>
@@ -337,6 +351,7 @@ namespace Cognite.OpcUa
             uaClient.WaitForOperations().Wait(10000);
             log.Information("Extractor closed");
         }
+
         /// <summary>
         /// Get uniqueId from uaClient
         /// </summary>
@@ -357,6 +372,7 @@ namespace Cognite.OpcUa
         {
             return uaClient.GetRelationshipId(reference);
         }
+
         /// <summary>
         /// Calls the ConvertToString method on UAClient. This uses the namespaceTable, so it cannot be static.
         /// </summary>
@@ -366,6 +382,7 @@ namespace Cognite.OpcUa
         {
             return uaClient.ConvertToString(value, enumValues);
         }
+
         /// <summary>
         /// Read properties for the given list of BufferedNode. This is intelligent,
         /// and keeps track of which properties are in the process of being read,
@@ -435,6 +452,7 @@ namespace Cognite.OpcUa
                 }
             }));
         }
+
         /// <summary>
         /// Redo browse, then schedule history on the looper.
         /// </summary>
@@ -447,6 +465,10 @@ namespace Cognite.OpcUa
             Looper.ScheduleTasks(historyTasks);
         }
 
+        /// <summary>
+        /// Used for testing, wait for subscriptions to be created, with given timeout.
+        /// </summary>
+        /// <param name="timeout">Timeout in 10ths of a second</param>
         public async Task WaitForSubscriptions(int timeout = 100)
         {
             int time = 0;
@@ -457,6 +479,12 @@ namespace Cognite.OpcUa
             }
             log.Debug("Waited {s} milliseconds for subscriptions", time * 100);
         }
+
+        /// <summary>
+        /// Retrieve extra metadata for <paramref name="node"/>.
+        /// </summary>
+        /// <param name="node">Node to get metadata for</param>
+        /// <returns>Extra metadata or null</returns>
         public Dictionary<string, string> GetExtraMetadata(UANode node)
         {
             if (node == null) return null;
@@ -484,6 +512,7 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Mapping
+
         /// <summary>
         /// Empties the node queue, pushing nodes to each destination, and starting subscriptions and history.
         /// This is the entry point for mapping on the extractor.
@@ -520,6 +549,9 @@ namespace Cognite.OpcUa
             return historyTasks;
         }
 
+        /// <summary>
+        /// Build transformations from configured list and deprecated filter properties.
+        /// </summary>
         private void BuildTransformations()
         {
             var transformations = new List<NodeTransformation>();
@@ -649,6 +681,9 @@ namespace Cognite.OpcUa
             BuildTransformations();
         }
 
+        /// <summary>
+        /// Represents the result of browsing the hierarchy.
+        /// </summary>
         private class BrowseResult
         {
             /// <summary>
@@ -681,6 +716,11 @@ namespace Cognite.OpcUa
             }
         }
 
+        /// <summary>
+        /// Retrieve extra node data for the nodes in <paramref name="result"/>
+        /// </summary>
+        /// <param name="update">UpdateConfig used to determine what should be fetched</param>
+        /// <param name="result">BrowseResult containing the nodes to get data for</param>
         private async Task GetExtraNodeData(UpdateConfig update, BrowseResult result)
         {
             log.Information("Getting data for {NumVariables} variables and {NumObjects} objects",
@@ -719,6 +759,13 @@ namespace Cognite.OpcUa
             await Task.WhenAll(extraMetaTasks);
         }
 
+        /// <summary>
+        /// Parse the list of raw objects, add new nodes to the state, and return
+        /// a list of nodes that should be pushed to destinations.
+        /// </summary>
+        /// <param name="update">Update configuration used to determine what nodes are changed.</param>
+        /// <param name="rawObjects">List of nodes to be filtered.</param>
+        /// <returns>List of filtered nodes.</returns>
         private IEnumerable<UANode> FilterObjects(UpdateConfig update, IEnumerable<UANode> rawObjects)
         {
             foreach (var node in rawObjects)
@@ -748,6 +795,10 @@ namespace Cognite.OpcUa
             }
         }
 
+        /// <summary>
+        /// Create event emitter states from list of browsed nodes. Using the EventNotifier attribute.
+        /// </summary>
+        /// <param name="result">BrowseResult containing nodes to consider.</param>
         private void InitEventStates(BrowseResult result)
         {
             foreach (var node in result.Objects.Concat(result.Variables))
@@ -760,6 +811,12 @@ namespace Cognite.OpcUa
             }
         }
 
+        /// <summary>
+        /// Filter variables, creating new objects and variables based on
+        /// attributes and config.
+        /// </summary>
+        /// <param name="update">Configuration used to determine what nodes have changed.</param>
+        /// <param name="result">BrowseResult containing nodes to filter.</param>
         private void FilterVariables(UpdateConfig update, BrowseResult result)
         {
             foreach (var node in result.RawVariables)
@@ -828,8 +885,6 @@ namespace Cognite.OpcUa
                 {
                     result.Objects.Add(node);
                 }
-
-               
             }
         }
 
@@ -892,7 +947,17 @@ namespace Cognite.OpcUa
             return result;
         }
 
-
+        /// <summary>
+        /// Called when pushing nodes fail, to properly add the nodes not yet pushed to
+        /// PendingNodes and PendingReferences on the pusher.
+        /// </summary>
+        /// <param name="objects">Objects pushed</param>
+        /// <param name="timeseries">Timeseries pushed</param>
+        /// <param name="references">References pushed</param>
+        /// <param name="nodesPassed">True if nodes were successfully pushed</param>
+        /// <param name="referencesPassed">True if references were successfully pushed</param>
+        /// <param name="dpRangesPassed">True if datapoint ranges were pushed.</param>
+        /// <param name="pusher">Pusher pushed to</param>
         private void PushNodesFailure(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> timeseries,
@@ -926,6 +991,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="objects">Object type nodes to push</param>
         /// <param name="timeseries">Variable type nodes to push</param>
+        /// <param name="references">References to push</param>
         /// <param name="pusher">Destination to push to</param>
         /// <param name="initial">True if this counts as initialization of the pusher</param>
         public async Task PushNodes(
@@ -989,6 +1055,11 @@ namespace Cognite.OpcUa
             pusher.Initialized |= initial;
         }
 
+        /// <summary>
+        /// Get references for the given nodes.
+        /// </summary>
+        /// <param name="nodes">Nodes to get references for.</param>
+        /// <returns>A list of references.</returns>
         private async Task<IEnumerable<UAReference>> GetRelationshipData(BrowseResult nodes)
         {
             var references = await referenceTypeManager.GetReferencesAsync(nodes.RawObjects.Concat(nodes.RawVariables).DistinctBy(node => node.Id),
@@ -1038,6 +1109,7 @@ namespace Cognite.OpcUa
             await referenceTypeManager.GetReferenceTypeDataAsync(source.Token);
             return references.Distinct();
         }
+
         /// <summary>
         /// Push given lists of nodes to pusher destinations, and fetches latest timestamp for relevant nodes.
         /// </summary>
@@ -1097,10 +1169,10 @@ namespace Cognite.OpcUa
                 state.FinalizeRangeInit();
             }
         }
+
         /// <summary>
         /// Subscribe to event changes, then run history.
         /// </summary>
-        /// <param name="nodes">Nodes to subscribe to events for</param>
         private async Task SynchronizeEvents()
         {
             await Task.Run(() => uaClient.SubscribeToEvents(State.EmitterStates,
@@ -1121,6 +1193,7 @@ namespace Cognite.OpcUa
                 log.Information("Skipping event history due to no initialized pushers");
             }
         }
+
         /// <summary>
         /// Subscribe to data changes, then run history.
         /// </summary>
@@ -1144,11 +1217,11 @@ namespace Cognite.OpcUa
                 log.Information("Skipping datapoints history due to no initialized pushers");
             }
         }
+
         /// <summary>
         /// Start synchronization of given list of variables with the server.
         /// </summary>
         /// <param name="variables">Variables to synchronize</param>
-        /// <param name="objects">Recently added objects, used for event subscriptions</param>
         /// <returns>Two tasks, one for data and one for events</returns>
         private IEnumerable<Task> Synchronize(IEnumerable<UAVariable> variables)
         {

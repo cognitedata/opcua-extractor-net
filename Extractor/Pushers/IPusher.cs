@@ -57,12 +57,16 @@ namespace Cognite.OpcUa
             return Task.FromResult(true);
         }
         /// <summary>
-        /// Test the connection to the destination, should return false on failure
+        /// Test the connection to the destination, should return false on failure, can return null if 
+        /// the test is somehow unable to be completed with meaningful results.
         /// </summary>
         Task<bool?> TestConnection(FullConfig config, CancellationToken token);
         /// <summary>
-        /// Get earliest and latest timestamps in destination system, if possible
+        /// Get earliest and latest timestamps for datapoints in destination system, if possible
         /// </summary>
+        /// <param name="states">States to initialize for</param>
+        /// <param name="backfillEnabled">True if backfill is enabled and earliest timestamps should be read</param>
+        /// <returns>True on success</returns>
         Task<bool> InitExtractedRanges(
             IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
@@ -74,8 +78,8 @@ namespace Cognite.OpcUa
         /// Get the earliest and latest timestamps for events in the destination system, if possible.
         /// </summary>
         /// <param name="states">States to initialize for</param>
-        /// <param name="backfillEnabled">True if backfill is enabled</param>
-        /// <returns>true on success</returns>
+        /// <param name="backfillEnabled">True if backfill is enabled and earliest timestamps should be read</param>
+        /// <returns>True on success</returns>
         Task<bool> InitExtractedEventRanges(
             IEnumerable<EventExtractionState> states,
             bool backfillEnabled,
@@ -84,22 +88,28 @@ namespace Cognite.OpcUa
             return Task.FromResult(true);
         }
         /// <summary>
-        /// Push events, emptying the event queue
+        /// Push given list of events
         /// </summary>
+        /// <param name="events">Events to push to destination</param>
+        /// <returns>True on success, false on failure, null if no events were valid for this destination.</returns>
         Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
             return Task.FromResult((bool?)true);
         }
         /// <summary>
-        /// Push data points, emptying the queue
+        /// Push given list of datapoints.
         /// </summary>
-        /// <param name="dataPointQueue">Data points to be pushed</param>
-        /// <returns>A list of datapoints that failed to be inserted</returns>
+        /// <param name="points">Data points to be pushed</param>
+        /// <returns>True on success, false on failure, null if no events were valid for this destination.</returns>
         Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             return Task.FromResult((bool?)true);
         }
-
+        /// <summary>
+        /// Push given list of references.
+        /// </summary>
+        /// <param name="references">References to push</param>
+        /// <returns>True on success</returns>
         Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
         {
             return Task.FromResult(true);

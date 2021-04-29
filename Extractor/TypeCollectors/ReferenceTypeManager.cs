@@ -42,7 +42,11 @@ namespace Cognite.OpcUa.TypeCollectors
             uaClient = client;
             this.extractor = extractor;
         }
-
+        /// <summary>
+        /// Gets or creates a <see cref="UAReferenceType"/> for <paramref name="id"/>.
+        /// </summary>
+        /// <param name="id">Id to get type for</param>
+        /// <returns>Unique type given by <paramref name="id"/></returns>
         public UAReferenceType GetReferenceType(NodeId id)
         {
             if (id == null) id = NodeId.Null;
@@ -51,7 +55,9 @@ namespace Cognite.OpcUa.TypeCollectors
             mappedTypes[id] = type;
             return type;
         }
-
+        /// <summary>
+        /// Fetch reference type metadata for all retrieved types.
+        /// </summary>
         public async Task GetReferenceTypeDataAsync(CancellationToken token)
         {
             var toRead = mappedTypes.Values.Where(type => !type.HasName && !type.Id.IsNullNodeId).ToList();
@@ -74,7 +80,13 @@ namespace Cognite.OpcUa.TypeCollectors
                 );
             }
         }
-
+        /// <summary>
+        /// Get all references between nodes in <paramref name="nodes"/> with reference type as subtype of
+        /// <paramref name="referenceTypes"/>.
+        /// </summary>
+        /// <param name="nodes">Nodes to fetch references for</param>
+        /// <param name="referenceTypes">ReferenceType filter</param>
+        /// <returns>List of found references</returns>
         public async Task<IEnumerable<UAReference>> GetReferencesAsync(IEnumerable<UANode> nodes, NodeId referenceTypes, CancellationToken token)
         {
             if (!nodes.Any()) return Array.Empty<UAReference>();

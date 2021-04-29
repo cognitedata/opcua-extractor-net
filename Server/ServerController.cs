@@ -8,6 +8,10 @@ using System.Threading.Tasks;
 
 namespace Server
 {
+    /// <summary>
+    /// Convenient wrapper for the server object handling starting/stopping it, 
+    /// and various utility methods used for testing.
+    /// </summary>
     sealed public class ServerController : IDisposable
     {
         public NodeIdReference Ids => Server.Ids;

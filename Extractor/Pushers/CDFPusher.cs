@@ -91,8 +91,9 @@ namespace Cognite.OpcUa.Pushers
         #region Interface
 
         /// <summary>
-        /// Dequeues up to 100000 points from the BufferedDPQueue, then pushes them to CDF. On failure, writes to file if enabled.
-        /// </summary>
+        /// Attempts to push the given list of datapoints to CDF.
+        /// </summary>'
+        /// <returns>True if push succeeded, false if it failed, null if there were no points to push.</returns>
         public async Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             if (points == null) return null;
@@ -170,8 +171,9 @@ namespace Cognite.OpcUa.Pushers
             return true;
         }
         /// <summary>
-        /// Dequeues up to 1000 events from the BufferedEventQueue, then pushes them to CDF.
+        /// Attempts to push the given list of events to CDF.
         /// </summary>
+        /// <returns>True if push succeeded, false if it failed, null if there were no events to push.</returns>
         public async Task<bool?> PushEvents(IEnumerable<UAEvent> events, CancellationToken token)
         {
             if (events == null) return null;
@@ -227,10 +229,11 @@ namespace Cognite.OpcUa.Pushers
         }
 
         /// <summary>
-        /// Empty queue, fetch info for each relevant node, test results against CDF, then synchronize any variables
+        /// Attempts to ensure that the given list of objects and variables are correctly reflected in CDF.
         /// </summary>
         /// <param name="objects">List of objects to be synchronized</param>
         /// <param name="variables">List of variables to be synchronized</param>
+        /// <param name="update">Configuration of what fields, if any, should be updated.</param>
         /// <returns>True if no operation failed unexpectedly</returns>
         public async Task<bool> PushNodes(
             IEnumerable<UANode> objects,
@@ -291,6 +294,13 @@ namespace Cognite.OpcUa.Pushers
             missingTimeseries.Clear();
             mismatchedTimeseries.Clear();
         }
+        /// <summary>
+        /// Initialize extracted datapoint ranges on the given list of states.
+        /// </summary>
+        /// <param name="states">List of states representing timeseries in CDF.
+        /// These must all exist.</param>
+        /// <param name="backfillEnabled">True if backfill is enabled and start points should be read.</param>
+        /// <returns>True if nothing failed unexpectedly.</returns>
         public async Task<bool> InitExtractedRanges(
             IEnumerable<VariableExtractionState> states,
             bool backfillEnabled,
@@ -364,7 +374,12 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
-
+        /// <summary>
+        /// Test that the extractor is capable of pushing to CDF.
+        /// Also fetches DataSet externalId.
+        /// </summary>
+        /// <param name="fullConfig">Configuration in use</param>
+        /// <returns>True if pushing is possible, false if not.</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
             if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
@@ -425,6 +440,11 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
+        /// <summary>
+        /// Push list of references as relationships to CDF.
+        /// </summary>
+        /// <param name="references">List of references to push</param>
+        /// <returns>True if nothing failed unexpectedly</returns>
         public async Task<bool> PushReferences(IEnumerable<UAReference> references, CancellationToken token)
         {
             if (references == null || !references.Any()) return true;
@@ -461,7 +481,11 @@ namespace Cognite.OpcUa.Pushers
         #endregion
 
         #region assets
-
+        /// <summary>
+        /// Update list of nodes as assets in CDF Raw.
+        /// </summary>
+        /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
+        /// <param name="update">Config for what should be updated on each asset.</param>
         private async Task UpdateRawAssets(IDictionary<string, UANode> assetMap, TypeUpdateConfig update, CancellationToken token)
         {
             await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async rows =>
@@ -480,7 +504,11 @@ namespace Cognite.OpcUa.Pushers
                 return updates;
             }, null, token);
         }
-
+        /// <summary>
+        /// Create list of nodes as assets in CDF Raw.
+        /// This does not create rows if they already exist.
+        /// </summary>
+        /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
         private async Task CreateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
             await EnsureRawRows<AssetCreate>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async ids =>
@@ -492,7 +520,10 @@ namespace Cognite.OpcUa.Pushers
                     .ToDictionary(asset => asset.ExternalId);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
-
+        /// <summary>
+        /// Create assets in CDF Clean.
+        /// </summary>
+        /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
         private async Task<IEnumerable<Asset>> CreateAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
             var assets = new List<Asset>();
@@ -521,7 +552,12 @@ namespace Cognite.OpcUa.Pushers
             }
             return assets;
         }
-
+        /// <summary>
+        /// Update assets in CDF Clean.
+        /// </summary>
+        /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
+        /// <param name="assets">List of existing assets in CDF.</param>
+        /// <param name="update">Configuration for which fields should be updated.</param>
         private async Task UpdateAssets(IDictionary<string, UANode> assetMap, IEnumerable<Asset> assets, TypeUpdateConfig update, CancellationToken token)
         {
             var updates = new List<AssetUpdateItem>();
@@ -546,7 +582,11 @@ namespace Cognite.OpcUa.Pushers
                 await destination.CogniteClient.Assets.UpdateAsync(updates, token);
             }
         }
-
+        /// <summary>
+        /// Master method for pushing assets to CDF raw or clean.
+        /// </summary>
+        /// <param name="objects">Assets to push</param>
+        /// <param name="update">Configuration for which fields, if any, to update in CDF</param>
         private async Task PushAssets(
             IEnumerable<UANode> objects,
             TypeUpdateConfig update,
@@ -585,6 +625,11 @@ namespace Cognite.OpcUa.Pushers
         #endregion
 
         #region timeseries
+        /// <summary>
+        /// Update list of nodes as timeseries in CDF Raw.
+        /// </summary>
+        /// <param name="tsMap">Id, node map for the timeseries that should be pushed.</param>
+        /// <param name="update">Config for what should be updated on each timeseries.</param>
         private async Task UpdateRawTimeseries(
             IDictionary<string, UAVariable> tsMap,
             TypeUpdateConfig update,
@@ -606,7 +651,11 @@ namespace Cognite.OpcUa.Pushers
                 return updates;
             }, null, token);
         }
-
+        /// <summary>
+        /// Create list of nodes as timeseries in CDF Raw.
+        /// This does not create rows if they already exist.
+        /// </summary>
+        /// <param name="tsMap">Id, node map for the timeseries that should be pushed.</param>
         private async Task CreateRawTimeseries(
             IDictionary<string, UAVariable> tsMap,
             CancellationToken token)
@@ -620,7 +669,11 @@ namespace Cognite.OpcUa.Pushers
                     .ToDictionary(ts => ts.ExternalId);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
-
+        /// <summary>
+        /// Create timeseries in CDF Clean, optionally creates only minimal timeseries with no metadata or context.
+        /// </summary>
+        /// <param name="tsMap">Id, node map for the timeseries that should be pushed.</param>
+        /// <param name="createMinimalTimeseries">True to create timeseries with no metadata.</param>
         private async Task<IEnumerable<TimeSeries>> CreateTimeseries(
             IDictionary<string, UAVariable> tsMap,
             bool createMinimalTimeseries,
@@ -667,7 +720,12 @@ namespace Cognite.OpcUa.Pushers
             }
             return timeseries.Results;
         }
-
+        /// <summary>
+        /// Update timeseries in CDF Clean.
+        /// </summary>
+        /// <param name="tsMap">Id, node map for the timeseries that should be pushed.</param>
+        /// <param name="timeseries">List of existing timeseries in CDF.</param>
+        /// <param name="update">Configuration for which fields should be updated.</param>
         private async Task UpdateTimeseries(
             IDictionary<string, UAVariable> tsMap,
             IEnumerable<TimeSeries> timeseries,
@@ -696,6 +754,11 @@ namespace Cognite.OpcUa.Pushers
             }
         }
 
+        /// <summary>
+        /// Master method for pushing timeseries to CDF raw or clean.
+        /// </summary>
+        /// <param name="tsList">Timeseries to push</param>
+        /// <param name="update">Configuration for which fields, if any, to update in CDF</param>
         private async Task PushTimeseries(
             IEnumerable<UAVariable> tsList,
             TypeUpdateConfig update,
@@ -731,6 +794,17 @@ namespace Cognite.OpcUa.Pushers
         #endregion
 
         #region raw-utils
+        /// <summary>
+        /// Ensure that raw rows given by <paramref name="keys"/> exist in the table given by
+        /// <paramref name="dbName"/> and <paramref name="tableName"/>.
+        /// Keys that do not exist are built into DTOs by <paramref name="dtoBuilder"/>.
+        /// </summary>
+        /// <typeparam name="T">Type of DTO to build</typeparam>
+        /// <param name="dbName">Name of database in CDF Raw</param>
+        /// <param name="tableName">Name of table in CDF Raw</param>
+        /// <param name="keys">Keys of rows to ensure</param>
+        /// <param name="dtoBuilder">Method to build DTOs for keys that were not found.</param>
+        /// <param name="options"><see cref="JsonSerializerOptions"/> used for serialization.</param>
         private async Task EnsureRawRows<T>(
             string dbName,
             string tableName,
@@ -768,7 +842,18 @@ namespace Cognite.OpcUa.Pushers
 
             await destination.InsertRawRowsAsync(dbName, tableName, createDtos, options, token);
         }
-
+        /// <summary>
+        /// Insert or update raw rows given by <paramref name="toRetrieve"/> in table
+        /// given by <paramref name="dbName"/> and <paramref name="tableName"/>.
+        /// The dtoBuilder is called with all rows that already exist,
+        /// so it must determine which rows should be updated and which should be created.
+        /// </summary>
+        /// <typeparam name="T">Type of DTO to build</typeparam>
+        /// <param name="dbName">Name of database in CDF Raw</param>
+        /// <param name="tableName">Name of table in CDF Raw</param>
+        /// <param name="toRetrieve">Rows to retrieve</param>
+        /// <param name="dtoBuilder">Method to build DTOs, called with existing rows.</param>
+        /// <param name="options"><see cref="JsonSerializerOptions"/> used for serialization.</param>
         private async Task UpsertRawRows<T>(
             string dbName,
             string tableName,
@@ -799,7 +884,7 @@ namespace Cognite.OpcUa.Pushers
                 }
             } while (cursor != null);
 
-            var toCreate = await dtoBuilder(existing.Where(row => toRetrieve.Contains(row.Key)));
+            var toCreate = await dtoBuilder(existing.Where(row => keys.Contains(row.Key)));
             if (!toCreate.Any()) return;
             log.Information("Creating or updating {cnt} raw rows in CDF", toCreate.Count);
 
@@ -808,7 +893,10 @@ namespace Cognite.OpcUa.Pushers
         #endregion
 
         #region references
-
+        /// <summary>
+        /// Create the given list of relationships in CDF, handles duplicates.
+        /// </summary>
+        /// <param name="relationships">Relationships to create</param>
         private async Task PushReferencesChunk(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
             if (!relationships.Any()) return;
@@ -839,6 +927,10 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
         }
+        /// <summary>
+        /// Create the given list of relationships in CDF Raw, skips rows that already exist.
+        /// </summary>
+        /// <param name="relationships">Relationships to create.</param>
         private async Task PushRawReferences(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
             await EnsureRawRows(

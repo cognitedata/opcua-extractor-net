@@ -82,22 +82,30 @@ namespace Cognite.OpcUa.Types
         {
             return HashCode.Combine(Source, Target, Type.Id, IsForward);
         }
-
-        public RelationshipCreate ToRelationship(long? dataSetId, UAExtractor extractor)
+        /// <summary>
+        /// Convert reference to a CDF relationship.
+        /// </summary>
+        /// <param name="dataSetId">Optional dataSetId</param>
+        /// <param name="client">Access to UAClient for creating Ids </param>
+        /// <returns>Created relationship</returns>
+        public RelationshipCreate ToRelationship(long? dataSetId, IUAClientAccess client)
         {
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
+            if (client == null) throw new ArgumentNullException(nameof(client));
             var relationship = new RelationshipCreate
             {
                 DataSetId = dataSetId,
-                SourceExternalId = extractor.GetUniqueId(Source.Id),
-                TargetExternalId = extractor.GetUniqueId(Target.Id),
+                SourceExternalId = client.GetUniqueId(Source.Id),
+                TargetExternalId = client.GetUniqueId(Target.Id),
                 SourceType = Source.GetVertexType(),
                 TargetType = Target.GetVertexType(),
-                ExternalId = extractor.GetRelationshipId(this)
+                ExternalId = client.GetRelationshipId(this)
             };
             return relationship;
         }
     }
+    /// <summary>
+    /// Class representing a vertex in an OPC-UA reference.
+    /// </summary>
     public class ReferenceVertex
     {
         public NodeId Id { get; }
@@ -121,7 +129,10 @@ namespace Cognite.OpcUa.Types
         {
             return HashCode.Combine(Id, IsTimeSeries);
         }
-
+        /// <summary>
+        /// Get the CDF vertex type of this vertex.
+        /// </summary>
+        /// <returns></returns>
         public RelationshipVertexType GetVertexType()
         {
             if (IsTimeSeries) return RelationshipVertexType.TimeSeries;

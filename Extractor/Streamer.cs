@@ -24,7 +24,6 @@ using Opc.Ua.Client;
 using Prometheus;
 using Serilog;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -32,6 +31,10 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
+    /// <summary>
+    /// Handles pushing of events and datapoints to destinations.
+    /// Buffers up to a point.
+    /// </summary>
     public class Streamer
     {
         private readonly UAExtractor extractor;
@@ -59,7 +62,10 @@ namespace Cognite.OpcUa
             this.extractor = extractor;
             this.config = config;
         }
-
+        /// <summary>
+        /// Enqueue a datapoint, pushes if this exceeds the maximum.
+        /// </summary>
+        /// <param name="dp">Datapoint to enqueue.</param>
         public void Enqueue(UADataPoint dp)
         {
             lock (dataPointMutex)
@@ -68,6 +74,10 @@ namespace Cognite.OpcUa
                 if (dataPointQueue.Count >= maxDpCount) extractor.Looper.TriggerPush();
             }
         }
+        /// <summary>
+        /// Enqueue a list of datapoints, pushes if this exceeds the maximum.
+        /// </summary>
+        /// <param name="dps">Datapoints to enqueue.</param>
         public void Enqueue(IEnumerable<UADataPoint> dps)
         {
             if (dps == null) return;
@@ -78,6 +88,10 @@ namespace Cognite.OpcUa
 
             }
         }
+        /// <summary>
+        /// Enqueues an event, pushes if this exceeds the maximum.
+        /// </summary>
+        /// <param name="evt">Event to enqueue.</param>
         public void Enqueue(UAEvent evt)
         {
             lock (eventMutex)
@@ -86,6 +100,10 @@ namespace Cognite.OpcUa
                 if (eventQueue.Count >= maxEventCount) extractor.Looper.TriggerPush();
             }
         }
+        /// <summary>
+        /// Enqueues a list of events, pushes if this exceeds the maximum.
+        /// </summary>
+        /// <param name="events">Events to enqueue.</param>
         public void Enqueue(IEnumerable<UAEvent> events)
         {
             if (events == null) return;
@@ -327,8 +345,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="value">DataValue to be transformed</param>
         /// <param name="variable">NodeExtractionState for variable the datavalue belongs to</param>
-        /// <param name="uniqueId"></param>
-        /// <returns>UniqueId to be used, for efficiency</returns>
+        /// <returns>List of converted datapoints</returns>
         public IEnumerable<UADataPoint> ToDataPoint(DataValue value, VariableExtractionState variable)
         {
             if (value == null) throw new ArgumentNullException(nameof(value));
@@ -374,6 +391,7 @@ namespace Cognite.OpcUa
             var sdp = variable.DataType.ToDataPoint(extractor, value.WrappedValue, value.SourceTimestamp, uniqueId);
             return new[] { sdp };
         }
+        
         /// <summary>
         /// Handle subscription callback for events
         /// </summary>
@@ -412,7 +430,6 @@ namespace Cognite.OpcUa
                 Enqueue(buffEvent);
             }
         }
-        
         
         /// <summary>
         /// Construct event from filter and collection of event fields

@@ -56,7 +56,15 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
         }
-
+        /// <summary>
+        /// Update the field in <paramref name="ret"/> by comparing the value in
+        /// <paramref name="raw"/> with <paramref name="newValue"/>.
+        /// If the new value is null or whitespace, it is ignored.
+        /// </summary>
+        /// <param name="ret"></param>
+        /// <param name="raw"></param>
+        /// <param name="newValue"></param>
+        /// <param name="key"></param>
         private static void UpdateIfModified(Dictionary<string, object> ret, RawRow raw, string newValue, string key)
         {
             if (raw.Columns.TryGetValue(key, out var column))
@@ -77,6 +85,17 @@ namespace Cognite.OpcUa.Pushers
                 ret[key] = newValue;
             }
         }
+        /// <summary>
+        /// Parse description, name and metadata for the given node,
+        /// updating fields modified from the original raw row <paramref name="raw"/>,
+        /// and converting the result to a json element.
+        /// </summary>
+        /// <param name="extractor">Active extractor, used for building metadata</param>
+        /// <param name="node">Node to create update for</param>
+        /// <param name="raw">Existing raw row</param>
+        /// <param name="update">Configuration for which fields to update</param>
+        /// <param name="ret">Dictionary containing values to be serialized</param>
+        /// <returns>Converted json element, or null if updating was unnecessary.</returns>
         private static JsonElement? CreateRawUpdateCommon(
             UAExtractor extractor,
             UANode node,
@@ -141,6 +160,17 @@ namespace Cognite.OpcUa.Pushers
             return JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(ret)).RootElement;
         }
 
+        /// <summary>
+        /// Create Raw update for a variable as timeseries.
+        /// updating fields modified from the original raw row<paramref name= "raw" />,
+        /// and converting the result to a json element.
+        /// </summary>
+        /// <param name="variable">Node to create update for</param>
+        /// <param name="extractor">Active extractor, used for building metadata</param>
+        /// <param name="raw">Existing raw row</param>
+        /// <param name="update">Configuration for which fields to update</param>
+        /// <param name="metaMap">Map for special timeseries attributes to be sat based on metadata</param>
+        /// <returns>Converted json element, or null if updating was unnecessary</returns>
         public static JsonElement? CreateRawTsUpdate(
             UAVariable variable,
             UAExtractor extractor,
@@ -167,7 +197,17 @@ namespace Cognite.OpcUa.Pushers
             }
             return CreateRawUpdateCommon(extractor, variable, raw, update, ret);
         }
-
+        /// <summary>
+        /// Create Raw update for a node as asset.
+        /// updating fields modified from the original raw row<paramref name= "raw" />,
+        /// and converting the result to a json element.
+        /// </summary>
+        /// <param name="node">Node to create update for</param>
+        /// <param name="extractor">Active extractor, used for building metadata</param>
+        /// <param name="raw">Existing raw row</param>
+        /// <param name="update">Configuration for which fields to update</param>
+        /// <param name="metaMap">Map for special asset attributes to be sat based on metadata</param>
+        /// <returns>Converted json element, or null if updating was unnecessary</returns>
         public static JsonElement? CreateRawAssetUpdate(
             UANode node,
             UAExtractor extractor,
@@ -192,6 +232,15 @@ namespace Cognite.OpcUa.Pushers
             }
             return CreateRawUpdateCommon(extractor, node, raw, update, ret);
         }
+        /// <summary>
+        /// Create timeseries update from existing timeseries and new OPC-UA variable.
+        /// </summary>
+        /// <param name="extractor">Active extractor, used for building metadata</param>
+        /// <param name="old">Existing timeseries</param>
+        /// <param name="newTs">New OPC-UA variable</param>
+        /// <param name="update">Configuration for which fields to update</param>
+        /// <param name="nodeToAssetIds">Map from NodeIds to assetIds, necessary for setting parents</param>
+        /// <returns>Update object, or null if updating was unnecessary</returns>
         public static TimeSeriesUpdate GetTSUpdate(
             UAExtractor extractor,
             TimeSeries old,
@@ -240,7 +289,15 @@ namespace Cognite.OpcUa.Pushers
             }
             return tsUpdate;
         }
-
+        
+        /// <summary>
+        /// Create asset update from existing asset and new OPC-UA node.
+        /// </summary>
+        /// <param name="extractor">Active extractor, used for building metadata</param>
+        /// <param name="old">Existing asset</param>
+        /// <param name="newAsset">New OPC-UA node</param>
+        /// <param name="update">Configuration for which fields to update</param>
+        /// <returns>Update object, or null if updating was unnecessary</returns>
         public static AssetUpdate GetAssetUpdate(
             Asset old,
             UANode newAsset,
@@ -284,12 +341,16 @@ namespace Cognite.OpcUa.Pushers
             return assetUpdate;
         }
     }
-
+    /// <summary>
+    /// EventCreate which can can be created without access to CDF Clean.
+    /// </summary>
     public class StatelessEventCreate : EventCreate
     {
         public IEnumerable<string> AssetExternalIds { get; set; }
     }
-
+    /// <summary>
+    /// TimeSeriesCreate which can can be created without access to CDF Clean.
+    /// </summary>
     public class StatelessTimeSeriesCreate : TimeSeriesCreate
     {
         public string AssetExternalId { get; set; }
