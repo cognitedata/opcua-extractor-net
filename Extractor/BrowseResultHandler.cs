@@ -142,9 +142,9 @@ namespace Cognite.OpcUa
             }
 
             log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
-                " representing {var} variables and {robj} objects.",
+                " {robj} objects and {var} variables.",
                 finalDestinationObjects.Count, finalDestinationVariables.Count,
-                finalSourceVariables.Count, finalSourceObjects.Count);
+                finalSourceObjects.Count, finalSourceVariables.Count);
             if (finalReferences.Any())
             {
                 log.Information("Found a total of {cnt} references", finalReferences.Count);
@@ -402,7 +402,7 @@ namespace Cognite.OpcUa
 
             if (config.Events.Enabled
                 && (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0
-                && extractor.State.GetEmitterState(node.Id) != null)
+                && extractor.State.GetEmitterState(node.Id) == null)
             {
                 bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
                 var eventState = new EventExtractionState(extractor, node.Id, history, history && config.History.Backfill);

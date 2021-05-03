@@ -52,10 +52,7 @@ namespace Cognite.OpcUa
         public ReferenceTypeManager ReferenceTypeManager { get; private set; }
         public IEnumerable<NodeId> RootNodes { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
-        private readonly ConcurrentQueue<UANode> commonQueue = new ConcurrentQueue<UANode>();
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
-        private readonly ConcurrentQueue<(ReferenceDescription Desc, NodeId ParentId)> referenceQueue =
-            new ConcurrentQueue<(ReferenceDescription, NodeId)>();
 
         // Concurrent reading of properties
         private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
