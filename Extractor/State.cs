@@ -155,16 +155,7 @@ namespace Cognite.OpcUa
         public void AddActiveNode(UANode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
             if (node == null) throw new ArgumentNullException(nameof(node));
-            nodeChecksums[node.Id] = node.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
-        }
-        /// <summary>
-        /// Add variable to overview of known mapped nodes
-        /// </summary>
-        /// <param name="node">Node to add</param>
-        public void AddActiveNode(UAVariable node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
-        {
-            if (node == null) throw new ArgumentNullException(nameof(node));
-            if (node.Index != -1) throw new InvalidOperationException();
+            if (node is UAVariable variable && variable.Index != -1) throw new InvalidOperationException();
             nodeChecksums[node.Id] = node.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
         }
         /// <summary>

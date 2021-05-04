@@ -89,13 +89,13 @@ namespace Cognite.OpcUa.TypeCollectors
         /// <returns>List of found references</returns>
         public async Task<IEnumerable<UAReference>> GetReferencesAsync(IEnumerable<UANode> nodes, NodeId referenceTypes, CancellationToken token)
         {
-            if (!nodes.Any()) return Array.Empty<UAReference>();
+            if (!nodes.Any()) return Enumerable.Empty<UAReference>();
 
             var nodeMap = nodes.ToDictionary(node => node.Id);
 
             // We only care about references to objects or variables, at least for now.
             // Only references between objects represented in the extracted hierarchy are relevant.
-            log.Information("Get extra references from the server");
+            log.Information("Get extra references from the server for {cnt} nodes", nodeMap.Count);
             var references = await Task.Run(() => uaClient.GetNodeChildren(
                 nodeMap.Keys,
                 referenceTypes,

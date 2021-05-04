@@ -230,11 +230,11 @@ namespace Cognite.OpcUa
                 {
                     case TransformationType.Ignore:
                         node.Attributes.Ignore = true;
-                        log.Debug("Ignoring node {name} {id} due to matching ignore filter {idx}", node.DisplayName, node.Id, index);
+                        log.Verbose("Ignoring node {name} {id} due to matching ignore filter {idx}", node.DisplayName, node.Id, index);
                         break;
                     case TransformationType.Property:
                         node.Attributes.IsProperty = true;
-                        log.Debug("Treating node {name} {id} as property due to matching filter {idx}", node.DisplayName, node.Id, index);
+                        log.Verbose("Treating node {name} {id} as property due to matching filter {idx}", node.DisplayName, node.Id, index);
                         break;
                 }
             }

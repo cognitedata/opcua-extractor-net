@@ -201,7 +201,7 @@ namespace Test.Integration
                             && !state.IsBackfilling), 5);
 
             await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 2 && pusher.Events[ObjectIds.Server].Count == 700, 5,
-                () => $"Expected to get 700 events but got {pusher.Events[ObjectIds.Server].Count}");
+                () => $"Expected to get 700 events but got {pusher.Events[ObjectIds.Server].Count} for {pusher.Events.Count}");
 
             var evt = pusher.Events[ObjectIds.Server].First(evt => evt.Message == "prop 0");
             Assert.Equal(ObjectIds.Server, evt.EmittingNode);
