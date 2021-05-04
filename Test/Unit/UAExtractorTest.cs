@@ -182,8 +182,7 @@ namespace Test.Unit
             extractor.State.SetNodeState(new VariableExtractionState(tester.Client, variables[1], false, false));
 
 
-            var refManager = (ReferenceTypeManager)extractor.GetType().GetField("referenceTypeManager",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(extractor);
+            var refManager = extractor.ReferenceTypeManager;
 
             var references = new List<UAReference>
             {
