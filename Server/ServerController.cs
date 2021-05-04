@@ -20,6 +20,7 @@ namespace Server
         private IEnumerable<PredefinedSetup> setups;
         private int port;
         public ServerIssueConfig Issues => Server.Issues;
+        public string ConfigRoot { get; set; } = "Server.Test";
 
         public ServerController(IEnumerable<PredefinedSetup> setups, int port = 62546)
         {
@@ -37,10 +38,10 @@ namespace Server
         public async Task Start()
         {
             ApplicationInstance app = new ApplicationInstance();
-            app.ConfigSectionName = "Server.Test";
+            app.ConfigSectionName = ConfigRoot;
             try
             {
-                var cfg = await app.LoadApplicationConfiguration(Path.Join("config", "Server.Test.Config.xml"), false);
+                var cfg = await app.LoadApplicationConfiguration(Path.Join("config", $"{ConfigRoot}.Config.xml"), false);
                 cfg.ServerConfiguration.BaseAddresses[0] = $"opc.tcp://localhost:{port}";
                 await app.CheckApplicationInstanceCertificate(false, 0);
                 Server = new TestServer(setups);

@@ -41,6 +41,14 @@ namespace Test.Unit
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
                 PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, 62000);
+            Server.ConfigRoot = "Server.Test.UaClient";
+
+            if (Directory.Exists("./uaclienttestcerts/pki/"))
+            {
+                Directory.Delete("./uaclienttestcerts/pki/", true);
+            }
+
+
             Server.Start().Wait();
 
             Client = new UAClient(Config);
@@ -164,7 +172,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestCertificatePath()
         {
-            if (File.Exists("./Certificates-test/"))
+            if (File.Exists("./certificates-test/"))
             {
                 Directory.Delete("./certificates-test/", true);
             }
@@ -184,6 +192,65 @@ namespace Test.Unit
                 await tester.Client.Run(tester.Source.Token);
             }
         }
+        [Fact]
+        public async Task TestCertificateValidation()
+        {
+            // Slightly hacky test. Use the server application certificate, and validate it using the built-in systems in
+            // the SDK.
+
+            tester.Client.Close();
+            tester.Server.Server.AllowAnonymous = false;
+            File.Delete("test-cert.der");
+            try
+            {
+                var certCfg = new X509CertConfig();
+              
+                var serverCertName = new DirectoryInfo("./uaclienttestcerts/pki/own/private/").GetFiles().First().FullName;
+                certCfg.FileName = serverCertName;
+                tester.Config.Source.X509Certificate = certCfg;
+
+                tester.Server.Server.SetValidator(true);
+
+                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token));
+
+                tester.Server.Server.SetValidator(false);
+
+                await tester.Client.Run(tester.Source.Token);
+            }
+            finally
+            {
+                tester.Server.Server.AllowAnonymous = true;
+                tester.Config.Source.X509Certificate = null;
+                await tester.Client.Run(tester.Source.Token);
+            }
+        }
+
+        [Fact]
+        public async Task TestPasswordAuthentication()
+        {
+            tester.Client.Close();
+            tester.Server.Server.AllowAnonymous = false;
+
+            try
+            {
+                tester.Config.Source.Username = "testuser";
+                tester.Config.Source.Password = "wrongpassword";
+
+                await Assert.ThrowsAsync<SilentServiceException>(async () => await tester.Client.Run(tester.Source.Token));
+
+                tester.Config.Source.Password = "testpassword";
+
+                await tester.Client.Run(tester.Source.Token);
+            }
+            finally
+            {
+                tester.Server.Server.AllowAnonymous = true;
+                tester.Config.Source.Username = null;
+                tester.Config.Source.Password = null;
+                await tester.Client.Run(tester.Source.Token);
+            }
+        }
+
         #endregion
 
         #region browse

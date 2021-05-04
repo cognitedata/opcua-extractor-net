@@ -31,6 +31,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -134,6 +135,60 @@ namespace Cognite.OpcUa
             Started = false;
         }
 
+        private X509Certificate2 GetCertificate(X509CertConfig certConf)
+        {
+            if (certConf == null) return null;
+            if (certConf.Store != X509CertificateLocation.None)
+            {
+                var store = new X509Store(
+                    certConf.Store == X509CertificateLocation.Local
+                    ? StoreLocation.LocalMachine
+                    : StoreLocation.CurrentUser);
+                try
+                {
+                    store.Open(OpenFlags.ReadOnly);
+
+                    var certCollection = store.Certificates;
+
+                    var certificates = certCollection
+                        .Find(X509FindType.FindBySubjectDistinguishedName, certConf.CertName, true);
+                    if (certificates.Count == 0) return null;
+
+                    return certificates[0];
+                }
+                finally
+                {
+                    store.Close();
+                }
+            }
+
+            if (string.IsNullOrEmpty(certConf.FileName)) return null;
+
+            X509Certificate2 cert;
+            if (!string.IsNullOrEmpty(config.Source.X509Certificate.Password))
+            {
+                cert = new X509Certificate2(config.Source.X509Certificate.FileName, config.Source.X509Certificate.Password);
+            }
+            else
+            {
+                cert = new X509Certificate2(config.Source.X509Certificate.FileName);
+            }
+            return cert;
+        }
+
+        protected UserIdentity GetUserIdentity()
+        {
+            if (!string.IsNullOrEmpty(config.Source.Username)) return new UserIdentity(config.Source.Username, config.Source.Password);
+            if (config.Source.X509Certificate != null)
+            {
+                var cert = GetCertificate(config.Source.X509Certificate);
+
+                return new UserIdentity(cert);
+            }
+
+            return new UserIdentity(new AnonymousIdentityToken());
+        }
+
         /// <summary>
         /// Load XML configuration file, override certain fields with environment variables if set.
         /// </summary>
@@ -204,7 +259,10 @@ namespace Cognite.OpcUa
             }
             var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri}", endpoint.Description.SecurityPolicyUri);
+            var identity = GetUserIdentity();
+            log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {idt}",
+                endpoint.Description.SecurityPolicyUri,
+                identity.DisplayName);
             try
             {
                 Session?.Dispose();
@@ -214,9 +272,7 @@ namespace Cognite.OpcUa
                     false,
                     ".NET OPC-UA Extractor Client",
                     0,
-                    (config.Source.Username == null || !config.Source.Username.Trim().Any())
-                        ? new UserIdentity(new AnonymousIdentityToken())
-                        : new UserIdentity(config.Source.Username, config.Source.Password),
+                    identity,
                     null
                 );
                 Session.KeepAliveInterval = config.Source.KeepAliveInterval;

@@ -54,6 +54,21 @@ namespace Cognite.OpcUa
         private int subscriptionChunk = 1000;
         public int KeepAliveInterval { get; set; } = 5000;
         public bool RestartOnReconnect { get; set; }
+        [YamlDotNet.Serialization.YamlMember(Alias = "x509-certificate")]
+        public X509CertConfig X509Certificate { get; set; }
+    }
+    public enum X509CertificateLocation
+    {
+        None,
+        User,
+        Local
+    };
+    public class X509CertConfig
+    {
+        public string FileName { get; set; }
+        public string Password { get; set; }
+        public X509CertificateLocation Store { get; set; } = X509CertificateLocation.None;
+        public string CertName { get; set; }
     }
     public class ExtractionConfig
     {
