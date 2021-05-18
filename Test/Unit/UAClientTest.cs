@@ -200,7 +200,6 @@ namespace Test.Unit
 
             tester.Client.Close();
             tester.Server.Server.AllowAnonymous = false;
-            File.Delete("test-cert.der");
             try
             {
                 var certCfg = new X509CertConfig();
@@ -221,6 +220,7 @@ namespace Test.Unit
             {
                 tester.Server.Server.AllowAnonymous = true;
                 tester.Config.Source.X509Certificate = null;
+                tester.Server.Server.SetValidator(false);
                 await tester.Client.Run(tester.Source.Token);
             }
         }
@@ -1015,8 +1015,10 @@ namespace Test.Unit
             await mgr.StartNodeMetrics(tester.Source.Token);
 
             tester.Server.SetDiagnosticsEnabled(true);
-            
+
+            // await CommonTestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_node_CurrentSessionCount") >= 1, 5);
             await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_CurrentSessionCount", 1), 5);
+
             tester.Client.RemoveSubscription("NodeMetrics");
             tester.Server.SetDiagnosticsEnabled(false);
             tester.Config.Metrics.Nodes = null;

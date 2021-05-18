@@ -265,7 +265,12 @@ namespace Cognite.OpcUa
                 identity.DisplayName);
             try
             {
+                if (Session?.Connected ?? false)
+                {
+                    Session.Close();
+                }
                 Session?.Dispose();
+
                 Session = await Session.Create(
                     AppConfig,
                     endpoint,
