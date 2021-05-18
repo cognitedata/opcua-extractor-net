@@ -279,8 +279,7 @@ namespace Test.Unit
             pusher1.PendingNodes.AddRange(nodes);
             pusher2.PendingNodes.Add(nodes.First());
 
-            var refManager = (ReferenceTypeManager)extractor.GetType().GetField("referenceTypeManager",
-                BindingFlags.Instance | BindingFlags.NonPublic).GetValue(extractor);
+            var refManager = extractor.ReferenceTypeManager;
 
             var reference = new UAReference(
                 ReferenceTypeIds.Organizes,

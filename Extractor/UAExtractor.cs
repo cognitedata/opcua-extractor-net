@@ -49,20 +49,16 @@ namespace Cognite.OpcUa
         public DataTypeManager DataTypeManager => uaClient.DataTypeManager;
 
         private readonly HistoryReader historyReader;
-        private readonly ReferenceTypeManager referenceTypeManager;
+        public ReferenceTypeManager ReferenceTypeManager { get; private set; }
         public IEnumerable<NodeId> RootNodes { get; private set; }
         private readonly IEnumerable<IPusher> pushers;
-        private readonly ConcurrentQueue<UANode> commonQueue = new ConcurrentQueue<UANode>();
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
-        private readonly ConcurrentQueue<(ReferenceDescription Desc, NodeId ParentId)> referenceQueue =
-            new ConcurrentQueue<(ReferenceDescription, NodeId)>();
 
         // Concurrent reading of properties
         private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
-
-        private IEnumerable<NodeTransformation> transformations;
+        public IEnumerable<NodeTransformation> Transformations { get; private set; }
 
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
@@ -116,7 +112,7 @@ namespace Cognite.OpcUa
             StateStorage = stateStore;
             if (config.Extraction.Relationships.Enabled)
             {
-                referenceTypeManager = new ReferenceTypeManager(uaClient, this);
+                ReferenceTypeManager = new ReferenceTypeManager(uaClient, this);
             }
 
             source = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -222,9 +218,10 @@ namespace Cognite.OpcUa
             }
 
             log.Debug("Begin mapping directory");
+            var handler = new BrowseResultHandler(config, this, uaClient);
             try
             {
-                await uaClient.BrowseNodeHierarchy(RootNodes, HandleNode, source.Token);
+                await uaClient.BrowseNodeHierarchy(RootNodes, handler.Callback, source.Token);
             }
             catch (Exception ex)
             {
@@ -237,7 +234,7 @@ namespace Cognite.OpcUa
             IEnumerable<Task> synchTasks;
             try
             {
-                synchTasks = await MapUAToDestinations();
+                synchTasks = await MapUAToDestinations(handler);
             }
             catch (Exception ex)
             {
@@ -295,8 +292,11 @@ namespace Cognite.OpcUa
             await uaClient.WaitForOperations();
             ConfigureExtractor();
             uaClient.ResetVisitedNodes();
-            await uaClient.BrowseNodeHierarchy(RootNodes, HandleNode, source.Token);
-            var synchTasks = await MapUAToDestinations();
+
+            var handler = new BrowseResultHandler(config, this, uaClient);
+            await uaClient.BrowseNodeHierarchy(RootNodes, handler.Callback, source.Token);
+            var synchTasks = await MapUAToDestinations(handler);
+
             Looper.ScheduleTasks(synchTasks);
             Started = true;
             log.Information("Successfully restarted extractor");
@@ -314,8 +314,9 @@ namespace Cognite.OpcUa
                 {
                     nodesToBrowse.Add(id);
                 }
-                await uaClient.BrowseNodeHierarchy(nodesToBrowse.Distinct(), HandleNode, source.Token);
-                var historyTasks = await MapUAToDestinations();
+                var handler = new BrowseResultHandler(config, this, uaClient);
+                await uaClient.BrowseNodeHierarchy(nodesToBrowse.Distinct(), handler.Callback, source.Token);
+                var historyTasks = await MapUAToDestinations(handler);
                 Looper.ScheduleTasks(historyTasks);
             }
         }
@@ -459,9 +460,11 @@ namespace Cognite.OpcUa
         public async Task Rebrowse()
         {
             // If we are updating we want to re-discover nodes in order to run them through mapping again.
-            await uaClient.BrowseNodeHierarchy(RootNodes, HandleNode, source.Token,
+            var handler = new BrowseResultHandler(config, this, uaClient);
+
+            await uaClient.BrowseNodeHierarchy(RootNodes, handler.Callback, source.Token,
                 !config.Extraction.Update.AnyUpdate && !config.Extraction.Relationships.Enabled);
-            var historyTasks = await MapUAToDestinations();
+            var historyTasks = await MapUAToDestinations(handler);
             Looper.ScheduleTasks(historyTasks);
         }
 
@@ -518,33 +521,15 @@ namespace Cognite.OpcUa
         /// This is the entry point for mapping on the extractor.
         /// </summary>
         /// <returns>A list of history tasks</returns>
-        private async Task<IEnumerable<Task>> MapUAToDestinations()
+        private async Task<IEnumerable<Task>> MapUAToDestinations(BrowseResultHandler handler)
         {
-            var nodes = await GetNodesFromQueue();
-
-            IEnumerable<UAReference> references = null;
-            if (config.Extraction.Relationships.Enabled)
-            {
-                references = await GetRelationshipData(nodes);
-            }
-            nodes.ClearRaw();
-
-            if (!nodes.Objects.Any() && !nodes.Timeseries.Any() && !nodes.Variables.Any() && (references == null || !references.Any()))
-            {
-                log.Information("Mapping resulted in no new nodes");
-                return Array.Empty<Task>();
-            }
-
-
-            log.Information("Map {obj} objects, and {ts} destination timeseries, representing {var} variables, to destinations",
-                nodes.Objects.Count, nodes.Timeseries.Count, nodes.Variables.Count);
+            var result = await handler.ParseResults(source.Token);
+            if (result == null) return Enumerable.Empty<Task>();
 
             Streamer.AllowData = State.NodeStates.Any();
-
-            await PushNodes(nodes.Objects, nodes.Timeseries, references);
-
+            await PushNodes(result.DestinationObjects, result.DestinationVariables, result.DestinationReferences);
             // Changed flag means that it already existed, so we avoid synchronizing these.
-            var historyTasks = Synchronize(nodes.Variables.Where(var => !var.Changed));
+            var historyTasks = Synchronize(result.SourceVariables.Where(var => !var.Changed));
             Starting.Set(0);
             return historyTasks;
         }
@@ -621,7 +606,7 @@ namespace Cognite.OpcUa
             }
             
             uaClient.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
-            this.transformations = transformations;
+            Transformations = transformations;
         }
 
         /// <summary>
@@ -679,272 +664,6 @@ namespace Cognite.OpcUa
                 }
             }
             BuildTransformations();
-        }
-
-        /// <summary>
-        /// Represents the result of browsing the hierarchy.
-        /// </summary>
-        private class BrowseResult
-        {
-            /// <summary>
-            /// All nodes that should be mapped to destination objects
-            /// </summary>
-            public List<UANode> Objects { get; } = new List<UANode>();
-            /// <summary>
-            /// All nodes that should be mapped to destination variables
-            /// </summary>
-            public List<UAVariable> Timeseries { get; } = new List<UAVariable>();
-            /// <summary>
-            /// All source system variables that should be read from
-            /// </summary>
-            public List<UAVariable> Variables { get; } = new List<UAVariable>();
-            /// <summary>
-            /// All source system objects
-            /// </summary>
-            public List<UANode> RawObjects { get; private set; } = new List<UANode>();
-            /// <summary>
-            /// All source system variables
-            /// </summary>
-            public List<UAVariable> RawVariables { get; private set; } = new List<UAVariable>();
-            /// <summary>
-            /// Helps free up memory, especially on re-browse
-            /// </summary>
-            public void ClearRaw()
-            {
-                RawObjects = null;
-                RawVariables = null;
-            }
-        }
-
-        /// <summary>
-        /// Retrieve extra node data for the nodes in <paramref name="result"/>
-        /// </summary>
-        /// <param name="update">UpdateConfig used to determine what should be fetched</param>
-        /// <param name="result">BrowseResult containing the nodes to get data for</param>
-        private async Task GetExtraNodeData(UpdateConfig update, BrowseResult result)
-        {
-            log.Information("Getting data for {NumVariables} variables and {NumObjects} objects",
-                result.RawVariables.Count, result.RawObjects.Count);
-
-            var nodes = result.RawObjects.Concat(result.RawVariables);
-
-            if (update.Objects.Metadata || update.Variables.Metadata)
-            {
-                var toReadProperties = nodes
-                    .Where(node => State.IsMappedNode(node.Id)
-                        && update.Objects.Metadata && !(node is UAVariable)
-                            || update.Variables.Metadata && (node is UAVariable))
-                    .ToList();
-                if (toReadProperties.Any())
-                {
-                    await ReadProperties(toReadProperties);
-                }
-            }
-
-            var extraMetaTasks = new List<Task>();
-            extraMetaTasks.Add(DataTypeManager.GetDataTypeMetadataAsync(
-                result.RawVariables.Select(variable => variable.DataType.Raw).ToHashSet(), source.Token));
-            if (config.Extraction.NodeTypes.Metadata)
-            {
-                extraMetaTasks.Add(uaClient.ObjectTypeManager.GetObjectTypeMetadataAsync(source.Token));
-            }
-            if (config.Extraction.NodeTypes.AsNodes)
-            {
-                var toRead = nodes.Where(node => node.NodeClass == NodeClass.VariableType)
-                    .Select(node => node as UAVariable)
-                    .Where(node => node != null)
-                    .ToList();
-                extraMetaTasks.Add(Task.Run(() => uaClient.ReadNodeValues(toRead, source.Token)));
-            }
-            await Task.WhenAll(extraMetaTasks);
-        }
-
-        /// <summary>
-        /// Parse the list of raw objects, add new nodes to the state, and return
-        /// a list of nodes that should be pushed to destinations.
-        /// </summary>
-        /// <param name="update">Update configuration used to determine what nodes are changed.</param>
-        /// <param name="rawObjects">List of nodes to be filtered.</param>
-        /// <returns>List of filtered nodes.</returns>
-        private IEnumerable<UANode> FilterObjects(UpdateConfig update, IEnumerable<UANode> rawObjects)
-        {
-            foreach (var node in rawObjects)
-            {
-                if (update.AnyUpdate)
-                {
-                    var oldChecksum = State.GetNodeChecksum(node.Id);
-                    if (oldChecksum != null)
-                    {
-                        node.Changed = oldChecksum != node.GetUpdateChecksum(update.Objects, config.Extraction.DataTypes.DataTypeMetadata,
-                            config.Extraction.NodeTypes.Metadata);
-                        if (node.Changed)
-                        {
-
-                            State.AddActiveNode(node, update.Objects, config.Extraction.DataTypes.DataTypeMetadata,
-                                config.Extraction.NodeTypes.Metadata);
-                            yield return node;
-                        }
-                        continue;
-                    }
-                }
-                log.Verbose(node.ToString());
-
-                State.AddActiveNode(node, update.Objects, config.Extraction.DataTypes.DataTypeMetadata,
-                    config.Extraction.NodeTypes.Metadata);
-                yield return node;
-            }
-        }
-
-        /// <summary>
-        /// Create event emitter states from list of browsed nodes. Using the EventNotifier attribute.
-        /// </summary>
-        /// <param name="result">BrowseResult containing nodes to consider.</param>
-        private void InitEventStates(BrowseResult result)
-        {
-            foreach (var node in result.Objects.Concat(result.Variables))
-            {
-                if ((node.EventNotifier & EventNotifiers.SubscribeToEvents) == 0) continue;
-                if (State.GetEmitterState(node.Id) != null) continue;
-                bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
-                var eventState = new EventExtractionState(this, node.Id, history, history && config.History.Backfill);
-                State.SetEmitterState(eventState);
-            }
-        }
-
-        /// <summary>
-        /// Filter variables, creating new objects and variables based on
-        /// attributes and config.
-        /// </summary>
-        /// <param name="update">Configuration used to determine what nodes have changed.</param>
-        /// <param name="result">BrowseResult containing nodes to filter.</param>
-        private void FilterVariables(UpdateConfig update, BrowseResult result)
-        {
-            foreach (var node in result.RawVariables)
-            {
-                if (!DataTypeManager.AllowTSMap(node)) continue;
-                if (update.AnyUpdate)
-                {
-                    var oldChecksum = State.GetNodeChecksum(node.Id);
-                    if (oldChecksum != null)
-                    {
-                        node.Changed = oldChecksum != node.GetUpdateChecksum(update.Variables, config.Extraction.DataTypes.DataTypeMetadata,
-                            config.Extraction.NodeTypes.Metadata);
-
-                        if (node.Changed)
-                        {
-                            var oldState = State.GetNodeState(node.Id);
-                            if (oldState == null) continue;
-                            State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata,
-                                config.Extraction.NodeTypes.Metadata);
-                            if (oldState.IsArray)
-                            {
-                                var children = node.CreateArrayChildren();
-                                foreach (var child in children)
-                                {
-                                    child.Changed = true;
-                                    result.Timeseries.Add(child);
-                                }
-                                result.Objects.Add(node);
-                            }
-                            else
-                            {
-                                result.Timeseries.Add(node);
-                                result.Variables.Add(node);
-                            }
-                        }
-                        continue;
-                    }
-                }
-                log.Verbose(node.ToString());
-                result.Variables.Add(node);
-                State.AddActiveNode(node, update.Variables, config.Extraction.DataTypes.DataTypeMetadata,
-                    config.Extraction.NodeTypes.Metadata);
-
-                if (node.NodeClass == NodeClass.Variable)
-                {
-                    var state = new VariableExtractionState(this, node, node.Historizing, node.Historizing && config.History.Backfill);
-                    if (state.IsArray)
-                    {
-                        var children = node.CreateArrayChildren();
-                        foreach (var child in children)
-                        {
-                            result.Timeseries.Add(child);
-                            var uniqueId = GetUniqueId(child.Id, child.Index);
-                            State.SetNodeState(state, uniqueId);
-                            State.RegisterNode(node.Id, uniqueId);
-                        }
-                        result.Objects.Add(node);
-                    }
-                    else
-                    {
-                        State.SetNodeState(state);
-                        result.Timeseries.Add(node);
-                    }
-                }
-                else
-                {
-                    result.Objects.Add(node);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Read nodes from commonQueue and sort them into lists of context objects, destination timeseries and source variables
-        /// </summary>
-        private async Task<BrowseResult> GetNodesFromQueue()
-        {
-            var result = new BrowseResult();
-            var nodeMap = new Dictionary<NodeId, UANode>();
-
-            while (commonQueue.TryDequeue(out UANode node))
-            {
-                if (node.Ignore) continue;
-                nodeMap[node.Id] = node;
-            }
-
-            await Task.Run(() => uaClient.ReadNodeData(nodeMap.Values, source.Token));
-
-            foreach (var node in nodeMap.Values)
-            {
-                if (node.ParentId != null && !node.ParentId.IsNullNodeId && nodeMap.TryGetValue(node.ParentId, out var parent))
-                {
-                    node.Parent = parent;
-                }
-
-                if (transformations != null)
-                {
-                    foreach (var trns in transformations)
-                    {
-                        if (node.Ignore) break;
-                        trns.ApplyTransformation(node, uaClient.NamespaceTable);
-                    }
-                }
-
-                if (node.Ignore) continue;
-
-                if (node.IsProperty)
-                {
-                    if (node.Parent == null) continue;
-                    node.Parent.AddProperty(node);
-                }
-                else if (node is UAVariable variable)
-                {
-                    result.RawVariables.Add(variable);
-                }
-                else
-                {
-                    result.RawObjects.Add(node);
-                }
-            }
-
-            var update = config.Extraction.Update;
-            await GetExtraNodeData(update, result);
-
-            result.Objects.AddRange(FilterObjects(update, result.RawObjects));
-            InitEventStates(result);
-            FilterVariables(update, result);
-
-            return result;
         }
 
         /// <summary>
@@ -1053,61 +772,6 @@ namespace Cognite.OpcUa
             }
 
             pusher.Initialized |= initial;
-        }
-
-        /// <summary>
-        /// Get references for the given nodes.
-        /// </summary>
-        /// <param name="nodes">Nodes to get references for.</param>
-        /// <returns>A list of references.</returns>
-        private async Task<IEnumerable<UAReference>> GetRelationshipData(BrowseResult nodes)
-        {
-            var references = await referenceTypeManager.GetReferencesAsync(nodes.RawObjects.Concat(nodes.RawVariables).DistinctBy(node => node.Id),
-                    ReferenceTypeIds.NonHierarchicalReferences, source.Token);
-
-            if (config.Extraction.Relationships.Hierarchical)
-            {
-                var nodeMap = nodes.Objects.Concat(nodes.Variables)
-                    .Where(node => !(node is UAVariable variable) || variable.Index == -1)
-                    .DistinctBy(node => node.Id)
-                    .ToDictionary(node => node.Id);
-                var hierarchicalReferences = new List<UAReference>();
-
-                while (referenceQueue.TryDequeue(out var pair))
-                {
-                    // The child should always be in the list of mapped nodes here
-                    var nodeId = uaClient.ToNodeId(pair.Desc.NodeId);
-                    if (!nodeMap.TryGetValue(nodeId, out var childNode)) continue;
-                    if (childNode == null || childNode is UAVariable childVar && childVar.IsProperty) continue;
-
-                    bool childIsTs = childNode is UAVariable cVar && !cVar.IsArray;
-
-                    hierarchicalReferences.Add(new UAReference(
-                        pair.Desc.ReferenceTypeId,
-                        true,
-                        pair.ParentId,
-                        childNode.Id,
-                        false,
-                        childIsTs,
-                        referenceTypeManager));
-
-                    if (config.Extraction.Relationships.InverseHierarchical)
-                    {
-                        hierarchicalReferences.Add(new UAReference(
-                            pair.Desc.ReferenceTypeId,
-                            false,
-                            childNode.Id,
-                            pair.ParentId,
-                            childIsTs,
-                            true,
-                            referenceTypeManager));
-                    }
-                }
-                references = references.Concat(hierarchicalReferences);
-            }
-
-            await referenceTypeManager.GetReferenceTypeDataAsync(source.Token);
-            return references.Distinct();
         }
 
         /// <summary>
@@ -1249,50 +913,6 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Handlers
-        /// <summary>
-        /// Callback for the browse operation, creates <see cref="UANode"/>s and enqueues them.
-        /// </summary>
-        /// <param name="node">Description of the node to be handled</param>
-        /// <param name="parentId">Id of the parent node</param>
-        private void HandleNode(ReferenceDescription node, NodeId parentId)
-        {
-            bool mapped = false;
-            log.Verbose("HandleNode {parent} {node}", parentId, node);
-
-            if (node.NodeClass == NodeClass.Object || config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
-            {
-                var uaNode = new UANode(uaClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
-                uaNode.SetNodeType(uaClient, node.TypeDefinition);
-
-                mapped = !uaNode.IsProperty;
-
-                log.Verbose("HandleNode {class} {name}", uaNode.NodeClass, uaNode.DisplayName);
-                State.RegisterNode(uaNode.Id, GetUniqueId(uaNode.Id));
-                commonQueue.Enqueue(uaNode);
-            }
-            else if (node.NodeClass == NodeClass.Variable || config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
-            {
-                var variable = new UAVariable(uaClient.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
-                variable.SetNodeType(uaClient, node.TypeDefinition);
-
-                mapped = !variable.IsProperty;
-              
-                State.RegisterNode(variable.Id, GetUniqueId(variable.Id));
-                log.Verbose("HandleNode Variable {name}", variable.DisplayName);
-                commonQueue.Enqueue(variable);
-            }
-            else
-            {
-                log.Warning("Node of unknown type received: {type}, {id}", node.NodeClass, node.NodeId);
-            }
-
-            if (mapped && config.Extraction.Relationships.Enabled && config.Extraction.Relationships.Hierarchical)
-            {
-                if (parentId == null || parentId.IsNullNodeId) return;
-                referenceQueue.Enqueue((node, parentId));
-            }
-        }
-
         /// <summary>
         /// Handle subscription callback for audit events (AddReferences/AddNodes). Triggers partial re-browse when necessary
         /// </summary>

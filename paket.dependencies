@@ -10,7 +10,10 @@ nuget coverlet.msbuild
 nuget Microsoft.NET.Test.Sdk
 nuget xunit
 nuget xunit.runner.visualstudio
-nuget OPCFoundation.NetStandard.Opc.Ua
+nuget OPCFoundation.NetStandard.Opc.Ua.Client
+nuget OPCFoundation.NetStandard.Opc.Ua.Configuration
+nuget OPCFoundation.NetStandard.Opc.Ua.Server
 nuget AdysTech.InfluxDB.Client.Net.Core
 nuget Microsoft.Windows.Compatibility
+nuget Microsoft.NetCore.Platforms 5.0.2
 nuget MQTTnet

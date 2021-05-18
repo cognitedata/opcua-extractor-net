@@ -153,6 +153,7 @@ namespace Cognite.OpcUa.Types
         {
             ArrayParent = other;
             Index = index;
+            Changed = other.Changed;
             VariableAttributes = other.VariableAttributes;
         }
         /// <summary>
@@ -170,6 +171,7 @@ namespace Cognite.OpcUa.Types
         public IEnumerable<UAVariable> CreateArrayChildren()
         {
             if (!IsArray) return Enumerable.Empty<UAVariable>();
+            if (ArrayChildren != null) return ArrayChildren;
             var children = new List<UAVariable>();
             for (int i = 0; i < ArrayDimensions[0]; i++)
             {
