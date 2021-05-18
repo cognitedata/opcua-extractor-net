@@ -30,6 +30,18 @@ source:
     username:
     # OPC-UA password
     password:
+    # OPC-UA servers may accept x509 certificates for authentication. This can be used to specify a certificate
+    # in a file or local certificate store.
+    # Certificate based authentication is highly server dependent.
+    x509-certificate:
+        # Path to x509 certificate
+        file-name:
+        # Password to use for x509 certificate file
+        password:
+        # Local store to use, one of None (to use file), Local (for LocalMachine) or User
+        store: None
+        # Name of certificate in store, i.e. CN=my-certificate
+        cert-name:
     # Use secured connection
     secure: false
     # If true, force restart the extractor on disconnect. Required for some servers
