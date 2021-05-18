@@ -320,12 +320,12 @@ namespace Test.Integration
         private void CountCustomValues(DummyPusher pusher, int count)
         {
             var ids = tester.Server.Ids.Custom;
-            Assert.Equal(count, pusher.DataPoints[(ids.Array, 0)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(count, pusher.DataPoints[(ids.Array, 1)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(count, pusher.DataPoints[(ids.Array, 2)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(count, pusher.DataPoints[(ids.Array, 3)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(count, pusher.DataPoints[(ids.StringyVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
-            Assert.Equal(count, pusher.DataPoints[(ids.MysteryVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(count, pusher.DataPoints[(ids.Array, 0)].ToList().DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(count, pusher.DataPoints[(ids.Array, 1)].ToList().DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(count, pusher.DataPoints[(ids.Array, 2)].ToList().DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(count, pusher.DataPoints[(ids.Array, 3)].ToList().DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(count, pusher.DataPoints[(ids.StringyVar, -1)].ToList().DistinctBy(dp => dp.Timestamp).Count());
+            Assert.Equal(count, pusher.DataPoints[(ids.MysteryVar, -1)].ToList().DistinctBy(dp => dp.Timestamp).Count());
 
         }
         // Details are tested elsewhere, this is just testing that history is run correctly on startup,
