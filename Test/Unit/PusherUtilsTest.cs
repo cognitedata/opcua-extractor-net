@@ -71,7 +71,7 @@ namespace Test.Unit
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
                 prop.VariableAttributes.DataType = pdt;
-                prop.SetDataPoint($"value{i}", now, tester.Client);
+                prop.SetDataPoint($"value{i}");
                 node.AddProperty(prop);
             }
 
@@ -98,8 +98,8 @@ namespace Test.Unit
             node.Attributes.Properties = oldProperties;
             oldProperties.RemoveAt(1);
             oldProperties.Add(CommonTestUtils.GetSimpleVariable("prop-new", pdt));
-            (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
-            (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
+            (oldProperties[3] as UAVariable).SetDataPoint("value-new");
+            (oldProperties[2] as UAVariable).SetDataPoint("value4-new");
 
             var result2 = PusherUtils.CreateRawTsUpdate(node, extractor, ToRawRow(result1.Value), update, null);
             Assert.Null(result2);
@@ -153,7 +153,7 @@ namespace Test.Unit
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
                 prop.VariableAttributes.DataType = pdt;
-                prop.SetDataPoint($"value{i}", now, tester.Client);
+                prop.SetDataPoint($"value{i}");
                 node.AddProperty(prop);
             }
 
@@ -177,8 +177,8 @@ namespace Test.Unit
             node.Attributes.Properties = oldProperties;
             oldProperties.RemoveAt(1);
             oldProperties.Add(CommonTestUtils.GetSimpleVariable("prop-new", pdt));
-            (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
-            (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
+            (oldProperties[3] as UAVariable).SetDataPoint("value-new");
+            (oldProperties[2] as UAVariable).SetDataPoint("value4-new");
 
             var result2 = PusherUtils.CreateRawAssetUpdate(node, extractor, ToRawRow(result1.Value), update, null);
             Assert.Null(result2);
@@ -228,7 +228,7 @@ namespace Test.Unit
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
                 prop.VariableAttributes.DataType = pdt;
-                prop.SetDataPoint($"value{i}", now, tester.Client);
+                prop.SetDataPoint($"value{i}");
                 node.AddProperty(prop);
             }
             // Need to create this manually to match
@@ -278,8 +278,8 @@ namespace Test.Unit
             node.Attributes.Properties = oldProperties;
             oldProperties.RemoveAt(1);
             oldProperties.Add(CommonTestUtils.GetSimpleVariable("prop-new", pdt));
-            (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
-            (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
+            (oldProperties[3] as UAVariable).SetDataPoint("value-new");
+            (oldProperties[2] as UAVariable).SetDataPoint("value4-new");
 
             result = PusherUtils.GetTSUpdate(extractor, ts, node, new TypeUpdateConfig(), nodeToAssetIds);
             Assert.Null(result.AssetId);
@@ -320,7 +320,7 @@ namespace Test.Unit
             {
                 var prop = new UAVariable(new NodeId($"prop{i}"), $"prop{i}", NodeId.Null);
                 prop.VariableAttributes.DataType = pdt;
-                prop.SetDataPoint($"value{i}", now, tester.Client);
+                prop.SetDataPoint($"value{i}");
                 node.AddProperty(prop);
             }
 
@@ -364,8 +364,8 @@ namespace Test.Unit
             node.Attributes.Properties = oldProperties;
             oldProperties.RemoveAt(1);
             oldProperties.Add(CommonTestUtils.GetSimpleVariable("prop-new", pdt));
-            (oldProperties[3] as UAVariable).SetDataPoint("value-new", now, tester.Client);
-            (oldProperties[2] as UAVariable).SetDataPoint("value4-new", now, tester.Client);
+            (oldProperties[3] as UAVariable).SetDataPoint("value-new");
+            (oldProperties[2] as UAVariable).SetDataPoint("value4-new");
 
             result = PusherUtils.GetAssetUpdate(asset, node, extractor, new TypeUpdateConfig());
             Assert.Null(result.ParentExternalId);

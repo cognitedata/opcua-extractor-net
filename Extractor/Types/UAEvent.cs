@@ -116,7 +116,7 @@ namespace Cognite.OpcUa.Types
                 {
                     count++;
                     metaDataBytes.AddRange(CogniteUtils.StringToStorable(kvp.Key));
-                    metaDataBytes.AddRange(CogniteUtils.StringToStorable(extractor.ConvertToString(kvp.Value)));
+                    metaDataBytes.AddRange(CogniteUtils.StringToStorable(extractor.StringConverter.ConvertToString(kvp.Value)));
                 }
             }
 
@@ -179,7 +179,7 @@ namespace Cognite.OpcUa.Types
                 : Time.ToUnixTimeMilliseconds();
             evt.ExternalId = EventId;
             evt.Type = MetaData != null && MetaData.TryGetValue("Type", out var rawType)
-                ? client.ConvertToString(rawType)
+                ? client.StringConverter.ConvertToString(rawType)
                 : client.GetUniqueId(EventType);
             evt.DataSetId = dataSetId;
 
@@ -196,14 +196,14 @@ namespace Cognite.OpcUa.Types
             }
             if (MetaData.TryGetValue("SubType", out var subtype))
             {
-                evt.Subtype = client.ConvertToString(subtype);
+                evt.Subtype = client.StringConverter.ConvertToString(subtype);
             }
 
             foreach (var dt in MetaData)
             {
                 if (!excludeMetaData.Contains(dt.Key))
                 {
-                    finalMetaData[dt.Key] = client.ConvertToString(dt.Value);
+                    finalMetaData[dt.Key] = client.StringConverter.ConvertToString(dt.Value);
                 }
             }
 

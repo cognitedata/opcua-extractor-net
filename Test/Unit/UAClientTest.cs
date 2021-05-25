@@ -616,11 +616,11 @@ namespace Test.Unit
             tester.Client.ReadNodeData(nodes, tester.Source.Token);
             tester.Client.ReadNodeValues(nodes, tester.Source.Token);
 
-            Assert.Equal(0.0, nodes[0].Value.DoubleValue);
-            Assert.Equal("[0, 0, 0, 0]", nodes[1].Value.StringValue);
-            Assert.Equal("[test1, test2]", nodes[2].Value.StringValue);
-            Assert.Equal("°C: degree Celsius", nodes[3].Value.StringValue);
-            Assert.Equal("(0, 100)", nodes[4].Value.StringValue);
+            Assert.Equal(new Variant(0.0), nodes[0].Value);
+            Assert.Equal(new Variant(new double[] { 0, 0, 0, 0 }), nodes[1].Value);
+            Assert.Equal(new Variant(new[] { "test1", "test2" }), nodes[2].Value);
+            Assert.Equal("°C: degree Celsius", tester.Client.StringConverter.ConvertToString(nodes[3].Value));
+            Assert.Equal("(0, 100)", tester.Client.StringConverter.ConvertToString(nodes[4].Value));
         }
 
         [Fact]
@@ -660,10 +660,10 @@ namespace Test.Unit
             Assert.Equal(2, nodes[3].Properties.Count());
             Assert.Null(nodes[4].Properties);
             Assert.Equal(2, nodes[5].Properties.Count());
-            Assert.NotNull((nodes[5].Properties.First() as UAVariable).Value);
-            Assert.NotNull((nodes[5].Properties.Last() as UAVariable).Value);
+            Assert.NotNull((nodes[5].Properties.First() as UAVariable).Value.Value);
+            Assert.NotNull((nodes[5].Properties.Last() as UAVariable).Value.Value);
             Assert.Equal(4, nodes[6].GetAllProperties().Count());
-            var meta = nodes[6].BuildMetadata(null);
+            var meta = nodes[6].BuildMetadata(null, tester.Client.StringConverter);
             Assert.Equal(2, meta.Count);
             Assert.Equal("value 1", meta["DeepProp_DeepProp2_val1"]);
             Assert.Equal("value 2", meta["DeepProp_DeepProp2_val2"]);
@@ -969,43 +969,45 @@ namespace Test.Unit
         [Fact]
         public void TestConvertToString()
         {
-            Assert.Equal("", tester.Client.ConvertToString(null));
-            Assert.Equal("gp.tl:s=abc", tester.Client.ConvertToString(new NodeId("abc", 2)));
-            Assert.Equal("gp.tl:s=abc", tester.Client.ConvertToString(new ExpandedNodeId("abc", tester.Client.NamespaceTable.GetString(2))));
-            Assert.Equal("test", tester.Client.ConvertToString(new LocalizedText("EN-US", "test")));
-            Assert.Equal("(0, 100)", tester.Client.ConvertToString(new Opc.Ua.Range(100, 0)));
-            Assert.Equal("N: Newton", tester.Client.ConvertToString(new EUInformation { DisplayName = "N", Description = "Newton" }));
-            Assert.Equal("N: Newton", tester.Client.ConvertToString(new ExtensionObject(new EUInformation { DisplayName = "N", Description = "Newton" })));
-            Assert.Equal("key: 1", tester.Client.ConvertToString(new EnumValueType { DisplayName = "key", Value = 1 }));
-            Assert.Equal("1234", tester.Client.ConvertToString(1234));
-            Assert.Equal("[123, 1234]", tester.Client.ConvertToString(new[] { 123, 1234 }));
-            Assert.Equal("[gp.tl:i=123, gp.tl:i=1234, gp.tl:s=abc]", tester.Client.ConvertToString(new[]
+            var converter = new StringConverter(tester.Client);
+
+            Assert.Equal("", converter.ConvertToString(null));
+            Assert.Equal("gp.tl:s=abc", converter.ConvertToString(new NodeId("abc", 2)));
+            Assert.Equal("gp.tl:s=abc", converter.ConvertToString(new ExpandedNodeId("abc", tester.Client.NamespaceTable.GetString(2))));
+            Assert.Equal("test", converter.ConvertToString(new LocalizedText("EN-US", "test")));
+            Assert.Equal("(0, 100)", converter.ConvertToString(new Opc.Ua.Range(100, 0)));
+            Assert.Equal("N: Newton", converter.ConvertToString(new EUInformation { DisplayName = "N", Description = "Newton" }));
+            Assert.Equal("N: Newton", converter.ConvertToString(new ExtensionObject(new EUInformation { DisplayName = "N", Description = "Newton" })));
+            Assert.Equal("key: 1", converter.ConvertToString(new EnumValueType { DisplayName = "key", Value = 1 }));
+            Assert.Equal("1234", converter.ConvertToString(1234));
+            Assert.Equal("[123,1234]", converter.ConvertToString(new[] { 123, 1234 }));
+            Assert.Equal(@"[""gp.tl:i=123"",""gp.tl:i=1234"",""gp.tl:s=abc""]", converter.ConvertToString(new[]
             {
                 new NodeId(123u, 2), new NodeId(1234u, 2), new NodeId("abc", 2)
             }));
-            Assert.Equal("somekey: gp.tl:s=abc", tester.Client.ConvertToString(new Opc.Ua.KeyValuePair
+            Assert.Equal("somekey: gp.tl:s=abc", converter.ConvertToString(new Opc.Ua.KeyValuePair
             {
                 Key = "somekey",
                 Value = new NodeId("abc", 2)
             }));
             var readValueId = new ReadValueId { AttributeId = Attributes.Value, NodeId = new NodeId("test") };
             var readValueIdStr = @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}";
-            Assert.Equal(readValueIdStr, tester.Client.ConvertToString(new Variant(readValueId)));
+            Assert.Equal(readValueIdStr, converter.ConvertToString(new Variant(readValueId)));
             var ids = new ReadValueIdCollection { readValueId, readValueId };
             // Results in Variant(ExtensionObject[])
-            Assert.Equal($"[{readValueIdStr},{readValueIdStr}]", tester.Client.ConvertToString(new Variant(ids)));
+            Assert.Equal($"[{readValueIdStr},{readValueIdStr}]", converter.ConvertToString(new Variant(ids)));
             var ids2 = new[] { readValueId, readValueId };
             // Results in [Variant(ExtensionObject), Variant(ExtensionObject)], so it ends up using our system
-            Assert.Equal($"[{readValueIdStr}, {readValueIdStr}]", tester.Client.ConvertToString(new Variant(ids2)));
+            Assert.Equal($"[{readValueIdStr},{readValueIdStr}]", converter.ConvertToString(new Variant(ids2)));
             // Simple matrix
 #pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
             var m1 = new Matrix(new int[3, 3] { { 1, 2, 3 }, { 4, 5, 6 }, { 7, 8, 9 } }, BuiltInType.Int32);
-            Assert.Equal("[[1,2,3],[4,5,6],[7,8,9]]", tester.Client.ConvertToString(new Variant(m1)));
+            Assert.Equal("[[1,2,3],[4,5,6],[7,8,9]]", converter.ConvertToString(new Variant(m1)));
             // Complex matrix
             var m2 = new Matrix(new Variant[2, 2] {
                 { new Variant(readValueId), new Variant(readValueId) },
                 { new Variant(readValueId), new Variant(readValueId) } }, BuiltInType.Variant);
-            Assert.Equal($"[[{readValueIdStr},{readValueIdStr}],[{readValueIdStr},{readValueIdStr}]]", tester.Client.ConvertToString(new Variant(m2)));
+            Assert.Equal($"[[{readValueIdStr},{readValueIdStr}],[{readValueIdStr},{readValueIdStr}]]", converter.ConvertToString(new Variant(m2)));
 #pragma warning restore CA1814 // Prefer jagged arrays over multidimensional
         }
         [Fact]

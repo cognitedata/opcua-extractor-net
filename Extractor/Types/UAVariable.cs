@@ -50,7 +50,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Value of variable as string or double
         /// </summary>
-        public UADataPoint Value { get; private set; }
+        public Variant Value { get; private set; }
         /// <summary>
         /// Whether the value of this variable has been read from the server.
         /// </summary>
@@ -92,7 +92,7 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
-                var meta = BuildMetadata(null);
+                var meta = BuildMetadata(null, new StringConverter(null));
                 builder.Append("Properties: {\n");
                 foreach (var prop in meta)
                 {
@@ -136,12 +136,9 @@ namespace Cognite.OpcUa.Types
         /// <param name="value">Value to set</param>
         /// <param name="sourceTimestamp">Timestamp from source</param>
         /// <param name="client">Current client context</param>
-        public void SetDataPoint(object value, DateTime sourceTimestamp, UAClient client)
+        public void SetDataPoint(Variant value)
         {
-            if (client == null) throw new ArgumentNullException(nameof(client));
-            if (value == null) return;
-            Value = DataType.ToDataPoint(client, value, sourceTimestamp, client.GetUniqueId(Id),
-                IsProperty || NodeClass == NodeClass.VariableType);
+            Value = value;
         }
         /// <summary>
         /// Create an array-element variable.
@@ -188,15 +185,20 @@ namespace Cognite.OpcUa.Types
         /// <param name="writePoco">TimeSeries to write to</param>
         /// <param name="parentIdHandler">Method called for each string mapped to parentId, should set
         /// parentId as dictated by external context.</param>
-        private void HandleMetaMap(Dictionary<string, string> metaMap, TimeSeriesCreate writePoco, Action<string> parentIdHandler)
+        private void HandleMetaMap(
+            Dictionary<string, string> metaMap,
+            TimeSeriesCreate writePoco,
+            Action<string> parentIdHandler,
+            StringConverter converter)
         {
             if (Properties == null || !Properties.Any() || metaMap == null || !metaMap.Any()) return;
             foreach (var prop in Properties)
             {
                 if (!(prop is UAVariable propVar)) continue;
-                if (!string.IsNullOrWhiteSpace(propVar.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                if (metaMap.TryGetValue(prop.DisplayName, out var mapped))
                 {
-                    var value = propVar.Value.StringValue;
+                    var value = converter.ConvertToString(propVar.Value, propVar.DataType.EnumValues);
+                    if (string.IsNullOrWhiteSpace(value)) continue;
                     switch (mapped)
                     {
                         case "description": writePoco.Description = value; break;
@@ -235,9 +237,9 @@ namespace Cognite.OpcUa.Types
                 DataSetId = dataSetId
             };
 
-            writePoco.Metadata = BuildMetadata(extractor);
+            writePoco.Metadata = BuildMetadata(extractor, extractor.StringConverter);
 
-            HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value);
+            HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value, extractor.StringConverter);
 
             return writePoco;
         }
@@ -288,7 +290,7 @@ namespace Cognite.OpcUa.Types
                 writePoco.AssetId = parent;
             }
 
-            writePoco.Metadata = BuildMetadata(extractor);
+            writePoco.Metadata = BuildMetadata(extractor, extractor.StringConverter);
 
             HandleMetaMap(metaMap, writePoco, value =>
             {
@@ -297,7 +299,7 @@ namespace Cognite.OpcUa.Types
                 {
                     writePoco.AssetId = assetId;
                 }
-            });
+            }, extractor.StringConverter);
 
             return writePoco;
         }

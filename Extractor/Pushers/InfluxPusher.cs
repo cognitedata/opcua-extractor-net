@@ -533,7 +533,7 @@ namespace Cognite.OpcUa
             string sourceNode;
             if (evt.MetaData != null && evt.MetaData.TryGetValue("SourceNode", out var rawSourceNode))
             {
-                sourceNode = Extractor.ConvertToString(rawSourceNode);
+                sourceNode = Extractor.StringConverter.ConvertToString(rawSourceNode);
             }
             else
             {
@@ -545,7 +545,7 @@ namespace Cognite.OpcUa
                 foreach (var kvp in evt.MetaData)
                 {
                     if (kvp.Key == "Emitter" || kvp.Key == "Type" || kvp.Key == "SourceNode") continue;
-                    var str = Extractor.ConvertToString(kvp.Value);
+                    var str = Extractor.StringConverter.ConvertToString(kvp.Value);
                     idp.Tags[kvp.Key] = string.IsNullOrEmpty(str) ? "null" : str;
                 }
             }

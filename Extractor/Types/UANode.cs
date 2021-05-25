@@ -112,7 +112,7 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
-                var meta = BuildMetadata(null);
+                var meta = BuildMetadata(null, new StringConverter(null));
                 builder.Append("Properties: {\n");
                 foreach (var prop in meta)
                 {
@@ -173,7 +173,7 @@ namespace Cognite.OpcUa.Types
                             if (prop.DisplayName == null) continue;
                             if (prop is UAVariable propVariable)
                             {
-                                metaHash += (prop.DisplayName, propVariable.Value?.StringValue).GetHashCode();
+                                metaHash += (prop.DisplayName, propVariable.Value.Value).GetHashCode();
                             }
                             if (prop.Properties?.Any() ?? false)
                             {
@@ -189,7 +189,7 @@ namespace Cognite.OpcUa.Types
                         }
                         if (NodeClass == NodeClass.VariableType)
                         {
-                            metaHash = metaHash * 31 + variable.Value?.StringValue?.GetHashCode(StringComparison.InvariantCulture) ?? 0;
+                            metaHash = metaHash * 31 + variable.Value.GetHashCode();
                         }
                     }
 
@@ -208,7 +208,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="extractor">Active extractor, used for building extra metadata.
         /// Can be null to not fetch any extra metadata at all.</param>
         /// <returns>Created metadata dictionary.</returns>
-        public Dictionary<string, string> BuildMetadata(UAExtractor extractor)
+        public Dictionary<string, string> BuildMetadata(UAExtractor extractor, StringConverter converter)
         {
             Dictionary<string, string> extras = extractor?.GetExtraMetadata(this);
             if (Properties == null && extras == null) return new Dictionary<string, string>();
@@ -221,13 +221,13 @@ namespace Cognite.OpcUa.Types
                 {
                     if (prop is UAVariable variable)
                     {
-                        result[prop.DisplayName] = variable.Value?.StringValue;
+                        result[prop.DisplayName] = converter.ConvertToString(variable.Value, variable.DataType?.EnumValues)
+                            ?? variable.Value.ToString();
                     }
 
                     if (prop.Properties != null)
                     {
-                        // Null extractor to not get extra metadata
-                        var nestedProperties = prop.BuildMetadata(null);
+                        var nestedProperties = prop.BuildMetadata(null, converter);
                         foreach (var sprop in nestedProperties)
                         {
                             result[$"{prop.DisplayName}_{sprop.Key}"] = sprop.Value;
@@ -279,15 +279,16 @@ namespace Cognite.OpcUa.Types
                 writePoco.ParentExternalId = extractor.GetUniqueId(ParentId);
             }
 
-            writePoco.Metadata = BuildMetadata(extractor);
+            writePoco.Metadata = BuildMetadata(extractor, extractor.StringConverter);
             if (Properties != null && Properties.Any() && (metaMap?.Any() ?? false))
             {
                 foreach (var prop in Properties)
                 {
                     if (!(prop is UAVariable propVar)) continue;
-                    if (!string.IsNullOrWhiteSpace(propVar.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                    if (metaMap.TryGetValue(prop.DisplayName, out var mapped))
                     {
-                        var value = propVar.Value.StringValue;
+                        var value = extractor.StringConverter.ConvertToString(propVar.Value, propVar.DataType.EnumValues);
+                        if (string.IsNullOrWhiteSpace(value)) continue;
                         switch (mapped)
                         {
                             case "description": writePoco.Description = value; break;

@@ -103,14 +103,14 @@ namespace Test.Unit
             var pdt = new UADataType(DataTypeIds.String);
 
             var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
-            propA.SetDataPoint("valueA", DateTime.UtcNow, tester.Client);
+            propA.SetDataPoint("valueA");
             var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
-            propB.SetDataPoint("valueB", DateTime.UtcNow, tester.Client);
+            propB.SetDataPoint("valueB");
 
             var propC = CommonTestUtils.GetSimpleVariable("propA", pdt);
-            propC.SetDataPoint("valueA", DateTime.UtcNow, tester.Client);
+            propC.SetDataPoint("valueA");
             var propD = CommonTestUtils.GetSimpleVariable("propB", pdt);
-            propD.SetDataPoint("valueC", DateTime.UtcNow, tester.Client);
+            propD.SetDataPoint("valueC");
 
             // Test metadata
             nodeA.Attributes.Properties = new List<UANode>
@@ -123,7 +123,7 @@ namespace Test.Unit
             };
             (csA, csB) = Update(nodeA, nodeB);
             AssertNotEqualIf(update.Metadata);
-            (nodeB.Attributes.Properties[1] as UAVariable).SetDataPoint("valueB", DateTime.UtcNow, tester.Client);
+            (nodeB.Attributes.Properties[1] as UAVariable).SetDataPoint("valueB");
             (csA, csB) = Update(nodeA, nodeB);
             Assert.Equal(csA, csB);
 
@@ -154,13 +154,13 @@ namespace Test.Unit
             // Test variable types
             var typeA = new UAVariable(new NodeId("typeA"), "typeA", NodeId.Null, NodeClass.VariableType);
             typeA.VariableAttributes.DataType = pdt;
-            typeA.SetDataPoint("value1", DateTime.UtcNow, tester.Client);
+            typeA.SetDataPoint("value1");
             var typeB = new UAVariable(new NodeId("typeA"), "typeA", NodeId.Null, NodeClass.VariableType);
             typeB.VariableAttributes.DataType = pdt;
-            typeB.SetDataPoint("value2", DateTime.UtcNow, tester.Client);
+            typeB.SetDataPoint("value2");
             (csA, csB) = Update(typeA, typeB);
             AssertNotEqualIf(update.Metadata);
-            typeB.SetDataPoint("value1", DateTime.UtcNow, tester.Client);
+            typeB.SetDataPoint("value1");
             (csA, csB) = Update(typeA, typeB);
             Assert.Equal(csA, csB);
         }
@@ -181,10 +181,10 @@ namespace Test.Unit
             node.Attributes.Description = "description";
             node.Attributes.EventNotifier = EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
             var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
-            propA.SetDataPoint("valueA", DateTime.UtcNow, tester.Client);
+            propA.SetDataPoint("valueA");
             var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
             var nestedProp = CommonTestUtils.GetSimpleVariable("propN", pdt);
-            nestedProp.SetDataPoint("nProp", DateTime.UtcNow, tester.Client);
+            nestedProp.SetDataPoint("nProp");
             nestedProp.Attributes.Properties = new List<UANode> { propA };
 
             node.Attributes.Properties = new List<UANode>
@@ -204,7 +204,7 @@ namespace Test.Unit
                    + "    propA: valueA\n"
                    + "    propN: nProp\n"
                    + "    propN_propA: valueA\n"
-                   + "    propB: ??\n"
+                   + "    propB: \n"
                    + "}";
             Assert.Equal(refStr, str);
         }
@@ -214,12 +214,12 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
-            Assert.Empty(node.BuildMetadata(null));
-            Assert.Empty(node.BuildMetadata(extractor));
+            Assert.Empty(node.BuildMetadata(null, tester.Client.StringConverter));
+            Assert.Empty(node.BuildMetadata(extractor, tester.Client.StringConverter));
             tester.Config.Extraction.NodeTypes.Metadata = true;
             node.Attributes.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
             // Test extras only
-            Assert.Single(node.BuildMetadata(extractor));
+            Assert.Single(node.BuildMetadata(extractor, tester.Client.StringConverter));
 
             // Test properties only
             var pdt = new UADataType(DataTypeIds.String);
@@ -228,30 +228,30 @@ namespace Test.Unit
             var ts = DateTime.UtcNow;
             var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
             var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
-            propA.SetDataPoint("valueA", ts, tester.Client);
-            propB.SetDataPoint("valueB", ts, tester.Client);
+            propA.SetDataPoint("valueA");
+            propB.SetDataPoint("valueB");
 
             node.Attributes.Properties = new List<UANode>
             {
                 propA, propB
             };
-            var meta = node.BuildMetadata(extractor);
+            var meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
             Assert.Equal(2, meta.Count);
             Assert.Equal("valueA", meta["propA"]);
             Assert.Equal("valueB", meta["propB"]);
 
             // Test both
             tester.Config.Extraction.NodeTypes.Metadata = true;
-            Assert.Equal(3, node.BuildMetadata(extractor).Count);
+            Assert.Equal(3, node.BuildMetadata(extractor, tester.Client.StringConverter).Count);
 
             // Test nested properties
             var nestedProp = CommonTestUtils.GetSimpleVariable("nestedProp", pdt); ;
-            nestedProp.SetDataPoint("nestedValue", ts, tester.Client);
+            nestedProp.SetDataPoint("nestedValue");
             propB.Attributes.Properties = new List<UANode>
             {
                 nestedProp
             };
-            meta = node.BuildMetadata(extractor);
+            meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
             Assert.Equal(4, meta.Count);
             Assert.Equal("nestedValue", meta["propB_nestedProp"]);
 
@@ -259,23 +259,23 @@ namespace Test.Unit
             var nullNameProp = new UAVariable(new NodeId("nullName"), null, NodeId.Null);
             nullNameProp.VariableAttributes.DataType = pdt;
             node.AddProperty(nullNameProp);
-            meta = node.BuildMetadata(extractor);
+            meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
             Assert.Equal(4, meta.Count);
 
             // Test null value
             var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", NodeId.Null);
             nullValueProp.VariableAttributes.DataType = pdt;
             node.AddProperty(nullValueProp);
-            meta = node.BuildMetadata(extractor);
+            meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
             Assert.Equal(5, meta.Count);
-            Assert.Null(meta["nullValue"]);
+            Assert.Equal("", meta["nullValue"]);
 
             // Test duplicated properties
             var propA2 = new UAVariable(new NodeId("propA2"), "propA", NodeId.Null);
             propA2.VariableAttributes.DataType = pdt;
             node.AddProperty(propA2);
-            propA2.SetDataPoint("valueA2", ts, tester.Client);
-            meta = node.BuildMetadata(extractor);
+            propA2.SetDataPoint("valueA2");
+            meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
             Assert.Equal(5, meta.Count);
             Assert.Equal("valueA2", meta["propA"]);
 
@@ -283,9 +283,9 @@ namespace Test.Unit
             Assert.Equal("SomeType", meta["TypeDefinition"]);
             var propNT = new UAVariable(new NodeId("TypeDef"), "TypeDefinition", NodeId.Null);
             propNT.VariableAttributes.DataType = pdt;
-            propNT.SetDataPoint("SomeOtherType", ts, tester.Client);
+            propNT.SetDataPoint("SomeOtherType");
             node.AddProperty(propNT);
-            meta = node.BuildMetadata(extractor);
+            meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
             Assert.Equal(5, meta.Count);
             Assert.Equal("SomeOtherType", meta["TypeDefinition"]);
         }
@@ -302,8 +302,8 @@ namespace Test.Unit
 
             var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
             var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
-            propA.SetDataPoint("valueA", ts, tester.Client);
-            propB.SetDataPoint("valueB", ts, tester.Client);
+            propA.SetDataPoint("valueA");
+            propB.SetDataPoint("valueB");
 
             node.Attributes.Properties = new List<UANode>
             {
@@ -320,7 +320,7 @@ namespace Test.Unit
 
             // Test meta-map
             var propC = CommonTestUtils.GetSimpleVariable("propC", pdt); ;
-            propC.SetDataPoint("valueC", ts, tester.Client);
+            propC.SetDataPoint("valueC");
             node.AddProperty(propC);
 
             var metaMap = new Dictionary<string, string>
@@ -363,11 +363,11 @@ namespace Test.Unit
             node.VariableAttributes.NodeType = new UANodeType(new NodeId("type"), false);
 
             var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
-            propA.SetDataPoint("valueA", DateTime.UtcNow, tester.Client);
+            propA.SetDataPoint("valueA");
             var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
             var nestedProp = CommonTestUtils.GetSimpleVariable("propN", pdt); ;
             
-            nestedProp.SetDataPoint("nProp", DateTime.UtcNow, tester.Client);
+            nestedProp.SetDataPoint("nProp");
             nestedProp.Attributes.Properties = new List<UANode> { propA };
 
             node.Attributes.Properties = new List<UANode>
@@ -392,7 +392,7 @@ namespace Test.Unit
                    + "    propA: valueA\n"
                    + "    propN: nProp\n"
                    + "    propN_propA: valueA\n"
-                   + "    propB: ??\n"
+                   + "    propB: \n"
                    + "}";
             Assert.Equal(refStr, str);
         }
@@ -405,37 +405,10 @@ namespace Test.Unit
             node.Attributes.IsProperty = true;
             node.VariableAttributes.DataType = sdt;
             var now = DateTime.UtcNow;
-            node.SetDataPoint(123.4, now, tester.Client);
-            Assert.Equal(now, node.Value.Timestamp);
-            Assert.True(node.Value.IsString);
-            Assert.Equal("123.4", node.Value.StringValue);
-            node.SetDataPoint("test", now, tester.Client);
-            Assert.Equal(now, node.Value.Timestamp);
-            Assert.True(node.Value.IsString);
-            Assert.Equal("test", node.Value.StringValue);
-
-            // Double datatype
-            node.Attributes.IsProperty = false;
-            node.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
-            node.SetDataPoint(123.0, now, tester.Client);
-            Assert.Equal(now, node.Value.Timestamp);
-            Assert.False(node.Value.IsString);
-            Assert.Equal(123.0, node.Value.DoubleValue);
-            node.SetDataPoint("test", now, tester.Client);
-            Assert.Equal(now, node.Value.Timestamp);
-            Assert.False(node.Value.IsString);
-            Assert.Equal(0, node.Value.DoubleValue);
-
-            // String datatype
-            node.VariableAttributes.DataType = new UADataType(DataTypeIds.String);
-            node.SetDataPoint(123.4, now, tester.Client);
-            Assert.Equal(now, node.Value.Timestamp);
-            Assert.True(node.Value.IsString);
-            Assert.Equal("123.4", node.Value.StringValue);
-            node.SetDataPoint("test", now, tester.Client);
-            Assert.Equal(now, node.Value.Timestamp);
-            Assert.True(node.Value.IsString);
-            Assert.Equal("test", node.Value.StringValue);
+            node.SetDataPoint(123.4);
+            Assert.Equal(new Variant(123.4), node.Value);
+            node.SetDataPoint("test");
+            Assert.Equal(new Variant("test"), node.Value);
         }
         [Fact]
         public void TestGetArrayChildren()
@@ -485,7 +458,7 @@ namespace Test.Unit
             for (int i = 1; i < 5; i++)
             {
                 var prop = CommonTestUtils.GetSimpleVariable($"prop{i}", pdt);
-                prop.SetDataPoint($"value{i}", now, tester.Client);
+                prop.SetDataPoint($"value{i}");
                 node.AddProperty(prop);
             }
 
@@ -537,7 +510,7 @@ namespace Test.Unit
             for (int i = 1; i < 5; i++)
             {
                 var prop = CommonTestUtils.GetSimpleVariable($"prop{i}", pdt);
-                prop.SetDataPoint($"value{i}", now, tester.Client);
+                prop.SetDataPoint($"value{i}");
                 node.AddProperty(prop);
             }
 
@@ -934,7 +907,7 @@ namespace Test.Unit
                 Assert.Equal(convEvt.MetaData.Count, evt.MetaData.Count);
                 foreach (var kvp in convEvt.MetaData)
                 {
-                    Assert.Equal(kvp.Value ?? "", tester.Client.ConvertToString(evt.MetaData[kvp.Key]));
+                    Assert.Equal(kvp.Value ?? "", tester.Client.StringConverter.ConvertToString(evt.MetaData[kvp.Key]));
                 }
             }
         }

@@ -275,8 +275,8 @@ namespace Test.Unit
                 foreach (var prop in node.Properties)
                 {
                     var propVar = prop as UAVariable;
-                    Assert.NotNull(propVar.Value);
-                    Assert.False(string.IsNullOrEmpty(propVar.Value.StringValue));
+                    Assert.NotNull(propVar.Value.Value);
+                    Assert.False(string.IsNullOrEmpty(extractor.StringConverter.ConvertToString(propVar.Value)));
                 }
             }
         }
@@ -384,7 +384,7 @@ namespace Test.Unit
             tester.Config.Extraction.NodeTypes.AsNodes = true;
             var type = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.VariableType);
             type.VariableAttributes.DataType = new UADataType(DataTypeIds.String);
-            type.SetDataPoint("value", DateTime.UtcNow, tester.Client);
+            type.SetDataPoint(new Variant("value"));
             fields = extractor.GetExtraMetadata(type);
             Assert.Single(fields);
             Assert.Equal("value", fields["Value"]);

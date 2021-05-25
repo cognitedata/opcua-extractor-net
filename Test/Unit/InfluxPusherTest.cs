@@ -299,7 +299,7 @@ namespace Test.Unit
                 Assert.Equal(rawEvt.MetaData.Count, evt.MetaData.Count);
                 foreach (var kvp in evt.MetaData)
                 {
-                    Assert.Equal(extractor.ConvertToString(rawEvt.MetaData[kvp.Key]), kvp.Value);
+                    Assert.Equal(extractor.StringConverter.ConvertToString(rawEvt.MetaData[kvp.Key]), kvp.Value);
                 }
             }
 

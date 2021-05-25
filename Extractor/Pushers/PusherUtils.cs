@@ -117,7 +117,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata)
             {
-                var newMetaData = node.BuildMetadata(extractor);
+                var newMetaData = node.BuildMetadata(extractor, extractor.StringConverter);
                 if (raw.Columns.TryGetValue("metadata", out var rawMetaData))
                 {
                     Dictionary<string, string> oldMetaData = null;
@@ -272,7 +272,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata)
             {
-                var newMetaData = newTs.BuildMetadata(extractor)
+                var newMetaData = newTs.BuildMetadata(extractor, extractor.StringConverter)
                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
                     .SanitizeMetadata(
@@ -323,7 +323,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata)
             {
-                var newMetaData = newAsset.BuildMetadata(extractor)
+                var newMetaData = newAsset.BuildMetadata(extractor, extractor.StringConverter)
                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
                     .SanitizeMetadata(
