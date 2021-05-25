@@ -3,9 +3,18 @@ using Opc.Ua.Server;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Server
 {
+    class DummyValidator : ICertificateValidator
+    {
+        public void Validate(X509Certificate2 certificate)
+        {
+            throw ServiceResultException.Create(StatusCodes.BadCertificateInvalid, "Bad certificate");
+        }
+    }
+
     /// <summary>
     /// The actual server itself, sets up the node managers and 
     /// contains a few methods defering calls to the custom node manager.
@@ -18,9 +27,51 @@ namespace Server
 
         private IEnumerable<PredefinedSetup> setups;
 
+        private ICertificateValidator certificateValidator;
+        private ApplicationConfiguration fullConfig;
+
+        public bool AllowAnonymous { get; set; } = true;
+
         public TestServer(IEnumerable<PredefinedSetup> setups)
         {
             this.setups = setups;
+        }
+
+        protected override void OnServerStarting(ApplicationConfiguration configuration)
+        {
+            if (configuration == null) throw new ArgumentNullException(nameof(configuration));
+
+            base.OnServerStarting(configuration);
+            fullConfig = configuration;
+        }
+
+        public void SetValidator(bool failAlways)
+        {
+            if (failAlways)
+            {
+                certificateValidator = new DummyValidator();
+            }
+            else
+            {
+                var validator = new CertificateValidator();
+                validator.Update(fullConfig.SecurityConfiguration);
+                validator.Update(
+                    fullConfig.SecurityConfiguration.UserIssuerCertificates,
+                    fullConfig.SecurityConfiguration.TrustedUserCertificates,
+                    fullConfig.SecurityConfiguration.RejectedCertificateStore);
+
+                certificateValidator = validator;
+            }
+        }
+
+        protected override void OnServerStarted(IServerInternal server)
+        {
+            if (server == null) throw new ArgumentNullException(nameof(server));
+
+            base.OnServerStarted(server);
+
+            // request notifications when the user identity is changed. all valid users are accepted by default.
+            server.SessionManager.ImpersonateUser += new ImpersonateEventHandler(ImpersonateUser);
         }
 
         protected override MasterNodeManager CreateMasterNodeManager(IServerInternal server, ApplicationConfiguration configuration)
@@ -44,6 +95,35 @@ namespace Server
             };
 
             return properties;
+        }
+
+
+        private void ImpersonateUser(Session _, ImpersonateEventArgs args)
+        {
+            if (args.NewIdentity is UserNameIdentityToken userNameToken)
+            {
+                if (userNameToken.UserName != "testuser" || userNameToken.DecryptedPassword != "testpassword")
+                    throw ServiceResultException.Create(StatusCodes.BadIdentityTokenRejected,
+                        "Incorrect username or password");
+            }
+            if (args.NewIdentity is X509IdentityToken x509Token)
+            {
+                try
+                {
+                    certificateValidator.Validate(x509Token.Certificate);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message + " " + e.StackTrace);
+                    throw ServiceResultException.Create(StatusCodes.BadIdentityTokenRejected,
+                        "Bad or untrusted certificate");
+                }
+            }
+            if (args.NewIdentity is AnonymousIdentityToken)
+            {
+                if (!AllowAnonymous) throw ServiceResultException.Create(StatusCodes.BadIdentityTokenRejected,
+                        "Anonymous token not permitted");
+            }
         }
 
         public void UpdateNode(NodeId id, object value)

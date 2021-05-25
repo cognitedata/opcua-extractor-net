@@ -18,7 +18,6 @@ namespace Server
                     PredefinedSetup.Events, PredefinedSetup.Auditing });
             server.Start().Wait();
             server.PopulateEvents();
-
             int idx = 0;
             while (true)
             {

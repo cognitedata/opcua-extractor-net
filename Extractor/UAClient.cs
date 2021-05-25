@@ -31,6 +31,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -204,19 +205,25 @@ namespace Cognite.OpcUa
             }
             var endpointConfiguration = EndpointConfiguration.Create(AppConfig);
             var endpoint = new ConfiguredEndpoint(null, selectedEndpoint, endpointConfiguration);
-            log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri}", endpoint.Description.SecurityPolicyUri);
+            var identity = AuthenticationUtils.GetUserIdentity(config.Source);
+            log.Information("Attempt to connect to endpoint with security: {SecurityPolicyUri} using user identity {idt}",
+                endpoint.Description.SecurityPolicyUri,
+                identity.DisplayName);
             try
             {
+                if (Session?.Connected ?? false)
+                {
+                    Session.Close();
+                }
                 Session?.Dispose();
+
                 Session = await Session.Create(
                     AppConfig,
                     endpoint,
                     false,
                     ".NET OPC-UA Extractor Client",
                     0,
-                    (config.Source.Username == null || !config.Source.Username.Trim().Any())
-                        ? new UserIdentity(new AnonymousIdentityToken())
-                        : new UserIdentity(config.Source.Username, config.Source.Password),
+                    identity,
                     null
                 );
                 Session.KeepAliveInterval = config.Source.KeepAliveInterval;

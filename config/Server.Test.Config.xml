@@ -14,7 +14,7 @@
     <ApplicationCertificate>
       <StoreType>Directory</StoreType>
       <StorePath>./servercertificates/pki/own</StorePath>
-      <SubjectName>CN=Opcua-extractor, C=NO, S=Oslo, O=Cognite, DC=localhost</SubjectName>
+      <SubjectName>CN=Opcua-test-server, C=NO, S=Oslo, O=Cognite, DC=localhost</SubjectName>
     </ApplicationCertificate>
 
     <!-- Where the issuer certificate are stored (certificate authorities) -->
@@ -34,6 +34,8 @@
       <StoreType>Directory</StoreType>
       <StorePath>./servercertificates/pki/rejected</StorePath>
     </RejectedCertificateStore>
+
+    <AutoAcceptUntrustedCertificates>false</AutoAcceptUntrustedCertificates>
   </SecurityConfiguration>
 
   <TransportConfigurations></TransportConfigurations>
