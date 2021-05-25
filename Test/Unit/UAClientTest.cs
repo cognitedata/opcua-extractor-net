@@ -1016,7 +1016,6 @@ namespace Test.Unit
 
             tester.Server.SetDiagnosticsEnabled(true);
 
-            // await CommonTestUtils.WaitForCondition(() => CommonTestUtils.GetMetricValue("opcua_node_CurrentSessionCount") >= 1, 5);
             await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_node_CurrentSessionCount", 1), 5);
 
             tester.Client.RemoveSubscription("NodeMetrics");

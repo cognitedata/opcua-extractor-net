@@ -40,7 +40,7 @@ source:
         password:
         # Local store to use, one of None (to use file), Local (for LocalMachine) or User
         store: None
-        # Name of certificate in store, i.e. CN=my-certificate
+        # Name of certificate in store, e.g. CN=my-certificate
         cert-name:
     # Use secured connection
     secure: false
