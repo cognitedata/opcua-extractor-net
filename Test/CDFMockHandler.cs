@@ -19,6 +19,7 @@ using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 using Serilog;
 using System;
@@ -28,6 +29,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -45,7 +47,7 @@ namespace Test
         public Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)> Datapoints { get; } =
             new Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)>();
 
-        public Dictionary<string, AssetDummy> AssetRaw { get; } = new Dictionary<string, AssetDummy>();
+        public Dictionary<string, AssetDummyJson> AssetRaw { get; } = new Dictionary<string, AssetDummyJson>();
         public Dictionary<string, StatelessTimeseriesDummy> TimeseriesRaw { get; } = new Dictionary<string, StatelessTimeseriesDummy>();
         public Dictionary<string, RelationshipDummy> Relationships { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, RelationshipDummy> RelationshipsRaw { get; } = new Dictionary<string, RelationshipDummy>();
@@ -757,7 +759,7 @@ namespace Test
 
         private HttpResponseMessage HandleCreateRawAssets(string content)
         {
-            var toCreate = JsonConvert.DeserializeObject<RawListWrapper<AssetDummy>>(content);
+            var toCreate = JsonConvert.DeserializeObject<RawListWrapper<AssetDummyJson>>(content);
             foreach (var item in toCreate.items)
             {
                 AssetRaw[item.key] = item.columns;
@@ -1060,6 +1062,10 @@ namespace Test
         public long rootId { get; set; }
         public string parentExternalId { get; set; }
     }
+    public class AssetDummyJson : AssetDummy
+    {
+        public new JObject metadata { get; set; }
+    }
     public class NullableSet<T>
     {
         public T set { get; set; }
@@ -1158,6 +1164,7 @@ namespace Test
     public class StatelessTimeseriesDummy : TimeseriesDummy
     {
         public string assetExternalId { get; set; }
+        public new JObject metadata { get; set; }
     }
     public class RawWrapper<T>
     {

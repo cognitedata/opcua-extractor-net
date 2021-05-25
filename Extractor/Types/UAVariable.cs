@@ -236,8 +236,7 @@ namespace Cognite.OpcUa.Types
                 IsStep = DataType.IsStep,
                 DataSetId = dataSetId
             };
-
-            writePoco.Metadata = BuildMetadata(extractor, extractor.StringConverter);
+            writePoco.Metadata = MetadataToJson(extractor, extractor.StringConverter);
 
             HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value, extractor.StringConverter);
 

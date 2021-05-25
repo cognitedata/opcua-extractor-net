@@ -404,19 +404,36 @@ namespace Test
 
             if (!upd.Objects.Context) Assert.Equal(rootId, assets[obj2Id].parentExternalId);
 
+            Dictionary<string, string> obj1Meta, obj2Meta, stringyMeta, mysteryMeta;
+
+            if (raw)
+            {
+                obj1Meta = (assets[obj1Id] as AssetDummyJson).metadata?.ToObject<Dictionary<string, string>>();
+                obj2Meta = (assets[obj2Id] as AssetDummyJson).metadata?.ToObject<Dictionary<string, string>>();
+                stringyMeta = (timeseries[stringyId] as StatelessTimeseriesDummy).metadata?.ToObject<Dictionary<string, string>>();
+                mysteryMeta = (timeseries[mysteryId] as StatelessTimeseriesDummy).metadata?.ToObject<Dictionary<string, string>>();
+            }
+            else
+            {
+                obj1Meta = assets[obj1Id].metadata;
+                obj2Meta = assets[obj2Id].metadata;
+                stringyMeta = timeseries[stringyId].metadata;
+                mysteryMeta = timeseries[mysteryId].metadata;
+            }
+
             if (!upd.Objects.Metadata)
             {
-                Assert.True(assets[obj1Id].metadata == null
-                    || !assets[obj1Id].metadata.Any());
-                Assert.Equal(2, assets[obj2Id].metadata.Count);
-                Assert.Equal("1234", assets[obj2Id].metadata["NumericProp"]);
+                Assert.True(obj1Meta == null || !obj1Meta.Any());
+                Assert.Equal(2, obj2Meta.Count);
+                Assert.Equal("1234", obj2Meta["NumericProp"]);
             }
             if (!upd.Variables.Metadata)
             {
-                Assert.True(timeseries[stringyId].metadata == null || !timeseries[stringyId].metadata.Any());
-                Assert.Equal(2, timeseries[mysteryId].metadata.Count);
-                Assert.Equal("(0, 100)", timeseries[mysteryId].metadata["EURange"]);
+                Assert.True(stringyMeta == null || !stringyMeta.Any());
+                Assert.Equal(2, mysteryMeta.Count);
+                Assert.Equal("(0, 100)", mysteryMeta["EURange"]);
             }
+            
         }
 
         public static void VerifyModified(
@@ -457,22 +474,39 @@ namespace Test
                 if (upd.Variables.Context) Assert.Equal(assets[obj1Id].id, timeseries[stringyId].assetId);
             }
 
+            Dictionary<string, string> obj1Meta, obj2Meta, stringyMeta, mysteryMeta;
+
+            if (raw)
+            {
+                obj1Meta = (assets[obj1Id] as AssetDummyJson).metadata?.ToObject<Dictionary<string, string>>();
+                obj2Meta = (assets[obj2Id] as AssetDummyJson).metadata?.ToObject<Dictionary<string, string>>();
+                stringyMeta = (timeseries[stringyId] as StatelessTimeseriesDummy).metadata?.ToObject<Dictionary<string, string>>();
+                mysteryMeta = (timeseries[mysteryId] as StatelessTimeseriesDummy).metadata?.ToObject<Dictionary<string, string>>();
+            }
+            else
+            {
+                obj1Meta = assets[obj1Id].metadata;
+                obj2Meta = assets[obj2Id].metadata;
+                stringyMeta = timeseries[stringyId].metadata;
+                mysteryMeta = timeseries[mysteryId].metadata;
+            }
+
 
             if (upd.Objects.Metadata)
             {
-                Assert.Single(assets[obj1Id].metadata);
-                Assert.Equal("New asset prop value", assets[obj1Id].metadata["NewAssetProp"]);
-                Assert.Equal(3, assets[obj2Id].metadata.Count);
-                Assert.Equal("4321", assets[obj2Id].metadata["NumericProp"]);
-                Assert.True(assets[obj2Id].metadata.ContainsKey("StringProp"));
-                Assert.True(assets[obj2Id].metadata.ContainsKey("StringProp updated"));
+                Assert.Single(obj1Meta);
+                Assert.Equal("New asset prop value", obj1Meta["NewAssetProp"]);
+                Assert.Equal(3, obj2Meta.Count);
+                Assert.Equal("4321", obj2Meta["NumericProp"]);
+                Assert.True(obj2Meta.ContainsKey("StringProp"));
+                Assert.True(obj2Meta.ContainsKey("StringProp updated"));
             }
             if (upd.Variables.Metadata)
             {
-                Assert.Single(timeseries[stringyId].metadata);
-                Assert.Equal("New prop value", timeseries[stringyId].metadata["NewProp"]);
-                Assert.Equal(3, timeseries[mysteryId].metadata.Count);
-                Assert.Equal("(0, 200)", timeseries[mysteryId].metadata["EURange"]);
+                Assert.Single(stringyMeta);
+                Assert.Equal("New prop value", stringyMeta["NewProp"]);
+                Assert.Equal(3, mysteryMeta.Count);
+                Assert.Equal("(0, 200)", mysteryMeta["EURange"]);
             }
         }
         public static async Task WaitForCondition(Func<Task<bool>> condition, int seconds, Func<string> assertion)

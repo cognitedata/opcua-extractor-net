@@ -612,7 +612,8 @@ namespace Test.Unit
             Assert.Equal("gp.base:s=parent", ts.AssetExternalId);
             Assert.True(ts.IsStep);
             Assert.False(ts.IsString);
-            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Equal(@"{""prop1"":""value1"",""prop2"":""value2"",""prop3"":""value3"",""prop4"":""value4""}",
+                extractor.StringConverter.JsonDocumentToString(ts.Metadata));
             Assert.Null(ts.Unit);
             Assert.Equal("description", ts.Description);
 
@@ -632,7 +633,8 @@ namespace Test.Unit
             Assert.Equal("value4", ts.AssetExternalId);
             Assert.True(ts.IsStep);
             Assert.False(ts.IsString);
-            Assert.Equal(4, ts.Metadata.Count);
+            Assert.Equal(@"{""prop1"":""value1"",""prop2"":""value2"",""prop3"":""value3"",""prop4"":""value4""}",
+                            extractor.StringConverter.JsonDocumentToString(ts.Metadata));
             Assert.Equal("value1", ts.Description);
             Assert.Equal("value3", ts.Unit);
         }

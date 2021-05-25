@@ -975,16 +975,25 @@ namespace Test.Integration
 
             await CommonTestUtils.WaitForCondition(() => handler.AssetRaw.Any() && handler.TimeseriesRaw.Any(), 5);
 
-            CommonTestUtils.VerifyStartingConditions(handler.AssetRaw, handler.TimeseriesRaw
+            CommonTestUtils.VerifyStartingConditions(
+                handler.AssetRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)kvp.Value), 
+                handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), null, extractor, tester.Server.Ids.Custom, true);
 
             tester.Server.ModifyCustomServer();
 
             await extractor.Rebrowse();
 
-            CommonTestUtils.VerifyStartingConditions(handler.AssetRaw, handler.TimeseriesRaw
+            CommonTestUtils.VerifyStartingConditions(
+                handler.AssetRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)kvp.Value),
+                handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, extractor, tester.Server.Ids.Custom, true);
-            CommonTestUtils.VerifyModified(handler.AssetRaw, handler.TimeseriesRaw
+            CommonTestUtils.VerifyModified(
+                handler.AssetRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)kvp.Value),
+                handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, extractor, tester.Server.Ids.Custom, true);
 
             tester.Server.ResetCustomServer();

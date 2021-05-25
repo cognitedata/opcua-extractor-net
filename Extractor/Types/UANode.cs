@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Pushers;
 using CogniteSdk;
 using Opc.Ua;
 using System;
@@ -272,32 +273,17 @@ namespace Cognite.OpcUa.Types
             }
             return result;
         }
-        /// <summary>
-        /// Convert to CDF Asset.
-        /// </summary>
-        /// <param name="extractor">Active extractor, used for fetching extra metadata</param>
-        /// <param name="dataSetId">Optional dataSetId</param>
-        /// <param name="metaMap">Map from metadata to asset attributes.</param>
-        /// <returns></returns>
-        public AssetCreate ToCDFAsset(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
+        private void PopulateAssetCreate(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap, AssetCreate asset)
         {
-            if (extractor == null) return null;
             var id = extractor.GetUniqueId(Id);
-            var writePoco = new AssetCreate
-            {
-                Description = Description,
-                ExternalId = id,
-                Name = string.IsNullOrEmpty(DisplayName)
-                    ? id : DisplayName,
-                DataSetId = dataSetId
-            };
-
+            asset.Description = Description;
+            asset.ExternalId = id;
+            asset.Name = string.IsNullOrEmpty(DisplayName) ? id : DisplayName;
+            asset.DataSetId = dataSetId;
             if (ParentId != null && !ParentId.IsNullNodeId)
             {
-                writePoco.ParentExternalId = extractor.GetUniqueId(ParentId);
+                asset.ParentExternalId = extractor.GetUniqueId(ParentId);
             }
-
-            writePoco.Metadata = BuildMetadata(extractor, extractor.StringConverter);
             if (Properties != null && Properties.Any() && (metaMap?.Any() ?? false))
             {
                 foreach (var prop in Properties)
@@ -309,15 +295,39 @@ namespace Cognite.OpcUa.Types
                         if (string.IsNullOrWhiteSpace(value)) continue;
                         switch (mapped)
                         {
-                            case "description": writePoco.Description = value; break;
-                            case "name": writePoco.Name = value; break;
-                            case "parentId": writePoco.ParentExternalId = value; break;
+                            case "description": asset.Description = value; break;
+                            case "name": asset.Name = value; break;
+                            case "parentId": asset.ParentExternalId = value; break;
                         }
                     }
                 }
             }
+        }
 
-            return writePoco;
+        /// <summary>
+        /// Convert to CDF Asset.
+        /// </summary>
+        /// <param name="extractor">Active extractor, used for fetching extra metadata</param>
+        /// <param name="dataSetId">Optional dataSetId</param>
+        /// <param name="metaMap">Map from metadata to asset attributes.</param>
+        /// <returns></returns>
+        public AssetCreate ToCDFAsset(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
+        {
+            if (extractor == null) return null;
+            var asset = new AssetCreate();
+            PopulateAssetCreate(extractor, dataSetId, metaMap, asset);
+            asset.Metadata = BuildMetadata(extractor, extractor.StringConverter);
+
+            return asset;
+        }
+        public AssetCreateJson ToCDFAssetJson(UAExtractor extractor, Dictionary<string, string> metaMap)
+        {
+            if (extractor == null) return null;
+            var asset = new AssetCreateJson();
+            PopulateAssetCreate(extractor, null, metaMap, asset);
+            asset.Metadata = MetadataToJson(extractor, extractor.StringConverter);
+
+            return asset;
         }
         /// <summary>
         /// Add property to list, creating the list if it does not exist.
