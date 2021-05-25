@@ -5,8 +5,10 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 namespace Cognite.OpcUa.Types
 {
@@ -20,9 +22,18 @@ namespace Cognite.OpcUa.Types
             this.uaClient = uaClient;
         }
 
+        public string JsonDocumentToString(JsonDocument doc)
+        {
+            using var stream = new MemoryStream();
+            using var writer = new Utf8JsonWriter(stream);
+            doc.WriteTo(writer);
+            writer.Flush();
+            return Encoding.UTF8.GetString(stream.ToArray());
+        }
+
         private void PropertyToJson(StringBuilder builder, UANode node, bool json)
         {
-            if (node is UAVariable variable && !variable.Properties.Any())
+            if (node is UAVariable variable && (variable.Properties == null || !variable.Properties.Any()))
             {
                 builder.Append(ConvertToString(variable.Value, variable.DataType.EnumValues, null, json));
                 return;
@@ -41,13 +52,13 @@ namespace Cognite.OpcUa.Types
             {
                 if (separator) builder.Append(',');
                 var name = prop.DisplayName;
-                string safeName = name;
+                string safeName = JsonConvert.ToString(name);
                 int idx = 0;
                 while (!fields.Add(safeName))
                 {
-                    safeName = $"{name}{idx++}";
+                    safeName = JsonConvert.ToString($"{name}{idx++}");
                 }
-                builder.AppendFormat(@"""{key}"":", safeName);
+                builder.AppendFormat(@"{0}:", safeName);
                 PropertyToJson(builder, prop, true);
                 separator = true;
             }
@@ -55,11 +66,55 @@ namespace Cognite.OpcUa.Types
             
         }
 
-        public Dictionary<string, string> MetadataToJson(IEnumerable<UANode> properties)
+        public JsonDocument MetadataToJson(Dictionary<string, string> extraFields, IEnumerable<UANode> properties)
+        {
+            var builder = new StringBuilder("{");
+            bool separator = false;
+            var fields = new HashSet<string>();
+            if (extraFields != null)
+            {
+                foreach (var field in extraFields)
+                {
+                    if (separator)
+                    {
+                        builder.Append(',');
+                    }
+                    var name = JsonConvert.ToString(field.Key);
+                    fields.Add(name);
+                    builder.AppendFormat("{0}:", name);
+                    builder.Append(JsonConvert.ToString(field.Value));
+                    separator = true;
+                }
+            }
+
+            foreach (var prop in properties)
+            {
+                var name = prop.DisplayName;
+                if (name == null) continue;
+                if (separator)
+                {
+                    builder.Append(',');
+                }
+                string safeName = JsonConvert.ToString(name);
+                int idx = 0;
+                while (!fields.Add(safeName))
+                {
+                    safeName = JsonConvert.ToString($"{name}{idx++}");
+                }
+                builder.AppendFormat("{0}:", safeName);
+                PropertyToJson(builder, prop, true);
+                separator = true;
+            }
+            builder.Append('}');
+            return JsonDocument.Parse(builder.ToString());
+        }
+
+        public Dictionary<string, string> MetadataToJsonRaw(IEnumerable<UANode> properties)
         {
             var result = new Dictionary<string, string>();
             foreach (var node in properties)
             {
+                if (node.DisplayName == null) continue;
                 var builder = new StringBuilder();
                 PropertyToJson(builder, node, false);
                 result[node.DisplayName] = builder.ToString();
@@ -70,7 +125,17 @@ namespace Cognite.OpcUa.Types
 
         public string ConvertToString(object value, IDictionary<long, string> enumValues = null, TypeInfo typeInfo = null, bool json = false)
         {
-            if (value == null) return "";
+            if (value == null)
+            {
+                if (json)
+                {
+                    return "null";
+                }
+                else
+                {
+                    return "";
+                }
+            }
             if (value is Variant variantValue)
             {
                 return ConvertToString(variantValue.Value, enumValues, variantValue.TypeInfo, json);

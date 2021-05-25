@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 namespace Cognite.OpcUa.Types
 {
@@ -208,12 +209,22 @@ namespace Cognite.OpcUa.Types
         /// <param name="extractor">Active extractor, used for building extra metadata.
         /// Can be null to not fetch any extra metadata at all.</param>
         /// <returns>Created metadata dictionary.</returns>
-        public Dictionary<string, string> BuildMetadata(UAExtractor extractor, StringConverter converter)
+        public Dictionary<string, string> BuildMetadata(UAExtractor extractor, StringConverter converter, bool json = false)
         {
             Dictionary<string, string> extras = extractor?.GetExtraMetadata(this);
             if (Properties == null && extras == null) return new Dictionary<string, string>();
             if (Properties == null) return extras;
             var result = extras ?? new Dictionary<string, string>();
+
+            if (json)
+            {
+                var meta = converter.MetadataToJsonRaw(Properties);
+                foreach (var kvp in meta)
+                {
+                    result[kvp.Key] = kvp.Value;
+                }
+                return result;
+            }
 
             foreach (var prop in Properties)
             {
@@ -237,6 +248,13 @@ namespace Cognite.OpcUa.Types
             }
 
             return result;
+        }
+        public JsonDocument MetadataToJson(UAExtractor extractor, StringConverter converter)
+        {
+            Dictionary<string, string> extras = extractor?.GetExtraMetadata(this);
+            if (Properties == null && extras == null) return JsonDocument.Parse("null");
+            if (Properties == null) return JsonDocument.Parse(JsonSerializer.Serialize(extras));
+            return converter.MetadataToJson(extras, Properties);
         }
         /// <summary>
         /// Retrieve a full list of properties for this node,

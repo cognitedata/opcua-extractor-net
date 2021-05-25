@@ -337,6 +337,148 @@ namespace Test.Unit
             Assert.Equal("valueC", poco.ParentExternalId);
             Assert.Equal(3, poco.Metadata.Count);
         }
+
+        [Fact]
+        public void TestToJsonRaw()
+        {
+            using var extractor = tester.BuildExtractor();
+            var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
+            Assert.Empty(node.BuildMetadata(null, tester.Client.StringConverter, true));
+            Assert.Empty(node.BuildMetadata(extractor, tester.Client.StringConverter, true));
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            node.Attributes.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
+            // Test extras only
+            Assert.Single(node.BuildMetadata(extractor, tester.Client.StringConverter, true));
+
+            // Test properties only
+            var pdt = new UADataType(DataTypeIds.String);
+
+            tester.Config.Extraction.NodeTypes.Metadata = false;
+            var ts = DateTime.UtcNow;
+            var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
+            var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
+            propA.SetDataPoint("valueA");
+            propB.SetDataPoint("valueB");
+
+            node.Attributes.Properties = new List<UANode>
+            {
+                propA, propB
+            };
+            var meta = node.BuildMetadata(extractor, tester.Client.StringConverter, true);
+            Assert.Equal(2, meta.Count);
+            Assert.Equal("valueA", meta["propA"]);
+            Assert.Equal("valueB", meta["propB"]);
+
+            // Test both
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            Assert.Equal(3, node.BuildMetadata(extractor, tester.Client.StringConverter, true).Count);
+
+            // Test nested properties
+            var nestedProp = CommonTestUtils.GetSimpleVariable("nestedProp", pdt); ;
+            nestedProp.SetDataPoint("nestedValue");
+            propB.Attributes.Properties = new List<UANode>
+            {
+                nestedProp
+            };
+            meta = node.BuildMetadata(extractor, tester.Client.StringConverter, true);
+            Assert.Equal(3, meta.Count);
+            Assert.Equal(@"{""Value"":""valueB"",""nestedProp"":""nestedValue""}", meta["propB"]);
+
+            // Test null name
+            var nullNameProp = new UAVariable(new NodeId("nullName"), null, NodeId.Null);
+            nullNameProp.VariableAttributes.DataType = pdt;
+            node.AddProperty(nullNameProp);
+            meta = node.BuildMetadata(extractor, tester.Client.StringConverter, true);
+            Assert.Equal(3, meta.Count);
+
+            // Test null value
+            var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", NodeId.Null);
+            nullValueProp.VariableAttributes.DataType = pdt;
+            node.AddProperty(nullValueProp);
+            meta = node.BuildMetadata(extractor, tester.Client.StringConverter, true);
+            Assert.Equal(4, meta.Count);
+            Assert.Equal("", meta["nullValue"]);
+
+            // Test duplicated properties
+            var propA2 = new UAVariable(new NodeId("propA2"), "propA", NodeId.Null);
+            propA2.VariableAttributes.DataType = pdt;
+            node.AddProperty(propA2);
+            propA2.SetDataPoint("valueA2");
+            meta = node.BuildMetadata(extractor, tester.Client.StringConverter, true);
+            Assert.Equal(4, meta.Count);
+            Assert.Equal("valueA2", meta["propA"]);
+        }
+        [Fact]
+        public void TestToJson()
+        {
+            using var extractor = tester.BuildExtractor();
+            var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
+            var converter = tester.Client.StringConverter;
+            Assert.Equal("null", converter.JsonDocumentToString(node.MetadataToJson(null, converter)));
+            Assert.Equal("null", converter.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+
+            // Extras only
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            node.Attributes.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
+            Assert.Equal(@"{""TypeDefinition"":""SomeType""}", converter.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+
+            // Properties only
+            var pdt = new UADataType(DataTypeIds.String);
+
+            tester.Config.Extraction.NodeTypes.Metadata = false;
+            var ts = DateTime.UtcNow;
+            var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
+            var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
+            propA.SetDataPoint("valueA");
+            propB.SetDataPoint("valueB");
+
+            node.Attributes.Properties = new List<UANode>
+            {
+                propA, propB
+            };
+            Assert.Equal(@"{""propA"":""valueA"",""propB"":""valueB""}",
+                converter.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+
+            tester.Config.Extraction.NodeTypes.Metadata = true;
+            Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"",""propB"":""valueB""}",
+                converter.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+
+            // Test nested properties
+            var nestedProp = CommonTestUtils.GetSimpleVariable("nestedProp", pdt); ;
+            nestedProp.SetDataPoint("nestedValue");
+            propB.Attributes.Properties = new List<UANode>
+            {
+                nestedProp
+            };
+            Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
+                + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""}}",
+                converter.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+
+            // Test null name
+            var nullNameProp = new UAVariable(new NodeId("nullName"), null, NodeId.Null);
+            nullNameProp.VariableAttributes.DataType = pdt;
+            node.AddProperty(nullNameProp);
+            Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
+                + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""}}",
+                converter.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+
+            // Test null value
+            var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", NodeId.Null);
+            nullValueProp.VariableAttributes.DataType = pdt;
+            node.AddProperty(nullValueProp);
+            Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
+                + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""},""nullValue"":null}",
+                converter.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+
+            // Test duplicated properties
+            var propA2 = new UAVariable(new NodeId("propA2"), "propA", NodeId.Null);
+            propA2.VariableAttributes.DataType = pdt;
+            node.AddProperty(propA2);
+            propA2.SetDataPoint("valueA2");
+            Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
+                + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""},""nullValue"":null,""propA0"":""valueA2""}",
+                converter.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+        }
         #endregion
 
         #region uavariable
