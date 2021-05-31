@@ -34,7 +34,7 @@ namespace Cognite.OpcUa.HistoryStates
 
         public void InitToEmpty()
         {
-            lock (_mutex)
+            lock (Mutex)
             {
                 if (!FrontfillEnabled || BackfillEnabled)
                 {

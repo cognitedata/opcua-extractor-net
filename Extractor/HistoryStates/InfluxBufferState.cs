@@ -59,7 +59,7 @@ namespace Cognite.OpcUa.HistoryStates
         /// </summary>
         public void ClearRanges()
         {
-            lock (_mutex)
+            lock (Mutex)
             {
                 DestinationExtractedRange = TimeRange.Empty;
             }

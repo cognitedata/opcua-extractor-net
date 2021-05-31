@@ -70,7 +70,7 @@ namespace Cognite.OpcUa.HistoryStates
         {
             if (!points.Any()) return;
             UpdateFromStream(DateTime.MaxValue, points.Max(pt => pt.Timestamp));
-            lock (_mutex)
+            lock (Mutex)
             {
                 if (IsFrontfilling)
                 {
@@ -85,7 +85,7 @@ namespace Cognite.OpcUa.HistoryStates
         /// <param name="final">True if this is the final iteration of history read</param>
         public override void UpdateFromFrontfill(DateTime last, bool final)
         {
-            lock (_mutex)
+            lock (Mutex)
             {
                 SourceExtractedRange = SourceExtractedRange.Extend(null, last);
                 if (!final)
@@ -106,7 +106,7 @@ namespace Cognite.OpcUa.HistoryStates
         public IEnumerable<UADataPoint> FlushBuffer()
         {
             if (IsFrontfilling || buffer == null || !buffer.Any()) return Array.Empty<UADataPoint>();
-            lock (_mutex)
+            lock (Mutex)
             {
                 var result = buffer.Where(pt => pt.Timestamp > SourceExtractedRange.Last).ToList();
                 buffer.Clear();

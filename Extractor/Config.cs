@@ -337,7 +337,18 @@ namespace Cognite.OpcUa
         public long StartTime { get; set; }
         public int Granularity { get; set; } = 600;
         public bool IgnoreContinuationPoints { get; set; }
+        public HistoryThrottlingConfig Throttling { get; set; }
     }
+    public class UAThrottlingConfig
+    {
+        public int MaxPerMinute { get; set; }
+        public int MaxParallelism { get; set; }
+    }
+    public class HistoryThrottlingConfig : UAThrottlingConfig
+    {
+        public int MaxNodeParallelism { get; set; }
+    }
+
     public class ProtoNodeId
     {
         public string NamespaceUri { get; set; }

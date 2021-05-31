@@ -1721,25 +1721,4 @@ namespace Cognite.OpcUa
         }
         #endregion
     }
-    /// <summary>
-    /// Parameter class containing the state of a single history read operation.
-    /// </summary>
-    public class HistoryReadParams
-    {
-        public HistoryReadDetails Details { get; }
-        public List<HistoryReadNode> Nodes { get; set; }
-
-        public HistoryReadParams(IEnumerable<NodeId> nodes, HistoryReadDetails details)
-        {
-            Nodes = nodes.Select(node => new HistoryReadNode { Id = node }).ToList();
-            Details = details;
-        }
-    }
-    public class HistoryReadNode
-    {
-        public UAHistoryExtractionState State { get; set; }
-        public NodeId Id { get; set; }
-        public byte[] ContinuationPoint { get; set; }
-        public bool Completed { get; set; }
-    }
 }

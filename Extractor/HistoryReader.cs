@@ -22,17 +22,61 @@ using Opc.Ua;
 using Prometheus;
 using Serilog;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
+    public enum HistoryReadType
+    {
+        FrontfillData,
+        BackfillData,
+        FrontfillEvents,
+        BackfillEvents
+    }
     /// <summary>
-    /// Tool to read history from OPC-UA. Manages backfill and frontfill of datapoints and events.
+    /// Parameter class containing the state of a single history read operation.
     /// </summary>
-    public class HistoryReader
+    public class HistoryReadParams
+    {
+        public HistoryReadDetails Details { get; }
+        public List<HistoryReadNode> Nodes { get; set; }
+        public Exception Exception { get; set; }
+
+        public HistoryReadParams(IEnumerable<HistoryReadNode> nodes, HistoryReadDetails details)
+        {
+            Nodes = nodes.ToList();
+            Details = details;
+        }
+    }
+    public class HistoryReadNode
+    {
+        public HistoryReadNode(HistoryReadType type, UAHistoryExtractionState state)
+        {
+            Type = type;
+            Id = state.Id;
+        }
+        public HistoryReadNode(HistoryReadType type, NodeId id)
+        {
+            Type = type;
+            Id = id;
+        }
+        public HistoryReadType Type { get; }
+        public UAHistoryExtractionState State { get; set; }
+        public DateTime Time => Type == HistoryReadType.BackfillData || Type == HistoryReadType.BackfillEvents
+            ? State.SourceExtractedRange.First : State.SourceExtractedRange.Last;
+        public NodeId Id { get; }
+        public byte[] ContinuationPoint { get; set; }
+        public bool Completed { get; set; }
+        public int LastRead { get; set; }
+        public int TotalRead { get; set; }
+    }
+
+    public class HistoryScheduler : IDisposable
     {
         private static readonly Counter numFrontfillPoints = Metrics
             .CreateCounter("opcua_frontfill_data_points", "Number of datapoints retrieved through frontfill");
@@ -54,32 +98,355 @@ namespace Cognite.OpcUa
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly HistoryConfig config;
+        private int numActiveNodes = 0;
+        private bool disposedValue;
+        private readonly TaskThrottler throttler;
+
+        private readonly HistoryReadType type;
         private readonly DateTime historyStartTime;
         private readonly TimeSpan historyGranularity;
+        private readonly HistoryThrottlingConfig throttling;
+        private readonly ILogger log = Log.Logger.ForContext<HistoryScheduler>();
 
-        private bool aborting;
-        private int running;
+        private readonly BlockingCollection<HistoryReadParams> finishedReads = new BlockingCollection<HistoryReadParams>();
 
-        private readonly ILogger log = Log.Logger.ForContext(typeof(HistoryReader));
-        /// <summary>
-        /// Constructor, initialize from config
-        /// </summary>
-        /// <param name="uaClient">UAClient to use for history read</param>
-        /// <param name="extractor">Parent extractor to enqueue points and events in</param>
-        /// <param name="config">Configuration to use</param>
-        public HistoryReader(UAClient uaClient, UAExtractor extractor, HistoryConfig config)
+        private bool Frontfill => type == HistoryReadType.FrontfillData || type == HistoryReadType.FrontfillEvents;
+        private bool Data => type == HistoryReadType.FrontfillData || type == HistoryReadType.BackfillData;
+        public HistoryScheduler(UAClient uaClient, UAExtractor extractor, HistoryConfig config, HistoryReadType type)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
-            if (uaClient == null) throw new ArgumentNullException(nameof(uaClient));
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
-            this.config = config;
-            this.uaClient = uaClient;
+            if (config.Throttling == null)
+            {
+                throttling = new HistoryThrottlingConfig { MaxNodeParallelism = 0, MaxParallelism = 0, MaxPerMinute = 0 };
+            }
+            else
+            {
+                throttling = config.Throttling;
+            }
             this.extractor = extractor;
+            this.uaClient = uaClient;
+            this.config = config;
+            this.type = type;
+            throttler = new TaskThrottler(throttling.MaxParallelism, false, throttling.MaxPerMinute, TimeSpan.FromMinutes(1));
+
             historyStartTime = CogniteTime.FromUnixTimeMilliseconds(config.StartTime);
             historyGranularity = config.Granularity <= 0
                 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.Granularity);
         }
+
+        public Task Run(IEnumerable<UAHistoryExtractionState> states, CancellationToken token)
+        {
+            return Task.Run(() => SchedulingLoop(states, token));
+        }
+
+        private IEnumerable<HistoryReadNode> GetHistoryChunk(List<HistoryReadNode> nodes, int idx)
+        {
+            if (idx >= nodes.Count) yield break;
+            int chunkSize = Data
+                ? config.DataNodesChunk
+                : config.EventNodesChunk;
+            DateTime initial = nodes[idx].Time;
+
+            for (int i = idx; i < nodes.Count; i++)
+            {
+                if (chunkSize > 0 && i - idx > chunkSize) yield break;
+                if (config.Granularity >= 0 && nodes[i].Time > initial + historyGranularity) yield break;
+                if (throttling.MaxNodeParallelism > 0 && i - idx + numActiveNodes > throttling.MaxNodeParallelism) yield break;
+                yield return nodes[i];
+            }
+        }
+
+        private void LogHistoryTermination(List<HistoryReadNode> toTerminate, int totalRead, int totalNodes)
+        {
+            log.Information("Finish reading {type} for {cnt} nodes: {totalRead}/{totalNodes}", type, toTerminate.Count, totalRead, totalNodes);
+            var builder = new StringBuilder();
+            builder.AppendFormat("Finish reading {0} for\n", type);
+            foreach (var node in toTerminate)
+            {
+                builder.AppendFormat("    In total {0} items for {1}. End now at {2}\n",
+                    node.TotalRead,
+                    node.State.Id,
+                    Frontfill ? node.State.SourceExtractedRange.Last : node.State.SourceExtractedRange.First);
+            }
+            log.Debug(builder.ToString());
+        }
+
+        private HistoryReadDetails GetReadDetails(IEnumerable<HistoryReadNode> nodes)
+        {
+            switch (type)
+            {
+                case HistoryReadType.FrontfillData:
+                    return new ReadRawModifiedDetails
+                    {
+                        IsReadModified = false,
+                        EndTime = DateTime.MinValue,
+                        StartTime = nodes.First().Time,
+                        NumValuesPerNode = (uint)config.DataChunk
+                    };
+                case HistoryReadType.BackfillData:
+                    return new ReadRawModifiedDetails
+                    {
+                        IsReadModified = false,
+                        // Reverse start/end time should result in backwards read according to the OPC-UA specification
+                        EndTime = historyStartTime,
+                        StartTime = nodes.Last().Time,
+                        NumValuesPerNode = (uint)config.DataChunk
+                    };
+                case HistoryReadType.FrontfillEvents:
+                    return new ReadEventDetails
+                    {
+                        EndTime = DateTime.MinValue,
+                        StartTime = nodes.First().Time,
+                        NumValuesPerNode = (uint)config.EventChunk,
+                        Filter = uaClient.BuildEventFilter()
+                    };
+                case HistoryReadType.BackfillEvents:
+                    return new ReadEventDetails
+                    {
+                        EndTime = historyStartTime,
+                        StartTime = nodes.Last().Time,
+                        NumValuesPerNode = (uint)config.EventChunk,
+                        Filter = uaClient.BuildEventFilter()
+                    };
+            }
+            throw new InvalidOperationException();
+        }
+
+        private List<HistoryReadParams> GetNextChunks(List<HistoryReadNode> nodes, int index, out int newIndex)
+        {
+            int lIndex = index;
+            List<HistoryReadParams> chunks = new List<HistoryReadParams>();
+            List<HistoryReadNode> chunk;
+            do
+            {
+                chunk = GetHistoryChunk(nodes, lIndex).ToList();
+                numActiveNodes += chunk.Count;
+                lIndex += chunk.Count;
+                if (chunk.Any())
+                {
+                    var details = GetReadDetails(chunk);
+                    chunks.Add(new HistoryReadParams(chunk, details));
+                }
+            } while (chunk.Any());
+            newIndex = lIndex;
+            return chunks;
+        }
+
+        private void LogReadFailure(HistoryReadParams finishedRead)
+        {
+            var sourceOp = Data
+                ? ExtractorUtils.SourceOp.HistoryRead
+                : ExtractorUtils.SourceOp.HistoryReadEvents;
+
+            Exception exc;
+            if (finishedRead.Exception is AggregateException aex)
+            {
+                var serviceEx = ExtractorUtils.GetRootExceptionOfType<ServiceResultException>(aex);
+                exc = ExtractorUtils.HandleServiceResult(log, serviceEx, sourceOp);
+            }
+            else if (finishedRead.Exception is ServiceResultException serviceEx)
+            {
+                exc = ExtractorUtils.HandleServiceResult(log, serviceEx, sourceOp);
+            }
+            else
+            {
+                exc = finishedRead.Exception;
+            }
+
+            string msg = $"HistoryRead {type} failed for nodes" +
+                $" {string.Join(',', finishedRead.Nodes.Select(node => node.State.Id))}: {exc.Message}";
+            log.Error($"{msg}: {exc.Message}");
+        }
+
+        private void IncrementMetrics(int total)
+        {
+            switch (type)
+            {
+                case HistoryReadType.FrontfillData:
+                    numFrontfillData.Inc();
+                    numFrontfillPoints.Inc(total);
+                    break;
+                case HistoryReadType.BackfillData:
+                    numBackfillData.Inc();
+                    numBackfillPoints.Inc(total);
+                    break;
+                case HistoryReadType.FrontfillEvents:
+                    numFrontfillEvent.Inc();
+                    numFrontfillEvents.Inc(total);
+                    break;
+                case HistoryReadType.BackfillEvents:
+                    numBackfillEvent.Inc();
+                    numBackfillEvents.Inc(total);
+                    break;
+            }
+        }
+
+        private int HandleFinishedRead(HistoryReadParams read, List<HistoryReadParams> chunks, int totalNodes, Action<HistoryReadNode> terminateCb)
+        {
+            if (read.Exception != null)
+            {
+                LogReadFailure(read);
+                return read.Nodes.Count;
+            }
+            int total = read.Nodes.Sum(node => node.LastRead);
+            IncrementMetrics(total);
+
+            if (config.IgnoreContinuationPoints && !Frontfill)
+            {
+                var newMin = read.Nodes.Select(node => node.Time).Max();
+                if (newMin <= historyStartTime)
+                {
+                    foreach (var node in read.Nodes)
+                    {
+                        node.Completed = true;
+                        terminateCb(node);
+                    }
+                }
+            }
+
+            var toTerminate = read.Nodes.Where(node => node.Completed).ToList();
+            LogHistoryTermination(toTerminate, read.Nodes.Count, totalNodes);
+            read.Nodes = read.Nodes.Where(node => !node.Completed).ToList();
+
+            if (read.Nodes.Any())
+            {
+                chunks.Add(read);
+            }
+
+            return toTerminate.Count;
+        }
+
+        private List<HistoryReadParams> RecalculateChunks(List<HistoryReadParams> reads)
+        {
+            var result = new List<HistoryReadParams>();
+            int total = reads.Sum(read => read.Nodes.Count);
+            if (total == 0) return result;
+            // Effectively remove then re-add all nodes to the schedule.
+            numActiveNodes -= total;
+            var nodes = reads.SelectMany(read => read.Nodes)
+                .OrderBy(node => node.Time)
+                .ToList();
+            return GetNextChunks(nodes, 0, out _);
+        }
+
+        private void SchedulingLoop(IEnumerable<UAHistoryExtractionState> states, CancellationToken token)
+        {
+            var nodes = states
+                .Select(state => new HistoryReadNode(type, state))
+                .OrderBy(state => state.Time)
+                .ToList();
+            int totalRead = 0;
+            int totalNodes = nodes.Count;
+
+            int index = 0;
+
+            if (type == HistoryReadType.BackfillData || type == HistoryReadType.BackfillEvents)
+            {
+                var toTerminate = nodes.TakeWhile(node => node.State.SourceExtractedRange.Last <= historyStartTime).ToList();
+                index += toTerminate.Count;
+                totalRead += toTerminate.Count;
+                foreach (var node in toTerminate)
+                {
+                    node.State.UpdateFromBackfill(CogniteTime.DateTimeEpoch, true);
+                }
+                LogHistoryTermination(toTerminate, totalRead, totalNodes);
+            }
+
+
+            var chunks = GetNextChunks(nodes, index, out index);
+
+            var cb = Frontfill
+                ? (Action<IEncodeable, HistoryReadNode, HistoryReadDetails>)HistoryDataHandler
+                : HistoryEventHandler;
+
+            while (numActiveNodes > 0 || chunks.Any())
+            {
+                if (token.IsCancellationRequested) break;
+                var generators = chunks
+                    .Select<HistoryReadParams, Func<Task>>(
+                        chunk => () => Task.Run(() => BaseHistoryReadOp(chunk, cb, finishedReads, token)))
+                    .ToList();
+                chunks.Clear();
+                foreach (var generator in generators)
+                {
+                    throttler.EnqueueTask(generator);
+                }
+                var finished = new List<HistoryReadParams>();
+                try
+                {
+                    finished.Add(finishedReads.Take(token));
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                while (finishedReads.TryTake(out var finishedRead))
+                {
+                    finished.Add(finishedRead);
+                }
+                foreach (var read in finished)
+                {
+                    int terminated = HandleFinishedRead(read, chunks, totalNodes, node => cb(null, node, read.Details));
+                    totalRead += terminated;
+                    numActiveNodes -= terminated;
+                }
+
+                if (config.IgnoreContinuationPoints)
+                {
+                    chunks = RecalculateChunks(chunks);
+                    if (Data)
+                    {
+                        // Since datapoints all have distinct time, we can add a tick here to avoid reading the same again
+                        // The same does not hold for events. Either way we also have a fallback check in the handlers 
+                        // for cases when the server operates on a lower resolution than ticks.
+                        foreach (var chunk in chunks)
+                        {
+                            var details = chunk.Details as ReadRawModifiedDetails;
+                            details.StartTime = details.StartTime.AddTicks(Frontfill ? 1 : -1);
+                        }
+                    }
+                }
+                chunks.AddRange(GetNextChunks(nodes, index, out index));
+            }
+
+            log.Information("Finish history of type {type}", type);
+            finishedReads.CompleteAdding();
+        }
+
+
+
+        private void BaseHistoryReadOp(
+            HistoryReadParams readParams,
+            Action<IEncodeable, HistoryReadNode, HistoryReadDetails> handler,
+            BlockingCollection<HistoryReadParams> finishedReads,
+            CancellationToken token)
+        {
+            try
+            {
+                if (token.IsCancellationRequested) return;
+                var results = uaClient.DoHistoryRead(readParams);
+
+                foreach (var res in results)
+                {
+                    handler(res.RawData, res.Node, readParams.Details);
+
+                    if (config.IgnoreContinuationPoints)
+                    {
+                        res.Node.ContinuationPoint = null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                readParams.Exception = ex;
+                throw;
+            }
+            finally
+            {
+                finishedReads.Add(readParams);
+            }
+        }
+
         /// <summary>
         /// Handle the result of a historyReadRaw. Takes information about the read, updates states and sends datapoints to the streamer.
         /// </summary>
@@ -87,7 +454,7 @@ namespace Cognite.OpcUa
         /// <param name="node">Active HistoryReadNode</param>
         /// <param name="frontfill">True if this is frontfill, false for backfill</param>
         /// <returns>Number of points read</returns>
-        private int HistoryDataHandler(IEncodeable rawData, HistoryReadNode node, bool frontfill, HistoryReadDetails _)
+        private void HistoryDataHandler(IEncodeable rawData, HistoryReadNode node, HistoryReadDetails _)
         {
             var data = rawData as HistoryData;
 
@@ -99,7 +466,7 @@ namespace Cognite.OpcUa
             if (node.State == null)
             {
                 log.Warning("History data for unknown node received: {id}", node.Id);
-                return 0;
+                return;
             }
 
             List<DataValue> dataPoints = new List<DataValue>(data?.DataValues?.Count ?? 0);
@@ -128,19 +495,17 @@ namespace Cognite.OpcUa
             if (config.IgnoreContinuationPoints)
             {
                 node.Completed = !dataPoints.Any()
-                    || frontfill && first == last && last == node.State.SourceExtractedRange.Last
-                    || !frontfill && first == last && last == node.State.SourceExtractedRange.First;
+                    || Frontfill && first == last && last == node.State.SourceExtractedRange.Last
+                    || !Frontfill && first == last && last == node.State.SourceExtractedRange.First;
             }
 
-            if (frontfill)
+            if (Frontfill)
             {
                 node.State.UpdateFromFrontfill(last, node.Completed);
-                log.Debug("Frontfill of data for {id} at {ts}", node.State.Id, last);
             }
             else
             {
                 node.State.UpdateFromBackfill(first, node.Completed);
-                log.Debug("Backfill of data for {id} at {ts}", node.State.Id, first);
             }
 
             int cnt = 0;
@@ -158,13 +523,15 @@ namespace Cognite.OpcUa
                 extractor.Streamer.Enqueue(buffDps);
             }
 
-            if (!node.Completed || !frontfill) return cnt;
+            node.LastRead = cnt;
+            node.TotalRead += cnt;
+
+            if (!node.Completed || !Frontfill) return;
 
             var buffered = nodeState.FlushBuffer();
+            log.Debug("Read {cnt} datapoints from buffer of state {id}", buffered.Count(), node.State.Id);
             nodeState.UpdateFromStream(buffered);
             extractor.Streamer.Enqueue(buffered);
-
-            return cnt;
         }
 
         private DateTime? GetTimeAttribute(VariantCollection evt, EventFilter filter)
@@ -190,19 +557,19 @@ namespace Cognite.OpcUa
         /// <param name="frontfill">True if frontfill, false for backfill</param>
         /// <param name="details">History read details used to generate this HistoryRead result</param>
         /// <returns>Number of events read</returns>
-        private int HistoryEventHandler(IEncodeable rawEvts, HistoryReadNode node, bool frontfill, HistoryReadDetails details)
+        private void HistoryEventHandler(IEncodeable rawEvts, HistoryReadNode node, HistoryReadDetails details)
         {
             var evts = rawEvts as HistoryEvent;
             if (!(details is ReadEventDetails eventDetails))
             {
                 log.Warning("Incorrect details type of history read events");
-                return 0;
+                return;
             }
             var filter = eventDetails.Filter;
             if (filter == null || filter.SelectClauses == null)
             {
                 log.Warning("No event filter when reading from history, ignoring");
-                return 0;
+                return;
             }
             if (node.State == null)
             {
@@ -212,7 +579,7 @@ namespace Cognite.OpcUa
             if (node.State == null)
             {
                 log.Warning("History events for unknown emitter received: {id}", node.Id);
-                return 0;
+                return;
             }
 
             var last = DateTime.MinValue;
@@ -255,24 +622,25 @@ namespace Cognite.OpcUa
             {
                 // If all the returned events are at the end point, then we are receiving duplicates.
                 node.Completed = !any
-                    || frontfill && first == last && last == node.State.SourceExtractedRange.Last
-                    || !frontfill && first == last && last == node.State.SourceExtractedRange.First;
+                    || Frontfill && first == last && last == node.State.SourceExtractedRange.Last
+                    || !Frontfill && first == last && last == node.State.SourceExtractedRange.First;
             }
 
-            if (frontfill)
+            if (Frontfill)
             {
                 node.State.UpdateFromFrontfill(last, node.Completed);
-                log.Debug("Frontfill of events for {id} at: {end}", node.Id, last);
             }
             else
             {
                 node.State.UpdateFromBackfill(first, node.Completed);
-                log.Debug("Backfill of events for {id} at: {end}", node.Id, first);
             }
 
             extractor.Streamer.Enqueue(createdEvents);
 
-            if (!node.Completed || !frontfill) return createdEvents.Count;
+            node.LastRead = createdEvents.Count;
+            node.TotalRead += createdEvents.Count;
+
+            if (!node.Completed || !Frontfill) return;
 
             var emitterState = node.State as EventExtractionState;
 
@@ -282,296 +650,100 @@ namespace Cognite.OpcUa
                 var (smin, smax) = buffered.MinMax(dp => dp.Time);
                 emitterState.UpdateFromStream(smin, smax);
             }
-            log.Information("Read {cnt} events from buffer", buffered.Count());
+            log.Debug("Read {cnt} events from buffer of state {id}", buffered.Count(), node.State.Id);
             extractor.Streamer.Enqueue(buffered);
-
-            return createdEvents.Count;
         }
-        /// <summary>
-        /// Main history read loop. Reads for the given list of nodes until all are done, using the given HistoryReadDetails.
-        /// </summary>
-        /// <param name="details">HistoryReadDetails to be used</param>
-        /// <param name="nodes">Nodes to be read</param>
-        /// <param name="frontfill">True if frontfill, false for backfill, used for synching states</param>
-        /// <param name="data">True if data is being read, false for events</param>
-        /// <param name="handler">Callback to handle read results</param>
-        private void BaseHistoryReadOp(HistoryReadDetails details,
-            IEnumerable<NodeId> nodes,
-            bool frontfill,
-            bool data,
-            Func<IEncodeable, HistoryReadNode, bool, HistoryReadDetails, int> handler,
-            CancellationToken token)
+
+        protected virtual void Dispose(bool disposing)
         {
-            var readParams = new HistoryReadParams(nodes, details);
-            while (readParams.Nodes.Any() && !token.IsCancellationRequested && !aborting)
+            if (!disposedValue)
             {
-                int total = 0;
-                int count = readParams.Nodes.Count();
-                var results = uaClient.DoHistoryRead(readParams);
-                if (aborting) break;
-
-                foreach (var res in results)
+                if (disposing)
                 {
-                    int cnt = handler(res.RawData, res.Node, frontfill, details);
-
-                    total += cnt;
-                    log.Debug("{mode} {cnt} {type} for node {nodeId}",
-                        frontfill ? "Frontfill" : "Backfill", cnt, data ? "datapoints" : "events", res.Node.Id);
-
-                    if (config.IgnoreContinuationPoints)
-                    {
-                        res.Node.ContinuationPoint = null;
-                    }
+                    throttler.Dispose();
+                    finishedReads.Dispose();
                 }
-                log.Information("{mode}ed {cnt} {type} for {nodeCount} states",
-                    frontfill ? "Frontfill" : "Backfill", total, data ? "datapoints" : "events", count);
-
-                if (data && frontfill)
-                {
-                    numFrontfillData.Inc();
-                    numFrontfillPoints.Inc(total);
-                }
-                else if (data)
-                {
-                    numBackfillData.Inc();
-                    numBackfillPoints.Inc(total);
-                }
-                else if (frontfill)
-                {
-                    numFrontfillEvent.Inc();
-                    numFrontfillEvents.Inc(total);
-                }
-                else
-                {
-                    numBackfillEvent.Inc();
-                    numBackfillEvents.Inc(total);
-                }
-
-                int termCount = readParams.Nodes.Count(node => node.Completed);
-                if (termCount > 0)
-                {
-                    log.Debug("Terminate {mode} of {type} for {count} states", frontfill ? "Frontfill" : "Backfill",
-                        data ? "datapoints" : "events", termCount);
-                }
-
-                readParams.Nodes = readParams.Nodes.Where(node => !node.Completed).ToList();
-
-                if (config.IgnoreContinuationPoints)
-                {
-                    DateTime newMin;
-                    if (frontfill)
-                    {
-                        newMin = readParams.Nodes
-                            .Where(node => node.State != null)
-                            .Select(node => node.State.SourceExtractedRange.Last)
-                            .Min();
-                    }
-                    else
-                    {
-                        newMin = readParams.Nodes
-                            .Where(node => node.State != null)
-                            .Select(node => node.State.SourceExtractedRange.First)
-                            .Max();
-                        if (newMin <= historyStartTime)
-                        {
-                            foreach (var node in readParams.Nodes)
-                            {
-                                node.Completed = true;
-                                handler(null, node, frontfill, details);
-                            }
-                        }
-                    }
-                    if (data)
-                    {
-                        // Since datapoints all have distinct time, we can add a tick here to avoid reading the same again
-                        // The same does not hold for events. Either way we also have a fallback check in the handlers 
-                        // for cases when the server operates on a lower resolution than ticks.
-                        (details as ReadRawModifiedDetails).StartTime = newMin.AddTicks(frontfill ? 1 : -1);
-                    }
-                    else
-                    {
-                        (details as ReadEventDetails).StartTime = newMin;
-                    }
-                }
+                disposedValue = true;
             }
         }
-        /// <summary>
-        /// Frontfill data for the given list of states
-        /// </summary>
-        /// <param name="nodes">Nodes to be read</param>
-        private void FrontfillDataChunk(IEnumerable<VariableExtractionState> nodes, CancellationToken token)
-        {
-            // Earliest latest timestamp in chunk.
-            var finalTimeStamp = nodes.Min(node => node.SourceExtractedRange.Last);
-            finalTimeStamp = finalTimeStamp < historyStartTime ? historyStartTime : finalTimeStamp;
-            var details = new ReadRawModifiedDetails
-            {
-                IsReadModified = false,
-                EndTime = DateTime.MinValue,
-                StartTime = finalTimeStamp,
-                NumValuesPerNode = (uint)config.DataChunk
-            };
-            log.Information("Frontfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
 
-            BaseHistoryReadOp(details, nodes.Select(node => node.SourceId), true, true, HistoryDataHandler, token);
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
-        /// <summary>
-        /// Backfill data for the given list of states
-        /// </summary>
-        /// <param name="nodes">Nodes to be read</param>
-        private void BackfillDataChunk(IEnumerable<VariableExtractionState> nodes, CancellationToken token)
-        {
-            var finalTimeStamp = nodes.Max(node => node.SourceExtractedRange.First);
-            if (finalTimeStamp <= historyStartTime) return;
-            var details = new ReadRawModifiedDetails
-            {
-                IsReadModified = false,
-                // Reverse start/end time should result in backwards read according to the OPC-UA specification
-                EndTime = historyStartTime,
-                StartTime = finalTimeStamp,
-                NumValuesPerNode = (uint)config.DataChunk
-            };
-            log.Information("Backfill data from {start} for {cnt} nodes", finalTimeStamp, nodes.Count());
+    }
 
-            BaseHistoryReadOp(details, nodes.Select(node => node.SourceId), false, true, HistoryDataHandler, token);
+    public class HistoryReader
+    {
+        private readonly UAClient uaClient;
+        private readonly UAExtractor extractor;
+        private readonly HistoryConfig config;
+        private CancellationTokenSource source;
+        private int running;
+        private ILogger log = Log.Logger.ForContext<HistoryReader>();
+        public HistoryReader(UAClient uaClient, UAExtractor extractor, HistoryConfig config, CancellationToken token)
+        {
+            if (config == null) throw new ArgumentNullException(nameof(config));
+            if (uaClient == null) throw new ArgumentNullException(nameof(uaClient));
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
+            this.config = config;
+            this.uaClient = uaClient;
+            this.extractor = extractor;
+            source = CancellationTokenSource.CreateLinkedTokenSource(token);
         }
-        /// <summary>
-        /// Frontfill events for the given list of states
-        /// </summary>
-        /// <param name="states">Emitters to be read from</param>
-        /// <param name="nodes">SourceNodes to read for</param>
-        private void FrontfillEventsChunk(IEnumerable<EventExtractionState> states, CancellationToken token)
-        {
-            var finalTimeStamp = states.Min(node => node.SourceExtractedRange.Last);
-            finalTimeStamp = finalTimeStamp < historyStartTime ? historyStartTime : finalTimeStamp;
-            var details = new ReadEventDetails
-            {
-                EndTime = DateTime.MinValue,
-                StartTime = finalTimeStamp,
-                NumValuesPerNode = (uint)config.EventChunk,
-                Filter = uaClient.BuildEventFilter()
-            };
-            log.Information("Frontfill events from {start} for {cnt} emitters", finalTimeStamp, states.Count());
 
-            BaseHistoryReadOp(details, states.Select(node => node.SourceId), true, false, HistoryEventHandler, token);
-
-        }
-        /// <summary>
-        /// Backfill events for the given list of states
-        /// </summary>
-        /// <param name="states">Emitters to be read from</param>
-        private void BackfillEventsChunk(IEnumerable<EventExtractionState> states, CancellationToken token)
+        private async Task RunSafe(Task task)
         {
-            var finalTimeStamp = states.Max(node => node.SourceExtractedRange.First);
-            if (finalTimeStamp <= historyStartTime) return;
-            var details = new ReadEventDetails
-            {
-                // Reverse start/end time should result in backwards read according to the OPC-UA specification
-                EndTime = historyStartTime,
-                StartTime = finalTimeStamp,
-                NumValuesPerNode = (uint)config.EventChunk,
-                Filter = uaClient.BuildEventFilter()
-            };
-            log.Information("Backfill events from {start} for {cnt} emitters", finalTimeStamp, states.Count());
-
-            BaseHistoryReadOp(details, states.Select(node => node.SourceId), false, false, HistoryEventHandler, token);
-        }
-        /// <summary>
-        /// Frontfill data for the given list of states. Chunks by time granularity and given chunksizes.
-        /// </summary>
-        /// <param name="states">Nodes to be read</param>
-        public async Task FrontfillData(IEnumerable<VariableExtractionState> states, CancellationToken token)
-        {
-            if (states == null || !states.Any()) return;
             try
             {
                 Interlocked.Increment(ref running);
-                var frontfillChunks = states.GroupByTimeGranularity(historyGranularity,
-                    state => state.SourceExtractedRange.Last, config.DataNodesChunk);
-                await Task.WhenAll(frontfillChunks.Select(chunk => Task.Run(() => FrontfillDataChunk(chunk, token))));
+                await task;
             }
             finally
             {
                 Interlocked.Decrement(ref running);
             }
+        }
 
+        /// <summary>
+        /// Frontfill data for the given list of states. Chunks by time granularity and given chunksizes.
+        /// </summary>
+        /// <param name="states">Nodes to be read</param>
+        public Task FrontfillData(IEnumerable<VariableExtractionState> states)
+        {
+            using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.FrontfillData);
+            return RunSafe(scheduler.Run(states, source.Token));
         }
         /// <summary>
         /// Backfill data for the given list of states. Chunks by time granularity and given chunksizes.
         /// </summary>
         /// <param name="states">Nodes to be read</param>
-        public async Task BackfillData(IEnumerable<VariableExtractionState> states, CancellationToken token)
+        public Task BackfillData(IEnumerable<VariableExtractionState> states)
         {
-            if (states == null || !states.Any()) return;
-            try
-            {
-                Interlocked.Increment(ref running);
-                foreach (var state in states)
-                {
-                    if (state.SourceExtractedRange.First < historyStartTime)
-                    {
-                        state.UpdateFromBackfill(CogniteTime.DateTimeEpoch, true);
-                    }
-                }
-                var backfillChunks = states.Where(state => state.SourceExtractedRange.First > historyStartTime)
-                    .GroupByTimeGranularity(historyGranularity, state => state.SourceExtractedRange.First, config.DataNodesChunk);
-                await Task.WhenAll(backfillChunks.Select(chunk => Task.Run(() => BackfillDataChunk(chunk, token))));
-            }
-            finally
-            {
-                Interlocked.Decrement(ref running);
-            }
-
+            using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.BackfillData);
+            return RunSafe(scheduler.Run(states, source.Token));
         }
         /// <summary>
         /// Frontfill events for the given list of states. Chunks by time granularity and given chunksizes.
         /// </summary>
         /// <param name="states">Emitters to be read from</param>
         /// <param name="nodes">SourceNodes to read for</param>
-        public async Task FrontfillEvents(IEnumerable<EventExtractionState> states, CancellationToken token)
+        public Task FrontfillEvents(IEnumerable<EventExtractionState> states)
         {
-            if (states == null || !states.Any()) return;
-            try
-            {
-                Interlocked.Increment(ref running);
-                var frontFillChunks = states.GroupByTimeGranularity(historyGranularity, state => state.SourceExtractedRange.Last, config.EventNodesChunk);
-                await Task.WhenAll(frontFillChunks.Select(chunk =>
-                    Task.Run(() => FrontfillEventsChunk(chunk, token))));
-            }
-            finally
-            {
-                Interlocked.Decrement(ref running);
-            }
-
+            using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.FrontfillEvents);
+            return RunSafe(scheduler.Run(states, source.Token));
         }
         /// <summary>
         /// Backfill events for the given list of states. Chunks by time granularity and given chunksizes.
         /// </summary>
         /// <param name="states">Emitters to be read from</param>
         /// <param name="nodes">SourceNodes to read for</param>
-        public async Task BackfillEvents(IEnumerable<EventExtractionState> states, CancellationToken token)
+        public Task BackfillEvents(IEnumerable<EventExtractionState> states)
         {
-            if (states == null || !states.Any()) return;
-            try
-            {
-                Interlocked.Increment(ref running);
-                foreach (var state in states)
-                {
-                    if (state.SourceExtractedRange.First < historyStartTime)
-                    {
-                        state.UpdateFromBackfill(CogniteTime.DateTimeEpoch, true);
-                    }
-                }
-                var backfillChunks = states.Where(state => state.SourceExtractedRange.First > historyStartTime)
-                    .GroupByTimeGranularity(historyGranularity, state => state.SourceExtractedRange.First, config.EventNodesChunk);
-
-                await Task.WhenAll(backfillChunks.Select(chunk =>
-                    Task.Run(() => BackfillEventsChunk(chunk, token))));
-            }
-            finally
-            {
-                Interlocked.Decrement(ref running);
-            }
+            using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.BackfillEvents);
+            return RunSafe(scheduler.Run(states, source.Token));
         }
         /// <summary>
         /// Request the history read terminate, then wait for all operations to finish before quitting.
@@ -582,11 +754,11 @@ namespace Cognite.OpcUa
         {
             if (running == 0) return true;
             log.Debug("Attempting to abort history read");
-            aborting = true;
+            source.Cancel();
             int timeout = timeoutsec * 10;
             int cycles = 0;
             while (running > 0 && cycles++ < timeout) await Task.Delay(100, token);
-            aborting = false;
+            source = CancellationTokenSource.CreateLinkedTokenSource(token);
             if (running > 0)
             {
                 log.Warning("Failed to abort HistoryReader");
