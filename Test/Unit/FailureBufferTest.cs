@@ -280,7 +280,7 @@ namespace Test.Unit
             Assert.Single(nodeBufferStates);
             Assert.True(fb1.AnyPoints);
 
-            var db = stateStore.GetDatabase();
+            var db = stateStore.Database;
             Assert.Equal(1, db.GetCollection(cfg.StateStorage.InfluxVariableStore).Count());
 
             bool anyPoints = (bool)fb1
@@ -355,7 +355,7 @@ namespace Test.Unit
             Assert.Single(eventBufferStates);
             Assert.True(fb1.AnyEvents);
 
-            var db = stateStore.GetDatabase();
+            var db = stateStore.Database;
             Assert.Equal(1, db.GetCollection(cfg.StateStorage.InfluxEventStore).Count());
 
             bool anyEvents = (bool)fb1
@@ -454,7 +454,7 @@ namespace Test.Unit
 
             Assert.Empty(nodeBufferStates);
 
-            var db = stateStore.GetDatabase();
+            var db = stateStore.Database;
             Assert.Equal(0, db.GetCollection(cfg.StateStorage.InfluxVariableStore).Count());
 
             // Re-enable datapoints, we'd expect to get points twice.
@@ -543,7 +543,7 @@ namespace Test.Unit
 
             Assert.Empty(eventBufferStates);
 
-            var db = stateStore.GetDatabase();
+            var db = stateStore.Database;
             Assert.Equal(0, db.GetCollection(cfg.StateStorage.InfluxEventStore).Count());
 
             // Re-enable events, we'd expect to get points twice.

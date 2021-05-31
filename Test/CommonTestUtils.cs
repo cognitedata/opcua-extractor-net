@@ -628,7 +628,7 @@ namespace Test
                 case "cdf":
                     Handler = new CDFMockHandler(Config.Cognite.Project, testParams.MockMode) { StoreDatapoints = testParams.StoreDatapoints };
                     CommonTestUtils.AddDummyProvider(Handler, services);
-                    services.AddCogniteClient("OPC-UA Extractor", true, true, false);
+                    services.AddCogniteClient("OPC-UA Extractor", null, true, true, false);
                     provider = services.BuildServiceProvider();
                     Pusher = Config.Cognite.ToPusher(provider);
                     break;
@@ -643,7 +643,7 @@ namespace Test
                     Handler = new CDFMockHandler(mqttConfig.Cognite.Project, testParams.MockMode) { StoreDatapoints = testParams.StoreDatapoints };
                     CommonTestUtils.AddDummyProvider(Handler, services);
                     services.AddSingleton(mqttConfig.Cognite);
-                    services.AddCogniteClient("MQTT-CDF Bridge", true, true, false);
+                    services.AddCogniteClient("MQTT-CDF Bridge", null, true, true, false);
                     provider = services.BuildServiceProvider();
                     Bridge = new MQTTBridge(new Destination(mqttConfig.Cognite, provider), mqttConfig);
                     Bridge.StartBridge(CancellationToken.None).Wait();
@@ -776,7 +776,7 @@ namespace Test
 
             if (Config.StateStorage.Location != null)
             {
-                var db = (Extractor.StateStorage as LiteDBStateStore).GetDatabase();
+                var db = (Extractor.StateStorage as LiteDBStateStore).Database;
                 var cols = db.GetCollectionNames();
                 foreach (var col in cols)
                 {

@@ -31,7 +31,7 @@ namespace Test.Unit
             var handler = new CDFMockHandler("test", CDFMockHandler.MockMode.None);
             handler.StoreDatapoints = true;
             CommonTestUtils.AddDummyProvider(handler, Services);
-            Services.AddCogniteClient("appid", true, true, false);
+            Services.AddCogniteClient("appid", null, true, true, false);
             var provider = Services.BuildServiceProvider();
             var pusher = Config.Cognite.ToPusher(provider) as CDFPusher;
             return (handler, pusher);

@@ -660,7 +660,10 @@ namespace Test.Unit
         {
             CommonTestUtils.ResetMetricValues("opcua_history_reads");
 
-            var req = new HistoryReadParams(new[] { tester.Server.Ids.Custom.Array, tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Base.StringVar },
+            var nodes = new[] { tester.Server.Ids.Custom.Array, tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Base.StringVar }
+                .Select(id => new HistoryReadNode(HistoryReadType.FrontfillData, id));
+
+            var req = new HistoryReadParams(nodes,
                 new ReadRawModifiedDetails
                 {
                     IsReadModified = false,
