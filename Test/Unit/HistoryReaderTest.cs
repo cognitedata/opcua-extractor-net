@@ -35,7 +35,7 @@ namespace Test.Unit
             this.tester = tester;
         }
 
-        [Fact]
+        [Fact(Timeout = 10000)]
         public void TestHistoryDataHandler()
         {
             using var extractor = tester.BuildExtractor();
@@ -153,7 +153,7 @@ namespace Test.Unit
             Assert.False(state1.IsFrontfilling);
             cfg.IgnoreContinuationPoints = false;
         }
-        [Fact]
+        [Fact(Timeout = 10000)]
         public void TestHistoryEventHandler()
         {
             using var extractor = tester.BuildExtractor();
@@ -276,7 +276,7 @@ namespace Test.Unit
             Assert.False(state.IsFrontfilling);
             cfg.IgnoreContinuationPoints = false;
         }
-        [Fact]
+        [Fact(Timeout = 10000)]
         public async Task TestFrontfillData()
         {
             using var extractor = tester.BuildExtractor();
@@ -374,7 +374,7 @@ namespace Test.Unit
                 Assert.Equal(tester.HistoryStart.AddMilliseconds(9990), state.SourceExtractedRange.Last);
             }
         }
-        [Fact]
+        [Fact(Timeout = 10000)]
         public async Task TestBackfillData()
         {
             using var extractor = tester.BuildExtractor();
@@ -470,7 +470,7 @@ namespace Test.Unit
                 Assert.Equal(tester.HistoryStart, state.SourceExtractedRange.First);
             }
         }
-        [Fact]
+        [Fact(Timeout = 10000)]
         public async Task TestFrontfillEvents()
         {
             using var extractor = tester.BuildExtractor();
@@ -556,20 +556,21 @@ namespace Test.Unit
             // and we get duplicates between each read, since we cannot guarantee that all in a given time chunk have been retrieved.
             // Really, when using this config option, you should read a single node per request.
             cfg.IgnoreContinuationPoints = true;
+            cfg.Granularity = 1;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_frontfill_events_count", "opcua_frontfill_events");
             await Task.WhenAny(reader.FrontfillEvents(states), Task.Delay(10000));
-            Assert.Equal(686, queue.Count);
+            Assert.Equal(526, queue.Count);
             queue.Clear();
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 6));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 686));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 7));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_events", 526));
             foreach (var state in states)
             {
                 Assert.False(state.IsFrontfilling);
                 Assert.Equal(tester.HistoryStart.AddMilliseconds(9900), state.SourceExtractedRange.Last);
             }
         }
-        [Fact]
+        [Fact(Timeout = 10000)]
         public async Task TestBackfillEvents()
         {
             using var extractor = tester.BuildExtractor();
@@ -665,7 +666,7 @@ namespace Test.Unit
                 Assert.Equal(tester.HistoryStart, state.SourceExtractedRange.First);
             }
         }
-        [Theory]
+        [Theory(Timeout = 10000)]
         [InlineData(1, 900)]
         [InlineData(4, 0)]
         public async Task TestReadGranularity(int expectedReads, int granularity)
@@ -717,7 +718,7 @@ namespace Test.Unit
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_history_reads", expectedReads));
         }
-        [Fact]
+        [Fact(Timeout = 10000)]
         public async Task TestTerminate()
         {
             using var extractor = tester.BuildExtractor();

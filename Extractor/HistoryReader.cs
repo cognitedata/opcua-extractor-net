@@ -135,9 +135,9 @@ namespace Cognite.OpcUa
                 : TimeSpan.FromSeconds(config.Granularity);
         }
 
-        public Task Run(IEnumerable<UAHistoryExtractionState> states, CancellationToken token)
+        public async Task Run(IEnumerable<UAHistoryExtractionState> states, CancellationToken token)
         {
-            return Task.Run(() => SchedulingLoop(states, token));
+            await Task.Run(() => SchedulingLoop(states, token));
         }
 
         private IEnumerable<HistoryReadNode> GetHistoryChunk(List<HistoryReadNode> nodes, int idx)
@@ -156,15 +156,50 @@ namespace Cognite.OpcUa
             }
         }
 
+        private string GetResourceName()
+        {
+            switch (type)
+            {
+                case HistoryReadType.BackfillData:
+                case HistoryReadType.FrontfillData:
+                    return "datapoints";
+                case HistoryReadType.FrontfillEvents:
+                case HistoryReadType.BackfillEvents:
+                    return "events";
+            }
+            throw new InvalidOperationException();
+        }
+
         private void LogHistoryTermination(List<HistoryReadNode> toTerminate, int totalRead, int totalNodes)
         {
+            if (!toTerminate.Any()) return;
+            string name = GetResourceName();
             log.Information("Finish reading {type} for {cnt} nodes: {totalRead}/{totalNodes}", type, toTerminate.Count, totalRead, totalNodes);
             var builder = new StringBuilder();
-            builder.AppendFormat("Finish reading {0} for\n", type);
+            builder.AppendFormat("Finish reading {0}. Retrieved:", type);
             foreach (var node in toTerminate)
             {
-                builder.AppendFormat("    In total {0} items for {1}. End now at {2}\n",
+                builder.AppendFormat("\n    {0} {1} total for {2}. End is now at {3}",
                     node.TotalRead,
+                    name,
+                    node.State.Id,
+                    Frontfill ? node.State.SourceExtractedRange.Last : node.State.SourceExtractedRange.First);
+            }
+            log.Debug(builder.ToString());
+        }
+
+        private void LogHistoryChunk(List<HistoryReadNode> nodes, int total)
+        {
+            if (!nodes.Any()) return;
+            string name = GetResourceName();
+            log.Information("HistoryRead {type} for {nodes} nodes. Retrieved {cnt} {name}.", type, nodes.Count, total, name);
+            var builder = new StringBuilder();
+            builder.AppendFormat("HistoryRead {0}. Retrieved:", type);
+            foreach (var node in nodes)
+            {
+                builder.AppendFormat("\n    {0} {1} for {2}. End is now at {3}",
+                    node.LastRead,
+                    name,
                     node.State.Id,
                     Frontfill ? node.State.SourceExtractedRange.Last : node.State.SourceExtractedRange.First);
             }
@@ -263,7 +298,12 @@ namespace Cognite.OpcUa
             }
         }
 
-        private int HandleFinishedRead(HistoryReadParams read, List<HistoryReadParams> chunks, int totalNodes, Action<HistoryReadNode> terminateCb)
+        private int HandleFinishedRead(
+            HistoryReadParams read,
+            List<HistoryReadParams> chunks,
+            int totalRead,
+            int totalNodes,
+            Action<HistoryReadNode> terminateCb)
         {
             if (read.Exception != null)
             {
@@ -272,6 +312,7 @@ namespace Cognite.OpcUa
             }
             int total = read.Nodes.Sum(node => node.LastRead);
             IncrementMetrics(total);
+            LogHistoryChunk(read.Nodes, total);
 
             if (config.IgnoreContinuationPoints && !Frontfill)
             {
@@ -287,7 +328,7 @@ namespace Cognite.OpcUa
             }
 
             var toTerminate = read.Nodes.Where(node => node.Completed).ToList();
-            LogHistoryTermination(toTerminate, read.Nodes.Count, totalNodes);
+            LogHistoryTermination(toTerminate, totalRead, totalNodes);
             read.Nodes = read.Nodes.Where(node => !node.Completed).ToList();
 
             if (read.Nodes.Any())
@@ -313,6 +354,37 @@ namespace Cognite.OpcUa
 
         private void SchedulingLoop(IEnumerable<UAHistoryExtractionState> states, CancellationToken token)
         {
+            if (!states.Any()) return;
+
+            using var source = CancellationTokenSource.CreateLinkedTokenSource(token);
+
+            var throttlerCheckTask = Task.Run(async () =>
+            {
+                try
+                {
+                    await throttler.RunTask;
+                }
+                catch (Exception ex)
+                {
+                    log.Error("Throttler failed: " + ex.Message);
+                }
+                finally
+                {
+                    if (!source.IsCancellationRequested)
+                    {
+                        log.Error("Throttler terminated before the end of run");
+                        var running = (BlockingCollection<Func<Task>>)throttler.GetType().GetField("_generators", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                            .GetValue(throttler);
+                        log.Error("Running value: " + running.IsAddingCompleted);
+                        var results = await throttler.WaitForCompletion();
+                        source.Cancel();
+                    }
+                }
+                
+            }, source.Token);
+
+            log.Information("Starting reading history of type {type} for {cnt} nodes", type, states.Count());
+
             var nodes = states
                 .Select(state => new HistoryReadNode(type, state))
                 .OrderBy(state => state.Time)
@@ -346,17 +418,21 @@ namespace Cognite.OpcUa
                 if (token.IsCancellationRequested) break;
                 var generators = chunks
                     .Select<HistoryReadParams, Func<Task>>(
-                        chunk => () => Task.Run(() => BaseHistoryReadOp(chunk, cb, finishedReads, token)))
+                        chunk => () => {
+                            Console.WriteLine("Create task for nodes: " + string.Join(',', chunk.Nodes.Select(node => node.Id)));
+                            return Task.Run(() => BaseHistoryReadOp(chunk, cb, finishedReads, source.Token));
+                        })
                     .ToList();
                 chunks.Clear();
                 foreach (var generator in generators)
                 {
+                    Console.WriteLine("Enqueue task for chunk");
                     throttler.EnqueueTask(generator);
                 }
                 var finished = new List<HistoryReadParams>();
                 try
                 {
-                    finished.Add(finishedReads.Take(token));
+                    finished.Add(finishedReads.Take(source.Token));
                 }
                 catch (OperationCanceledException)
                 {
@@ -368,11 +444,10 @@ namespace Cognite.OpcUa
                 }
                 foreach (var read in finished)
                 {
-                    int terminated = HandleFinishedRead(read, chunks, totalNodes, node => cb(null, node, read.Details));
+                    int terminated = HandleFinishedRead(read, chunks, totalRead, totalNodes, node => cb(null, node, read.Details));
                     totalRead += terminated;
                     numActiveNodes -= terminated;
                 }
-
                 if (config.IgnoreContinuationPoints)
                 {
                     chunks = RecalculateChunks(chunks);
@@ -391,7 +466,8 @@ namespace Cognite.OpcUa
                 chunks.AddRange(GetNextChunks(nodes, index, out index));
             }
 
-            log.Information("Finish history of type {type}", type);
+            log.Information("Finish history of type {type} for {cnt} nodes", type, nodes.Count);
+            source.Cancel();
         }
 
 
@@ -433,7 +509,6 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="rawData">Data to be transformed into events</param>
         /// <param name="node">Active HistoryReadNode</param>
-        /// <param name="frontfill">True if this is frontfill, false for backfill</param>
         /// <returns>Number of points read</returns>
         private void HistoryDataHandler(IEncodeable rawData, HistoryReadNode node, HistoryReadDetails _)
         {
@@ -538,7 +613,6 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="rawEvts">Collection of events to be handled as IEncodable</param>
         /// <param name="node">Active HistoryReadNode</param>
-        /// <param name="frontfill">True if frontfill, false for backfill</param>
         /// <param name="details">History read details used to generate this HistoryRead result</param>
         /// <returns>Number of events read</returns>
         private void HistoryEventHandler(IEncodeable rawEvts, HistoryReadNode node, HistoryReadDetails details)
@@ -640,6 +714,7 @@ namespace Cognite.OpcUa
 
         protected virtual void Dispose(bool disposing)
         {
+            log.Information("Disposing of HistoryScheduler");
             if (!disposedValue)
             {
                 if (disposing)
@@ -678,15 +753,17 @@ namespace Cognite.OpcUa
             source = CancellationTokenSource.CreateLinkedTokenSource(token);
         }
 
-        private async Task RunSafe(Task task)
+        private async Task Run(IEnumerable<UAHistoryExtractionState> states, HistoryReadType type)
         {
+            var scheduler = new HistoryScheduler(uaClient, extractor, config, type);
             try
             {
                 Interlocked.Increment(ref running);
-                await task;
+                await scheduler.Run(states, source.Token);
             }
             finally
             {
+                scheduler.Dispose();
                 Interlocked.Decrement(ref running);
             }
         }
@@ -697,8 +774,7 @@ namespace Cognite.OpcUa
         /// <param name="states">Nodes to be read</param>
         public async Task FrontfillData(IEnumerable<VariableExtractionState> states)
         {
-            using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.FrontfillData);
-            await RunSafe(scheduler.Run(states, source.Token));
+            await Run(states, HistoryReadType.FrontfillData);
         }
         /// <summary>
         /// Backfill data for the given list of states. Chunks by time granularity and given chunksizes.
@@ -706,8 +782,7 @@ namespace Cognite.OpcUa
         /// <param name="states">Nodes to be read</param>
         public async Task BackfillData(IEnumerable<VariableExtractionState> states)
         {
-            using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.BackfillData);
-            await RunSafe(scheduler.Run(states, source.Token));
+            await Run(states, HistoryReadType.BackfillData);
         }
         /// <summary>
         /// Frontfill events for the given list of states. Chunks by time granularity and given chunksizes.
@@ -716,8 +791,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">SourceNodes to read for</param>
         public async Task FrontfillEvents(IEnumerable<EventExtractionState> states)
         {
-            using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.FrontfillEvents);
-            await RunSafe(scheduler.Run(states, source.Token));
+            await Run(states, HistoryReadType.FrontfillEvents);
         }
         /// <summary>
         /// Backfill events for the given list of states. Chunks by time granularity and given chunksizes.
@@ -726,8 +800,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">SourceNodes to read for</param>
         public async Task BackfillEvents(IEnumerable<EventExtractionState> states)
         {
-            using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.BackfillEvents);
-            await RunSafe(scheduler.Run(states, source.Token));
+            await Run(states, HistoryReadType.BackfillEvents);
         }
         /// <summary>
         /// Request the history read terminate, then wait for all operations to finish before quitting.
