@@ -58,7 +58,8 @@ namespace Cognite.OpcUa
         public HistoryReadNode(HistoryReadType type, UAHistoryExtractionState state)
         {
             Type = type;
-            Id = state.Id;
+            State = state;
+            Id = state.SourceId;
         }
         public HistoryReadNode(HistoryReadType type, NodeId id)
         {
@@ -146,12 +147,11 @@ namespace Cognite.OpcUa
                 ? config.DataNodesChunk
                 : config.EventNodesChunk;
             DateTime initial = nodes[idx].Time;
-
             for (int i = idx; i < nodes.Count; i++)
             {
-                if (chunkSize > 0 && i - idx > chunkSize) yield break;
+                if (chunkSize > 0 && i - idx + 1 > chunkSize) yield break;
                 if (config.Granularity >= 0 && nodes[i].Time > initial + historyGranularity) yield break;
-                if (throttling.MaxNodeParallelism > 0 && i - idx + numActiveNodes > throttling.MaxNodeParallelism) yield break;
+                if (throttling.MaxNodeParallelism > 0 && i - idx + numActiveNodes + 1 > throttling.MaxNodeParallelism) yield break;
                 yield return nodes[i];
             }
         }
@@ -234,28 +234,10 @@ namespace Cognite.OpcUa
 
         private void LogReadFailure(HistoryReadParams finishedRead)
         {
-            var sourceOp = Data
-                ? ExtractorUtils.SourceOp.HistoryRead
-                : ExtractorUtils.SourceOp.HistoryReadEvents;
-
-            Exception exc;
-            if (finishedRead.Exception is AggregateException aex)
-            {
-                var serviceEx = ExtractorUtils.GetRootExceptionOfType<ServiceResultException>(aex);
-                exc = ExtractorUtils.HandleServiceResult(log, serviceEx, sourceOp);
-            }
-            else if (finishedRead.Exception is ServiceResultException serviceEx)
-            {
-                exc = ExtractorUtils.HandleServiceResult(log, serviceEx, sourceOp);
-            }
-            else
-            {
-                exc = finishedRead.Exception;
-            }
-
             string msg = $"HistoryRead {type} failed for nodes" +
-                $" {string.Join(',', finishedRead.Nodes.Select(node => node.State.Id))}: {exc.Message}";
-            log.Error($"{msg}: {exc.Message}");
+                $" {string.Join(',', finishedRead.Nodes.Select(node => node.State.Id))}: {finishedRead.Exception.Message}";
+            log.Error(msg);
+            ExtractorUtils.LogException(log, finishedRead.Exception, "Critical failure in HistoryRead", "Failure in HistoryRead");
         }
 
         private void IncrementMetrics(int total)
@@ -355,7 +337,7 @@ namespace Cognite.OpcUa
 
             var chunks = GetNextChunks(nodes, index, out index);
 
-            var cb = Frontfill
+            var cb = Data
                 ? (Action<IEncodeable, HistoryReadNode, HistoryReadDetails>)HistoryDataHandler
                 : HistoryEventHandler;
 
@@ -410,7 +392,6 @@ namespace Cognite.OpcUa
             }
 
             log.Information("Finish history of type {type}", type);
-            finishedReads.CompleteAdding();
         }
 
 
@@ -529,9 +510,12 @@ namespace Cognite.OpcUa
             if (!node.Completed || !Frontfill) return;
 
             var buffered = nodeState.FlushBuffer();
-            log.Debug("Read {cnt} datapoints from buffer of state {id}", buffered.Count(), node.State.Id);
-            nodeState.UpdateFromStream(buffered);
-            extractor.Streamer.Enqueue(buffered);
+            if (buffered.Any())
+            {
+                log.Debug("Read {cnt} datapoints from buffer of state {id}", buffered.Count(), node.State.Id);
+                nodeState.UpdateFromStream(buffered);
+                extractor.Streamer.Enqueue(buffered);
+            }
         }
 
         private DateTime? GetTimeAttribute(VariantCollection evt, EventFilter filter)
@@ -649,9 +633,9 @@ namespace Cognite.OpcUa
             {
                 var (smin, smax) = buffered.MinMax(dp => dp.Time);
                 emitterState.UpdateFromStream(smin, smax);
+                log.Debug("Read {cnt} events from buffer of state {id}", buffered.Count(), node.State.Id);
+                extractor.Streamer.Enqueue(buffered);
             }
-            log.Debug("Read {cnt} events from buffer of state {id}", buffered.Count(), node.State.Id);
-            extractor.Streamer.Enqueue(buffered);
         }
 
         protected virtual void Dispose(bool disposing)
@@ -711,39 +695,39 @@ namespace Cognite.OpcUa
         /// Frontfill data for the given list of states. Chunks by time granularity and given chunksizes.
         /// </summary>
         /// <param name="states">Nodes to be read</param>
-        public Task FrontfillData(IEnumerable<VariableExtractionState> states)
+        public async Task FrontfillData(IEnumerable<VariableExtractionState> states)
         {
             using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.FrontfillData);
-            return RunSafe(scheduler.Run(states, source.Token));
+            await RunSafe(scheduler.Run(states, source.Token));
         }
         /// <summary>
         /// Backfill data for the given list of states. Chunks by time granularity and given chunksizes.
         /// </summary>
         /// <param name="states">Nodes to be read</param>
-        public Task BackfillData(IEnumerable<VariableExtractionState> states)
+        public async Task BackfillData(IEnumerable<VariableExtractionState> states)
         {
             using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.BackfillData);
-            return RunSafe(scheduler.Run(states, source.Token));
+            await RunSafe(scheduler.Run(states, source.Token));
         }
         /// <summary>
         /// Frontfill events for the given list of states. Chunks by time granularity and given chunksizes.
         /// </summary>
         /// <param name="states">Emitters to be read from</param>
         /// <param name="nodes">SourceNodes to read for</param>
-        public Task FrontfillEvents(IEnumerable<EventExtractionState> states)
+        public async Task FrontfillEvents(IEnumerable<EventExtractionState> states)
         {
             using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.FrontfillEvents);
-            return RunSafe(scheduler.Run(states, source.Token));
+            await RunSafe(scheduler.Run(states, source.Token));
         }
         /// <summary>
         /// Backfill events for the given list of states. Chunks by time granularity and given chunksizes.
         /// </summary>
         /// <param name="states">Emitters to be read from</param>
         /// <param name="nodes">SourceNodes to read for</param>
-        public Task BackfillEvents(IEnumerable<EventExtractionState> states)
+        public async Task BackfillEvents(IEnumerable<EventExtractionState> states)
         {
             using var scheduler = new HistoryScheduler(uaClient, extractor, config, HistoryReadType.BackfillEvents);
-            return RunSafe(scheduler.Run(states, source.Token));
+            await RunSafe(scheduler.Run(states, source.Token));
         }
         /// <summary>
         /// Request the history read terminate, then wait for all operations to finish before quitting.
