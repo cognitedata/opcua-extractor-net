@@ -753,5 +753,86 @@ namespace Test.Unit
 
             Assert.True(await waitTask);
         }
+
+        [Fact(Timeout = 10000)]
+        public async Task TestHistoryThrottling()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var cfg = new HistoryConfig
+            {
+                Backfill = true,
+                Data = true
+            };
+
+            var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+
+            var dt = new UADataType(DataTypeIds.Double);
+            var dt2 = new UADataType(DataTypeIds.String);
+
+            var states = new[] { tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Custom.Array,
+                tester.Server.Ids.Base.DoubleVar1, tester.Server.Ids.Base.StringVar }
+                .Select((id, idx) => new VariableExtractionState(
+                    extractor,
+                    CommonTestUtils.GetSimpleVariable("state",
+                        idx == 3 ? dt2 : dt,
+                        idx == 1 ? 4 : 0,
+                        id),
+                    true, true))
+                .ToList();
+
+            var start = tester.HistoryStart.AddSeconds(5);
+
+            foreach (var state in states)
+            {
+                state.InitExtractedRange(start, start);
+                state.FinalizeRangeInit();
+                extractor.State.SetNodeState(state);
+            }
+
+            var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
+                .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(extractor.Streamer);
+
+            CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
+
+            cfg.Throttling = new HistoryThrottlingConfig
+            {
+                MaxNodeParallelism = 1,
+            };
+
+            await reader.FrontfillData(states);
+            Assert.Equal(3500, queue.Count);
+            // 4 since nodes may not be read in parallel
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 4));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
+
+            // Similar for 2 parallelism
+            cfg.Throttling.MaxNodeParallelism = 2;
+            queue.Clear();
+            foreach (var state in states) state.RestartHistory();
+            CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
+            await reader.FrontfillData(states);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
+
+            // Task throttling should have no effect on metrics, since this is about the number of actual parallel tasks in total
+            cfg.Throttling.MaxParallelism = 2;
+            queue.Clear();
+            foreach (var state in states) state.RestartHistory();
+            CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
+            await reader.FrontfillData(states);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
+
+            // Expect this to not cause issues
+            cfg.Throttling.MaxPerMinute = 2;
+            queue.Clear();
+            foreach (var state in states) state.RestartHistory();
+            CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
+            await reader.FrontfillData(states);
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
+        }
     }
 }
