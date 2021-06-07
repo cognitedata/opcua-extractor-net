@@ -356,7 +356,6 @@ namespace Test.Integration
             tester.Server.PopulateCustomHistory(start);
 
             var runTask = extractor.RunExtractor();
-
             await extractor.WaitForSubscriptions();
 
             await CommonTestUtils.WaitForCondition(() => extractor.State.NodeStates.All(node =>

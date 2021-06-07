@@ -60,11 +60,13 @@ namespace Cognite.OpcUa
             Type = type;
             State = state;
             Id = state.SourceId;
+            if (Id == null || Id.IsNullNodeId) throw new InvalidOperationException("NodeId may not be null");
         }
         public HistoryReadNode(HistoryReadType type, NodeId id)
         {
             Type = type;
             Id = id;
+            if (Id == null || Id.IsNullNodeId) throw new InvalidOperationException("NodeId may not be null");
         }
         public HistoryReadType Type { get; }
         public UAHistoryExtractionState State { get; set; }
@@ -174,7 +176,8 @@ namespace Cognite.OpcUa
         {
             if (!toTerminate.Any()) return;
             string name = GetResourceName();
-            log.Information("Finish reading {type} for {cnt} nodes: {totalRead}/{totalNodes}", type, toTerminate.Count, totalRead, totalNodes);
+            log.Information("Finish reading {type} for {cnt} nodes: {totalRead}/{totalNodes}",
+                type, toTerminate.Count, totalRead + toTerminate.Count, totalNodes);
             var builder = new StringBuilder();
             builder.AppendFormat("Finish reading {0}. Retrieved:", type);
             foreach (var node in toTerminate)

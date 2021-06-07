@@ -1146,7 +1146,7 @@ namespace Test.Integration
             extraction.DataTypes.MaxArraySize = 0;
             extraction.DataTypes.AutoIdentifyTypes = false;
 
-            Assert.Equal(449, pusher.PushedNodes.Count);
+            Assert.Equal(458, pusher.PushedNodes.Count);
             Assert.Equal(366, pusher.PushedVariables.Count);
 
             var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType];
