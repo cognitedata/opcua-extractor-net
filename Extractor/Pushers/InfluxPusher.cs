@@ -240,8 +240,6 @@ namespace Cognite.OpcUa
                 var last = await client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT last(value) FROM \"{id}\"");
 
-                Console.WriteLine($"Got {last.Count} values from {id}");
-
                 if (last.Any() && last.First().HasEntries)
                 {
                     DateTime ts = last.First().Entries[0].Time;

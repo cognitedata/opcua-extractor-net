@@ -141,7 +141,6 @@ namespace Cognite.OpcUa
                 var rawDt = results[i * attrPerNode + 1].GetValue(NodeId.Null);
                 var dt = client.DataTypeManager.GetDataType(rawDt) ?? new UADataType(rawDt);
                 var name = results[i * attrPerNode].GetValue<LocalizedText>(null)?.Text;
-                Console.WriteLine(name);
                 if (name == null) continue;
 
                 var desc = results[i * attrPerNode + 3].GetValue<LocalizedText>(null)?.Text;

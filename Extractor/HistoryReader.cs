@@ -358,32 +358,7 @@ namespace Cognite.OpcUa
 
             using var source = CancellationTokenSource.CreateLinkedTokenSource(token);
 
-            var throttlerCheckTask = Task.Run(async () =>
-            {
-                try
-                {
-                    await throttler.RunTask;
-                }
-                catch (Exception ex)
-                {
-                    log.Error("Throttler failed: " + ex.Message);
-                }
-                finally
-                {
-                    if (!source.IsCancellationRequested)
-                    {
-                        log.Error("Throttler terminated before the end of run");
-                        var running = (BlockingCollection<Func<Task>>)throttler.GetType().GetField("_generators", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                            .GetValue(throttler);
-                        log.Error("Running value: " + running.IsAddingCompleted);
-                        var results = await throttler.WaitForCompletion();
-                        source.Cancel();
-                    }
-                }
-                
-            }, source.Token);
-
-            log.Information("Starting reading history of type {type} for {cnt} nodes", type, states.Count());
+            log.Information("Start reading history of type {type} for {cnt} nodes", type, states.Count());
 
             var nodes = states
                 .Select(state => new HistoryReadNode(type, state))
@@ -419,14 +394,12 @@ namespace Cognite.OpcUa
                 var generators = chunks
                     .Select<HistoryReadParams, Func<Task>>(
                         chunk => () => {
-                            Console.WriteLine("Create task for nodes: " + string.Join(',', chunk.Nodes.Select(node => node.Id)));
                             return Task.Run(() => BaseHistoryReadOp(chunk, cb, finishedReads, source.Token));
                         })
                     .ToList();
                 chunks.Clear();
                 foreach (var generator in generators)
                 {
-                    Console.WriteLine("Enqueue task for chunk");
                     throttler.EnqueueTask(generator);
                 }
                 var finished = new List<HistoryReadParams>();
@@ -714,7 +687,6 @@ namespace Cognite.OpcUa
 
         protected virtual void Dispose(bool disposing)
         {
-            log.Information("Disposing of HistoryScheduler");
             if (!disposedValue)
             {
                 if (disposing)
@@ -815,6 +787,7 @@ namespace Cognite.OpcUa
             int timeout = timeoutsec * 10;
             int cycles = 0;
             while (running > 0 && cycles++ < timeout) await Task.Delay(100, token);
+            source.Dispose();
             source = CancellationTokenSource.CreateLinkedTokenSource(token);
             if (running > 0)
             {

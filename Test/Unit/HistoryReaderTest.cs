@@ -653,13 +653,14 @@ namespace Test.Unit
             // We expect this to give the exact same results as normal chunking, except we get one extra read,
             // and we get duplicates between each read, since we cannot guarantee that all in a given time chunk have been retrieved.
             cfg.IgnoreContinuationPoints = true;
+            cfg.Granularity = 1;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_backfill_events_count", "opcua_backfill_events");
             await Task.WhenAny(reader.BackfillEvents(states), Task.Delay(10000));
-            Assert.Equal(686, queue.Count);
+            Assert.Equal(526, queue.Count);
             queue.Clear();
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 6));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 686));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events_count", 7));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_events", 526));
             foreach (var state in states)
             {
                 Assert.False(state.IsBackfilling);
