@@ -1073,6 +1073,7 @@ namespace Cognite.OpcUa.Config
 
             bool backfillCapable = false;
 
+            log.Information("Read history backwards from " + earliestTime);
             var backfillDetails = new ReadRawModifiedDetails
             {
                 IsReadModified = false,
@@ -1080,6 +1081,8 @@ namespace Cognite.OpcUa.Config
                 EndTime = earliestTime,
                 NumValuesPerNode = (uint)config.History.DataChunk
             };
+
+            nodeWithData.ContinuationPoint = null;
 
             var backfillParams = new HistoryReadParams(new[] { nodeWithData }, backfillDetails);
 

@@ -30,6 +30,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -152,6 +153,10 @@ namespace Cognite.OpcUa
                 AppConfig = await application.LoadApplicationConfiguration($"{config.Source.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
             }
             catch (ServiceResultException exc)
+            {
+                throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
+            }
+            catch (IOException exc)
             {
                 throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
             }
