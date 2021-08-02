@@ -298,13 +298,6 @@ namespace Test.Integration
             var ids = tester.Server.Ids.Base;
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
-            dataTypes.AllowStringVariables = false;
-            dataTypes.MaxArraySize = 0;
-            dataTypes.AutoIdentifyTypes = true;
-            dataTypes.IgnoreDataTypes = new[]
-            {
-                CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.IgnoreType, tester.Client)
-            };
 
             tester.Config.Extraction.DataChangeFilter = new Cognite.OpcUa.DataSubscriptionConfig
             {
@@ -331,6 +324,9 @@ namespace Test.Integration
             var dps = pusher.DataPoints[(ids.DoubleVar1, -1)];
             Assert.Equal(0.0, dps[0].DoubleValue);
             Assert.Equal(1.0, dps[1].DoubleValue);
+
+            tester.Server.UpdateNode(ids.DoubleVar1, 0.0);
+            tester.Config.Extraction.DataChangeFilter = null;
         }
         #endregion
         #region history

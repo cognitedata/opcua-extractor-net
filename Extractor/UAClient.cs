@@ -1125,7 +1125,7 @@ namespace Cognite.OpcUa
                     AttributeId = Attributes.Value,
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = Math.Max(0, config.Source.QueueLength),
-                    Filter = config.Extraction.DataChangeFilter.Filter
+                    Filter = config.Extraction.DataChangeFilter?.Filter
                 }, token);
 #pragma warning restore CA2000 // Dispose objects before losing scope
 
