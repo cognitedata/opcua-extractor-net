@@ -65,7 +65,7 @@ namespace Cognite.OpcUa
         {
             SelectEndpoint, CreateSession, Browse, BrowseNext,
             CreateSubscription, CreateMonitoredItems, ReadAttributes, HistoryRead,
-            HistoryReadEvents, ReadRootNode, DefaultOperation, CloseSession
+            HistoryReadEvents, ReadRootNode, DefaultOperation, CloseSession, Unknown
         }
         /// <summary>
         /// Recursively browse through aggregateException to find a root exception of given type.
@@ -112,7 +112,7 @@ namespace Cognite.OpcUa
                     log.Debug(failure, message);
                     return;
                 }
-                log.Error(e, message + " - {msg}", aex?.InnerException?.Message ?? aex.Message);
+                log.Error(e, message + " - {msg}", aex.InnerException?.Message ?? aex.Message);
             }
             else if (e is SilentServiceException silent)
             {
@@ -369,6 +369,8 @@ namespace Cognite.OpcUa
             }
         }
     }
+
+
     /// <summary>
     /// Used to indicate a serviceException that has been recognized and properly logged.
     /// </summary>
@@ -381,6 +383,24 @@ namespace Cognite.OpcUa
         {
             Operation = op;
             StatusCode = ex?.StatusCode ?? StatusCodes.Bad;
+        }
+
+        public SilentServiceException()
+        {
+            Operation = ExtractorUtils.SourceOp.Unknown;
+            StatusCode = StatusCodes.Bad;
+        }
+
+        public SilentServiceException(string message) : base(message)
+        {
+            Operation = ExtractorUtils.SourceOp.Unknown;
+            StatusCode = StatusCodes.Bad;
+        }
+
+        public SilentServiceException(string message, Exception innerException) : base(message, innerException)
+        {
+            Operation = ExtractorUtils.SourceOp.Unknown;
+            StatusCode = StatusCodes.Bad;
         }
     }
     /// <summary>

@@ -51,8 +51,6 @@ namespace Cognite.OpcUa
         /// </summary>
         public async Task Run(CancellationToken token)
         {
-            if (token == null) throw new ArgumentNullException(nameof(token));
-
             using var client = new UAClient(config);
             var pushers = new List<IPusher>();
 

@@ -56,7 +56,7 @@ namespace Cognite.OpcUa
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         private CancellationToken liveToken;
-        protected Dictionary<NodeId, HashSet<EventField>> eventFields;
+        private Dictionary<NodeId, HashSet<EventField>> eventFields;
 
         private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
@@ -751,14 +751,10 @@ namespace Cognite.OpcUa
                 log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {nodeCount} nodes",
                     values.Count, count, distinctNodeCount);
             }
-            catch (Exception ex)
+            catch (ServiceResultException ex)
             {
                 attributeRequestFailures.Inc();
-                if (ex is ServiceResultException serviceEx)
-                {
-                    throw ExtractorUtils.HandleServiceResult(log, serviceEx, ExtractorUtils.SourceOp.ReadAttributes);
-                }
-                throw;
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
             finally
             {
@@ -793,7 +789,7 @@ namespace Cognite.OpcUa
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
-            int total = values.Count();
+            int total = values.Count;
 
             log.Information("Retrieved {total}/{expected} attributes", total, expected);
             if (total < expected)
@@ -989,7 +985,7 @@ namespace Cognite.OpcUa
 
                 log.Debug("Fetched historical "
                           + (readParams.Details is ReadEventDetails ? "events" : "datapoints")
-                          + " for {nodeCount} nodes", readParams.Nodes.Count());
+                          + " for {nodeCount} nodes", readParams.Nodes.Count);
             }
             catch (ServiceResultException ex)
             {
@@ -1031,11 +1027,13 @@ namespace Cognite.OpcUa
                                        sub.DisplayName.StartsWith(subName, StringComparison.InvariantCulture));
                 if (subscription == null)
                 {
+#pragma warning disable CA2000 // Dispose objects before losing scope
                     subscription = new Subscription(Session.DefaultSubscription)
                     {
                         PublishingInterval = config.Source.PublishingInterval,
                         DisplayName = subName
                     };
+#pragma warning restore CA2000 // Dispose objects before losing scope
                 }
                 int count = 0;
                 var hasSubscription = subscription.MonitoredItems.Select(sub => sub.ResolvedNodeId).ToHashSet();
@@ -1113,6 +1111,7 @@ namespace Cognite.OpcUa
         {
             if (!nodeList.Any()) return;
 
+#pragma warning disable CA2000 // Dispose objects before losing scope
             var sub = AddSubscriptions(
                 nodeList,
                 "DataChangeListener",
@@ -1127,6 +1126,7 @@ namespace Cognite.OpcUa
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = Math.Max(0, config.Source.QueueLength)
                 }, token);
+#pragma warning restore CA2000 // Dispose objects before losing scope
 
             numSubscriptions.Set(sub.MonitoredItemCount);
         }
@@ -1145,6 +1145,7 @@ namespace Cognite.OpcUa
 
             var filter = BuildEventFilter();
 
+#pragma warning disable CA2000 // Dispose objects before losing scope
             AddSubscriptions(
                 emitters,
                 "EventListener",
@@ -1160,6 +1161,7 @@ namespace Cognite.OpcUa
                     NodeClass = NodeClass.Object
                 },
                 token);
+#pragma warning restore CA2000 // Dispose objects before losing scope
         }
 
         /// <summary>
@@ -1328,11 +1330,13 @@ namespace Cognite.OpcUa
             lock (subscriptionLock)
             {
                 var subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener", StringComparison.InvariantCulture))
+#pragma warning disable CA2000 // Dispose objects before losing scope
                                ?? new Subscription(Session.DefaultSubscription)
                                {
                                    PublishingInterval = config.Source.PublishingInterval,
                                    DisplayName = "AuditListener"
                                };
+#pragma warning restore CA2000 // Dispose objects before losing scope
                 if (subscription.MonitoredItemCount != 0) return;
                 var item = new MonitoredItem
                 {
@@ -1472,7 +1476,7 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    var encoder = new JsonEncoder(Session.MessageContext, false);
+                    using var encoder = new JsonEncoder(Session.MessageContext, false);
                     encoder.WriteVariantContents(value, typeInfo);
                     return encoder.CloseAndReturnText();
                 }
@@ -1551,7 +1555,7 @@ namespace Cognite.OpcUa
             {
                 return ShouldUseJson(extensionObject.Body);
             }
-            if (!type.Namespace.StartsWith("Opc.Ua")) return false;
+            if (!type.Namespace.StartsWith("Opc.Ua", StringComparison.InvariantCulture)) return false;
             if (customHandledTypes.Contains(type)) return false;
             return true;
         }
@@ -1564,12 +1568,12 @@ namespace Cognite.OpcUa
         /// to be used for mapping assets and timeseries in CDF to opcua nodes.
         /// To avoid having to send the entire namespaceUri to CDF, we allow mapping Uris to prefixes in the config file.
         /// </remarks>
-        /// <param name="rNodeId">Nodeid to be converted</param>
+        /// <param name="id">Nodeid to be converted</param>
         /// <returns>Unique string representation</returns>
-        public string GetUniqueId(ExpandedNodeId rNodeId, int index = -1)
+        public string GetUniqueId(ExpandedNodeId id, int index = -1)
         {
-            if (rNodeId == null || rNodeId.IsNull) return null;
-            var nodeId = ToNodeId(rNodeId);
+            if (id == null || id.IsNull) return null;
+            var nodeId = ToNodeId(id);
             if (nodeId == null || nodeId.IsNullNodeId) return null;
             if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride))
             {
@@ -1583,7 +1587,7 @@ namespace Cognite.OpcUa
 
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
-                var namespaceUri = rNodeId.NamespaceUri ?? Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
+                var namespaceUri = id.NamespaceUri ?? Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
                 string newPrefix = config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
@@ -1691,9 +1695,9 @@ namespace Cognite.OpcUa
                 buffer = new StringBuilder(config.Extraction.IdPrefix, 255);
                 buffer.Append(reference.GetName());
                 buffer.Append(';');
-                buffer.Append(GetNodeIdString(reference.Source.Id).Substring(overflow));
+                buffer.Append(GetNodeIdString(reference.Source.Id).AsSpan(overflow));
                 buffer.Append(';');
-                buffer.Append(GetNodeIdString(reference.Target.Id).Substring(overflow));
+                buffer.Append(GetNodeIdString(reference.Target.Id).AsSpan(overflow));
             }
             return buffer.ToString();
         }

@@ -212,7 +212,7 @@ namespace Cognite.OpcUa.Pushers
         /// Check if the client is currently connected to MQTT, if not, try to reconnect.
         /// </summary>
         /// <returns>True if connected, false if not</returns>
-        public async Task<bool?> TestConnection(FullConfig config, CancellationToken token)
+        public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
             if (client.IsConnected) return true;
             closed = false;

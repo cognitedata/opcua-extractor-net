@@ -70,6 +70,7 @@ namespace Cognite.OpcUa
         
         public NodeMetricsManager(UAClient client, FullConfig config)
         {
+            if (config == null) throw new ArgumentNullException(nameof(config));
             this.config = config.Metrics.Nodes;
             sourceConfig = config.Source;
             this.client = client;

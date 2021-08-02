@@ -139,7 +139,7 @@ namespace Cognite.OpcUa
 
             Task failedTask = null;
 
-            while (tasks.Any() && failedTask == null)
+            while (tasks.Any())
             {
                 try
                 {

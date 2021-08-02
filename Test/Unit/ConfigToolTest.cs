@@ -60,7 +60,7 @@ namespace Test.Unit
         {
             // Test while connected
             await tester.Explorer.GetEndpoints(tester.Source.Token);
-            var summary = tester.Explorer.GetSummary();
+            var summary = tester.Explorer.Summary;
             Assert.True(summary.Secure);
             Assert.Equal(7, summary.Endpoints.Count);
 
@@ -69,14 +69,14 @@ namespace Test.Unit
             tester.Explorer.ResetSummary();
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:60000";
             await Assert.ThrowsAsync<FatalException>(() => tester.Explorer.GetEndpoints(tester.Source.Token));
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.False(summary.Secure);
             Assert.Null(summary.Endpoints);
 
             // Test connect from explorer
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:63500";
             await tester.Explorer.GetEndpoints(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.True(summary.Secure);
             Assert.Equal(7, summary.Endpoints.Count);
 
@@ -84,7 +84,7 @@ namespace Test.Unit
             tester.Explorer.ResetSummary();
             tester.Config.Source.Secure = true;
             await tester.Explorer.GetEndpoints(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.True(summary.Secure);
             Assert.Equal(7, summary.Endpoints.Count);
         }
@@ -93,7 +93,7 @@ namespace Test.Unit
         {
             // Test normal run
             await tester.Explorer.GetBrowseChunkSizes(tester.Source.Token);
-            var summary = tester.Explorer.GetSummary();
+            var summary = tester.Explorer.Summary;
             Assert.Equal(1000, summary.BrowseChunk);
             Assert.False(summary.BrowseNextWarning);
             Assert.Equal(1000, summary.BrowseNodesChunk);
@@ -103,7 +103,7 @@ namespace Test.Unit
             tester.Config.Source.BrowseChunk = 100;
             tester.Config.Source.BrowseNodesChunk = 100;
             await tester.Explorer.GetBrowseChunkSizes(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.Equal(100, summary.BrowseChunk);
             Assert.False(summary.BrowseNextWarning);
             Assert.Equal(100, summary.BrowseNodesChunk);
@@ -115,7 +115,7 @@ namespace Test.Unit
             tester.Config.Source.BrowseChunk = 0;
             tester.Config.Source.BrowseNodesChunk = 100;
             await tester.Explorer.GetBrowseChunkSizes(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.Equal(0, summary.BrowseChunk);
             Assert.False(summary.BrowseNextWarning);
             Assert.Equal(100, summary.BrowseNodesChunk);
@@ -128,7 +128,7 @@ namespace Test.Unit
             tester.Config.Source.BrowseChunk = 1000;
             tester.Server.Issues.MaxBrowseResults = 100;
             await tester.Explorer.GetBrowseChunkSizes(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.Equal(1, summary.BrowseNodesChunk);
             Assert.True(summary.BrowseNextWarning);
             Assert.Equal(100, summary.BrowseChunk);
@@ -142,7 +142,7 @@ namespace Test.Unit
             tester.Server.Issues.MaxBrowseResults = 0;
             tester.Server.Issues.MaxBrowseNodes = 10;
             await tester.Explorer.GetBrowseChunkSizes(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.Equal(10, summary.BrowseNodesChunk);
             Assert.False(summary.BrowseNextWarning);
             Assert.Equal(1000, summary.BrowseChunk);
@@ -160,7 +160,7 @@ namespace Test.Unit
         {
             // Config doesn't really impact this
             tester.Explorer.ReadCustomTypes(tester.Source.Token);
-            var summary = tester.Explorer.GetSummary();
+            var summary = tester.Explorer.Summary;
             Assert.Equal(1, summary.CustomNumTypesCount);
             Assert.True(tester.BaseConfig.Extraction.DataTypes.AutoIdentifyTypes);
             Assert.True(summary.Enums);
@@ -173,7 +173,7 @@ namespace Test.Unit
             // Test no root
             tester.Explorer.ResetNodes();
             await tester.Explorer.GetAttributeChunkSizes(tester.Source.Token);
-            var summary = tester.Explorer.GetSummary();
+            var summary = tester.Explorer.Summary;
             Assert.Equal(10000, summary.AttributeChunkSize);
             Assert.False(summary.VariableLimitWarning);
 
@@ -182,7 +182,7 @@ namespace Test.Unit
             tester.Explorer.ResetNodes();
             tester.Config.Extraction.RootNode = tester.Server.Ids.Base.Root.ToProtoNodeId(tester.Explorer);
             await tester.Explorer.GetAttributeChunkSizes(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.Equal(1000, summary.AttributeChunkSize);
             Assert.True(summary.VariableLimitWarning);
             tester.Config.Extraction.RootNode = null;
@@ -193,7 +193,7 @@ namespace Test.Unit
             tester.Config.Extraction.RootNode = tester.Server.Ids.Full.Root.ToProtoNodeId(tester.Explorer);
             tester.Server.Issues.MaxAttributes = 100;
             await tester.Explorer.GetAttributeChunkSizes(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.Equal(100, summary.AttributeChunkSize);
             Assert.False(summary.VariableLimitWarning);
             
@@ -208,7 +208,7 @@ namespace Test.Unit
             tester.Config.Extraction.RootNode = null;
             tester.Explorer.ResetNodes();
             await tester.Explorer.IdentifyDataTypeSettings(tester.Source.Token);
-            var summary = tester.Explorer.GetSummary();
+            var summary = tester.Explorer.Summary;
             Assert.True(summary.StringVariables);
             Assert.Equal(4, summary.MaxArraySize);
             bool history = (bool)tester.Explorer.GetType()
@@ -221,7 +221,7 @@ namespace Test.Unit
             tester.Explorer.ResetSummary();
             tester.Config.Extraction.DataTypes.MaxArraySize = 2;
             await tester.Explorer.IdentifyDataTypeSettings(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.True(summary.StringVariables);
             Assert.Equal(2, summary.MaxArraySize);
             history = (bool)tester.Explorer.GetType()
@@ -234,7 +234,7 @@ namespace Test.Unit
             tester.Explorer.ResetSummary();
             tester.Config.Extraction.DataTypes.MaxArraySize = 1;
             await tester.Explorer.IdentifyDataTypeSettings(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.True(summary.StringVariables);
             Assert.Equal(0, summary.MaxArraySize);
             history = (bool)tester.Explorer.GetType()
@@ -248,7 +248,7 @@ namespace Test.Unit
             tester.Config.Extraction.DataTypes.MaxArraySize = 4;
             tester.Config.Extraction.RootNode = tester.Server.Ids.Base.Root.ToProtoNodeId(tester.Explorer);
             await tester.Explorer.IdentifyDataTypeSettings(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.True(summary.StringVariables);
             Assert.Equal(0, summary.MaxArraySize);
             history = (bool)tester.Explorer.GetType()
@@ -261,7 +261,7 @@ namespace Test.Unit
             tester.Explorer.ResetSummary();
             tester.Config.Extraction.RootNode = tester.Server.Ids.Event.Root.ToProtoNodeId(tester.Explorer);
             await tester.Explorer.IdentifyDataTypeSettings(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.False(summary.StringVariables);
             Assert.Equal(0, summary.MaxArraySize);
             history = (bool)tester.Explorer.GetType()
@@ -289,7 +289,7 @@ namespace Test.Unit
             // Test full hierarchy
             tester.Explorer.ResetNodes();
             await tester.Explorer.GetSubscriptionChunkSizes(tester.Source.Token);
-            var summary = tester.Explorer.GetSummary();
+            var summary = tester.Explorer.Summary;
             Assert.False(summary.SilentSubscriptionsWarning);
             Assert.Equal(1000, summary.SubscriptionChunkSize);
             Assert.False(summary.SubscriptionLimitWarning);
@@ -299,7 +299,7 @@ namespace Test.Unit
             tester.Explorer.ResetNodes();
             tester.Explorer.ResetSummary();
             await tester.Explorer.GetSubscriptionChunkSizes(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.False(summary.SilentSubscriptionsWarning);
             Assert.Equal(1000, summary.SubscriptionChunkSize);
             Assert.True(summary.SubscriptionLimitWarning);
@@ -309,7 +309,7 @@ namespace Test.Unit
             tester.Explorer.ResetNodes();
             tester.Explorer.ResetSummary();
             await tester.Explorer.GetSubscriptionChunkSizes(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.False(summary.SilentSubscriptionsWarning);
             Assert.Equal(1000, summary.SubscriptionChunkSize);
             Assert.True(summary.SubscriptionLimitWarning);
@@ -320,7 +320,7 @@ namespace Test.Unit
             tester.Explorer.ResetNodes();
             tester.Explorer.ResetSummary();
             await tester.Explorer.GetSubscriptionChunkSizes(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.False(summary.SilentSubscriptionsWarning);
             Assert.Equal(100, summary.SubscriptionChunkSize);
             Assert.False(summary.SubscriptionLimitWarning);
@@ -337,7 +337,7 @@ namespace Test.Unit
             // Test for non-historizing nodes
             tester.Config.Extraction.RootNode = tester.Server.Ids.Event.Root.ToProtoNodeId(tester.Explorer);
             await tester.Explorer.GetHistoryReadConfig(tester.Source.Token);
-            var summary = tester.Explorer.GetSummary();
+            var summary = tester.Explorer.Summary;
             Assert.True(summary.NoHistorizingNodes);
 
             // Test for regular analysis, with no data
@@ -345,7 +345,7 @@ namespace Test.Unit
             tester.Explorer.ResetNodes();
             tester.Explorer.ResetSummary();
             await tester.Explorer.GetHistoryReadConfig(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.False(summary.NoHistorizingNodes);
             Assert.True(summary.History);
             Assert.Equal(100, summary.HistoryChunkSize);
@@ -356,7 +356,7 @@ namespace Test.Unit
             tester.Explorer.ResetNodes();
             tester.Explorer.ResetSummary();
             await tester.Explorer.GetHistoryReadConfig(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.False(summary.NoHistorizingNodes);
             Assert.True(summary.History);
             Assert.Equal(1, summary.HistoryChunkSize);
@@ -369,7 +369,7 @@ namespace Test.Unit
             var now = DateTime.UtcNow;
             tester.Server.PopulateBaseHistory(now.AddSeconds(-100));
             await tester.Explorer.GetHistoryReadConfig(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.False(summary.NoHistorizingNodes);
             Assert.True(summary.History);
             Assert.Equal(100, summary.HistoryChunkSize);
@@ -380,7 +380,7 @@ namespace Test.Unit
             tester.Explorer.ResetSummary();
             tester.Server.PopulateBaseHistory(now.AddSeconds(-10000));
             await tester.Explorer.GetHistoryReadConfig(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.False(summary.NoHistorizingNodes);
             Assert.True(summary.History);
             Assert.Equal(100, summary.HistoryChunkSize);
@@ -401,7 +401,7 @@ namespace Test.Unit
             tester.Config.Extraction.RootNode = tester.Server.Ids.Base.Root.ToProtoNodeId(tester.Explorer);
             tester.Server.SetEventConfig(false, false, false);
             await tester.Explorer.GetEventConfig(tester.Source.Token);
-            var summary = tester.Explorer.GetSummary();
+            var summary = tester.Explorer.Summary;
             Assert.False(summary.AnyEvents);
             Assert.False(summary.Auditing);
             Assert.False(summary.HistoricalEvents);
@@ -412,7 +412,7 @@ namespace Test.Unit
             tester.Server.SetEventConfig(true, true, false);
             tester.Explorer.ResetSummary();
             await tester.Explorer.GetEventConfig(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.True(summary.AnyEvents);
             Assert.True(summary.Auditing);
             Assert.True(summary.HistoricalEvents);
@@ -423,7 +423,7 @@ namespace Test.Unit
             tester.Server.SetEventConfig(false, false, true);
             tester.Explorer.ResetSummary();
             await tester.Explorer.GetEventConfig(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.True(summary.AnyEvents);
             Assert.True(summary.Auditing);
             Assert.False(summary.HistoricalEvents);
@@ -436,7 +436,7 @@ namespace Test.Unit
             tester.Explorer.ResetSummary();
             tester.Explorer.ResetNodes();
             await tester.Explorer.GetEventConfig(tester.Source.Token);
-            summary = tester.Explorer.GetSummary();
+            summary = tester.Explorer.Summary;
             Assert.True(summary.AnyEvents);
             Assert.False(summary.Auditing);
             Assert.True(summary.HistoricalEvents);

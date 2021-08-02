@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using CogniteSdk;
 using Opc.Ua;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -155,11 +156,11 @@ namespace Cognite.OpcUa.Types
                 }
                 if (update.Description)
                 {
-                    checksum = checksum * 31 + (Description?.GetHashCode() ?? 0);
+                    checksum = checksum * 31 + (Description?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
                 }
                 if (update.Name)
                 {
-                    checksum = checksum * 31 + (DisplayName?.GetHashCode() ?? 0);
+                    checksum = checksum * 31 + (DisplayName?.GetHashCode(StringComparison.InvariantCulture) ?? 0);
                 }
                 if (update.Metadata)
                 {
@@ -188,7 +189,7 @@ namespace Cognite.OpcUa.Types
                         }
                         if (NodeClass == NodeClass.VariableType)
                         {
-                            metaHash = metaHash * 31 + variable.Value?.StringValue?.GetHashCode() ?? 0;
+                            metaHash = metaHash * 31 + variable.Value?.StringValue?.GetHashCode(StringComparison.InvariantCulture) ?? 0;
                         }
                     }
 
@@ -321,6 +322,7 @@ namespace Cognite.OpcUa.Types
         public void SetNodeType(UAClient client, ExpandedNodeId nodeId)
         {
             if (nodeId == null || nodeId.IsNull) return;
+            if (client == null) throw new ArgumentNullException(nameof(client));
             var id = client.ToNodeId(nodeId);
             Attributes.NodeType = client.ObjectTypeManager.GetObjectType(id, NodeClass == NodeClass.Variable);
             if (NodeClass == NodeClass.Variable && id == VariableTypeIds.PropertyType)

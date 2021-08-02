@@ -68,7 +68,7 @@ namespace Cognite.OpcUa.Config
             }
             explorer.Close();
 
-            var result = ToolUtil.ConfigResultToString(explorer.GetFinalConfig());
+            var result = ToolUtil.ConfigResultToString(explorer.FinalConfig);
 
             log.Information("");
             File.WriteAllText(output, result);

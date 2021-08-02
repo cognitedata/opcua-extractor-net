@@ -75,7 +75,7 @@ namespace Test.Utils
         {
         }
 
-        public Task<bool?> TestConnection(FullConfig config, CancellationToken token)
+        public Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
             return Task.FromResult(TestConnectionResult);
         }

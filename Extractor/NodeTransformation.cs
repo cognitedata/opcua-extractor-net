@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
+using System;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -59,7 +60,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="id">Identifier to get representation of</param>
         /// <returns>String representation of identifier of <paramref name="id"/></returns>
-        private string GetIdString(NodeId id)
+        private static string GetIdString(NodeId id)
         {
             var builder = new StringBuilder();
             NodeId.Format(builder, id.Identifier, id.IdType, 0);
@@ -71,7 +72,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="raw">Raw string to create regex for.</param>
         /// <returns>Created regex.</returns>
-        private Regex CreateRegex(string raw)
+        private static Regex CreateRegex(string raw)
         {
             if (string.IsNullOrEmpty(raw)) return null;
 
@@ -91,7 +92,7 @@ namespace Cognite.OpcUa
         public bool IsBasicMatch(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces, NodeClass nc)
         {
             if (Description != null || IsArray != null || Parent != null) return false;
-            return MatchBasic(name, id, typeDefinition, namespaces, nc);
+            return MatchBasic(name, id ?? NodeId.Null, typeDefinition, namespaces, nc);
         }
         /// <summary>
         /// Test for match using only basic properties available in when reading from the server.
@@ -137,7 +138,7 @@ namespace Cognite.OpcUa
         /// <returns>True if match</returns>
         public bool IsMatch(UANode node, NamespaceTable ns)
         {
-            if (!MatchBasic(node.DisplayName, node.Id, node.NodeType?.Id, ns, node.NodeClass)) return false;
+            if (node == null || !MatchBasic(node.DisplayName, node.Id, node.NodeType?.Id, ns, node.NodeClass)) return false;
             if (Description != null && (string.IsNullOrEmpty(node.Description) || !Description.IsMatch(node.Description))) return false;
             if (IsArray != null && (!(node is UAVariable variable) || variable.IsArray != IsArray)) return false;
             if (Parent != null && (node.Parent == null || !Parent.IsMatch(node.Parent, ns))) return false;
@@ -150,6 +151,7 @@ namespace Cognite.OpcUa
         /// <param name="idx">Level of nesting, for clean indentation.</param>
         public void Format(StringBuilder builder, int idx)
         {
+            if (builder == null) throw new ArgumentNullException(nameof(builder));
             if (Name != null)
             {
                 builder.Append(' ', (idx + 1) * 4);
@@ -207,6 +209,7 @@ namespace Cognite.OpcUa
         private readonly int index;
         public NodeTransformation(RawNodeTransformation raw, int index)
         {
+            if (raw == null) throw new ArgumentNullException(nameof(raw));
             Filter = new NodeFilter(raw.Filter);
             Type = raw.Type;
             this.index = index;
@@ -218,6 +221,7 @@ namespace Cognite.OpcUa
         /// <param name="ns">Active NamespaceTable</param>
         public void ApplyTransformation(UANode node, NamespaceTable ns)
         {
+            if (node == null) return;
             if (node.Parent != null)
             {
                 node.Attributes.Ignore |= node.Parent.Ignore;

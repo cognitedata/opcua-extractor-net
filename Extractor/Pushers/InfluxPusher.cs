@@ -25,6 +25,7 @@ using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -139,10 +140,10 @@ namespace Cognite.OpcUa
                 {
                     log.Error("Failed to insert datapoints into influxdb: {line}, {reason}. Message: {msg}",
                         iex.FailedLine, iex.Reason, iex.Message);
-                    if (iex.Reason.StartsWith("partial write"))
+                    if (iex.Reason.StartsWith("partial write", StringComparison.InvariantCulture))
                     {
                         dataPointPushes.Inc();
-                        int droppedIdx = iex.Message.LastIndexOf("dropped=");
+                        int droppedIdx = iex.Message.LastIndexOf("dropped=", StringComparison.InvariantCulture);
                         if (droppedIdx != -1)
                         {
                             string droppedRaw = iex.Message.Substring(droppedIdx + 8).Trim();
@@ -214,7 +215,7 @@ namespace Cognite.OpcUa
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            if (states == null || !states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
             var ranges = new ConcurrentDictionary<string, TimeRange>();
 
             var ids = new List<string>();
@@ -376,7 +377,7 @@ namespace Cognite.OpcUa
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (!states.Any() || config.Debug || !config.ReadExtractedEventRanges) return true;
+            if (states == null || !states.Any() || config.Debug || !config.ReadExtractedEventRanges) return true;
             IEnumerable<string> eventSeries;
             try
             {
@@ -680,7 +681,9 @@ namespace Cognite.OpcUa
                     };
                     foreach (var kvp in values)
                     {
-                        if (string.IsNullOrEmpty(kvp.Value as string) || excludeEventTags.Contains(kvp.Key.ToLower())) continue;
+#pragma warning disable CA1308 // Normalize strings to uppercase
+                        if (string.IsNullOrEmpty(kvp.Value as string) || excludeEventTags.Contains(kvp.Key.ToLower(CultureInfo.InvariantCulture))) continue;
+#pragma warning restore CA1308 // Normalize strings to uppercase
                         evt.MetaData.Add(kvp.Key, kvp.Value);
                     }
                     log.Verbose(evt.ToString());

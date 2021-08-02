@@ -44,7 +44,7 @@ namespace Cognite.OpcUa
     public class HistoryReadParams
     {
         public HistoryReadDetails Details { get; }
-        public List<HistoryReadNode> Nodes { get; set; }
+        public IList<HistoryReadNode> Nodes { get; set; }
         public Exception Exception { get; set; }
 
         public HistoryReadParams(IEnumerable<HistoryReadNode> nodes, HistoryReadDetails details)
@@ -57,6 +57,7 @@ namespace Cognite.OpcUa
     {
         public HistoryReadNode(HistoryReadType type, UAHistoryExtractionState state)
         {
+            if (state == null) throw new ArgumentNullException(nameof(state));
             Type = type;
             State = state;
             Id = state.SourceId;
@@ -101,7 +102,7 @@ namespace Cognite.OpcUa
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly HistoryConfig config;
-        private int numActiveNodes = 0;
+        private int numActiveNodes;
         private bool disposedValue;
         private readonly TaskThrottler throttler;
 
@@ -117,6 +118,7 @@ namespace Cognite.OpcUa
         private bool Data => type == HistoryReadType.FrontfillData || type == HistoryReadType.BackfillData;
         public HistoryScheduler(UAClient uaClient, UAExtractor extractor, HistoryConfig config, HistoryReadType type)
         {
+            if (config == null) throw new ArgumentNullException(nameof(config));
             if (config.Throttling == null)
             {
                 throttling = new HistoryThrottlingConfig { MaxNodeParallelism = 0, MaxParallelism = 0, MaxPerMinute = 0 };
@@ -139,7 +141,7 @@ namespace Cognite.OpcUa
 
         public async Task Run(IEnumerable<UAHistoryExtractionState> states, CancellationToken token)
         {
-            await Task.Run(() => SchedulingLoop(states, token));
+            await Task.Run(() => SchedulingLoop(states, token), CancellationToken.None);
         }
 
         private IEnumerable<HistoryReadNode> GetHistoryChunk(List<HistoryReadNode> nodes, int idx)
@@ -191,7 +193,7 @@ namespace Cognite.OpcUa
             log.Debug(builder.ToString());
         }
 
-        private void LogHistoryChunk(List<HistoryReadNode> nodes, int total)
+        private void LogHistoryChunk(IList<HistoryReadNode> nodes, int total)
         {
             if (!nodes.Any()) return;
             string name = GetResourceName();
@@ -476,7 +478,7 @@ namespace Cognite.OpcUa
             }
             finally
             {
-                finishedReads.Add(readParams);
+                finishedReads.Add(readParams, token);
             }
         }
 
@@ -569,7 +571,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        private DateTime? GetTimeAttribute(VariantCollection evt, EventFilter filter)
+        private static DateTime? GetTimeAttribute(VariantCollection evt, EventFilter filter)
         {
             int index = filter.SelectClauses.FindIndex(atr =>
                 atr.TypeDefinitionId == ObjectTypeIds.BaseEventType

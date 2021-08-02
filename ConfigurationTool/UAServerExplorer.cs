@@ -29,6 +29,37 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.Config
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Summary struct")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1051:Do not declare visible instance fields", Justification = "Summary struct")]
+    public struct Summary
+    {
+        public IList<string> Endpoints;
+        public bool Secure;
+        public int BrowseNodesChunk;
+        public int BrowseChunk;
+        public bool BrowseNextWarning;
+        public int CustomNumTypesCount;
+        public int MaxArraySize;
+        public bool StringVariables;
+        public int AttributeChunkSize;
+        public bool VariableLimitWarning;
+        public int SubscriptionChunkSize;
+        public bool SubscriptionLimitWarning;
+        public bool SilentSubscriptionsWarning;
+        public int HistoryChunkSize;
+        public bool NoHistorizingNodes;
+        public bool BackfillRecommended;
+        public bool HistoricalEvents;
+        public bool AnyEvents;
+        public int NumEmitters;
+        public int NumHistEmitters;
+        public IList<string> NamespaceMap;
+        public TimeSpan HistoryGranularity;
+        public bool Enums;
+        public bool Auditing;
+        public bool Subscriptions;
+        public bool History;
+    }
     public class UAServerExplorer : UAClient
     {
         private readonly FullConfig baseConfig;
@@ -46,7 +77,7 @@ namespace Cognite.OpcUa.Config
         private bool dataTypesRead;
         private bool nodeDataRead;
 
-        private readonly List<int> testAttributeChunkSizes = new List<int>
+        private readonly ICollection<int> testAttributeChunkSizes = new List<int>
         {
             100000,
             10000,
@@ -55,7 +86,7 @@ namespace Cognite.OpcUa.Config
             10
         };
 
-        private readonly List<int> testSubscriptionChunkSizes = new List<int>
+        private readonly ICollection<int> testSubscriptionChunkSizes = new List<int>
         {
             10000,
             1000,
@@ -64,42 +95,14 @@ namespace Cognite.OpcUa.Config
             1
         };
 
-        private readonly List<int> testHistoryChunkSizes = new List<int>
+        private readonly ICollection<int> testHistoryChunkSizes = new List<int>
         {
             100,
             10,
             1
         };
 
-        public struct Summary
-        {
-            public List<string> Endpoints;
-            public bool Secure;
-            public int BrowseNodesChunk;
-            public int BrowseChunk;
-            public bool BrowseNextWarning;
-            public int CustomNumTypesCount;
-            public int MaxArraySize;
-            public bool StringVariables;
-            public int AttributeChunkSize;
-            public bool VariableLimitWarning;
-            public int SubscriptionChunkSize;
-            public bool SubscriptionLimitWarning;
-            public bool SilentSubscriptionsWarning;
-            public int HistoryChunkSize;
-            public bool NoHistorizingNodes;
-            public bool BackfillRecommended;
-            public bool HistoricalEvents;
-            public bool AnyEvents;
-            public int NumEmitters;
-            public int NumHistEmitters;
-            public List<string> NamespaceMap;
-            public TimeSpan HistoryGranularity;
-            public bool Enums;
-            public bool Auditing;
-            public bool Subscriptions;
-            public bool History;
-        }
+        
 
         private Summary summary;
 
@@ -113,10 +116,7 @@ namespace Cognite.OpcUa.Config
             this.baseConfig.Source.Username = config.Source.Username;
             this.baseConfig.Source.Secure = config.Source.Secure;
         }
-        public Summary GetSummary()
-        {
-            return summary;
-        }
+        public Summary Summary => summary;
         public void ResetSummary()
         {
             summary = new Summary();
@@ -128,7 +128,7 @@ namespace Cognite.OpcUa.Config
             dataTypesRead = false;
             dataTypes = new List<UANode>();
             nodeDataRead = false;
-            eventFields = null;
+            ClearEventFields();
         }
 
         /// <summary>
@@ -600,7 +600,7 @@ namespace Cognite.OpcUa.Config
         {
             if (Session == null || !Session.Connected)
             {
-                Run(token).Wait();
+                Run(token).Wait(token);
             }
             PopulateDataTypes(token);
 
@@ -659,7 +659,7 @@ namespace Cognite.OpcUa.Config
                     return count < chunkSize + 10;
                 }).ToList();
                 log.Information("Total {tot}", nodeList.Count);
-                log.Information("Attempting to read attributes for {cnt} nodes with ChunkSize {chunkSize}", toCheck.Count(), chunkSize);
+                log.Information("Attempting to read attributes for {cnt} nodes with ChunkSize {chunkSize}", toCheck.Count, chunkSize);
                 config.Source.AttributesChunk = chunkSize;
                 try
                 {
@@ -1264,6 +1264,8 @@ namespace Cognite.OpcUa.Config
 
             Session.RemoveSubscriptions(Session.Subscriptions.ToList());
         }
+
+
         /// <summary>
         /// Generate an abbreviated string for each namespace,
         /// splits on non-numeric characters, then uses the first letter of each part,
@@ -1271,6 +1273,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         /// <param name="namespaces"></param>
         /// <returns></returns>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "Lowercase namespaces are prettier")]
         public static Dictionary<string, string> GenerateNamespaceMap(IEnumerable<string> namespaces)
         {
             var startRegex = new Regex("^.*://");
@@ -1479,9 +1482,6 @@ namespace Cognite.OpcUa.Config
             }
         }
 
-        public FullConfig GetFinalConfig()
-        {
-            return baseConfig;
-        }
+        public FullConfig FinalConfig => baseConfig;
     }
 }
