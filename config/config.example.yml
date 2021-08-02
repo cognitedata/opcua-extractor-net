@@ -590,6 +590,16 @@ extraction:
             # Another instance of NodeFilter which is applied to the parent node.
             # parent:
 
+    # Modify the DataChangeFilter used for datapoint subscriptions. See OPC-UA reference part 4 7.17.2 for details.
+    # These are just passed to the server, they have no effect on extractor behavior.
+    data-change-filter:
+        # One of Status, StatusValue, or StatusValueTimestamp.
+        trigger: "StatusValue"
+        # One of None, Absolute, or Percent.
+        deadband-type: "None"
+        # Double value of the deadband.
+        deadband-value: 0
+
 
 events:
     # Events are extracted with the following rules: By default all events are extracted.
