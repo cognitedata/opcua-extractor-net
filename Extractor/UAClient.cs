@@ -230,6 +230,12 @@ namespace Cognite.OpcUa
         {
             reverseConnectManager?.Dispose();
 
+            AppConfig.ClientConfiguration.ReverseConnect = new ReverseConnectClientConfiguration
+            {
+                WaitTimeout = 300000,
+                HoldTime = 30000
+            };
+
             reverseConnectManager = new ReverseConnectManager();
             var endpointUrl = new Uri(config.Source.EndpointUrl);
             var reverseUrl = new Uri(config.Source.ReverseConnectUrl);
@@ -237,7 +243,7 @@ namespace Cognite.OpcUa
             reverseConnectManager.StartService(AppConfig);
 
             log.Information("Waiting for reverse connection from: {EndpointURL}", config.Source.EndpointUrl);
-            var connection = await reverseConnectManager.WaitForConnection(endpointUrl, null, CancellationToken.None);
+            var connection = await reverseConnectManager.WaitForConnection(endpointUrl, null);
             if (connection == null)
             {
                 log.Error("Reverse connect failed, no connection established");
@@ -246,7 +252,7 @@ namespace Cognite.OpcUa
             EndpointDescription selectedEndpoint;
             try
             {
-                selectedEndpoint = CoreClientUtils.SelectEndpoint(AppConfig, connection, config.Source.Secure, 15000);
+                selectedEndpoint = CoreClientUtils.SelectEndpoint(AppConfig, connection, config.Source.Secure, 30000);
             }
             catch (ServiceResultException ex)
             {
@@ -267,7 +273,7 @@ namespace Cognite.OpcUa
                 }
                 Session?.Dispose();
 
-                connection = await reverseConnectManager.WaitForConnection(endpointUrl, null, CancellationToken.None);
+                connection = await reverseConnectManager.WaitForConnection(endpointUrl, null);
                 if (connection == null)
                 {
                     log.Error("Reverse connect failed, no connection established");

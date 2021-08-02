@@ -250,6 +250,26 @@ namespace Test.Unit
                 await tester.Client.Run(tester.Source.Token);
             }
         }
+        [Fact]
+        public async Task TestReverseConnect()
+        {
+            tester.Client.Close();
+            tester.Server.Server.AddReverseConnection(new Uri("opc.tcp://localhost:61000"));
+            tester.Config.Source.ReverseConnectUrl = "opc.tcp://localhost:61000";
+            try
+            {
+                await tester.Client.Run(tester.Source.Token);
+                Assert.True(tester.Client.Started);
+                // Just check that we are able to read, indicating an established connection
+                tester.Client.ReadRawValues(new[] { VariableIds.Server_ServerStatus }, tester.Source.Token);
+            }
+            finally
+            {
+                tester.Server.Server.RemoveReverseConnection(new Uri("opc.tcp://localhost:61000"));
+                tester.Config.Source.ReverseConnectUrl = null;
+                await tester.Client.Run(tester.Source.Token);
+            }
+        }
 
         #endregion
 
