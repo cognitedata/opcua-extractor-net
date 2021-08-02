@@ -56,6 +56,7 @@ namespace Cognite.OpcUa
         public bool RestartOnReconnect { get; set; }
         [YamlDotNet.Serialization.YamlMember(Alias = "x509-certificate")]
         public X509CertConfig X509Certificate { get; set; }
+        public string ReverseConnectUrl { get; set; }
     }
     public enum X509CertificateLocation
     {
