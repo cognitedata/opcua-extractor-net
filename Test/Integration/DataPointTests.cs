@@ -325,8 +325,8 @@ namespace Test.Integration
             Assert.Equal(0.0, dps[0].DoubleValue);
             Assert.Equal(1.0, dps[1].DoubleValue);
 
-            tester.Server.UpdateNode(ids.DoubleVar1, 0.0);
             tester.Config.Extraction.DataChangeFilter = null;
+            tester.WipeBaseHistory();
         }
         #endregion
         #region history
