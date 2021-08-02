@@ -84,7 +84,7 @@ namespace Server
                 }
                 else
                 {
-                    log.Information("Read data backwards from index {idx}/{cnt}", idx, data.Count - 1);
+                    log.Information("Read data backwards from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
                 }
 
                 while (true)
@@ -116,7 +116,7 @@ namespace Server
             }
             else
             {
-                log.Information("Read data from index {idx}/{cnt}", idx, data.Count - 1);
+                log.Information("Read data from index {idx}/{cnt}, time {start}", idx, data.Count - 1, request.StartTime);
             }
 
             while (true)

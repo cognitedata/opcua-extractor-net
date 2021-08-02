@@ -15,5 +15,4 @@ nuget OPCFoundation.NetStandard.Opc.Ua.Configuration
 nuget OPCFoundation.NetStandard.Opc.Ua.Server
 nuget AdysTech.InfluxDB.Client.Net.Core
 nuget Microsoft.Windows.Compatibility
-nuget Microsoft.NetCore.Platforms 5.0.2
 nuget MQTTnet

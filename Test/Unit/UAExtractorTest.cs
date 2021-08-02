@@ -294,7 +294,7 @@ namespace Test.Unit
             handler.AllowConnectionTest = !failedStart;
 
             CommonTestUtils.AddDummyProvider(handler, services);
-            services.AddCogniteClient("OPC-UA Extractor", true, true, false);
+            services.AddCogniteClient("OPC-UA Extractor", null, true, true, false);
             var provider = services.BuildServiceProvider();
 
             var runtime = new ExtractorRuntime(config, provider);

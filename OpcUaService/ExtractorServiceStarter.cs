@@ -48,7 +48,7 @@ namespace OpcUaService
 
             if (_config.Cognite != null)
             {
-                services.AddCogniteClient("OPC-UA Extractor", true, true, true);
+                services.AddCogniteClient("OPC-UA Extractor", $"CogniteOPCUAExtractor/{Version.GetVersion()}", true, true, true);
             }
 
             using var provider = services.BuildServiceProvider();

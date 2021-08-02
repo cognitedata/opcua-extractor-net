@@ -121,7 +121,7 @@ namespace Cognite.OpcUa
             {
                 FailureBuffer = new FailureBuffer(config, this, pushers.FirstOrDefault(pusher => pusher is InfluxPusher) as InfluxPusher);
             }
-            historyReader = new HistoryReader(uaClient, this, config.History);
+            historyReader = new HistoryReader(uaClient, this, config.History, source.Token);
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
             if (config.Extraction.IdPrefix == "events.")
             {
@@ -437,19 +437,17 @@ namespace Cognite.OpcUa
             if (!config.History.Enabled && !config.Events.History) return;
             await Task.WhenAll(Task.Run(async () =>
             {
-                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling), source.Token);
+                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling));
                 if (config.History.Backfill)
                 {
-                    await historyReader.BackfillEvents(State.EmitterStates.Where(state => state.IsBackfilling), source.Token);
+                    await historyReader.BackfillEvents(State.EmitterStates.Where(state => state.IsBackfilling));
                 }
             }), Task.Run(async () =>
             {
-                await historyReader.FrontfillData(
-                    State.NodeStates.Where(state => state.IsFrontfilling).ToList(), source.Token);
+                await historyReader.FrontfillData(State.NodeStates.Where(state => state.IsFrontfilling).ToList());
                 if (config.History.Backfill)
                 {
-                    await historyReader.BackfillData(
-                        State.NodeStates.Where(state => state.IsBackfilling).ToList(), source.Token);
+                    await historyReader.BackfillData(State.NodeStates.Where(state => state.IsBackfilling).ToList());
                 }
             }));
         }
@@ -846,10 +844,10 @@ namespace Cognite.OpcUa
             if (!config.Events.History) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
-                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling), source.Token);
+                await historyReader.FrontfillEvents(State.EmitterStates.Where(state => state.IsFrontfilling));
                 if (config.History.Backfill)
                 {
-                    await historyReader.BackfillEvents(State.EmitterStates.Where(state => state.IsBackfilling), source.Token);
+                    await historyReader.BackfillEvents(State.EmitterStates.Where(state => state.IsBackfilling));
                 }
             }
             else
@@ -870,10 +868,10 @@ namespace Cognite.OpcUa
             if (!config.History.Enabled) return;
             if (pushers.Any(pusher => pusher.Initialized))
             {
-                await historyReader.FrontfillData(states.Where(state => state.IsFrontfilling), source.Token);
+                await historyReader.FrontfillData(states.Where(state => state.IsFrontfilling));
                 if (config.History.Backfill)
                 {
-                    await historyReader.BackfillData(states.Where(state => state.IsBackfilling), source.Token);
+                    await historyReader.BackfillData(states.Where(state => state.IsBackfilling));
                 }
             }
             else

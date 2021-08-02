@@ -52,7 +52,7 @@ namespace Cognite.OpcUa.HistoryStates
         {
             if (evt == null) return;
             UpdateFromStream(evt.Time, evt.Time);
-            lock (_mutex)
+            lock (Mutex)
             {
                 if (IsFrontfilling)
                 {
@@ -63,7 +63,7 @@ namespace Cognite.OpcUa.HistoryStates
         private void RefreshBuffer()
         {
             if (buffer == null) return;
-            lock (_mutex)
+            lock (Mutex)
             {
                 buffer = buffer.Where(evt => !SourceExtractedRange.Contains(evt.Time)).ToList();
             }
@@ -92,7 +92,7 @@ namespace Cognite.OpcUa.HistoryStates
         public IEnumerable<UAEvent> FlushBuffer()
         {
             if (IsFrontfilling || buffer == null || !buffer.Any()) return Array.Empty<UAEvent>();
-            lock (_mutex)
+            lock (Mutex)
             {
                 var result = buffer.Where(evt => !SourceExtractedRange.Contains(evt.Time)).ToList();
                 buffer.Clear();

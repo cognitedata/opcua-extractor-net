@@ -975,7 +975,7 @@ namespace Cognite.OpcUa.Config
             long sumDistance = 0;
             int count = 0;
 
-            NodeId nodeWithData = null;
+            HistoryReadNode nodeWithData = null;
 
             bool failed = true;
             bool done = false;
@@ -983,7 +983,8 @@ namespace Cognite.OpcUa.Config
             foreach (int chunkSize in testHistoryChunkSizes)
             {
                 var chunk = historizingStates.Take(chunkSize);
-                var historyParams = new HistoryReadParams(chunk.Select(state => state.SourceId), details);
+                var historyParams = new HistoryReadParams(
+                    chunk.Select(state => new HistoryReadNode(HistoryReadType.FrontfillData, state)), details);
                 try
                 {
                     var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
@@ -997,7 +998,7 @@ namespace Cognite.OpcUa.Config
                         // means that we don't base our history analysis on those.
                         if (data.Length > 100 && nodeWithData == null)
                         {
-                            nodeWithData = node.Id;
+                            nodeWithData = node;
                         }
 
 
@@ -1011,7 +1012,7 @@ namespace Cognite.OpcUa.Config
                         long estimate = (DateTime.UtcNow.Ticks - data.First().Timestamp.Ticks) / avgTicks;
                         if (estimate > largestEstimate)
                         {
-                            nodeWithData = node.Id;
+                            nodeWithData = node;
                             largestEstimate = estimate;
                         }
                     }
@@ -1072,6 +1073,7 @@ namespace Cognite.OpcUa.Config
 
             bool backfillCapable = false;
 
+            log.Information("Read history backwards from {time}", earliestTime);
             var backfillDetails = new ReadRawModifiedDetails
             {
                 IsReadModified = false,
@@ -1079,6 +1081,8 @@ namespace Cognite.OpcUa.Config
                 EndTime = earliestTime,
                 NumValuesPerNode = (uint)config.History.DataChunk
             };
+
+            nodeWithData.ContinuationPoint = null;
 
             var backfillParams = new HistoryReadParams(new[] { nodeWithData }, backfillDetails);
 

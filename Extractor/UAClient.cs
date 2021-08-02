@@ -30,6 +30,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -152,6 +153,10 @@ namespace Cognite.OpcUa
                 AppConfig = await application.LoadApplicationConfiguration($"{config.Source.ConfigRoot}/opc.ua.net.extractor.Config.xml", false);
             }
             catch (ServiceResultException exc)
+            {
+                throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
+            }
+            catch (IOException exc)
             {
                 throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
             }
@@ -1720,26 +1725,5 @@ namespace Cognite.OpcUa
             }
         }
         #endregion
-    }
-    /// <summary>
-    /// Parameter class containing the state of a single history read operation.
-    /// </summary>
-    public class HistoryReadParams
-    {
-        public HistoryReadDetails Details { get; }
-        public List<HistoryReadNode> Nodes { get; set; }
-
-        public HistoryReadParams(IEnumerable<NodeId> nodes, HistoryReadDetails details)
-        {
-            Nodes = nodes.Select(node => new HistoryReadNode { Id = node }).ToList();
-            Details = details;
-        }
-    }
-    public class HistoryReadNode
-    {
-        public UAHistoryExtractionState State { get; set; }
-        public NodeId Id { get; set; }
-        public byte[] ContinuationPoint { get; set; }
-        public bool Completed { get; set; }
     }
 }

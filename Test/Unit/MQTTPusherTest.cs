@@ -31,7 +31,7 @@ namespace Test.Unit
         }
         public (CDFMockHandler, MQTTBridge, MQTTPusher) GetPusher()
         {
-            Services.AddCogniteClient("appid", true, true, false);
+            Services.AddCogniteClient("appid", null, true, true, false);
             var mqttConfig = ConfigurationUtils.Read<BridgeConfig>("config.bridge.yml");
             mqttConfig.Mqtt.ClientId = $"opcua-mqtt-pusher-test-bridge-{idCounter}";
             mqttConfig.GenerateDefaults();
@@ -42,7 +42,7 @@ namespace Test.Unit
             };
             CommonTestUtils.AddDummyProvider(handler, Services);
             Services.AddSingleton(mqttConfig.Cognite);
-            Services.AddCogniteClient("MQTT-CDF Bridge", true, true, false);
+            Services.AddCogniteClient("MQTT-CDF Bridge", null, true, true, false);
             var provider = Services.BuildServiceProvider();
             Config.Mqtt.ClientId = $"opcua-mqtt-pusher-test-{idCounter}";
             idCounter++;

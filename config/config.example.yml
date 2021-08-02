@@ -95,6 +95,16 @@ history:
     # It is therefore recommended to set data-nodes-chunk and event-nodes-chunk to 1 if this is used, although it will work without.
     # If points/events are generated at close to the same rate for all nodes, using a larger chunk size may work fine.
     ignore-continuation-points: false
+    # Configuration for throttling history reads. This applies to both events and datapoints separately. So the maximum load on the server
+    # is effectively twice the configured values. This is worth noting if the server restricts the number of available continuation points,
+    # and both events and datapoints are enabled. In this case max-node-parallelism should be set to half the maximum number of continuation points.
+    throttling:
+        # Maximum number of history requests per type per minute.
+        max-per-minute: 0
+        # Maximum number of parallel history requests.
+        max-parallelism: 0
+        # Maximum number of nodes to read in parallel. This should be set equal to or lower than the maximum number of continuation points set by the server.
+        max-node-parallelism: 0
 
 
 # Configuration for the pusher to CDF.

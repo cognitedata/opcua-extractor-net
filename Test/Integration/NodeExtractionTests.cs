@@ -25,7 +25,7 @@ namespace Test.Integration
             var handler = new CDFMockHandler("test", CDFMockHandler.MockMode.None);
             handler.StoreDatapoints = true;
             CommonTestUtils.AddDummyProvider(handler, Services);
-            Services.AddCogniteClient("appid", true, true, false);
+            Services.AddCogniteClient("appid", null, true, true, false);
             var provider = Services.BuildServiceProvider();
             var pusher = Config.Cognite.ToPusher(provider) as CDFPusher;
             return (handler, pusher);
@@ -1146,7 +1146,7 @@ namespace Test.Integration
             extraction.DataTypes.MaxArraySize = 0;
             extraction.DataTypes.AutoIdentifyTypes = false;
 
-            Assert.Equal(449, pusher.PushedNodes.Count);
+            Assert.Equal(458, pusher.PushedNodes.Count);
             Assert.Equal(366, pusher.PushedVariables.Count);
 
             var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType];

@@ -21,6 +21,9 @@ namespace Test.Utils
         protected ServiceCollection Services { get; }
         protected BaseExtractorTestFixture(int port)
         {
+            // Set higher min thread count, this is required due to running both server and client in the same process.
+            // The server uses the threadPool in a weird way that can cause starvation if this is set too low.
+            ThreadPool.SetMinThreads(20, 20);
             Services = new ServiceCollection();
             Config = Services.AddConfig<FullConfig>("config.test.yml", 1);
             Console.WriteLine($"Add logger: {Config.Logger}");

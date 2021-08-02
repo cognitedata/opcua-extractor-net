@@ -47,7 +47,7 @@ namespace Test.Unit
                 Config.Logger.Console.Level = "debug";
                 CommonTestUtils.AddDummyProvider(Handler, services);
                 services.AddLogger();
-                services.AddCogniteClient("MQTT-CDF Bridge", true, true, false);
+                services.AddCogniteClient("MQTT-CDF Bridge", null, true, true, false);
                 provider = services.BuildServiceProvider();
 
                 bridge = new MQTTBridge(new Destination(Config.Cognite, provider), Config);
