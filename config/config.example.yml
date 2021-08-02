@@ -592,6 +592,7 @@ extraction:
 
     # Modify the DataChangeFilter used for datapoint subscriptions. See OPC-UA reference part 4 7.17.2 for details.
     # These are just passed to the server, they have no effect on extractor behavior.
+    # Filters are applied to all nodes, but deadband should only affect some, according to the standard.
     data-change-filter:
         # One of Status, StatusValue, or StatusValueTimestamp.
         trigger: "StatusValue"
