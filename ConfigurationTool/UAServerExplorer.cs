@@ -1073,7 +1073,7 @@ namespace Cognite.OpcUa.Config
 
             bool backfillCapable = false;
 
-            log.Information("Read history backwards from " + earliestTime);
+            log.Information("Read history backwards from {time}", earliestTime);
             var backfillDetails = new ReadRawModifiedDetails
             {
                 IsReadModified = false,
