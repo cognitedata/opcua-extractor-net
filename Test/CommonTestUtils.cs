@@ -91,7 +91,16 @@ namespace Test
             if (disposing)
             {
                 Console.SetOut(_originalOut);
-                _output.WriteLine(_textWriter.ToString());
+                // This can rarely randomly fail due to some obscure threading issue.
+                // It's just cleanup of tests, so we can just retry.
+                try
+                {
+                    _output.WriteLine(_textWriter.ToString());
+                }
+                catch (IndexOutOfRangeException)
+                {
+                    _output.WriteLine(_textWriter.ToString());
+                }
                 _textWriter.Dispose();
             }
             disposed = true;
