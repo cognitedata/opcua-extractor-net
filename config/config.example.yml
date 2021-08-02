@@ -30,6 +30,9 @@ source:
     username:
     # OPC-UA password
     password:
+    # Local URL used for reverse-connect. This is the URL the server should connect to. An endpoint-url should also be specified,
+    # but the server is responsible for initiating connections, meaning it can be placed entirely behind a firewall.
+    reverse-connect-url:
     # OPC-UA servers may accept x509 certificates for authentication. This can be used to specify a certificate
     # in a file or local certificate store.
     # Certificate based authentication is highly server dependent.
