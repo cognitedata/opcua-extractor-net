@@ -2,6 +2,7 @@
 using Cognite.OpcUa;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Types;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using System;
@@ -11,6 +12,7 @@ using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Test.Integration
 {
@@ -1089,6 +1091,20 @@ namespace Test.Integration
             Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
 
+            // ... and that the JSON looks right
+            meta = root.BuildMetadata(null, extractor.StringConverter, true);
+            foreach (var kvp in meta)
+            {
+                Console.WriteLine(kvp.Key + ":" + kvp.Value);
+            }
+            // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
+            Assert.Single(meta);
+            Assert.Equal(@"{""ChildObject"":{},""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
+            + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""Variable StringArray"":[""test1"",""test2""],""StringyVar"":null,""IgnoreVar"":null,"
+            + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""NumberVar"":{""Value"":null,""DeepProp"":{""DeepProp2"":{""val1"":""value 1"",""val2"":""value 2""}}},"
+            + @"""EnumVar1"":""Enum2"",""EnumVar3"":[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""],""EnumVar2"":""VEnum2""}", meta["CustomRoot"]);
             extraction.Transformations = null;
             extraction.DataTypes.AllowStringVariables = false;
             extraction.DataTypes.MaxArraySize = 0;
@@ -1113,59 +1129,46 @@ namespace Test.Integration
                     Type = TransformationType.Ignore
                 }
             };
-
             using var extractor = tester.BuildExtractor(true, null, pusher);
-
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
-
             extraction.DataTypes.AllowStringVariables = true;
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
-
             await extractor.RunExtractor(true);
-
             extraction.Transformations = null;
             extraction.DataTypes.AllowStringVariables = false;
             extraction.DataTypes.MaxArraySize = 0;
             extraction.DataTypes.AutoIdentifyTypes = false;
-
             Assert.Single(pusher.PushedNodes);
             Assert.Empty(pusher.PushedVariables);
         }
-        #endregion
 
+        #endregion
         #region types
         [Fact]
         public async Task TestReadTypes()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
-
             using var extractor = tester.BuildExtractor(true, null, pusher);
-
             extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.TypesFolder, tester.Client);
             extraction.NodeTypes.AsNodes = true;
             extraction.DataTypes.AllowStringVariables = true;
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
-
             await extractor.RunExtractor(true);
-
             extraction.NodeTypes.AsNodes = false;
             extraction.DataTypes.AllowStringVariables = false;
             extraction.DataTypes.MaxArraySize = 0;
             extraction.DataTypes.AutoIdentifyTypes = false;
-
             Assert.Equal(458, pusher.PushedNodes.Count);
             Assert.Equal(366, pusher.PushedVariables.Count);
-
             var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType];
             Assert.Equal("CustomVariableType", customVarType.DisplayName);
             Assert.Equal(NodeClass.VariableType, customVarType.NodeClass);
             var meta = customVarType.BuildMetadata(extractor, extractor.StringConverter);
             Assert.Single(meta);
             Assert.Equal("123.123", meta["Value"]);
-
             var customObjType = pusher.PushedNodes[tester.Server.Ids.Custom.ObjectType];
             Assert.Equal("CustomObjectType", customObjType.DisplayName);
             Assert.Equal(NodeClass.ObjectType, customObjType.NodeClass);

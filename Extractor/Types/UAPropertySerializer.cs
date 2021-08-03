@@ -34,9 +34,16 @@ namespace Cognite.OpcUa.Types
 
         private void PropertyToJson(StringBuilder builder, UANode node, bool json)
         {
-            if (node is UAVariable variable && (variable.Properties == null || !variable.Properties.Any()))
+            if (node.Properties == null || !node.Properties.Any())
             {
-                builder.Append(ConvertToString(variable.Value, variable.DataType.EnumValues, null, json));
+                if (node is UAVariable variable)
+                {
+                    builder.Append(ConvertToString(variable.Value, variable.DataType.EnumValues, null, json));
+                }
+                else
+                {
+                    builder.Append("{}");
+                }
                 return;
             }
             bool separator = false;
@@ -49,6 +56,7 @@ namespace Cognite.OpcUa.Types
                 separator = true;
                 fields.Add("Value");
             }
+
             foreach (var prop in node.Properties)
             {
                 if (separator) builder.Append(',');

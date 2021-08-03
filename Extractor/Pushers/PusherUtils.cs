@@ -155,13 +155,9 @@ namespace Cognite.OpcUa.Pushers
                 {
                     r1.WriteTo(jsonWriter);
                 }
-                else if (r1.ValueKind != JsonValueKind.Array && r1.ValueKind != JsonValueKind.Object || r1.ValueKind != r2.ValueKind)
+                else if (r1.ValueKind != JsonValueKind.Object || r1.ValueKind != r2.ValueKind)
                 {
                     r2.WriteTo(jsonWriter);
-                }
-                else if (r1.ValueKind == JsonValueKind.Array)
-                {
-                    MergeArrays(jsonWriter, r1, r2);
                 }
                 else
                 {
@@ -198,10 +194,6 @@ namespace Cognite.OpcUa.Pushers
                     {
                         MergeObjects(jsonWriter, originalValue, newValue);
                     }
-                    else if (newValueKind == JsonValueKind.Array && originalValueKind == JsonValueKind.Array)
-                    {
-                        MergeArrays(jsonWriter, originalValue, newValue);
-                    }
                     else
                     {
                         newValue.WriteTo(jsonWriter);
@@ -223,28 +215,6 @@ namespace Cognite.OpcUa.Pushers
             }
 
             jsonWriter.WriteEndObject();
-        }
-
-        /// <summary>
-        /// Merge two JSON arrays, write the result to <paramref name="jsonWriter"/>.
-        /// </summary>
-        /// <param name="jsonWriter">Output writer</param>
-        /// <param name="root1">First array</param>
-        /// <param name="root2">Second array</param>
-        private static void MergeArrays(Utf8JsonWriter jsonWriter, JsonElement root1, JsonElement root2)
-        {
-            jsonWriter.WriteStartArray();
-
-            foreach (JsonElement element in root1.EnumerateArray())
-            {
-                element.WriteTo(jsonWriter);
-            }
-            foreach (JsonElement element in root2.EnumerateArray())
-            {
-                element.WriteTo(jsonWriter);
-            }
-
-            jsonWriter.WriteEndArray();
         }
 
         /// <summary>
@@ -335,6 +305,7 @@ namespace Cognite.OpcUa.Pushers
             TypeUpdateConfig update,
             IDictionary<NodeId, long> nodeToAssetIds)
         {
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             if (update == null || newTs == null || nodeToAssetIds == null || old == null) return null;
             var tsUpdate = new TimeSeriesUpdate();
             if (update.Context)
