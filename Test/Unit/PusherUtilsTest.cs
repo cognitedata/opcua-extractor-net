@@ -291,12 +291,12 @@ namespace Test.Unit
             Assert.Equal("description2", result.Description.Set);
             Assert.Equal("test2", result.Name.Set);
             Assert.Equal(222, result.AssetId.Set);
-            Assert.Equal(4, result.Metadata.Add.Count);
-            Assert.Equal("value1", result.Metadata.Add["prop1"]);
-            Assert.False(result.Metadata.Add.ContainsKey("prop2"));
-            Assert.Equal("value3", result.Metadata.Add["prop3"]);
-            Assert.Equal("value4-new", result.Metadata.Add["prop4"]);
-            Assert.Equal("value-new", result.Metadata.Add["prop-new"]);
+            Assert.Equal(4, result.Metadata.Set.Count);
+            Assert.Equal("value1", result.Metadata.Set["prop1"]);
+            Assert.False(result.Metadata.Set.ContainsKey("prop2"));
+            Assert.Equal("value3", result.Metadata.Set["prop3"]);
+            Assert.Equal("value4-new", result.Metadata.Set["prop4"]);
+            Assert.Equal("value-new", result.Metadata.Set["prop-new"]);
             Assert.Null(result.ExternalId);
 
             // Update with null values, and missing asset
@@ -377,12 +377,12 @@ namespace Test.Unit
             Assert.Equal("description2", result.Description.Set);
             Assert.Equal("test2", result.Name.Set);
             Assert.Equal("gp.base:s=parent2", result.ParentExternalId.Set);
-            Assert.Equal(4, result.Metadata.Add.Count);
-            Assert.Equal("value1", result.Metadata.Add["prop1"]);
-            Assert.False(result.Metadata.Add.ContainsKey("prop2"));
-            Assert.Equal("value3", result.Metadata.Add["prop3"]);
-            Assert.Equal("value4-new", result.Metadata.Add["prop4"]);
-            Assert.Equal("value-new", result.Metadata.Add["prop-new"]);
+            Assert.Equal(4, result.Metadata.Set.Count);
+            Assert.Equal("value1", result.Metadata.Set["prop1"]);
+            Assert.False(result.Metadata.Set.ContainsKey("prop2"));
+            Assert.Equal("value3", result.Metadata.Set["prop3"]);
+            Assert.Equal("value4-new", result.Metadata.Set["prop4"]);
+            Assert.Equal("value-new", result.Metadata.Set["prop-new"]);
             Assert.Null(result.ExternalId);
 
             node = new UANode(new NodeId("test3"), null, NodeId.Null, NodeClass.Object);
