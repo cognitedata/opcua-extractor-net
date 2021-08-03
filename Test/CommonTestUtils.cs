@@ -41,6 +41,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -532,6 +533,16 @@ namespace Test
             log.Information("Waited for {cnt} seconds", i / 5.0);
             Assert.True(triggered, assertion());
         }
+
+        public static string JsonDocumentToString(JsonDocument doc)
+        {
+            if (doc == null) throw new ArgumentNullException(nameof(doc));
+            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            });
+        }
+
         public static async Task WaitForCondition(Func<bool> condition, int seconds,
             string assertion = "Expected condition to trigger")
         {

@@ -1092,19 +1092,15 @@ namespace Test.Integration
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
 
             // ... and that the JSON looks right
-            meta = root.BuildMetadata(null, extractor.StringConverter, true);
-            foreach (var kvp in meta)
-            {
-                Console.WriteLine(kvp.Key + ":" + kvp.Value);
-            }
+            var metaDoc = root.MetadataToJson(null, extractor.StringConverter);
+            var metaString = CommonTestUtils.JsonDocumentToString(metaDoc);
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
-            Assert.Single(meta);
-            Assert.Equal(@"{""ChildObject"":{},""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
+            Assert.Equal(@"{""CustomRoot"":{""ChildObject"":{},""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
             + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
             + @"""Variable StringArray"":[""test1"",""test2""],""StringyVar"":null,""IgnoreVar"":null,"
             + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
             + @"""NumberVar"":{""Value"":null,""DeepProp"":{""DeepProp2"":{""val1"":""value 1"",""val2"":""value 2""}}},"
-            + @"""EnumVar1"":""Enum2"",""EnumVar3"":[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""],""EnumVar2"":""VEnum2""}", meta["CustomRoot"]);
+            + @"""EnumVar1"":""Enum2"",""EnumVar3"":[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""],""EnumVar2"":""VEnum2""}}", metaString);
             extraction.Transformations = null;
             extraction.DataTypes.AllowStringVariables = false;
             extraction.DataTypes.MaxArraySize = 0;

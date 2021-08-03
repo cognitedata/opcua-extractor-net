@@ -210,22 +210,13 @@ namespace Cognite.OpcUa.Types
         /// <param name="extractor">Active extractor, used for building extra metadata.
         /// Can be null to not fetch any extra metadata at all.</param>
         /// <returns>Created metadata dictionary.</returns>
-        public Dictionary<string, string> BuildMetadata(UAExtractor extractor, StringConverter converter, bool json = false)
+        public Dictionary<string, string> BuildMetadata(UAExtractor extractor, StringConverter converter)
         {
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             Dictionary<string, string> extras = extractor?.GetExtraMetadata(this);
             if (Properties == null && extras == null) return new Dictionary<string, string>();
             if (Properties == null) return extras;
             var result = extras ?? new Dictionary<string, string>();
-
-            if (json)
-            {
-                var meta = converter.MetadataToJsonRaw(Properties);
-                foreach (var kvp in meta)
-                {
-                    result[kvp.Key] = kvp.Value;
-                }
-                return result;
-            }
 
             foreach (var prop in Properties)
             {
