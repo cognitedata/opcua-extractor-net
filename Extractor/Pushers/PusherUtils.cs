@@ -201,7 +201,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (raw == null)
             {
-                var create = node.ToCDFAsset(extractor, null, metaMap);
+                var create = node.ToCDFAssetJson(extractor, metaMap);
                 return JsonDocument.Parse(JsonSerializer.Serialize(create,
                     new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })).RootElement;
             }

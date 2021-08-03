@@ -74,6 +74,10 @@ namespace Test.Unit
                 prop.SetDataPoint($"value{i}");
                 node.AddProperty(prop);
             }
+            var nestedProp = new UAVariable(new NodeId("nestedProp"), "nestedProp", NodeId.Null);
+            nestedProp.VariableAttributes.DataType = pdt;
+            nestedProp.SetDataPoint("nestedValue");
+            node.Properties.ElementAt(2).AddProperty(nestedProp);
 
             var update = new TypeUpdateConfig();
 
@@ -88,6 +92,7 @@ namespace Test.Unit
             Assert.False(result1.Value.GetProperty("isString").GetBoolean());
             var meta = result1.Value.GetProperty("metadata");
             Assert.Equal("value1", GetStringValue(meta, "prop1"));
+            Assert.Equal(@"{""Value"":""value3"",""nestedProp"":""nestedValue""}", meta.GetProperty("prop3").ToString());
             Assert.Equal("value4", GetStringValue(meta, "prop4"));
 
 
@@ -100,6 +105,7 @@ namespace Test.Unit
             oldProperties.Add(CommonTestUtils.GetSimpleVariable("prop-new", pdt));
             (oldProperties[3] as UAVariable).SetDataPoint("value-new");
             (oldProperties[2] as UAVariable).SetDataPoint("value4-new");
+            nestedProp.SetDataPoint("nestedValue2");
 
             var result2 = PusherUtils.CreateRawTsUpdate(node, extractor, ToRawRow(result1.Value), update, null);
             Assert.Null(result2);
@@ -118,8 +124,8 @@ namespace Test.Unit
             Assert.Equal("gp.base:s=parent2", GetStringValue(result2, "assetExternalId"));
             meta = result2.Value.GetProperty("metadata");
             Assert.Equal("value1", GetStringValue(meta, "prop1"));
-            Assert.False(meta.TryGetProperty("value2", out var _));
-            Assert.Equal("value3", GetStringValue(meta, "prop3"));
+            Assert.False(meta.TryGetProperty("prop2", out var _));
+            Assert.Equal(@"{""Value"":""value3"",""nestedProp"":""nestedValue2""}", meta.GetProperty("prop3").ToString());
             Assert.Equal("value4-new", GetStringValue(meta, "prop4"));
             Assert.Equal("value-new", GetStringValue(meta, "prop-new"));
             Assert.True(result2.Value.GetProperty("isStep").GetBoolean());
@@ -156,6 +162,11 @@ namespace Test.Unit
                 prop.SetDataPoint($"value{i}");
                 node.AddProperty(prop);
             }
+            var nestedProp = new UAVariable(new NodeId("nestedProp"), "nestedProp", NodeId.Null);
+            nestedProp.VariableAttributes.DataType = pdt;
+            nestedProp.SetDataPoint("nestedValue");
+            node.Properties.ElementAt(2).AddProperty(nestedProp);
+
 
             var update = new TypeUpdateConfig();
 
@@ -168,6 +179,7 @@ namespace Test.Unit
             Assert.Equal("gp.base:s=parent", GetStringValue(result1, "parentExternalId"));
             var meta = result1.Value.GetProperty("metadata");
             Assert.Equal("value1", GetStringValue(meta, "prop1"));
+            Assert.Equal(@"{""Value"":""value3"",""nestedProp"":""nestedValue""}", meta.GetProperty("prop3").ToString());
             Assert.Equal("value4", GetStringValue(meta, "prop4"));
 
             // Update, but keep TypeUpdateConfig at default
@@ -179,6 +191,7 @@ namespace Test.Unit
             oldProperties.Add(CommonTestUtils.GetSimpleVariable("prop-new", pdt));
             (oldProperties[3] as UAVariable).SetDataPoint("value-new");
             (oldProperties[2] as UAVariable).SetDataPoint("value4-new");
+            nestedProp.SetDataPoint("nestedValue2");
 
             var result2 = PusherUtils.CreateRawAssetUpdate(node, extractor, ToRawRow(result1.Value), update, null);
             Assert.Null(result2);
@@ -196,8 +209,8 @@ namespace Test.Unit
             Assert.Equal("gp.base:s=parent2", GetStringValue(result2, "parentExternalId"));
             meta = result2.Value.GetProperty("metadata");
             Assert.Equal("value1", GetStringValue(meta, "prop1"));
-            Assert.False(meta.TryGetProperty("value2", out var _));
-            Assert.Equal("value3", GetStringValue(meta, "prop3"));
+            Assert.False(meta.TryGetProperty("prop2", out var _));
+            Assert.Equal(@"{""Value"":""value3"",""nestedProp"":""nestedValue2""}", meta.GetProperty("prop3").ToString());
             Assert.Equal("value4-new", GetStringValue(meta, "prop4"));
             Assert.Equal("value-new", GetStringValue(meta, "prop-new"));
 
