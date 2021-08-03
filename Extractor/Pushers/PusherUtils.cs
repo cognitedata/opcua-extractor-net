@@ -151,7 +151,11 @@ namespace Cognite.OpcUa.Pushers
 
             using (var jsonWriter = new Utf8JsonWriter(outputBuffer, new JsonWriterOptions { Indented = true }))
             {
-                if (r1.ValueKind != JsonValueKind.Array && r1.ValueKind != JsonValueKind.Object || r1.ValueKind != r2.ValueKind)
+                if (r2.ValueKind == JsonValueKind.Null && (r1.ValueKind == JsonValueKind.Object || r1.ValueKind == JsonValueKind.Array))
+                {
+                    r1.WriteTo(jsonWriter);
+                }
+                else if (r1.ValueKind != JsonValueKind.Array && r1.ValueKind != JsonValueKind.Object || r1.ValueKind != r2.ValueKind)
                 {
                     r2.WriteTo(jsonWriter);
                 }
