@@ -139,11 +139,15 @@ namespace Test
             }
 
             string content = "";
-            try
+            if (req.Content != null)
             {
-                content = await req.Content.ReadAsStringAsync(cancellationToken);
+                try
+                {
+                    content = await req.Content.ReadAsStringAsync(cancellationToken);
+                }
+                catch { }
             }
-            catch { }
+            
             lock (handlerLock)
             {
                 HttpResponseMessage res;

@@ -121,7 +121,8 @@ namespace Cognite.OpcUa.Pushers
             if (update.Metadata)
             {
                 var newMetaData = node.MetadataToJson(extractor, extractor.StringConverter);
-                if (newMetaData.RootElement.ValueKind == JsonValueKind.Null && raw.Columns.TryGetValue("metadata", out var rawMetaData))
+                if (newMetaData.RootElement.ValueKind == JsonValueKind.Null && raw.Columns.TryGetValue("metadata", out var rawMetaData)
+                    && rawMetaData.ValueKind != JsonValueKind.Null)
                 {
                     ret["metadata"] = JsonDocument.Parse(rawMetaData.ToString());
                 }
