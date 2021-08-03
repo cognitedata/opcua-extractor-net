@@ -409,6 +409,40 @@ namespace Test.Unit
                 + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""},""nullValue"":null,""propA0"":""valueA2""}",
                 CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
         }
+        [Fact]
+        public void TestToJsonComplexTypes()
+        {
+            using var extractor = tester.BuildExtractor();
+            var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
+            var converter = tester.Client.StringConverter;
+
+            var pdt = new UADataType(DataTypeIds.ReadValueId);
+            var prop = new UAVariable(new NodeId("readvalueid"), "readvalueid", NodeId.Null);
+
+            // Test simple value
+            prop.VariableAttributes.DataType = pdt;
+            var value = new ReadValueId { NodeId = new NodeId("test"), AttributeId = Attributes.Value };
+            prop.SetDataPoint(new Variant(value));
+            node.AddProperty(prop);
+
+            Assert.Equal(@"{""readvalueid"":{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}}",
+                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+
+            // Test nested
+            node.Attributes.Properties.Clear();
+            var outerProp = new UANode(new NodeId("outer"), "outer", NodeId.Null, NodeClass.Object);
+            outerProp.AddProperty(prop);
+            node.AddProperty(outerProp);
+            Assert.Equal(@"{""outer"":{""readvalueid"":{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}}}",
+                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+
+            // Test array
+            prop.SetDataPoint(new Variant(new ReadValueIdCollection(new[] { value, value })));
+            Assert.Equal(@"{""outer"":{""readvalueid"":["
+            + @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13},"
+            + @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}]}}",
+                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+        }
         #endregion
 
         #region uavariable
