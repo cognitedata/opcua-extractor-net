@@ -121,9 +121,9 @@ namespace Cognite.OpcUa.Pushers
             if (update.Metadata)
             {
                 var newMetaData = node.MetadataToJson(extractor, extractor.StringConverter);
-                if (raw.Columns.TryGetValue("metadata", out var rawMetaData))
+                if (newMetaData.RootElement.ValueKind == JsonValueKind.Null && raw.Columns.TryGetValue("metadata", out var rawMetaData))
                 {
-                    ret["metadata"] = JsonDocument.Parse(Merge(rawMetaData, newMetaData.RootElement));
+                    ret["metadata"] = JsonDocument.Parse(rawMetaData.ToString());
                 }
                 else
                 {
@@ -140,81 +140,6 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
             return JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(ret)).RootElement;
-        }
-        /// <summary>
-        /// Adapted from https://stackoverflow.com/a/59574030/9946909. 
-        /// Merge two JsonElements, producing a json encoded string with the merged contents.
-        /// </summary>
-        private static string Merge(JsonElement r1, JsonElement r2)
-        {
-            var outputBuffer = new ArrayBufferWriter<byte>();
-
-            using (var jsonWriter = new Utf8JsonWriter(outputBuffer, new JsonWriterOptions { Indented = true }))
-            {
-                if (r2.ValueKind == JsonValueKind.Null && (r1.ValueKind == JsonValueKind.Object || r1.ValueKind == JsonValueKind.Array))
-                {
-                    r1.WriteTo(jsonWriter);
-                }
-                else if (r1.ValueKind != JsonValueKind.Object || r1.ValueKind != r2.ValueKind)
-                {
-                    r2.WriteTo(jsonWriter);
-                }
-                else
-                {
-                    MergeObjects(jsonWriter, r1, r2);
-                }
-            }
-
-            return Encoding.UTF8.GetString(outputBuffer.WrittenSpan);
-        }
-
-        /// <summary>
-        /// Merge two json objects, write the result to <paramref name="jsonWriter"/>.
-        /// </summary>
-        /// <param name="jsonWriter">Output writer</param>
-        /// <param name="root1">First object</param>
-        /// <param name="root2">Second object</param>
-        private static void MergeObjects(Utf8JsonWriter jsonWriter, JsonElement root1, JsonElement root2)
-        {
-            jsonWriter.WriteStartObject();
-            foreach (JsonProperty property in root1.EnumerateObject())
-            {
-                string propertyName = property.Name;
-
-                JsonValueKind newValueKind;
-
-                if (root2.TryGetProperty(propertyName, out JsonElement newValue) && (newValueKind = newValue.ValueKind) != JsonValueKind.Null)
-                {
-                    jsonWriter.WritePropertyName(propertyName);
-
-                    JsonElement originalValue = property.Value;
-                    JsonValueKind originalValueKind = originalValue.ValueKind;
-
-                    if (newValueKind == JsonValueKind.Object && originalValueKind == JsonValueKind.Object)
-                    {
-                        MergeObjects(jsonWriter, originalValue, newValue);
-                    }
-                    else
-                    {
-                        newValue.WriteTo(jsonWriter);
-                    }
-                }
-                else
-                {
-                    property.WriteTo(jsonWriter);
-                }
-            }
-
-            // Write all the properties of the second document that are unique to it.
-            foreach (JsonProperty property in root2.EnumerateObject())
-            {
-                if (!root1.TryGetProperty(property.Name, out _))
-                {
-                    property.WriteTo(jsonWriter);
-                }
-            }
-
-            jsonWriter.WriteEndObject();
         }
 
         /// <summary>
