@@ -265,9 +265,9 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.TimeSeriesMetadataMaxBytes);
 
                 if (old.Metadata == null && newMetaData.Any()
-                    || newMetaData.Any(meta => !old.Metadata.ContainsKey(meta.Key) || old.Metadata[meta.Key] != meta.Value))
+                    || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
                 {
-                    tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
+                    tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
                 }
             }
             return tsUpdate;
@@ -316,9 +316,9 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.AssetMetadataMaxBytes);
 
                 if (old.Metadata == null && newMetaData.Any()
-                    || newMetaData.Any(meta => !old.Metadata.ContainsKey(meta.Key) || old.Metadata[meta.Key] != meta.Value))
+                    || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
                 {
-                    assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
+                    assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
                 }
             }
             return assetUpdate;

@@ -496,16 +496,15 @@ namespace Test
             {
                 Assert.Single(obj1Meta);
                 Assert.Equal("New asset prop value", obj1Meta["NewAssetProp"]);
-                Assert.Equal(3, obj2Meta.Count);
+                Assert.Equal(2, obj2Meta.Count);
                 Assert.Equal("4321", obj2Meta["NumericProp"]);
-                Assert.True(obj2Meta.ContainsKey("StringProp"));
                 Assert.True(obj2Meta.ContainsKey("StringProp updated"));
             }
             if (upd.Variables.Metadata)
             {
                 Assert.Single(stringyMeta);
                 Assert.Equal("New prop value", stringyMeta["NewProp"]);
-                Assert.Equal(3, mysteryMeta.Count);
+                Assert.Equal(2, mysteryMeta.Count);
                 Assert.Equal("(0, 200)", mysteryMeta["EURange"]);
             }
         }
