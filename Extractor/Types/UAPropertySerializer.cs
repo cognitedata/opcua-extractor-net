@@ -22,8 +22,9 @@ namespace Cognite.OpcUa.Types
             this.uaClient = uaClient;
         }
 
-        public string JsonDocumentToString(JsonDocument doc)
+        public static string JsonDocumentToString(JsonDocument doc)
         {
+            if (doc == null) throw new ArgumentNullException(nameof(doc));
             using var stream = new MemoryStream();
             using var writer = new Utf8JsonWriter(stream);
             doc.WriteTo(writer);
@@ -87,30 +88,35 @@ namespace Cognite.OpcUa.Types
                 }
             }
 
-            foreach (var prop in properties)
+            if (properties != null)
             {
-                var name = prop.DisplayName;
-                if (name == null) continue;
-                if (separator)
+                foreach (var prop in properties)
                 {
-                    builder.Append(',');
+                    var name = prop.DisplayName;
+                    if (name == null) continue;
+                    if (separator)
+                    {
+                        builder.Append(',');
+                    }
+                    string safeName = JsonConvert.ToString(name);
+                    int idx = 0;
+                    while (!fields.Add(safeName))
+                    {
+                        safeName = JsonConvert.ToString($"{name}{idx++}");
+                    }
+                    builder.AppendFormat("{0}:", safeName);
+                    PropertyToJson(builder, prop, true);
+                    separator = true;
                 }
-                string safeName = JsonConvert.ToString(name);
-                int idx = 0;
-                while (!fields.Add(safeName))
-                {
-                    safeName = JsonConvert.ToString($"{name}{idx++}");
-                }
-                builder.AppendFormat("{0}:", safeName);
-                PropertyToJson(builder, prop, true);
-                separator = true;
             }
+            
             builder.Append('}');
             return JsonDocument.Parse(builder.ToString());
         }
 
         public Dictionary<string, string> MetadataToJsonRaw(IEnumerable<UANode> properties)
         {
+            if (properties == null) return null;
             var result = new Dictionary<string, string>();
             foreach (var node in properties)
             {
@@ -157,7 +163,7 @@ namespace Cognite.OpcUa.Types
                 {
                     bool topLevelIsArray = typeInfo.ValueRank >= ValueRanks.OneDimension;
 
-                    var encoder = new JsonEncoder(uaClient.MessageContext, false, null, topLevelIsArray);
+                    using var encoder = new JsonEncoder(uaClient.MessageContext, false, null, topLevelIsArray);
                     encoder.WriteVariantContents(value, typeInfo);
                     var result = encoder.CloseAndReturnText();
                     if (topLevelIsArray)
@@ -285,7 +291,7 @@ namespace Cognite.OpcUa.Types
             {
                 return ShouldUseJson(extensionObject.Body);
             }
-            if (!type.Namespace.StartsWith("Opc.Ua")) return false;
+            if (!type.Namespace.StartsWith("Opc.Ua", StringComparison.InvariantCulture)) return false;
             if (customHandledTypes.Contains(type)) return false;
             return true;
         }

@@ -252,6 +252,7 @@ namespace Cognite.OpcUa.Types
         }
         public JsonDocument MetadataToJson(UAExtractor extractor, StringConverter converter)
         {
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             Dictionary<string, string> extras = extractor?.GetExtraMetadata(this);
             if (Properties == null && extras == null) return JsonDocument.Parse("null");
             if (Properties == null) return JsonDocument.Parse(JsonSerializer.Serialize(extras));
