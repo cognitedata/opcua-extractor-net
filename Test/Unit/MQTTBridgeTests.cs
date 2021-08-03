@@ -775,7 +775,7 @@ namespace Test.Unit
             Assert.Contains(tester.Handler.AssetRaw, kvp => kvp.Value.name == "test-asset-3");
             Assert.True(tester.Handler.AssetRaw.ContainsKey("test-asset-1"));
             var asset1 = tester.Handler.AssetRaw["test-asset-1"];
-            Assert.Equal(@"{""test-value"":""test-prop""}", asset1.metadata.ToString(Newtonsoft.Json.Formatting.None));
+            Assert.Equal(@"{""test-prop"":""test-value""}", asset1.metadata.ToString(Newtonsoft.Json.Formatting.None));
         }
 
         [Fact]
