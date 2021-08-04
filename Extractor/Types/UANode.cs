@@ -62,6 +62,10 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public string Description => Attributes.Description;
         /// <summary>
+        /// Whether to subscribe to this node, independent of reading history.
+        /// </summary>
+        public bool ShouldSubscribe => Attributes.ShouldSubscribe;
+        /// <summary>
         /// True if the node has been modified after pushing.
         /// </summary>
         public bool Changed { get; set; }

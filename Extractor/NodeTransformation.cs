@@ -257,6 +257,7 @@ namespace Cognite.OpcUa
     public enum TransformationType
     {
         Ignore,
-        Property
+        Property,
+        NoSubscription
     }    
 }

@@ -816,9 +816,9 @@ namespace Test.Unit
 
             var emitters = new[]
             {
-                new EventExtractionState(tester.Client, ObjectIds.Server, true, true),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true)
+                new EventExtractionState(tester.Client, ObjectIds.Server, true, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true, true)
             };
             tester.Config.Source.SubscriptionChunk = 1;
 
@@ -868,9 +868,9 @@ namespace Test.Unit
             };
             var emitters = new[]
             {
-                new EventExtractionState(tester.Client, ObjectIds.Server, true, true),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true)
+                new EventExtractionState(tester.Client, ObjectIds.Server, true, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj2, true, true, true)
             };
             int count = 0;
 

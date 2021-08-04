@@ -963,7 +963,7 @@ namespace Test.Unit
             // minimal
             var now = DateTime.UtcNow;
             using var extractor = tester.BuildExtractor();
-            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true);
+            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true, true);
             extractor.State.SetEmitterState(state);
             extractor.State.RegisterNode(new NodeId("type"), tester.Client.GetUniqueId(new NodeId("type")));
             // No event should be created without all of these

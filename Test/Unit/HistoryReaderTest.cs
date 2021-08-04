@@ -485,8 +485,8 @@ namespace Test.Unit
 
             var states = new[]
             {
-                new EventExtractionState(tester.Client, ObjectIds.Server, true, true),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true)
+                new EventExtractionState(tester.Client, ObjectIds.Server, true, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true, true)
             };
 
             var start = tester.HistoryStart.AddSeconds(5);
@@ -584,8 +584,8 @@ namespace Test.Unit
 
             var states = new[]
             {
-                new EventExtractionState(tester.Client, ObjectIds.Server, true, true),
-                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true)
+                new EventExtractionState(tester.Client, ObjectIds.Server, true, true, true),
+                new EventExtractionState(tester.Client, tester.Server.Ids.Event.Obj1, true, true, true)
             };
 
             var start = tester.HistoryStart.AddSeconds(5).AddMilliseconds(-100);

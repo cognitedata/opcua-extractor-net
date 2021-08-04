@@ -107,7 +107,7 @@ namespace Test.Unit
             extractor.Streamer.AllowEvents = true;
             var start = DateTime.UtcNow;
 
-            var state = new EventExtractionState(tester.Client, new NodeId("id"), false, false);
+            var state = new EventExtractionState(tester.Client, new NodeId("id"), false, false, true);
             state.InitToEmpty();
             state.FinalizeRangeInit();
             extractor.State.SetEmitterState(state);
@@ -225,7 +225,7 @@ namespace Test.Unit
 
             var id = new NodeId("id");
 
-            var state = new EventExtractionState(tester.Client, id, true, true);
+            var state = new EventExtractionState(tester.Client, id, true, true, true);
             state.InitToEmpty();
             state.FinalizeRangeInit();
             state.UpdateFromBackfill(DateTime.MaxValue, true);

@@ -46,7 +46,6 @@ namespace Cognite.OpcUa.Types
         /// ValueRank in opcua
         /// </summary>
         public int ValueRank => VariableAttributes.ValueRank;
-
         /// <summary>
         /// Value of variable as string or double
         /// </summary>
