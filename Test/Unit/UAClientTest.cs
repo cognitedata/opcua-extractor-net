@@ -17,6 +17,8 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml;
+using System.Xml.Serialization;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -1009,6 +1011,50 @@ namespace Test.Unit
                 { new Variant(readValueId), new Variant(readValueId) } }, BuiltInType.Variant);
             Assert.Equal($"[[{readValueIdStr},{readValueIdStr}],[{readValueIdStr},{readValueIdStr}]]", converter.ConvertToString(new Variant(m2)));
 #pragma warning restore CA1814 // Prefer jagged arrays over multidimensional
+        }
+        [Fact]
+        public void TestConvertToStringJson()
+        {
+            var converter = new StringConverter(tester.Client);
+
+            Assert.Equal("null", converter.ConvertToString(null, null, null, true));
+            Assert.Equal(@"""gp.tl:s=abc""", converter.ConvertToString(new NodeId("abc", 2), null, null, true));
+            Assert.Equal(@"""gp.tl:s=abc""", converter.ConvertToString(new ExpandedNodeId("abc", tester.Client.NamespaceTable.GetString(2)), null, null, true));
+            Assert.Equal(@"""test""", converter.ConvertToString(new LocalizedText("EN-US", "test"), null, null, true));
+            Assert.Equal(@"""(0, 100)""", converter.ConvertToString(new Opc.Ua.Range(100, 0), null, null, true));
+            Assert.Equal(@"""N: Newton""", converter.ConvertToString(new EUInformation { DisplayName = "N", Description = "Newton" }, null, null, true));
+            Assert.Equal(@"""N: Newton""", converter.ConvertToString(new ExtensionObject(new EUInformation { DisplayName = "N", Description = "Newton" }),
+                null, null, true));
+            Assert.Equal(@"{""key"":1}", converter.ConvertToString(new EnumValueType { DisplayName = "key", Value = 1 }, null, null, true));
+            Assert.Equal("1234", converter.ConvertToString(1234, null, null, true));
+            Assert.Equal("[123,1234]", converter.ConvertToString(new[] { 123, 1234 }, null, null, true));
+            Assert.Equal(@"[""gp.tl:i=123"",""gp.tl:i=1234"",""gp.tl:s=abc""]", converter.ConvertToString(new[]
+            {
+                new NodeId(123u, 2), new NodeId(1234u, 2), new NodeId("abc", 2)
+            }, null, null, true));
+            Assert.Equal(@"{""somekey"":""gp.tl:s=abc""}", converter.ConvertToString(new Opc.Ua.KeyValuePair
+            {
+                Key = "somekey",
+                Value = new NodeId("abc", 2)
+            }, null, null, true));
+            Assert.Equal(@"{""enumkey"":1}", converter.ConvertToString(new Opc.Ua.EnumValueType
+            {
+                DisplayName = "enumkey",
+                Value = 1
+            }, null, null, true));
+            var xml = new XmlDocument();
+            xml.LoadXml("<?xml version='1.0' ?>" +
+                "<test1 key1='val1' key2='val2'>" +
+                "   <test2 key3='val3' key4='val4'>Content</test2>" +
+                "</test1>");
+            var xmlJson = converter.ConvertToString(xml.DocumentElement, null, null, true);
+            Console.WriteLine(xmlJson);
+            Assert.Equal(@"{""test1"":{""@key1"":""val1"",""@key2"":""val2"",""test2"":"
+                + @"{""@key3"":""val3"",""@key4"":""val4"",""#text"":""Content""}}}", xmlJson);
+#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
+            var m1 = new Matrix(new int[3, 3] { { 1, 2, 3 }, { 4, 5, 6 }, { 7, 8, 9 } }, BuiltInType.Int32);
+#pragma warning restore CA1814 // Prefer jagged arrays over multidimensional
+            Assert.Equal("[[1,2,3],[4,5,6],[7,8,9]]", converter.ConvertToString(new Variant(m1), null, null, true));
         }
         [Fact]
         public void TestGetUniqueId()

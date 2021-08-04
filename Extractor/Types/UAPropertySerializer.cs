@@ -12,6 +12,10 @@ using System.Text.Json;
 
 namespace Cognite.OpcUa.Types
 {
+    /// <summary>
+    /// Class used for converting properties and property values to strings.
+    /// Handles both conversion to metadata for Clean, and conversion to JSON for Raw.
+    /// </summary>
     public class StringConverter
     {
         private readonly UAClient uaClient;
@@ -21,14 +25,20 @@ namespace Cognite.OpcUa.Types
         {
             this.uaClient = uaClient;
         }
-
-        private void PropertyToJson(StringBuilder builder, UANode node, bool json)
+        /// <summary>
+        /// Recursively converts the value and children of a node to JSON.
+        /// If the node has no properties, simply returns a string representation of its value (which may be complex),
+        /// if not, a JSON object is returned with a field "Value".
+        /// </summary>
+        /// <param name="builder">String builder to append to</param>
+        /// <param name="node">Property to convert</param>
+        private void PropertyToJson(StringBuilder builder, UANode node)
         {
             if (node.Properties == null || !node.Properties.Any())
             {
                 if (node is UAVariable variable)
                 {
-                    builder.Append(ConvertToString(variable.Value, variable.DataType.EnumValues, null, json));
+                    builder.Append(ConvertToString(variable.Value, variable.DataType.EnumValues, null, true));
                 }
                 else
                 {
@@ -58,13 +68,19 @@ namespace Cognite.OpcUa.Types
                     safeName = JsonConvert.ToString($"{name}{idx++}");
                 }
                 builder.AppendFormat(@"{0}:", safeName);
-                PropertyToJson(builder, prop, true);
+                PropertyToJson(builder, prop);
                 separator = true;
             }
             builder.Append('}');
             
         }
 
+        /// <summary>
+        /// Convert the full metadata of a node to JSON. Can take an optional list of extra fields.
+        /// </summary>
+        /// <param name="extraFields">Extra fields to add</param>
+        /// <param name="properties">List of properties in result</param>
+        /// <returns>A JSONDocument with the full serialized metadata</returns>
         public JsonDocument MetadataToJson(Dictionary<string, string> extraFields, IEnumerable<UANode> properties)
         {
             var builder = new StringBuilder("{");
@@ -78,9 +94,11 @@ namespace Cognite.OpcUa.Types
                     {
                         builder.Append(',');
                     }
+                    // Using JsonConvert to escape values.
                     var name = JsonConvert.ToString(field.Key);
                     fields.Add(name);
-                    builder.AppendFormat("{0}:", name);
+                    builder.Append(name);
+                    builder.Append(':');
                     builder.Append(JsonConvert.ToString(field.Value));
                     separator = true;
                 }
@@ -96,6 +114,7 @@ namespace Cognite.OpcUa.Types
                     {
                         builder.Append(',');
                     }
+                    // Ensure that the field does not already exist.
                     string safeName = JsonConvert.ToString(name);
                     int idx = 0;
                     while (!fields.Add(safeName))
@@ -103,7 +122,7 @@ namespace Cognite.OpcUa.Types
                         safeName = JsonConvert.ToString($"{name}{idx++}");
                     }
                     builder.AppendFormat("{0}:", safeName);
-                    PropertyToJson(builder, prop, true);
+                    PropertyToJson(builder, prop);
                     separator = true;
                 }
             }
@@ -112,34 +131,31 @@ namespace Cognite.OpcUa.Types
             return JsonDocument.Parse(builder.ToString());
         }
 
+        /// <summary>
+        /// Convert a value from OPC-UA to a string, which may optionally be JSON.
+        /// Gives better results if <paramref name="value"/> is Variant.
+        /// </summary>
+        /// <param name="value">Value to convert</param>
+        /// <param name="enumValues">Map from numeric to string values</param>
+        /// <param name="typeInfo">TypeInfo for <paramref name="value"/></param>
+        /// <param name="json">True to return valid JSON.</param>
+        /// <returns></returns>
         public string ConvertToString(object value, IDictionary<long, string> enumValues = null, TypeInfo typeInfo = null, bool json = false)
         {
             if (value == null)
             {
-                if (json)
-                {
-                    return "null";
-                }
-                else
-                {
-                    return "";
-                }
+                return json ? "null" : "";
             }
             if (value is Variant variantValue)
             {
+                // This helps reduce code duplication, by making it possible to call ConvertToString with both variants and non-variants.
                 return ConvertToString(variantValue.Value, enumValues, variantValue.TypeInfo, json);
             }
             if (value is string strValue)
             {
-                if (json)
-                {
-                    return JsonConvert.ToString(strValue);
-                }
-                else
-                {
-                    return strValue;
-                }
+                return json ? JsonConvert.ToString(strValue) : strValue;
             }
+            // If this is true, the value should be converted using the built-in JsonEncoder.
             if (typeInfo != null && ShouldUseJson(value) && uaClient != null)
             {
                 try
@@ -149,6 +165,8 @@ namespace Cognite.OpcUa.Types
                     using var encoder = new JsonEncoder(uaClient.MessageContext, false, null, topLevelIsArray);
                     encoder.WriteVariantContents(value, typeInfo);
                     var result = encoder.CloseAndReturnText();
+
+                    // JsonEncoder for some reason spits out {{ ... }} from WriteVariantContents.
                     if (topLevelIsArray)
                     {
                         return result[1..^1];
@@ -161,7 +179,8 @@ namespace Cognite.OpcUa.Types
                     log.Warning("Failed to serialize built in type: {err}", ex.Message);
                 }
             }
-            if (typeof(IEnumerable).IsAssignableFrom(value.GetType()))
+            // If the type is enumerable we can write it to a JSON array.
+            if (typeof(IEnumerable).IsAssignableFrom(value.GetType()) && !(value is System.Xml.XmlElement))
             {
                 var builder = new StringBuilder("[");
                 int count = 0;
@@ -204,8 +223,16 @@ namespace Cognite.OpcUa.Types
             else if (value is QualifiedName qualifiedName) returnStr = qualifiedName.Name;
             else if (value is Opc.Ua.Range range) returnStr = $"({range.Low}, {range.High})";
             else if (value is EUInformation euInfo) returnStr = $"{euInfo.DisplayName?.Text}: {euInfo.Description?.Text}";
-            else if (value is EnumValueType enumType) returnStr = $"{enumType.DisplayName?.Text}: {enumType.Value}";
-            else if (value is Opc.Ua.KeyValuePair kvp) returnStr = $"{kvp.Key?.Name}: {ConvertToString(kvp.Value, enumValues, typeInfo, json)}";
+            else if (value is EnumValueType enumType)
+            {
+                if (json) return $"{{{JsonConvert.ToString(enumType.DisplayName?.Text ?? "null")}:{enumType.Value}}}";
+                return $"{enumType.DisplayName?.Text}: {enumType.Value}";
+            }
+            else if (value is Opc.Ua.KeyValuePair kvp)
+            {
+                if (json) return $"{{{JsonConvert.ToString(kvp.Key?.Name ?? "null")}:{ConvertToString(kvp.Value, enumValues, typeInfo, json)}}}";
+                return $"{kvp.Key?.Name}: {ConvertToString(kvp.Value, enumValues, typeInfo, json)}";
+            }
             else if (value is System.Xml.XmlElement xml) return JsonConvert.SerializeXmlNode(xml);
             else if (value is ExtensionObject extensionObject)
             {
@@ -221,16 +248,14 @@ namespace Cognite.OpcUa.Types
             else if (IsNumber(value)) return value.ToString();
             else returnStr = value.ToString();
 
-            if (json)
-            {
-                return JsonConvert.ToString(returnStr);
-            }
-            else
-            {
-                return returnStr;
-            }
+            return json ? JsonConvert.ToString(returnStr) : returnStr;
         }
 
+        /// <summary>
+        /// Returns true if <paramref name="value"/> is a basic numeric type.
+        /// </summary>
+        /// <param name="value">Value to check</param>
+        /// <returns>True if <paramref name="value"/> is a numeric type</returns>
         private static bool IsNumber(object value)
         {
             return value is sbyte
@@ -253,6 +278,11 @@ namespace Cognite.OpcUa.Types
             typeof(EUInformation), typeof(EnumValueType), typeof(Variant)
         };
 
+        /// <summary>
+        /// Returns true if <paramref name="value"/> requires us to use the OPC-UA SDKs JsonEncoder.
+        /// </summary>
+        /// <param name="value">Value to check</param>
+        /// <returns>True if this type is best handled by Opc.Ua.JsonEncoder</returns>
         private static bool ShouldUseJson(object value)
         {
             // Go through the value to check if we can parse it ourselves.
