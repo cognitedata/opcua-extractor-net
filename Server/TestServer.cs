@@ -19,7 +19,7 @@ namespace Server
     /// The actual server itself, sets up the node managers and 
     /// contains a few methods defering calls to the custom node manager.
     /// </summary>
-    public sealed class TestServer : StandardServer
+    public sealed class TestServer : ReverseConnectServer
     {
         private TestNodeManager custom;
         public NodeIdReference Ids => custom.Ids;
@@ -40,6 +40,11 @@ namespace Server
         protected override void OnServerStarting(ApplicationConfiguration configuration)
         {
             if (configuration == null) throw new ArgumentNullException(nameof(configuration));
+            configuration.ServerConfiguration.ReverseConnect = new ReverseConnectServerConfiguration
+            {
+                ConnectInterval = 1000,
+                Clients = new ReverseConnectClientCollection()
+            };
 
             base.OnServerStarting(configuration);
             fullConfig = configuration;
