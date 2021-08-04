@@ -649,12 +649,15 @@ namespace Cognite.OpcUa
                         State.SetEmitterState(new EventExtractionState(this, id, history, history && config.History.Backfill, subscription));
                     }
                 }
-                var serverNode = uaClient.GetServerNode(source.Token);
-                if (serverNode.EventNotifier != 0)
+                if (config.Events.ReadServer)
                 {
-                    var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
-                    var subscription = (serverNode.EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
-                    State.SetEmitterState(new EventExtractionState(this, serverNode.Id, history, history && config.History.Backfill, subscription));
+                    var serverNode = uaClient.GetServerNode(source.Token);
+                    if (serverNode.EventNotifier != 0)
+                    {
+                        var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
+                        var subscription = (serverNode.EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
+                        State.SetEmitterState(new EventExtractionState(this, serverNode.Id, history, history && config.History.Backfill, subscription));
+                    }
                 }
             }
             BuildTransformations();
@@ -833,9 +836,13 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task SynchronizeEvents()
         {
-            var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
-            await Task.Run(() => uaClient.SubscribeToEvents(subscribeStates,
-                Streamer.EventSubscriptionHandler, source.Token));
+            if (config.Subscriptions.Events)
+            {
+                var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
+                await Task.Run(() => uaClient.SubscribeToEvents(subscribeStates,
+                    Streamer.EventSubscriptionHandler, source.Token));
+            }
+
             Interlocked.Increment(ref subscribed);
             if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!config.Events.History) return;
@@ -859,8 +866,12 @@ namespace Cognite.OpcUa
         /// <param name="states">States to subscribe to</param>
         private async Task SynchronizeNodes(IEnumerable<VariableExtractionState> states)
         {
-            var subscribeStates = states.Where(state => state.ShouldSubscribe);
-            await Task.Run(() => uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, source.Token));
+            if (config.Subscriptions.DataPoints)
+            {
+                var subscribeStates = states.Where(state => state.ShouldSubscribe);
+                await Task.Run(() => uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, source.Token));
+            }
+
             Interlocked.Increment(ref subscribed);
             if (!State.EmitterStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!config.History.Enabled) return;

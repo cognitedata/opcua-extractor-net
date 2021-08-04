@@ -299,7 +299,7 @@ namespace Test.Integration
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
 
-            tester.Config.Extraction.DataChangeFilter = new Cognite.OpcUa.DataSubscriptionConfig
+            tester.Config.Subscriptions.DataChangeFilter = new Cognite.OpcUa.DataSubscriptionConfig
             {
                 DeadbandType = DeadbandType.Absolute,
                 Trigger = DataChangeTrigger.StatusValue,
@@ -325,7 +325,7 @@ namespace Test.Integration
             Assert.Equal(0.0, dps[0].DoubleValue);
             Assert.Equal(1.0, dps[1].DoubleValue);
 
-            tester.Config.Extraction.DataChangeFilter = null;
+            tester.Config.Subscriptions.DataChangeFilter = null;
             tester.WipeBaseHistory();
         }
         #endregion
