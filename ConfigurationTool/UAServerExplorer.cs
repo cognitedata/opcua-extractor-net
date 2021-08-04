@@ -742,7 +742,7 @@ namespace Cognite.OpcUa.Config
                     continue;
                 }
 
-                if (variable.Historizing)
+                if (variable.ReadHistory)
                 {
                     history = true;
                 }
@@ -946,7 +946,7 @@ namespace Cognite.OpcUa.Config
             ReadNodeData(token);
 
             var historizingStates = nodeList.Where(node =>
-                    (node is UAVariable variable) && !variable.IsProperty && variable.Historizing)
+                    (node is UAVariable variable) && !variable.IsProperty && variable.ReadHistory)
                 .Select(node => new VariableExtractionState(this, node as UAVariable, true, true)).ToList();
 
             var stateMap = historizingStates.ToDictionary(state => state.SourceId);

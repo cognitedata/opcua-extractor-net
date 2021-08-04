@@ -41,7 +41,11 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// True if the opcua node stores its own history
         /// </summary>
-        public bool Historizing => VariableAttributes.Historizing;
+        public bool ReadHistory => VariableAttributes.ReadHistory;
+        /// <summary>
+        /// Current access level of the opcua node
+        /// </summary>
+        public byte AccessLevel => VariableAttributes.AccessLevel;
         /// <summary>
         /// ValueRank in opcua
         /// </summary>
@@ -72,10 +76,11 @@ namespace Cognite.OpcUa.Types
                 builder.Append(DataType);
                 builder.Append('\n');
             }
-            if (Historizing)
+            if (ReadHistory)
             {
-                builder.Append("Historizing: True\n");
+                builder.Append("History: True\n");
             }
+            builder.AppendFormat(CultureInfo.InvariantCulture, "AccessLevel: {0}\n", AccessLevel);
             if (ValueRank != ValueRanks.Scalar)
             {
                 builder.AppendFormat(CultureInfo.InvariantCulture, "ValueRank: {0}\n", ValueRank);
