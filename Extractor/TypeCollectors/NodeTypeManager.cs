@@ -37,8 +37,7 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public NodeTypeManager(UAClient client)
         {
-            if (client == null) throw new ArgumentNullException(nameof(client));
-            uaClient = client;
+            uaClient = client ?? throw new ArgumentNullException(nameof(client));
         }
         /// <summary>
         /// Get or create UANodeType for <paramref name="id"/>.

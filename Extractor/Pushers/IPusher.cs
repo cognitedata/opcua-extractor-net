@@ -24,6 +24,8 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "IList lacks AddRange")]
+
     public interface IPusher : IDisposable
     {
         bool DataFailing { get; set; }
@@ -36,6 +38,8 @@ namespace Cognite.OpcUa
         /// Parent extractor
         /// </summary>
         UAExtractor Extractor { get; set; }
+
+
         /// <summary>
         /// Nodes not yet pushed due to pusher failure, should be cleared to free up memory after a successfull push.
         /// </summary>
@@ -60,7 +64,7 @@ namespace Cognite.OpcUa
         /// Test the connection to the destination, should return false on failure, can return null if 
         /// the test is somehow unable to be completed with meaningful results.
         /// </summary>
-        Task<bool?> TestConnection(FullConfig config, CancellationToken token);
+        Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token);
         /// <summary>
         /// Get earliest and latest timestamps for datapoints in destination system, if possible
         /// </summary>

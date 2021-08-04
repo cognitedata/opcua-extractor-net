@@ -96,8 +96,8 @@ namespace Cognite.OpcUa.Types
                 DataSetId = dataSetId,
                 SourceExternalId = client.GetUniqueId(Source.Id),
                 TargetExternalId = client.GetUniqueId(Target.Id),
-                SourceType = Source.GetVertexType(),
-                TargetType = Target.GetVertexType(),
+                SourceType = Source.VertexType,
+                TargetType = Target.VertexType,
                 ExternalId = client.GetRelationshipId(this)
             };
             return relationship;
@@ -133,10 +133,13 @@ namespace Cognite.OpcUa.Types
         /// Get the CDF vertex type of this vertex.
         /// </summary>
         /// <returns></returns>
-        public RelationshipVertexType GetVertexType()
+        public RelationshipVertexType VertexType
         {
-            if (IsTimeSeries) return RelationshipVertexType.TimeSeries;
-            return RelationshipVertexType.Asset;
+            get
+            {
+                if (IsTimeSeries) return RelationshipVertexType.TimeSeries;
+                return RelationshipVertexType.Asset;
+            }
         }
     }
 }

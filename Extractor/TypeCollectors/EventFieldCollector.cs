@@ -53,9 +53,9 @@ namespace Cognite.OpcUa.TypeCollectors
                 return hash;
             }
         }
-        public override bool Equals(object other)
+        public override bool Equals(object obj)
         {
-            if (!(other is EventField otherField)) return false;
+            if (!(obj is EventField otherField)) return false;
             if (BrowsePath.Count != otherField.BrowsePath.Count) return false;
 
             for (int i = 0; i < BrowsePath.Count; i++)

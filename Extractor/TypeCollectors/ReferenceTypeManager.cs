@@ -32,14 +32,13 @@ namespace Cognite.OpcUa.TypeCollectors
     /// </summary>
     public class ReferenceTypeManager
     {
-        private ILogger log = Log.Logger.ForContext<ReferenceTypeManager>();
+        private readonly ILogger log = Log.Logger.ForContext<ReferenceTypeManager>();
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
         private readonly Dictionary<NodeId, UAReferenceType> mappedTypes = new Dictionary<NodeId, UAReferenceType>();
         public ReferenceTypeManager(UAClient client, UAExtractor extractor)
         {
-            if (client == null) throw new ArgumentNullException(nameof(client));
-            uaClient = client;
+            uaClient = client ?? throw new ArgumentNullException(nameof(client));
             this.extractor = extractor;
         }
         /// <summary>

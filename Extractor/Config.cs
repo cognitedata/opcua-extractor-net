@@ -70,12 +70,14 @@ namespace Cognite.OpcUa
         public X509CertificateLocation Store { get; set; } = X509CertificateLocation.None;
         public string CertName { get; set; }
     }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1721:Property names should not match get methods", Justification = "Config")]
     public class ExtractionConfig
     {
         public string IdPrefix { get; set; }
         public IEnumerable<string> IgnoreNamePrefix { get; set; }
         public IEnumerable<string> IgnoreName { get; set; }
         public ProtoNodeId RootNode { get; set; }
+
         public IEnumerable<ProtoNodeId> RootNodes { get; set; }
         public Dictionary<string, ProtoNodeId> NodeMap { get; set; }
         public Dictionary<string, string> NamespaceMap { get => namespaceMap; set => namespaceMap = value ?? namespaceMap; }
@@ -218,7 +220,7 @@ namespace Cognite.OpcUa
             }
         }
         private double? nonFiniteReplacement;
-        public IPusher ToPusher(IServiceProvider _)
+        public IPusher ToPusher(IServiceProvider provider)
         {
             return new InfluxPusher(this);
         }
@@ -256,7 +258,7 @@ namespace Cognite.OpcUa
             }
         }
         private double? nonFiniteReplacement;
-        public IPusher ToPusher(IServiceProvider _)
+        public IPusher ToPusher(IServiceProvider provider)
         {
             return new MQTTPusher(this);
         }

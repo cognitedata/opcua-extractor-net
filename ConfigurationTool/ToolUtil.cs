@@ -116,7 +116,7 @@ namespace Cognite.OpcUa.Config
         /// <param name="target">List to write to</param>
         /// <param name="client">UAClient instance for namespaces</param>
         /// <returns>Callback for Browse in UAClient</returns>
-        public static Action<ReferenceDescription, NodeId> GetSimpleListWriterCallback(List<UANode> target, UAClient client)
+        public static Action<ReferenceDescription, NodeId> GetSimpleListWriterCallback(IList<UANode> target, UAClient client)
         {
             return (node, parentId) =>
             {
@@ -192,6 +192,8 @@ namespace Cognite.OpcUa.Config
                     UAClient.ConvertToDouble(value.Value));
             return new[] { sdp };
         }
+
+
         /// <summary>
         /// Get a subscription handler that writes datapoints to a list
         /// </summary>
@@ -199,6 +201,7 @@ namespace Cognite.OpcUa.Config
         /// <param name="states">Overview of states to use</param>
         /// <param name="client">UAClient for namespaces</param>
         /// <returns>Subscription handler for datapoints</returns>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "IList lacks AddRange")]
         public static MonitoredItemNotificationEventHandler GetSimpleListWriterHandler(
             List<UADataPoint> points,
             IDictionary<NodeId, VariableExtractionState> states,
@@ -247,7 +250,9 @@ namespace Cognite.OpcUa.Config
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (rawData == null || state == null) return Array.Empty<UADataPoint>();
+#pragma warning disable CA1508 // Avoid dead conditional code - While it is always true here, this should be kept.
             if (!(rawData is HistoryData data))
+#pragma warning restore CA1508 // Avoid dead conditional code
             {
                 log.Warning("Incorrect result type of history read data");
                 return Array.Empty<UADataPoint>();
