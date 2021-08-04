@@ -96,6 +96,7 @@ namespace Cognite.OpcUa
         public NodeTypeConfig NodeTypes { get => nodeTypes; set => nodeTypes = value ?? nodeTypes; }
         private NodeTypeConfig nodeTypes = new NodeTypeConfig();
         public IEnumerable<RawNodeTransformation> Transformations { get; set; }
+        public DataSubscriptionConfig DataChangeFilter { get; set; }
         public IEnumerable<NodeId> GetRootNodes(UAClient client)
         {
             var roots = new List<NodeId>();
@@ -156,6 +157,19 @@ namespace Cognite.OpcUa
         public bool Metadata { get; set; }
         public bool Context { get; set; }
 
+    }
+    public class DataSubscriptionConfig
+    {
+        public DataChangeTrigger Trigger { get => filter.Trigger; set => filter.Trigger = value; }
+        public DeadbandType DeadbandType { get => (DeadbandType)filter.DeadbandType; set => filter.DeadbandType = (uint)value; }
+        public double DeadbandValue { get => filter.DeadbandValue; set => filter.DeadbandValue = value; }
+        private DataChangeFilter filter = new DataChangeFilter()
+        {
+            Trigger = DataChangeTrigger.StatusValue,
+            DeadbandType = (uint)DeadbandType.None,
+            DeadbandValue = 0.0
+        };
+        public DataChangeFilter Filter => filter;
     }
     public interface IPusherConfig
     {

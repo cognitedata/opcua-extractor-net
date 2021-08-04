@@ -288,6 +288,46 @@ namespace Test.Integration
             tester.Server.UpdateNode(ids.RankImpreciseNoDim, 0);
             tester.Server.UpdateNode(ids.NullType, 0);
         }
+        [Fact]
+        public async Task TestDataChangeFilter()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var dataTypes = tester.Config.Extraction.DataTypes;
+            var ids = tester.Server.Ids.Base;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+
+            tester.Config.Extraction.DataChangeFilter = new Cognite.OpcUa.DataSubscriptionConfig
+            {
+                DeadbandType = DeadbandType.Absolute,
+                Trigger = DataChangeTrigger.StatusValue,
+                DeadbandValue = 0.6,
+            };
+
+            var runTask = extractor.RunExtractor();
+
+            pusher.DataPoints[(ids.DoubleVar1, -1)] = new List<UADataPoint>();
+
+            await extractor.WaitForSubscriptions();
+            // Middle value is skipped due to deadband
+            tester.Server.UpdateNode(ids.DoubleVar1, 0.0);
+            await Task.Delay(100);
+            tester.Server.UpdateNode(ids.DoubleVar1, 0.5);
+            await Task.Delay(100);
+            tester.Server.UpdateNode(ids.DoubleVar1, 1.0);
+
+            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints[(ids.DoubleVar1, -1)].Count == 2, 5,
+                () => $"Expected 2 datapoints, got {pusher.DataPoints[(ids.DoubleVar1, -1)].Count}");
+
+            var dps = pusher.DataPoints[(ids.DoubleVar1, -1)];
+            Assert.Equal(0.0, dps[0].DoubleValue);
+            Assert.Equal(1.0, dps[1].DoubleValue);
+
+            tester.Config.Extraction.DataChangeFilter = null;
+            tester.WipeBaseHistory();
+        }
         #endregion
         #region history
         private static void TestContinuity(IEnumerable<UADataPoint> dps, bool shouldBeString)
