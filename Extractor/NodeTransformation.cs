@@ -242,7 +242,7 @@ namespace Cognite.OpcUa
                         break;
                     case TransformationType.DropSubscriptions:
                         node.Attributes.ShouldSubscribe = false;
-                        log.Verbose("Dropping subscriptions on node {name} {id} due to matching filter {idx}", node.DisplayName, node.Id, index);
+                        log.Debug("Dropping subscriptions on node {name} {id} due to matching filter {idx}", node.DisplayName, node.Id, index);
                         break;
                 }
             }

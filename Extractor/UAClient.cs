@@ -1191,7 +1191,7 @@ namespace Cognite.OpcUa
                         subscription.Dispose();
                     }
                 }
-                log.Information("Added {TotalAddedSubscriptions} / {total} subscriptions", count, total);
+                log.Information("Added {TotalAddedSubscriptions} / {total} subscriptions to {sub}", count, total, subscription.DisplayName);
                 return subscription;
             }
         }

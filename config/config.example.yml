@@ -78,6 +78,9 @@ history:
     # Enable/disable backfill behavior. If this is false, data is read using frontfill only. (Pre 1.1 behavior)
     # This applied to both datapoints and events.
     backfill: false
+    # Time in seconds to wait between each restart of history. Setting this too low may impact performance.
+    # Leave at 0 to disable periodic restarts.
+    restart-period: 0
     # Max number of datapoints per history read request, 0 for server specified
     data-chunk: 1000
     # Max number of simultaneous nodes per historyRead request for data

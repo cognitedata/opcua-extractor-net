@@ -358,6 +358,7 @@ namespace Cognite.OpcUa
         public long StartTime { get; set; }
         public int Granularity { get; set; } = 600;
         public bool IgnoreContinuationPoints { get; set; }
+        public int RestartPeriod { get; set; }
         public HistoryThrottlingConfig Throttling { get; set; }
     }
     public class UAThrottlingConfig
