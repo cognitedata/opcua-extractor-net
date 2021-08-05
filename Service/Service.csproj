@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+    <RootNamespace>Cognite.OpcUa</RootNamespace>
+    <AssemblyName>OpcUaExtractorService</AssemblyName>
+    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="App.config" />
+    <None Remove="Properties\GitCommitHash" />
+    <None Remove="Properties\GitCommitTime" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
+    <None Include="../.editorconfig" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Properties\GitCommitHash">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\GitCommitTime">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
+  </ItemGroup>
+  <PropertyGroup>
+    <GitCleanVersion>
+    </GitCleanVersion>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PreBuildEvent Condition=" '$(OS)' == 'WINDOWS_NT' ">
+      mkdir "$(MSBuildProjectDirectory)/Properties"
+      git describe --tags --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
+      git log -1  --format="%25%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
+    </PreBuildEvent>
+    <PreBuildEvent Condition=" '$(OS)' == 'UNIX' ">
+      mkdir "$(MSBuildProjectDirectory)/Properties"
+      git describe --tags --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
+      git log -1  --format="%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
+    </PreBuildEvent>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Extractor\Extractor.csproj" />
+  </ItemGroup>
+  <Import Project="..\.paket\Paket.Restore.targets" />
+</Project>
