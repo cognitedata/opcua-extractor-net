@@ -6,9 +6,12 @@
     <AssemblyName>OpcUaExtractorService</AssemblyName>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
     <PublishSingleFile>true</PublishSingleFile>
-    <!--IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract-->
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
+  <ItemGroup>
+    <TrimmerRootAssembly Include="System.Runtime" />
+    <TrimmerRootAssembly Include="System.Numerics.Vectors" />
+  </ItemGroup>
   <ItemGroup>
     <None Remove="App.config" />
     <None Remove="Properties\GitCommitHash" />
