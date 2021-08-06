@@ -5,6 +5,9 @@
     <RootNamespace>Cognite.OpcUa</RootNamespace>
     <AssemblyName>OpcUaExtractorService</AssemblyName>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+    <PublishSingleFile>true</PublishSingleFile>
+    <!--IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract-->
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="App.config" />

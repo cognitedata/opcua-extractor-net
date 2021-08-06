@@ -410,7 +410,7 @@ NUGET
     OPCFoundation.NetStandard.Opc.Ua.Server (1.4.366.38)
       OPCFoundation.NetStandard.Opc.Ua.Configuration (>= 1.4.366.38) - restriction: || (>= net462) (>= netstandard2.0)
       OPCFoundation.NetStandard.Opc.Ua.Core (>= 1.4.366.38) - restriction: || (>= net462) (>= netstandard2.0)
-    Oryx (4.0) - restriction: >= netstandard2.0
+    Oryx (4.0.1) - restriction: >= netstandard2.0
       FSharp.Core (>= 5.0.1) - restriction: >= netstandard2.0
       FsToolkit.ErrorHandling (>= 2.1.2) - restriction: >= netstandard2.0
       Microsoft.Extensions.Logging (>= 5.0) - restriction: >= netstandard2.0
@@ -424,14 +424,14 @@ NUGET
       Oryx.SystemTextJson (>= 4.0) - restriction: >= netstandard2.0
       Ply (>= 0.3.1) - restriction: >= netstandard2.0
       System.Text.Json (>= 5.0.2) - restriction: >= netstandard2.0
-    Oryx.Protobuf (4.0) - restriction: >= netstandard2.0
+    Oryx.Protobuf (4.0.1) - restriction: >= netstandard2.0
       FSharp.Core (>= 5.0.1) - restriction: >= netstandard2.0
       Google.Protobuf (>= 3.15.4) - restriction: >= netstandard2.0
-      Oryx (>= 4.0) - restriction: >= netstandard2.0
+      Oryx (>= 4.0.1) - restriction: >= netstandard2.0
       Ply (>= 0.3.1) - restriction: >= netstandard2.0
-    Oryx.SystemTextJson (4.0) - restriction: >= netstandard2.0
+    Oryx.SystemTextJson (4.0.1) - restriction: >= netstandard2.0
       FSharp.Core (>= 5.0.1) - restriction: >= netstandard2.0
-      Oryx (>= 4.0) - restriction: >= netstandard2.0
+      Oryx (>= 4.0.1) - restriction: >= netstandard2.0
       Ply (>= 0.3.1) - restriction: >= netstandard2.0
       System.Text.Json (>= 5.0.1) - restriction: >= netstandard2.0
     Ply (0.3.1) - restriction: >= netstandard2.0

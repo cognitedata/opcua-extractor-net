@@ -1,7 +1,6 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Metrics;
 using Cognite.Extractor.StateStorage;
@@ -16,7 +15,6 @@ namespace Cognite.OpcUa.Service
     {
         public static void Main(string[] args)
         {
-            var rt = typeof(System.OperatingSystem);
             CreateHostBuilder(args).Build().Run();
         }
 
