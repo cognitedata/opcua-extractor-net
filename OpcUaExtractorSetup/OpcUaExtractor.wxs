@@ -108,8 +108,8 @@
           <RegistryValue Id="OpcUaExtractorRegPath" Action="write" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]"/>
         </RegistryKey>
       </Component>
-      <Component Id="OpcUaService_dll" Guid="08E73D25-7416-4934-87A4-C824A5866912" Directory="OpcUaExtractorFolder">
-        <File Id="OpcUaService.dll" Name="OpcUaService.dll" Source="$(var.OpcUaExtractor_TargetDir)OpcUaService.dll" />
+      <Component Id="ExtractorLauncher_dll" Guid="08E73D25-7416-4934-87A4-C824A5866912" Directory="OpcUaExtractorFolder">
+        <File Id="ExtractorLauncher.dll" Name="ExtractorLauncher.dll" Source="$(var.OpcUaExtractor_TargetDir)ExtractorLauncher.dll" />
       </Component>
     </ComponentGroup>
     <ComponentGroup Id="OpcUaExtractorConfigFilesComponentGroup">
