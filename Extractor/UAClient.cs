@@ -988,7 +988,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            Action<ReferenceDescription, NodeId> cb = (desc, parentId) =>
+            void cb(ReferenceDescription desc, NodeId parentId)
             {
                 var id = ToNodeId(desc.NodeId);
                 var parent = nodeDict[parentId];
@@ -996,11 +996,11 @@ namespace Cognite.OpcUa
 
                 UANode prop;
 
-                if (desc.NodeClass == NodeClass.Object)
+                if (desc.NodeClass == NodeClass.Object || desc.NodeClass == NodeClass.ObjectType)
                 {
                     prop = new UANode(id, desc.DisplayName.Text, parentId, desc.NodeClass);
                 }
-                else if (desc.NodeClass == NodeClass.Variable)
+                else if (desc.NodeClass == NodeClass.Variable || desc.NodeClass == NodeClass.VariableType)
                 {
                     prop = new UAVariable(id, desc.DisplayName.Text, parentId, desc.NodeClass);
                     properties.Add(prop as UAVariable);
@@ -1017,7 +1017,7 @@ namespace Cognite.OpcUa
                 {
                     nodeDict[id] = prop;
                 }
-            };
+            }
 
             BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
                 (uint)NodeClass.Object | (uint)NodeClass.Variable, false, true, true);

@@ -1107,6 +1107,52 @@ namespace Test.Integration
             extraction.DataTypes.AutoIdentifyTypes = false;
         }
         [Fact]
+        public async Task TestArrayPropertiesWithoutMaxArraySize()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            extraction.Transformations = new List<RawNodeTransformation>
+            {
+                new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = "^CustomRoot$"
+                    },
+                    Type = TransformationType.Property
+                }
+            };
+
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.ObjectsFolder, tester.Client);
+
+            extraction.DataTypes.AllowStringVariables = false;
+            extraction.DataTypes.MaxArraySize = 0;
+            extraction.DataTypes.AutoIdentifyTypes = false;
+
+            await extractor.RunExtractor(true);
+
+            var root = pusher.PushedNodes[ObjectIds.ObjectsFolder];
+            var meta = root.BuildMetadata(null, extractor.StringConverter);
+            Assert.Equal(17, meta.Count);
+            // Verify that the metadata fields get values
+            Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
+            Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
+
+            // ... and that the JSON looks right
+            var metaDoc = root.MetadataToJson(null, extractor.StringConverter);
+            var metaString = CommonTestUtils.JsonDocumentToString(metaDoc);
+            // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
+            Assert.Equal(@"{""CustomRoot"":{""ChildObject"":{},""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
+            + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""Variable StringArray"":[""test1"",""test2""],""StringyVar"":null,""IgnoreVar"":null,"
+            + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""NumberVar"":{""Value"":null,""DeepProp"":{""DeepProp2"":{""val1"":""value 1"",""val2"":""value 2""}}},"
+            + @"""EnumVar1"":1,""EnumVar3"":[123,123,321,123],""EnumVar2"":123}}", metaString);
+            extraction.Transformations = null;
+        }
+        [Fact]
         public async Task TestLateIgnore()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());

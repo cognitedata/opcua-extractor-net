@@ -169,6 +169,7 @@ namespace Cognite.OpcUa
                 node.Parent = parent;
             }
 
+            bool initialProperty = node.IsProperty;
             if (extractor.Transformations != null)
             {
                 foreach (var trns in extractor.Transformations)
@@ -182,6 +183,12 @@ namespace Cognite.OpcUa
             {
                 if (node.Parent == null) return;
                 node.Parent.AddProperty(node);
+                // Edge-case, since attributes are read before transformations, if transformations cause a node to become a property,
+                // ArrayDimensions won't be read. We can just read them later at minimal cost.
+                if (!initialProperty && config.Extraction.DataTypes.MaxArraySize == 0 && (node is UAVariable variable) && variable.ValueRank >= 0)
+                {
+                    node.Attributes.DataRead = false;
+                }
             }
             else if (node is UAVariable variable)
             {
