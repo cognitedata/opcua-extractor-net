@@ -496,7 +496,7 @@ namespace Cognite.OpcUa
             }
             var buffEvent = new UAEvent
             {
-                Message = extractor.ConvertToString(extractedProperties.GetValueOrDefault("Message")),
+                Message = extractor.StringConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message")),
                 EventId = config.Extraction.IdPrefix + eventId,
                 SourceNode = sourceNode,
                 Time = time,

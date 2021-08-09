@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.Pushers;
 using CogniteSdk;
 using Opc.Ua;
 using System;
@@ -22,6 +23,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 namespace Cognite.OpcUa.Types
 {
@@ -112,7 +114,7 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
-                var meta = BuildMetadata(null);
+                var meta = BuildMetadata(null, new StringConverter(null));
                 builder.Append("Properties: {\n");
                 foreach (var prop in meta)
                 {
@@ -173,7 +175,7 @@ namespace Cognite.OpcUa.Types
                             if (prop.DisplayName == null) continue;
                             if (prop is UAVariable propVariable)
                             {
-                                metaHash += (prop.DisplayName, propVariable.Value?.StringValue).GetHashCode();
+                                metaHash += (prop.DisplayName, propVariable.Value.Value).GetHashCode();
                             }
                             if (prop.Properties?.Any() ?? false)
                             {
@@ -189,7 +191,7 @@ namespace Cognite.OpcUa.Types
                         }
                         if (NodeClass == NodeClass.VariableType)
                         {
-                            metaHash = metaHash * 31 + variable.Value?.StringValue?.GetHashCode(StringComparison.InvariantCulture) ?? 0;
+                            metaHash = metaHash * 31 + variable.Value.GetHashCode();
                         }
                     }
 
@@ -208,8 +210,9 @@ namespace Cognite.OpcUa.Types
         /// <param name="extractor">Active extractor, used for building extra metadata.
         /// Can be null to not fetch any extra metadata at all.</param>
         /// <returns>Created metadata dictionary.</returns>
-        public Dictionary<string, string> BuildMetadata(UAExtractor extractor)
+        public Dictionary<string, string> BuildMetadata(UAExtractor extractor, StringConverter converter)
         {
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             Dictionary<string, string> extras = extractor?.GetExtraMetadata(this);
             if (Properties == null && extras == null) return new Dictionary<string, string>();
             if (Properties == null) return extras;
@@ -221,13 +224,13 @@ namespace Cognite.OpcUa.Types
                 {
                     if (prop is UAVariable variable)
                     {
-                        result[prop.DisplayName] = variable.Value?.StringValue;
+                        result[prop.DisplayName] = converter.ConvertToString(variable.Value, variable.DataType?.EnumValues)
+                            ?? variable.Value.ToString();
                     }
 
                     if (prop.Properties != null)
                     {
-                        // Null extractor to not get extra metadata
-                        var nestedProperties = prop.BuildMetadata(null);
+                        var nestedProperties = prop.BuildMetadata(null, converter);
                         foreach (var sprop in nestedProperties)
                         {
                             result[$"{prop.DisplayName}_{sprop.Key}"] = sprop.Value;
@@ -237,6 +240,14 @@ namespace Cognite.OpcUa.Types
             }
 
             return result;
+        }
+        public JsonDocument MetadataToJson(UAExtractor extractor, StringConverter converter)
+        {
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            Dictionary<string, string> extras = extractor?.GetExtraMetadata(this);
+            if (Properties == null && extras == null) return JsonDocument.Parse("null");
+            if (Properties == null) return JsonDocument.Parse(JsonSerializer.Serialize(extras));
+            return converter.MetadataToJson(extras, Properties);
         }
         /// <summary>
         /// Retrieve a full list of properties for this node,
@@ -254,6 +265,37 @@ namespace Cognite.OpcUa.Types
             }
             return result;
         }
+        private void PopulateAssetCreate(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap, AssetCreate asset)
+        {
+            var id = extractor.GetUniqueId(Id);
+            asset.Description = Description;
+            asset.ExternalId = id;
+            asset.Name = string.IsNullOrEmpty(DisplayName) ? id : DisplayName;
+            asset.DataSetId = dataSetId;
+            if (ParentId != null && !ParentId.IsNullNodeId)
+            {
+                asset.ParentExternalId = extractor.GetUniqueId(ParentId);
+            }
+            if (Properties != null && Properties.Any() && (metaMap?.Any() ?? false))
+            {
+                foreach (var prop in Properties)
+                {
+                    if (!(prop is UAVariable propVar)) continue;
+                    if (metaMap.TryGetValue(prop.DisplayName, out var mapped))
+                    {
+                        var value = extractor.StringConverter.ConvertToString(propVar.Value, propVar.DataType.EnumValues);
+                        if (string.IsNullOrWhiteSpace(value)) continue;
+                        switch (mapped)
+                        {
+                            case "description": asset.Description = value; break;
+                            case "name": asset.Name = value; break;
+                            case "parentId": asset.ParentExternalId = value; break;
+                        }
+                    }
+                }
+            }
+        }
+
         /// <summary>
         /// Convert to CDF Asset.
         /// </summary>
@@ -264,41 +306,20 @@ namespace Cognite.OpcUa.Types
         public AssetCreate ToCDFAsset(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
         {
             if (extractor == null) return null;
-            var id = extractor.GetUniqueId(Id);
-            var writePoco = new AssetCreate
-            {
-                Description = Description,
-                ExternalId = id,
-                Name = string.IsNullOrEmpty(DisplayName)
-                    ? id : DisplayName,
-                DataSetId = dataSetId
-            };
+            var asset = new AssetCreate();
+            PopulateAssetCreate(extractor, dataSetId, metaMap, asset);
+            asset.Metadata = BuildMetadata(extractor, extractor.StringConverter);
 
-            if (ParentId != null && !ParentId.IsNullNodeId)
-            {
-                writePoco.ParentExternalId = extractor.GetUniqueId(ParentId);
-            }
+            return asset;
+        }
+        public AssetCreateJson ToCDFAssetJson(UAExtractor extractor, Dictionary<string, string> metaMap)
+        {
+            if (extractor == null) return null;
+            var asset = new AssetCreateJson();
+            PopulateAssetCreate(extractor, null, metaMap, asset);
+            asset.Metadata = MetadataToJson(extractor, extractor.StringConverter);
 
-            writePoco.Metadata = BuildMetadata(extractor);
-            if (Properties != null && Properties.Any() && (metaMap?.Any() ?? false))
-            {
-                foreach (var prop in Properties)
-                {
-                    if (!(prop is UAVariable propVar)) continue;
-                    if (!string.IsNullOrWhiteSpace(propVar.Value?.StringValue) && metaMap.TryGetValue(prop.DisplayName, out var mapped))
-                    {
-                        var value = propVar.Value.StringValue;
-                        switch (mapped)
-                        {
-                            case "description": writePoco.Description = value; break;
-                            case "name": writePoco.Name = value; break;
-                            case "parentId": writePoco.ParentExternalId = value; break;
-                        }
-                    }
-                }
-            }
-
-            return writePoco;
+            return asset;
         }
         /// <summary>
         /// Add property to list, creating the list if it does not exist.

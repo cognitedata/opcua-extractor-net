@@ -511,11 +511,11 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
         private async Task CreateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
-            await EnsureRawRows<AssetCreate>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async ids =>
+            await EnsureRawRows<AssetCreateJson>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async ids =>
             {
                 var assets = ids.Select(id => assetMap[id]);
                 await Extractor.ReadProperties(assets);
-                return assets.Select(node => node.ToCDFAsset(Extractor, null, config.MetadataMapping?.Assets))
+                return assets.Select(node => node.ToCDFAssetJson(Extractor, config.MetadataMapping?.Assets))
                     .Where(asset => asset != null)
                     .ToDictionary(asset => asset.ExternalId);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);

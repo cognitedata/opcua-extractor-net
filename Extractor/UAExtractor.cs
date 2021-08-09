@@ -59,6 +59,7 @@ namespace Cognite.OpcUa
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
         public IEnumerable<NodeTransformation> Transformations { get; private set; }
+        public StringConverter StringConverter => uaClient.StringConverter;
 
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
@@ -375,16 +376,6 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Calls the ConvertToString method on UAClient. This uses the namespaceTable, so it cannot be static.
-        /// </summary>
-        /// <param name="value">Value to convert</param>
-        /// <returns>Converted value</returns>
-        public string ConvertToString(object value, IDictionary<long, string> enumValues = null, TypeInfo typeInfo = null)
-        {
-            return uaClient.ConvertToString(value, enumValues);
-        }
-
-        /// <summary>
         /// Read properties for the given list of BufferedNode. This is intelligent,
         /// and keeps track of which properties are in the process of being read,
         /// to prevent multiple pushers from starting PropertyRead operations at the same time.
@@ -496,7 +487,7 @@ namespace Cognite.OpcUa
                 if (variable.NodeClass == NodeClass.VariableType)
                 {
                     fields ??= new Dictionary<string, string>();
-                    fields["Value"] = variable.Value?.StringValue;
+                    fields["Value"] = StringConverter.ConvertToString(variable.Value, variable.DataType?.EnumValues);
                 }
             }
             if (config.Extraction.NodeTypes.Metadata)
@@ -1036,7 +1027,7 @@ namespace Cognite.OpcUa
     public interface IUAClientAccess
     {
         string GetUniqueId(ExpandedNodeId id, int index = -1);
-        string ConvertToString(object value, IDictionary<long, string> enumValues = null, TypeInfo typeInfo = null);
+        StringConverter StringConverter { get; }
         string GetRelationshipId(UAReference reference);
     }
 }

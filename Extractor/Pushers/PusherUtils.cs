@@ -17,13 +17,16 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
+using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Opc.Ua;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 
 namespace Cognite.OpcUa.Pushers
@@ -117,31 +120,11 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata)
             {
-                var newMetaData = node.BuildMetadata(extractor);
-                if (raw.Columns.TryGetValue("metadata", out var rawMetaData))
+                var newMetaData = node.MetadataToJson(extractor, extractor.StringConverter);
+                if (newMetaData.RootElement.ValueKind == JsonValueKind.Null && raw.Columns.TryGetValue("metadata", out var rawMetaData)
+                    && rawMetaData.ValueKind != JsonValueKind.Null)
                 {
-                    Dictionary<string, string> oldMetaData = null;
-                    try
-                    {
-                        oldMetaData = JsonSerializer.Deserialize<Dictionary<string, string>>(rawMetaData.ToString());
-                    }
-                    catch (JsonException) { }
-                    if (oldMetaData == null || newMetaData != null
-                        && newMetaData.Any(kvp => !oldMetaData.TryGetValue(kvp.Key, out var field) || field != kvp.Value))
-                    {
-                        if (oldMetaData != null)
-                        {
-                            foreach (var field in oldMetaData)
-                            {
-                                if (!newMetaData.ContainsKey(field.Key))
-                                {
-                                    newMetaData[field.Key] = field.Value;
-                                }
-                            }
-                        }
-                        ret["metadata"] = newMetaData;
-
-                    }
+                    ret["metadata"] = JsonDocument.Parse(rawMetaData.ToString());
                 }
                 else
                 {
@@ -219,7 +202,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (raw == null)
             {
-                var create = node.ToCDFAsset(extractor, null, metaMap);
+                var create = node.ToCDFAssetJson(extractor, metaMap);
                 return JsonDocument.Parse(JsonSerializer.Serialize(create,
                     new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })).RootElement;
             }
@@ -248,6 +231,7 @@ namespace Cognite.OpcUa.Pushers
             TypeUpdateConfig update,
             IDictionary<NodeId, long> nodeToAssetIds)
         {
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             if (update == null || newTs == null || nodeToAssetIds == null || old == null) return null;
             var tsUpdate = new TimeSeriesUpdate();
             if (update.Context)
@@ -272,7 +256,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata)
             {
-                var newMetaData = newTs.BuildMetadata(extractor)
+                var newMetaData = newTs.BuildMetadata(extractor, extractor.StringConverter)
                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
                     .SanitizeMetadata(
@@ -282,9 +266,9 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.TimeSeriesMetadataMaxBytes);
 
                 if (old.Metadata == null && newMetaData.Any()
-                    || newMetaData.Any(meta => !old.Metadata.ContainsKey(meta.Key) || old.Metadata[meta.Key] != meta.Value))
+                    || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
                 {
-                    tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
+                    tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
                 }
             }
             return tsUpdate;
@@ -323,7 +307,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (update.Metadata)
             {
-                var newMetaData = newAsset.BuildMetadata(extractor)
+                var newMetaData = newAsset.BuildMetadata(extractor, extractor.StringConverter)
                     .Where(kvp => !string.IsNullOrEmpty(kvp.Value))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
                     .SanitizeMetadata(
@@ -333,9 +317,9 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.AssetMetadataMaxBytes);
 
                 if (old.Metadata == null && newMetaData.Any()
-                    || newMetaData.Any(meta => !old.Metadata.ContainsKey(meta.Key) || old.Metadata[meta.Key] != meta.Value))
+                    || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
                 {
-                    assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData, Array.Empty<string>());
+                    assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
                 }
             }
             return assetUpdate;
@@ -354,5 +338,10 @@ namespace Cognite.OpcUa.Pushers
     public class StatelessTimeSeriesCreate : TimeSeriesCreate
     {
         public string AssetExternalId { get; set; }
+        public new JsonDocument Metadata { get; set; }
+    }
+    public class AssetCreateJson : AssetCreate
+    {
+        public new JsonDocument Metadata { get; set; }
     }
 }
