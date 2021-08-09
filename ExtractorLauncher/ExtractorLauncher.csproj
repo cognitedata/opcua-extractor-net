@@ -32,6 +32,7 @@
   <PropertyGroup>
     <GitCleanVersion>
     </GitCleanVersion>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
   <PropertyGroup>
     <PreBuildEvent Condition=" '$(OS)' == 'WINDOWS_NT' ">
@@ -45,4 +46,5 @@
       git log -1  --format="%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
     </PreBuildEvent>
   </PropertyGroup>
+  <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

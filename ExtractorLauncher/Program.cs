@@ -21,11 +21,15 @@ using Cognite.Extractor.Metrics;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.Config;
+using Cognite.OpcUa.Service;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Prometheus;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -40,7 +44,7 @@ namespace Cognite.OpcUa
     {
         private static readonly Gauge version =
             Metrics.CreateGauge("opcua_version", $"version: {Version.GetVersion()}, status: {Version.Status()}");
-        private static ILogger log;
+        private static Serilog.ILogger log;
         static int Main(string[] args)
         {
             // Temporary logger config for capturing logs during configuration.
@@ -72,77 +76,45 @@ namespace Cognite.OpcUa
                             "    -nc|--no-config            - Don't attempt to load yml config files. " +
                             "The OPC-UA XML config file will still be needed.\n" +
                             "    -l|--log-level             - Set the console log-level [fatal/error/warning/information/debug/verbose].\n" +
+                            "    -e|--service               - Parameter required when starting the extractor as a service.\n" +
+                            "    -w|--working-dir [path]    - Directory to run from, base for relative config or log path. " +
+                            "Defaults to current directory, or one level above executable if running as service.\n" +
                             "    -x|--exit                  - Exit the extractor on failure, equivalent to Source.ExitOnFailure.");
                 return -1;
             }
 
-
-            string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
-
-            var services = new ServiceCollection();
-
-            var config = new FullConfig();
-            FullConfig baseConfig = null;
-            if (!setup.NoConfig)
+            if (setup.Service)
             {
-                try
-                {
-                    string configFile = setup.ConfigFile ?? System.IO.Path.Combine(configDir, setup.ConfigTool ? "config.config-tool.yml" : "config.yml");
-                    Log.Information("Loading config file from {path}", configFile);
-                    config = services.AddConfig<FullConfig>(configFile, 1);
-                    if (setup.ConfigTool)
-                    {
-                        baseConfig = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
-                    }
-                }
-                catch (Extractor.Configuration.ConfigurationException e)
-                {
-                    Log.Error("Failed to load configuration: {msg}", e.Message);
-                    throw;
-                }
-                config.Source.ConfigRoot = configDir;
+                RunService(setup);
             }
             else
             {
-                config.GenerateDefaults();
-                if (setup.ConfigTool)
+                RunStandalone(setup);
+            }
+            
+
+            return 0;
+        }
+        private static void RunService(ExtractorParams setup)
+        {
+            Host.CreateDefaultBuilder()
+                .ConfigureServices((hostContext, services) =>
                 {
-                    baseConfig = new FullConfig();
-                    baseConfig.GenerateDefaults();
-                    baseConfig.Version = 1;
-                    config.Version = 1;
-                }
-            }
-
-            if (!string.IsNullOrEmpty(setup.Host)) config.Source.EndpointUrl = setup.Host;
-            if (!string.IsNullOrEmpty(setup.Username)) config.Source.Username = setup.Username;
-            if (!string.IsNullOrEmpty(setup.Password)) config.Source.Password = setup.Password;
-            config.Source.Secure |= setup.Secure;
-            if (!string.IsNullOrEmpty(setup.LogLevel)) config.Logger.Console = new LogConfig() { Level = setup.LogLevel };
-            else if (setup.NoConfig) config.Logger.Console = new LogConfig { Level = "information" };
-            config.Source.AutoAccept |= setup.AutoAccept;
-            config.Source.ExitOnFailure |= setup.ExitOnFailure;
-
-            if (setup.NoConfig)
-            {
-                services.AddConfig(config,
-                    typeof(CogniteConfig), typeof(LoggerConfig), typeof(MetricsConfig), typeof(StateStoreConfig));
-            }
-
-            services.AddMetrics();
-            services.AddLogger();
-
-            if (!setup.ConfigTool)
-            {
-                if (config.Cognite != null)
-                {
-                    services.AddCogniteClient("OPC-UA Extractor", $"CogniteOPCUAExtractor/{Version.GetVersion()}", true, true, true);
-                }
-                services.AddStateStore();
-            }
-
+                    Configure(setup, services);
+                    services.AddHostedService<Worker>();
+                })
+                .ConfigureLogging(loggerFactory => loggerFactory.AddEventLog())
+                .UseWindowsService()
+                .UseSystemd()
+                .Build()
+                .Run();
+        }
+        private static void RunStandalone(ExtractorParams setup)
+        {
+            var services = new ServiceCollection();
+            Configure(setup, services);
             var provider = services.BuildServiceProvider();
-            Log.Logger = provider.GetRequiredService<ILogger>();
+            Log.Logger = provider.GetRequiredService<Serilog.ILogger>();
             log = Log.Logger.ForContext<Program>();
 
             log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
@@ -152,18 +124,99 @@ namespace Cognite.OpcUa
 
             if (setup.ConfigTool)
             {
-                string configOutput = setup.ConfigTarget ?? System.IO.Path.Combine(configDir, "config.config-tool-output.yml");
-                RunConfigTool(config, baseConfig, configOutput);
+                string configOutput = setup.ConfigTarget ?? Path.Combine(setup.config.Source.ConfigRoot, "config.config-tool-output.yml");
+                RunConfigTool(setup.config, setup.baseConfig, configOutput);
             }
             else
             {
                 var metrics = provider.GetRequiredService<MetricsService>();
                 metrics.Start();
-                RunExtractor(config, provider);
+                RunExtractor(setup.config, provider);
+            }
+        }
+        private static void Configure(ExtractorParams setup, IServiceCollection services)
+        {
+            string path = null;
+            if (setup.WorkingDir != null)
+            {
+                path = setup.WorkingDir;
+            }
+            else if (setup.Service)
+            {
+                path = Directory.GetParent(AppContext.BaseDirectory).Parent.FullName;
+            }
+            if (path != null)
+            {
+                if (!Directory.Exists(path))
+                {
+                    throw new ConfigurationException($"Target directory does not exist: {path}");
+                }
+                Directory.SetCurrentDirectory(path);
             }
 
-            return 0;
+            string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
+
+            setup.config = new FullConfig();
+            setup.baseConfig = null;
+            if (!setup.NoConfig)
+            {
+                try
+                {
+                    string configFile = setup.ConfigFile ?? System.IO.Path.Combine(configDir, setup.ConfigTool ? "config.config-tool.yml" : "config.yml");
+                    Log.Information("Loading config file from {path}", configFile);
+                    setup.config = services.AddConfig<FullConfig>(configFile, 1);
+                    if (setup.ConfigTool)
+                    {
+                        setup.baseConfig = ConfigurationUtils.TryReadConfigFromFile<FullConfig>(configFile, 1);
+                    }
+                }
+                catch (Extractor.Configuration.ConfigurationException e)
+                {
+                    Log.Error("Failed to load configuration: {msg}", e.Message);
+                    throw;
+                }
+                setup.config.Source.ConfigRoot = configDir;
+            }
+            else
+            {
+                setup.config.GenerateDefaults();
+                if (setup.ConfigTool)
+                {
+                    setup.baseConfig = new FullConfig();
+                    setup.baseConfig.GenerateDefaults();
+                    setup.baseConfig.Version = 1;
+                    setup.config.Version = 1;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(setup.Host)) setup.config.Source.EndpointUrl = setup.Host;
+            if (!string.IsNullOrEmpty(setup.Username)) setup.config.Source.Username = setup.Username;
+            if (!string.IsNullOrEmpty(setup.Password)) setup.config.Source.Password = setup.Password;
+            setup.config.Source.Secure |= setup.Secure;
+            if (!string.IsNullOrEmpty(setup.LogLevel)) setup.config.Logger.Console = new LogConfig() { Level = setup.LogLevel };
+            else if (setup.NoConfig) setup.config.Logger.Console = new LogConfig { Level = "information" };
+            setup.config.Source.AutoAccept |= setup.AutoAccept;
+            setup.config.Source.ExitOnFailure |= setup.ExitOnFailure;
+
+            if (setup.NoConfig)
+            {
+                services.AddConfig(setup.config,
+                    typeof(CogniteConfig), typeof(LoggerConfig), typeof(MetricsConfig), typeof(StateStoreConfig));
+            }
+
+            services.AddMetrics();
+            services.AddLogger();
+
+            if (!setup.ConfigTool)
+            {
+                if (setup.config.Cognite != null)
+                {
+                    services.AddCogniteClient("OPC-UA Extractor", $"CogniteOPCUAExtractor/{Version.GetVersion()}", true, true, true);
+                }
+                services.AddStateStore();
+            }
         }
+
         /// <summary>
         /// Start the extractor and keep it running until canceled, restarting on crashes
         /// </summary>
@@ -329,9 +382,17 @@ namespace Cognite.OpcUa
                     case "--auto-accept":
                         result.AutoAccept = true;
                         break;
-                    case "--x":
+                    case "-x":
                     case "--exit":
                         result.ExitOnFailure = true;
+                        break;
+                    case "-e":
+                    case "--service":
+                        result.Service = true;
+                        break;
+                    case "-w":
+                    case "--working-dir":
+                        result.WorkingDir = args[++i];
                         break;
                     default:
                         throw new InvalidOperationException($"Unrecognized parameter: {args[i]}");
@@ -341,13 +402,15 @@ namespace Cognite.OpcUa
             return result;
         }
 
-        private struct ExtractorParams
+        private class ExtractorParams
         {
             public bool ConfigTool;
             public string Host;
             public string Username;
             public string Password;
             public bool Secure;
+            public bool Service;
+            public string WorkingDir;
             public string ConfigFile;
             public string ConfigTarget;
             public string LogLevel;
@@ -355,6 +418,8 @@ namespace Cognite.OpcUa
             public bool NoConfig;
             public bool AutoAccept;
             public bool ExitOnFailure;
+            public FullConfig config;
+            public FullConfig baseConfig;
         }
     }
 }
