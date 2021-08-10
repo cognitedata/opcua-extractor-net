@@ -546,15 +546,15 @@ namespace Cognite.OpcUa.Pushers
         {
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
-            var assets = ConvertNodes(objects, update);
 
             if (useRawStore)
             {
-                var rawObj = new RawRequestWrapper<AssetCreate>
+                var jsonAssets = ConvertNodesJson(objects, update);
+                var rawObj = new RawRequestWrapper<AssetCreateJson>
                 {
                     Database = config.RawMetadata.Database,
                     Table = config.RawMetadata.AssetsTable,
-                    Rows = assets.Select(asset => new RawRowCreateDto<AssetCreate> { Key = asset.ExternalId, Columns = asset })
+                    Rows = jsonAssets.Select(asset => new RawRowCreateDto<AssetCreateJson> { Key = asset.ExternalId, Columns = asset })
                 };
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
@@ -568,15 +568,17 @@ namespace Cognite.OpcUa.Pushers
                 try
                 {
                     await client.PublishAsync(rawMsg, token);
-                    createdAssets.Inc(assets.Count());
+                    createdAssets.Inc(jsonAssets.Count());
                 }
                 catch (Exception ex)
                 {
                     log.Error("Failed to write assets to raw over MQTT: {msg}", ex.Message);
+                    return false;
                 }
 
                 return true;
             }
+            var assets = ConvertNodes(objects, update);
 
             var data = JsonSerializer.SerializeToUtf8Bytes(assets, null);
 
@@ -609,6 +611,30 @@ namespace Cognite.OpcUa.Pushers
             foreach (var node in nodes)
             {
                 var create = node.ToCDFAsset(Extractor, config.DataSetId, config.MetadataMapping?.Assets);
+                if (create == null) continue;
+                if (!node.Changed)
+                {
+                    yield return create;
+                    continue;
+                }
+                if (!update.Context) create.ParentExternalId = null;
+                if (!update.Description) create.Description = null;
+                if (!update.Metadata) create.Metadata = null;
+                if (!update.Name) create.Name = null;
+                yield return create;
+            }
+        }
+        /// <summary>
+        /// Convert nodes to assets with json metadata, setting fields that should not be updated to null.
+        /// </summary>
+        /// <param name="nodes">Nodes to create or update</param>
+        /// <param name="update">Configuration for which fields should be updated.</param>
+        /// <returns>List of assets to create</returns>
+        private IEnumerable<AssetCreateJson> ConvertNodesJson(IEnumerable<UANode> nodes, TypeUpdateConfig update)
+        {
+            foreach (var node in nodes)
+            {
+                var create = node.ToCDFAssetJson(Extractor, config.MetadataMapping?.Assets);
                 if (create == null) continue;
                 if (!node.Changed)
                 {

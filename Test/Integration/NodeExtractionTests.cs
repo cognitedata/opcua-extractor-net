@@ -2,6 +2,7 @@
 using Cognite.OpcUa;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Types;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using System;
@@ -11,6 +12,7 @@ using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Test.Integration
 {
@@ -72,10 +74,10 @@ namespace Test.Integration
             Assert.Equal(2, node.Properties.Count());
             var prop = node.Properties.First(prop => prop.DisplayName == "NumericProp") as UAVariable;
             Assert.Equal(DataTypeIds.Int64, prop.DataType.Raw);
-            Assert.Equal("1234", prop.Value.StringValue);
+            Assert.Equal(new Variant(1234L), prop.Value);
             prop = node.Properties.First(prop => prop.DisplayName == "StringProp") as UAVariable;
             Assert.Equal(DataTypeIds.String, prop.DataType.Raw);
-            Assert.Equal("String prop value", prop.Value.StringValue);
+            Assert.Equal(new Variant("String prop value"), prop.Value);
             Assert.False(node is UAVariable);
 
             // No normal datatypes here
@@ -106,10 +108,10 @@ namespace Test.Integration
             Assert.Equal(2, vnode.Properties.Count());
             var prop = vnode.Properties.First(prop => prop.DisplayName == "EngineeringUnits") as UAVariable;
             Assert.Equal(DataTypeIds.EUInformation, prop.DataType.Raw);
-            Assert.Equal("°C: degree Celsius", prop.Value.StringValue);
+            Assert.Equal("°C: degree Celsius", extractor.StringConverter.ConvertToString(prop.Value));
             prop = vnode.Properties.First(prop => prop.DisplayName == "EURange") as UAVariable;
             Assert.Equal(DataTypeIds.Range, prop.DataType.Raw);
-            Assert.Equal("(0, 100)", prop.Value.StringValue);
+            Assert.Equal("(0, 100)", extractor.StringConverter.ConvertToString(prop.Value));
 
             Assert.All(pusher.PushedVariables.Values.Where(variable => variable.DisplayName != "MysteryVar"
                 && variable.DisplayName != "NumberVar"),
@@ -188,10 +190,10 @@ namespace Test.Integration
             Assert.Equal(2, arr.Properties.Count());
             var prop = arr.Properties.First(prop => prop.DisplayName == "EngineeringUnits") as UAVariable;
             Assert.Equal(DataTypeIds.EUInformation, prop.DataType.Raw);
-            Assert.Equal("°C: degree Celsius", prop.Value.StringValue);
+            Assert.Equal("°C: degree Celsius", extractor.StringConverter.ConvertToString(prop.Value));
             prop = arr.Properties.First(prop => prop.DisplayName == "EURange") as UAVariable;
             Assert.Equal(DataTypeIds.Range, prop.DataType.Raw);
-            Assert.Equal("(0, 100)", prop.Value.StringValue);
+            Assert.Equal("(0, 100)", extractor.StringConverter.ConvertToString(prop.Value));
             Assert.True(arr.IsArray);
             Assert.Equal(4, arr.ArrayDimensions[0]);
             Assert.Equal(4, arr.ArrayChildren.Count());
@@ -511,15 +513,16 @@ namespace Test.Integration
             var node = pusher.PushedNodes[ids.Root];
             Assert.Equal(5, node.Properties.Count());
             var prop = node.Properties.First(prop => prop.DisplayName == "Variable StringArray") as UAVariable;
-            Assert.Equal("[test1, test2]", prop.Value.StringValue);
+            Assert.Equal(@"[""test1"",""test2""]", extractor.StringConverter.ConvertToString(prop.Value));
             prop = node.Properties.First(prop => prop.DisplayName == "Variable Array") as UAVariable;
-            Assert.Equal("[0, 0, 0, 0]", prop.Value.StringValue);
+            Assert.Equal("[0,0,0,0]", extractor.StringConverter.ConvertToString(prop.Value));
             prop = node.Properties.First(prop => prop.DisplayName == "EnumVar1") as UAVariable;
-            Assert.Equal("Enum2", prop.Value.StringValue);
+            Assert.Equal("Enum2", extractor.StringConverter.ConvertToString(prop.Value, prop.DataType.EnumValues));
             prop = node.Properties.First(prop => prop.DisplayName == "EnumVar2") as UAVariable;
-            Assert.Equal("VEnum2", prop.Value.StringValue);
+            Assert.Equal("VEnum2", extractor.StringConverter.ConvertToString(prop.Value, prop.DataType.EnumValues));
             prop = node.Properties.First(prop => prop.DisplayName == "EnumVar3") as UAVariable;
-            Assert.Equal("[VEnum2, VEnum2, VEnum1, VEnum2]", prop.Value.StringValue);
+            Assert.Equal(@"[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""]",
+                extractor.StringConverter.ConvertToString(prop.Value, prop.DataType.EnumValues));
 
             extraction.PropertyNameFilter = null;
             extraction.DataTypes.AllowStringVariables = false;
@@ -550,7 +553,7 @@ namespace Test.Integration
             var node = pusher.PushedNodes[ids.Root];
             Assert.Single(node.Properties);
             var prop = node.Properties.First(prop => prop.DisplayName == "EnumVar2") as UAVariable;
-            Assert.Equal("VEnum2", prop.Value.StringValue);
+            Assert.Equal("VEnum2", extractor.StringConverter.ConvertToString(prop.Value, prop.DataType.EnumValues));
 
             extraction.PropertyIdFilter = null;
             extraction.DataTypes.AllowStringVariables = false;
@@ -974,16 +977,25 @@ namespace Test.Integration
 
             await CommonTestUtils.WaitForCondition(() => handler.AssetRaw.Any() && handler.TimeseriesRaw.Any(), 5);
 
-            CommonTestUtils.VerifyStartingConditions(handler.AssetRaw, handler.TimeseriesRaw
+            CommonTestUtils.VerifyStartingConditions(
+                handler.AssetRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)kvp.Value), 
+                handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), null, extractor, tester.Server.Ids.Custom, true);
 
             tester.Server.ModifyCustomServer();
 
             await extractor.Rebrowse();
 
-            CommonTestUtils.VerifyStartingConditions(handler.AssetRaw, handler.TimeseriesRaw
+            CommonTestUtils.VerifyStartingConditions(
+                handler.AssetRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)kvp.Value),
+                handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, extractor, tester.Server.Ids.Custom, true);
-            CommonTestUtils.VerifyModified(handler.AssetRaw, handler.TimeseriesRaw
+            CommonTestUtils.VerifyModified(
+                handler.AssetRaw
+                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)kvp.Value),
+                handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, extractor, tester.Server.Ids.Custom, true);
 
             tester.Server.ResetCustomServer();
@@ -1037,7 +1049,7 @@ namespace Test.Integration
 
             await extractor.Rebrowse();
 
-            Assert.Equal("[0, 1, 2, 3, 4]", handler.Assets[id].metadata["TooLargeDim"]);
+            Assert.Equal("[0,1,2,3,4]", handler.Assets[id].metadata["TooLargeDim"]);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }
@@ -1073,16 +1085,72 @@ namespace Test.Integration
             await extractor.RunExtractor(true);
 
             var root = pusher.PushedNodes[ObjectIds.ObjectsFolder];
-            var meta = root.BuildMetadata(null);
+            var meta = root.BuildMetadata(null, extractor.StringConverter);
             Assert.Equal(17, meta.Count);
             // Verify that the metadata fields get values
-            Assert.Equal("[0, 0, 0, 0]", meta["CustomRoot_Variable Array"]);
+            Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
 
+            // ... and that the JSON looks right
+            var metaDoc = root.MetadataToJson(null, extractor.StringConverter);
+            var metaString = CommonTestUtils.JsonDocumentToString(metaDoc);
+            // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
+            Assert.Equal(@"{""CustomRoot"":{""ChildObject"":{},""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
+            + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""Variable StringArray"":[""test1"",""test2""],""StringyVar"":null,""IgnoreVar"":null,"
+            + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""NumberVar"":{""Value"":null,""DeepProp"":{""DeepProp2"":{""val1"":""value 1"",""val2"":""value 2""}}},"
+            + @"""EnumVar1"":""Enum2"",""EnumVar3"":[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""],""EnumVar2"":""VEnum2""}}", metaString);
             extraction.Transformations = null;
             extraction.DataTypes.AllowStringVariables = false;
             extraction.DataTypes.MaxArraySize = 0;
             extraction.DataTypes.AutoIdentifyTypes = false;
+        }
+        [Fact]
+        public async Task TestArrayPropertiesWithoutMaxArraySize()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            extraction.Transformations = new List<RawNodeTransformation>
+            {
+                new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Name = "^CustomRoot$"
+                    },
+                    Type = TransformationType.Property
+                }
+            };
+
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.ObjectsFolder, tester.Client);
+
+            extraction.DataTypes.AllowStringVariables = false;
+            extraction.DataTypes.MaxArraySize = 0;
+            extraction.DataTypes.AutoIdentifyTypes = false;
+
+            await extractor.RunExtractor(true);
+
+            var root = pusher.PushedNodes[ObjectIds.ObjectsFolder];
+            var meta = root.BuildMetadata(null, extractor.StringConverter);
+            Assert.Equal(17, meta.Count);
+            // Verify that the metadata fields get values
+            Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
+            Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
+
+            // ... and that the JSON looks right
+            var metaDoc = root.MetadataToJson(null, extractor.StringConverter);
+            var metaString = CommonTestUtils.JsonDocumentToString(metaDoc);
+            // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
+            Assert.Equal(@"{""CustomRoot"":{""ChildObject"":{},""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
+            + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""Variable StringArray"":[""test1"",""test2""],""StringyVar"":null,""IgnoreVar"":null,"
+            + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
+            + @"""NumberVar"":{""Value"":null,""DeepProp"":{""DeepProp2"":{""val1"":""value 1"",""val2"":""value 2""}}},"
+            + @"""EnumVar1"":1,""EnumVar3"":[123,123,321,123],""EnumVar2"":123}}", metaString);
+            extraction.Transformations = null;
         }
         [Fact]
         public async Task TestLateIgnore()
@@ -1103,59 +1171,46 @@ namespace Test.Integration
                     Type = TransformationType.Ignore
                 }
             };
-
             using var extractor = tester.BuildExtractor(true, null, pusher);
-
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
-
             extraction.DataTypes.AllowStringVariables = true;
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
-
             await extractor.RunExtractor(true);
-
             extraction.Transformations = null;
             extraction.DataTypes.AllowStringVariables = false;
             extraction.DataTypes.MaxArraySize = 0;
             extraction.DataTypes.AutoIdentifyTypes = false;
-
             Assert.Single(pusher.PushedNodes);
             Assert.Empty(pusher.PushedVariables);
         }
-        #endregion
 
+        #endregion
         #region types
         [Fact]
         public async Task TestReadTypes()
         {
             using var pusher = new DummyPusher(new DummyPusherConfig());
             var extraction = tester.Config.Extraction;
-
             using var extractor = tester.BuildExtractor(true, null, pusher);
-
             extraction.RootNode = CommonTestUtils.ToProtoNodeId(ObjectIds.TypesFolder, tester.Client);
             extraction.NodeTypes.AsNodes = true;
             extraction.DataTypes.AllowStringVariables = true;
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
-
             await extractor.RunExtractor(true);
-
             extraction.NodeTypes.AsNodes = false;
             extraction.DataTypes.AllowStringVariables = false;
             extraction.DataTypes.MaxArraySize = 0;
             extraction.DataTypes.AutoIdentifyTypes = false;
-
             Assert.Equal(458, pusher.PushedNodes.Count);
             Assert.Equal(366, pusher.PushedVariables.Count);
-
             var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType];
             Assert.Equal("CustomVariableType", customVarType.DisplayName);
             Assert.Equal(NodeClass.VariableType, customVarType.NodeClass);
-            var meta = customVarType.BuildMetadata(extractor);
+            var meta = customVarType.BuildMetadata(extractor, extractor.StringConverter);
             Assert.Single(meta);
             Assert.Equal("123.123", meta["Value"]);
-
             var customObjType = pusher.PushedNodes[tester.Server.Ids.Custom.ObjectType];
             Assert.Equal("CustomObjectType", customObjType.DisplayName);
             Assert.Equal(NodeClass.ObjectType, customObjType.NodeClass);

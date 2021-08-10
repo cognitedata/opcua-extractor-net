@@ -1,12 +1,15 @@
 ﻿using Cognite.Extractor.StateStorage;
+using Cognite.OpcUa;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
+using Opc.Ua.Client;
 using Server;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -134,6 +137,7 @@ namespace Test.Integration
             tester.Config.Events.ExcludeEventFilter = null;
             tester.Config.Events.ExcludeProperties = new List<string>();
             using var extractor = tester.BuildExtractor(true, null, pusher);
+            tester.Config.Events.History = false;
 
             var runTask = extractor.RunExtractor();
 
@@ -168,6 +172,93 @@ namespace Test.Integration
             Assert.Equal(ids.DeepType, evt.EventType);
 
             tester.WipeEventHistory();
+        }
+        [Fact]
+        public async Task TestDisableSubscriptions()
+        {
+            return;
+            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Event;
+
+            var now = DateTime.UtcNow;
+
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Backfill = true;
+            tester.Config.Events.History = true;
+
+            void Reset()
+            {
+                extractor.State.Clear();
+                extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
+                extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
+                tester.Client.ResetVisitedNodes();
+                tester.Client.RemoveSubscription("EventListener");
+            }
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+
+            tester.WipeEventHistory();
+            tester.Server.PopulateEvents();
+            CommonTestUtils.ResetMetricValue("opcua_frontfill_events_count");
+
+            var session = (Session)tester.Client.GetType().GetProperty("Session", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(tester.Client);
+
+            // Test everything normal
+            await extractor.RunExtractor(true);
+            Assert.All(extractor.State.NodeStates, state => { Assert.True(state.ShouldSubscribe); });
+            await extractor.WaitForSubscriptions();
+            Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture)).MonitoredItemCount);
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 1), 5);
+
+            // Test disable subscriptions
+            Reset();
+            tester.Config.Subscriptions.Events = false;
+            await extractor.RunExtractor(true);
+            var state = extractor.State.GetEmitterState(ids.Obj1);
+            Assert.True(state.ShouldSubscribe);
+            state = extractor.State.GetEmitterState(ObjectIds.Server);
+            Assert.True(state.ShouldSubscribe);
+            await extractor.WaitForSubscriptions();
+            Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture));
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 2), 5);
+
+
+
+            // Test disable specific subscriptions
+            Reset();
+            var oldTransforms = tester.Config.Extraction.Transformations;
+            tester.Config.Extraction.Transformations = new List<RawNodeTransformation>
+            {
+                new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Id = $"i={ids.Obj1.Identifier}$"
+                    },
+                    Type = TransformationType.DropSubscriptions
+                }
+            };
+
+            tester.Config.Subscriptions.Events = true;
+            await extractor.RunExtractor(true);
+            state = extractor.State.GetEmitterState(ids.Obj1);
+            Assert.False(state.ShouldSubscribe);
+            state = extractor.State.GetEmitterState(ObjectIds.Server);
+            Assert.True(state.ShouldSubscribe);
+            await extractor.WaitForSubscriptions();
+            Assert.Equal(2u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture)).MonitoredItemCount);
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 3), 5);
+
+
+            tester.Config.History.Enabled = false;
+            tester.Config.History.Backfill = false;
+            tester.Config.Events.History = false;
+            tester.Config.Extraction.Transformations = oldTransforms;
+            tester.WipeEventHistory();
+
         }
         #endregion
 

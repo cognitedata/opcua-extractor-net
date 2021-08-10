@@ -169,6 +169,7 @@ namespace Cognite.OpcUa
                 node.Parent = parent;
             }
 
+            bool initialProperty = node.IsProperty;
             if (extractor.Transformations != null)
             {
                 foreach (var trns in extractor.Transformations)
@@ -182,6 +183,12 @@ namespace Cognite.OpcUa
             {
                 if (node.Parent == null) return;
                 node.Parent.AddProperty(node);
+                // Edge-case, since attributes are read before transformations, if transformations cause a node to become a property,
+                // ArrayDimensions won't be read. We can just read them later at minimal cost.
+                if (!initialProperty && config.Extraction.DataTypes.MaxArraySize == 0 && (node is UAVariable variable) && variable.ValueRank >= 0)
+                {
+                    node.Attributes.DataRead = false;
+                }
             }
             else if (node is UAVariable variable)
             {
@@ -401,11 +408,12 @@ namespace Cognite.OpcUa
                 config.Extraction.NodeTypes.Metadata);
 
             if (config.Events.Enabled
-                && (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0
+                && node.EventNotifier != 0
                 && extractor.State.GetEmitterState(node.Id) == null)
             {
                 bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
-                var eventState = new EventExtractionState(extractor, node.Id, history, history && config.History.Backfill);
+                bool subscription = (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0 && node.ShouldSubscribe;
+                var eventState = new EventExtractionState(extractor, node.Id, history, history && config.History.Backfill, subscription);
                 extractor.State.SetEmitterState(eventState);
             }
 

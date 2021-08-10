@@ -69,7 +69,7 @@ namespace Cognite.OpcUa.Types
             if (timestamp == DateTime.MinValue) timestamp = DateTime.UtcNow;
             if (IsString || stringOverride)
             {
-                return new UADataPoint(timestamp, id, client.ConvertToString(value, EnumValues));
+                return new UADataPoint(timestamp, id, client.StringConverter.ConvertToString(value, EnumValues));
             }
             return new UADataPoint(timestamp, id, UAClient.ConvertToDouble(value));
         }

@@ -1,14 +1,17 @@
 ﻿using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
+using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Opc.Ua;
+using Opc.Ua.Client;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -299,7 +302,7 @@ namespace Test.Integration
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
 
-            tester.Config.Extraction.DataChangeFilter = new Cognite.OpcUa.DataSubscriptionConfig
+            tester.Config.Subscriptions.DataChangeFilter = new Cognite.OpcUa.DataSubscriptionConfig
             {
                 DeadbandType = DeadbandType.Absolute,
                 Trigger = DataChangeTrigger.StatusValue,
@@ -325,7 +328,7 @@ namespace Test.Integration
             Assert.Equal(0.0, dps[0].DoubleValue);
             Assert.Equal(1.0, dps[1].DoubleValue);
 
-            tester.Config.Extraction.DataChangeFilter = null;
+            tester.Config.Subscriptions.DataChangeFilter = null;
             tester.WipeBaseHistory();
         }
         #endregion
@@ -679,6 +682,92 @@ namespace Test.Integration
             dataTypes.MaxArraySize = 4;
             tester.WipeCustomHistory();
             tester.ResetCustomServerValues();
+        }
+        [Fact]
+        public async Task TestDisableSubscriptions()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            var ids = tester.Server.Ids.Base;
+
+            var now = DateTime.UtcNow;
+
+            void Reset()
+            {
+                extractor.State.Clear();
+                extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
+                extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
+                tester.Client.ResetVisitedNodes();
+                tester.Client.RemoveSubscription("DataChangeListener");
+            }
+
+
+            tester.Config.History.Enabled = true;
+            tester.Config.History.Data = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = false;
+
+            tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
+
+            tester.WipeBaseHistory();
+            tester.Server.PopulateBaseHistory(now.AddSeconds(-5));
+            CommonTestUtils.ResetMetricValue("opcua_frontfill_data_count");
+
+            var session = (Session)tester.Client.GetType().GetProperty("Session", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(tester.Client);
+
+            // Test everything normal
+            await extractor.RunExtractor(true);
+            Assert.All(extractor.State.NodeStates, state => { Assert.True(state.ShouldSubscribe); });
+            await extractor.WaitForSubscriptions();
+            Assert.Equal(4u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture)).MonitoredItemCount);
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 1), 5);
+
+            // Test disable subscriptions
+            Reset();
+            tester.Config.Subscriptions.DataPoints = false;
+            await extractor.RunExtractor(true);
+            var state = extractor.State.GetNodeState(ids.DoubleVar1);
+            Assert.True(state.ShouldSubscribe);
+            state = extractor.State.GetNodeState(ids.IntVar);
+            Assert.True(state.ShouldSubscribe);
+            await extractor.WaitForSubscriptions();
+            Assert.DoesNotContain(session.Subscriptions, sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture));
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2), 5);
+
+
+
+            // Test disable specific subscriptions
+            Reset();
+            var oldTransforms = tester.Config.Extraction.Transformations;
+            tester.Config.Extraction.Transformations = new List<RawNodeTransformation>
+            {
+                new RawNodeTransformation
+                {
+                    Filter = new RawNodeFilter
+                    {
+                        Id = $"i={ids.DoubleVar1.Identifier}$"
+                    },
+                    Type = TransformationType.DropSubscriptions
+                }
+            };
+            
+            tester.Config.Subscriptions.DataPoints = true;
+            await extractor.RunExtractor(true);
+            state = extractor.State.GetNodeState(ids.DoubleVar1);
+            Assert.False(state.ShouldSubscribe);
+            state = extractor.State.GetNodeState(ids.IntVar);
+            Assert.True(state.ShouldSubscribe);
+            await extractor.WaitForSubscriptions();
+            Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture)).MonitoredItemCount);
+            await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 3), 5);
+
+
+            tester.Config.Extraction.Transformations = oldTransforms;
+            tester.Config.History.Enabled = false;
+            tester.Config.History.Data = false;
+            tester.WipeBaseHistory();
+
         }
         #endregion
 

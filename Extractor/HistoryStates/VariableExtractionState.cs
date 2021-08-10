@@ -40,6 +40,7 @@ namespace Cognite.OpcUa.HistoryStates
         /// The extractor generally requires fixed dimensions in order to push arrays to destination systems.
         /// </summary>
         public Collection<int> ArrayDimensions { get; }
+        public bool ShouldSubscribe { get; }
         public string DisplayName { get; }
 
         private readonly List<UADataPoint> buffer;
@@ -57,6 +58,7 @@ namespace Cognite.OpcUa.HistoryStates
             DataType = variable.DataType;
             ArrayDimensions = variable.ArrayDimensions;
             DisplayName = variable.DisplayName;
+            ShouldSubscribe = variable.ShouldSubscribe;
             if (frontfill)
             {
                 buffer = new List<UADataPoint>();

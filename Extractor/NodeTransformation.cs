@@ -227,7 +227,7 @@ namespace Cognite.OpcUa
                 node.Attributes.Ignore |= node.Parent.Ignore;
                 node.Attributes.IsProperty |= node.Parent.IsProperty;
             }
-            if (node.Ignore || node.IsProperty && Type == TransformationType.Property) return;
+            if (node.Ignore || node.IsProperty && Type == TransformationType.Property || !node.ShouldSubscribe && Type == TransformationType.DropSubscriptions) return;
             if (Filter.IsMatch(node, ns))
             {
                 switch (Type)
@@ -239,6 +239,10 @@ namespace Cognite.OpcUa
                     case TransformationType.Property:
                         node.Attributes.IsProperty = true;
                         log.Verbose("Treating node {name} {id} as property due to matching filter {idx}", node.DisplayName, node.Id, index);
+                        break;
+                    case TransformationType.DropSubscriptions:
+                        node.Attributes.ShouldSubscribe = false;
+                        log.Debug("Dropping subscriptions on node {name} {id} due to matching filter {idx}", node.DisplayName, node.Id, index);
                         break;
                 }
             }
@@ -257,6 +261,7 @@ namespace Cognite.OpcUa
     public enum TransformationType
     {
         Ignore,
-        Property
+        Property,
+        DropSubscriptions
     }    
 }

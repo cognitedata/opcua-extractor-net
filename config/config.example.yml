@@ -78,6 +78,9 @@ history:
     # Enable/disable backfill behavior. If this is false, data is read using frontfill only. (Pre 1.1 behavior)
     # This applied to both datapoints and events.
     backfill: false
+    # Time in seconds to wait between each restart of history. Setting this too low may impact performance.
+    # Leave at 0 to disable periodic restarts.
+    restart-period: 0
     # Max number of datapoints per history read request, 0 for server specified
     data-chunk: 1000
     # Max number of simultaneous nodes per historyRead request for data
@@ -567,11 +570,12 @@ extraction:
     # "Property", turn the node into a property, which is treated as metadata.
     # This also applies to descendants. Nested metadata is give a name like "grandparent_parent_variable", for
     # each variable in the tree.
+    # "DropSubscriptions", do not subscribe to this node with neither events or data-points.
     # There is some overhead associated with the filters. They are applied sequentially, so it can help performance to put
     # "Ignore" filters first.
     # It is possible to have multiple of each filter type.
     transformations:
-      # Type, either "Ignore" or "Property"
+      # Type, either "Ignore", "Property", or "DropSubscriptions"
       # - type:
       #  NodeFilter. All non-null filters must match each node for the transformation to be applied.
       #  filter:
@@ -593,6 +597,13 @@ extraction:
             # Another instance of NodeFilter which is applied to the parent node.
             # parent:
 
+    
+
+subscriptions:
+    # Enable subscriptions on data-points.
+    data-points: true
+    # Enable subscriptions on events. Requires events.enabled to be set to true.
+    events: true
     # Modify the DataChangeFilter used for datapoint subscriptions. See OPC-UA reference part 4 7.17.2 for details.
     # These are just passed to the server, they have no effect on extractor behavior.
     # Filters are applied to all nodes, but deadband should only affect some, according to the standard.
@@ -603,7 +614,6 @@ extraction:
         deadband-type: "None"
         # Double value of the deadband.
         deadband-value: 0
-
 
 events:
     # Events are extracted with the following rules: By default all events are extracted.
@@ -623,6 +633,9 @@ events:
 
     # True to enable reading historical events from historizing event emitters
     history: false
+
+    # True to also check the server node when looking for event emitters, default true.
+    read-server: true
 
     # Regex filter on event type DisplayName, matches will not be extracted.
     exclude-event-filter:

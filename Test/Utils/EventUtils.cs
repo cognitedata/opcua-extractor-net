@@ -19,7 +19,7 @@ namespace Test.Utils
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             // Add state
-            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true);
+            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true, true);
             if (init)
             {
                 state.InitExtractedRange(DateTime.UtcNow.Subtract(TimeSpan.FromHours(1)), DateTime.UtcNow.AddHours(1));
