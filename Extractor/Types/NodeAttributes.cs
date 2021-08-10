@@ -65,7 +65,7 @@ namespace Cognite.OpcUa.Types
                     {
                         result.Add(Attributes.Historizing);
                     }
-                    if (config.Events.Enabled)
+                    if (config.Events.Enabled && config.Events.DiscoverEmitters)
                     {
                         result.Add(Attributes.EventNotifier);
                     }
@@ -98,7 +98,7 @@ namespace Cognite.OpcUa.Types
             if (values == null) throw new ArgumentNullException(nameof(values));
             if (config == null) throw new ArgumentNullException(nameof(config));
             Description = values[idx++].GetValue<LocalizedText>(null)?.Text;
-            if (NodeClass == NodeClass.Object && config.Events.Enabled)
+            if ((NodeClass == NodeClass.Object || NodeClass == NodeClass.Variable) && config.Events.Enabled && config.Events.DiscoverEmitters)
             {
                 EventNotifier = values[idx++].GetValue(EventNotifiers.None);
             }
