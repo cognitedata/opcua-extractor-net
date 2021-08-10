@@ -459,54 +459,56 @@ namespace Cognite.OpcUa
                 return null;
             }
 
-            var extractedProperties = new Dictionary<string, Variant>();
+            var extractedProperties = new Dictionary<string, EventFieldValue>();
 
             for (int i = 0; i < filter.SelectClauses.Count; i++)
             {
                 var clause = filter.SelectClauses[i];
-                if (!targetEventFields.Contains(new EventField(clause.BrowsePath))) continue;
+                var field = new EventField(clause.BrowsePath);
+                if (!targetEventFields.Contains(field)) continue;
 
                 string name = string.Join('_', clause.BrowsePath.Select(name => name.Name));
                 if (name != "EventId" && name != "SourceNode" && name != "EventType" && config.Events.DestinationNameMap.TryGetValue(name, out var mapped))
                 {
+                    field = new EventField(new QualifiedNameCollection(clause.BrowsePath.Take(clause.BrowsePath.Count - 1).Append(mapped)));
                     name = mapped;
                 }
-                if (!extractedProperties.TryGetValue(name, out var extracted) || extracted == Variant.Null)
+                if (!extractedProperties.TryGetValue(name, out var extracted) || extracted.Value == Variant.Null)
                 {
-                    extractedProperties[name] = eventFields[i];
+                    extractedProperties[name] = new EventFieldValue(field, eventFields[i]);
                 }
             }
 
-            if (!extractedProperties.TryGetValue("EventId", out var rawEventId) || !(rawEventId.Value is byte[] byteEventId))
+            if (!extractedProperties.TryGetValue("EventId", out var rawEventId) || !(rawEventId.Value.Value is byte[] byteEventId))
             {
                 log.Verbose("Event of type {type} lacks id", eventType);
                 return null;
             }
 
             string eventId = Convert.ToBase64String(byteEventId);
-            if (!extractedProperties.TryGetValue("SourceNode", out var rawSourceNode) || !(rawSourceNode.Value is NodeId sourceNode))
+            if (!extractedProperties.TryGetValue("SourceNode", out var rawSourceNode) || !(rawSourceNode.Value.Value is NodeId sourceNode))
             {
                 sourceNode = NodeId.Null;
             }
 
-            if (!extractedProperties.TryGetValue("Time", out var rawTime) || !(rawTime.Value is DateTime time))
+            if (!extractedProperties.TryGetValue("Time", out var rawTime) || !(rawTime.Value.Value is DateTime time))
             {
                 log.Verbose("Event lacks specified time, type: {type}", eventType);
                 return null;
             }
+
+            var finalProperties = extractedProperties.Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId"
+                && kvp.Key != "SourceNode" && kvp.Key != "Time" && kvp.Key != "EventType").Select(kvp => kvp.Value);
             var buffEvent = new UAEvent
             {
-                Message = extractor.StringConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message")),
+                Message = extractor.StringConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message")?.Value),
                 EventId = config.Extraction.IdPrefix + eventId,
                 SourceNode = sourceNode,
                 Time = time,
                 EventType = eventType,
-                MetaData = extractedProperties
-                    .Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId" && kvp.Key != "SourceNode"
-                                  && kvp.Key != "Time" && kvp.Key != "EventType")
-                    .ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value),
                 EmittingNode = emitter
             };
+            buffEvent.SetMetadata(extractor.StringConverter, finalProperties);
             return buffEvent;
         }
     }

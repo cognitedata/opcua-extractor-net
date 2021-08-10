@@ -941,10 +941,10 @@ namespace Test.Unit
 
             evt.Message = "message";
             evt.SourceNode = new NodeId("source");
-            evt.MetaData = new Dictionary<string, object>
+            evt.MetaData = new Dictionary<string, string>
             {
                 { "key", "value1" },
-                { "key2", 123 },
+                { "key2", "123" },
                 { "key3", "value2" }
             };
 
@@ -999,13 +999,13 @@ namespace Test.Unit
             evt.Message = "message";
             evt.Time = now;
             evt.SourceNode = new NodeId("source");
-            evt.MetaData = new Dictionary<string, object>
+            evt.SetMetadata(extractor.StringConverter, new[]
             {
-                { "key1", "value1" },
-                { "key2", 123 },
-                { "key3", null },
-                { "key4", new NodeId("meta") }
-            };
+                new EventFieldValue(new EventField("key1"), "value1"),
+                new EventFieldValue(new EventField("key1"), 123),
+                new EventFieldValue(new EventField("key1"), Variant.Null),
+                new EventFieldValue(new EventField("key1"), new NodeId("meta")),
+            });
 
             bytes = evt.ToStorableBytes(extractor);
             using (var stream = new MemoryStream(bytes))
@@ -1034,7 +1034,7 @@ namespace Test.Unit
             var evt = new UAEvent
             {
                 EmittingNode = new NodeId("emitter"),
-                MetaData = new Dictionary<string, object>(),
+                MetaData = new Dictionary<string, string>(),
                 EventId = "eventid",
                 EventType = new NodeId("type"),
                 Message = "message",
@@ -1066,8 +1066,8 @@ namespace Test.Unit
 
             // With mapped metadata
             evt.MetaData["SubType"] = "SomeSubType";
-            evt.MetaData["StartTime"] = ts.AddDays(-1);
-            evt.MetaData["EndTime"] = ts.AddDays(1).ToUnixTimeMilliseconds();
+            evt.MetaData["StartTime"] = ts.AddDays(-1).ToUnixTimeMilliseconds().ToString();
+            evt.MetaData["EndTime"] = ts.AddDays(1).ToUnixTimeMilliseconds().ToString();
             evt.MetaData["Type"] = "SomeOtherType";
 
             conv = evt.ToStatelessCDFEvent(extractor, 123, null);
@@ -1094,7 +1094,7 @@ namespace Test.Unit
             var evt = new UAEvent
             {
                 EmittingNode = new NodeId("emitter"),
-                MetaData = new Dictionary<string, object>(),
+                MetaData = new Dictionary<string, string>(),
                 EventId = "eventid",
                 EventType = new NodeId("type"),
                 Message = "message",
@@ -1124,8 +1124,8 @@ namespace Test.Unit
 
             // With mapped metadata
             evt.MetaData["SubType"] = "SomeSubType";
-            evt.MetaData["StartTime"] = ts.AddDays(-1);
-            evt.MetaData["EndTime"] = ts.AddDays(1).ToUnixTimeMilliseconds();
+            evt.MetaData["StartTime"] = ts.AddDays(-1).ToUnixTimeMilliseconds().ToString();
+            evt.MetaData["EndTime"] = ts.AddDays(1).ToUnixTimeMilliseconds().ToString();
             evt.MetaData["Type"] = "SomeOtherType";
 
             conv = evt.ToCDFEvent(extractor, 123, nodeToAsset);
@@ -1141,6 +1141,43 @@ namespace Test.Unit
             Assert.Equal(ts.AddDays(1).ToUnixTimeMilliseconds(), conv.EndTime);
             Assert.Equal(123, conv.DataSetId);
             Assert.Equal(new long[] { 111 }, conv.AssetIds);
+        }
+        [Fact]
+        public void TestDeepEventMetadata()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            var ts = DateTime.UtcNow;
+
+            var evt = new UAEvent
+            {
+                EmittingNode = new NodeId("emitter"),
+                EventId = "eventid",
+                EventType = new NodeId("type"),
+                Message = "message",
+                SourceNode = new NodeId("source"),
+                Time = ts
+            };
+
+            var rawMeta = new[]
+            {
+                new EventFieldValue(new EventField("test-simple"), new NodeId("test")),
+                new EventFieldValue(new EventField("test-complex"), new Variant(new ReadValueId { AttributeId = 1, NodeId = new NodeId("test2") })),
+                new EventFieldValue(new EventField(new QualifiedNameCollection { "deep", "deep-2", "deep-simple" }), 123.123),
+                new EventFieldValue(new EventField(new QualifiedNameCollection { "deep", "deep-2", "deep-complex" }),
+                    new Variant(new ReadValueId { AttributeId = 1, NodeId = new NodeId("test2") })),
+                new EventFieldValue(new EventField(new QualifiedNameCollection { "deep", "deep-2" }), new [] { 1, 2, 3, 4 }),
+                new EventFieldValue(new EventField(new QualifiedNameCollection { "deep", "deep-2", "Value" }), 123.321)
+            };
+            evt.SetMetadata(extractor.StringConverter, rawMeta);
+            var meta = evt.MetaData;
+
+            Assert.Equal(3, meta.Count);
+            Assert.Equal("gp.base:s=test", meta["test-simple"]);
+            Assert.Equal(@"{""NodeId"":{""IdType"":1,""Id"":""test2""},""AttributeId"":1}", meta["test-complex"]);
+            Assert.Equal(@"{""deep-2"":{""deep-simple"":123.123,""deep-complex"":{""NodeId"":{""IdType"":1,""Id"":""test2""},""AttributeId"":1},"
+                + @"""Value1"":123.321,""Value"":[1,2,3,4]}}", meta["deep"]);
+
         }
         #endregion
 

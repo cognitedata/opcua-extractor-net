@@ -250,10 +250,10 @@ namespace Test.Unit
                     SourceNode = new NodeId("source"),
                     EventType = new NodeId("type"),
                     EventId = "someid",
-                    MetaData = new Dictionary<string, object>
+                    MetaData = new Dictionary<string, string>
                     {
                         { "Key1", "object1" },
-                        { "Key2", 123 }
+                        { "Key2", "123" }
                     }
                 },
                 new UAEvent
@@ -263,10 +263,10 @@ namespace Test.Unit
                     SourceNode = new NodeId("source"),
                     EventType = new NodeId("type"),
                     EventId = "someid2",
-                    MetaData = new Dictionary<string, object>
+                    MetaData = new Dictionary<string, string>
                     {
                         { "Key1", "object1" },
-                        { "Key2", 123 }
+                        { "Key2", "123" }
                     }
                 }
             };

@@ -18,7 +18,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
+using Newtonsoft.Json;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -26,6 +28,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 namespace Cognite.OpcUa.Types
 {
@@ -55,9 +58,9 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public NodeId EventType { get; set; }
         /// <summary>
-        /// string->object dictionary of the remaining properties that haven't been filtered out.
+        /// Metadata fields
         /// </summary>
-        public Dictionary<string, object> MetaData { get; set; }
+        public Dictionary<string, string> MetaData { get; set; }
         /// <summary>
         /// Id of the node that emitted the event in opc-ua
         /// </summary>
@@ -89,6 +92,50 @@ namespace Cognite.OpcUa.Types
             }
 
             return builder.ToString();
+        }
+        public void SetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values)
+        {
+            MetaData = GetMetadata(converter, values);
+        }
+        private static Dictionary<string, string> GetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values)
+        {
+            if (values == null) return null;
+            var parents = new Dictionary<string, EventFieldNode>();
+            foreach (var field in values)
+            {
+                IDictionary<string, EventFieldNode> next = parents;
+                EventFieldNode current = null;
+                for (int i = 0; i < field.Field.BrowsePath.Count; i++)
+                {
+                    if (!next.TryGetValue(field.Field.BrowsePath[i].Name, out current))
+                    {
+                        next[field.Field.BrowsePath[i].Name] = current = new EventFieldNode();
+                    }
+                    next = current.Children;
+                }
+                if (current != null)
+                {
+                    current.Value = field.Value;
+                }
+            }
+            var sb = new StringBuilder();
+            var sw = new StringWriter(sb);
+            using var writer = new JsonTextWriter(sw) { Formatting = Formatting.None };
+            var results = new Dictionary<string, string>();
+            foreach (var kvp in parents)
+            {
+                kvp.Value.ToJson(converter, writer);
+                writer.Flush();
+                var result = sb.ToString();
+                // If what we produce is an escaped JSON string we'd like to remove the quotes.
+                if (result.StartsWith('"') && result.EndsWith('"'))
+                {
+                    result = result[1..^1];
+                }
+                results[kvp.Key] = result;
+                sb.Clear();
+            }
+            return results;
         }
         /// <summary>
         /// Converts event into array of bytes which may be written to file.
@@ -149,7 +196,7 @@ namespace Cognite.OpcUa.Types
             if (stream.Read(buffer, 0, sizeof(ushort)) < sizeof(ushort)) return null;
             ushort count = BitConverter.ToUInt16(buffer, 0);
 
-            evt.MetaData = new Dictionary<string, object>();
+            evt.MetaData = new Dictionary<string, string>();
 
             for (int i = 0; i < count; i++)
             {
@@ -203,7 +250,7 @@ namespace Cognite.OpcUa.Types
             {
                 if (!excludeMetaData.Contains(dt.Key))
                 {
-                    finalMetaData[dt.Key] = client.StringConverter.ConvertToString(dt.Value);
+                    finalMetaData[dt.Key] = dt.Value;
                 }
             }
 
@@ -277,6 +324,54 @@ namespace Cognite.OpcUa.Types
             }
             ToCDFEventBase(client, evt, dataSetId);
             return evt;
+        }
+    }
+    public class EventFieldValue
+    {
+        public EventField Field { get; }
+        public Variant Value { get; }
+        public EventFieldValue(EventField field, Variant value)
+        {
+            Field = field;
+            Value = value;
+        }
+    }
+    public class EventFieldNode
+    {
+        public IDictionary<string, EventFieldNode> Children { get; } = new Dictionary<string, EventFieldNode>();
+        public Variant? Value { get; set; }
+        public void ToJson(StringConverter converter, JsonWriter writer)
+        {
+            if (writer == null) throw new ArgumentNullException(nameof(writer));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            if (Children.Any())
+            {
+                writer.WriteStartObject();
+                int valIdx = 1;
+                foreach (var child in Children)
+                {
+                    string key = child.Key;
+                    if (key == "Value")
+                    {
+                        do
+                        {
+                            key = $"Value{valIdx++}";
+                        } while (Children.ContainsKey(key));
+                    }
+                    writer.WritePropertyName(key);
+                    child.Value.ToJson(converter, writer);
+                }
+                if (Value.HasValue)
+                {
+                    writer.WritePropertyName("Value");
+                    writer.WriteRawValue(converter.ConvertToString(Value, null, null, true));
+                }
+                writer.WriteEndObject();
+            }
+            else if (Value.HasValue)
+            {
+                writer.WriteRawValue(converter.ConvertToString(Value, null, null, true));
+            }
         }
     }
 }

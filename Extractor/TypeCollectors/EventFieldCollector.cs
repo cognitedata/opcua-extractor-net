@@ -30,7 +30,7 @@ namespace Cognite.OpcUa.TypeCollectors
     public class EventField
     {
         public QualifiedNameCollection BrowsePath { get; }
-        public string Name => string.Join('_', BrowsePath.Select(name => name.Name));
+        public string Name => BrowsePath.Last().Name;
         public EventField(QualifiedName browseName)
         {
             BrowsePath = new QualifiedNameCollection() { browseName };
