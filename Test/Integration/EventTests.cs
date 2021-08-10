@@ -67,11 +67,11 @@ namespace Test.Integration
             Assert.Equal(ObjectIds.Server, evt.EmittingNode);
             Assert.Equal(ids.Obj1, evt.SourceNode);
             Assert.Equal(5, evt.MetaData.Count);
-            Assert.Equal(new Variant("str 0"), evt.MetaData["PropertyString"]);
-            Assert.Equal(new Variant(0f), evt.MetaData["PropertyNum"]);
-            Assert.Equal(new Variant("sub-type"), evt.MetaData["SubType"]);
-            Assert.Equal(new Variant((ushort)100), evt.MetaData["Severity"]);
-            Assert.Equal(new Variant("Object 1"), evt.MetaData["SourceName"]);
+            Assert.Equal("str 0", evt.MetaData["PropertyString"]);
+            Assert.Equal("0", evt.MetaData["PropertyNum"]);
+            Assert.Equal("sub-type", evt.MetaData["SubType"]);
+            Assert.Equal("100", evt.MetaData["Severity"]);
+            Assert.Equal("Object 1", evt.MetaData["SourceName"]);
             Assert.True(evt.Time > DateTime.UtcNow.AddSeconds(-5));
             Assert.Equal(ids.PropType, evt.EventType);
             Assert.StartsWith(tester.Config.Extraction.IdPrefix, evt.EventId, StringComparison.InvariantCulture);
@@ -110,10 +110,10 @@ namespace Test.Integration
             Assert.Equal(ids.Obj1, evt.SourceNode);
             Assert.Equal(4, evt.MetaData.Count);
             Assert.False(evt.MetaData.ContainsKey("PropertyNum"));
-            Assert.Equal(new Variant("str 0"), evt.MetaData["PropertyString"]);
-            Assert.Equal(new Variant("sub-type"), evt.MetaData["SubType"]);
-            Assert.Equal(new Variant((ushort)100), evt.MetaData["Severity"]);
-            Assert.Equal(new Variant("Object 1"), evt.MetaData["SourceName"]);
+            Assert.Equal("str 0", evt.MetaData["PropertyString"]);
+            Assert.Equal("sub-type", evt.MetaData["SubType"]);
+            Assert.Equal("100", evt.MetaData["Severity"]);
+            Assert.Equal("Object 1", evt.MetaData["SourceName"]);
             Assert.True(evt.Time > DateTime.UtcNow.AddSeconds(-5));
             Assert.Equal(ids.PropType, evt.EventType);
             Assert.StartsWith(tester.Config.Extraction.IdPrefix, evt.EventId, StringComparison.InvariantCulture);
@@ -121,7 +121,7 @@ namespace Test.Integration
             evt = pusher.Events[ObjectIds.Server].First(evt => evt.Message == "mapped 0");
             Assert.Equal(ObjectIds.Server, evt.EmittingNode);
             Assert.Equal(3, evt.MetaData.Count);
-            Assert.Equal(new Variant("CustomType"), evt.MetaData["Type"]);
+            Assert.Equal("CustomType", evt.MetaData["Type"]);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
@@ -162,12 +162,12 @@ namespace Test.Integration
             Assert.Equal(ObjectIds.Server, evt.EmittingNode);
             Assert.Equal(ids.Root, evt.SourceNode);
             Assert.Equal(6, evt.MetaData.Count);
-            Assert.Equal(new Variant(123.123f), evt.MetaData["PropertyNum"]);
-            Assert.Equal(new Variant("string"), evt.MetaData["PropertyString"]);
-            Assert.Equal(new Variant("subType"), evt.MetaData["SubType"]);
-            Assert.Equal(new Variant((ushort)100), evt.MetaData["Severity"]);
-            Assert.Equal(new Variant("EventRoot"), evt.MetaData["SourceName"]);
-            Assert.Equal(new Variant("deepValue"), evt.MetaData["DeepObj_DeepProp"]);
+            Assert.Equal("123.123", evt.MetaData["PropertyNum"]);
+            Assert.Equal("string", evt.MetaData["PropertyString"]);
+            Assert.Equal("subType", evt.MetaData["SubType"]);
+            Assert.Equal("100", evt.MetaData["Severity"]);
+            Assert.Equal("EventRoot", evt.MetaData["SourceName"]);
+            Assert.Equal(@"{""DeepProp"":""deepValue""}", evt.MetaData["DeepObj"]);
             Assert.True(evt.Time > DateTime.UtcNow.AddSeconds(-5));
             Assert.Equal(ids.DeepType, evt.EventType);
 
@@ -299,17 +299,18 @@ namespace Test.Integration
             Assert.Equal(ids.Obj1, evt.SourceNode);
             Assert.Equal(4, evt.MetaData.Count);
             Assert.False(evt.MetaData.ContainsKey("PropertyNum"));
-            Assert.Equal(new Variant("str 0"), evt.MetaData["PropertyString"]);
-            Assert.Equal(new Variant("sub-type"), evt.MetaData["SubType"]);
-            Assert.Equal(new Variant((ushort)100), evt.MetaData["Severity"]);
-            Assert.Equal(new Variant("Object 1"), evt.MetaData["SourceName"]);
+            Assert.Equal("str 0", evt.MetaData["PropertyString"]);
+            Assert.Equal("sub-type", evt.MetaData["SubType"]);
+            Assert.Equal("100", evt.MetaData["Severity"]);
+            Assert.Equal("Object 1", evt.MetaData["SourceName"]);
             Assert.Equal(ids.PropType, evt.EventType);
             Assert.StartsWith(tester.Config.Extraction.IdPrefix, evt.EventId, StringComparison.InvariantCulture);
 
             evt = pusher.Events[ObjectIds.Server].First(evt => evt.Message == "mapped 0");
             Assert.Equal(ObjectIds.Server, evt.EmittingNode);
+            foreach (var meta in evt.MetaData) Console.WriteLine($"{meta.Key}: {meta.Value}");
             Assert.Equal(3, evt.MetaData.Count);
-            Assert.Equal(new Variant("CustomType"), evt.MetaData["Type"]);
+            Assert.Equal("CustomType", evt.MetaData["Type"]);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 

@@ -470,7 +470,7 @@ namespace Cognite.OpcUa
                 string name = string.Join('_', clause.BrowsePath.Select(name => name.Name));
                 if (name != "EventId" && name != "SourceNode" && name != "EventType" && config.Events.DestinationNameMap.TryGetValue(name, out var mapped))
                 {
-                    field.BrowsePath[field.BrowsePath.Count - 1] = mapped;
+                    field = new EventField(new QualifiedNameCollection(clause.BrowsePath.Take(clause.BrowsePath.Count - 1).Append(mapped)));
                     name = mapped;
                 }
                 if (!extractedProperties.TryGetValue(name, out var extracted) || extracted.Value == Variant.Null)
@@ -496,11 +496,22 @@ namespace Cognite.OpcUa
                 log.Verbose("Event lacks specified time, type: {type}", eventType);
                 return null;
             }
+            if (extractedProperties.GetValueOrDefault("Message")?.Value.Value.ToString() == "mapped 0")
+            {
+                foreach (var prop in extractedProperties)
+                {
+                    Console.WriteLine(prop.Key + ": " + prop.Value.Value);
+                }
+                foreach (var field in targetEventFields)
+                {
+                    Console.WriteLine(string.Join(',', field.BrowsePath.Select(bn => bn.Name)) + ": ", field.Name);
+                }
+            }
             var finalProperties = extractedProperties.Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId"
                 && kvp.Key != "SourceNode" && kvp.Key != "Time" && kvp.Key != "EventType").Select(kvp => kvp.Value);
             var buffEvent = new UAEvent
             {
-                Message = extractor.StringConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message").Value),
+                Message = extractor.StringConverter.ConvertToString(extractedProperties.GetValueOrDefault("Message")?.Value),
                 EventId = config.Extraction.IdPrefix + eventId,
                 SourceNode = sourceNode,
                 Time = time,
