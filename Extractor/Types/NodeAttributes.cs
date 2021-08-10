@@ -61,13 +61,17 @@ namespace Cognite.OpcUa.Types
                     }
                     break;
                 case NodeClass.Variable:
-                    if (config.History.Enabled)
+                    if (config.History.Enabled && config.History.Data)
                     {
                         result.Add(Attributes.Historizing);
                     }
                     if (config.Events.Enabled && config.Events.DiscoverEmitters)
                     {
                         result.Add(Attributes.EventNotifier);
+                    }
+                    if (!config.Subscriptions.IgnoreAccessLevel && (config.Subscriptions.DataPoints || config.History.Enabled && config.History.Data))
+                    {
+                        result.Add(Attributes.UserAccessLevel);
                     }
                     goto case NodeClass.VariableType;
                 case NodeClass.VariableType:
@@ -117,7 +121,8 @@ namespace Cognite.OpcUa.Types
         public UADataType DataType { get; set; }
         public int ValueRank { get; set; }
         public Collection<int> ArrayDimensions { get; set; }
-
+        public byte AccessLevel { get; set; }
+        public bool ReadHistory { get; set; }
         public VariableAttributes(NodeClass nc) : base(nc) { }
         /// <summary>
         /// Handle attribute read result for a variable.
@@ -138,12 +143,25 @@ namespace Cognite.OpcUa.Types
                 if (config.History.Enabled)
                 {
                     Historizing = values[idx++].GetValue(false);
+                    if (config.Subscriptions.IgnoreAccessLevel)
+                    {
+                        ReadHistory = Historizing;
+                    }
                 }
                 if (config.Events.Enabled)
                 {
                     EventNotifier = values[idx++].GetValue(EventNotifiers.None);
                 }
-                ShouldSubscribe = true;
+                if (!config.Subscriptions.IgnoreAccessLevel && (config.Subscriptions.DataPoints || config.History.Enabled && config.History.Data))
+                {
+                    AccessLevel = values[idx++].GetValue<byte>(0);
+                    ShouldSubscribe = (AccessLevel & AccessLevels.CurrentRead) != 0;
+                    ReadHistory = (AccessLevel & AccessLevels.HistoryRead) != 0 && config.History.Enabled && config.History.Data;
+                }
+                else
+                {
+                    ShouldSubscribe = true;
+                }
             }
             var dt = values[idx++].GetValue(NodeId.Null);
             DataType = client.DataTypeManager.GetDataType(dt) ?? new UADataType(dt);

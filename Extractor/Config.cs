@@ -176,6 +176,7 @@ namespace Cognite.OpcUa
         public DataSubscriptionConfig DataChangeFilter { get; set; }
         public bool DataPoints { get; set; } = true;
         public bool Events { get; set; } = true;
+        public bool IgnoreAccessLevel { get; set; }
     }
     public interface IPusherConfig
     {
