@@ -36,6 +36,7 @@ namespace Cognite.OpcUa
         private bool nextPushFlag;
         private bool restart;
 
+        private readonly object taskListLock = new object();
         private readonly List<Task> tasks = new List<Task>();
         private readonly IEnumerable<IPusher> pushers;
         private readonly ILogger log = Log.Logger.ForContext(typeof(Looper));
@@ -98,7 +99,10 @@ namespace Cognite.OpcUa
         /// </summary>
         public void ScheduleTasks(IEnumerable<Task> newTasks)
         {
-            tasks.AddRange(newTasks);
+            lock (taskListLock)
+            {
+                tasks.AddRange(newTasks);
+            }
             triggerGrowTaskList.Set();
         }
         public void TriggerHistoryRestart()
@@ -155,20 +159,23 @@ namespace Cognite.OpcUa
                 {
                     ExtractorUtils.LogException(log, ex, "Unexpected error in main task list", "Handled error in main task list");
                 }
-                failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
-
-                if (failedTask != null) break;
-
-                var toRemove = tasks.Where(task => task.IsCompleted).ToList();
-                foreach (var task in toRemove)
+                lock (taskListLock)
                 {
-                    tasks.Remove(task);
-                }
+                    failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
 
-                if (triggerGrowTaskList.WaitOne(0))
-                {
-                    triggerGrowTaskList.Reset();
-                    tasks.Add(SafeWait(triggerGrowTaskList, Timeout.InfiniteTimeSpan, token));
+                    if (failedTask != null) break;
+
+                    var toRemove = tasks.Where(task => task.IsCompleted).ToList();
+                    foreach (var task in toRemove)
+                    {
+                        tasks.Remove(task);
+                    }
+
+                    if (triggerGrowTaskList.WaitOne(0))
+                    {
+                        triggerGrowTaskList.Reset();
+                        tasks.Add(SafeWait(triggerGrowTaskList, Timeout.InfiniteTimeSpan, token));
+                    }
                 }
             }
 
