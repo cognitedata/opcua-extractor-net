@@ -496,17 +496,7 @@ namespace Cognite.OpcUa
                 log.Verbose("Event lacks specified time, type: {type}", eventType);
                 return null;
             }
-            if (extractedProperties.GetValueOrDefault("Message")?.Value.Value.ToString() == "mapped 0")
-            {
-                foreach (var prop in extractedProperties)
-                {
-                    Console.WriteLine(prop.Key + ": " + prop.Value.Value);
-                }
-                foreach (var field in targetEventFields)
-                {
-                    Console.WriteLine(string.Join(',', field.BrowsePath.Select(bn => bn.Name)) + ": ", field.Name);
-                }
-            }
+
             var finalProperties = extractedProperties.Where(kvp => kvp.Key != "Message" && kvp.Key != "EventId"
                 && kvp.Key != "SourceNode" && kvp.Key != "Time" && kvp.Key != "EventType").Select(kvp => kvp.Value);
             var buffEvent = new UAEvent

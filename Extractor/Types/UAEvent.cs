@@ -358,7 +358,6 @@ namespace Cognite.OpcUa.Types
                             key = $"Value{valIdx++}";
                         } while (Children.ContainsKey(key));
                     }
-                    Console.WriteLine("Write key: " + key);
                     writer.WritePropertyName(key);
                     child.Value.ToJson(converter, writer);
                 }
@@ -371,7 +370,6 @@ namespace Cognite.OpcUa.Types
             }
             else if (Value.HasValue)
             {
-                var val = converter.ConvertToString(Value, null, null, true);
                 writer.WriteRawValue(converter.ConvertToString(Value, null, null, true));
             }
         }
