@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
 using Opc.Ua;
 using System;
@@ -55,9 +56,9 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public NodeId EventType { get; set; }
         /// <summary>
-        /// string->object dictionary of the remaining properties that haven't been filtered out.
+        /// Metadata fields
         /// </summary>
-        public Dictionary<string, object> MetaData { get; set; }
+        public List<EventFieldValue> Fields { get; set; }
         /// <summary>
         /// Id of the node that emitted the event in opc-ua
         /// </summary>
@@ -78,17 +79,40 @@ namespace Cognite.OpcUa.Types
             {
                 builder.AppendFormat(CultureInfo.InvariantCulture, "SourceNode: {0}\n", SourceNode);
             }
-            if (MetaData != null && MetaData.Any())
+            if (Fields != null && Fields.Any())
             {
                 builder.Append("MetaData: {\n");
-                foreach (var kvp in MetaData)
+                foreach (var field in Fields)
                 {
-                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", kvp.Key, kvp.Value);
+                    string key = string.Join('_', field.Field.BrowsePath.Select(bn => bn.Name));
+                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", key, field.Value);
                 }
                 builder.Append("}\n");
             }
 
             return builder.ToString();
+        }
+        private Dictionary<string, EventFieldNode> GetMetadata()
+        {
+            var parents = new Dictionary<string, EventFieldNode>();
+            foreach (var field in Fields)
+            {
+                IDictionary<string, EventFieldNode> next = parents;
+                EventFieldNode current = null;
+                for (int i = 0; i < field.Field.BrowsePath.Count; i++)
+                {
+                    if (!next.TryGetValue(field.Field.BrowsePath[i].Name, out current))
+                    {
+                        next[field.Field.BrowsePath[i].Name] = current = new EventFieldNode();
+                    }
+                    next = current.Children;
+                }
+                if (current != null)
+                {
+                    current.Value = field.Value;
+                }
+            }
+            return parents;
         }
         /// <summary>
         /// Converts event into array of bytes which may be written to file.
@@ -110,8 +134,13 @@ namespace Cognite.OpcUa.Types
             bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EmittingNode)));
             var metaDataBytes = new List<byte>();
             ushort count = 0;
-            if (MetaData != null)
+            if (Fields != null)
             {
+
+
+
+
+
                 foreach (var kvp in MetaData)
                 {
                     count++;
@@ -278,5 +307,20 @@ namespace Cognite.OpcUa.Types
             ToCDFEventBase(client, evt, dataSetId);
             return evt;
         }
+    }
+    public class EventFieldValue
+    {
+        public EventField Field { get; }
+        public Variant Value { get; }
+        public EventFieldValue(EventField field, Variant value)
+        {
+            Field = field;
+            Value = value;
+        }
+    }
+    public class EventFieldNode
+    {
+        public IDictionary<string, EventFieldNode> Children { get; } = new Dictionary<string, EventFieldNode>();
+        public Variant? Value { get; set; }
     }
 }
