@@ -16,14 +16,16 @@ namespace Cognite.OpcUa.Types
     /// Class used for converting properties and property values to strings.
     /// Handles both conversion to metadata for Clean, and conversion to JSON for Raw.
     /// </summary>
-    public class StringConverter
+    public class StringConverter : JsonConverter<UANode>
     {
         private readonly UAClient uaClient;
+        private readonly FullConfig config;
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
 
-        public StringConverter(UAClient uaClient)
+        public StringConverter(UAClient uaClient, FullConfig config)
         {
             this.uaClient = uaClient;
+            this.config = config;
         }
         /// <summary>
         /// Recursively converts the value and children of a node to JSON.
@@ -307,6 +309,109 @@ namespace Cognite.OpcUa.Types
             if (!type.Namespace.StartsWith("Opc.Ua", StringComparison.InvariantCulture)) return false;
             if (customHandledTypes.Contains(type)) return false;
             return true;
+        }
+
+
+        private void WriteProperties(JsonWriter writer, UANode node, bool getExtras, bool writeValue)
+        {
+            Dictionary<string, string> extras = null;
+
+            if (getExtras)
+            {
+                extras = node.GetExtraMetadata(config.Extraction, uaClient.DataTypeManager, uaClient.StringConverter);
+                if (extras != null) extras.Remove("Value");
+            }
+            // If we should treat this as a key/value pair, or write it as an object
+            if (extras != null && extras.Any() || node.Properties != null && node.Properties.Any())
+            {
+                writer.WriteStartObject();
+            }
+            else if (node is UAVariable variable && writeValue)
+            {
+                writer.WriteRawValue(ConvertToString(variable.Value, variable.DataType?.EnumValues, null, true));
+                return;
+            }
+            else
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            // Keep fields from being duplicated, resulting in illegal JSON.
+            var fields = new HashSet<string>();
+            if (node is UAVariable variable2 && writeValue)
+            {
+                writer.WritePropertyName("Value");
+                writer.WriteRawValue(ConvertToString(variable2.Value));
+                fields.Add("Value");
+            }
+            if (extras != null)
+            {
+                foreach (var kvp in extras)
+                {
+                    writer.WritePropertyName(kvp.Key);
+                    writer.WriteValue(kvp.Value);
+                    fields.Add(kvp.Key);
+                }
+            }
+            if (node.Properties != null)
+            {
+                foreach (var child in node.Properties)
+                {
+                    var name = child.DisplayName;
+                    if (name == null) continue;
+                    string safeName = name;
+                    int idx = 0;
+                    while (!fields.Add(safeName))
+                    {
+                        safeName = JsonConvert.ToString($"{name}{idx++}");
+                    }
+
+                    writer.WritePropertyName(safeName);
+                    WriteProperties(writer, child, false, true);
+                }
+            }
+            writer.WriteEndObject();
+        }
+
+        public override void WriteJson(JsonWriter writer, UANode value, Newtonsoft.Json.JsonSerializer serializer)
+        {
+            if (writer == null) throw new ArgumentNullException(nameof(writer));
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var id = uaClient.GetUniqueId(value.Id);
+            writer.WriteStartObject();
+            writer.WritePropertyName("externalId");
+            writer.WriteValue(id);
+            writer.WritePropertyName("name");
+            writer.WriteValue(string.IsNullOrEmpty(value.DisplayName) ? id : value.DisplayName);
+            writer.WritePropertyName("description");
+            writer.WriteValue(value.Description);
+            writer.WritePropertyName("metadata");
+            WriteProperties(writer, value, true, value.NodeClass == NodeClass.VariableType);
+            if ((value.NodeClass == NodeClass.Variable) && value is UAVariable variable && variable.IsArray)
+            {
+                writer.WritePropertyName("assetExternalId");
+                writer.WriteValue(uaClient.GetUniqueId(value.ParentId));
+                writer.WritePropertyName("isString");
+                writer.WriteValue(variable.DataType?.IsString ?? false);
+                writer.WritePropertyName("isStep");
+                writer.WriteValue(variable.DataType?.IsStep ?? false);
+            }
+            else
+            {
+                writer.WritePropertyName("parentExternalId");
+                writer.WriteValue(uaClient.GetUniqueId(value.ParentId));
+            }
+        }
+
+        public override UANode ReadJson(JsonReader reader, Type objectType, UANode existingValue, bool hasExistingValue, Newtonsoft.Json.JsonSerializer serializer)
+        {
+            throw new NotImplementedException();
         }
     }
 }

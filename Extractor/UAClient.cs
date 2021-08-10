@@ -110,7 +110,7 @@ namespace Cognite.OpcUa
             {
                 metricsManager = new NodeMetricsManager(this, config);
             }
-            StringConverter = new StringConverter(this);
+            StringConverter = new StringConverter(this, config);
         }
         #region Session management
         /// <summary>

@@ -22,6 +22,7 @@ using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
+using Microsoft.Extensions.DependencyInjection;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
@@ -63,6 +64,8 @@ namespace Cognite.OpcUa.Pushers
 
         private Dictionary<NodeId, string> eventParents = new Dictionary<NodeId, string>();
 
+        private ExtractionConfig extractionConfig;
+
         private static readonly Counter createdAssets = Metrics
             .CreateCounter("opcua_created_assets_mqtt", "Number of assets pushed over mqtt");
         private static readonly Counter createdTimeseries = Metrics
@@ -86,9 +89,10 @@ namespace Cognite.OpcUa.Pushers
         /// Constructor, also starts the client and sets up correct disconnect handlers.
         /// </summary>
         /// <param name="config">Config to use</param>
-        public MQTTPusher(MqttPusherConfig config)
+        public MQTTPusher(MqttPusherConfig config, IServiceProvider provider)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
+            extractionConfig = provider.GetRequiredService<ExtractionConfig>();
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.ClientId)
                 .WithTcpServer(config.Host, config.Port)
@@ -549,12 +553,12 @@ namespace Cognite.OpcUa.Pushers
 
             if (useRawStore)
             {
-                var jsonAssets = ConvertNodesJson(objects, update);
-                var rawObj = new RawRequestWrapper<AssetCreateJson>
+                var jsonAssets = ConvertNodesJson(objects);
+                var rawObj = new RawRequestWrapper<JsonElement>
                 {
                     Database = config.RawMetadata.Database,
                     Table = config.RawMetadata.AssetsTable,
-                    Rows = jsonAssets.Select(asset => new RawRowCreateDto<AssetCreateJson> { Key = asset.ExternalId, Columns = asset })
+                    Rows = jsonAssets.Select(pair => new RawRowCreateDto<JsonElement> { Key = pair.id, Columns = pair.node })
                 };
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
@@ -610,7 +614,7 @@ namespace Cognite.OpcUa.Pushers
         {
             foreach (var node in nodes)
             {
-                var create = node.ToCDFAsset(Extractor, config.DataSetId, config.MetadataMapping?.Assets);
+                var create = node.ToCDFAsset(extractionConfig, Extractor, Extractor.StringConverter, Extractor.DataTypeManager, config.DataSetId, config.MetadataMapping?.Assets);
                 if (create == null) continue;
                 if (!node.Changed)
                 {
@@ -625,27 +629,17 @@ namespace Cognite.OpcUa.Pushers
             }
         }
         /// <summary>
-        /// Convert nodes to assets with json metadata, setting fields that should not be updated to null.
+        /// Convert nodes to raw assets or timeseries with json metadata.
         /// </summary>
         /// <param name="nodes">Nodes to create or update</param>
-        /// <param name="update">Configuration for which fields should be updated.</param>
         /// <returns>List of assets to create</returns>
-        private IEnumerable<AssetCreateJson> ConvertNodesJson(IEnumerable<UANode> nodes, TypeUpdateConfig update)
+        private IEnumerable<(string id, JsonElement node)> ConvertNodesJson(IEnumerable<UANode> nodes)
         {
             foreach (var node in nodes)
             {
-                var create = node.ToCDFAssetJson(Extractor, config.MetadataMapping?.Assets);
+                var create = node.ToJson(Extractor.StringConverter);
                 if (create == null) continue;
-                if (!node.Changed)
-                {
-                    yield return create;
-                    continue;
-                }
-                if (!update.Context) create.ParentExternalId = null;
-                if (!update.Description) create.Description = null;
-                if (!update.Metadata) create.Metadata = null;
-                if (!update.Name) create.Name = null;
-                yield return create;
+                yield return (Extractor.GetUniqueId(node.Id), create.RootElement);
             }
         }
         /// <summary>
@@ -658,7 +652,8 @@ namespace Cognite.OpcUa.Pushers
         {
             foreach (var variable in variables)
             {
-                var create = variable.ToStatelessTimeSeries(Extractor, config.DataSetId, config.MetadataMapping?.Timeseries);
+                var create = variable.ToStatelessTimeSeries(extractionConfig, Extractor,
+                    Extractor.DataTypeManager, Extractor.StringConverter, config.DataSetId, config.MetadataMapping?.Timeseries);
                 if (create == null) continue;
                 if (!variable.Changed)
                 {
@@ -684,15 +679,14 @@ namespace Cognite.OpcUa.Pushers
             bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
 
-            var timeseries = ConvertVariables(variables, update);
-
             bool useMinimalTs = useRawStore || config.SkipMetadata;
 
             if (useMinimalTs)
             {
                 var minimalTimeseries = variables
                     .Where(variable => !update.AnyUpdate || !variable.Changed)
-                    .Select(variable => variable.ToTimeseries(Extractor, config.DataSetId, null, null, true))
+                    .Select(variable => variable.ToTimeseries(extractionConfig, Extractor,
+                        Extractor.DataTypeManager, Extractor.StringConverter, config.DataSetId, null, null, true))
                     .Where(variable => variable != null)
                     .ToList();
 
@@ -708,7 +702,7 @@ namespace Cognite.OpcUa.Pushers
                     try
                     {
                         await client.PublishAsync(minimalMsg, token);
-                        createdTimeseries.Inc(timeseries.Count());
+                        createdTimeseries.Inc(minimalTimeseries.Count);
                     }
                     catch (Exception e)
                     {
@@ -722,11 +716,12 @@ namespace Cognite.OpcUa.Pushers
 
             if (useRawStore)
             {
-                var rawObj = new RawRequestWrapper<StatelessTimeSeriesCreate>
+                var rawTimeseries = ConvertNodesJson(variables);
+                var rawObj = new RawRequestWrapper<JsonElement>
                 {
                     Database = config.RawMetadata.Database,
                     Table = config.RawMetadata.TimeseriesTable,
-                    Rows = timeseries.Select(ts => new RawRowCreateDto<StatelessTimeSeriesCreate> { Key = ts.ExternalId, Columns = ts })
+                    Rows = rawTimeseries.Select(pair => new RawRowCreateDto<JsonElement> { Key = pair.id, Columns = pair.node })
                 };
 
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
@@ -751,6 +746,7 @@ namespace Cognite.OpcUa.Pushers
                 return true;
             }
 
+            var timeseries = ConvertVariables(variables, update);
 
             var data = JsonSerializer.SerializeToUtf8Bytes(timeseries, null);
             var msg = baseBuilder
