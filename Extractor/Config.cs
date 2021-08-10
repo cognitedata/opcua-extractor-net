@@ -328,6 +328,7 @@ namespace Cognite.OpcUa
         public IEnumerable<ProtoNodeId> EmitterIds { get; set; }
         public IEnumerable<ProtoNodeId> HistorizingEmitterIds { get; set; }
         public bool Enabled { get; set; }
+        public bool DiscoverEmitters { get; set; } = true;
         public bool AllEvents { get; set; } = true;
         public bool History { get; set; }
         public string ExcludeEventFilter { get; set; }

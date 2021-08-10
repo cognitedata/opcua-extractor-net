@@ -622,9 +622,11 @@ events:
     # Emitters are added from the node hierarchy, or from the emitter-ids option,
     # if found in both, the node hierarchy is used.
 
-    # True to enable reading events from the server, reads from any nodes in the hierarchy
-    # with a suitable EventNotifier, as well as the Server node.
+    # True to enable reading events from the server
     enabled: false
+
+    # Automatically treat nodes with suitable EventNotifier as emitters.
+    discover-emitters: true
 
     # Default true, enable reading both custom events and base opc-ua events.
     all-events: true
