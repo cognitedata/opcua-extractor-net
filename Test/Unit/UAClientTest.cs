@@ -519,7 +519,7 @@ namespace Test.Unit
             Assert.Equal(tester.Server.Ids.Custom.StringyType, (nodes[3] as UAVariable).DataType.Raw);
             Assert.Equal(4, (nodes[4] as UAVariable).ArrayDimensions[0]);
             Assert.Single((nodes[4] as UAVariable).ArrayDimensions);
-            Assert.True((nodes[4] as UAVariable).Historizing);
+            Assert.True((nodes[4] as UAVariable).ReadHistory);
             Assert.Null((nodes[5] as UAVariable).ArrayDimensions);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 1));
@@ -545,7 +545,7 @@ namespace Test.Unit
                 tester.Config.History.Enabled = false;
             }
             Assert.All(nodes, node => Assert.Equal(DataTypeIds.Double, node.DataType.Raw));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 80));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 100));
         }
         [Fact]
         public void TestReadRawValues()

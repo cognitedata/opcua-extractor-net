@@ -456,14 +456,16 @@ namespace Test.Unit
             node.VariableAttributes.ValueRank = ValueRanks.Scalar;
             var str = node.ToString();
             var refStr = "Variable: name\n"
-                       + "Id: s=test\n";
+                       + "Id: s=test\n"
+                       + "AccessLevel: 0\n";
             Assert.Equal(refStr, str);
 
             // full
             node = new UAVariable(new NodeId("test"), "name", new NodeId("parent"));
             node.Attributes.Description = "description";
             node.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
-            node.VariableAttributes.Historizing = true;
+            node.VariableAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
+            node.VariableAttributes.ReadHistory = true;
             node.VariableAttributes.ValueRank = ValueRanks.Any;
             node.VariableAttributes.ArrayDimensions = new System.Collections.ObjectModel.Collection<int>(new int[] { 4 });
             node.VariableAttributes.NodeType = new UANodeType(new NodeId("type"), false);
@@ -490,7 +492,8 @@ namespace Test.Unit
                    + $"    NodeId: i={DataTypes.Double}\n"
                    + "    String: False\n"
                    + "}\n"
-                   + "Historizing: True\n"
+                   + "History: True\n"
+                   + "AccessLevel: 5\n"
                    + "ValueRank: -2\n"
                    + "Dimension: 4\n"
                    + "NodeType: s=type\n"
@@ -524,7 +527,8 @@ namespace Test.Unit
             Assert.Empty(node.CreateArrayChildren());
             Assert.Null(node.ArrayChildren);
 
-            node.VariableAttributes.Historizing = true;
+            node.VariableAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
+            node.VariableAttributes.ReadHistory = true;
             node.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
             node.VariableAttributes.NodeType = new UANodeType(new NodeId("test"), true);
             node.VariableAttributes.ValueRank = ValueRanks.OneDimension;
@@ -537,9 +541,10 @@ namespace Test.Unit
             for (int i = 0; i < 4; i++)
             {
                 var child = children[i];
-                Assert.True(child.Historizing);
+                Assert.True(child.ReadHistory);
                 Assert.Equal($"name[{i}]", child.DisplayName);
                 Assert.Equal(node.Id, child.ParentId);
+                Assert.Equal(node.AccessLevel, child.AccessLevel);
                 Assert.Equal(node, child.ArrayParent);
                 Assert.Equal(node.DataType, child.DataType);
                 Assert.Equal(node.NodeType, child.NodeType);

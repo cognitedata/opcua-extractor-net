@@ -425,8 +425,8 @@ namespace Cognite.OpcUa
                 state = new VariableExtractionState(
                             extractor,
                             variable,
-                            variable.Historizing,
-                            variable.Historizing && config.History.Backfill);
+                            variable.ReadHistory,
+                            variable.ReadHistory && config.History.Backfill);
 
                 if (variable.IsArray)
                 {
