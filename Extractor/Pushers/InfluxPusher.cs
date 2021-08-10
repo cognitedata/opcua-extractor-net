@@ -677,14 +677,14 @@ namespace Cognite.OpcUa
                         EmittingNode = state.SourceId,
                         SourceNode = sourceNode,
                         EventType = type,
-                        MetaData = new Dictionary<string, object>()
+                        MetaData = new Dictionary<string, string>()
                     };
                     foreach (var kvp in values)
                     {
 #pragma warning disable CA1308 // Normalize strings to uppercase
                         if (string.IsNullOrEmpty(kvp.Value as string) || excludeEventTags.Contains(kvp.Key.ToLower(CultureInfo.InvariantCulture))) continue;
 #pragma warning restore CA1308 // Normalize strings to uppercase
-                        evt.MetaData.Add(kvp.Key, kvp.Value);
+                        evt.MetaData.Add(kvp.Key, kvp.Value.ToString());
                     }
                     log.Verbose(evt.ToString());
 

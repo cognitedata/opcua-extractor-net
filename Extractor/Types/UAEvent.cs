@@ -20,6 +20,7 @@ using Cognite.Extractor.Common;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
+using Newtonsoft.Json;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -27,6 +28,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 namespace Cognite.OpcUa.Types
 {
@@ -58,7 +60,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Metadata fields
         /// </summary>
-        public List<EventFieldValue> Fields { get; set; }
+        public Dictionary<string, string> MetaData { get; set; }
         /// <summary>
         /// Id of the node that emitted the event in opc-ua
         /// </summary>
@@ -79,23 +81,27 @@ namespace Cognite.OpcUa.Types
             {
                 builder.AppendFormat(CultureInfo.InvariantCulture, "SourceNode: {0}\n", SourceNode);
             }
-            if (Fields != null && Fields.Any())
+            if (MetaData != null && MetaData.Any())
             {
                 builder.Append("MetaData: {\n");
-                foreach (var field in Fields)
+                foreach (var kvp in MetaData)
                 {
-                    string key = string.Join('_', field.Field.BrowsePath.Select(bn => bn.Name));
-                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", key, field.Value);
+                    builder.AppendFormat(CultureInfo.InvariantCulture, "    {0}: {1}\n", kvp.Key, kvp.Value);
                 }
                 builder.Append("}\n");
             }
 
             return builder.ToString();
         }
-        private Dictionary<string, EventFieldNode> GetMetadata()
+        public void SetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values)
         {
+            MetaData = GetMetadata(converter, values);
+        }
+        private static Dictionary<string, string> GetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values)
+        {
+            if (values == null) return null;
             var parents = new Dictionary<string, EventFieldNode>();
-            foreach (var field in Fields)
+            foreach (var field in values)
             {
                 IDictionary<string, EventFieldNode> next = parents;
                 EventFieldNode current = null;
@@ -112,7 +118,24 @@ namespace Cognite.OpcUa.Types
                     current.Value = field.Value;
                 }
             }
-            return parents;
+            var sb = new StringBuilder();
+            var sw = new StringWriter(sb);
+            using var writer = new JsonTextWriter(sw) { Formatting = Formatting.None };
+            var results = new Dictionary<string, string>();
+            foreach (var kvp in parents)
+            {
+                kvp.Value.ToJson(converter, writer);
+                writer.Flush();
+                var result = sb.ToString();
+                // If what we produce is an escaped JSON string we'd like to remove the quotes.
+                if (result.StartsWith('"') && result.EndsWith('"'))
+                {
+                    result = result[1..^1];
+                }
+                results[kvp.Key] = result;
+                sb.Clear();
+            }
+            return results;
         }
         /// <summary>
         /// Converts event into array of bytes which may be written to file.
@@ -134,13 +157,8 @@ namespace Cognite.OpcUa.Types
             bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EmittingNode)));
             var metaDataBytes = new List<byte>();
             ushort count = 0;
-            if (Fields != null)
+            if (MetaData != null)
             {
-
-
-
-
-
                 foreach (var kvp in MetaData)
                 {
                     count++;
@@ -178,7 +196,7 @@ namespace Cognite.OpcUa.Types
             if (stream.Read(buffer, 0, sizeof(ushort)) < sizeof(ushort)) return null;
             ushort count = BitConverter.ToUInt16(buffer, 0);
 
-            evt.MetaData = new Dictionary<string, object>();
+            evt.MetaData = new Dictionary<string, string>();
 
             for (int i = 0; i < count; i++)
             {
@@ -232,7 +250,7 @@ namespace Cognite.OpcUa.Types
             {
                 if (!excludeMetaData.Contains(dt.Key))
                 {
-                    finalMetaData[dt.Key] = client.StringConverter.ConvertToString(dt.Value);
+                    finalMetaData[dt.Key] = dt.Value;
                 }
             }
 
@@ -322,5 +340,40 @@ namespace Cognite.OpcUa.Types
     {
         public IDictionary<string, EventFieldNode> Children { get; } = new Dictionary<string, EventFieldNode>();
         public Variant? Value { get; set; }
+        public void ToJson(StringConverter converter, JsonWriter writer)
+        {
+            if (writer == null) throw new ArgumentNullException(nameof(writer));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            if (Children.Any())
+            {
+                writer.WriteStartObject();
+                int valIdx = 1;
+                foreach (var child in Children)
+                {
+                    string key = child.Key;
+                    if (key == "Value")
+                    {
+                        do
+                        {
+                            key = $"Value{valIdx++}";
+                        } while (Children.ContainsKey(key));
+                    }
+                    Console.WriteLine("Write key: " + key);
+                    writer.WritePropertyName(key);
+                    child.Value.ToJson(converter, writer);
+                }
+                if (Value.HasValue)
+                {
+                    writer.WritePropertyName("Value");
+                    writer.WriteRawValue(converter.ConvertToString(Value, null, null, true));
+                }
+                writer.WriteEndObject();
+            }
+            else if (Value.HasValue)
+            {
+                var val = converter.ConvertToString(Value, null, null, true);
+                writer.WriteRawValue(converter.ConvertToString(Value, null, null, true));
+            }
+        }
     }
 }
