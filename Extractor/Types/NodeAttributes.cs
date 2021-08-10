@@ -38,6 +38,7 @@ namespace Cognite.OpcUa.Types
         public NodeClass NodeClass { get; }
         public bool PropertiesRead { get; set; }
         public bool DataRead { get; set; }
+        public bool ShouldSubscribe { get; set; } = true;
         public NodeAttributes(NodeClass nc)
         {
             NodeClass = nc;
@@ -97,6 +98,10 @@ namespace Cognite.OpcUa.Types
             {
                 EventNotifier = values[idx++].GetValue(EventNotifiers.None);
             }
+            if (NodeClass != NodeClass.Object && NodeClass != NodeClass.Variable)
+            {
+                ShouldSubscribe = false;
+            }
             DataRead = true;
             return idx;
         }
@@ -138,6 +143,7 @@ namespace Cognite.OpcUa.Types
                 {
                     EventNotifier = values[idx++].GetValue(EventNotifiers.None);
                 }
+                ShouldSubscribe = true;
             }
             var dt = values[idx++].GetValue(NodeId.Null);
             DataType = client.DataTypeManager.GetDataType(dt) ?? new UADataType(dt);

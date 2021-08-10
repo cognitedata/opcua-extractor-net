@@ -102,7 +102,7 @@ namespace Test.Unit
 
         private void InitPusherLoopTest(UAExtractor extractor, params DummyPusher[] pushers)
         {
-            var evtState = new EventExtractionState(tester.Client, new NodeId("id"), false, false);
+            var evtState = new EventExtractionState(tester.Client, new NodeId("id"), false, false, true);
             evtState.InitToEmpty();
             evtState.FinalizeRangeInit();
             extractor.State.SetEmitterState(evtState);

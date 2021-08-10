@@ -1191,7 +1191,7 @@ namespace Cognite.OpcUa
                         subscription.Dispose();
                     }
                 }
-                log.Information("Added {TotalAddedSubscriptions} / {total} subscriptions", count, total);
+                log.Information("Added {TotalAddedSubscriptions} / {total} subscriptions to {sub}", count, total, subscription.DisplayName);
                 return subscription;
             }
         }
@@ -1223,7 +1223,7 @@ namespace Cognite.OpcUa
                     AttributeId = Attributes.Value,
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = Math.Max(0, config.Source.QueueLength),
-                    Filter = config.Extraction.DataChangeFilter?.Filter
+                    Filter = config.Subscriptions.DataChangeFilter?.Filter
                 }, token);
 #pragma warning restore CA2000 // Dispose objects before losing scope
 

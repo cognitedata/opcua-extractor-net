@@ -133,8 +133,8 @@ namespace Cognite.OpcUa
             {
                 tasks.Add(Task.Run(() => StoreStateLoop(token), CancellationToken.None));
             }
+            tasks.Add(Task.Run(() => HistoryRestartLoop(token), CancellationToken.None));
 
-            tasks.Add(SafeWait(triggerHistoryRestart, Timeout.InfiniteTimeSpan, token));
             tasks.Add(SafeWait(triggerGrowTaskList, Timeout.InfiniteTimeSpan, token));
 
             Task failedTask = null;
@@ -163,14 +163,6 @@ namespace Cognite.OpcUa
                 foreach (var task in toRemove)
                 {
                     tasks.Remove(task);
-                }
-
-                if (triggerHistoryRestart.WaitOne(0))
-                {
-                    log.Information("Restarting history");
-                    triggerHistoryRestart.Reset();
-                    tasks.Add(Task.Run(() => extractor.RestartHistory(), token));
-                    tasks.Add(SafeWait(triggerHistoryRestart, Timeout.InfiniteTimeSpan, token));
                 }
 
                 if (triggerGrowTaskList.WaitOne(0))
@@ -348,7 +340,35 @@ namespace Cognite.OpcUa
             }
         }
 
-
+        private async Task HistoryRestartLoop(CancellationToken token)
+        {
+            var delay = config.History.RestartPeriod > 0 ? TimeSpan.FromSeconds(config.History.RestartPeriod) : Timeout.InfiniteTimeSpan;
+            await SafeWait(triggerHistoryRestart, delay, token);
+            while (!token.IsCancellationRequested)
+            {
+                triggerHistoryRestart.Reset();
+                var waitTask = SafeWait(triggerHistoryRestart, delay, token);
+                log.Information("Restarting history...");
+                bool success = await extractor.TerminateHistory(30);
+                if (!success) throw new ExtractorFailureException("Failed to terminate history");
+                if (config.History.Enabled && config.History.Data)
+                {
+                    foreach (var state in extractor.State.NodeStates.Where(state => state.FrontfillEnabled))
+                    {
+                        state.RestartHistory();
+                    }
+                }
+                if (config.Events.History && config.Events.Enabled)
+                {
+                    foreach (var state in extractor.State.EmitterStates.Where(state => state.FrontfillEnabled))
+                    {
+                        state.RestartHistory();
+                    }
+                }
+                await extractor.RestartHistory();
+                await waitTask;
+            }
+        }
         public void Dispose()
         {
             triggerUpdateOperations?.Dispose();

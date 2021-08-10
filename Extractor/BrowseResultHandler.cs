@@ -408,11 +408,12 @@ namespace Cognite.OpcUa
                 config.Extraction.NodeTypes.Metadata);
 
             if (config.Events.Enabled
-                && (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0
+                && node.EventNotifier != 0
                 && extractor.State.GetEmitterState(node.Id) == null)
             {
                 bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
-                var eventState = new EventExtractionState(extractor, node.Id, history, history && config.History.Backfill);
+                bool subscription = (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0 && node.ShouldSubscribe;
+                var eventState = new EventExtractionState(extractor, node.Id, history, history && config.History.Backfill, subscription);
                 extractor.State.SetEmitterState(eventState);
             }
 

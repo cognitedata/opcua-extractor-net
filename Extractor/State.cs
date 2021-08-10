@@ -175,5 +175,19 @@ namespace Cognite.OpcUa
         /// Number of currently managed nodes.
         /// </summary>
         public int NumActiveNodes => nodeChecksums.Count;
+
+        /// <summary>
+        /// Wipe the state
+        /// </summary>
+        public void Clear()
+        {
+            nodeChecksums.Clear();
+            nodeStates.Clear();
+            nodeStatesByExtId.Clear();
+            emitterStates.Clear();
+            emitterStatesByExtId.Clear();
+            externalToNodeId.Clear();
+            ActiveEvents.Clear();
+        }
     }
 }
