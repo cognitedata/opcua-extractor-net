@@ -178,7 +178,8 @@ namespace Cognite.OpcUa.TypeCollectors
             if (node.ArrayDimensions != null && node.ArrayDimensions.Count == 1)
             {
                 int length = node.ArrayDimensions.First();
-                if (config.MaxArraySize < 0 || length > 0 && length <= (arraySizeOverride ?? config.MaxArraySize))
+                int maxArraySize = arraySizeOverride.HasValue ? Math.Max(arraySizeOverride.Value, config.MaxArraySize) : config.MaxArraySize;
+                if (config.MaxArraySize < 0 || length > 0 && length <= maxArraySize)
                 {
                     return true;
                 }

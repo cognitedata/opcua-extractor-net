@@ -163,9 +163,9 @@ namespace Test.Unit
 
             var nodeInfluxStates = nodeStates.Select(state => new InfluxBufferState(state)).ToList();
 
-            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false);
-            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false);
-            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true);
+            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
+            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false, true);
+            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true, true);
             var evtStates = new[] { estate1, estate2, estate3 };
 
             var evtInfluxStates = evtStates.Select(state => new InfluxBufferState(state)).ToList();
@@ -310,9 +310,9 @@ namespace Test.Unit
             using var pusher = new InfluxPusher(tester.Config.Influx);
             var fb1 = new FailureBuffer(cfg, extractor, pusher);
 
-            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false);
-            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false);
-            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true);
+            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
+            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false, true);
+            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true, true);
 
             extractor.State.SetEmitterState(estate1);
             extractor.State.SetEmitterState(estate2);
@@ -488,9 +488,9 @@ namespace Test.Unit
             var pushers = new IPusher[] { pusher, dPusher };
             var fb1 = new FailureBuffer(cfg, extractor, pusher);
 
-            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false);
-            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false);
-            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true);
+            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
+            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false, true);
+            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true, true);
 
             extractor.State.SetEmitterState(estate1);
             extractor.State.SetEmitterState(estate2);
@@ -642,9 +642,9 @@ namespace Test.Unit
             var pushers = new IPusher[] { dPusher };
             var fb1 = new FailureBuffer(cfg, extractor, null);
 
-            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false);
-            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false);
-            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true);
+            var estate1 = new EventExtractionState(extractor, new NodeId("emitter1"), false, false, true);
+            var estate2 = new EventExtractionState(extractor, new NodeId("emitter2"), false, false, true);
+            var estate3 = new EventExtractionState(extractor, new NodeId("emitter3"), true, true, true);
 
             extractor.State.SetEmitterState(estate1);
             extractor.State.SetEmitterState(estate2);

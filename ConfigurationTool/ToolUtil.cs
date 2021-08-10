@@ -172,7 +172,7 @@ namespace Cognite.OpcUa.Config
                         ? new UADataPoint(
                             value.SourceTimestamp,
                             $"{variable.Id}[{i}]",
-                            client.ConvertToString(values.GetValue(i)))
+                            client.StringConverter.ConvertToString(values.GetValue(i)))
                         : new UADataPoint(
                             value.SourceTimestamp,
                             $"{variable.Id}[{i}]",
@@ -185,7 +185,7 @@ namespace Cognite.OpcUa.Config
                 ? new UADataPoint(
                     value.SourceTimestamp,
                     variable.Id,
-                    client.ConvertToString(value.Value))
+                    client.StringConverter.ConvertToString(value.Value))
                 : new UADataPoint(
                     value.SourceTimestamp,
                     variable.Id,

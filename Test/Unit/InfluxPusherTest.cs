@@ -218,7 +218,7 @@ namespace Test.Unit
                 "opcua_events_pushed_influx", "opcua_event_pushes_influx",
                 "opcua_skipped_events_influx");
 
-            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true);
+            var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true, true);
             extractor.State.SetEmitterState(state);
             extractor.State.RegisterNode(new NodeId("source"), extractor.GetUniqueId(new NodeId("source")));
             extractor.State.RegisterNode(new NodeId("emitter"), extractor.GetUniqueId(new NodeId("emitter")));
@@ -299,7 +299,7 @@ namespace Test.Unit
                 Assert.Equal(rawEvt.MetaData.Count, evt.MetaData.Count);
                 foreach (var kvp in evt.MetaData)
                 {
-                    Assert.Equal(extractor.ConvertToString(rawEvt.MetaData[kvp.Key]), kvp.Value);
+                    Assert.Equal(extractor.StringConverter.ConvertToString(rawEvt.MetaData[kvp.Key]), kvp.Value);
                 }
             }
 
@@ -418,8 +418,8 @@ namespace Test.Unit
 
             EventExtractionState[] GetStates()
             {
-                var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true);
-                var state2 = new EventExtractionState(tester.Client, new NodeId("emitter2"), true, true);
+                var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true, true);
+                var state2 = new EventExtractionState(tester.Client, new NodeId("emitter2"), true, true, true);
                 extractor.State.SetEmitterState(state);
                 extractor.State.SetEmitterState(state2);
                 return new[] { state, state2 };

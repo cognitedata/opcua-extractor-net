@@ -1250,7 +1250,7 @@ namespace Cognite.OpcUa.Config
 
             log.Information("Try subscribing to events on emitting nodes");
 
-            var states = emitters.Select(emitter => new EventExtractionState(this, emitter.Id, false, false));
+            var states = emitters.Select(emitter => new EventExtractionState(this, emitter.Id, false, false, true));
 
             try
             {

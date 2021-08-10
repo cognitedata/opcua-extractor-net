@@ -68,6 +68,21 @@ namespace Cognite.Bridge
 
             return new AssetUpdateItem(update.ExternalId) { Update = upd };
         }
+        /// <summary>
+        /// Convert an arbitrarily complex JsonDocument assumed to be a JSON object into a string, string dictionary.
+        /// </summary>
+        /// <param name="doc">Document to convert</param>
+        /// <returns>A dictionary</returns>
+        private static Dictionary<string, string> JsonDocumentToDictionary(JsonDocument doc)
+        {
+            if (doc == null || doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            var result = new Dictionary<string, string>();
+            foreach (var elem in doc.RootElement.EnumerateObject())
+            {
+                result[elem.Name] = elem.Value.ToString();
+            }
+            return result;
+        }
 
         /// <summary>
         /// Create an timeseries update from a new timeseries and an old.
@@ -84,9 +99,10 @@ namespace Cognite.Bridge
             if (update.DataSetId != null && update.DataSetId != old.DataSetId) upd.DataSetId = new UpdateNullable<long?>(update.DataSetId);
             if (update.Description != null && update.Description != old.Description) upd.Description = new UpdateNullable<string>(update.Description);
 
-            if (update.Metadata != null && update.Metadata
+            var meta = JsonDocumentToDictionary(update.Metadata);
+            if (meta != null && meta
                 .Any(kvp => old.Metadata == null || !old.Metadata.TryGetValue(kvp.Key, out string value) || value != kvp.Value))
-                upd.Metadata = new UpdateDictionary<string>(update.Metadata, Enumerable.Empty<string>());
+                upd.Metadata = new UpdateDictionary<string>(meta, Enumerable.Empty<string>());
 
             if (update.Name != null && update.Name != old.Name) upd.Name = new UpdateNullable<string>(update.Name);
             if (update.AssetId != null && update.AssetId != old.AssetId)
@@ -230,6 +246,7 @@ namespace Cognite.Bridge
                 log.Warning("Null payload in timeseries");
                 return true;
             }
+            var str = Encoding.UTF8.GetString(msg.Payload);
             var timeseries = JsonSerializer.Deserialize<IEnumerable<StatelessTimeSeriesCreate>>(Encoding.UTF8.GetString(msg.Payload));
 
             var assetExternalIds = timeseries.Select(ts => ts.AssetExternalId).Where(id => id != null).ToHashSet();
@@ -684,6 +701,7 @@ namespace Cognite.Bridge
         internal class StatelessTimeSeriesCreate : TimeSeriesCreate
         {
             public string AssetExternalId { get; set; }
+            public new JsonDocument Metadata { get; set; }
         }
         [SuppressMessage("Microsoft.Performance", "CA1812")]
         internal class RawRequestWrapper

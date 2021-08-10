@@ -59,6 +59,7 @@ namespace Cognite.OpcUa
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
         public IEnumerable<NodeTransformation> Transformations { get; private set; }
+        public StringConverter StringConverter => uaClient.StringConverter;
 
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
@@ -375,16 +376,6 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Calls the ConvertToString method on UAClient. This uses the namespaceTable, so it cannot be static.
-        /// </summary>
-        /// <param name="value">Value to convert</param>
-        /// <returns>Converted value</returns>
-        public string ConvertToString(object value, IDictionary<long, string> enumValues = null, TypeInfo typeInfo = null)
-        {
-            return uaClient.ConvertToString(value, enumValues);
-        }
-
-        /// <summary>
         /// Read properties for the given list of BufferedNode. This is intelligent,
         /// and keeps track of which properties are in the process of being read,
         /// to prevent multiple pushers from starting PropertyRead operations at the same time.
@@ -496,7 +487,7 @@ namespace Cognite.OpcUa
                 if (variable.NodeClass == NodeClass.VariableType)
                 {
                     fields ??= new Dictionary<string, string>();
-                    fields["Value"] = variable.Value?.StringValue;
+                    fields["Value"] = StringConverter.ConvertToString(variable.Value, variable.DataType?.EnumValues);
                 }
             }
             if (config.Extraction.NodeTypes.Metadata)
@@ -642,23 +633,31 @@ namespace Cognite.OpcUa
                     State.ActiveEvents[field.Key] = field.Value;
                     State.RegisterNode(field.Key, uaClient.GetUniqueId(field.Key));
                 }
-                if (config.Events.EmitterIds != null && config.Events.EmitterIds.Any())
+                if (config.Events.EmitterIds != null && config.Events.EmitterIds.Any()
+                    || config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
                 {
-                    var histEmitterIds = new HashSet<NodeId>((config.Events.HistorizingEmitterIds ?? Array.Empty<ProtoNodeId>())
+                    var histEmitterIds = new HashSet<NodeId>((config.Events.HistorizingEmitterIds ?? Enumerable.Empty<ProtoNodeId>())
                         .Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)));
-                    foreach (var id in config.Events.EmitterIds.Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)))
+                    var emitterIds = new HashSet<NodeId>((config.Events.EmitterIds ?? Enumerable.Empty<ProtoNodeId>())
+                        .Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)));
+                    var eventEmitterIds = new HashSet<NodeId>(histEmitterIds.Concat(emitterIds));
+                                                                                                          ;
+                    foreach (var id in eventEmitterIds)
                     {
                         var history = (histEmitterIds.Contains(id)) && config.Events.History;
-                        State.SetEmitterState(new EventExtractionState(this, id, history,
-                            history && config.History.Backfill));
+                        var subscription = emitterIds.Contains(id);
+                        State.SetEmitterState(new EventExtractionState(this, id, history, history && config.History.Backfill, subscription));
                     }
                 }
-                var serverNode = uaClient.GetServerNode(source.Token);
-                if ((serverNode.EventNotifier & EventNotifiers.SubscribeToEvents) != 0)
+                if (config.Events.ReadServer)
                 {
-                    var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
-                    State.SetEmitterState(new EventExtractionState(this, serverNode.Id, history,
-                        history && config.History.Backfill));
+                    var serverNode = uaClient.GetServerNode(source.Token);
+                    if (serverNode.EventNotifier != 0)
+                    {
+                        var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
+                        var subscription = (serverNode.EventNotifier & EventNotifiers.SubscribeToEvents) != 0;
+                        State.SetEmitterState(new EventExtractionState(this, serverNode.Id, history, history && config.History.Backfill, subscription));
+                    }
                 }
             }
             BuildTransformations();
@@ -837,8 +836,13 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task SynchronizeEvents()
         {
-            await Task.Run(() => uaClient.SubscribeToEvents(State.EmitterStates,
-                Streamer.EventSubscriptionHandler, source.Token));
+            if (config.Subscriptions.Events)
+            {
+                var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
+                await Task.Run(() => uaClient.SubscribeToEvents(subscribeStates,
+                    Streamer.EventSubscriptionHandler, source.Token));
+            }
+
             Interlocked.Increment(ref subscribed);
             if (!State.NodeStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!config.Events.History) return;
@@ -862,7 +866,12 @@ namespace Cognite.OpcUa
         /// <param name="states">States to subscribe to</param>
         private async Task SynchronizeNodes(IEnumerable<VariableExtractionState> states)
         {
-            await Task.Run(() => uaClient.SubscribeToNodes(states, Streamer.DataSubscriptionHandler, source.Token));
+            if (config.Subscriptions.DataPoints)
+            {
+                var subscribeStates = states.Where(state => state.ShouldSubscribe);
+                await Task.Run(() => uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, source.Token));
+            }
+
             Interlocked.Increment(ref subscribed);
             if (!State.EmitterStates.Any() || subscribed > 1) subscribeFlag = true;
             if (!config.History.Enabled) return;
@@ -1036,7 +1045,7 @@ namespace Cognite.OpcUa
     public interface IUAClientAccess
     {
         string GetUniqueId(ExpandedNodeId id, int index = -1);
-        string ConvertToString(object value, IDictionary<long, string> enumValues = null, TypeInfo typeInfo = null);
+        StringConverter StringConverter { get; }
         string GetRelationshipId(UAReference reference);
     }
 }

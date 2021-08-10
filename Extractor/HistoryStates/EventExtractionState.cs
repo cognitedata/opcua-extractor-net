@@ -34,14 +34,16 @@ namespace Cognite.OpcUa.HistoryStates
         /// Last known timestamp of events from OPC-UA.
         /// </summary>
         private IList<UAEvent> buffer;
+        public bool ShouldSubscribe { get; }
 
-        public EventExtractionState(IUAClientAccess client, NodeId emitterId, bool frontfill, bool backfill)
+        public EventExtractionState(IUAClientAccess client, NodeId emitterId, bool frontfill, bool backfill, bool subscription)
             : base(client, emitterId, frontfill, backfill)
         {
             if (frontfill)
             {
                 buffer = new List<UAEvent>();
             }
+            ShouldSubscribe = subscription;
         }
 
         /// <summary>

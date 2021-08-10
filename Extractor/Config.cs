@@ -97,7 +97,6 @@ namespace Cognite.OpcUa
         public NodeTypeConfig NodeTypes { get => nodeTypes; set => nodeTypes = value ?? nodeTypes; }
         private NodeTypeConfig nodeTypes = new NodeTypeConfig();
         public IEnumerable<RawNodeTransformation> Transformations { get; set; }
-        public DataSubscriptionConfig DataChangeFilter { get; set; }
         public IEnumerable<NodeId> GetRootNodes(UAClient client)
         {
             var roots = new List<NodeId>();
@@ -172,6 +171,12 @@ namespace Cognite.OpcUa
         };
         public DataChangeFilter Filter => filter;
     }
+    public class SubscriptionConfig
+    {
+        public DataSubscriptionConfig DataChangeFilter { get; set; }
+        public bool DataPoints { get; set; } = true;
+        public bool Events { get; set; } = true;
+    }
     public interface IPusherConfig
     {
         bool Debug { get; set; }
@@ -208,13 +213,11 @@ namespace Cognite.OpcUa
         public string TimeseriesTable { get; set; }
         public string RelationshipsTable { get; set; }
     }
-
     public class MetadataMapConfig
     {
         public Dictionary<string, string> Assets { get; set; }
         public Dictionary<string, string> Timeseries { get; set; }
     }
-
     public class InfluxPusherConfig : IPusherConfig
     {
         public string Host { get; set; }
@@ -240,7 +243,6 @@ namespace Cognite.OpcUa
             return new InfluxPusher(this);
         }
     }
-
     public class MqttPusherConfig : IPusherConfig
     {
         public string Host { get; set; }
@@ -278,7 +280,6 @@ namespace Cognite.OpcUa
             return new MQTTPusher(this);
         }
     }
-
     public class FailureBufferConfig
     {
         public bool Enabled { get; set; }
@@ -300,6 +301,7 @@ namespace Cognite.OpcUa
         public FailureBufferConfig FailureBuffer { get; set; }
         public HistoryConfig History { get; set; }
         public StateStorageConfig StateStorage { get; set; }
+        public SubscriptionConfig Subscriptions { get; set; }
         public override void GenerateDefaults()
         {
             if (Source == null) Source = new UAClientConfig();
@@ -317,6 +319,7 @@ namespace Cognite.OpcUa
             if (FailureBuffer == null) FailureBuffer = new FailureBufferConfig();
             if (History == null) History = new HistoryConfig();
             if (StateStorage == null) StateStorage = new StateStorageConfig();
+            if (Subscriptions == null) Subscriptions = new SubscriptionConfig();
         }
     }
     public class EventConfig
@@ -325,9 +328,11 @@ namespace Cognite.OpcUa
         public IEnumerable<ProtoNodeId> EmitterIds { get; set; }
         public IEnumerable<ProtoNodeId> HistorizingEmitterIds { get; set; }
         public bool Enabled { get; set; }
+        public bool DiscoverEmitters { get; set; } = true;
         public bool AllEvents { get; set; } = true;
         public bool History { get; set; }
         public string ExcludeEventFilter { get; set; }
+        public bool ReadServer { get; set; } = true;
         public IEnumerable<string> ExcludeProperties { get => excludeProperties; set => excludeProperties = value ?? excludeProperties; }
         private IEnumerable<string> excludeProperties = new List<string>();
         public IEnumerable<string> BaseExcludeProperties {
@@ -354,6 +359,7 @@ namespace Cognite.OpcUa
         public long StartTime { get; set; }
         public int Granularity { get; set; } = 600;
         public bool IgnoreContinuationPoints { get; set; }
+        public int RestartPeriod { get; set; }
         public HistoryThrottlingConfig Throttling { get; set; }
     }
     public class UAThrottlingConfig

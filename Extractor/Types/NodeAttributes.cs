@@ -37,7 +37,8 @@ namespace Cognite.OpcUa.Types
         public IList<UANode> Properties { get; set; }
         public NodeClass NodeClass { get; }
         public bool PropertiesRead { get; set; }
-        public bool DataRead { get; protected set; }
+        public bool DataRead { get; set; }
+        public bool ShouldSubscribe { get; set; } = true;
         public NodeAttributes(NodeClass nc)
         {
             NodeClass = nc;
@@ -64,7 +65,7 @@ namespace Cognite.OpcUa.Types
                     {
                         result.Add(Attributes.Historizing);
                     }
-                    if (config.Events.Enabled)
+                    if (config.Events.Enabled && config.Events.DiscoverEmitters)
                     {
                         result.Add(Attributes.EventNotifier);
                     }
@@ -93,9 +94,13 @@ namespace Cognite.OpcUa.Types
             if (values == null) throw new ArgumentNullException(nameof(values));
             if (config == null) throw new ArgumentNullException(nameof(config));
             Description = values[idx++].GetValue<LocalizedText>(null)?.Text;
-            if (NodeClass == NodeClass.Object && config.Events.Enabled)
+            if ((NodeClass == NodeClass.Object || NodeClass == NodeClass.Variable) && config.Events.Enabled && config.Events.DiscoverEmitters)
             {
                 EventNotifier = values[idx++].GetValue(EventNotifiers.None);
+            }
+            if (NodeClass != NodeClass.Object && NodeClass != NodeClass.Variable)
+            {
+                ShouldSubscribe = false;
             }
             DataRead = true;
             return idx;
@@ -138,6 +143,7 @@ namespace Cognite.OpcUa.Types
                 {
                     EventNotifier = values[idx++].GetValue(EventNotifiers.None);
                 }
+                ShouldSubscribe = true;
             }
             var dt = values[idx++].GetValue(NodeId.Null);
             DataType = client.DataTypeManager.GetDataType(dt) ?? new UADataType(dt);
