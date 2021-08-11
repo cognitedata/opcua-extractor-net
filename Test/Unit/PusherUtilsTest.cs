@@ -236,5 +236,57 @@ namespace Test.Unit
             Assert.Null(result.Metadata);
             Assert.Null(result.Name);
         }
+
+        [Fact]
+        public void TestRawUpdate()
+        {
+            // Test null
+            Assert.Null(PusherUtils.CreateRawUpdate(null, null, null));
+
+            var properties = new List<UANode>
+            {
+                new UAVariable(new NodeId("prop1"), "prop1", NodeId.Null, NodeClass.Variable),
+                new UANode(new NodeId("prop2"), "prop2", NodeId.Null, NodeClass.Object),
+            };
+            var deepProp = new UAVariable(new NodeId("prop3"), "prop3", NodeId.Null, NodeClass.Variable);
+            properties[1].AddProperty(deepProp);
+            deepProp.SetDataPoint("value3");
+            (properties[0] as UAVariable).SetDataPoint(new[] { 1, 2, 3, 4 });
+
+            // Test create asset
+            var node = new UANode(new NodeId("test"), "test", new NodeId("parent"), NodeClass.Object);
+            foreach (var prop in properties) node.AddProperty(prop);
+            var result = PusherUtils.CreateRawUpdate(tester.Client.StringConverter, node, null);
+            Assert.Equal(@"{""externalId"":""gp.base:s=test"",""name"":""test"",""description"":null,""metadata"":{""prop1"":[1,2,3,4]," +
+                @"""prop2"":{""prop3"":""value3""}},""parentExternalId"":""gp.base:s=parent""}", result.ToString());
+
+            var nodeRow = ToRawRow(result.Value);
+
+            Assert.Null(PusherUtils.CreateRawUpdate(tester.Client.StringConverter, node, nodeRow));
+
+            // Modified description
+            node.Attributes.Description = "desc";
+            result = PusherUtils.CreateRawUpdate(tester.Client.StringConverter, node, nodeRow);
+            Assert.Equal(@"{""externalId"":""gp.base:s=test"",""name"":""test"",""description"":""desc"",""metadata"":{""prop1"":[1,2,3,4]," +
+                @"""prop2"":{""prop3"":""value3""}},""parentExternalId"":""gp.base:s=parent""}", result.ToString());
+
+            var variable = new UAVariable(new NodeId("test"), "test", new NodeId("parent"), NodeClass.Variable);
+            variable.VariableAttributes.DataType = new UADataType(new NodeId("dt"));
+            variable.SetDataPoint("test");
+            
+            foreach (var prop in properties) variable.AddProperty(prop);
+            result = PusherUtils.CreateRawUpdate(tester.Client.StringConverter, variable, null);
+            Assert.Equal(@"{""externalId"":""gp.base:s=test"",""name"":""test"",""description"":null,""metadata"":{""prop1"":[1,2,3,4]," +
+                @"""prop2"":{""prop3"":""value3""}},""assetExternalId"":""gp.base:s=parent"",""isString"":true,""isStep"":false}", result.ToString());
+
+            nodeRow = ToRawRow(result.Value);
+
+            Assert.Null(PusherUtils.CreateRawUpdate(tester.Client.StringConverter, variable, nodeRow));
+
+            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Boolean);
+            result = PusherUtils.CreateRawUpdate(tester.Client.StringConverter, variable, nodeRow);
+            Assert.Equal(@"{""externalId"":""gp.base:s=test"",""name"":""test"",""description"":null,""metadata"":{""prop1"":[1,2,3,4]," +
+                @"""prop2"":{""prop3"":""value3""}},""assetExternalId"":""gp.base:s=parent"",""isString"":false,""isStep"":true}", result.ToString());
+        }
     }
 }

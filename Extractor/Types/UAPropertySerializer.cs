@@ -27,111 +27,6 @@ namespace Cognite.OpcUa.Types
             this.uaClient = uaClient;
             this.config = config;
         }
-        /// <summary>
-        /// Recursively converts the value and children of a node to JSON.
-        /// If the node has no properties, simply returns a string representation of its value (which may be complex),
-        /// if not, a JSON object is returned with a field "Value".
-        /// </summary>
-        /// <param name="builder">String builder to append to</param>
-        /// <param name="node">Property to convert</param>
-        private void PropertyToJson(StringBuilder builder, UANode node)
-        {
-            if (node.Properties == null || !node.Properties.Any())
-            {
-                if (node is UAVariable variable)
-                {
-                    builder.Append(ConvertToString(variable.Value, variable.DataType.EnumValues, null, true));
-                }
-                else
-                {
-                    builder.Append("{}");
-                }
-                return;
-            }
-            bool separator = false;
-            var fields = new HashSet<string>();
-            builder.Append('{');
-            if (node is UAVariable variable2)
-            {
-                builder.Append(@"""Value"":");
-                builder.Append(ConvertToString(variable2.Value, variable2.DataType.EnumValues, null, true));
-                separator = true;
-                fields.Add("Value");
-            }
-
-            foreach (var prop in node.Properties)
-            {
-                if (separator) builder.Append(',');
-                var name = prop.DisplayName;
-                string safeName = JsonConvert.ToString(name);
-                int idx = 0;
-                while (!fields.Add(safeName))
-                {
-                    safeName = JsonConvert.ToString($"{name}{idx++}");
-                }
-                builder.AppendFormat(@"{0}:", safeName);
-                PropertyToJson(builder, prop);
-                separator = true;
-            }
-            builder.Append('}');
-            
-        }
-
-        /// <summary>
-        /// Convert the full metadata of a node to JSON. Can take an optional list of extra fields.
-        /// </summary>
-        /// <param name="extraFields">Extra fields to add</param>
-        /// <param name="properties">List of properties in result</param>
-        /// <returns>A JSONDocument with the full serialized metadata</returns>
-        public JsonDocument MetadataToJson(Dictionary<string, string> extraFields, IEnumerable<UANode> properties)
-        {
-            var builder = new StringBuilder("{");
-            bool separator = false;
-            var fields = new HashSet<string>();
-            if (extraFields != null)
-            {
-                foreach (var field in extraFields)
-                {
-                    if (separator)
-                    {
-                        builder.Append(',');
-                    }
-                    // Using JsonConvert to escape values.
-                    var name = JsonConvert.ToString(field.Key);
-                    fields.Add(name);
-                    builder.Append(name);
-                    builder.Append(':');
-                    builder.Append(JsonConvert.ToString(field.Value));
-                    separator = true;
-                }
-            }
-
-            if (properties != null)
-            {
-                foreach (var prop in properties)
-                {
-                    var name = prop.DisplayName;
-                    if (name == null) continue;
-                    if (separator)
-                    {
-                        builder.Append(',');
-                    }
-                    // Ensure that the field does not already exist.
-                    string safeName = JsonConvert.ToString(name);
-                    int idx = 0;
-                    while (!fields.Add(safeName))
-                    {
-                        safeName = JsonConvert.ToString($"{name}{idx++}");
-                    }
-                    builder.AppendFormat("{0}:", safeName);
-                    PropertyToJson(builder, prop);
-                    separator = true;
-                }
-            }
-            
-            builder.Append('}');
-            return JsonDocument.Parse(builder.ToString());
-        }
 
         /// <summary>
         /// Convert a value from OPC-UA to a string, which may optionally be JSON.
@@ -379,7 +274,6 @@ namespace Cognite.OpcUa.Types
             if (writer == null) throw new ArgumentNullException(nameof(writer));
             if (value == null)
             {
-                Console.WriteLine("Write null value");
                 writer.WriteNull();
                 return;
             }
