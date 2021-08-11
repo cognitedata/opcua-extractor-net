@@ -60,35 +60,6 @@ namespace Cognite.OpcUa.Pushers
                 }
             }
         }
-        /// <summary>
-        /// Update the field in <paramref name="ret"/> by comparing the value in
-        /// <paramref name="raw"/> with <paramref name="newValue"/>.
-        /// If the new value is null or whitespace, it is ignored.
-        /// </summary>
-        /// <param name="ret"></param>
-        /// <param name="raw"></param>
-        /// <param name="newValue"></param>
-        /// <param name="key"></param>
-        private static void UpdateIfModified(Dictionary<string, object> ret, RawRow raw, string newValue, string key)
-        {
-            if (raw.Columns.TryGetValue(key, out var column))
-            {
-                string oldValue = null;
-                try
-                {
-                    oldValue = column.GetString();
-                }
-                catch (JsonException) { }
-                if (string.IsNullOrWhiteSpace(oldValue) || !string.IsNullOrWhiteSpace(newValue) && newValue != oldValue)
-                {
-                    ret[key] = newValue;
-                }
-            }
-            else
-            {
-                ret[key] = newValue;
-            }
-        }
 
         public static JsonElement? CreateRawUpdate(
             StringConverter converter,
@@ -241,9 +212,5 @@ namespace Cognite.OpcUa.Pushers
     public class StatelessTimeSeriesCreate : TimeSeriesCreate
     {
         public string AssetExternalId { get; set; }
-    }
-    public class AssetCreateJson : AssetCreate
-    {
-        public new JsonDocument Metadata { get; set; }
     }
 }
