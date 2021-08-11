@@ -64,7 +64,7 @@ namespace Cognite.OpcUa.Pushers
             this.config = config;
             BaseConfig = config;
             destination = clientProvider.GetRequiredService<CogniteDestination>();
-            extractionConfig = clientProvider.GetRequiredService<ExtractionConfig>();
+            extractionConfig = clientProvider.GetRequiredService<FullConfig>().Extraction;
         }
 
         private static readonly Counter dataPointsCounter = Metrics

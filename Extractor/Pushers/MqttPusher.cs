@@ -92,7 +92,7 @@ namespace Cognite.OpcUa.Pushers
         public MQTTPusher(MqttPusherConfig config, IServiceProvider provider)
         {
             this.config = config ?? throw new ArgumentNullException(nameof(config));
-            extractionConfig = provider.GetRequiredService<ExtractionConfig>();
+            extractionConfig = provider.GetRequiredService<FullConfig>().Extraction;
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.ClientId)
                 .WithTcpServer(config.Host, config.Port)

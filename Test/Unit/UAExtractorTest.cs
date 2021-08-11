@@ -362,19 +362,17 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
 
-            Assert.Null(extractor.GetExtraMetadata(null));
-
             tester.Config.Extraction.DataTypes.DataTypeMetadata = true;
             var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null);
             variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
-            var fields = extractor.GetExtraMetadata(variable);
+            var fields = variable.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
             Assert.Single(fields);
             Assert.Equal("Double", fields["dataType"]);
 
             tester.Config.Extraction.NodeTypes.Metadata = true;
             var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
             node.Attributes.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
-            fields = extractor.GetExtraMetadata(node);
+            fields = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
             Assert.Single(fields);
             Assert.Equal("SomeType", fields["TypeDefinition"]);
 
@@ -385,7 +383,7 @@ namespace Test.Unit
             var type = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.VariableType);
             type.VariableAttributes.DataType = new UADataType(DataTypeIds.String);
             type.SetDataPoint(new Variant("value"));
-            fields = extractor.GetExtraMetadata(type);
+            fields = type.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
             Assert.Single(fields);
             Assert.Equal("value", fields["Value"]);
             tester.Config.Extraction.NodeTypes.AsNodes = false;

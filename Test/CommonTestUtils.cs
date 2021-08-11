@@ -365,6 +365,12 @@ namespace Test
                 ? asset != null && asset.externalId == ev.metadata["SourceNode"] || timeseries != null && timeseries.externalId == ev.metadata["SourceNode"]
                 : asset != null && ev.assetIds.Contains(asset.id);
         }
+
+        private static Dictionary<string, string> MetaToDict(JsonElement elem)
+        {
+            if (elem.ValueKind != JsonValueKind.Object) return null;
+            return elem.EnumerateObject().ToDictionary(kvp => kvp.Name, kvp => kvp.Value.ToString());
+        }
         public static void VerifyStartingConditions(
             Dictionary<string, AssetDummy> assets,
             Dictionary<string, TimeseriesDummy> timeseries,
@@ -409,10 +415,10 @@ namespace Test
 
             if (raw)
             {
-                obj1Meta = (assets[obj1Id] as AssetDummyJson).metadata?.ToObject<Dictionary<string, string>>();
-                obj2Meta = (assets[obj2Id] as AssetDummyJson).metadata?.ToObject<Dictionary<string, string>>();
-                stringyMeta = (timeseries[stringyId] as StatelessTimeseriesDummy).metadata?.ToObject<Dictionary<string, string>>();
-                mysteryMeta = (timeseries[mysteryId] as StatelessTimeseriesDummy).metadata?.ToObject<Dictionary<string, string>>();
+                obj1Meta = MetaToDict((assets[obj1Id] as AssetDummyJson).metadata);
+                obj2Meta = MetaToDict((assets[obj2Id] as AssetDummyJson).metadata);
+                stringyMeta = MetaToDict((timeseries[stringyId] as StatelessTimeseriesDummy).metadata);
+                mysteryMeta = MetaToDict((timeseries[mysteryId] as StatelessTimeseriesDummy).metadata);
             }
             else
             {
@@ -479,10 +485,10 @@ namespace Test
 
             if (raw)
             {
-                obj1Meta = (assets[obj1Id] as AssetDummyJson).metadata?.ToObject<Dictionary<string, string>>();
-                obj2Meta = (assets[obj2Id] as AssetDummyJson).metadata?.ToObject<Dictionary<string, string>>();
-                stringyMeta = (timeseries[stringyId] as StatelessTimeseriesDummy).metadata?.ToObject<Dictionary<string, string>>();
-                mysteryMeta = (timeseries[mysteryId] as StatelessTimeseriesDummy).metadata?.ToObject<Dictionary<string, string>>();
+                obj1Meta = MetaToDict((assets[obj1Id] as AssetDummyJson).metadata);
+                obj2Meta = MetaToDict((assets[obj2Id] as AssetDummyJson).metadata);
+                stringyMeta = MetaToDict((timeseries[stringyId] as StatelessTimeseriesDummy).metadata);
+                mysteryMeta = MetaToDict((timeseries[mysteryId] as StatelessTimeseriesDummy).metadata);
             }
             else
             {
@@ -534,10 +540,9 @@ namespace Test
             Assert.True(triggered, assertion());
         }
 
-        public static string JsonDocumentToString(JsonDocument doc)
+        public static string JsonElementToString(JsonElement elem)
         {
-            if (doc == null) throw new ArgumentNullException(nameof(doc));
-            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions
+            return System.Text.Json.JsonSerializer.Serialize(elem, new JsonSerializerOptions
             {
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             });

@@ -214,12 +214,12 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
-            Assert.Empty(node.BuildMetadata(null, tester.Client.StringConverter));
-            Assert.Empty(node.BuildMetadata(extractor, tester.Client.StringConverter));
+            Assert.Empty(node.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, false));
+            Assert.Empty(node.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, true));
             tester.Config.Extraction.NodeTypes.Metadata = true;
             node.Attributes.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
             // Test extras only
-            Assert.Single(node.BuildMetadata(extractor, tester.Client.StringConverter));
+            Assert.Single(node.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, true));
 
             // Test properties only
             var pdt = new UADataType(DataTypeIds.String);
@@ -235,14 +235,14 @@ namespace Test.Unit
             {
                 propA, propB
             };
-            var meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
+            var meta = node.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, true);
             Assert.Equal(2, meta.Count);
             Assert.Equal("valueA", meta["propA"]);
             Assert.Equal("valueB", meta["propB"]);
 
             // Test both
             tester.Config.Extraction.NodeTypes.Metadata = true;
-            Assert.Equal(3, node.BuildMetadata(extractor, tester.Client.StringConverter).Count);
+            Assert.Equal(3, node.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, true).Count);
 
             // Test nested properties
             var nestedProp = CommonTestUtils.GetSimpleVariable("nestedProp", pdt); ;
@@ -251,7 +251,7 @@ namespace Test.Unit
             {
                 nestedProp
             };
-            meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
+            meta = node.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, true);
             Assert.Equal(4, meta.Count);
             Assert.Equal("nestedValue", meta["propB_nestedProp"]);
 
@@ -259,14 +259,14 @@ namespace Test.Unit
             var nullNameProp = new UAVariable(new NodeId("nullName"), null, NodeId.Null);
             nullNameProp.VariableAttributes.DataType = pdt;
             node.AddProperty(nullNameProp);
-            meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
+            meta = node.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, true);
             Assert.Equal(4, meta.Count);
 
             // Test null value
             var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", NodeId.Null);
             nullValueProp.VariableAttributes.DataType = pdt;
             node.AddProperty(nullValueProp);
-            meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
+            meta = node.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, true);
             Assert.Equal(5, meta.Count);
             Assert.Equal("", meta["nullValue"]);
 
@@ -275,7 +275,7 @@ namespace Test.Unit
             propA2.VariableAttributes.DataType = pdt;
             node.AddProperty(propA2);
             propA2.SetDataPoint("valueA2");
-            meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
+            meta = node.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, true);
             Assert.Equal(5, meta.Count);
             Assert.Equal("valueA2", meta["propA"]);
 
@@ -285,7 +285,7 @@ namespace Test.Unit
             propNT.VariableAttributes.DataType = pdt;
             propNT.SetDataPoint("SomeOtherType");
             node.AddProperty(propNT);
-            meta = node.BuildMetadata(extractor, tester.Client.StringConverter);
+            meta = node.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, true);
             Assert.Equal(5, meta.Count);
             Assert.Equal("SomeOtherType", meta["TypeDefinition"]);
         }
@@ -310,7 +310,7 @@ namespace Test.Unit
                 propA, propB
             };
 
-            var poco = node.ToCDFAsset(extractor, 123, null);
+            var poco = node.ToCDFAsset(tester.Config.Extraction, extractor, extractor.StringConverter, extractor.DataTypeManager, 123, null);
             Assert.Equal(node.Description, poco.Description);
             Assert.Equal(123, poco.DataSetId);
             Assert.Equal("test", poco.Name);
@@ -329,7 +329,7 @@ namespace Test.Unit
                 { "propB", "name" },
                 { "propC", "parentId" }
             };
-            poco = node.ToCDFAsset(extractor, 123, metaMap);
+            poco = node.ToCDFAsset(tester.Config.Extraction, extractor, extractor.StringConverter, extractor.DataTypeManager, 123, metaMap);
             Assert.Equal("valueA", poco.Description);
             Assert.Equal(123, poco.DataSetId);
             Assert.Equal("valueB", poco.Name);
@@ -338,19 +338,24 @@ namespace Test.Unit
             Assert.Equal(3, poco.Metadata.Count);
         }
 
+        private static string MetadataToJson(UANode node, UAExtractor extractor)
+        {
+            var json = node.ToJson(extractor.StringConverter);
+            return json.RootElement.GetProperty("metadata").ToString();
+        }
+
         [Fact]
         public void TestToJson()
         {
             using var extractor = tester.BuildExtractor();
             var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
             var converter = tester.Client.StringConverter;
-            Assert.Equal("null", CommonTestUtils.JsonDocumentToString(node.MetadataToJson(null, converter)));
-            Assert.Equal("null", CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+            Assert.Equal("", MetadataToJson(node, extractor));
 
             // Extras only
             tester.Config.Extraction.NodeTypes.Metadata = true;
             node.Attributes.NodeType = new UANodeType(new NodeId("type"), false) { Name = "SomeType" };
-            Assert.Equal(@"{""TypeDefinition"":""SomeType""}", CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+            Assert.Equal(@"{""TypeDefinition"":""SomeType""}", MetadataToJson(node, extractor));
 
             // Properties only
             var pdt = new UADataType(DataTypeIds.String);
@@ -366,12 +371,10 @@ namespace Test.Unit
             {
                 propA, propB
             };
-            Assert.Equal(@"{""propA"":""valueA"",""propB"":""valueB""}",
-                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+            Assert.Equal(@"{""propA"":""valueA"",""propB"":""valueB""}", MetadataToJson(node, extractor));
 
             tester.Config.Extraction.NodeTypes.Metadata = true;
-            Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"",""propB"":""valueB""}",
-                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+            Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"",""propB"":""valueB""}", MetadataToJson(node, extractor));
 
             // Test nested properties
             var nestedProp = CommonTestUtils.GetSimpleVariable("nestedProp", pdt); ;
@@ -382,7 +385,7 @@ namespace Test.Unit
             };
             Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
                 + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""}}",
-                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+                MetadataToJson(node, extractor));
 
             // Test null name
             var nullNameProp = new UAVariable(new NodeId("nullName"), null, NodeId.Null);
@@ -390,7 +393,7 @@ namespace Test.Unit
             node.AddProperty(nullNameProp);
             Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
                 + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""}}",
-                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+                MetadataToJson(node, extractor));
 
             // Test null value
             var nullValueProp = new UAVariable(new NodeId("nullValue"), "nullValue", NodeId.Null);
@@ -398,7 +401,7 @@ namespace Test.Unit
             node.AddProperty(nullValueProp);
             Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
                 + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""},""nullValue"":null}",
-                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+                MetadataToJson(node, extractor));
 
             // Test duplicated properties
             var propA2 = new UAVariable(new NodeId("propA2"), "propA", NodeId.Null);
@@ -407,7 +410,7 @@ namespace Test.Unit
             propA2.SetDataPoint("valueA2");
             Assert.Equal(@"{""TypeDefinition"":""SomeType"",""propA"":""valueA"","
                 + @"""propB"":{""Value"":""valueB"",""nestedProp"":""nestedValue""},""nullValue"":null,""propA0"":""valueA2""}",
-                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+                MetadataToJson(node, extractor));
         }
         [Fact]
         public void TestToJsonComplexTypes()
@@ -426,7 +429,7 @@ namespace Test.Unit
             node.AddProperty(prop);
 
             Assert.Equal(@"{""readvalueid"":{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}}",
-                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+                MetadataToJson(node, extractor));
 
             // Test nested
             node.Attributes.Properties.Clear();
@@ -434,14 +437,14 @@ namespace Test.Unit
             outerProp.AddProperty(prop);
             node.AddProperty(outerProp);
             Assert.Equal(@"{""outer"":{""readvalueid"":{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}}}",
-                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+                MetadataToJson(node, extractor));
 
             // Test array
             prop.SetDataPoint(new Variant(new ReadValueIdCollection(new[] { value, value })));
             Assert.Equal(@"{""outer"":{""readvalueid"":["
             + @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13},"
             + @"{""NodeId"":{""IdType"":1,""Id"":""test""},""AttributeId"":13}]}}",
-                CommonTestUtils.JsonDocumentToString(node.MetadataToJson(extractor, converter)));
+                MetadataToJson(node, extractor));
         }
         #endregion
 
@@ -573,7 +576,7 @@ namespace Test.Unit
                 node.AddProperty(prop);
             }
 
-            var ts = node.ToStatelessTimeSeries(extractor, 123, null);
+            var ts = node.ToStatelessTimeSeries(tester.Config.Extraction, extractor, extractor.DataTypeManager, extractor.StringConverter, 123, null);
             Assert.Equal("gp.base:s=test", ts.ExternalId);
             Assert.Equal(123, ts.DataSetId);
             Assert.Equal("test", ts.Name);
@@ -581,8 +584,8 @@ namespace Test.Unit
             Assert.Equal("gp.base:s=parent", ts.AssetExternalId);
             Assert.True(ts.IsStep);
             Assert.False(ts.IsString);
-            Assert.Equal(@"{""prop1"":""value1"",""prop2"":""value2"",""prop3"":""value3"",""prop4"":""value4""}",
-                CommonTestUtils.JsonDocumentToString(ts.Metadata));
+            Assert.Equal(4, ts.Metadata.Count);
+            for (int i = 1; i <= 4; i++) Assert.Equal($"value{i}", ts.Metadata[$"prop{i}"]);
             Assert.Null(ts.Unit);
             Assert.Equal("description", ts.Description);
 
@@ -594,7 +597,7 @@ namespace Test.Unit
                 { "prop3", "unit" },
                 { "prop4", "parentId" }
             };
-            ts = node.ToStatelessTimeSeries(extractor, 123, metaMap);
+            ts = node.ToStatelessTimeSeries(tester.Config.Extraction, extractor, extractor.DataTypeManager, extractor.StringConverter, 123, metaMap);
             Assert.Equal("gp.base:s=test", ts.ExternalId);
             Assert.Equal(123, ts.DataSetId);
             Assert.Equal("value2", ts.Name);
@@ -602,8 +605,8 @@ namespace Test.Unit
             Assert.Equal("value4", ts.AssetExternalId);
             Assert.True(ts.IsStep);
             Assert.False(ts.IsString);
-            Assert.Equal(@"{""prop1"":""value1"",""prop2"":""value2"",""prop3"":""value3"",""prop4"":""value4""}",
-                CommonTestUtils.JsonDocumentToString(ts.Metadata));
+            Assert.Equal(4, ts.Metadata.Count);
+            for (int i = 1; i <= 4; i++) Assert.Equal($"value{i}", ts.Metadata[$"prop{i}"]);
             Assert.Equal("value1", ts.Description);
             Assert.Equal("value3", ts.Unit);
         }
@@ -634,7 +637,7 @@ namespace Test.Unit
             };
             extractor.State.RegisterNode(new NodeId("parent2"), "value4");
 
-            var ts = node.ToTimeseries(extractor, 123, nodeToAssetIds, null);
+            var ts = node.ToTimeseries(tester.Config.Extraction, extractor, extractor.DataTypeManager, extractor.StringConverter, 123, nodeToAssetIds, null);
             Assert.Equal("gp.base:s=test", ts.ExternalId);
             Assert.Equal(123, ts.DataSetId);
             Assert.Equal("test", ts.Name);
@@ -646,7 +649,7 @@ namespace Test.Unit
             Assert.Null(ts.Unit);
             Assert.Equal("description", ts.Description);
 
-            ts = node.ToTimeseries(extractor, 123, nodeToAssetIds, null, true);
+            ts = node.ToTimeseries(tester.Config.Extraction, extractor, extractor.DataTypeManager, extractor.StringConverter, 123, nodeToAssetIds, null, true);
             Assert.Null(ts.Name);
             Assert.Null(ts.Metadata);
             Assert.Null(ts.AssetId);
@@ -661,7 +664,7 @@ namespace Test.Unit
                 { "prop3", "unit" },
                 { "prop4", "parentId" }
             };
-            ts = node.ToTimeseries(extractor, 123, nodeToAssetIds, metaMap);
+            ts = node.ToTimeseries(tester.Config.Extraction, extractor, extractor.DataTypeManager, extractor.StringConverter, 123, nodeToAssetIds, metaMap);
             Assert.Equal("gp.base:s=test", ts.ExternalId);
             Assert.Equal(123, ts.DataSetId);
             Assert.Equal("value2", ts.Name);

@@ -369,8 +369,20 @@ namespace Cognite.OpcUa.Types
             using var writer = new JsonTextWriter(sw);
 
             serializer.Serialize(writer, this);
+            writer.Flush();
+            stream.Seek(0, SeekOrigin.Begin);
 
-            return JsonDocument.Parse(stream);
+            try
+            {
+                return JsonDocument.Parse(stream);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                stream.Seek(0, SeekOrigin.Begin);
+                Console.WriteLine(Encoding.UTF8.GetString(stream.ToArray()));
+                return null;
+            }
         }
         /// <summary>
         /// Add property to list, creating the list if it does not exist.

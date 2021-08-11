@@ -41,6 +41,7 @@ namespace Cognite.OpcUa
     {
         private readonly UAClient uaClient;
         private readonly FullConfig config;
+        public FullConfig FullConfig => config;
         public Looper Looper { get; }
         public FailureBuffer FailureBuffer { get; }
         public IExtractionStateStore StateStorage { get; }

@@ -361,15 +361,15 @@ namespace Test.Unit
             handler.FailedRoutes.Clear();
             Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
             Assert.Single(handler.AssetRaw);
-            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.name);
+            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
             var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
             node.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Null(handler.AssetRaw.First().Value.description);
-            Assert.Null(handler.AssetRaw.Last().Value.description);
+            Assert.Null(handler.AssetRaw.First().Value.GetProperty("description").GetString());
+            Assert.Null(handler.AssetRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
             tester.Config.Cognite.RawMetadata = null;
@@ -402,14 +402,14 @@ namespace Test.Unit
             handler.FailedRoutes.Clear();
             Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
             Assert.Single(handler.AssetRaw);
-            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.name);
+            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, overwrite the existing one
             var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
             node.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Single(handler.AssetRaw, asset => asset.Value.description == "description");
+            Assert.Single(handler.AssetRaw, asset => asset.Value.GetProperty("description").GetString() == "description");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
             tester.Config.Cognite.RawMetadata = null;
@@ -514,7 +514,7 @@ namespace Test.Unit
             handler.FailedRoutes.Clear();
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
             Assert.Single(handler.TimeseriesRaw);
-            Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.name);
+            Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
             var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
@@ -522,8 +522,8 @@ namespace Test.Unit
             node.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             Assert.Equal(2, handler.TimeseriesRaw.Count);
-            Assert.Null(handler.TimeseriesRaw.First().Value.description);
-            Assert.Null(handler.TimeseriesRaw.Last().Value.description);
+            Assert.Null(handler.TimeseriesRaw.First().Value.GetProperty("description").GetString());
+            Assert.Null(handler.TimeseriesRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
             tester.Config.Cognite.RawMetadata = null;
@@ -565,7 +565,7 @@ namespace Test.Unit
             handler.FailedRoutes.Clear();
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
             Assert.Single(handler.TimeseriesRaw);
-            Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.name);
+            Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, overwrite the existing due to update settings
             var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
@@ -573,7 +573,7 @@ namespace Test.Unit
             node.Attributes.Description = "description";
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             Assert.Equal(2, handler.TimeseriesRaw.Count);
-            Assert.Contains(handler.TimeseriesRaw, ts => ts.Value.description == "description");
+            Assert.Contains(handler.TimeseriesRaw, ts => ts.Value.GetProperty("description").GetString() == "description");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
             tester.Config.Cognite.RawMetadata = null;

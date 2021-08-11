@@ -342,7 +342,7 @@ namespace Cognite.OpcUa.Types
             if (node is UAVariable variable2 && writeValue)
             {
                 writer.WritePropertyName("Value");
-                writer.WriteRawValue(ConvertToString(variable2.Value));
+                writer.WriteRawValue(ConvertToString(variable2.Value, null, null, true));
                 fields.Add("Value");
             }
             if (extras != null)
@@ -364,7 +364,7 @@ namespace Cognite.OpcUa.Types
                     int idx = 0;
                     while (!fields.Add(safeName))
                     {
-                        safeName = JsonConvert.ToString($"{name}{idx++}");
+                        safeName = $"{name}{idx++}";
                     }
 
                     writer.WritePropertyName(safeName);
@@ -379,10 +379,10 @@ namespace Cognite.OpcUa.Types
             if (writer == null) throw new ArgumentNullException(nameof(writer));
             if (value == null)
             {
+                Console.WriteLine("Write null value");
                 writer.WriteNull();
                 return;
             }
-
             var id = uaClient.GetUniqueId(value.Id);
             writer.WriteStartObject();
             writer.WritePropertyName("externalId");
@@ -393,7 +393,7 @@ namespace Cognite.OpcUa.Types
             writer.WriteValue(value.Description);
             writer.WritePropertyName("metadata");
             WriteProperties(writer, value, true, value.NodeClass == NodeClass.VariableType);
-            if ((value.NodeClass == NodeClass.Variable) && value is UAVariable variable && variable.IsArray)
+            if ((value.NodeClass == NodeClass.Variable) && value is UAVariable variable && (!variable.IsArray || variable.Index >= 0))
             {
                 writer.WritePropertyName("assetExternalId");
                 writer.WriteValue(uaClient.GetUniqueId(value.ParentId));
@@ -407,6 +407,7 @@ namespace Cognite.OpcUa.Types
                 writer.WritePropertyName("parentExternalId");
                 writer.WriteValue(uaClient.GetUniqueId(value.ParentId));
             }
+            writer.WriteEndObject();
         }
 
         public override UANode ReadJson(JsonReader reader, Type objectType, UANode existingValue, bool hasExistingValue, Newtonsoft.Json.JsonSerializer serializer)
