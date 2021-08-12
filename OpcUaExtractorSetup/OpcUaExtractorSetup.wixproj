@@ -78,7 +78,7 @@
 	<DefineConstants>ExtractorBuildDir=../extractorbuild</DefineConstants>
   </PropertyGroup>
   <Target Name="BeforeBuild">
-    <HeatDirectory OutputFile="$(ProjectDir)\ProductInstallFiles-all.wxs" Directory="../extractorbuild" ComponentGroupName="ProductFilesComponentGroup" DirectoryRefId="OpcUaExtractorFolder" AutogenerateGuids="true" PreprocessorVariable="var.ExtractorBuildDir" SuppressRegistry="true" SuppressRootDirectory="true" ToolPath="$(WixToolPath)" NoLogo="true" />
+    <HeatDirectory OutputFile="$(ProjectDir)\ProductInstallFiles-all.wxs" Directory="../extractorbuild" ComponentGroupName="ProductFilesComponentGroup" DirectoryRefId="ExecutableFolder" AutogenerateGuids="true" PreprocessorVariable="var.ExtractorBuildDir" SuppressRegistry="true" SuppressRootDirectory="true" ToolPath="$(WixToolPath)" NoLogo="true" />
     <XslTransformation XslInputPath="$(ProjectDir)\heat-filter.xslt" XmlInputPaths="$(ProjectDir)\ProductInstallFiles-all.wxs" OutputPaths="$(ProjectDir)\ProductInstallFiles.wxs" />
   </Target>
 </Project>

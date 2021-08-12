@@ -104,7 +104,7 @@ namespace Cognite.OpcUa
                     services.AddHostedService<Worker>();
                 })
                 .ConfigureLogging(loggerFactory => loggerFactory.AddEventLog())
-                .UseWindowsService()
+                .UseWindowsService(options => options.ServiceName = "OpcuaExtractor")
                 .UseSystemd()
                 .Build()
                 .Run();

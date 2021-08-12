@@ -57,6 +57,7 @@
           <Directory Id="OpcUaExtractorFolder" Name="OpcUaExtractor">
             <Directory Id="ConfigFolder" Name="config" />
             <Directory Id="LogsFolder" Name="logs" />
+            <Directory Id="ExecutableFolder" Name="bin" />
             <Directory Id="OpcUaServiceManagerFolder" Name="OpcUaServiceManager" />
           </Directory>
         </Directory>
@@ -67,7 +68,7 @@
   <Fragment>
     <ComponentGroup Id="OpcUaExtractorServiceComponentGroup">
       <ComponentGroupRef Id="ProductFilesComponentGroup"/>
-      <Component Id="OpcuaExtractor_exe" Guid="6FD4B99A-422C-4703-A9BB-D2837459F15B" Directory="OpcUaExtractorFolder">
+      <Component Id="OpcuaExtractor_exe" Guid="6FD4B99A-422C-4703-A9BB-D2837459F15B" Directory="ExecutableFolder">
         <File Source="$(var.ExtractorBuild)/OpcuaExtractor.exe" />
           <!--
         <ComponentRef Id="cmpFB7C1B7AFE6B78B1A8E464042F47BA4A" Primary="yes" />
@@ -77,13 +78,14 @@
         <ServiceInstall Id="ServiceInstaller"
                         Type="ownProcess" 
                         Vital="yes"
-                        Name="OpcUa-Extractor"
+                        Name="OpcuaExtractor"
                         DisplayName="Cognite OpcUa Extractor"
                         Description="Cognite OpcUa Extractor service, extracts data from a OpcUa server and ingest the data into CDF."
                         Start="auto"
                         Account="LocalSystem"
                         ErrorControl="ignore"
-                        Interactive="no">
+                        Interactive="no"
+                        Arguments="-e">
           <util:ServiceConfig FirstFailureActionType="restart"
                               SecondFailureActionType="restart" 
                               ThirdFailureActionType="restart"
@@ -92,11 +94,11 @@
           <ServiceConfig DelayedAutoStart="yes" OnInstall="yes" OnReinstall="yes" />
         </ServiceInstall>
         
-        <ServiceControl Id="StartService" Start="install" Stop="both" Remove="uninstall" Name="OpcUa-Extractor" Wait="no" />
+        <ServiceControl Id="StartService" Stop="both" Remove="uninstall" Name="OpcuaExtractor" Wait="no" />
         <!-- This EventSource Name need to match whats being used as event source in the service. -->
         <!-- Reference to a specific framework version looks scary... -->
         <util:EventSource Name="CogniteOpcUa" Log="Application" EventMessageFile="%SystemRoot%\Microsoft.NET\Framework\v2.0.50727\EventLogMessages.dll" />
-        <RegistryKey Id="ProductKey" Action="createAndRemoveOnUninstall" Root="HKLM" Key="Software\Cognite\OpcUaExtractor">
+        <RegistryKey Id="ProductKey" Action="createAndRemoveOnUninstall" Root="HKLM" Key="Software\Cognite\OpcuaExtractor">
           <RegistryValue Id="OpcUaExtractorRegPath" Action="write" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" />
         </RegistryKey>
       </Component>
