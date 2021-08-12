@@ -20,8 +20,8 @@ namespace OpcUaServiceManager
         private List<ServiceController> _cogniteServices;
         private List<string> _serviceNamesInUse;
         private string _opcuaExtractorDir;
-        private string _opcuaExtractorExe = @"OpcUaExtractor\OpcUaService.exe";
-        private bool _piextractorCanCreateServices = false;
+        private string _opcuaExtractorExe = @"OpcUaExtractor\OpcuaExtractor.exe";
+        private bool _opcuaExtractorCanCreateService = false;
         private int _nextServiceNumber;
 
         /// <summary>
@@ -51,7 +51,7 @@ namespace OpcUaServiceManager
             {
                 lblOpcUaExtractorFound.Text = "OpcUaService found: " + _opcuaExtractorDir + _opcuaExtractorExe;
                 lblOpcUaExtractorFound.ForeColor = Color.Green;
-                _piextractorCanCreateServices = true;
+                _opcuaExtractorCanCreateService = true;
             }
         }
 
@@ -68,7 +68,7 @@ namespace OpcUaServiceManager
             txtSvcFolder.Text = txtSvcFolder.Text.Trim();
             txtSvcName.Text = txtSvcName.Text.Trim();
 
-            if (!_piextractorCanCreateServices)
+            if (!_opcuaExtractorCanCreateService)
             {
                 MessageBox.Show("OpcUa Extractor setup is wrong. Operation cancelled.");
                 return;
@@ -93,7 +93,9 @@ namespace OpcUaServiceManager
                 return;
             }
 
-            string result = RunCommand.Run(string.Format(@"/C sc create {2} binPath= ""\""{0}\"" \""{1}\"" \""{3}\"""" DisplayName= ""{3}""", _opcuaExtractorDir + _opcuaExtractorExe, txtSvcFolder.Text, _serviceBaseName + _nextServiceNumber, txtSvcName.Text));
+            string cmd = string.Format(@"/C sc create {2} binPath= ""\""{0}\"" -e -w \""{1}\"" "" DisplayName= ""{3}""",
+                _opcuaExtractorDir + _opcuaExtractorExe, txtSvcFolder.Text, _serviceBaseName + _nextServiceNumber, txtSvcName.Text);
+            string result = RunCommand.Run(cmd);
             if (result.Contains("SUCCESS"))
             {
                 RunCommand.Run(string.Format(@"/C sc description {0} ""{1}""", _serviceBaseName + _nextServiceNumber, txtSvcDescription.Text));

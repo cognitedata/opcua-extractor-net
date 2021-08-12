@@ -26,6 +26,7 @@ OpcUaService/Properties
 Service/Properties
 *.bin
 *.db
+extractorbuild/
 
 # Config
 config/*

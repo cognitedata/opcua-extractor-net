@@ -46,13 +46,7 @@
 
   <xsl:key
         name="RemoveFromOutput"
-        match="wix:Component[ substring( wix:File/@Source, string-length( wix:File/@Source ) - 15 ) = 'ExtractorLauncher.exe' ]"
-        use="@Id"
-    />
-
-  <xsl:key
-        name="RemoveFromOutput"
-        match="wix:Component[ substring( wix:File/@Source, string-length( wix:File/@Source ) - 15 ) = 'ExtractorLauncher.dll' ]"
+        match="wix:Component[ substring( wix:File/@Source, string-length( wix:File/@Source ) - 17 ) = 'OpcuaExtractor.exe' ]"
         use="@Id"
     />
 

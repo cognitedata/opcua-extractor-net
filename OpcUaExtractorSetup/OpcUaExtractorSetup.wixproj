@@ -20,19 +20,20 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="OpcUaExtractor.wxs" />
-    <Compile Include="ProductInstallFiles.wxs" />
+	<Compile Include="ProductInstallFiles.wxs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\OpcUaServiceManager\OpcUaServiceManager.csproj">
-      <Name>OpcUaServiceManager</Name>
-      <Project>{fecdd1d7-db45-4d16-ace4-910b42929268}</Project>
+    <ProjectReference Include="..\ExtractorLauncher\ExtractorLauncher.csproj">
+      <Name>ExtractorLauncher</Name>
+      <Project>{0f78788d-dc43-4323-9208-fa59bc2c973a}</Project>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
       <RefTargetDir>INSTALLFOLDER</RefTargetDir>
     </ProjectReference>
-    <ProjectReference Include="..\ExtractorLauncher\ExtractorLauncher.csproj">
-      <Name>ExtractorLauncher</Name>
+    <ProjectReference Include="..\OpcUaServiceManager\OpcUaServiceManager.csproj">
+      <Name>OpcUaServiceManager</Name>
+      <Project>{fecdd1d7-db45-4d16-ace4-910b42929268}</Project>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
@@ -73,8 +74,11 @@
 	<Target Name="AfterBuild">
 	</Target>
 	-->
+  <PropertyGroup>
+	<DefineConstants>ExtractorBuildDir=../extractorbuild</DefineConstants>
+  </PropertyGroup>
   <Target Name="BeforeBuild">
-    <HeatDirectory OutputFile="$(ProjectDir)\ProductInstallFiles-all.wxs" Directory="$(ProjectDir)/../ExtractorLauncher/bin/$(Configuration)/net5.0/" ComponentGroupName="ProductFilesComponentGroup" DirectoryRefId="OpcUaExtractorFolder" AutogenerateGuids="true" PreprocessorVariable="var.OpcUaService.TargetDir" SuppressRegistry="true" SuppressRootDirectory="true" ToolPath="$(WixToolPath)" NoLogo="true" />
+    <HeatDirectory OutputFile="$(ProjectDir)\ProductInstallFiles-all.wxs" Directory="../extractorbuild" ComponentGroupName="ProductFilesComponentGroup" DirectoryRefId="OpcUaExtractorFolder" AutogenerateGuids="true" PreprocessorVariable="var.ExtractorBuildDir" SuppressRegistry="true" SuppressRootDirectory="true" ToolPath="$(WixToolPath)" NoLogo="true" />
     <XslTransformation XslInputPath="$(ProjectDir)\heat-filter.xslt" XmlInputPaths="$(ProjectDir)\ProductInstallFiles-all.wxs" OutputPaths="$(ProjectDir)\ProductInstallFiles.wxs" />
   </Target>
 </Project>

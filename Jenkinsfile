@@ -90,6 +90,13 @@ podTemplate(
                 echo "${env.BRANCH_NAME}"
             }
         }
+        if (false) {
+        container('influxdb') {
+            stage('Build DB') {
+                sh("influx --execute 'DROP DATABASE testdb'")
+                sh("influx --execute 'CREATE DATABASE testdb'")
+            }
+        }
         container('dotnet') {
             stage('Install dependencies') {
                 sh('apt-get update && apt-get -y install gnupg curl procps gawk grep')
@@ -135,6 +142,7 @@ podTemplate(
                 }
             }
         }
+        }
         if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
             container('docker') {
                 stage("Build Docker images") {
@@ -164,7 +172,7 @@ podTemplate(
             }
         }
     }
-    if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
+    if ("$lastTag" == "$version" && env.BRANCH_NAME == "master" || true) {
         node('windows') {
             stage('Building MSI on windows node') {
                 powershell('echo $env:Path')
@@ -172,6 +180,7 @@ podTemplate(
         
             stage('Checkout') {
                 checkout(scm)
+                version = "2.4.0"
                 echo "$version"
                 echo "$lastTag"
                 echo "${env.BRANCH_NAME}"
@@ -181,7 +190,7 @@ podTemplate(
                 stage ('Build MSI') {
                     powershell('dotnet tool restore')
                     powershell('dotnet paket restore')
-                    powershell('dotnet build --configuration Release .\\OpcUaService\\')
+                    powershell('dotnet build --configuration Release .\\ExtractorLauncher\\')
                     powershell(".\\MsiVersionUpdate.ps1 .\\OpcUaExtractorSetup\\OpcUaExtractor.wxs ${version}")
                     buildStatus = bat(returnStatus: true, script: "${msbuild} /t:rebuild /p:Configuration=Release .\\OpcUaExtractorSetup\\OpcUaExtractorSetup.wixproj")
                     if (buildStatus != 0) {

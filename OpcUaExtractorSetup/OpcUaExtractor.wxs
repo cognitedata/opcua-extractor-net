@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-  <?define OpcUaExtractor_TargetDir=$(var.OpcUaService.TargetDir)?>
   <?define OpcUaServiceManager_TargetDir=$(var.OpcUaServiceManager.TargetDir)?>
+  <?define ExtractorLauncher_TargetDir=$(var.ExtractorLauncher.TargetDir)?>
+  <?define ExtractorBuild=../extractorbuild?>
   <!-- Important to update ProductVersion for new releases so it gets upgraded -->
   <?define ProductVersion="1.0.0"?>
   <?define ProductId="*" ?>
@@ -9,8 +10,7 @@
   <?define CogniteNameSimple="Cognite OpcUa Extractor" ?>
 
 
-  <Product Id="$(var.ProductId)" Name="$(var.CogniteName)" Language="1033" Version="$(var.ProductVersion)"
-           Manufacturer="Cognite AS" UpgradeCode="3bd281b5-ad7d-4bb0-8dcf-11949ba9c592">
+  <Product Id="$(var.ProductId)" Name="$(var.CogniteName)" Language="1033" Version="$(var.ProductVersion)" Manufacturer="Cognite AS" UpgradeCode="3bd281b5-ad7d-4bb0-8dcf-11949ba9c592">
     <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of $(var.CogniteNameSimple) is already installed." />
@@ -44,8 +44,8 @@
 
     <Feature Id="OpcUaExtractorFeature" Title="OpcUa Extractor" Level="1">
       <ComponentGroupRef Id="OpcUaExtractorServiceComponentGroup" />
-      <ComponentGroupRef Id="OpcUaExtractorConfigFilesComponentGroup"/>
-      <ComponentGroupRef Id="OpcUaServiceManagerFilesComponentGroup"/>
+      <ComponentGroupRef Id="OpcUaExtractorConfigFilesComponentGroup" />
+      <ComponentGroupRef Id="OpcUaServiceManagerFilesComponentGroup" />
     </Feature>
 
   </Product>
@@ -67,15 +67,15 @@
   <Fragment>
     <ComponentGroup Id="OpcUaExtractorServiceComponentGroup">
       <ComponentGroupRef Id="ProductFilesComponentGroup"/>
-      <Component Id="OpcUaService_exe" Guid="6FD4B99A-422C-4703-A9BB-D2837459F15B" Directory="OpcUaExtractorFolder">
-        <File Source="$(var.OpcUaExtractor_TargetDir)OpcUaService.exe" />
-        <!--
+      <Component Id="OpcuaExtractor_exe" Guid="6FD4B99A-422C-4703-A9BB-D2837459F15B" Directory="OpcUaExtractorFolder">
+        <File Source="$(var.ExtractorBuild)/OpcuaExtractor.exe" />
+          <!--
         <ComponentRef Id="cmpFB7C1B7AFE6B78B1A8E464042F47BA4A" Primary="yes" />
         <File Id="[#fil4FF089F0F3026D97861EE6BC791D6FF1]" />        
         <Component Id="cmpFB7C1B7AFE6B78B1A8E464042F47BA4A" 
         -->
         <ServiceInstall Id="ServiceInstaller"
-                        Type="ownProcess"
+                        Type="ownProcess" 
                         Vital="yes"
                         Name="OpcUa-Extractor"
                         DisplayName="Cognite OpcUa Extractor"
@@ -84,41 +84,31 @@
                         Account="LocalSystem"
                         ErrorControl="ignore"
                         Interactive="no">
-          <util:ServiceConfig
-            FirstFailureActionType="restart"
-            SecondFailureActionType="restart"
-            ThirdFailureActionType="restart"
-            RestartServiceDelayInSeconds="10" />
-          <!--<ServiceDependency Id="Dnscache" /> -->
+          <util:ServiceConfig FirstFailureActionType="restart"
+                              SecondFailureActionType="restart" 
+                              ThirdFailureActionType="restart"
+                              RestartServiceDelayInSeconds="10" />
+          <ServiceDependency Id="Dnscache" />
           <ServiceConfig DelayedAutoStart="yes" OnInstall="yes" OnReinstall="yes" />
         </ServiceInstall>
-        <ServiceControl Id="StartService"
-                        Start="install"
-                        Stop="both"
-                        Remove="uninstall"
-                        Name="OpcUa-Extractor"
-                        Wait="no"  />
+        
+        <ServiceControl Id="StartService" Start="install" Stop="both" Remove="uninstall" Name="OpcUa-Extractor" Wait="no" />
         <!-- This EventSource Name need to match whats being used as event source in the service. -->
         <!-- Reference to a specific framework version looks scary... -->
-        <util:EventSource
-          Name="CogniteOpcUa"
-          Log="Application"
-          EventMessageFile="%SystemRoot%\Microsoft.NET\Framework\v2.0.50727\EventLogMessages.dll" />
+        <util:EventSource Name="CogniteOpcUa" Log="Application" EventMessageFile="%SystemRoot%\Microsoft.NET\Framework\v2.0.50727\EventLogMessages.dll" />
         <RegistryKey Id="ProductKey" Action="createAndRemoveOnUninstall" Root="HKLM" Key="Software\Cognite\OpcUaExtractor">
-          <RegistryValue Id="OpcUaExtractorRegPath" Action="write" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]"/>
+          <RegistryValue Id="OpcUaExtractorRegPath" Action="write" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" />
         </RegistryKey>
       </Component>
-      <Component Id="ExtractorLauncher_dll" Guid="08E73D25-7416-4934-87A4-C824A5866912" Directory="OpcUaExtractorFolder">
-        <File Id="ExtractorLauncher.dll" Name="ExtractorLauncher.dll" Source="$(var.OpcUaExtractor_TargetDir)ExtractorLauncher.dll" />
-      </Component>
     </ComponentGroup>
+    
     <ComponentGroup Id="OpcUaExtractorConfigFilesComponentGroup">
       <!--OpcUaExtractor config file-->
       <Component Id="config_example_yml" Guid="BD4BFAD2-3D5E-4718-BF38-04ADE8209EAF" Directory="ConfigFolder">
-        <File Id="config.example.yml" Name="config.example.yml" Source="$(var.OpcUaExtractor_TargetDir)config\config.example.yml" />
+        <File Id="config.example.yml" Name="config.example.yml" Source="$(var.ExtractorLauncher_TargetDir)config\config.example.yml" />
       </Component>
       <Component Id="opc_ua_net_extractor_Config" Guid="C1F2FD46-1E38-4C1F-B4CF-58BFD589618C" Directory="ConfigFolder">
-        <File Id="opc.ua.net.extractor.Config.xml" Name="opc.ua.net.extractor.Config.xml" Source="$(var.OpcUaExtractor_TargetDir)config\opc.ua.net.extractor.Config.xml" />
+        <File Id="opc.ua.net.extractor.Config.xml" Name="opc.ua.net.extractor.Config.xml" Source="$(var.ExtractorLauncher_TargetDir)config\opc.ua.net.extractor.Config.xml" />
       </Component>
     </ComponentGroup>
     <!-- Service Manager -->
@@ -134,6 +124,5 @@
       </Component>
     </ComponentGroup>
   </Fragment>
-
 </Wix>
 
