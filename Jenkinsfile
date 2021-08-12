@@ -101,7 +101,6 @@ podTemplate(
                 sh("influx --execute 'CREATE DATABASE testdb'")
             }
         }
-        if (false) {
         container('dotnet') {
             stage('Install dependencies') {
                 sh('apt-get update && apt-get -y install gnupg curl procps gawk grep')
@@ -147,33 +146,31 @@ podTemplate(
                 }
             }
         }
-        }
-        if ("$lastTag" == "$version" && env.BRANCH_NAME == "master" || true) {
+        if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
             container('docker') {
                 stage("Build Docker images") {
                     sh('docker images | head')
                     sh('#!/bin/sh -e\n'
                             + 'docker login -u _json_key -p "$(cat /jenkins-docker-builder/credentials.json)" https://eu.gcr.io')
 
-                    sh("docker build --build-arg VERSION_ARGS='$versionArgs' -f Dockerfile.build .")
-                    // sh("image=\$(docker build --build-arg VERSION_ARGS='$versionArgs' -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
-                    //    + "&& id=\$(docker create \$image)"
-                    //    + "&& docker cp \$id:/build/deploy ."
-                    //    + "&& docker rm -v \$id"
-                    //    + "&& docker build -t ${dockerImageName}:${version} -t ${dockerImageName2}:${version} .")
+                    sh("image=\$(docker build --build-arg VERSION_ARGS='$versionArgs' -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
+                        + "&& id=\$(docker create \$image)"
+                        + "&& docker cp \$id:/build/deploy ."
+                        + "&& docker rm -v \$id"
+                        + "&& docker build -t ${dockerImageName}:${version} -t ${dockerImageName2}:${version} .")
 
-                    // sh("image=\$(docker build -f Dockerfile.bridge.build . | awk '/Successfully built/ {print \$3}')"
-                    //    + "&& id=\$(docker create \$image)"
-                    //    + "&& docker cp \$id:/build/deploy ."
-                    //    + "&& docker rm -v \$id"
-                    //    + "&& docker build -f Dockerfile.bridge -t ${bridgeDockerImageName}:${version} -t ${bridgeDockerImageName2}:${version} .")
-                    // sh('docker images | head')
+                    sh("image=\$(docker build -f Dockerfile.bridge.build . | awk '/Successfully built/ {print \$3}')"
+                        + "&& id=\$(docker create \$image)"
+                        + "&& docker cp \$id:/build/deploy ."
+                        + "&& docker rm -v \$id"
+                        + "&& docker build -f Dockerfile.bridge -t ${bridgeDockerImageName}:${version} -t ${bridgeDockerImageName2}:${version} .")
+                    sh('docker images | head')
                 }
                 stage('Push Docker images') {
-                    // sh("docker push ${dockerImageName}:${version}")
-                    // sh("docker push ${dockerImageName2}:${version}")
-                    // sh("docker push ${bridgeDockerImageName}:${version}")
-                    // sh("docker push ${bridgeDockerImageName2}:${version}")
+                    sh("docker push ${dockerImageName}:${version}")
+                    sh("docker push ${dockerImageName2}:${version}")
+                    sh("docker push ${bridgeDockerImageName}:${version}")
+                    sh("docker push ${bridgeDockerImageName2}:${version}")
                 }
             }
         }
