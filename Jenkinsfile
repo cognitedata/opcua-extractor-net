@@ -94,7 +94,6 @@ podTemplate(
                 echo "${env.BRANCH_NAME}"
             }
         }
-        if (false) {
         container('influxdb') {
             stage('Build DB') {
                 sh("influx --execute 'DROP DATABASE testdb'")
@@ -146,7 +145,6 @@ podTemplate(
                 }
             }
         }
-        }
         if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
             container('docker') {
                 stage("Build Docker images") {
@@ -176,7 +174,7 @@ podTemplate(
             }
         }
     }
-    if ("$lastTag" == "$version" && env.BRANCH_NAME == "master" || true) {
+    if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
         node('windows') {
             stage('Building MSI on windows node') {
                 powershell('echo $env:Path')
@@ -184,7 +182,6 @@ podTemplate(
         
             stage('Checkout') {
                 checkout(scm)
-                version = "2.4.0"
                 echo "$version"
                 echo "$lastTag"
                 echo "${env.BRANCH_NAME}"
