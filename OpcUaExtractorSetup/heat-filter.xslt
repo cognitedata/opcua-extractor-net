@@ -57,6 +57,12 @@
     />
 
   <xsl:key
+      name="RemoveFromOutput"
+      match="wix:Component[ substring( wix:File/@Source, string-length( wix:File/@Source ) - 3 ) = '.xml' ]"
+      use="@Id"
+    />
+
+  <xsl:key
       name="DontRemoveFromOutput"
       match="wix:Component[ substring( wix:File/@Source, string-length( wix:File/@Source ) - 6 ) = '.config' ]"
       use="@Id"

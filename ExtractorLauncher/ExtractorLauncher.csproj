@@ -6,6 +6,7 @@
     <RootNamespace>Cognite.OpcUa</RootNamespace>
     <AssemblyName>OpcuaExtractor</AssemblyName>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
