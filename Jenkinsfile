@@ -85,6 +85,10 @@ podTemplate(
                 version = sh(returnStdout: true, script: "git describe --tags HEAD || true").trim()
                 version = version.replaceFirst(/-(\d+)-.*/, '-pre.$1')
                 lastTag = sh(returnStdout: true, script: "git describe --tags --abbrev=0").trim()
+                desc = sh(returnStdout: true, script: "git describe --tags --dirty").trim()
+                time = sh(returnStdout: true, script: "git log -1  --format=%ai").trim()
+                publishArgs = "--self-contained true /p:PublishSingleFile=\"true\" /p:InformationalVersion=\"$version\" /p:Description=\"$desc $time\""
+                echo "$publishArgs"
                 echo "$version"
                 echo "$lastTag"
                 echo "${env.BRANCH_NAME}"
@@ -190,11 +194,13 @@ podTemplate(
                 stage ('Build MSI') {
                     powershell('dotnet tool restore')
                     powershell('dotnet paket restore')
-                    powershell('dotnet build --configuration Release .\\ExtractorLauncher\\')
+                    powershell("dotnet publish -c Release -r win-x86 $publishArgs .\\ExtractorLauncher\\ -o extractorbuild\\")
                     powershell(".\\MsiVersionUpdate.ps1 .\\OpcUaExtractorSetup\\OpcUaExtractor.wxs ${version}")
-                    buildStatus = bat(returnStatus: true, script: "${msbuild} /t:rebuild /p:Configuration=Release .\\OpcUaExtractorSetup\\OpcUaExtractorSetup.wixproj")
-                    if (buildStatus != 0) {
-                        error("Build MSI failed.")
+                    dir ('.\\OpcUaExtractorSetup\\') {
+                        buildStatus = bat(returnStatus: true, script: "${msbuild} /t:rebuild /p:Configuration=Release .\\OpcUaExtractorSetup.wixproj")
+                        if (buildStatus != 0) {
+                            error("Build MSI failed.")
+                        }
                     }
                 }
                 stage ('Deploy to github') {
@@ -235,7 +241,7 @@ void packBridge(String configuration, String version, boolean linux) {
 }
 
 void packProject(String configuration, String version, boolean linux) {
-    sh("dotnet publish -c Release -r $configuration --self-contained true /p:PublishSingleFile=\"true\" ExtractorLauncher/")
+    sh("dotnet publish -c Release -r $configuration $publishArgs ExtractorLauncher/")
     sh("mkdir -p ./${configuration}/")
     sh("mv ExtractorLauncher/bin/Release/net5.0/${configuration}/publish/* ./${configuration}/")
     sh("cp -r ./config ./${configuration}/")

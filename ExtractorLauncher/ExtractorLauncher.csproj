@@ -21,30 +21,10 @@
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
     <None Include="../.editorconfig" />
   </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Properties\GitCommitHash">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Properties\GitCommitTime">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </EmbeddedResource>
-  </ItemGroup>
   <PropertyGroup>
     <GitCleanVersion>
     </GitCleanVersion>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-  </PropertyGroup>
-  <PropertyGroup>
-    <PreBuildEvent Condition=" '$(OS)' == 'WINDOWS_NT' ">
-      mkdir "$(MSBuildProjectDirectory)/Properties"
-      git describe --tags --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
-      git log -1  --format="%25%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
-    </PreBuildEvent>
-    <PreBuildEvent Condition=" '$(OS)' == 'UNIX' ">
-      mkdir "$(MSBuildProjectDirectory)/Properties"
-      git describe --tags --dirty &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitHash"
-      git log -1  --format="%25ai" &gt; "$(MSBuildProjectDirectory)/Properties/GitCommitTime"
-    </PreBuildEvent>
   </PropertyGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>
