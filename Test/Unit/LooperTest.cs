@@ -26,6 +26,7 @@ namespace Test.Unit
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
             tester.Config.Extraction.DataPushDelay = -1;
             tester.Config.Extraction.AutoRebrowsePeriod = 1000;
         }

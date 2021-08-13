@@ -46,6 +46,7 @@ namespace Test.Unit
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
             (handler, pusher) = tester.GetPusher();
         }
         [Fact]
@@ -101,9 +102,6 @@ namespace Test.Unit
 
             Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
             Assert.Null(tester.Config.Cognite.DataSetId);
-
-            handler.FailedRoutes.Clear();
-            tester.Config.Cognite.DataSetExternalId = null;
         }
         [Fact]
         public async Task TestPushDatapoints()
@@ -372,7 +370,6 @@ namespace Test.Unit
             Assert.Null(handler.AssetRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
-            tester.Config.Cognite.RawMetadata = null;
         }
         [Fact]
         public async Task TestUpdateRawAssets()
@@ -412,7 +409,6 @@ namespace Test.Unit
             Assert.Single(handler.AssetRaw, asset => asset.Value.GetProperty("description").GetString() == "description");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
-            tester.Config.Cognite.RawMetadata = null;
         }
         [Fact]
         public async Task TestCreateUpdateTimeseries()
@@ -526,7 +522,6 @@ namespace Test.Unit
             Assert.Null(handler.TimeseriesRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
-            tester.Config.Cognite.RawMetadata = null;
         }
         [Fact]
         public async Task TestUpdateRawTimeseries()
@@ -576,7 +571,6 @@ namespace Test.Unit
             Assert.Contains(handler.TimeseriesRaw, ts => ts.Value.GetProperty("description").GetString() == "description");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
-            tester.Config.Cognite.RawMetadata = null;
         }
         #endregion
         [Fact]

@@ -26,7 +26,9 @@ namespace Test.Unit
         private ExtractorTestFixture tester;
         public UAExtractorTest(ITestOutputHelper output, ExtractorTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
         }
         [Fact]
         public async Task TestClientStartFailure()
@@ -53,21 +55,13 @@ namespace Test.Unit
             var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(pushers: pusher);
 
-            try
-            {
-                await extractor.RunExtractor(true);
+            await extractor.RunExtractor(true);
 
-                Assert.Equal(153, pusher.PushedNodes.Count);
-                Assert.Equal(2000, pusher.PushedVariables.Count);
+            Assert.Equal(153, pusher.PushedNodes.Count);
+            Assert.Equal(2000, pusher.PushedVariables.Count);
 
-                Assert.Contains(pusher.PushedNodes.Values, node => node.DisplayName == "DeepObject 4, 25");
-                Assert.Contains(pusher.PushedVariables.Values, node => node.DisplayName == "SubVariable 1234");
-            }
-            finally
-            {
-                tester.Config.Extraction.RootNode = null;
-            }
-
+            Assert.Contains(pusher.PushedNodes.Values, node => node.DisplayName == "DeepObject 4, 25");
+            Assert.Contains(pusher.PushedVariables.Values, node => node.DisplayName == "SubVariable 1234");
         }
         private static void TriggerEventExternally(string field, object parent)
         {
@@ -89,22 +83,15 @@ namespace Test.Unit
             var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(pushers: pusher);
 
-            try
-            {
-                var task = extractor.RunExtractor();
-                await extractor.WaitForSubscriptions();
+            var task = extractor.RunExtractor();
+            await extractor.WaitForSubscriptions();
 
-                Assert.False(task.IsCompleted);
+            Assert.False(task.IsCompleted);
 
-                TriggerEventExternally("OnServerDisconnect", tester.Client);
+            TriggerEventExternally("OnServerDisconnect", tester.Client);
 
-                await Task.WhenAny(task, Task.Delay(10000));
-                Assert.True(task.IsCompleted);
-            }
-            finally
-            {
-                tester.Config.Source.ForceRestart = false;
-            }
+            await Task.WhenAny(task, Task.Delay(10000));
+            Assert.True(task.IsCompleted);
         }
         [Fact]
         public async Task TestRestartOnReconnect()
@@ -114,24 +101,17 @@ namespace Test.Unit
             var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(pushers: pusher);
 
-            try
-            {
-                var task = extractor.RunExtractor();
-                await extractor.WaitForSubscriptions();
-                Assert.True(pusher.PushedNodes.Any());
-                pusher.PushedNodes.Clear();
-                TriggerEventExternally("OnServerReconnect", tester.Client);
+            var task = extractor.RunExtractor();
+            await extractor.WaitForSubscriptions();
+            Assert.True(pusher.PushedNodes.Any());
+            pusher.PushedNodes.Clear();
+            TriggerEventExternally("OnServerReconnect", tester.Client);
 
-                Assert.True(pusher.OnReset.WaitOne(10000));
+            Assert.True(pusher.OnReset.WaitOne(10000));
 
-                await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
+            await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
 
-                extractor.Close();
-            }
-            finally
-            {
-                tester.Config.Source.RestartOnReconnect = false;
-            }
+            extractor.Close();
         }
         [Theory]
         [InlineData(0, 2, 2, 1, 0, 0)]
@@ -197,30 +177,22 @@ namespace Test.Unit
                     refManager)
             };
 
-            try
+            await extractor.PushNodes(nodes, variables, references, pusher, true);
+
+            Assert.Equal(pushedObjects, pusher.PushedNodes.Count);
+            Assert.Equal(pushedVariables, pusher.PushedVariables.Count);
+            Assert.Equal(pushedRefs, pusher.PushedReferences.Count);
+            Assert.Equal(failedNodes, pusher.PendingNodes.Count);
+            Assert.Equal(failedRefs, pusher.PendingReferences.Count);
+
+            if (failAt == 0)
             {
-                await extractor.PushNodes(nodes, variables, references, pusher, true);
-
-                Assert.Equal(pushedObjects, pusher.PushedNodes.Count);
-                Assert.Equal(pushedVariables, pusher.PushedVariables.Count);
-                Assert.Equal(pushedRefs, pusher.PushedReferences.Count);
-                Assert.Equal(failedNodes, pusher.PendingNodes.Count);
-                Assert.Equal(failedRefs, pusher.PendingReferences.Count);
-
-                if (failAt == 0)
-                {
-                    Assert.True(pusher.Initialized);
-                }
-                else
-                {
-                    Assert.False(pusher.Initialized);
-                }
+                Assert.True(pusher.Initialized);
             }
-            finally
+            else
             {
-                tester.Config.Extraction.Relationships.Enabled = false;
+                Assert.False(pusher.Initialized);
             }
-
         }
 
         [Fact]
@@ -387,7 +359,6 @@ namespace Test.Unit
             fields = type.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
             Assert.Single(fields);
             Assert.Equal("value", fields["Value"]);
-            tester.Config.Extraction.NodeTypes.AsNodes = false;
         }
         [Fact]
         public async Task TestNodeMapping()
@@ -405,8 +376,6 @@ namespace Test.Unit
             Assert.Equal("Test1", extractor.GetUniqueId(new NodeId("test")));
             Assert.Equal("Test2", tester.Client.GetUniqueId(new NodeId("test2", 2)));
             Assert.Equal("Test1[0]", extractor.GetUniqueId(new NodeId("test"), 0));
-
-            tester.Config.Extraction.NodeMap = null;
         }
     }
 }

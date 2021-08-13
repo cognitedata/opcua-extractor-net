@@ -24,6 +24,8 @@ namespace Test.Unit
         private PusherUtilsTestFixture tester;
         public PusherUtilsTest(ITestOutputHelper output, PusherUtilsTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
+            tester.ResetConfig();
             this.tester = tester;
         }
         [Fact]

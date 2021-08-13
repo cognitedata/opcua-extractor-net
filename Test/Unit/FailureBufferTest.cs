@@ -48,7 +48,9 @@ namespace Test.Unit
         private readonly FailureBufferTestFixture tester;
         public FailureBufferTest(ITestOutputHelper output, FailureBufferTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
         }
 
         private FullConfig BuildConfig()

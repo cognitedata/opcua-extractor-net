@@ -25,7 +25,9 @@ namespace Test.Unit
         private readonly TypesTestFixture tester;
         public TypesTest(ITestOutputHelper output, TypesTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
         }
         #region uanode
         [Theory]

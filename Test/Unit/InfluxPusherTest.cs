@@ -53,6 +53,7 @@ namespace Test.Unit
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
             (client, pusher) = tester.GetPusher();
         }
         [Fact]

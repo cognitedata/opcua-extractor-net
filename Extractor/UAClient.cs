@@ -1208,7 +1208,8 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             if (!nodeList.Any()) return;
-
+            Console.WriteLine(config.Subscriptions.DataChangeFilter?.Filter?.DeadbandValue ?? 0);
+            Console.WriteLine(config.Subscriptions.DataChangeFilter?.Filter?.DeadbandType ?? 0);
 #pragma warning disable CA2000 // Dispose objects before losing scope
             var sub = AddSubscriptions(
                 nodeList,

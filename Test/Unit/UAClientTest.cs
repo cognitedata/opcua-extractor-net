@@ -84,6 +84,7 @@ namespace Test.Unit
         private UAClientTestFixture tester;
         public UAClientTest(ITestOutputHelper output, UAClientTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
         }
         #region session

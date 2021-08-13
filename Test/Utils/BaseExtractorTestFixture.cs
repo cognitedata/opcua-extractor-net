@@ -59,19 +59,22 @@ namespace Test.Utils
                     var current = prop.GetValue(obj);
                     var old = prop.GetValue(reference);
 
-                    if (prop.PropertyType.IsValueType && !current.Equals(old))
+                    if (prop.PropertyType.IsValueType)
                     {
                         if (!hasSet) continue;
+                        Console.WriteLine("Set " + prop.Name + " to " + old.ToString());
                         prop.SetValue(obj, old);
                     }
                     else if (current is null && !(old is null) || !(current is null) && old is null)
                     {
                         if (!hasSet) continue;
+                        Console.WriteLine("Reset " + prop.Name + " " + (old is null));
                         prop.SetValue(obj, old);
                     }
                     else if (current is null && old is null) continue;
                     else
                     {
+                        Console.WriteLine("Enter " + prop.PropertyType.Name);
                         ResetType(current, old);
                     }
                 }
@@ -79,6 +82,7 @@ namespace Test.Utils
                 {
                     if (!hasSet) continue;
                     var old = prop.GetValue(reference);
+                    Console.WriteLine("Set " + prop.Name + " to " + old?.ToString());
                     prop.SetValue(obj, old);
                 }
             }
@@ -87,6 +91,7 @@ namespace Test.Utils
         public void ResetConfig()
         {
             var raw = ConfigurationUtils.Read<FullConfig>("config.test.yml");
+            raw.GenerateDefaults();
             ResetType(Config, raw);
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
             Config.GenerateDefaults();

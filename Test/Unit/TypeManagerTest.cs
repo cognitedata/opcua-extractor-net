@@ -2,6 +2,7 @@
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -21,7 +22,9 @@ namespace Test.Unit
         private readonly TypeManagerTestFixture tester;
         public TypeManagerTest(ITestOutputHelper output, TypeManagerTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
         }
         #region datatypemanager
         [Fact]

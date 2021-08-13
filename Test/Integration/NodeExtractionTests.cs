@@ -21,7 +21,6 @@ namespace Test.Integration
     {
         public NodeExtractionTestFixture() : base()
         {
-            Config.History.Enabled = false;
         }
         public (CDFMockHandler, CDFPusher) GetCDFPusher()
         {
@@ -41,7 +40,10 @@ namespace Test.Integration
         NodeExtractionTestFixture tester;
         public NodeExtractionTests(ITestOutputHelper output, NodeExtractionTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
+            tester.Config.History.Enabled = false;
         }
         #region datatypeconfig
         [Fact]
@@ -117,8 +119,6 @@ namespace Test.Integration
             Assert.All(pusher.PushedVariables.Values.Where(variable => variable.DisplayName != "MysteryVar"
                 && variable.DisplayName != "NumberVar"),
                 variable => Assert.True(variable.Properties == null || !variable.Properties.Any()));
-
-            dataTypes.AllowStringVariables = false;
         }
         [Fact]
         public async Task TestAllowSmallArrays()
@@ -160,9 +160,6 @@ namespace Test.Integration
             Assert.Contains(vnode, arr.ArrayChildren);
             Assert.Equal(1, vnode.Index);
             Assert.False(pusher.PushedVariables.ContainsKey((ids.StringArray, 2)));
-
-            dataTypes.AllowStringVariables = false;
-            dataTypes.MaxArraySize = 0;
         }
         [Fact]
         public async Task TestAllowLargerArrays()
@@ -199,9 +196,6 @@ namespace Test.Integration
             Assert.Equal(4, arr.ArrayDimensions[0]);
             Assert.Equal(4, arr.ArrayChildren.Count());
             Assert.Equal(DataTypeIds.Double, arr.DataType.Raw);
-
-            dataTypes.AllowStringVariables = false;
-            dataTypes.MaxArraySize = 0;
         }
         [Fact]
         public async Task TestAutoIdentifyTypes()
@@ -241,10 +235,6 @@ namespace Test.Integration
 
             var nnode = pusher.PushedVariables[(ids.NumberVar, -1)];
             Assert.Equal(4, nnode.GetAllProperties().Count());
-
-            dataTypes.AllowStringVariables = false;
-            dataTypes.MaxArraySize = 0;
-            dataTypes.AutoIdentifyTypes = false;
         }
 
         [Fact]
@@ -283,11 +273,6 @@ namespace Test.Integration
 
             var vnode = pusher.PushedVariables[(ids.MysteryVar, -1)];
             Assert.False(vnode.DataType.IsString);
-
-            dataTypes.AllowStringVariables = false;
-            dataTypes.MaxArraySize = 0;
-            dataTypes.AutoIdentifyTypes = false;
-            dataTypes.EnumsAsStrings = false;
         }
         [Fact]
         public async Task TestIgnoreDataType()
@@ -344,11 +329,6 @@ namespace Test.Integration
             Assert.True(node.DataType.IsStep);
             Assert.False(node.DataType.IsString);
             Assert.Equal(ids.NumberType, node.DataType.Raw);
-
-            dataTypes.AllowStringVariables = false;
-            dataTypes.MaxArraySize = 0;
-            dataTypes.AutoIdentifyTypes = false;
-            dataTypes.CustomNumericTypes = null;
         }
         [Theory]
         [InlineData(true)]
@@ -404,11 +384,6 @@ namespace Test.Integration
             var node = pusher.PushedNodes[ids.RankImprecise];
             var arr = Assert.IsType<UAVariable>(node);
             Assert.Equal(4, arr.ArrayDimensions[0]);
-
-            dataTypes.AllowStringVariables = false;
-            dataTypes.AutoIdentifyTypes = false;
-            dataTypes.UnknownAsScalar = false;
-            dataTypes.MaxArraySize = 0;
         }
 
         #endregion
@@ -445,10 +420,6 @@ namespace Test.Integration
 
             var node = pusher.PushedNodes[ids.Obj2];
             Assert.Single(node.Properties);
-
-            extraction.IgnoreName = null;
-            extraction.DataTypes.AllowStringVariables = false;
-            extraction.DataTypes.MaxArraySize = 0;
         }
         [Fact]
         public async Task TestIgnoreNamePrefix()
@@ -481,10 +452,6 @@ namespace Test.Integration
 
             var node = pusher.PushedNodes[ids.Obj2];
             Assert.Single(node.Properties);
-
-            extraction.IgnoreNamePrefix = null;
-            extraction.DataTypes.AllowStringVariables = false;
-            extraction.DataTypes.MaxArraySize = 0;
         }
         [Fact]
         public async Task TestPropertyNameFilter()
@@ -524,11 +491,6 @@ namespace Test.Integration
             prop = node.Properties.First(prop => prop.DisplayName == "EnumVar3") as UAVariable;
             Assert.Equal(@"[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""]",
                 extractor.StringConverter.ConvertToString(prop.Value, prop.DataType.EnumValues));
-
-            extraction.PropertyNameFilter = null;
-            extraction.DataTypes.AllowStringVariables = false;
-            extraction.DataTypes.MaxArraySize = 0;
-            extraction.DataTypes.AutoIdentifyTypes = false;
         }
         [Fact]
         public async Task TestPropertyIdFilter()
@@ -555,11 +517,6 @@ namespace Test.Integration
             Assert.Single(node.Properties);
             var prop = node.Properties.First(prop => prop.DisplayName == "EnumVar2") as UAVariable;
             Assert.Equal("VEnum2", extractor.StringConverter.ConvertToString(prop.Value, prop.DataType.EnumValues));
-
-            extraction.PropertyIdFilter = null;
-            extraction.DataTypes.AllowStringVariables = false;
-            extraction.DataTypes.MaxArraySize = 0;
-            extraction.DataTypes.AutoIdentifyTypes = false;
         }
         [Fact]
         public async Task TestMultipleSourceNodes()
@@ -581,11 +538,6 @@ namespace Test.Integration
             extraction.DataTypes.AutoIdentifyTypes = true;
 
             await extractor.RunExtractor(true);
-
-            extraction.DataTypes.AllowStringVariables = false;
-            extraction.DataTypes.MaxArraySize = 0;
-            extraction.DataTypes.AutoIdentifyTypes = false;
-            extraction.RootNodes = null;
 
             Assert.Equal(7, pusher.PushedNodes.Count);
             Assert.Equal(21, pusher.PushedVariables.Count);
@@ -646,12 +598,6 @@ namespace Test.Integration
             Assert.Equal(2, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("MysteryType", metadata["dataType"]);
-
-            extraction.DataTypes.AllowStringVariables = false;
-            extraction.DataTypes.MaxArraySize = 0;
-            extraction.DataTypes.AutoIdentifyTypes = false;
-            extraction.DataTypes.DataTypeMetadata = false;
-            extraction.NodeTypes.Metadata = false;
         }
         #endregion
 
@@ -700,8 +646,6 @@ namespace Test.Integration
                 Assert.Contains(pusher.PushedReferences, orel => orel.Source.Id == rel.Target.Id
                     && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
             });
-
-            tester.Config.Extraction.Relationships.Enabled = false;
         }
         [Fact]
         public async Task TestHierarchicalReferences()
@@ -726,9 +670,6 @@ namespace Test.Integration
                 Assert.NotNull(rel.Type.Id);
                 Assert.True(rel.Type.HasName);
             });
-
-            tester.Config.Extraction.Relationships.Enabled = false;
-            tester.Config.Extraction.Relationships.Hierarchical = false;
         }
         [Fact]
         public async Task TestInverseHierarchicalReferences()
@@ -755,9 +696,6 @@ namespace Test.Integration
                 Assert.Contains(pusher.PushedReferences, orel => orel.Source.Id == rel.Target.Id
                     && orel.Target.Id == rel.Source.Id && orel.IsForward == !rel.IsForward);
             });
-            tester.Config.Extraction.Relationships.Enabled = false;
-            tester.Config.Extraction.Relationships.Hierarchical = false;
-            tester.Config.Extraction.Relationships.InverseHierarchical = false;
         }
         #endregion
 
@@ -804,15 +742,7 @@ namespace Test.Integration
 
             extractor.Close(false);
 
-
             await Assert.ThrowsAsync<TaskCanceledException>(async () => await runTask);
-
-            tester.Config.Extraction.Relationships.Enabled = false;
-            tester.Config.Extraction.Relationships.Hierarchical = false;
-            tester.Config.Extraction.Relationships.InverseHierarchical = false;
-            dataTypes.AllowStringVariables = false;
-            dataTypes.MaxArraySize = 0;
-            dataTypes.AutoIdentifyTypes = false;
         }
         [Theory]
         [InlineData(true, false)]
@@ -872,13 +802,6 @@ namespace Test.Integration
 
 
             await Assert.ThrowsAsync<TaskCanceledException>(async () => await runTask);
-
-            tester.Config.Extraction.Relationships.Enabled = false;
-            tester.Config.Extraction.Relationships.Hierarchical = false;
-            tester.Config.Extraction.Relationships.InverseHierarchical = false;
-            dataTypes.AllowStringVariables = false;
-            dataTypes.MaxArraySize = 0;
-            dataTypes.AutoIdentifyTypes = false;
         }
         #endregion
 
@@ -1105,10 +1028,6 @@ namespace Test.Integration
             + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
             + @"""NumberVar"":{""Value"":null,""DeepProp"":{""DeepProp2"":{""val1"":""value 1"",""val2"":""value 2""}}},"
             + @"""EnumVar1"":""Enum2"",""EnumVar3"":[""VEnum2"",""VEnum2"",""VEnum1"",""VEnum2""],""EnumVar2"":""VEnum2""}}", metaString);
-            extraction.Transformations = null;
-            extraction.DataTypes.AllowStringVariables = false;
-            extraction.DataTypes.MaxArraySize = 0;
-            extraction.DataTypes.AutoIdentifyTypes = false;
         }
         [Fact]
         public async Task TestArrayPropertiesWithoutMaxArraySize()
@@ -1154,7 +1073,6 @@ namespace Test.Integration
             + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
             + @"""NumberVar"":{""Value"":null,""DeepProp"":{""DeepProp2"":{""val1"":""value 1"",""val2"":""value 2""}}},"
             + @"""EnumVar1"":1,""EnumVar3"":[123,123,321,123],""EnumVar2"":123}}", metaString);
-            extraction.Transformations = null;
         }
         [Fact]
         public async Task TestLateIgnore()
@@ -1181,10 +1099,7 @@ namespace Test.Integration
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
             await extractor.RunExtractor(true);
-            extraction.Transformations = null;
-            extraction.DataTypes.AllowStringVariables = false;
-            extraction.DataTypes.MaxArraySize = 0;
-            extraction.DataTypes.AutoIdentifyTypes = false;
+
             Assert.Single(pusher.PushedNodes);
             Assert.Empty(pusher.PushedVariables);
         }
@@ -1203,10 +1118,7 @@ namespace Test.Integration
             extraction.DataTypes.MaxArraySize = -1;
             extraction.DataTypes.AutoIdentifyTypes = true;
             await extractor.RunExtractor(true);
-            extraction.NodeTypes.AsNodes = false;
-            extraction.DataTypes.AllowStringVariables = false;
-            extraction.DataTypes.MaxArraySize = 0;
-            extraction.DataTypes.AutoIdentifyTypes = false;
+
             Assert.Equal(458, pusher.PushedNodes.Count);
             Assert.Equal(366, pusher.PushedVariables.Count);
             var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType];
