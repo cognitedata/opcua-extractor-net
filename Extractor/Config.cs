@@ -127,6 +127,7 @@ namespace Cognite.OpcUa
         public bool EnumsAsStrings { get; set; }
         public bool DataTypeMetadata { get; set; }
         public bool NullAsNumeric { get; set; }
+        public bool ExpandNodeIds { get; set; }
     }
 
     public class RelationshipConfig

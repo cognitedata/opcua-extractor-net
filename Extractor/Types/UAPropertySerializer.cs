@@ -27,6 +27,7 @@ namespace Cognite.OpcUa.Types
         {
             this.uaClient = uaClient;
             this.config = config;
+            nodeIdConverter = new NodeIdConverter(uaClient);
         }
 
         /// <summary>
@@ -206,10 +207,13 @@ namespace Cognite.OpcUa.Types
             if (customHandledTypes.Contains(type)) return false;
             return true;
         }
-        private ConcurrentDictionary<ConverterType, NodeSerializer> converters = new ConcurrentDictionary<ConverterType, NodeSerializer>();
-        public JsonConverter<UANode> GetConverter(ConverterType type)
+
+        private readonly ConcurrentDictionary<ConverterType, NodeSerializer> converters = new ConcurrentDictionary<ConverterType, NodeSerializer>();
+        private readonly NodeIdConverter nodeIdConverter;
+        public void AddConverters(Newtonsoft.Json.JsonSerializer serializer, ConverterType type)
         {
-            return converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient, key));
+            serializer.Converters.Add(converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient, key)));
+            serializer.Converters.Add(nodeIdConverter);
         }
     }
 
@@ -294,28 +298,21 @@ namespace Cognite.OpcUa.Types
             writer.WriteEndObject();
         }
 
-        public override void WriteJson(JsonWriter writer, UANode value, Newtonsoft.Json.JsonSerializer serializer)
+        private void WriteBaseValues(JsonWriter writer, UANode node)
         {
-            if (writer == null) throw new ArgumentNullException(nameof(writer));
-            if (value == null)
-            {
-                writer.WriteNull();
-                return;
-            }
-            var id = uaClient.GetUniqueId(value.Id);
-            writer.WriteStartObject();
+            var id = uaClient.GetUniqueId(node.Id);
             writer.WritePropertyName("externalId");
             writer.WriteValue(id);
             writer.WritePropertyName("name");
-            writer.WriteValue(string.IsNullOrEmpty(value.DisplayName) ? id : value.DisplayName);
+            writer.WriteValue(string.IsNullOrEmpty(node.DisplayName) ? id : node.DisplayName);
             writer.WritePropertyName("description");
-            writer.WriteValue(value.Description);
+            writer.WriteValue(node.Description);
             writer.WritePropertyName("metadata");
-            WriteProperties(writer, value, true, value.NodeClass == NodeClass.VariableType);
-            if (Type == ConverterType.Variable && value is UAVariable variable)
+            WriteProperties(writer, node, true, node.NodeClass == NodeClass.VariableType);
+            if (Type == ConverterType.Variable && node is UAVariable variable)
             {
                 writer.WritePropertyName("assetExternalId");
-                writer.WriteValue(uaClient.GetUniqueId(value.ParentId));
+                writer.WriteValue(uaClient.GetUniqueId(node.ParentId));
                 writer.WritePropertyName("isString");
                 writer.WriteValue(variable.DataType?.IsString ?? false);
                 writer.WritePropertyName("isStep");
@@ -324,7 +321,47 @@ namespace Cognite.OpcUa.Types
             else
             {
                 writer.WritePropertyName("parentExternalId");
-                writer.WriteValue(uaClient.GetUniqueId(value.ParentId));
+                writer.WriteValue(uaClient.GetUniqueId(node.ParentId));
+            }
+        }
+        private void WriteNodeIds(JsonWriter writer, UANode node, Newtonsoft.Json.JsonSerializer serializer)
+        {
+            writer.WritePropertyName("NodeId");
+            serializer.Serialize(writer, node.Id);
+            if (node.ParentId != null && !node.ParentId.IsNullNodeId)
+            {
+                writer.WritePropertyName("ParentNodeId");
+                serializer.Serialize(writer, node.ParentId);
+            }
+            if (node.NodeType != null && !node.NodeType.Id.IsNullNodeId)
+            {
+                writer.WritePropertyName("TypeDefinitionId");
+                serializer.Serialize(writer, node.NodeType.Id);
+            }
+            if (Type == ConverterType.Variable && node is UAVariable variable)
+            {
+                if (variable.DataType != null && !variable.DataType.Raw.IsNullNodeId)
+                {
+                    writer.WritePropertyName("DataTypeId");
+                    serializer.Serialize(writer, variable.DataType.Raw);
+                }
+            }
+
+        }
+
+        public override void WriteJson(JsonWriter writer, UANode value, Newtonsoft.Json.JsonSerializer serializer)
+        {
+            if (writer == null) throw new ArgumentNullException(nameof(writer));
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+            writer.WriteStartObject();
+            WriteBaseValues(writer, value);
+            if (config.Extraction.DataTypes.ExpandNodeIds)
+            {
+                WriteNodeIds(writer, value, serializer);
             }
             writer.WriteEndObject();
         }
@@ -333,6 +370,119 @@ namespace Cognite.OpcUa.Types
             UANode existingValue, bool hasExistingValue, Newtonsoft.Json.JsonSerializer serializer)
         {
             throw new NotImplementedException();
+        }
+    }
+    class NodeIdConverter : JsonConverter<NodeId>
+    {
+        private readonly UAClient uaClient;
+        public NodeIdConverter(UAClient uaClient)
+        {
+            this.uaClient = uaClient;
+        }
+        public override NodeId ReadJson(JsonReader reader, Type objectType,
+            NodeId existingValue, bool hasExistingValue, Newtonsoft.Json.JsonSerializer serializer)
+        {
+            if (reader.TokenType != JsonToken.StartObject) return NodeId.Null;
+            reader.Read();
+            if (reader.TokenType == JsonToken.EndObject) return NodeId.Null;
+            object identifier = null;
+            int? idType = null;
+            string ns = null;
+            while (reader.TokenType != JsonToken.EndObject)
+            {
+                var key = reader.Value as string;
+                switch (key)
+                {
+                    case "namespace":
+                        ns = reader.ReadAsString();
+                        break;
+                    case "identifier":
+                        reader.Read();
+                        identifier = reader.Value;
+                        break;
+                    case "idType":
+                        idType = reader.ReadAsInt32();
+                        break;
+                }
+                reader.Read();
+            }
+            if (idType == null || identifier == null || idType.Value > 3 || idType.Value < 0) return NodeId.Null;
+            int nsIdx = 0;
+            if (ns != null)
+            {
+                nsIdx = uaClient.NamespaceTable.GetIndex(ns);
+                if (nsIdx < 0) return NodeId.Null;
+            }
+            switch ((IdType)idType.Value)
+            {
+                case IdType.Numeric:
+                    uint val;
+                    try
+                    {
+                        val = Convert.ToUInt32(identifier);
+                    }
+                    catch
+                    {
+                        return NodeId.Null;
+                    }
+                    return new NodeId(val, (ushort)nsIdx);
+                case IdType.String:
+                    return new NodeId(identifier.ToString(), (ushort)nsIdx);
+                case IdType.Guid:
+                    Guid guid;
+                    try
+                    {
+                        guid = Guid.Parse(identifier.ToString());
+                    }
+                    catch (FormatException)
+                    {
+                        return NodeId.Null;
+                    }
+                    return new NodeId(guid, (ushort)nsIdx);
+                case IdType.Opaque:
+                    byte[] opaque;
+                    try
+                    {
+                        opaque = Convert.FromBase64String(identifier.ToString());
+                    }
+                    catch
+                    {
+                        return NodeId.Null;
+                    }
+                    return new NodeId(opaque, (ushort)nsIdx);
+            }
+            return NodeId.Null;
+        }
+
+        public override void WriteJson(JsonWriter writer, NodeId value, Newtonsoft.Json.JsonSerializer serializer)
+        {
+            writer.WriteStartObject();
+            if (value.NamespaceIndex != 0)
+            {
+                writer.WritePropertyName("namespace");
+                var ns = uaClient.NamespaceTable.GetString(value.NamespaceIndex);
+                writer.WriteValue(ns);
+            }
+
+            writer.WritePropertyName("idType");
+            writer.WriteValue((int)value.IdType);
+            writer.WritePropertyName("identifier");
+            switch (value.IdType)
+            {
+                case IdType.Numeric:
+                    writer.WriteValue(value.Identifier as uint? ?? 0);
+                    break;
+                case IdType.Guid:
+                    writer.WriteValue(value.Identifier as Guid? ?? Guid.Empty);
+                    break;
+                case IdType.Opaque:
+                    writer.WriteValue(Convert.ToBase64String(value.Identifier as byte[] ?? Array.Empty<byte>()));
+                    break;
+                case IdType.String:
+                    writer.WriteValue(value.Identifier as string);
+                    break;
+            }
+            writer.WriteEndObject();
         }
     }
 }
