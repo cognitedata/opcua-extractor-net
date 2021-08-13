@@ -358,12 +358,12 @@ namespace Cognite.OpcUa.Types
 
             return asset;
         }
-        public JsonDocument ToJson(StringConverter converter)
+        public JsonDocument ToJson(StringConverter converter, ConverterType type)
         {
             // This is inefficient. A better solution would use System.Text.Json directly, but that requires .NET 6
             // for WriteRaw in Utf8JsonWriter.
             var serializer = new Newtonsoft.Json.JsonSerializer();
-            serializer.Converters.Add(converter);
+            serializer.Converters.Add(converter.GetConverter(type));
             using var stream = new MemoryStream();
             var sw = new StreamWriter(stream);
             using var writer = new JsonTextWriter(sw);

@@ -340,7 +340,7 @@ namespace Test.Unit
 
         private static string MetadataToJson(UANode node, UAExtractor extractor)
         {
-            var json = node.ToJson(extractor.StringConverter);
+            var json = node.ToJson(extractor.StringConverter, ConverterType.Node);
             return json.RootElement.GetProperty("metadata").ToString();
         }
 

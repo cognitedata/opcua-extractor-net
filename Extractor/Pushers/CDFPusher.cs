@@ -487,7 +487,6 @@ namespace Cognite.OpcUa.Pushers
         /// Update list of nodes as assets in CDF Raw.
         /// </summary>
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
-        /// <param name="update">Config for what should be updated on each asset.</param>
         private async Task UpdateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
             await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async rows =>
@@ -498,7 +497,8 @@ namespace Cognite.OpcUa.Pushers
                 await Extractor.ReadProperties(toReadProperties);
 
                 var updates = assetMap
-                    .Select(kvp => (kvp.Key, PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, rowDict.GetValueOrDefault(kvp.Key))))
+                    .Select(kvp => (kvp.Key, PusherUtils.CreateRawUpdate(Extractor.StringConverter,
+                        kvp.Value, rowDict.GetValueOrDefault(kvp.Key), ConverterType.Node)))
                     .Where(elem => elem.Item2 != null)
                     .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
 
@@ -516,7 +516,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var assets = ids.Select(id => (assetMap[id], id));
                 await Extractor.ReadProperties(assets.Select(pair => pair.Item1));
-                return assets.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter), pair.id))
+                return assets.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Node), pair.id))
                     .Where(pair => pair.Item1 != null)
                     .ToDictionary(pair => pair.Item2, pair => pair.Item1.RootElement);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
@@ -645,7 +645,7 @@ namespace Cognite.OpcUa.Pushers
 
                 var updates = tsMap
                     .Select(kvp => (kvp.Key, PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value,
-                        rowDict.GetValueOrDefault(kvp.Key))))
+                        rowDict.GetValueOrDefault(kvp.Key), ConverterType.Variable)))
                     .Where(elem => elem.Item2 != null)
                     .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
 
@@ -665,7 +665,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var timeseries = ids.Select(id => (tsMap[id], id));
                 await Extractor.ReadProperties(timeseries.Select(pair => pair.Item1));
-                return timeseries.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter), pair.id))
+                return timeseries.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Variable), pair.id))
                     .Where(pair => pair.Item1 != null)
                     .ToDictionary(pair => pair.Item2, pair => pair.Item1.RootElement);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);

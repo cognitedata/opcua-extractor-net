@@ -553,7 +553,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (useRawStore)
             {
-                var jsonAssets = ConvertNodesJson(objects);
+                var jsonAssets = ConvertNodesJson(objects, ConverterType.Node);
                 var rawObj = new RawRequestWrapper<JsonElement>
                 {
                     Database = config.RawMetadata.Database,
@@ -614,7 +614,8 @@ namespace Cognite.OpcUa.Pushers
         {
             foreach (var node in nodes)
             {
-                var create = node.ToCDFAsset(extractionConfig, Extractor, Extractor.StringConverter, Extractor.DataTypeManager, config.DataSetId, config.MetadataMapping?.Assets);
+                var create = node.ToCDFAsset(extractionConfig, Extractor,
+                    Extractor.StringConverter, Extractor.DataTypeManager, config.DataSetId, config.MetadataMapping?.Assets);
                 if (create == null) continue;
                 if (!node.Changed)
                 {
@@ -633,11 +634,11 @@ namespace Cognite.OpcUa.Pushers
         /// </summary>
         /// <param name="nodes">Nodes to create or update</param>
         /// <returns>List of assets to create</returns>
-        private IEnumerable<(string id, JsonElement node)> ConvertNodesJson(IEnumerable<UANode> nodes)
+        private IEnumerable<(string id, JsonElement node)> ConvertNodesJson(IEnumerable<UANode> nodes, ConverterType type)
         {
             foreach (var node in nodes)
             {
-                var create = node.ToJson(Extractor.StringConverter);
+                var create = node.ToJson(Extractor.StringConverter, type);
                 if (create == null) continue;
                 yield return (Extractor.GetUniqueId(node.Id), create.RootElement);
             }
@@ -716,7 +717,7 @@ namespace Cognite.OpcUa.Pushers
 
             if (useRawStore)
             {
-                var rawTimeseries = ConvertNodesJson(variables);
+                var rawTimeseries = ConvertNodesJson(variables, ConverterType.Variable);
                 var rawObj = new RawRequestWrapper<JsonElement>
                 {
                     Database = config.RawMetadata.Database,

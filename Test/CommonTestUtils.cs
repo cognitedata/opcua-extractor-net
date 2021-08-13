@@ -98,7 +98,7 @@ namespace Test
                 {
                     _output.WriteLine(_textWriter.ToString());
                 }
-                catch (IndexOutOfRangeException)
+                catch (ArgumentOutOfRangeException)
                 {
                     _output.WriteLine(_textWriter.ToString());
                 }
@@ -170,7 +170,6 @@ namespace Test
         }
         public static void ResetMetricValues(params string[] names)
         {
-            if (names == null) throw new ArgumentNullException(nameof(names));
             foreach (var name in names)
             {
                 ResetMetricValue(name);

@@ -1096,7 +1096,7 @@ namespace Test.Integration
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
 
             // ... and that the JSON looks right
-            var metaElem = root.ToJson(extractor.StringConverter);
+            var metaElem = root.ToJson(extractor.StringConverter, ConverterType.Node);
             var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
             Assert.Equal(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
@@ -1145,7 +1145,7 @@ namespace Test.Integration
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
 
             // ... and that the JSON looks right
-            var metaElem = root.ToJson(extractor.StringConverter);
+            var metaElem = root.ToJson(extractor.StringConverter, ConverterType.Node);
             var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
             Assert.Equal(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"

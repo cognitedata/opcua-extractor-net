@@ -3,6 +3,7 @@ using Opc.Ua;
 using Serilog;
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -16,7 +17,7 @@ namespace Cognite.OpcUa.Types
     /// Class used for converting properties and property values to strings.
     /// Handles both conversion to metadata for Clean, and conversion to JSON for Raw.
     /// </summary>
-    public class StringConverter : JsonConverter<UANode>
+    public class StringConverter
     {
         private readonly UAClient uaClient;
         private readonly FullConfig config;
@@ -205,7 +206,31 @@ namespace Cognite.OpcUa.Types
             if (customHandledTypes.Contains(type)) return false;
             return true;
         }
+        private ConcurrentDictionary<ConverterType, NodeSerializer> converters = new ConcurrentDictionary<ConverterType, NodeSerializer>();
+        public JsonConverter<UANode> GetConverter(ConverterType type)
+        {
+            return converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient, key));
+        }
+    }
 
+    public enum ConverterType {
+        Node,
+        Variable
+    }
+
+    class NodeSerializer : JsonConverter<UANode>
+    {
+        private readonly StringConverter converter;
+        private readonly FullConfig config;
+        private readonly UAClient uaClient;
+        public ConverterType Type { get; }
+        public NodeSerializer(StringConverter converter, FullConfig config, UAClient uaClient, ConverterType type)
+        {
+            this.converter = converter ?? throw new ArgumentNullException(nameof(converter));
+            this.config = config ?? throw new ArgumentNullException(nameof(config));
+            this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
+            Type = type;
+        }
 
         private void WriteProperties(JsonWriter writer, UANode node, bool getExtras, bool writeValue)
         {
@@ -223,7 +248,7 @@ namespace Cognite.OpcUa.Types
             }
             else if (node is UAVariable variable && writeValue)
             {
-                writer.WriteRawValue(ConvertToString(variable.Value, variable.DataType?.EnumValues, null, true));
+                writer.WriteRawValue(converter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, true));
                 return;
             }
             else
@@ -237,7 +262,7 @@ namespace Cognite.OpcUa.Types
             if (node is UAVariable variable2 && writeValue)
             {
                 writer.WritePropertyName("Value");
-                writer.WriteRawValue(ConvertToString(variable2.Value, null, null, true));
+                writer.WriteRawValue(converter.ConvertToString(variable2.Value, null, null, true));
                 fields.Add("Value");
             }
             if (extras != null)
@@ -287,7 +312,7 @@ namespace Cognite.OpcUa.Types
             writer.WriteValue(value.Description);
             writer.WritePropertyName("metadata");
             WriteProperties(writer, value, true, value.NodeClass == NodeClass.VariableType);
-            if ((value.NodeClass == NodeClass.Variable) && value is UAVariable variable && (!variable.IsArray || variable.Index >= 0))
+            if (Type == ConverterType.Variable && value is UAVariable variable)
             {
                 writer.WritePropertyName("assetExternalId");
                 writer.WriteValue(uaClient.GetUniqueId(value.ParentId));
@@ -304,7 +329,8 @@ namespace Cognite.OpcUa.Types
             writer.WriteEndObject();
         }
 
-        public override UANode ReadJson(JsonReader reader, Type objectType, UANode existingValue, bool hasExistingValue, Newtonsoft.Json.JsonSerializer serializer)
+        public override UANode ReadJson(JsonReader reader, Type objectType,
+            UANode existingValue, bool hasExistingValue, Newtonsoft.Json.JsonSerializer serializer)
         {
             throw new NotImplementedException();
         }
