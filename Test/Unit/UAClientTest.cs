@@ -98,6 +98,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestConnectionFailure()
         {
+            string oldEP = tester.Config.Source.EndpointUrl;
             tester.Client.Close();
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62009";
             try

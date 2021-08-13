@@ -17,7 +17,7 @@ namespace Test.Unit
 {
     public sealed class InfluxPusherTestFixture : BaseExtractorTestFixture
     {
-        public InfluxPusherTestFixture() : base(63000)
+        public InfluxPusherTestFixture() : base()
         {
         }
         public (InfluxDBClient, InfluxPusher) GetPusher(bool clear = true)

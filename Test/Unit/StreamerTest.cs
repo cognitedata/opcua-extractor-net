@@ -18,7 +18,7 @@ namespace Test.Unit
 {
     public sealed class StreamerTestFixture : BaseExtractorTestFixture
     {
-        public StreamerTestFixture() : base(62200) { }
+        public StreamerTestFixture() : base() { }
     }
     public class StreamerTest : MakeConsoleWork, IClassFixture<StreamerTestFixture>
     {

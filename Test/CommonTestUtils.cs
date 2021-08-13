@@ -109,6 +109,19 @@ namespace Test
     }
     public static class CommonTestUtils
     {
+        private static object portCounterLock = new object();
+        private static int portCounter = 62100;
+        public static int NextPort
+        {
+            get
+            {
+                lock (portCounterLock)
+                {
+                    return portCounter++;
+                }
+            }
+        }
+
         private static readonly ILogger log = Log.Logger.ForContext(typeof(CommonTestUtils));
 
         public static bool TestRunResult(Exception e)

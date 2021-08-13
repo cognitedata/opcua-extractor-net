@@ -18,7 +18,7 @@ namespace Test.Unit
 {
     public sealed class TypesTestFixture : BaseExtractorTestFixture
     {
-        public TypesTestFixture() : base(62600) { }
+        public TypesTestFixture() : base() { }
     }
     public class TypesTest : MakeConsoleWork, IClassFixture<TypesTestFixture>
     {

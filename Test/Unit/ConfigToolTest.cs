@@ -31,7 +31,9 @@ namespace Test.Unit
             var services = new ServiceCollection();
             Config = services.AddConfig<FullConfig>("config.test.yml", 1);
             Console.WriteLine($"Add logger: {Config.Logger}");
-            Config.Source.EndpointUrl = $"opc.tcp://localhost:63500";
+
+            int port = CommonTestUtils.NextPort;
+            Config.Source.EndpointUrl = $"opc.tcp://localhost:{port}";
             BaseConfig = ConfigurationUtils.Read<FullConfig>("config.test.yml");
             BaseConfig.GenerateDefaults();
 
@@ -40,7 +42,7 @@ namespace Test.Unit
 
             Server = new ServerController(new[] {
                 PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
-                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, 63500);
+                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, port);
             Server.Start().Wait();
 
             Explorer = new UAServerExplorer(Config, BaseConfig);
@@ -64,6 +66,7 @@ namespace Test.Unit
             Assert.True(summary.Secure);
             Assert.Equal(7, summary.Endpoints.Count);
 
+            var oldEP = tester.Config.Source.EndpointUrl;
             // Test failure to connect at all
             tester.Explorer.Close();
             tester.Explorer.ResetSummary();
@@ -74,7 +77,7 @@ namespace Test.Unit
             Assert.Null(summary.Endpoints);
 
             // Test connect from explorer
-            tester.Config.Source.EndpointUrl = "opc.tcp://localhost:63500";
+            tester.Config.Source.EndpointUrl = oldEP;
             await tester.Explorer.GetEndpoints(tester.Source.Token);
             summary = tester.Explorer.Summary;
             Assert.True(summary.Secure);

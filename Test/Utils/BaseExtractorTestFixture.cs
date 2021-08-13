@@ -19,8 +19,9 @@ namespace Test.Utils
         public CancellationTokenSource Source { get; protected set; }
         public IServiceProvider Provider { get; protected set; }
         protected ServiceCollection Services { get; }
-        protected BaseExtractorTestFixture(int port)
+        protected BaseExtractorTestFixture()
         {
+            int port = CommonTestUtils.NextPort;
             // Set higher min thread count, this is required due to running both server and client in the same process.
             // The server uses the threadPool in a weird way that can cause starvation if this is set too low.
             ThreadPool.SetMinThreads(20, 20);

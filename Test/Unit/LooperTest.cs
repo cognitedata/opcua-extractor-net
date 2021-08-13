@@ -17,7 +17,7 @@ namespace Test.Unit
 {
     public sealed class LooperTestFixture : BaseExtractorTestFixture
     {
-        public LooperTestFixture() : base(62300) { }
+        public LooperTestFixture() : base() { }
     }
     public class LooperTest : MakeConsoleWork, IClassFixture<LooperTestFixture>
     {

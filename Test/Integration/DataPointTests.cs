@@ -21,7 +21,7 @@ namespace Test.Integration
 {
     public class DataPointTestFixture : BaseExtractorTestFixture
     {
-        public DataPointTestFixture() : base(63300)
+        public DataPointTestFixture() : base()
         {
             Config.Source.PublishingInterval = 400;
             Config.Extraction.DataPushDelay = 400;

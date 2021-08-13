@@ -23,7 +23,7 @@ namespace Test.Unit
 {
     public sealed class CDFPusherTestFixture : BaseExtractorTestFixture
     {
-        public CDFPusherTestFixture() : base(62900)
+        public CDFPusherTestFixture() : base()
         {
         }
         public (CDFMockHandler, CDFPusher) GetPusher()

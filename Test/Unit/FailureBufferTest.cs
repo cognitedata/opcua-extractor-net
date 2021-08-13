@@ -21,7 +21,7 @@ namespace Test.Unit
 {
     public sealed class FailureBufferTestFixture : BaseExtractorTestFixture
     {
-        public FailureBufferTestFixture() : base(62400)
+        public FailureBufferTestFixture() : base()
         {
             try
             {

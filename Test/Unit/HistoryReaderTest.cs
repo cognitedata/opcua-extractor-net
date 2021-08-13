@@ -19,7 +19,7 @@ namespace Test.Unit
     public sealed class HistoryReaderTestFixture : BaseExtractorTestFixture
     {
         public DateTime HistoryStart { get; }
-        public HistoryReaderTestFixture() : base(62500)
+        public HistoryReaderTestFixture() : base()
         {
             HistoryStart = DateTime.UtcNow.AddSeconds(-20);
             Server.PopulateCustomHistory(HistoryStart);

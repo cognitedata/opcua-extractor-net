@@ -19,7 +19,7 @@ namespace Test.Unit
 {
     public sealed class ExtractorTestFixture : BaseExtractorTestFixture
     {
-        public ExtractorTestFixture() : base(62100) { }
+        public ExtractorTestFixture() : base() { }
     }
     public class UAExtractorTest : MakeConsoleWork, IClassFixture<ExtractorTestFixture>
     {
@@ -31,6 +31,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestClientStartFailure()
         {
+            var oldEP = tester.Config.Source.EndpointUrl;
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:60000";
             tester.Client.Close();
 
@@ -41,7 +42,7 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62100";
+                tester.Config.Source.EndpointUrl = oldEP;
                 await tester.Client.Run(tester.Source.Token);
             }
         }
@@ -288,7 +289,7 @@ namespace Test.Unit
             // Set up for each of the three pushers
             var services = new ServiceCollection();
             var config = services.AddConfig<FullConfig>("config.test.yml", 1);
-            config.Source.EndpointUrl = "opc.tcp://localhost:62100";
+            config.Source.EndpointUrl = tester.Config.Source.EndpointUrl;
             var handler = new CDFMockHandler(config.Cognite.Project, CDFMockHandler.MockMode.None);
 
             handler.AllowConnectionTest = !failedStart;
@@ -331,7 +332,7 @@ namespace Test.Unit
         {
             var services = new ServiceCollection();
             var config = services.AddConfig<FullConfig>("config.test.yml", 1);
-            config.Source.EndpointUrl = "opc.tcp://localhost:62100";
+            config.Source.EndpointUrl = tester.Config.Source.EndpointUrl;
             config.Cognite = null;
             config.Influx = null;
             config.Mqtt = null;

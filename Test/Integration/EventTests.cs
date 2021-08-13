@@ -19,7 +19,7 @@ namespace Test.Integration
 {
     public class EventTestFixture : BaseExtractorTestFixture
     {
-        public EventTestFixture() : base(63400)
+        public EventTestFixture() : base()
         {
             Config.Source.PublishingInterval = 200;
             Config.Extraction.DataPushDelay = 200;

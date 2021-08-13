@@ -17,7 +17,7 @@ namespace Test.Unit
 {
     public sealed class PusherUtilsTestFixture : BaseExtractorTestFixture
     {
-        public PusherUtilsTestFixture() : base(62800) { }
+        public PusherUtilsTestFixture() : base() { }
     }
     public class PusherUtilsTest : MakeConsoleWork, IClassFixture<PusherUtilsTestFixture>
     {
