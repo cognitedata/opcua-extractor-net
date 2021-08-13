@@ -23,9 +23,6 @@ namespace Test.Integration
     {
         public DataPointTestFixture() : base()
         {
-            Config.Source.PublishingInterval = 400;
-            Config.Extraction.DataPushDelay = 400;
-            Config.History.Enabled = false;
         }
         public void ResetCustomServerValues()
         {
@@ -60,7 +57,15 @@ namespace Test.Integration
         private readonly DataPointTestFixture tester;
         public DataPointTests(ITestOutputHelper output, DataPointTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
+            tester.Config.Source.PublishingInterval = 400;
+            tester.Config.Extraction.DataPushDelay = 400;
+            tester.Config.History.Enabled = false;
+            tester.ResetCustomServerValues();
+            tester.WipeBaseHistory();
+            tester.WipeCustomHistory();
         }
 
         #region subscriptions
@@ -71,7 +76,7 @@ namespace Test.Integration
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var dataTypes = tester.Config.Extraction.DataTypes;
-            var ids = tester.Server.Ids.Custom;
+            var ids = tester.Ids.Custom;
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
             dataTypes.AllowStringVariables = true;
@@ -143,12 +148,6 @@ namespace Test.Integration
             TestDataPoints((ids.EnumVar3, 3), 321.0);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-
-            dataTypes.AllowStringVariables = false;
-            dataTypes.MaxArraySize = 0;
-            dataTypes.AutoIdentifyTypes = false;
-            dataTypes.IgnoreDataTypes = null;
-            tester.ResetCustomServerValues();
         }
         [Fact]
         public async Task TestEnumAsString()
@@ -157,7 +156,7 @@ namespace Test.Integration
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var dataTypes = tester.Config.Extraction.DataTypes;
-            var ids = tester.Server.Ids.Custom;
+            var ids = tester.Ids.Custom;
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
             dataTypes.AllowStringVariables = true;
@@ -206,12 +205,6 @@ namespace Test.Integration
             TestDataPoints((ids.EnumVar3, 3), "VEnum1");
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-
-            dataTypes.AllowStringVariables = false;
-            dataTypes.MaxArraySize = 0;
-            dataTypes.AutoIdentifyTypes = false;
-            dataTypes.EnumsAsStrings = false;
-            tester.ResetCustomServerValues();
         }
         [Fact]
         public async Task TestWrongData()
@@ -220,7 +213,7 @@ namespace Test.Integration
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var dataTypes = tester.Config.Extraction.DataTypes;
-            var ids = tester.Server.Ids.Wrong;
+            var ids = tester.Ids.Wrong;
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Wrong.Root, tester.Client);
             dataTypes.AllowStringVariables = true;
@@ -282,10 +275,6 @@ namespace Test.Integration
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
-            dataTypes.AllowStringVariables = false;
-            dataTypes.UnknownAsScalar = false;
-            dataTypes.MaxArraySize = 0;
-
             tester.Server.UpdateNode(ids.WrongDim, new[] { 0, 0, 0, 0 });
             tester.Server.UpdateNode(ids.RankImprecise, new[] { 0, 0, 0, 0 });
             tester.Server.UpdateNode(ids.RankImpreciseNoDim, 0);
@@ -298,11 +287,11 @@ namespace Test.Integration
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var dataTypes = tester.Config.Extraction.DataTypes;
-            var ids = tester.Server.Ids.Base;
+            var ids = tester.Ids.Base;
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(ids.Root, tester.Client);
 
-            tester.Config.Subscriptions.DataChangeFilter = new Cognite.OpcUa.DataSubscriptionConfig
+            tester.Config.Subscriptions.DataChangeFilter = new DataSubscriptionConfig
             {
                 DeadbandType = DeadbandType.Absolute,
                 Trigger = DataChangeTrigger.StatusValue,
@@ -327,9 +316,6 @@ namespace Test.Integration
             var dps = pusher.DataPoints[(ids.DoubleVar1, -1)];
             Assert.Equal(0.0, dps[0].DoubleValue);
             Assert.Equal(1.0, dps[1].DoubleValue);
-
-            tester.Config.Subscriptions.DataChangeFilter = null;
-            tester.WipeBaseHistory();
         }
         #endregion
         #region history
@@ -513,7 +499,7 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = false });
             var extractor = tester.BuildExtractor(true, stateStore, pusher);
 
-            var ids = tester.Server.Ids.Custom;
+            var ids = tester.Ids.Custom;
 
             tester.Config.History.Enabled = true;
             tester.Config.StateStorage.Interval = 1000000;
@@ -582,15 +568,6 @@ namespace Test.Integration
             {
                 extractor.Dispose();
             }
-
-            tester.Config.History.Enabled = false;
-            tester.Config.History.Data = false;
-            tester.Config.History.Backfill = false;
-            dataTypes.AllowStringVariables = false;
-            dataTypes.AutoIdentifyTypes = false;
-            dataTypes.MaxArraySize = 4;
-            tester.WipeCustomHistory();
-            tester.ResetCustomServerValues();
         }
         [Theory]
         [InlineData(true)]
@@ -600,7 +577,7 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
             var extractor = tester.BuildExtractor(true, null, pusher);
 
-            var ids = tester.Server.Ids.Custom;
+            var ids = tester.Ids.Custom;
 
             tester.Config.History.Enabled = true;
             tester.Config.History.Data = true;
@@ -673,15 +650,6 @@ namespace Test.Integration
             {
                 extractor.Dispose();
             }
-
-            tester.Config.History.Enabled = false;
-            tester.Config.History.Data = false;
-            tester.Config.History.Backfill = false;
-            dataTypes.AllowStringVariables = false;
-            dataTypes.AutoIdentifyTypes = false;
-            dataTypes.MaxArraySize = 4;
-            tester.WipeCustomHistory();
-            tester.ResetCustomServerValues();
         }
         [Fact]
         public async Task TestDisableSubscriptions()
@@ -689,7 +657,7 @@ namespace Test.Integration
             using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
-            var ids = tester.Server.Ids.Base;
+            var ids = tester.Ids.Base;
 
             var now = DateTime.UtcNow;
 
@@ -761,13 +729,6 @@ namespace Test.Integration
             await extractor.WaitForSubscriptions();
             Assert.Equal(3u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("DataChangeListener", StringComparison.InvariantCulture)).MonitoredItemCount);
             await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 3), 5);
-
-
-            tester.Config.Extraction.Transformations = oldTransforms;
-            tester.Config.History.Enabled = false;
-            tester.Config.History.Data = false;
-            tester.WipeBaseHistory();
-
         }
         #endregion
 
@@ -842,7 +803,6 @@ namespace Test.Integration
             Assert.Equal(1002, pusher.DataPoints[(ids.StringVar, -1)].DistinctBy(dp => dp.Timestamp).Count());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_buffer_num_points", 0));
-            tester.ResetCustomServerValues();
         }
         #endregion
     }
