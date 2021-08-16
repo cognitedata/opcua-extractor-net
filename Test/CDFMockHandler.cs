@@ -47,8 +47,8 @@ namespace Test
         public Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)> Datapoints { get; } =
             new Dictionary<string, (List<NumericDatapoint> NumericDatapoints, List<StringDatapoint> StringDatapoints)>();
 
-        public Dictionary<string, AssetDummyJson> AssetRaw { get; } = new Dictionary<string, AssetDummyJson>();
-        public Dictionary<string, StatelessTimeseriesDummy> TimeseriesRaw { get; } = new Dictionary<string, StatelessTimeseriesDummy>();
+        public Dictionary<string, JsonElement> AssetRaw { get; } = new Dictionary<string, JsonElement>();
+        public Dictionary<string, JsonElement> TimeseriesRaw { get; } = new Dictionary<string, JsonElement>();
         public Dictionary<string, RelationshipDummy> Relationships { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, RelationshipDummy> RelationshipsRaw { get; } = new Dictionary<string, RelationshipDummy>();
         public Dictionary<string, DataSet> DataSets { get; } = new Dictionary<string, DataSet>();
@@ -732,9 +732,9 @@ namespace Test
         }
         private HttpResponseMessage HandleGetRawAssets()
         {
-            var data = new RawListWrapper<AssetDummy>();
-            data.items = AssetRaw.Select(kvp => new RawWrapper<AssetDummy> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
-            var content = JsonConvert.SerializeObject(data);
+            var data = new RawListWrapper<JsonElement>();
+            data.items = AssetRaw.Select(kvp => new RawWrapper<JsonElement> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
+            var content = System.Text.Json.JsonSerializer.Serialize(data);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(content)
@@ -742,9 +742,9 @@ namespace Test
         }
         private HttpResponseMessage HandleGetRawTimeseries()
         {
-            var data = new RawListWrapper<StatelessTimeseriesDummy>();
-            data.items = TimeseriesRaw.Select(kvp => new RawWrapper<StatelessTimeseriesDummy> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
-            var content = JsonConvert.SerializeObject(data);
+            var data = new RawListWrapper<JsonElement>();
+            data.items = TimeseriesRaw.Select(kvp => new RawWrapper<JsonElement> { columns = kvp.Value, key = kvp.Key, lastUpdatedTime = 0 });
+            var content = System.Text.Json.JsonSerializer.Serialize(data);
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(content)
@@ -763,7 +763,7 @@ namespace Test
 
         private HttpResponseMessage HandleCreateRawAssets(string content)
         {
-            var toCreate = JsonConvert.DeserializeObject<RawListWrapper<AssetDummyJson>>(content);
+            var toCreate = System.Text.Json.JsonSerializer.Deserialize<RawListWrapper<JsonElement>>(content);
             foreach (var item in toCreate.items)
             {
                 AssetRaw[item.key] = item.columns;
@@ -776,7 +776,7 @@ namespace Test
         }
         private HttpResponseMessage HandleCreateRawTimeseries(string content)
         {
-            var toCreate = JsonConvert.DeserializeObject<RawListWrapper<StatelessTimeseriesDummy>>(content);
+            var toCreate = System.Text.Json.JsonSerializer.Deserialize<RawListWrapper<JsonElement>>(content);
             foreach (var item in toCreate.items)
             {
                 TimeseriesRaw[item.key] = item.columns;
@@ -1068,7 +1068,7 @@ namespace Test
     }
     public class AssetDummyJson : AssetDummy
     {
-        public new JObject metadata { get; set; }
+        public new JsonElement metadata { get; set; }
     }
     public class NullableSet<T>
     {
@@ -1168,7 +1168,7 @@ namespace Test
     public class StatelessTimeseriesDummy : TimeseriesDummy
     {
         public string assetExternalId { get; set; }
-        public new JObject metadata { get; set; }
+        public new JsonElement metadata { get; set; }
     }
     public class RawWrapper<T>
     {

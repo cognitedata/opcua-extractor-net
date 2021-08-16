@@ -665,7 +665,7 @@ namespace Test.Unit
             Assert.NotNull((nodes[5].Properties.First() as UAVariable).Value.Value);
             Assert.NotNull((nodes[5].Properties.Last() as UAVariable).Value.Value);
             Assert.Equal(4, nodes[6].GetAllProperties().Count());
-            var meta = nodes[6].BuildMetadata(null, tester.Client.StringConverter);
+            var meta = nodes[6].BuildMetadata(tester.Config.Extraction, tester.Client.DataTypeManager, tester.Client.StringConverter, false);
             Assert.Equal(2, meta.Count);
             Assert.Equal("value 1", meta["DeepProp_DeepProp2_val1"]);
             Assert.Equal("value 2", meta["DeepProp_DeepProp2_val2"]);
@@ -971,7 +971,7 @@ namespace Test.Unit
         [Fact]
         public void TestConvertToString()
         {
-            var converter = new StringConverter(tester.Client);
+            var converter = new StringConverter(tester.Client, tester.Config);
 
             Assert.Equal("", converter.ConvertToString(null));
             Assert.Equal("gp.tl:s=abc", converter.ConvertToString(new NodeId("abc", 2)));
@@ -1015,7 +1015,7 @@ namespace Test.Unit
         [Fact]
         public void TestConvertToStringJson()
         {
-            var converter = new StringConverter(tester.Client);
+            var converter = new StringConverter(tester.Client, tester.Config);
 
             Assert.Equal("null", converter.ConvertToString(null, null, null, true));
             Assert.Equal(@"""gp.tl:s=abc""", converter.ConvertToString(new NodeId("abc", 2), null, null, true));

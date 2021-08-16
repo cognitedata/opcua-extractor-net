@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
 using Opc.Ua;
 using System;
@@ -96,7 +97,7 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
-                var meta = BuildMetadata(null, new StringConverter(null));
+                var meta = BuildMetadata(null, null, new StringConverter(null, null), false);
                 builder.Append("Properties: {\n");
                 foreach (var prop in meta)
                 {
@@ -223,26 +224,30 @@ namespace Cognite.OpcUa.Types
         /// <param name="metaMap">Configured mapping from property name to timeseries attribute</param>
         /// <returns>Stateless timeseries to create or null.</returns>
         public StatelessTimeSeriesCreate ToStatelessTimeSeries(
-            UAExtractor extractor,
+            ExtractionConfig config,
+            IUAClientAccess client,
+            DataTypeManager manager,
+            StringConverter converter,
             long? dataSetId,
             Dictionary<string, string> metaMap)
         {
-            if (extractor == null) return null;
-            string externalId = extractor.GetUniqueId(Id, Index);
+            if (manager == null || converter == null) return null;
+            if (client == null) throw new ArgumentNullException(nameof(client));
+            string externalId = client.GetUniqueId(Id, Index);
             var writePoco = new StatelessTimeSeriesCreate
             {
                 Description = Description,
                 ExternalId = externalId,
-                AssetExternalId = extractor.GetUniqueId(ParentId),
+                AssetExternalId = client.GetUniqueId(ParentId),
                 Name = DisplayName,
                 LegacyName = externalId,
                 IsString = DataType.IsString,
                 IsStep = DataType.IsStep,
                 DataSetId = dataSetId
             };
-            writePoco.Metadata = MetadataToJson(extractor, extractor.StringConverter);
+            writePoco.Metadata = BuildMetadata(config, manager, converter, true);
 
-            HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value, extractor.StringConverter);
+            HandleMetaMap(metaMap, writePoco, value => writePoco.AssetExternalId = value, converter);
 
             return writePoco;
         }
@@ -256,13 +261,18 @@ namespace Cognite.OpcUa.Types
         /// <param name="minimal">True to only add minimal metadata.</param>
         /// <returns>Timeseries to create or null</returns>
         public TimeSeriesCreate ToTimeseries(
+            ExtractionConfig config,
             UAExtractor extractor,
+            DataTypeManager manager,
+            StringConverter converter,
             long? dataSetId,
             IDictionary<NodeId, long> nodeToAssetIds,
             Dictionary<string, string> metaMap,
             bool minimal = false)
         {
-            if (extractor == null) return null;
+            if (manager == null) throw new ArgumentNullException(nameof(manager));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
 
             string externalId = extractor.GetUniqueId(Id, Index);
 
@@ -293,7 +303,7 @@ namespace Cognite.OpcUa.Types
                 writePoco.AssetId = parent;
             }
 
-            writePoco.Metadata = BuildMetadata(extractor, extractor.StringConverter);
+            writePoco.Metadata = BuildMetadata(config, manager, converter, true);
 
             HandleMetaMap(metaMap, writePoco, value =>
             {

@@ -16,14 +16,18 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.Pushers;
+using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
+using Newtonsoft.Json;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Xml.Linq;
 
 namespace Cognite.OpcUa.Types
 {
@@ -118,7 +122,7 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
-                var meta = BuildMetadata(null, new StringConverter(null));
+                var meta = BuildMetadata(null, null, new StringConverter(null, null), false);
                 builder.Append("Properties: {\n");
                 foreach (var prop in meta)
                 {
@@ -208,16 +212,47 @@ namespace Cognite.OpcUa.Types
             }
             return checksum;
         }
+        public Dictionary<string, string> GetExtraMetadata(ExtractionConfig config, DataTypeManager manager, StringConverter converter)
+        {
+            if (config == null) throw new ArgumentNullException(nameof(config));
+            if (manager == null) throw new ArgumentNullException(nameof(manager));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
+            Dictionary<string, string> fields = null;
+            if (this is UAVariable variable)
+            {
+                fields = manager.GetAdditionalMetadata(variable);
+                if (variable.NodeClass == NodeClass.VariableType)
+                {
+                    fields ??= new Dictionary<string, string>();
+                    fields["Value"] = converter.ConvertToString(variable.Value, variable.DataType?.EnumValues);
+                }
+            }
+            if (config.NodeTypes.Metadata)
+            {
+                fields ??= new Dictionary<string, string>();
+                if (NodeType?.Name != null)
+                {
+                    fields["TypeDefinition"] = NodeType.Name;
+                }
+            }
+            return fields;
+        }
         /// <summary>
         /// Return a dictionary of metadata fields for this node.
         /// </summary>
-        /// <param name="extractor">Active extractor, used for building extra metadata.
-        /// Can be null to not fetch any extra metadata at all.</param>
+        /// <param name="config">Extraction config object</param>
+        /// <param name="manager">DataTypeManager used to get information about the datatype</param>
+        /// <param name="converter">StringConverter used for building metadata</param>
+        /// <param name="getExtras">True to get extra metadata</param>
         /// <returns>Created metadata dictionary.</returns>
-        public Dictionary<string, string> BuildMetadata(UAExtractor extractor, StringConverter converter)
+        public Dictionary<string, string> BuildMetadata(ExtractionConfig config, DataTypeManager manager, StringConverter converter, bool getExtras)
         {
             if (converter == null) throw new ArgumentNullException(nameof(converter));
-            Dictionary<string, string> extras = extractor?.GetExtraMetadata(this);
+            Dictionary<string, string> extras = null;
+            if (getExtras)
+            {
+                extras = GetExtraMetadata(config, manager, converter);
+            }
             if (Properties == null && extras == null) return new Dictionary<string, string>();
             if (Properties == null) return extras;
             var result = extras ?? new Dictionary<string, string>();
@@ -234,7 +269,7 @@ namespace Cognite.OpcUa.Types
 
                     if (prop.Properties != null)
                     {
-                        var nestedProperties = prop.BuildMetadata(null, converter);
+                        var nestedProperties = prop.BuildMetadata(config, manager, converter, false);
                         foreach (var sprop in nestedProperties)
                         {
                             result[$"{prop.DisplayName}_{sprop.Key}"] = sprop.Value;
@@ -245,14 +280,7 @@ namespace Cognite.OpcUa.Types
 
             return result;
         }
-        public JsonDocument MetadataToJson(UAExtractor extractor, StringConverter converter)
-        {
-            if (converter == null) throw new ArgumentNullException(nameof(converter));
-            Dictionary<string, string> extras = extractor?.GetExtraMetadata(this);
-            if (Properties == null && extras == null) return JsonDocument.Parse("null");
-            if (Properties == null) return JsonDocument.Parse(JsonSerializer.Serialize(extras));
-            return converter.MetadataToJson(extras, Properties);
-        }
+
         /// <summary>
         /// Retrieve a full list of properties for this node,
         /// recursively fetching properties of properties.
@@ -269,16 +297,21 @@ namespace Cognite.OpcUa.Types
             }
             return result;
         }
-        private void PopulateAssetCreate(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap, AssetCreate asset)
+        private void PopulateAssetCreate(
+            IUAClientAccess client,
+            StringConverter converter,
+            long? dataSetId,
+            Dictionary<string, string> metaMap,
+            AssetCreate asset)
         {
-            var id = extractor.GetUniqueId(Id);
+            var id = client.GetUniqueId(Id);
             asset.Description = Description;
             asset.ExternalId = id;
             asset.Name = string.IsNullOrEmpty(DisplayName) ? id : DisplayName;
             asset.DataSetId = dataSetId;
             if (ParentId != null && !ParentId.IsNullNodeId)
             {
-                asset.ParentExternalId = extractor.GetUniqueId(ParentId);
+                asset.ParentExternalId = client.GetUniqueId(ParentId);
             }
             if (Properties != null && Properties.Any() && (metaMap?.Any() ?? false))
             {
@@ -287,7 +320,7 @@ namespace Cognite.OpcUa.Types
                     if (!(prop is UAVariable propVar)) continue;
                     if (metaMap.TryGetValue(prop.DisplayName, out var mapped))
                     {
-                        var value = extractor.StringConverter.ConvertToString(propVar.Value, propVar.DataType.EnumValues);
+                        var value = converter.ConvertToString(propVar.Value, propVar.DataType.EnumValues);
                         if (string.IsNullOrWhiteSpace(value)) continue;
                         switch (mapped)
                         {
@@ -303,27 +336,53 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Convert to CDF Asset.
         /// </summary>
-        /// <param name="extractor">Active extractor, used for fetching extra metadata</param>
+        /// <param name="config">Active configuration object</param>
+        /// <param name="client">Access to OPC-UA session</param>
+        /// <param name="converter">StringConverter for converting fields</param>
         /// <param name="dataSetId">Optional dataSetId</param>
         /// <param name="metaMap">Map from metadata to asset attributes.</param>
         /// <returns></returns>
-        public AssetCreate ToCDFAsset(UAExtractor extractor, long? dataSetId, Dictionary<string, string> metaMap)
+        public AssetCreate ToCDFAsset(
+            ExtractionConfig config,
+            IUAClientAccess client,
+            StringConverter converter,
+            DataTypeManager manager,
+            long? dataSetId,
+            Dictionary<string, string> metaMap)
         {
-            if (extractor == null) return null;
+            if (client == null) throw new ArgumentNullException(nameof(client));
+            if (converter == null) throw new ArgumentNullException(nameof(converter));
             var asset = new AssetCreate();
-            PopulateAssetCreate(extractor, dataSetId, metaMap, asset);
-            asset.Metadata = BuildMetadata(extractor, extractor.StringConverter);
+            PopulateAssetCreate(client, converter, dataSetId, metaMap, asset);
+            asset.Metadata = BuildMetadata(config, manager, converter, true);
 
             return asset;
         }
-        public AssetCreateJson ToCDFAssetJson(UAExtractor extractor, Dictionary<string, string> metaMap)
+        public JsonDocument ToJson(StringConverter converter, ConverterType type)
         {
-            if (extractor == null) return null;
-            var asset = new AssetCreateJson();
-            PopulateAssetCreate(extractor, null, metaMap, asset);
-            asset.Metadata = MetadataToJson(extractor, extractor.StringConverter);
+            // This is inefficient. A better solution would use System.Text.Json directly, but that requires .NET 6
+            // for WriteRaw in Utf8JsonWriter.
+            var serializer = new Newtonsoft.Json.JsonSerializer();
+            serializer.Converters.Add(converter.GetConverter(type));
+            using var stream = new MemoryStream();
+            var sw = new StreamWriter(stream);
+            using var writer = new JsonTextWriter(sw);
 
-            return asset;
+            serializer.Serialize(writer, this);
+            writer.Flush();
+            stream.Seek(0, SeekOrigin.Begin);
+
+            try
+            {
+                return JsonDocument.Parse(stream);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                stream.Seek(0, SeekOrigin.Begin);
+                Console.WriteLine(Encoding.UTF8.GetString(stream.ToArray()));
+                return null;
+            }
         }
         /// <summary>
         /// Add property to list, creating the list if it does not exist.
