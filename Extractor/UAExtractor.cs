@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -481,7 +482,7 @@ namespace Cognite.OpcUa
         /// This is the entry point for mapping on the extractor.
         /// </summary>
         /// <returns>A list of history tasks</returns>
-        private async Task<IEnumerable<Task>> MapUAToDestinations(BrowseResultHandler handler)
+        private async Task<IEnumerable<Task>> MapUAToDestinations(INodeSource handler)
         {
             var result = await handler.ParseResults(source.Token);
             if (result == null) return Enumerable.Empty<Task>();

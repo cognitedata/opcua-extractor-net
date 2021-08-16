@@ -817,26 +817,8 @@ namespace Cognite.OpcUa.Pushers
             JsonSerializerOptions options,
             CancellationToken token)
         {
-            string cursor = null;
-            var existing = new HashSet<string>();
-            do
-            {
-                try
-                {
-                    var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
-                        new RawRowQuery { Columns = new[] { "," }, Cursor = cursor, Limit = 10_000 }, token);
-                    foreach (var item in result.Items)
-                    {
-                        existing.Add(item.Key);
-                    }
-                    cursor = result.NextCursor;
-                }
-                catch (ResponseException ex) when (ex.Code == 404)
-                {
-                    log.Warning("Table or database not found: {msg}", ex.Message);
-                    break;
-                }
-            } while (cursor != null);
+            var rows = await GetRawRows(dbName, tableName, new[] { "," }, token);
+            var existing = rows.Select(row => row.Key);
 
             var toCreate = keys.Except(existing);
             if (!toCreate.Any()) return;
@@ -866,19 +848,32 @@ namespace Cognite.OpcUa.Pushers
             JsonSerializerOptions options,
             CancellationToken token)
         {
-            string cursor = null;
-            var existing = new List<RawRow>();
+            var existing = await GetRawRows(dbName, tableName, null, token);
+            
             var keys = new HashSet<string>(toRetrieve);
+
+            var toCreate = await dtoBuilder(existing.Where(row => keys.Contains(row.Key)));
+            if (!toCreate.Any()) return;
+            log.Information("Creating or updating {cnt} raw rows in CDF", toCreate.Count);
+
+            await destination.InsertRawRowsAsync(dbName, tableName, toCreate, options, token);
+        }
+
+        public async Task<IEnumerable<RawRow>> GetRawRows(
+            string dbName,
+            string tableName,
+            IEnumerable<string> columns,
+            CancellationToken token)
+        {
+            string cursor = null;
+            var rows = new List<RawRow>();
             do
             {
                 try
                 {
                     var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
-                        new RawRowQuery { Cursor = cursor, Limit = 10_000 }, token);
-                    foreach (var item in result.Items)
-                    {
-                        existing.Add(item);
-                    }
+                        new RawRowQuery { Cursor = cursor, Limit = 10_000, Columns = columns }, token);
+                    rows.AddRange(result.Items);
                     cursor = result.NextCursor;
                 }
                 catch (ResponseException ex) when (ex.Code == 404)
@@ -887,12 +882,7 @@ namespace Cognite.OpcUa.Pushers
                     break;
                 }
             } while (cursor != null);
-
-            var toCreate = await dtoBuilder(existing.Where(row => keys.Contains(row.Key)));
-            if (!toCreate.Any()) return;
-            log.Information("Creating or updating {cnt} raw rows in CDF", toCreate.Count);
-
-            await destination.InsertRawRowsAsync(dbName, tableName, toCreate, options, token);
+            return rows;
         }
         #endregion
 

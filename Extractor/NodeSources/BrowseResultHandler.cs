@@ -25,37 +25,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Cognite.OpcUa
+namespace Cognite.OpcUa.NodeSources
 {
-    /// <summary>
-    /// Contains the result of a round of browsing the server node hierarchy.
-    /// </summary>
-    public class BrowseResult
-    {
-        public BrowseResult(
-            IEnumerable<UANode> sourceObjects,
-            IEnumerable<UAVariable> sourceVariables,
-            IEnumerable<UANode> destinationObjects,
-            IEnumerable<UAVariable> destinationVariables,
-            IEnumerable<UAReference> destinationReferences)
-        {
-            SourceObjects = sourceObjects;
-            SourceVariables = sourceVariables;
-            DestinationObjects = destinationObjects;
-            DestinationVariables = destinationVariables;
-            DestinationReferences = destinationReferences;
-        }
-        public IEnumerable<UANode> SourceObjects { get; }
-        public IEnumerable<UAVariable> SourceVariables { get; }
-        public IEnumerable<UANode> DestinationObjects { get; }
-        public IEnumerable<UAVariable> DestinationVariables { get; }
-        public IEnumerable<UAReference> DestinationReferences { get; }
-    }
     /// <summary>
     /// Contains the results of a browse operation, and parses the nodes to produce
     /// lists of nodes that should be mapped to destinations.
     /// </summary>
-    public class BrowseResultHandler
+    public class BrowseResultHandler : INodeSource
     {
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAExtractor));
 
