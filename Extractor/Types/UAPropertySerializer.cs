@@ -3,6 +3,7 @@ using Opc.Ua;
 using Serilog;
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -19,116 +20,13 @@ namespace Cognite.OpcUa.Types
     public class StringConverter
     {
         private readonly UAClient uaClient;
+        private readonly FullConfig config;
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
 
-        public StringConverter(UAClient uaClient)
+        public StringConverter(UAClient uaClient, FullConfig config)
         {
             this.uaClient = uaClient;
-        }
-        /// <summary>
-        /// Recursively converts the value and children of a node to JSON.
-        /// If the node has no properties, simply returns a string representation of its value (which may be complex),
-        /// if not, a JSON object is returned with a field "Value".
-        /// </summary>
-        /// <param name="builder">String builder to append to</param>
-        /// <param name="node">Property to convert</param>
-        private void PropertyToJson(StringBuilder builder, UANode node)
-        {
-            if (node.Properties == null || !node.Properties.Any())
-            {
-                if (node is UAVariable variable)
-                {
-                    builder.Append(ConvertToString(variable.Value, variable.DataType.EnumValues, null, true));
-                }
-                else
-                {
-                    builder.Append("{}");
-                }
-                return;
-            }
-            bool separator = false;
-            var fields = new HashSet<string>();
-            builder.Append('{');
-            if (node is UAVariable variable2)
-            {
-                builder.Append(@"""Value"":");
-                builder.Append(ConvertToString(variable2.Value, variable2.DataType.EnumValues, null, true));
-                separator = true;
-                fields.Add("Value");
-            }
-
-            foreach (var prop in node.Properties)
-            {
-                if (separator) builder.Append(',');
-                var name = prop.DisplayName;
-                string safeName = JsonConvert.ToString(name);
-                int idx = 0;
-                while (!fields.Add(safeName))
-                {
-                    safeName = JsonConvert.ToString($"{name}{idx++}");
-                }
-                builder.AppendFormat(@"{0}:", safeName);
-                PropertyToJson(builder, prop);
-                separator = true;
-            }
-            builder.Append('}');
-            
-        }
-
-        /// <summary>
-        /// Convert the full metadata of a node to JSON. Can take an optional list of extra fields.
-        /// </summary>
-        /// <param name="extraFields">Extra fields to add</param>
-        /// <param name="properties">List of properties in result</param>
-        /// <returns>A JSONDocument with the full serialized metadata</returns>
-        public JsonDocument MetadataToJson(Dictionary<string, string> extraFields, IEnumerable<UANode> properties)
-        {
-            var builder = new StringBuilder("{");
-            bool separator = false;
-            var fields = new HashSet<string>();
-            if (extraFields != null)
-            {
-                foreach (var field in extraFields)
-                {
-                    if (separator)
-                    {
-                        builder.Append(',');
-                    }
-                    // Using JsonConvert to escape values.
-                    var name = JsonConvert.ToString(field.Key);
-                    fields.Add(name);
-                    builder.Append(name);
-                    builder.Append(':');
-                    builder.Append(JsonConvert.ToString(field.Value));
-                    separator = true;
-                }
-            }
-
-            if (properties != null)
-            {
-                foreach (var prop in properties)
-                {
-                    var name = prop.DisplayName;
-                    if (name == null) continue;
-                    if (separator)
-                    {
-                        builder.Append(',');
-                    }
-                    // Ensure that the field does not already exist.
-                    string safeName = JsonConvert.ToString(name);
-                    int idx = 0;
-                    while (!fields.Add(safeName))
-                    {
-                        safeName = JsonConvert.ToString($"{name}{idx++}");
-                    }
-                    builder.AppendFormat("{0}:", safeName);
-                    PropertyToJson(builder, prop);
-                    separator = true;
-                }
-            }
-            
-            builder.Append('}');
-            return JsonDocument.Parse(builder.ToString());
+            this.config = config;
         }
 
         /// <summary>
@@ -307,6 +205,134 @@ namespace Cognite.OpcUa.Types
             if (!type.Namespace.StartsWith("Opc.Ua", StringComparison.InvariantCulture)) return false;
             if (customHandledTypes.Contains(type)) return false;
             return true;
+        }
+        private ConcurrentDictionary<ConverterType, NodeSerializer> converters = new ConcurrentDictionary<ConverterType, NodeSerializer>();
+        public JsonConverter<UANode> GetConverter(ConverterType type)
+        {
+            return converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient, key));
+        }
+    }
+
+    public enum ConverterType {
+        Node,
+        Variable
+    }
+
+    class NodeSerializer : JsonConverter<UANode>
+    {
+        private readonly StringConverter converter;
+        private readonly FullConfig config;
+        private readonly UAClient uaClient;
+        public ConverterType Type { get; }
+        public NodeSerializer(StringConverter converter, FullConfig config, UAClient uaClient, ConverterType type)
+        {
+            this.converter = converter ?? throw new ArgumentNullException(nameof(converter));
+            this.config = config ?? throw new ArgumentNullException(nameof(config));
+            this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
+            Type = type;
+        }
+
+        private void WriteProperties(JsonWriter writer, UANode node, bool getExtras, bool writeValue)
+        {
+            Dictionary<string, string> extras = null;
+
+            if (getExtras)
+            {
+                extras = node.GetExtraMetadata(config.Extraction, uaClient.DataTypeManager, uaClient.StringConverter);
+                if (extras != null) extras.Remove("Value");
+            }
+            // If we should treat this as a key/value pair, or write it as an object
+            if (extras != null && extras.Any() || node.Properties != null && node.Properties.Any())
+            {
+                writer.WriteStartObject();
+            }
+            else if (node is UAVariable variable && writeValue)
+            {
+                writer.WriteRawValue(converter.ConvertToString(variable.Value, variable.DataType?.EnumValues, null, true));
+                return;
+            }
+            else
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            // Keep fields from being duplicated, resulting in illegal JSON.
+            var fields = new HashSet<string>();
+            if (node is UAVariable variable2 && writeValue)
+            {
+                writer.WritePropertyName("Value");
+                writer.WriteRawValue(converter.ConvertToString(variable2.Value, null, null, true));
+                fields.Add("Value");
+            }
+            if (extras != null)
+            {
+                foreach (var kvp in extras)
+                {
+                    writer.WritePropertyName(kvp.Key);
+                    writer.WriteValue(kvp.Value);
+                    fields.Add(kvp.Key);
+                }
+            }
+            if (node.Properties != null)
+            {
+                foreach (var child in node.Properties)
+                {
+                    var name = child.DisplayName;
+                    if (name == null) continue;
+                    string safeName = name;
+                    int idx = 0;
+                    while (!fields.Add(safeName))
+                    {
+                        safeName = $"{name}{idx++}";
+                    }
+
+                    writer.WritePropertyName(safeName);
+                    WriteProperties(writer, child, false, true);
+                }
+            }
+            writer.WriteEndObject();
+        }
+
+        public override void WriteJson(JsonWriter writer, UANode value, Newtonsoft.Json.JsonSerializer serializer)
+        {
+            if (writer == null) throw new ArgumentNullException(nameof(writer));
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+            var id = uaClient.GetUniqueId(value.Id);
+            writer.WriteStartObject();
+            writer.WritePropertyName("externalId");
+            writer.WriteValue(id);
+            writer.WritePropertyName("name");
+            writer.WriteValue(string.IsNullOrEmpty(value.DisplayName) ? id : value.DisplayName);
+            writer.WritePropertyName("description");
+            writer.WriteValue(value.Description);
+            writer.WritePropertyName("metadata");
+            WriteProperties(writer, value, true, value.NodeClass == NodeClass.VariableType);
+            if (Type == ConverterType.Variable && value is UAVariable variable)
+            {
+                writer.WritePropertyName("assetExternalId");
+                writer.WriteValue(uaClient.GetUniqueId(value.ParentId));
+                writer.WritePropertyName("isString");
+                writer.WriteValue(variable.DataType?.IsString ?? false);
+                writer.WritePropertyName("isStep");
+                writer.WriteValue(variable.DataType?.IsStep ?? false);
+            }
+            else
+            {
+                writer.WritePropertyName("parentExternalId");
+                writer.WriteValue(uaClient.GetUniqueId(value.ParentId));
+            }
+            writer.WriteEndObject();
+        }
+
+        public override UANode ReadJson(JsonReader reader, Type objectType,
+            UANode existingValue, bool hasExistingValue, Newtonsoft.Json.JsonSerializer serializer)
+        {
+            throw new NotImplementedException();
         }
     }
 }

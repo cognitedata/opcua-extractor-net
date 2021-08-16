@@ -8,6 +8,7 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -614,18 +615,18 @@ namespace Test.Integration
             Assert.Equal(16, pusher.PushedVariables.Count);
 
             var node = pusher.PushedNodes[ids.Root];
-            var metadata = extractor.GetExtraMetadata(node);
+            var metadata = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
             Assert.Single(metadata);
             Assert.Equal("BaseObjectType", metadata["TypeDefinition"]);
 
             node = pusher.PushedNodes[ids.Array];
-            metadata = extractor.GetExtraMetadata(node);
+            metadata = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
             Assert.Equal(2, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("Double", metadata["dataType"]);
 
             node = pusher.PushedNodes[ids.EnumVar3];
-            metadata = extractor.GetExtraMetadata(node);
+            metadata = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
             Assert.Equal(4, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("CustomEnumType2", metadata["dataType"]);
@@ -633,7 +634,7 @@ namespace Test.Integration
             Assert.Equal("VEnum2", metadata["123"]);
 
             node = pusher.PushedVariables[(ids.EnumVar3, 1)];
-            metadata = extractor.GetExtraMetadata(node);
+            metadata = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
             Assert.Equal(4, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("CustomEnumType2", metadata["dataType"]);
@@ -641,7 +642,7 @@ namespace Test.Integration
             Assert.Equal("VEnum2", metadata["123"]);
 
             node = pusher.PushedVariables[(ids.MysteryVar, -1)];
-            metadata = extractor.GetExtraMetadata(node);
+            metadata = node.GetExtraMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter);
             Assert.Equal(2, metadata.Count);
             Assert.Equal("BaseDataVariableType", metadata["TypeDefinition"]);
             Assert.Equal("MysteryType", metadata["dataType"]);
@@ -936,29 +937,24 @@ namespace Test.Integration
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
         }
         [Theory]
-        [InlineData(true, true, true, true, false, false, false, false)]
-        [InlineData(false, false, false, false, true, true, true, true)]
-        [InlineData(true, false, true, false, true, false, true, false)]
-        [InlineData(false, true, false, true, false, true, false, true)]
-        [InlineData(true, true, true, true, true, true, true, true)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(true, true)]
         public async Task TestUpdateFieldsRaw(
-            bool assetName, bool variableName,
-            bool assetDesc, bool variableDesc,
-            bool assetContext, bool variableContext,
-            bool assetMeta, bool variableMeta)
+            bool assets, bool timeseries)
         {
             var (handler, pusher) = tester.GetCDFPusher();
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
             var upd = tester.Config.Extraction.Update;
-            upd.Objects.Name = assetName;
-            upd.Objects.Description = assetDesc;
-            upd.Objects.Context = assetContext;
-            upd.Objects.Metadata = assetMeta;
-            upd.Variables.Name = variableName;
-            upd.Variables.Description = variableDesc;
-            upd.Variables.Context = variableContext;
-            upd.Variables.Metadata = variableMeta;
+            upd.Objects.Name = assets;
+            upd.Objects.Description = assets;
+            upd.Objects.Context = assets;
+            upd.Objects.Metadata = assets;
+            upd.Variables.Name = timeseries;
+            upd.Variables.Description = timeseries;
+            upd.Variables.Context = timeseries;
+            upd.Variables.Metadata = timeseries;
 
             tester.Config.Extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Server.Ids.Custom.Root, tester.Client);
 
@@ -977,11 +973,17 @@ namespace Test.Integration
 
             await CommonTestUtils.WaitForCondition(() => handler.AssetRaw.Any() && handler.TimeseriesRaw.Any(), 5);
 
+            foreach (var kvp in handler.TimeseriesRaw)
+            {
+                Console.WriteLine(kvp.Value.ToString());
+            }
+
             CommonTestUtils.VerifyStartingConditions(
                 handler.AssetRaw
-                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)kvp.Value), 
+                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())), 
                 handler.TimeseriesRaw
-                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), null, extractor, tester.Server.Ids.Custom, true);
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)
+                    JsonSerializer.Deserialize<StatelessTimeseriesDummy>(kvp.Value.ToString())), null, extractor, tester.Server.Ids.Custom, true);
 
             tester.Server.ModifyCustomServer();
 
@@ -989,14 +991,16 @@ namespace Test.Integration
 
             CommonTestUtils.VerifyStartingConditions(
                 handler.AssetRaw
-                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)kvp.Value),
+                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())),
                 handler.TimeseriesRaw
-                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, extractor, tester.Server.Ids.Custom, true);
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)
+                    JsonSerializer.Deserialize<StatelessTimeseriesDummy>(kvp.Value.ToString())), upd, extractor, tester.Server.Ids.Custom, true);
             CommonTestUtils.VerifyModified(
                 handler.AssetRaw
-                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)kvp.Value),
+                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())),
                 handler.TimeseriesRaw
-                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)kvp.Value), upd, extractor, tester.Server.Ids.Custom, true);
+                .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)
+                    JsonSerializer.Deserialize<StatelessTimeseriesDummy>(kvp.Value.ToString())), upd, extractor, tester.Server.Ids.Custom, true);
 
             tester.Server.ResetCustomServer();
             tester.Config.Extraction.Update = new UpdateConfig();
@@ -1085,17 +1089,17 @@ namespace Test.Integration
             await extractor.RunExtractor(true);
 
             var root = pusher.PushedNodes[ObjectIds.ObjectsFolder];
-            var meta = root.BuildMetadata(null, extractor.StringConverter);
+            var meta = root.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, false);
             Assert.Equal(17, meta.Count);
             // Verify that the metadata fields get values
             Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
 
             // ... and that the JSON looks right
-            var metaDoc = root.MetadataToJson(null, extractor.StringConverter);
-            var metaString = CommonTestUtils.JsonDocumentToString(metaDoc);
+            var metaElem = root.ToJson(extractor.StringConverter, ConverterType.Node);
+            var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
-            Assert.Equal(@"{""CustomRoot"":{""ChildObject"":{},""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
+            Assert.Equal(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
             + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
             + @"""Variable StringArray"":[""test1"",""test2""],""StringyVar"":null,""IgnoreVar"":null,"
             + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
@@ -1134,17 +1138,17 @@ namespace Test.Integration
             await extractor.RunExtractor(true);
 
             var root = pusher.PushedNodes[ObjectIds.ObjectsFolder];
-            var meta = root.BuildMetadata(null, extractor.StringConverter);
+            var meta = root.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, false);
             Assert.Equal(17, meta.Count);
             // Verify that the metadata fields get values
             Assert.Equal("[0,0,0,0]", meta["CustomRoot_Variable Array"]);
             Assert.Equal("String prop value", meta["CustomRoot_ChildObject2_StringProp"]);
 
             // ... and that the JSON looks right
-            var metaDoc = root.MetadataToJson(null, extractor.StringConverter);
-            var metaString = CommonTestUtils.JsonDocumentToString(metaDoc);
+            var metaElem = root.ToJson(extractor.StringConverter, ConverterType.Node);
+            var metaString = CommonTestUtils.JsonElementToString(metaElem.RootElement.GetProperty("metadata"));
             // This wouldn't work in clean, since there is only a single very large metadata field, but it is a much more useful input to Raw.
-            Assert.Equal(@"{""CustomRoot"":{""ChildObject"":{},""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
+            Assert.Equal(@"{""CustomRoot"":{""ChildObject"":null,""ChildObject2"":{""NumericProp"":1234,""StringProp"":""String prop value""},"
             + @"""Variable Array"":{""Value"":[0,0,0,0],""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
             + @"""Variable StringArray"":[""test1"",""test2""],""StringyVar"":null,""IgnoreVar"":null,"
             + @"""MysteryVar"":{""Value"":null,""EngineeringUnits"":""°C: degree Celsius"",""EURange"":""(0, 100)""},"
@@ -1208,7 +1212,7 @@ namespace Test.Integration
             var customVarType = pusher.PushedNodes[tester.Server.Ids.Custom.VariableType];
             Assert.Equal("CustomVariableType", customVarType.DisplayName);
             Assert.Equal(NodeClass.VariableType, customVarType.NodeClass);
-            var meta = customVarType.BuildMetadata(extractor, extractor.StringConverter);
+            var meta = customVarType.BuildMetadata(tester.Config.Extraction, extractor.DataTypeManager, extractor.StringConverter, true);
             Assert.Single(meta);
             Assert.Equal("123.123", meta["Value"]);
             var customObjType = pusher.PushedNodes[tester.Server.Ids.Custom.ObjectType];

@@ -41,6 +41,7 @@ namespace Cognite.OpcUa
     {
         private readonly UAClient uaClient;
         private readonly FullConfig config;
+        public FullConfig FullConfig => config;
         public Looper Looper { get; }
         public FailureBuffer FailureBuffer { get; }
         public IExtractionStateStore StateStorage { get; }
@@ -470,36 +471,6 @@ namespace Cognite.OpcUa
                 throw new TimeoutException("Waiting for push timed out");
             }
             log.Debug("Waited {s} milliseconds for subscriptions", time * 100);
-        }
-
-        /// <summary>
-        /// Retrieve extra metadata for <paramref name="node"/>.
-        /// </summary>
-        /// <param name="node">Node to get metadata for</param>
-        /// <returns>Extra metadata or null</returns>
-        public Dictionary<string, string> GetExtraMetadata(UANode node)
-        {
-            if (node == null) return null;
-            Dictionary<string, string> fields = null;
-            if (node is UAVariable variable)
-            {
-                fields = DataTypeManager.GetAdditionalMetadata(variable);
-                if (variable.NodeClass == NodeClass.VariableType)
-                {
-                    fields ??= new Dictionary<string, string>();
-                    fields["Value"] = StringConverter.ConvertToString(variable.Value, variable.DataType?.EnumValues);
-                }
-            }
-            if (config.Extraction.NodeTypes.Metadata)
-            {
-                fields ??= new Dictionary<string, string>();
-                if (node.NodeType?.Name != null)
-                {
-                    fields["TypeDefinition"] = node.NodeType.Name;
-                }
-            }
-            return fields;
-
         }
         #endregion
 

@@ -278,7 +278,7 @@ namespace Cognite.OpcUa
         private double? nonFiniteReplacement;
         public IPusher ToPusher(IServiceProvider provider)
         {
-            return new MQTTPusher(this);
+            return new MQTTPusher(this, provider);
         }
     }
     public class FailureBufferConfig

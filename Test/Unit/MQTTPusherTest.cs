@@ -312,7 +312,7 @@ namespace Test.Unit
             Assert.True(await pusher.PushNodes(new[] { node }, tss, update, tester.Source.Token));
             await waitTask;
             Assert.Single(handler.AssetRaw);
-            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.name);
+            Assert.Equal("BaseRoot", handler.AssetRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
             var node2 = new UANode(tester.Server.Ids.Custom.Root, "CustomRoot", NodeId.Null, NodeClass.Object);
@@ -321,16 +321,16 @@ namespace Test.Unit
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             await waitTask;
             Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Null(handler.AssetRaw.First().Value.description);
-            Assert.Null(handler.AssetRaw.Last().Value.description);
+            Assert.Null(handler.AssetRaw.First().Value.GetProperty("description").GetString());
+            Assert.Null(handler.AssetRaw.Last().Value.GetProperty("description").GetString());
 
             // Try to create again, skip both
             waitTask = bridge.WaitForNextMessage(1);
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
             Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Null(handler.AssetRaw.First().Value.description);
-            Assert.Null(handler.AssetRaw.Last().Value.description);
+            Assert.Null(handler.AssetRaw.First().Value.GetProperty("description").GetString());
+            Assert.Null(handler.AssetRaw.Last().Value.GetProperty("description").GetString());
 
             // Update due to update settings
             update.Objects.Description = true;
@@ -339,8 +339,8 @@ namespace Test.Unit
             Assert.True(await pusher.PushNodes(new[] { node, node2 }, tss, update, tester.Source.Token));
             await waitTask;
             Assert.Equal(2, handler.AssetRaw.Count);
-            Assert.Equal("description", handler.AssetRaw.First().Value.description);
-            Assert.Equal("description", handler.AssetRaw.Last().Value.description);
+            Assert.Equal("description", handler.AssetRaw.First().Value.GetProperty("description").GetString());
+            Assert.Equal("description", handler.AssetRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
             tester.Config.Mqtt.RawMetadata = null;
@@ -439,7 +439,7 @@ namespace Test.Unit
             Assert.True(await pusher.PushNodes(assets, new[] { node }, update, tester.Source.Token));
             await waitTask;
             Assert.Single(handler.TimeseriesRaw);
-            Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.name);
+            Assert.Equal("Variable 1", handler.TimeseriesRaw.First().Value.GetProperty("name").GetString());
 
             // Create another, do not overwrite the existing one, due to no update settings
             var node2 = new UAVariable(tester.Server.Ids.Custom.MysteryVar, "MysteryVar", new NodeId("parent"));
@@ -449,16 +449,16 @@ namespace Test.Unit
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             await waitTask;
             Assert.Equal(2, handler.TimeseriesRaw.Count);
-            Assert.Null(handler.TimeseriesRaw.First().Value.description);
-            Assert.Null(handler.TimeseriesRaw.Last().Value.description);
+            Assert.Null(handler.TimeseriesRaw.First().Value.GetProperty("description").GetString());
+            Assert.Null(handler.TimeseriesRaw.Last().Value.GetProperty("description").GetString());
 
             // Try to create again, skip both
             waitTask = bridge.WaitForNextMessage(1);
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
             Assert.Equal(2, handler.TimeseriesRaw.Count);
-            Assert.Null(handler.TimeseriesRaw.First().Value.description);
-            Assert.Null(handler.TimeseriesRaw.Last().Value.description);
+            Assert.Null(handler.TimeseriesRaw.First().Value.GetProperty("description").GetString());
+            Assert.Null(handler.TimeseriesRaw.Last().Value.GetProperty("description").GetString());
 
             // Update due to update settings
             update.Variables.Description = true;
@@ -467,8 +467,8 @@ namespace Test.Unit
             Assert.True(await pusher.PushNodes(assets, new[] { node, node2 }, update, tester.Source.Token));
             await waitTask;
             Assert.Equal(2, handler.TimeseriesRaw.Count);
-            Assert.Equal("description", handler.TimeseriesRaw.First().Value.description);
-            Assert.Equal("description", handler.TimeseriesRaw.Last().Value.description);
+            Assert.Equal("description", handler.TimeseriesRaw.First().Value.GetProperty("description").GetString());
+            Assert.Equal("description", handler.TimeseriesRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
             tester.Config.Mqtt.RawMetadata = null;

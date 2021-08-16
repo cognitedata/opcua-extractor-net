@@ -42,6 +42,7 @@ namespace Cognite.OpcUa.Pushers
     public sealed class CDFPusher : IPusher
     {
         private readonly CognitePusherConfig config;
+        private readonly ExtractionConfig extractionConfig;
         private readonly IDictionary<NodeId, long> nodeToAssetIds = new Dictionary<NodeId, long>();
 
         public bool DataFailing { get; set; }
@@ -63,6 +64,7 @@ namespace Cognite.OpcUa.Pushers
             this.config = config;
             BaseConfig = config;
             destination = clientProvider.GetRequiredService<CogniteDestination>();
+            extractionConfig = clientProvider.GetRequiredService<FullConfig>().Extraction;
         }
 
         private static readonly Counter dataPointsCounter = Metrics
@@ -485,8 +487,7 @@ namespace Cognite.OpcUa.Pushers
         /// Update list of nodes as assets in CDF Raw.
         /// </summary>
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
-        /// <param name="update">Config for what should be updated on each asset.</param>
-        private async Task UpdateRawAssets(IDictionary<string, UANode> assetMap, TypeUpdateConfig update, CancellationToken token)
+        private async Task UpdateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
             await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async rows =>
             {
@@ -496,8 +497,8 @@ namespace Cognite.OpcUa.Pushers
                 await Extractor.ReadProperties(toReadProperties);
 
                 var updates = assetMap
-                    .Select(kvp => (kvp.Key, PusherUtils.CreateRawAssetUpdate(kvp.Value, Extractor,
-                        rowDict.GetValueOrDefault(kvp.Key), update, config.MetadataMapping?.Assets)))
+                    .Select(kvp => (kvp.Key, PusherUtils.CreateRawUpdate(Extractor.StringConverter,
+                        kvp.Value, rowDict.GetValueOrDefault(kvp.Key), ConverterType.Node)))
                     .Where(elem => elem.Item2 != null)
                     .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
 
@@ -511,13 +512,13 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
         private async Task CreateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
-            await EnsureRawRows<AssetCreateJson>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async ids =>
+            await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async ids =>
             {
-                var assets = ids.Select(id => assetMap[id]);
-                await Extractor.ReadProperties(assets);
-                return assets.Select(node => node.ToCDFAssetJson(Extractor, config.MetadataMapping?.Assets))
-                    .Where(asset => asset != null)
-                    .ToDictionary(asset => asset.ExternalId);
+                var assets = ids.Select(id => (assetMap[id], id));
+                await Extractor.ReadProperties(assets.Select(pair => pair.Item1));
+                return assets.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Node), pair.id))
+                    .Where(pair => pair.Item1 != null)
+                    .ToDictionary(pair => pair.Item2, pair => pair.Item1.RootElement);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
         /// <summary>
@@ -534,7 +535,8 @@ namespace Cognite.OpcUa.Pushers
                     var assets = ids.Select(id => assetMap[id]);
                     await Extractor.ReadProperties(assets);
                     return assets
-                        .Select(node => node.ToCDFAsset(Extractor, config.DataSetId, config.MetadataMapping?.Assets))
+                        .Select(node => node.ToCDFAsset(extractionConfig, Extractor,
+                            Extractor.StringConverter, Extractor.DataTypeManager, config.DataSetId, config.MetadataMapping?.Assets))
                         .Where(asset => asset != null);
                 }, RetryMode.None, SanitationMode.Clean, token);
 
@@ -566,7 +568,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (existing.TryGetValue(kvp.Key, out var asset))
                 {
-                    var assetUpdate = PusherUtils.GetAssetUpdate(asset, kvp.Value, Extractor, update);
+                    var assetUpdate = PusherUtils.GetAssetUpdate(extractionConfig, asset, kvp.Value, Extractor, update);
 
                     if (assetUpdate == null) continue;
                     if (assetUpdate.ParentExternalId != null || assetUpdate.Description != null
@@ -604,7 +606,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (update.AnyUpdate)
                 {
-                    await UpdateRawAssets(assetIds, update, token);
+                    await UpdateRawAssets(assetIds, token);
                 }
                 else
                 {
@@ -632,7 +634,6 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="update">Config for what should be updated on each timeseries.</param>
         private async Task UpdateRawTimeseries(
             IDictionary<string, UAVariable> tsMap,
-            TypeUpdateConfig update,
             CancellationToken token)
         {
             await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, async rows =>
@@ -643,8 +644,8 @@ namespace Cognite.OpcUa.Pushers
                 await Extractor.ReadProperties(toReadProperties);
 
                 var updates = tsMap
-                    .Select(kvp => (kvp.Key, PusherUtils.CreateRawTsUpdate(kvp.Value, Extractor,
-                        rowDict.GetValueOrDefault(kvp.Key), update, config.MetadataMapping?.Timeseries)))
+                    .Select(kvp => (kvp.Key, PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value,
+                        rowDict.GetValueOrDefault(kvp.Key), ConverterType.Variable)))
                     .Where(elem => elem.Item2 != null)
                     .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
 
@@ -660,13 +661,13 @@ namespace Cognite.OpcUa.Pushers
             IDictionary<string, UAVariable> tsMap,
             CancellationToken token)
         {
-            await EnsureRawRows<StatelessTimeSeriesCreate>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, async ids =>
+            await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, async ids =>
             {
-                var timeseries = ids.Select(id => tsMap[id]);
-                await Extractor.ReadProperties(timeseries);
-                return timeseries.Select(node => node.ToStatelessTimeSeries(Extractor, null, config.MetadataMapping?.Timeseries))
-                    .Where(ts => ts != null)
-                    .ToDictionary(ts => ts.ExternalId);
+                var timeseries = ids.Select(id => (tsMap[id], id));
+                await Extractor.ReadProperties(timeseries.Select(pair => pair.Item1));
+                return timeseries.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Variable), pair.id))
+                    .Where(pair => pair.Item1 != null)
+                    .ToDictionary(pair => pair.Item2, pair => pair.Item1.RootElement);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
         /// <summary>
@@ -687,7 +688,10 @@ namespace Cognite.OpcUa.Pushers
                     await Extractor.ReadProperties(tss);
                 }
                 return tss.Select(ts => ts.ToTimeseries(
+                    extractionConfig,
                     Extractor,
+                    Extractor.DataTypeManager,
+                    Extractor.StringConverter,
                     config.DataSetId,
                     nodeToAssetIds,
                     config.MetadataMapping?.Timeseries,
@@ -738,7 +742,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (existing.TryGetValue(kvp.Key, out var ts))
                 {
-                    var tsUpdate = PusherUtils.GetTSUpdate(Extractor, ts, kvp.Value, update, nodeToAssetIds);
+                    var tsUpdate = PusherUtils.GetTSUpdate(extractionConfig, Extractor.DataTypeManager, Extractor.StringConverter, ts, kvp.Value, update, nodeToAssetIds);
                     if (tsUpdate == null) continue;
                     if (tsUpdate.AssetId != null || tsUpdate.Description != null
                         || tsUpdate.Name != null || tsUpdate.Metadata != null)
@@ -779,7 +783,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (update.AnyUpdate)
                 {
-                    await UpdateRawTimeseries(tsIds, update, token);
+                    await UpdateRawTimeseries(tsIds, token);
                 }
                 else
                 {

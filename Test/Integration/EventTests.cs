@@ -176,7 +176,6 @@ namespace Test.Integration
         [Fact]
         public async Task TestDisableSubscriptions()
         {
-            return;
             using var pusher = new DummyPusher(new DummyPusherConfig() { ReadExtractedRanges = true });
             using var extractor = tester.BuildExtractor(true, null, pusher);
 
