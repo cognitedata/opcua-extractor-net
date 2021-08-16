@@ -151,12 +151,7 @@ namespace Test
             return true;
         }
 
-        public static bool VerifySuccessMetrics()
-        {
-            return TestMetricValue("opcua_attribute_request_failures", 0)
-                && TestMetricValue("opcua_history_read_failures", 0)
-                && TestMetricValue("opcua_browse_failures", 0);
-        }
+
         public static void ResetMetricValues(params string[] names)
         {
             foreach (var name in names)

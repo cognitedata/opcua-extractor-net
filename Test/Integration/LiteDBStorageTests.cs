@@ -66,6 +66,7 @@ namespace Test.Integration
             tester.Config.Extraction.DataTypes.AllowStringVariables = true;
             tester.Config.History.Enabled = true;
             tester.Config.FailureBuffer.Enabled = true;
+            tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
             tester.Server.PopulateBaseHistory();
 
             using var extractor = tester.BuildExtractor(true, null, pusher);
@@ -99,7 +100,6 @@ namespace Test.Integration
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 
-            Assert.True(CommonTestUtils.VerifySuccessMetrics());
             Assert.NotEqual(0, (int)CommonTestUtils.GetMetricValue("opcua_datapoint_push_failures_influx"));
         }
 
@@ -122,6 +122,8 @@ namespace Test.Integration
             tester.Config.FailureBuffer.Enabled = true;
             tester.Config.FailureBuffer.Influx = true;
             tester.Config.FailureBuffer.InfluxStateStore = true;
+            tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
+
 
             var (handler, cdfPusher) = tester.GetCDFPusher();
 
@@ -212,6 +214,7 @@ namespace Test.Integration
             tester.Config.FailureBuffer.Enabled = true;
             tester.Config.FailureBuffer.Influx = true;
             tester.Config.FailureBuffer.InfluxStateStore = true;
+            tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
 
             var (handler, cdfPusher) = tester.GetCDFPusher();
 
