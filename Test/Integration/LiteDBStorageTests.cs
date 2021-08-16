@@ -38,8 +38,6 @@ namespace Test.Integration
         }
     }
 
-
-    [Collection("Extractor tests")]
     public class LiteDbStorageTests : MakeConsoleWork, IClassFixture<LiteDbStorageTestFixture>
     {
         private readonly LiteDbStorageTestFixture tester;

@@ -15,15 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using AdysTech.InfluxDB.Client.Net;
-using Cognite.Bridge;
-using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
-using Cognite.Extractor.Metrics;
-using Cognite.Extractor.StateStorage;
-using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
-using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using LiteDB;
@@ -42,29 +34,13 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
-using File = System.IO.File;
 
 [assembly: CLSCompliant(false)]
 namespace Test
 {
-    public class ConfigInitFixture
-    {
-        public ConfigInitFixture()
-        {
-            var defaultConfig = new LoggerConfig();
-            defaultConfig.Console = new LogConfig() { Level = "debug" };
-            LoggingUtils.Configure(defaultConfig);
-        }
-    }
-
-    [CollectionDefinition("Extractor tests")]
-    public class ExtractorCollectionDefinition : ICollectionFixture<ConfigInitFixture> { }
-
-
     public class MakeConsoleWork : IDisposable
     {
         private readonly ITestOutputHelper _output;
