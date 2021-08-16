@@ -346,7 +346,34 @@ namespace Cognite.OpcUa.Types
                     serializer.Serialize(writer, variable.DataType.Raw);
                 }
             }
+        }
 
+        private void WriteInternalInfo(JsonWriter writer, UANode node, Newtonsoft.Json.JsonSerializer serializer)
+        {
+            writer.WritePropertyName("InternalData");
+            writer.WriteStartObject();
+
+            writer.WritePropertyName("EventNotifier");
+            writer.WriteValue(node.EventNotifier);
+            writer.WritePropertyName("ShouldSubscribe");
+            writer.WriteValue(node.ShouldSubscribe);
+            if (Type == ConverterType.Variable && node is UAVariable variable)
+            {
+                writer.WritePropertyName("AccessLevel");
+                writer.WriteValue(variable.AccessLevel);
+                writer.WritePropertyName("Historizing");
+                writer.WriteValue(variable.VariableAttributes.Historizing);
+                if (variable.ArrayDimensions != null)
+                {
+                    writer.WritePropertyName("ValueRank");
+                    writer.WriteValue(variable.ValueRank);
+                    writer.WritePropertyName("ArrayDimensions");
+                    serializer.Serialize(writer, variable.ArrayDimensions);
+                    writer.WritePropertyName("Index");
+                    writer.WriteValue(variable.Index);
+                }
+            }
+            writer.WriteEndObject();
         }
 
         public override void WriteJson(JsonWriter writer, UANode value, Newtonsoft.Json.JsonSerializer serializer)
@@ -362,6 +389,10 @@ namespace Cognite.OpcUa.Types
             if (config.Extraction.DataTypes.ExpandNodeIds)
             {
                 WriteNodeIds(writer, value, serializer);
+            }
+            if (config.Extraction.DataTypes.AppendInternalValues)
+            {
+                WriteInternalInfo(writer, value, serializer);
             }
             writer.WriteEndObject();
         }

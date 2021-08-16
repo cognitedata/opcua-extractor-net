@@ -11,6 +11,7 @@ using Opc.Ua;
 using System.Xml;
 using Newtonsoft.Json;
 using System.IO;
+using System.Collections.ObjectModel;
 
 namespace Test.Unit
 {
@@ -238,6 +239,61 @@ namespace Test.Unit
                 + @"""DataTypeId"":{""idType"":0,""identifier"":1}}");
 
             tester.Config.Extraction.DataTypes.ExpandNodeIds = false;
+        }
+        [Fact]
+        public void TestWriteInternals()
+        {
+            var serializer = new JsonSerializer();
+            var converter = tester.Client.StringConverter;
+            converter.AddConverters(serializer, ConverterType.Node);
+
+            void TestConvert(UANode node, string expected)
+            {
+                var sb = new StringBuilder();
+                using var sw = new StringWriter(sb);
+                using var writer = new JsonTextWriter(sw);
+                serializer.Serialize(writer, node);
+                writer.Flush();
+                var result = sb.ToString();
+
+                Assert.Equal(expected, result);
+            }
+
+            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
+            var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
+            TestConvert(node,
+                @"{""externalId"":""gp.base:s=test"",""name"":""test"","
+                + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
+                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true}}");
+
+            node.Attributes.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
+            TestConvert(node,
+                @"{""externalId"":""gp.base:s=test"",""name"":""test"","
+                + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
+                + @"""InternalData"":{""EventNotifier"":5,""ShouldSubscribe"":true}}");
+
+            var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.Variable);
+            serializer = new JsonSerializer();
+            converter.AddConverters(serializer, ConverterType.Variable);
+            variable.VariableAttributes.AccessLevel |= AccessLevels.CurrentRead | AccessLevels.HistoryRead;
+            variable.VariableAttributes.Historizing = true;
+            TestConvert(variable,
+                @"{""externalId"":""gp.base:s=test"",""name"":""test"","
+                + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
+                + @"""isString"":false,""isStep"":false,"
+                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""AccessLevel"":5,""Historizing"":true}}");
+
+            variable.VariableAttributes.ValueRank = ValueRanks.OneDimension;
+            variable.VariableAttributes.ArrayDimensions = new Collection<int> { 5 };
+            TestConvert(variable,
+                @"{""externalId"":""gp.base:s=test"",""name"":""test"","
+                + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
+                + @"""isString"":false,""isStep"":false,"
+                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""AccessLevel"":5,""Historizing"":true,"
+                + @"""ValueRank"":1,""ArrayDimensions"":[5],""Index"":-1}}"
+                );
+
+            tester.Config.Extraction.DataTypes.AppendInternalValues = false;
         }
     }
 }

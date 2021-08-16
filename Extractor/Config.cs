@@ -128,6 +128,7 @@ namespace Cognite.OpcUa
         public bool DataTypeMetadata { get; set; }
         public bool NullAsNumeric { get; set; }
         public bool ExpandNodeIds { get; set; }
+        public bool AppendInternalValues { get; set; }
     }
 
     public class RelationshipConfig
