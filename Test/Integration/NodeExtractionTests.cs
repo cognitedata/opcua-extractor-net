@@ -22,16 +22,6 @@ namespace Test.Integration
         public NodeExtractionTestFixture() : base()
         {
         }
-        public (CDFMockHandler, CDFPusher) GetCDFPusher()
-        {
-            var handler = new CDFMockHandler("test", CDFMockHandler.MockMode.None);
-            handler.StoreDatapoints = true;
-            CommonTestUtils.AddDummyProvider(handler, Services);
-            Services.AddCogniteClient("appid", null, true, true, false);
-            var provider = Services.BuildServiceProvider();
-            var pusher = Config.Cognite.ToPusher(provider) as CDFPusher;
-            return (handler, pusher);
-        }
     }
 
     // Tests for various configurations for extracting nodes and pushing to dummy pusher

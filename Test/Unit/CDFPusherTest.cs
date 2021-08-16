@@ -26,16 +26,6 @@ namespace Test.Unit
         public CDFPusherTestFixture() : base()
         {
         }
-        public (CDFMockHandler, CDFPusher) GetPusher()
-        {
-            var handler = new CDFMockHandler("test", CDFMockHandler.MockMode.None);
-            handler.StoreDatapoints = true;
-            CommonTestUtils.AddDummyProvider(handler, Services);
-            Services.AddCogniteClient("appid", null, true, true, false);
-            var provider = Services.BuildServiceProvider();
-            var pusher = Config.Cognite.ToPusher(provider) as CDFPusher;
-            return (handler, pusher);
-        }
     }
     public class CDFPusherTest : MakeConsoleWork, IClassFixture<CDFPusherTestFixture>
     {
@@ -47,7 +37,7 @@ namespace Test.Unit
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
             tester.ResetConfig();
-            (handler, pusher) = tester.GetPusher();
+            (handler, pusher) = tester.GetCDFPusher();
         }
         [Fact]
         public async Task TestTestConnection()

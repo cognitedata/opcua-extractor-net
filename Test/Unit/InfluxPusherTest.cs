@@ -6,7 +6,6 @@ using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Test.Utils;
@@ -19,29 +18,7 @@ namespace Test.Unit
     {
         public InfluxPusherTestFixture() : base()
         {
-        }
-        public (InfluxDBClient, InfluxPusher) GetPusher(bool clear = true)
-        {
-            if (Config.Influx == null)
-            {
-                Config.Influx = new InfluxPusherConfig();
-            }
-            Config.Influx.Database ??= "testdb-pusher";
-            Config.Influx.Host ??= "http://localhost:8086";
-
-            var client = new InfluxDBClient(Config.Influx.Host, Config.Influx.Username, Config.Influx.Password);
-            if (clear)
-            {
-                ClearDB(client).Wait();
-            }
-            var pusher = Config.Influx.ToPusher(null) as InfluxPusher;
-            return (client, pusher);
-        }
-        public async Task ClearDB(InfluxDBClient client)
-        {
-            if (client == null) return;
-            await client.DropDatabaseAsync(new InfluxDatabase(Config.Influx.Database));
-            await client.CreateDatabaseAsync(Config.Influx.Database);
+            DeleteFiles("fb-");
         }
     }
     public class InfluxPusherTest : MakeConsoleWork, IClassFixture<InfluxPusherTestFixture>
@@ -49,12 +26,25 @@ namespace Test.Unit
         private readonly InfluxPusherTestFixture tester;
         private InfluxDBClient client;
         private InfluxPusher pusher;
+        private static int ifIndex;
         public InfluxPusherTest(ITestOutputHelper output, InfluxPusherTestFixture tester) : base(output)
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
             tester.ResetConfig();
-            (client, pusher) = tester.GetPusher();
+
+            var ifSetup = tester.GetInfluxPusher($"testdb-pusher{ifIndex++}");
+            client = ifSetup.client;
+            pusher = ifSetup.pusher;
+        }
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            if (disposing)
+            {
+                client?.Dispose();
+                pusher?.Dispose();
+            }
         }
         [Fact]
         public async Task TestTestConnection()
@@ -502,16 +492,6 @@ namespace Test.Unit
             Assert.True(await pusher.InitExtractedEventRanges(states, true, tester.Source.Token));
             Assert.Equal(new TimeRange(GetTs(1000), GetTs(3000)), states[0].DestinationExtractedRange);
             Assert.Equal(new TimeRange(GetTs(1000), GetTs(2000)), states[1].DestinationExtractedRange);
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            base.Dispose(disposing);
-            if (disposing)
-            {
-                client.Dispose();
-                pusher.Dispose();
-            }
         }
     }
 }

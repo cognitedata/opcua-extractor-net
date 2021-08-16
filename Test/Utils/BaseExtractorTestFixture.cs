@@ -1,4 +1,5 @@
-﻿using Cognite.Extractor.Configuration;
+﻿using AdysTech.InfluxDB.Client.Net;
+using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.StateStorage;
 using Cognite.Extractor.Utils;
@@ -9,6 +10,7 @@ using Server;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -62,19 +64,16 @@ namespace Test.Utils
                     if (prop.PropertyType.IsValueType)
                     {
                         if (!hasSet) continue;
-                        Console.WriteLine("Set " + prop.Name + " to " + old.ToString());
                         prop.SetValue(obj, old);
                     }
                     else if (current is null && !(old is null) || !(current is null) && old is null)
                     {
                         if (!hasSet) continue;
-                        Console.WriteLine("Reset " + prop.Name + " " + (old is null));
                         prop.SetValue(obj, old);
                     }
                     else if (current is null && old is null) continue;
                     else
                     {
-                        Console.WriteLine("Enter " + prop.PropertyType.Name);
                         ResetType(current, old);
                     }
                 }
@@ -82,7 +81,6 @@ namespace Test.Utils
                 {
                     if (!hasSet) continue;
                     var old = prop.GetValue(reference);
-                    Console.WriteLine("Set " + prop.Name + " to " + old?.ToString());
                     prop.SetValue(obj, old);
                 }
             }
@@ -110,6 +108,73 @@ namespace Test.Utils
                 Client.IgnoreFilters = null;
             }
             return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
+        }
+
+        
+
+        public (InfluxPusher pusher, InfluxDBClient client) GetInfluxPusher(string dbName, bool clear = true)
+        {
+            if (Config.Influx == null)
+            {
+                Config.Influx = new InfluxPusherConfig();
+            }
+            Config.Influx.Database = dbName;
+            Config.Influx.Host ??= "http://localhost:8086";
+
+            var client = new InfluxDBClient(Config.Influx.Host, Config.Influx.Username, Config.Influx.Password);
+            if (clear)
+            {
+                ClearLiteDB(client).Wait();
+            }
+            var pusher = Config.Influx.ToPusher(null) as InfluxPusher;
+            return (pusher, client);
+        }
+
+        public async Task ClearLiteDB(InfluxDBClient client)
+        {
+            if (client == null) return;
+            try
+            {
+                await client.DropDatabaseAsync(new InfluxDatabase(Config.Influx.Database));
+            }
+            catch
+            {
+                Console.WriteLine("Failed to drop database: " + Config.Influx.Database);
+            }
+            await client.CreateDatabaseAsync(Config.Influx.Database);
+        }
+
+        public (CDFMockHandler, CDFPusher) GetCDFPusher()
+        {
+            var handler = new CDFMockHandler("test", CDFMockHandler.MockMode.None);
+            handler.StoreDatapoints = true;
+            CommonTestUtils.AddDummyProvider(handler, Services);
+            Services.AddCogniteClient("appid", null, true, true, false);
+            var provider = Services.BuildServiceProvider();
+            var pusher = Config.Cognite.ToPusher(provider) as CDFPusher;
+            return (handler, pusher);
+        }
+
+        public static void DeleteFiles(string prefix)
+        {
+            try
+            {
+                var files = Directory.GetFiles(".");
+                foreach (var file in files)
+                {
+                    var fileName = Path.GetFileName(file);
+                    if (fileName.StartsWith(prefix, StringComparison.InvariantCulture)
+                        && (fileName.EndsWith(".bin", StringComparison.InvariantCulture)
+                        || fileName.EndsWith(".db", StringComparison.InvariantCulture)))
+                    {
+                        File.Delete(file);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to clear files: {ex.Message}");
+            }
         }
 
         protected virtual void Dispose(bool disposing)
