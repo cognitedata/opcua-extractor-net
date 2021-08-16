@@ -196,6 +196,7 @@ namespace Cognite.OpcUa
         public bool SkipMetadata { get; set; }
         public RawMetadataConfig RawMetadata { get; set; }
         public MetadataMapConfig MetadataMapping { get; set; }
+        public CDFNodeSourceConfig RawNodeBuffer { get; set; }
         public double? NonFiniteReplacement
         {
             get => nonFiniteReplacement;
@@ -220,6 +221,14 @@ namespace Cognite.OpcUa
     {
         public Dictionary<string, string> Assets { get; set; }
         public Dictionary<string, string> Timeseries { get; set; }
+    }
+    public class CDFNodeSourceConfig
+    {
+        public bool Enable { get; set; }
+        public string Database { get; set; }
+        public string AssetsTable { get; set; }
+        public string TimeseriesTable { get; set; }
+        public bool BrowseOnEmpty { get; set; }
     }
     public class InfluxPusherConfig : IPusherConfig
     {

@@ -3,17 +3,18 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Cognite.OpcUa.Types
+namespace Cognite.OpcUa.NodeSources
 {
-    public class SavedNode
+    class SavedNode
     {
         public NodeId NodeId { get; set; }
         public NodeId ParentNodeId { get; set; }
         [Newtonsoft.Json.JsonProperty("name")]
         public string Name { get; set; }
         public NodeId DataTypeId { get; set; }
+        public InternalInfo InternalInfo { get; set; }
     }
-    public class InternalInfo
+    class InternalInfo
     {
         public byte EventNotifier { get; set; }
         public bool ShouldSubscribe { get; set; }
