@@ -265,25 +265,26 @@ namespace Test.Unit
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":1}}");
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":1}}");
 
             node.Attributes.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalData"":{""EventNotifier"":5,""ShouldSubscribe"":true,""NodeClass"":1}}");
+                + @"""InternalInfo"":{""EventNotifier"":5,""ShouldSubscribe"":true,""NodeClass"":1}}");
 
             var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.Variable);
             serializer = new JsonSerializer();
             converter.AddConverters(serializer, ConverterType.Variable);
             variable.VariableAttributes.AccessLevel |= AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             variable.VariableAttributes.Historizing = true;
+            variable.VariableAttributes.ValueRank = -1;
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":2,""AccessLevel"":5,"
-                + @"""Historizing"":true}}");
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":2,""AccessLevel"":5,"
+                + @"""Historizing"":true,""ValueRank"":-1}}");
 
             variable.VariableAttributes.ValueRank = ValueRanks.OneDimension;
             variable.VariableAttributes.ArrayDimensions = new Collection<int> { 5 };
@@ -291,7 +292,7 @@ namespace Test.Unit
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":2,""AccessLevel"":5,"
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":2,""AccessLevel"":5,"
                 + @"""Historizing"":true,""ValueRank"":1,""ArrayDimensions"":[5],""Index"":-1}}"
                 );
         }
@@ -339,6 +340,7 @@ namespace Test.Unit
             variable.VariableAttributes.AccessLevel = 5;
             variable.VariableAttributes.EventNotifier = 5;
             variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
+            variable.VariableAttributes.ValueRank = -1;
 
             saved = Convert(variable);
             Assert.Equal(variable.Id, saved.NodeId);
@@ -350,6 +352,7 @@ namespace Test.Unit
             Assert.Equal(variable.DataType.Raw, saved.DataTypeId);
             Assert.Equal(variable.AccessLevel, saved.InternalInfo.AccessLevel);
             Assert.Equal(variable.VariableAttributes.Historizing, saved.InternalInfo.Historizing);
+            Assert.Equal(variable.ValueRank, saved.InternalInfo.ValueRank);
 
             variable.VariableAttributes.ValueRank = 2;
             variable.VariableAttributes.ArrayDimensions = new Collection<int> { 3, 4 };

@@ -74,9 +74,20 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
-                    var variable = new UAVariable(node.NodeId, node.Name, node.ParentNodeId, node.InternalInfo.NodeClass);
+                    string name = node.Name;
+                    // If this is an array element, we need to strip the postfix from the name, since we are treating it
+                    // as its parent.
+                    if (node.InternalInfo.ArrayDimensions != null && node.InternalInfo.Index >= 0)
+                    {
+                        var postfix = $"[{node.InternalInfo.Index}]";
+                        name = name.Substring(0, name.Length - postfix.Length);
+                    }
+                    var variable = new UAVariable(node.NodeId, name, node.ParentNodeId, node.InternalInfo.NodeClass);
                     variable.VariableAttributes.AccessLevel = node.InternalInfo.AccessLevel;
-                    variable.VariableAttributes.ArrayDimensions = new Collection<int>(node.InternalInfo.ArrayDimensions);
+                    if (node.InternalInfo.ArrayDimensions != null)
+                    {
+                        variable.VariableAttributes.ArrayDimensions = new Collection<int>(node.InternalInfo.ArrayDimensions);
+                    }
                     variable.VariableAttributes.DataType = Extractor.DataTypeManager.GetDataType(node.DataTypeId);
                     variable.VariableAttributes.EventNotifier = node.InternalInfo.EventNotifier;
                     variable.VariableAttributes.Historizing = node.InternalInfo.Historizing;
@@ -92,7 +103,7 @@ namespace Cognite.OpcUa.NodeSources
                 IEnumerable<SavedNode> nodes;
                 try
                 {
-                    var assetData = await pusher.GetRawRows(sourceConfig.Database, sourceConfig.TimeseriesTable, new[]
+                    var assetData = await pusher.GetRawRows(sourceConfig.Database, sourceConfig.AssetsTable, new[]
                     {
                         "NodeId", "ParentNodeId", "name", "InternalInfo"
                     }, token);
@@ -139,6 +150,11 @@ namespace Cognite.OpcUa.NodeSources
             {
                 log.Information("Mapping resulted in no new nodes");
                 return null;
+            }
+
+            foreach (var node in finalSourceObjects.Concat(finalSourceVariables))
+            {
+                InitNodeState(Config.Extraction.Update, node);
             }
 
             log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +

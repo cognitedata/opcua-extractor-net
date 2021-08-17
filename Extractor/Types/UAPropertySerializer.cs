@@ -366,10 +366,10 @@ namespace Cognite.OpcUa.Types
                 writer.WriteValue(variable.AccessLevel);
                 writer.WritePropertyName("Historizing");
                 writer.WriteValue(variable.VariableAttributes.Historizing);
+                writer.WritePropertyName("ValueRank");
+                writer.WriteValue(variable.ValueRank);
                 if (variable.ArrayDimensions != null)
                 {
-                    writer.WritePropertyName("ValueRank");
-                    writer.WriteValue(variable.ValueRank);
                     writer.WritePropertyName("ArrayDimensions");
                     serializer.Serialize(writer, variable.ArrayDimensions);
                     writer.WritePropertyName("Index");

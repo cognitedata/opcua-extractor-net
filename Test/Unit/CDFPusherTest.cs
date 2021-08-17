@@ -2,18 +2,23 @@
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Microsoft.Extensions.DependencyInjection;
+using Newtonsoft.Json;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -563,6 +568,8 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
         }
         #endregion
+
+        #region other-methods
         [Fact]
         public async Task TestInitExtractedRanges()
         {
@@ -761,6 +768,138 @@ namespace Test.Unit
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
         }
+        #endregion
+
+        #region node-source
+
+        void NodeToRaw(UAExtractor extractor, UANode node, ConverterType type, bool ts)
+        {
+            var serializer = new Newtonsoft.Json.JsonSerializer();
+            extractor.StringConverter.AddConverters(serializer, type);
+            var id = extractor.GetUniqueId(node.Id, (node is UAVariable variable) ? variable.Index : -1);
+
+            var sb = new StringBuilder();
+            var sw = new StringWriter(sb);
+            using var writer = new JsonTextWriter(sw);
+            serializer.Serialize(writer, node);
+
+            var val = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(sb.ToString());
+            if (ts)
+            {
+                handler.TimeseriesRaw[id] = val;
+            }
+            else
+            {
+                handler.AssetRaw[id] = val;
+            }
+        }
+
+        [Fact]
+        public async Task TestGetNodesFromCDF()
+        {
+            using var extractor = tester.BuildExtractor();
+
+            tester.Config.Cognite.RawNodeBuffer = new CDFNodeSourceConfig
+            {
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries",
+                Database = "metadata",
+                Enable = true
+            };
+            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
+            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 10;
+
+            var source = new CDFNodeSource(tester.Config, extractor, tester.Client, pusher);
+
+            // Nothing in CDF
+            await source.ReadRawNodes(tester.Source.Token);
+            var result = await source.ParseResults(tester.Source.Token);
+            Assert.Null(result);
+
+            // Datapoints
+            // Not a variable
+            var node = new UANode(new NodeId("test"), "test", NodeId.Null, NodeClass.Object);
+            NodeToRaw(extractor, node, ConverterType.Node, false);
+            // Normal double
+            var variable = new UAVariable(new NodeId("test2"), "test2", NodeId.Null, NodeClass.Variable);
+            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
+            variable.VariableAttributes.ValueRank = -1;
+            NodeToRaw(extractor, variable, ConverterType.Variable, true);
+            // Normal string
+            variable = new UAVariable(new NodeId("test3"), "test3", NodeId.Null, NodeClass.Variable);
+            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.String);
+            variable.VariableAttributes.ValueRank = -1;
+            NodeToRaw(extractor, variable, ConverterType.Variable, true);
+            // Array
+            variable = new UAVariable(new NodeId("test4"), "test4", NodeId.Null, NodeClass.Variable);
+            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
+            variable.VariableAttributes.ValueRank = 1;
+            variable.VariableAttributes.ArrayDimensions = new Collection<int> { 4 };
+            NodeToRaw(extractor, variable, ConverterType.Node, false);
+            foreach (var child in variable.CreateArrayChildren())
+            {
+                NodeToRaw(extractor, child, ConverterType.Variable, true);
+            }
+
+            source = new CDFNodeSource(tester.Config, extractor, tester.Client, pusher);
+            await source.ReadRawNodes(tester.Source.Token);
+            result = await source.ParseResults(tester.Source.Token);
+            Assert.Single(result.DestinationObjects);
+            Assert.Equal("test4", result.DestinationObjects.First().DisplayName);
+            Assert.Equal(-1, (result.DestinationObjects.First() as UAVariable).Index);
+            Assert.Equal(6, result.DestinationVariables.Count());
+            Assert.Empty(result.SourceObjects);
+            Assert.Equal(3, result.SourceVariables.Count());
+
+            Assert.Equal(3, extractor.State.NodeStates.Count());
+            extractor.State.Clear();
+
+            // Events
+            // First, try disabling timeseries subscriptions and seeing that no results are returned
+            tester.Config.Subscriptions.DataPoints = false;
+            tester.Config.History.Enabled = false;
+            source = new CDFNodeSource(tester.Config, extractor, tester.Client, pusher);
+            await source.ReadRawNodes(tester.Source.Token);
+            result = await source.ParseResults(tester.Source.Token);
+            Assert.Null(result);
+            Assert.Empty(extractor.State.NodeStates);
+
+            // Enable events, but no states should be created
+            tester.Config.Events.Enabled = true;
+            source = new CDFNodeSource(tester.Config, extractor, tester.Client, pusher);
+            await source.ReadRawNodes(tester.Source.Token);
+            result = await source.ParseResults(tester.Source.Token);
+            Assert.Equal(2, result.DestinationObjects.Count());
+            Assert.Single(result.SourceObjects);
+            Assert.Equal(6, result.DestinationVariables.Count());
+            Assert.Equal(3, result.SourceVariables.Count());
+            Assert.Empty(extractor.State.NodeStates);
+            Assert.Empty(extractor.State.EmitterStates);
+
+            // Add a couple emitters
+            node = new UANode(new NodeId("test5"), "test5", NodeId.Null, NodeClass.Object);
+            node.Attributes.EventNotifier = EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
+            NodeToRaw(extractor, node, ConverterType.Node, false);
+
+            variable = new UAVariable(new NodeId("test6"), "test6", NodeId.Null, NodeClass.Variable);
+            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.String);
+            variable.VariableAttributes.ValueRank = -1;
+            variable.VariableAttributes.EventNotifier = EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
+            NodeToRaw(extractor, variable, ConverterType.Variable, true);
+
+            source = new CDFNodeSource(tester.Config, extractor, tester.Client, pusher);
+            await source.ReadRawNodes(tester.Source.Token);
+            result = await source.ParseResults(tester.Source.Token);
+            Assert.Equal(3, result.DestinationObjects.Count());
+            Assert.Equal(2, result.SourceObjects.Count());
+            Assert.Equal(7, result.DestinationVariables.Count());
+            Assert.Equal(4, result.SourceVariables.Count());
+            Assert.Empty(extractor.State.NodeStates);
+            Assert.Equal(2, extractor.State.EmitterStates.Count());
+        }
+        #endregion
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);

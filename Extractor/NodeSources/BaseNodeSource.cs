@@ -108,22 +108,29 @@ namespace Cognite.OpcUa.NodeSources
                 var state = Extractor.State.GetNodeState(node.Id);
                 if (state != null) return;
 
-                state = new VariableExtractionState(
-                            Extractor,
-                            variable,
-                            variable.ReadHistory,
-                            variable.ReadHistory && Config.History.Backfill);
+                bool setState = Config.Subscriptions.DataPoints || Config.History.Enabled && Config.History.Data;
+
+
+                if (setState)
+                {
+                    state = new VariableExtractionState(
+                        Extractor,
+                        variable,
+                        variable.ReadHistory,
+                        variable.ReadHistory && Config.History.Backfill);
+                }
+
 
                 if (variable.IsArray)
                 {
                     foreach (var child in variable.ArrayChildren)
                     {
                         var uniqueId = Extractor.GetUniqueId(child.Id, child.Index);
-                        Extractor.State.SetNodeState(state, uniqueId);
+                        if (setState) Extractor.State.SetNodeState(state, uniqueId);
                         Extractor.State.RegisterNode(node.Id, uniqueId);
                     }
                 }
-                else
+                else if (setState)
                 {
                     Extractor.State.SetNodeState(state);
                 }
