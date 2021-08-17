@@ -18,39 +18,20 @@ using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa.NodeSources
 {
-    public class CDFNodeSource : INodeSource
+    public class CDFNodeSource : BaseNodeSource
     {
-        private readonly FullConfig fullConfig;
-        private readonly UAExtractor extractor;
-        private readonly UAClient client;
         private readonly CDFPusher pusher;
-        private readonly CDFNodeSourceConfig config;
+        private readonly CDFNodeSourceConfig sourceConfig;
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFNodeSource));
 
-        public CDFNodeSource(FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher)
+        public CDFNodeSource(FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher) : base(config, extractor, client)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
-            fullConfig = config;
-            this.extractor = extractor;
-            this.client = client;
             this.pusher = pusher;
-            this.config = config.Cognite.RawNodeBuffer;
+            sourceConfig = config.Cognite.RawNodeBuffer;
         }
         private readonly List<UAVariable> readVariables = new List<UAVariable>();
         private readonly List<UANode> readNodes = new List<UANode>();
-
-        // Nodes that are treated as variables (and synchronized) in the source system
-        private readonly List<UAVariable> finalSourceVariables = new List<UAVariable>();
-        // Nodes that are treated as objects (so not synchronized) in the source system.
-        // finalSourceVariables and finalSourceObjects should together contain all mapped nodes
-        // in the source system.
-        private readonly List<UANode> finalSourceObjects = new List<UANode>();
-
-        // Nodes that are treated as objects in the destination systems (i.e. mapped to assets)
-        private readonly List<UANode> finalDestinationObjects = new List<UANode>();
-        // Nodes that are treated as variables in the destination systems (i.e. mapped to timeseries)
-        // May contain duplicate NodeIds, but all should produce distinct UniqueIds.
-        private readonly List<UAVariable> finalDestinationVariables = new List<UAVariable>();
 
         private static async Task<IEnumerable<SavedNode>> DeserializeRawData(IEnumerable<RawRow> rows, JsonSerializer serializer, CancellationToken token)
         {
@@ -65,20 +46,20 @@ namespace Cognite.OpcUa.NodeSources
         public async Task ReadRawNodes(CancellationToken token)
         {
             var serializer = new JsonSerializer();
-            extractor.StringConverter.AddConverters(serializer, ConverterType.Node);
+            Extractor.StringConverter.AddConverters(serializer, ConverterType.Node);
 
             var nodeSet = new HashSet<NodeId>();
 
-            bool dataEnabled = fullConfig.Subscriptions.DataPoints || fullConfig.History.Enabled && fullConfig.History.Data;
-            bool eventsEnabled = fullConfig.Subscriptions.Events || fullConfig.History.Enabled && fullConfig.Events.History;
-            eventsEnabled = eventsEnabled && fullConfig.Events.Enabled;
+            bool dataEnabled = Config.Subscriptions.DataPoints || Config.History.Enabled && Config.History.Data;
+            bool eventsEnabled = Config.Subscriptions.Events || Config.History.Enabled && Config.Events.History;
+            eventsEnabled = eventsEnabled && Config.Events.Enabled;
 
-            if ((dataEnabled || eventsEnabled) && !string.IsNullOrEmpty(config.TimeseriesTable))
+            if ((dataEnabled || eventsEnabled) && !string.IsNullOrEmpty(sourceConfig.TimeseriesTable))
             {
                 IEnumerable<SavedNode> nodes;
                 try
                 {
-                    var tsData = await pusher.GetRawRows(config.Database, config.TimeseriesTable, new[] {
+                    var tsData = await pusher.GetRawRows(sourceConfig.Database, sourceConfig.TimeseriesTable, new[] {
                         "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo"
                     }, token);
                     nodes = await DeserializeRawData(tsData, serializer, token);
@@ -95,7 +76,7 @@ namespace Cognite.OpcUa.NodeSources
                     var variable = new UAVariable(node.NodeId, node.Name, node.ParentNodeId, node.InternalInfo.NodeClass);
                     variable.VariableAttributes.AccessLevel = node.InternalInfo.AccessLevel;
                     variable.VariableAttributes.ArrayDimensions = new Collection<int>(node.InternalInfo.ArrayDimensions);
-                    variable.VariableAttributes.DataType = extractor.DataTypeManager.GetDataType(node.DataTypeId);
+                    variable.VariableAttributes.DataType = Extractor.DataTypeManager.GetDataType(node.DataTypeId);
                     variable.VariableAttributes.EventNotifier = node.InternalInfo.EventNotifier;
                     variable.VariableAttributes.Historizing = node.InternalInfo.Historizing;
                     variable.VariableAttributes.ShouldSubscribe = node.InternalInfo.ShouldSubscribe;
@@ -104,12 +85,12 @@ namespace Cognite.OpcUa.NodeSources
                 }
             }
 
-            if (eventsEnabled && !string.IsNullOrEmpty(config.AssetsTable))
+            if (eventsEnabled && !string.IsNullOrEmpty(sourceConfig.AssetsTable))
             {
                 IEnumerable<SavedNode> nodes;
                 try
                 {
-                    var assetData = await pusher.GetRawRows(config.Database, config.TimeseriesTable, new[]
+                    var assetData = await pusher.GetRawRows(sourceConfig.Database, sourceConfig.TimeseriesTable, new[]
                     {
                         "NodeId", "ParentNodeId", "name", "InternalInfo"
                     }, token);
@@ -134,8 +115,23 @@ namespace Cognite.OpcUa.NodeSources
         }
 
 
-        public async Task<BrowseResult> ParseResults(CancellationToken token)
+        public override async Task<BrowseResult> ParseResults(CancellationToken token)
         {
+            if (!readVariables.Any() && !readNodes.Any()) return null;
+
+            await GetExtraNodeData(token);
+
+            finalDestinationObjects.AddRange(readNodes);
+            finalSourceObjects.AddRange(readNodes);
+            foreach (var variable in readVariables)
+            {
+                if (!Extractor.DataTypeManager.AllowTSMap(variable)) continue;
+                AddVariableToLists(variable);
+            }
+
+            readNodes.Clear();
+            readVariables.Clear();
+
             return null;
         }
 
@@ -143,15 +139,7 @@ namespace Cognite.OpcUa.NodeSources
         {
             // Datatype metadata might make sense if we have enum variables, either way this is cheap.
             var distinctDataTypes = readVariables.Select(variable => variable.DataType.Raw).ToHashSet();
-            await extractor.DataTypeManager.GetDataTypeMetadataAsync(distinctDataTypes, token);
-        }
-
-        private void SortVariable(UAVariable variable)
-        {
-            if (variable.IsArray)
-            {
-                finalDestinationVariables.AddRange(variable.CreateArrayChildren());
-            }
+            await Extractor.DataTypeManager.GetDataTypeMetadataAsync(distinctDataTypes, token);
         }
     }
 }

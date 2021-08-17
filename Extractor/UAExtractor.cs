@@ -482,7 +482,7 @@ namespace Cognite.OpcUa
         /// This is the entry point for mapping on the extractor.
         /// </summary>
         /// <returns>A list of history tasks</returns>
-        private async Task<IEnumerable<Task>> MapUAToDestinations(INodeSource handler)
+        private async Task<IEnumerable<Task>> MapUAToDestinations(BaseNodeSource handler)
         {
             var result = await handler.ParseResults(source.Token);
             if (result == null) return Enumerable.Empty<Task>();
