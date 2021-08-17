@@ -17,13 +17,15 @@ namespace Test.Unit
 {
     public sealed class PusherUtilsTestFixture : BaseExtractorTestFixture
     {
-        public PusherUtilsTestFixture() : base(62800) { }
+        public PusherUtilsTestFixture() : base() { }
     }
     public class PusherUtilsTest : MakeConsoleWork, IClassFixture<PusherUtilsTestFixture>
     {
         private PusherUtilsTestFixture tester;
         public PusherUtilsTest(ITestOutputHelper output, PusherUtilsTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
+            tester.ResetConfig();
             this.tester = tester;
         }
         [Fact]

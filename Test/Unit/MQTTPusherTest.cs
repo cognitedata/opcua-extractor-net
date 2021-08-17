@@ -26,7 +26,7 @@ namespace Test.Unit
     public sealed class MQTTPusherTestFixture : BaseExtractorTestFixture
     {
         private static int idCounter;
-        public MQTTPusherTestFixture() : base(63100)
+        public MQTTPusherTestFixture() : base()
         {
         }
         public (CDFMockHandler, MQTTBridge, MQTTPusher) GetPusher()
@@ -62,6 +62,7 @@ namespace Test.Unit
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
             (handler, bridge, pusher) = tester.GetPusher();
             bridge.StartBridge(tester.Source.Token).Wait();
         }
@@ -343,7 +344,6 @@ namespace Test.Unit
             Assert.Equal("description", handler.AssetRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
-            tester.Config.Mqtt.RawMetadata = null;
         }
         [Fact]
         public async Task TestCreateUpdateTimeseries()
@@ -471,7 +471,6 @@ namespace Test.Unit
             Assert.Equal("description", handler.TimeseriesRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
-            tester.Config.Mqtt.RawMetadata = null;
         }
         [Fact]
         public async Task TestCreateRelationships()
@@ -584,8 +583,6 @@ namespace Test.Unit
             await Assert.ThrowsAsync<TimeoutException>(() => waitTask);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_mqtt", 0));
-
-            tester.Config.Mqtt.RawMetadata = null;
         }
 
         [Fact]
@@ -636,9 +633,6 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_timeseries_mqtt", 2));
             Assert.Equal(4, existingNodes.Count);
 
-            tester.Config.Mqtt.LocalState = null;
-
-
             try
             {
                 File.Delete("mqtt-state-store-1.db");
@@ -688,7 +682,6 @@ namespace Test.Unit
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_created_relationships_mqtt", 2));
             Assert.Equal(2, existingNodes.Count);
-            tester.Config.Mqtt.LocalState = null;
 
             try
             {

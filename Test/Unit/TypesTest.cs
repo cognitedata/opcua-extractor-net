@@ -18,14 +18,16 @@ namespace Test.Unit
 {
     public sealed class TypesTestFixture : BaseExtractorTestFixture
     {
-        public TypesTestFixture() : base(62600) { }
+        public TypesTestFixture() : base() { }
     }
     public class TypesTest : MakeConsoleWork, IClassFixture<TypesTestFixture>
     {
         private readonly TypesTestFixture tester;
         public TypesTest(ITestOutputHelper output, TypesTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
         }
         #region uanode
         [Theory]

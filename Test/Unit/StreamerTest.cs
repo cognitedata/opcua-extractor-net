@@ -18,14 +18,16 @@ namespace Test.Unit
 {
     public sealed class StreamerTestFixture : BaseExtractorTestFixture
     {
-        public StreamerTestFixture() : base(62200) { }
+        public StreamerTestFixture() : base() { }
     }
     public class StreamerTest : MakeConsoleWork, IClassFixture<StreamerTestFixture>
     {
         private StreamerTestFixture tester;
         public StreamerTest(ITestOutputHelper output, StreamerTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
         }
 
         [Fact]
@@ -267,8 +269,6 @@ namespace Test.Unit
             Assert.Equal(2000, evts.Count);
             Assert.Equal(4000, evts2.Count);
             Assert.True(result);
-
-            tester.Config.Events.History = false;
         }
         [Fact]
         public void TestDataHandler()
@@ -570,7 +570,6 @@ namespace Test.Unit
             Assert.NotNull(created);
             Assert.Single(created.MetaData);
             Assert.True(created.MetaData.ContainsKey("unit"));
-
         }
     }
 }

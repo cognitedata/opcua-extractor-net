@@ -17,7 +17,7 @@ namespace Test.Unit
 {
     public sealed class LooperTestFixture : BaseExtractorTestFixture
     {
-        public LooperTestFixture() : base(62300) { }
+        public LooperTestFixture() : base() { }
     }
     public class LooperTest : MakeConsoleWork, IClassFixture<LooperTestFixture>
     {
@@ -26,6 +26,7 @@ namespace Test.Unit
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
             tester.Config.Extraction.DataPushDelay = -1;
             tester.Config.Extraction.AutoRebrowsePeriod = 1000;
         }

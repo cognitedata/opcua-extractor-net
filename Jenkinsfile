@@ -90,12 +90,6 @@ podTemplate(
                 echo "${env.BRANCH_NAME}"
             }
         }
-        container('influxdb') {
-            stage('Build DB') {
-                sh("influx --execute 'DROP DATABASE testdb'")
-                sh("influx --execute 'CREATE DATABASE testdb'")
-            }
-        }
         container('dotnet') {
             stage('Install dependencies') {
                 sh('apt-get update && apt-get -y install gnupg curl procps gawk grep')

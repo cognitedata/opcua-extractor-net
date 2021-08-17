@@ -21,7 +21,7 @@ namespace Test.Unit
 {
     public sealed class FailureBufferTestFixture : BaseExtractorTestFixture
     {
-        public FailureBufferTestFixture() : base(62400)
+        public FailureBufferTestFixture() : base()
         {
             try
             {
@@ -48,7 +48,9 @@ namespace Test.Unit
         private readonly FailureBufferTestFixture tester;
         public FailureBufferTest(ITestOutputHelper output, FailureBufferTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
         }
 
         private FullConfig BuildConfig()
@@ -78,24 +80,6 @@ namespace Test.Unit
                     Database = $"testdb{idx}"
                 }
             };
-        }
-
-        private static async Task<InfluxDBClient> SetupInfluxdb(InfluxPusherConfig config)
-        {
-            var client = new InfluxDBClient(config.Host);
-
-            try
-            {
-                await client.DropDatabaseAsync(new InfluxDatabase(config.Database));
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to drop influxdb database: {ex.Message}");
-            }
-
-            await client.CreateDatabaseAsync(config.Database);
-
-            return client;
         }
 
         [Fact]
@@ -377,7 +361,9 @@ namespace Test.Unit
 
             cfg.FailureBuffer.Influx = true;
             cfg.FailureBuffer.InfluxStateStore = true;
-            using var pusher = new InfluxPusher(cfg.Influx);
+            var ifSetup = tester.GetInfluxPusher(cfg.Influx.Database);
+            using var pusher = ifSetup.pusher;
+            using var client = ifSetup.client;
             using var dPusher = new DummyPusher(new DummyPusherConfig());
             pusher.Extractor = extractor;
             var pushers = new IPusher[] { pusher, dPusher };
@@ -406,8 +392,6 @@ namespace Test.Unit
             var dps1 = dPusher.DataPoints[(new NodeId("state1"), -1)] = new List<UADataPoint>();
             var dps2 = dPusher.DataPoints[(new NodeId("state2"), -1)] = new List<UADataPoint>();
             var dps3 = dPusher.DataPoints[(new NodeId("state3"), -1)] = new List<UADataPoint>();
-
-            using var client = await SetupInfluxdb(cfg.Influx);
 
             // Just read, this happens on startup. We'd expect nothing to really happen here.
             Assert.False(fb1.AnyPoints);
@@ -482,7 +466,9 @@ namespace Test.Unit
 
             cfg.FailureBuffer.Influx = true;
             cfg.FailureBuffer.InfluxStateStore = true;
-            using var pusher = new InfluxPusher(cfg.Influx);
+            var ifSetup = tester.GetInfluxPusher(cfg.Influx.Database);
+            using var pusher = ifSetup.pusher;
+            using var client = ifSetup.client;
             using var dPusher = new DummyPusher(new DummyPusherConfig());
             pusher.Extractor = extractor;
             var pushers = new IPusher[] { pusher, dPusher };
@@ -503,8 +489,6 @@ namespace Test.Unit
             var evts1 = dPusher.Events[new NodeId("emitter1")] = new List<UAEvent>();
             var evts2 = dPusher.Events[new NodeId("emitter2")] = new List<UAEvent>();
             var evts3 = dPusher.Events[new NodeId("emitter3")] = new List<UAEvent>();
-
-            using var client = await SetupInfluxdb(cfg.Influx);
 
             // Just read, this happens on startup. We'd expect nothing to really happen here.
             Assert.False(fb1.AnyPoints);

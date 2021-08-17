@@ -23,18 +23,8 @@ namespace Test.Unit
 {
     public sealed class CDFPusherTestFixture : BaseExtractorTestFixture
     {
-        public CDFPusherTestFixture() : base(62900)
+        public CDFPusherTestFixture() : base()
         {
-        }
-        public (CDFMockHandler, CDFPusher) GetPusher()
-        {
-            var handler = new CDFMockHandler("test", CDFMockHandler.MockMode.None);
-            handler.StoreDatapoints = true;
-            CommonTestUtils.AddDummyProvider(handler, Services);
-            Services.AddCogniteClient("appid", null, true, true, false);
-            var provider = Services.BuildServiceProvider();
-            var pusher = Config.Cognite.ToPusher(provider) as CDFPusher;
-            return (handler, pusher);
         }
     }
     public class CDFPusherTest : MakeConsoleWork, IClassFixture<CDFPusherTestFixture>
@@ -46,7 +36,8 @@ namespace Test.Unit
         {
             if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
-            (handler, pusher) = tester.GetPusher();
+            tester.ResetConfig();
+            (handler, pusher) = tester.GetCDFPusher();
         }
         [Fact]
         public async Task TestTestConnection()
@@ -101,9 +92,6 @@ namespace Test.Unit
 
             Assert.False(await pusher.TestConnection(tester.Config, tester.Source.Token));
             Assert.Null(tester.Config.Cognite.DataSetId);
-
-            handler.FailedRoutes.Clear();
-            tester.Config.Cognite.DataSetExternalId = null;
         }
         [Fact]
         public async Task TestPushDatapoints()
@@ -372,7 +360,6 @@ namespace Test.Unit
             Assert.Null(handler.AssetRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
-            tester.Config.Cognite.RawMetadata = null;
         }
         [Fact]
         public async Task TestUpdateRawAssets()
@@ -412,7 +399,6 @@ namespace Test.Unit
             Assert.Single(handler.AssetRaw, asset => asset.Value.GetProperty("description").GetString() == "description");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
-            tester.Config.Cognite.RawMetadata = null;
         }
         [Fact]
         public async Task TestCreateUpdateTimeseries()
@@ -526,7 +512,6 @@ namespace Test.Unit
             Assert.Null(handler.TimeseriesRaw.Last().Value.GetProperty("description").GetString());
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
-            tester.Config.Cognite.RawMetadata = null;
         }
         [Fact]
         public async Task TestUpdateRawTimeseries()
@@ -576,7 +561,6 @@ namespace Test.Unit
             Assert.Contains(handler.TimeseriesRaw, ts => ts.Value.GetProperty("description").GetString() == "description");
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_node_ensure_failures_cdf", 1));
-            tester.Config.Cognite.RawMetadata = null;
         }
         #endregion
         [Fact]

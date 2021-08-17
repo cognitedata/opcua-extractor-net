@@ -19,7 +19,7 @@ namespace Test.Unit
     public sealed class HistoryReaderTestFixture : BaseExtractorTestFixture
     {
         public DateTime HistoryStart { get; }
-        public HistoryReaderTestFixture() : base(62500)
+        public HistoryReaderTestFixture() : base()
         {
             HistoryStart = DateTime.UtcNow.AddSeconds(-20);
             Server.PopulateCustomHistory(HistoryStart);
@@ -32,7 +32,9 @@ namespace Test.Unit
         private readonly HistoryReaderTestFixture tester;
         public HistoryReaderTest(ITestOutputHelper output, HistoryReaderTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
         }
 
         [Fact(Timeout = 10000)]
@@ -151,7 +153,6 @@ namespace Test.Unit
             historyDataHandler.Invoke(reader, new object[] { historyData, node, null });
             Assert.Equal(0, node.TotalRead);
             Assert.False(state1.IsFrontfilling);
-            cfg.IgnoreContinuationPoints = false;
         }
         [Fact(Timeout = 10000)]
         public void TestHistoryEventHandler()
@@ -274,7 +275,6 @@ namespace Test.Unit
             historyEventHandler.Invoke(reader, new object[] { historyEvents, node, details });
             Assert.Equal(0, node.TotalRead);
             Assert.False(state.IsFrontfilling);
-            cfg.IgnoreContinuationPoints = false;
         }
         [Fact(Timeout = 10000)]
         public async Task TestFrontfillData()

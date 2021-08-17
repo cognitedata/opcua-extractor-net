@@ -84,6 +84,7 @@ namespace Test.Unit
         private UAClientTestFixture tester;
         public UAClientTest(ITestOutputHelper output, UAClientTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
         }
         #region session
@@ -98,6 +99,7 @@ namespace Test.Unit
         [Fact]
         public async Task TestConnectionFailure()
         {
+            string oldEP = tester.Config.Source.EndpointUrl;
             tester.Client.Close();
             tester.Config.Source.EndpointUrl = "opc.tcp://localhost:62009";
             try

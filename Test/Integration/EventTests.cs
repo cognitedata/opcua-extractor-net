@@ -19,7 +19,7 @@ namespace Test.Integration
 {
     public class EventTestFixture : BaseExtractorTestFixture
     {
-        public EventTestFixture() : base(63400)
+        public EventTestFixture() : base()
         {
             Config.Source.PublishingInterval = 200;
             Config.Extraction.DataPushDelay = 200;
@@ -38,7 +38,15 @@ namespace Test.Integration
         private readonly EventTestFixture tester;
         public EventTests(ITestOutputHelper output, EventTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
+            tester.ResetConfig();
+            tester.Config.Source.PublishingInterval = 200;
+            tester.Config.Extraction.DataPushDelay = 200;
+            tester.Config.History.Enabled = false;
+            tester.Config.Events.Enabled = true;
+            tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
+            tester.WipeEventHistory();
         }
         #region subscriptions
         [Fact]
@@ -77,8 +85,6 @@ namespace Test.Integration
             Assert.StartsWith(tester.Config.Extraction.IdPrefix, evt.EventId, StringComparison.InvariantCulture);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-
-            tester.WipeEventHistory();
         }
         [Fact]
         public async Task TestSubscriptionFilters()
@@ -124,11 +130,6 @@ namespace Test.Integration
             Assert.Equal("CustomType", evt.MetaData["Type"]);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-
-            tester.Config.Events.ExcludeEventFilter = null;
-            tester.Config.Events.ExcludeProperties = new List<string>();
-            tester.Config.Events.DestinationNameMap.Clear();
-            tester.WipeEventHistory();
         }
         [Fact]
         public async Task TestDeepEvent()
@@ -170,8 +171,6 @@ namespace Test.Integration
             Assert.Equal(@"{""DeepProp"":""deepValue""}", evt.MetaData["DeepObj"]);
             Assert.True(evt.Time > DateTime.UtcNow.AddSeconds(-5));
             Assert.Equal(ids.DeepType, evt.EventType);
-
-            tester.WipeEventHistory();
         }
         [Fact]
         public async Task TestDisableSubscriptions()
@@ -250,14 +249,6 @@ namespace Test.Integration
             await extractor.WaitForSubscriptions();
             Assert.Equal(2u, session.Subscriptions.First(sub => sub.DisplayName.StartsWith("EventListener", StringComparison.InvariantCulture)).MonitoredItemCount);
             await CommonTestUtils.WaitForCondition(() => CommonTestUtils.TestMetricValue("opcua_frontfill_events_count", 3), 5);
-
-
-            tester.Config.History.Enabled = false;
-            tester.Config.History.Backfill = false;
-            tester.Config.Events.History = false;
-            tester.Config.Extraction.Transformations = oldTransforms;
-            tester.WipeEventHistory();
-
         }
         #endregion
 
@@ -312,14 +303,6 @@ namespace Test.Integration
             Assert.Equal("CustomType", evt.MetaData["Type"]);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-
-            tester.Config.History.Enabled = false;
-            tester.Config.History.Backfill = false;
-            tester.Config.Events.History = false;
-            tester.Config.Events.ExcludeEventFilter = null;
-            tester.Config.Events.ExcludeProperties = new List<string>();
-            tester.Config.Events.DestinationNameMap.Clear();
-            tester.WipeEventHistory();
         }
         [Theory]
         [InlineData(true)]
@@ -374,14 +357,6 @@ namespace Test.Integration
             Assert.Equal(402, pusher.Events[ids.Obj1].Count);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-
-            tester.Config.History.Enabled = false;
-            tester.Config.History.Backfill = false;
-            tester.Config.Events.History = false;
-            tester.Config.Events.ExcludeEventFilter = null;
-            tester.Config.Events.ExcludeProperties = new List<string>();
-            tester.Config.Events.DestinationNameMap.Clear();
-            tester.WipeEventHistory();
         }
         [Theory]
         [InlineData(true)]
@@ -472,15 +447,6 @@ namespace Test.Integration
             {
                 extractor.Dispose();
             }
-
-            tester.Config.History.Enabled = false;
-            tester.Config.History.Backfill = false;
-            tester.Config.Events.History = false;
-            tester.Config.StateStorage.Interval = 0;
-            tester.Config.Events.ExcludeEventFilter = null;
-            tester.Config.Events.ExcludeProperties = new List<string>();
-            tester.Config.Events.DestinationNameMap.Clear();
-            tester.WipeEventHistory();
         }
         [Theory]
         [InlineData(true)]
@@ -563,14 +529,6 @@ namespace Test.Integration
             {
                 extractor.Dispose();
             }
-
-            tester.Config.History.Enabled = false;
-            tester.Config.History.Backfill = false;
-            tester.Config.Events.History = false;
-            tester.Config.Events.ExcludeEventFilter = null;
-            tester.Config.Events.ExcludeProperties = new List<string>();
-            tester.Config.Events.DestinationNameMap.Clear();
-            tester.WipeEventHistory();
         }
         #endregion
         [Fact]
@@ -650,7 +608,6 @@ namespace Test.Integration
             Assert.Equal(2, pusher.Events[ids.Obj2].Count);
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_buffer_num_events", 0));
-            tester.WipeEventHistory();
         }
         [Fact]
         public async Task TestAuditEvents()
@@ -695,8 +652,6 @@ namespace Test.Integration
             Assert.NotNull(refVar.DataType);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
-            tester.Config.Extraction.RootNode = tester.Server.Ids.Event.Root.ToProtoNodeId(tester.Client);
-            tester.Config.Extraction.EnableAuditDiscovery = false;
         }
     }
 }

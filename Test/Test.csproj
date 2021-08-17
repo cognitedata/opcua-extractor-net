@@ -24,9 +24,6 @@
     <None Update="config.config-tool-test.yml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="config.events.yml">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Update="config.test.yml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

@@ -420,13 +420,12 @@ namespace Cognite.OpcUa
                     continue;
                 }
                 eventState.UpdateFromStream(buffEvent);
-                log.Information(eventState.IsFrontfilling + ", " + eventState.IsBackfilling);
+
                 // Either backfill/frontfill is done, or we are not outside of each respective bound
                 if ((extractor.StateStorage == null || config.StateStorage.Interval <= 0)
                     && (eventState.IsFrontfilling && buffEvent.Time > eventState.SourceExtractedRange.Last
                         || eventState.IsBackfilling && buffEvent.Time < eventState.SourceExtractedRange.First)) continue;
 
-                log.Information(buffEvent.ToString());
                 Enqueue(buffEvent);
             }
         }
