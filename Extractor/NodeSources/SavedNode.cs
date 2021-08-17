@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Cognite.OpcUa.NodeSources
 {
-    class SavedNode
+    public class SavedNode
     {
         public NodeId NodeId { get; set; }
         public NodeId ParentNodeId { get; set; }
@@ -14,7 +14,7 @@ namespace Cognite.OpcUa.NodeSources
         public NodeId DataTypeId { get; set; }
         public InternalInfo InternalInfo { get; set; }
     }
-    class InternalInfo
+    public class InternalInfo
     {
         public byte EventNotifier { get; set; }
         public bool ShouldSubscribe { get; set; }

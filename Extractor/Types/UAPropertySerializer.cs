@@ -351,7 +351,7 @@ namespace Cognite.OpcUa.Types
 
         private void WriteInternalInfo(JsonWriter writer, UANode node, Newtonsoft.Json.JsonSerializer serializer)
         {
-            writer.WritePropertyName("InternalData");
+            writer.WritePropertyName("InternalInfo");
             writer.WriteStartObject();
 
             writer.WritePropertyName("EventNotifier");
