@@ -3,3 +3,4 @@ Microsoft.Extensions.Hosting.Systemd
 Microsoft.Extensions.Hosting
 Microsoft.Extensions.Hosting.Abstractions
 Microsoft.Extensions.Logging.EventLog
+System.CommandLine
