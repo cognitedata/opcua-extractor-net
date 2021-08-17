@@ -17,7 +17,7 @@ namespace Test.Unit
 {
     public sealed class StringConversionTestFixture : BaseExtractorTestFixture
     {
-        public StringConversionTestFixture() : base(63200) { }
+        public StringConversionTestFixture() : base() { }
     }
     public class StringConversionTest : MakeConsoleWork, IClassFixture<StringConversionTestFixture>
     {
@@ -25,6 +25,7 @@ namespace Test.Unit
         public StringConversionTest(ITestOutputHelper output, StringConversionTestFixture tester) : base(output)
         {
             this.tester = tester;
+            tester.ResetConfig();
         }
         [Fact]
         public void TestConvertToString()
@@ -237,8 +238,6 @@ namespace Test.Unit
                 + @"""isString"":false,""isStep"":true,"
                 + @"""NodeId"":{""idType"":1,""identifier"":""test""},"
                 + @"""DataTypeId"":{""idType"":0,""identifier"":1}}");
-
-            tester.Config.Extraction.DataTypes.ExpandNodeIds = false;
         }
         [Fact]
         public void TestWriteInternals()
@@ -292,8 +291,6 @@ namespace Test.Unit
                 + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""AccessLevel"":5,""Historizing"":true,"
                 + @"""ValueRank"":1,""ArrayDimensions"":[5],""Index"":-1}}"
                 );
-
-            tester.Config.Extraction.DataTypes.AppendInternalValues = false;
         }
     }
 }
