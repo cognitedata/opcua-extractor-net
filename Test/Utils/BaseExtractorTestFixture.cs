@@ -6,6 +6,7 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Pushers;
 using Microsoft.Extensions.DependencyInjection;
+using Opc.Ua;
 using Server;
 using System;
 using System.Collections;
@@ -202,6 +203,37 @@ namespace Test.Utils
                 await runTask;
             }
             catch (TaskCanceledException) { }
+        }
+        public void ResetCustomServerValues()
+        {
+            var ids = Server.Ids.Custom;
+            Server.UpdateNode(ids.StringyVar, "value");
+            Server.UpdateNode(ids.StringArray, new[] { "test1", "test2" });
+            Server.UpdateNode(ids.MysteryVar, 0);
+            Server.UpdateNode(ids.Array, new[] { 0, 0, 0, 0 });
+            Server.UpdateNode(ids.EnumVar1, 1);
+            Server.UpdateNode(ids.IgnoreVar, 0);
+            Server.UpdateNode(ids.EnumVar2, 123);
+            Server.UpdateNode(ids.EnumVar3, new[] { 123, 123, 321, 123 });
+        }
+        public void WipeCustomHistory()
+        {
+            var ids = Server.Ids.Custom;
+            Server.WipeHistory(ids.StringyVar, null);
+            Server.WipeHistory(ids.MysteryVar, 0);
+            Server.WipeHistory(ids.Array, new[] { 0, 0, 0, 0 });
+        }
+        public void WipeBaseHistory()
+        {
+            var ids = Server.Ids.Base;
+            Server.WipeHistory(ids.DoubleVar1, 0.0);
+            Server.WipeHistory(ids.StringVar, null);
+            Server.WipeHistory(ids.IntVar, 0);
+        }
+        public void WipeEventHistory()
+        {
+            Server.WipeEventHistory(Server.Ids.Event.Obj1);
+            Server.WipeEventHistory(ObjectIds.Server);
         }
     }
 }

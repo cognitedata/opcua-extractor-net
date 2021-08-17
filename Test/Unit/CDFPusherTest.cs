@@ -31,13 +31,6 @@ namespace Test.Unit
         public CDFPusherTestFixture() : base()
         {
         }
-        public void WipeCustomHistory()
-        {
-            var ids = Server.Ids.Custom;
-            Server.WipeHistory(ids.StringyVar, null);
-            Server.WipeHistory(ids.MysteryVar, 0);
-            Server.WipeHistory(ids.Array, new[] { 0, 0, 0, 0 });
-        }
     }
     public class CDFPusherTest : MakeConsoleWork, IClassFixture<CDFPusherTestFixture>
     {
@@ -50,7 +43,6 @@ namespace Test.Unit
             this.tester = tester;
             tester.ResetConfig();
             (handler, pusher) = tester.GetCDFPusher();
-            tester.WipeCustomHistory();
         }
         [Fact]
         public async Task TestTestConnection()
@@ -976,6 +968,8 @@ namespace Test.Unit
                 await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
                 return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Any();
             }, 10);
+
+            tester.WipeCustomHistory();
         }
         [Fact]
         public async Task TestCDFAsSourceEvents()
@@ -1044,6 +1038,8 @@ namespace Test.Unit
                 await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
                 return handler.Events.Any();
             }, 10);
+
+            tester.WipeEventHistory();
         }
         #endregion
         protected override void Dispose(bool disposing)
