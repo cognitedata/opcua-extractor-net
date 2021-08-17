@@ -4,6 +4,7 @@ using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Newtonsoft.Json;
 using Opc.Ua;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -24,6 +25,7 @@ namespace Cognite.OpcUa.NodeSources
         private readonly UAClient client;
         private readonly CDFPusher pusher;
         private readonly CDFNodeSourceConfig config;
+        private readonly ILogger log = Log.Logger.ForContext(typeof(CDFNodeSource));
 
         public CDFNodeSource(FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher)
         {
@@ -36,6 +38,19 @@ namespace Cognite.OpcUa.NodeSources
         }
         private readonly List<UAVariable> readVariables = new List<UAVariable>();
         private readonly List<UANode> readNodes = new List<UANode>();
+
+        // Nodes that are treated as variables (and synchronized) in the source system
+        private readonly List<UAVariable> finalSourceVariables = new List<UAVariable>();
+        // Nodes that are treated as objects (so not synchronized) in the source system.
+        // finalSourceVariables and finalSourceObjects should together contain all mapped nodes
+        // in the source system.
+        private readonly List<UANode> finalSourceObjects = new List<UANode>();
+
+        // Nodes that are treated as objects in the destination systems (i.e. mapped to assets)
+        private readonly List<UANode> finalDestinationObjects = new List<UANode>();
+        // Nodes that are treated as variables in the destination systems (i.e. mapped to timeseries)
+        // May contain duplicate NodeIds, but all should produce distinct UniqueIds.
+        private readonly List<UAVariable> finalDestinationVariables = new List<UAVariable>();
 
         private static async Task<IEnumerable<SavedNode>> DeserializeRawData(IEnumerable<RawRow> rows, JsonSerializer serializer, CancellationToken token)
         {
@@ -60,11 +75,20 @@ namespace Cognite.OpcUa.NodeSources
 
             if ((dataEnabled || eventsEnabled) && !string.IsNullOrEmpty(config.TimeseriesTable))
             {
-                var tsData = await pusher.GetRawRows(config.Database, config.TimeseriesTable, new[] {
-                    "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo"
-                }, token);
-
-                var nodes = await DeserializeRawData(tsData, serializer, token);
+                IEnumerable<SavedNode> nodes;
+                try
+                {
+                    var tsData = await pusher.GetRawRows(config.Database, config.TimeseriesTable, new[] {
+                        "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo"
+                    }, token);
+                    nodes = await DeserializeRawData(tsData, serializer, token);
+                }
+                catch (Exception ex)
+                {
+                    log.Error("Failed to retrieve and deserialize raw timeseries from CDF: {msg}", ex.Message);
+                    return;
+                }
+                
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
@@ -82,11 +106,21 @@ namespace Cognite.OpcUa.NodeSources
 
             if (eventsEnabled && !string.IsNullOrEmpty(config.AssetsTable))
             {
-                var assetData = await pusher.GetRawRows(config.Database, config.TimeseriesTable, new[]
+                IEnumerable<SavedNode> nodes;
+                try
                 {
-                    "NodeId", "ParentNodeId", "name", "InternalInfo"
-                }, token);
-                var nodes = await DeserializeRawData(assetData, serializer, token);
+                    var assetData = await pusher.GetRawRows(config.Database, config.TimeseriesTable, new[]
+                    {
+                        "NodeId", "ParentNodeId", "name", "InternalInfo"
+                    }, token);
+                    nodes = await DeserializeRawData(assetData, serializer, token);
+                }
+                catch (Exception ex)
+                {
+                    log.Error("Failed to retrieve and deserialize raw assets from CDF: {msg}", ex.Message);
+                    return;
+                }
+            
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
@@ -96,14 +130,28 @@ namespace Cognite.OpcUa.NodeSources
                     readNodes.Add(obj);
                 }
             }
-            
-
+            log.Information("Retrieved {as} objects and {ts} variables from CDF Raw", readNodes.Count, readVariables.Count);
         }
 
 
         public async Task<BrowseResult> ParseResults(CancellationToken token)
         {
             return null;
+        }
+
+        private async Task GetExtraNodeData(CancellationToken token)
+        {
+            // Datatype metadata might make sense if we have enum variables, either way this is cheap.
+            var distinctDataTypes = readVariables.Select(variable => variable.DataType.Raw).ToHashSet();
+            await extractor.DataTypeManager.GetDataTypeMetadataAsync(distinctDataTypes, token);
+        }
+
+        private void SortVariable(UAVariable variable)
+        {
+            if (variable.IsArray)
+            {
+                finalDestinationVariables.AddRange(variable.CreateArrayChildren());
+            }
         }
     }
 }
