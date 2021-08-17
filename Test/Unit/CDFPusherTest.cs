@@ -31,6 +31,13 @@ namespace Test.Unit
         public CDFPusherTestFixture() : base()
         {
         }
+        public void WipeCustomHistory()
+        {
+            var ids = Server.Ids.Custom;
+            Server.WipeHistory(ids.StringyVar, null);
+            Server.WipeHistory(ids.MysteryVar, 0);
+            Server.WipeHistory(ids.Array, new[] { 0, 0, 0, 0 });
+        }
     }
     public class CDFPusherTest : MakeConsoleWork, IClassFixture<CDFPusherTestFixture>
     {
@@ -43,6 +50,7 @@ namespace Test.Unit
             this.tester = tester;
             tester.ResetConfig();
             (handler, pusher) = tester.GetCDFPusher();
+            tester.WipeCustomHistory();
         }
         [Fact]
         public async Task TestTestConnection()
@@ -898,6 +906,144 @@ namespace Test.Unit
             Assert.Equal(4, result.SourceVariables.Count());
             Assert.Empty(extractor.State.NodeStates);
             Assert.Equal(2, extractor.State.EmitterStates.Count());
+        }
+
+        [Fact]
+        public async Task TestCDFAsSourceData()
+        {
+            tester.Config.Cognite.RawNodeBuffer = new CDFNodeSourceConfig
+            {
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries",
+                Database = "metadata",
+                Enable = true
+            };
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries",
+                Database = "metadata"
+            };
+            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
+            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
+            tester.Config.Extraction.DataTypes.AllowStringVariables = true;
+            tester.Config.Extraction.DataTypes.MaxArraySize = 10;
+            tester.Config.Extraction.DataTypes.AutoIdentifyTypes = true;
+            tester.Config.Extraction.RootNode = tester.Ids.Custom.Root.ToProtoNodeId(tester.Client);
+
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            // Nothing in CDF
+            await Assert.ThrowsAsync<ExtractorFailureException>(async () => await extractor.RunExtractor(true));
+            Assert.Empty(extractor.State.EmitterStates);
+            Assert.Empty(extractor.State.NodeStates);
+            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
+            await extractor.RunExtractor(true);
+            Assert.True(extractor.State.NodeStates.Any());
+            Assert.True(handler.AssetRaw.Any());
+            Assert.True(handler.TimeseriesRaw.Any());
+            Assert.True(handler.Timeseries.Any());
+            Assert.Empty(handler.Assets);
+
+            await extractor.WaitForSubscriptions();
+            tester.Client.ResetVisitedNodes();
+            tester.Client.RemoveSubscription("DataChangeListener");
+
+            extractor.State.Clear();
+
+            // Now there is something in CDF, read it back
+            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
+            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
+            handler.Timeseries.Clear();
+            await extractor.RunExtractor(true);
+            Assert.True(extractor.State.NodeStates.Any());
+
+            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string newTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
+
+            // Ensure data in raw is untouched.
+            Assert.Equal(oldAssets, newAssets);
+            Assert.Equal(oldTimeseries, newTimeseries);
+
+            await extractor.WaitForSubscriptions();
+
+            var id = tester.Client.GetUniqueId(tester.Server.Ids.Custom.MysteryVar);
+            tester.Server.UpdateNode(tester.Server.Ids.Custom.MysteryVar, 1.0);
+
+            await CommonTestUtils.WaitForCondition(async () =>
+            {
+                await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+                return handler.Datapoints.ContainsKey(id) && handler.Datapoints[id].NumericDatapoints.Any();
+            }, 10);
+        }
+        [Fact]
+        public async Task TestCDFAsSourceEvents()
+        {
+            tester.Config.Cognite.RawNodeBuffer = new CDFNodeSourceConfig
+            {
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries",
+                Database = "metadata",
+                Enable = true
+            };
+            tester.Config.Cognite.RawMetadata = new RawMetadataConfig
+            {
+                AssetsTable = "assets",
+                TimeseriesTable = "timeseries",
+                Database = "metadata"
+            };
+            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
+            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
+            tester.Config.Events.Enabled = true;
+            tester.Config.Events.ReadServer = false;
+            tester.Config.Subscriptions.DataPoints = false;
+            tester.Config.Extraction.RootNode = tester.Ids.Event.Root.ToProtoNodeId(tester.Client);
+
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            // Nothing in CDF
+            await Assert.ThrowsAsync<ExtractorFailureException>(async () => await extractor.RunExtractor(true));
+            Assert.Empty(extractor.State.EmitterStates);
+            Assert.Empty(extractor.State.NodeStates);
+            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = true;
+            await extractor.RunExtractor(true);
+            Assert.True(extractor.State.NodeStates.Any());
+            Assert.True(handler.AssetRaw.Any());
+            Assert.True(handler.TimeseriesRaw.Any());
+            Assert.True(handler.Timeseries.Any());
+            Assert.Empty(handler.Assets);
+
+            await extractor.WaitForSubscriptions();
+            tester.Client.ResetVisitedNodes();
+            tester.Client.RemoveSubscription("EventListener");
+
+            extractor.State.Clear();
+
+            // Now there is something in CDF, read it back
+            tester.Config.Cognite.RawNodeBuffer.BrowseOnEmpty = false;
+            string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
+            handler.Timeseries.Clear();
+            await extractor.RunExtractor(true);
+            Assert.True(extractor.State.NodeStates.Any());
+
+            string newAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
+            string newTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
+
+            // Ensure data in raw is untouched.
+            Assert.Equal(oldAssets, newAssets);
+            Assert.Equal(oldTimeseries, newTimeseries);
+
+            await extractor.WaitForSubscriptions();
+
+            tester.Server.TriggerEvents(0);
+
+            await CommonTestUtils.WaitForCondition(async () =>
+            {
+                await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
+                return handler.Events.Any();
+            }, 10);
         }
         #endregion
         protected override void Dispose(bool disposing)

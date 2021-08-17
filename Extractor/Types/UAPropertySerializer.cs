@@ -371,7 +371,7 @@ namespace Cognite.OpcUa.Types
                 if (variable.ArrayDimensions != null)
                 {
                     writer.WritePropertyName("ArrayDimensions");
-                    serializer.Serialize(writer, variable.ArrayDimensions);
+                    serializer.Serialize(writer, variable.ArrayDimensions.ToArray());
                     writer.WritePropertyName("Index");
                     writer.WriteValue(variable.Index);
                 }

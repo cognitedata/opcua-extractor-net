@@ -466,6 +466,7 @@ namespace Cognite.OpcUa
                     {
                         throw new ExtractorFailureException("Found no nodes in CDF, restarting");
                     }
+                    log.Information("Found no nodes in CDF, reading from OPC-UA server");
                 }
                 else
                 {
