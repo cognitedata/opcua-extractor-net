@@ -46,19 +46,19 @@
 
   <xsl:key
         name="RemoveFromOutput"
-        match="wix:Component[ substring( wix:File/@Source, string-length( wix:File/@Source ) - 15 ) = 'OpcUaService.exe' ]"
-        use="@Id"
-    />
-
-  <xsl:key
-        name="RemoveFromOutput"
-        match="wix:Component[ substring( wix:File/@Source, string-length( wix:File/@Source ) - 15 ) = 'OpcUaService.dll' ]"
+        match="wix:Component[ substring( wix:File/@Source, string-length( wix:File/@Source ) - 17 ) = 'OpcuaExtractor.exe' ]"
         use="@Id"
     />
 
   <xsl:key
       name="RemoveFromOutput"
       match="wix:Component[ substring( wix:File/@Source, string-length( wix:File/@Source ) - 3 ) = '.pdb' ]"
+      use="@Id"
+    />
+
+  <xsl:key
+      name="RemoveFromOutput"
+      match="wix:Component[ substring( wix:File/@Source, string-length( wix:File/@Source ) - 3 ) = '.xml' ]"
       use="@Id"
     />
 

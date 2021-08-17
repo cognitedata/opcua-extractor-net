@@ -1,6 +1,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
-VisualStudioVersion = 16.0.29306.81
+VisualStudioVersion = 16.0.31605.320
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Extractor", "Extractor\Extractor.csproj", "{05A543F7-06ED-41FF-BC48-0E7FBD2BB3CF}"
 EndProject
@@ -26,8 +26,6 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConfigurationTool", "ConfigurationTool\ConfigurationTool.csproj", "{F9A30D7C-1F8D-41F2-9A84-26C2B86DCDBE}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExtractorLauncher", "ExtractorLauncher\ExtractorLauncher.csproj", "{0F78788D-DC43-4323-9208-FA59BC2C973A}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpcUaService", "OpcUaService\OpcUaService.csproj", "{EB4EE67D-1395-469B-B1D2-DDF71FD59AF3}"
 EndProject
 Project("{930C7802-8A8C-48F9-8165-68863BCCD9DD}") = "OpcUaExtractorSetup", "OpcUaExtractorSetup\OpcUaExtractorSetup.wixproj", "{D5FB684A-8DC0-4AAC-B9E3-00AC6E7A56F5}"
 EndProject
@@ -82,14 +80,6 @@ Global
 		{0F78788D-DC43-4323-9208-FA59BC2C973A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{0F78788D-DC43-4323-9208-FA59BC2C973A}.Release|x86.ActiveCfg = Release|Any CPU
 		{0F78788D-DC43-4323-9208-FA59BC2C973A}.Release|x86.Build.0 = Release|Any CPU
-		{EB4EE67D-1395-469B-B1D2-DDF71FD59AF3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{EB4EE67D-1395-469B-B1D2-DDF71FD59AF3}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{EB4EE67D-1395-469B-B1D2-DDF71FD59AF3}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{EB4EE67D-1395-469B-B1D2-DDF71FD59AF3}.Debug|x86.Build.0 = Debug|Any CPU
-		{EB4EE67D-1395-469B-B1D2-DDF71FD59AF3}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{EB4EE67D-1395-469B-B1D2-DDF71FD59AF3}.Release|Any CPU.Build.0 = Release|Any CPU
-		{EB4EE67D-1395-469B-B1D2-DDF71FD59AF3}.Release|x86.ActiveCfg = Release|Any CPU
-		{EB4EE67D-1395-469B-B1D2-DDF71FD59AF3}.Release|x86.Build.0 = Release|Any CPU
 		{D5FB684A-8DC0-4AAC-B9E3-00AC6E7A56F5}.Debug|Any CPU.ActiveCfg = Debug|x86
 		{D5FB684A-8DC0-4AAC-B9E3-00AC6E7A56F5}.Debug|x86.ActiveCfg = Debug|x86
 		{D5FB684A-8DC0-4AAC-B9E3-00AC6E7A56F5}.Debug|x86.Build.0 = Debug|x86

@@ -23,8 +23,10 @@ coverage.json
 paket-files/
 ExtractorLauncher/Properties
 OpcUaService/Properties
+Service/Properties
 *.bin
 *.db
+extractorbuild/
 
 # Config
 config/*

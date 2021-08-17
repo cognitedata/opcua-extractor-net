@@ -16,3 +16,8 @@ nuget OPCFoundation.NetStandard.Opc.Ua.Server
 nuget AdysTech.InfluxDB.Client.Net.Core
 nuget Microsoft.Windows.Compatibility
 nuget MQTTnet
+nuget Microsoft.Extensions.Hosting.WindowsServices
+nuget Microsoft.Extensions.Hosting.Systemd
+nuget Microsoft.Extensions.Hosting
+nuget Microsoft.Extensions.Hosting.Abstractions
+nuget Microsoft.Extensions.Logging.EventLog
