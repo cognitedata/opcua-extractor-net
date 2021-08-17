@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
@@ -94,6 +95,10 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         public bool Ignore => Attributes.Ignore;
 
+        /// <summary>
+        /// Where this node was first generated from
+        /// </summary>
+        public NodeSource Source { get; set; } = NodeSource.OPCUA;
         /// <summary>
         /// Return a string description, for logging
         /// </summary>

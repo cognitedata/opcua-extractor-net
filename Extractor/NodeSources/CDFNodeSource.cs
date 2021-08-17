@@ -24,7 +24,8 @@ namespace Cognite.OpcUa.NodeSources
         private readonly CDFNodeSourceConfig sourceConfig;
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFNodeSource));
 
-        public CDFNodeSource(FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher) : base(config, extractor, client)
+        public CDFNodeSource(FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher)
+            : base(config, extractor, client)
         {
             if (config == null) throw new ArgumentNullException(nameof(config));
             this.pusher = pusher;
@@ -81,6 +82,7 @@ namespace Cognite.OpcUa.NodeSources
                     variable.VariableAttributes.Historizing = node.InternalInfo.Historizing;
                     variable.VariableAttributes.ShouldSubscribe = node.InternalInfo.ShouldSubscribe;
                     variable.VariableAttributes.ValueRank = node.InternalInfo.ValueRank;
+                    variable.Source = NodeSource.CDF;
                     readVariables.Add(variable);
                 }
             }
@@ -108,6 +110,7 @@ namespace Cognite.OpcUa.NodeSources
                     var obj = new UANode(node.NodeId, node.Name, node.ParentNodeId, node.InternalInfo.NodeClass);
                     obj.Attributes.EventNotifier = node.InternalInfo.EventNotifier;
                     obj.Attributes.ShouldSubscribe = node.InternalInfo.ShouldSubscribe;
+                    obj.Source = NodeSource.CDF;
                     readNodes.Add(obj);
                 }
             }
@@ -132,7 +135,23 @@ namespace Cognite.OpcUa.NodeSources
             readNodes.Clear();
             readVariables.Clear();
 
-            return null;
+            if (!finalDestinationObjects.Any() && !finalDestinationVariables.Any() && !finalSourceVariables.Any() && !finalReferences.Any())
+            {
+                log.Information("Mapping resulted in no new nodes");
+                return null;
+            }
+
+            log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
+                " {robj} objects and {var} variables.",
+                finalDestinationObjects.Count, finalDestinationVariables.Count,
+                finalSourceObjects.Count, finalSourceVariables.Count);
+
+            return new BrowseResult(
+                finalSourceObjects,
+                finalSourceVariables,
+                finalDestinationObjects,
+                finalDestinationVariables,
+                finalReferences);
         }
 
         private async Task GetExtraNodeData(CancellationToken token)

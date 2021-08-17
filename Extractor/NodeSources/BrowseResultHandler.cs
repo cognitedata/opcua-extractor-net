@@ -43,7 +43,8 @@ namespace Cognite.OpcUa.NodeSources
         private List<UAVariable> rawVariables = new List<UAVariable>();
         private List<UANode> rawObjects = new List<UANode>();
 
-        public BrowseResultHandler(FullConfig config, UAExtractor extractor, UAClient client) : base(config, extractor, client)
+        public BrowseResultHandler(FullConfig config, UAExtractor extractor, UAClient client)
+            : base(config, extractor, client)
         {
         }
 

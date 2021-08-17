@@ -9,6 +9,12 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.NodeSources
 {
+    public enum NodeSource
+    {
+        CDF,
+        OPCUA
+    }
+
     /// <summary>
     /// Class containing some common behavior between node sources
     /// </summary>
@@ -31,6 +37,7 @@ namespace Cognite.OpcUa.NodeSources
         protected FullConfig Config { get; }
         protected UAExtractor Extractor { get; }
         protected UAClient Client { get; }
+
         protected BaseNodeSource(FullConfig config, UAExtractor extractor, UAClient client)
         {
             Config = config;

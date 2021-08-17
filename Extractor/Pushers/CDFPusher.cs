@@ -19,6 +19,7 @@ using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Microsoft.Extensions.DependencyInjection;
@@ -596,7 +597,12 @@ namespace Cognite.OpcUa.Pushers
         {
             if (config.SkipMetadata) return;
 
-            var assetIds = new ConcurrentDictionary<string, UANode>(objects.ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
+            var assetIds = new ConcurrentDictionary<string, UANode>(objects
+                .Where(node => node.Source != NodeSource.CDF)
+                .ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
+
+            if (!assetIds.Any()) return;
+
             var metaMap = config.MetadataMapping?.Assets;
             bool useRawAssets = config.RawMetadata != null
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
@@ -777,22 +783,25 @@ namespace Cognite.OpcUa.Pushers
 
             var timeseries = await CreateTimeseries(tsIds, simpleTimeseries, token);
 
-            if (config.SkipMetadata) return;
+            var toPushMeta = tsIds.Where(kvp => kvp.Value.Source != NodeSource.CDF)
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+            if (config.SkipMetadata || !toPushMeta.Any()) return;
 
             if (useRawTimeseries)
             {
                 if (update.AnyUpdate)
                 {
-                    await UpdateRawTimeseries(tsIds, token);
+                    await UpdateRawTimeseries(toPushMeta, token);
                 }
                 else
                 {
-                    await CreateRawTimeseries(tsIds, token);
+                    await CreateRawTimeseries(toPushMeta, token);
                 }
             }
             else if (update.AnyUpdate)
             {
-                await UpdateTimeseries(tsIds, timeseries, update, token);
+                await UpdateTimeseries(toPushMeta, timeseries, update, token);
             }
         }
         #endregion
