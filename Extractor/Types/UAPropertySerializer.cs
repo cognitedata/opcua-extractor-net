@@ -358,6 +358,8 @@ namespace Cognite.OpcUa.Types
             writer.WriteValue(node.EventNotifier);
             writer.WritePropertyName("ShouldSubscribe");
             writer.WriteValue(node.ShouldSubscribe);
+            writer.WritePropertyName("NodeClass");
+            writer.WriteValue(node.NodeClass);
             if (Type == ConverterType.Variable && node is UAVariable variable)
             {
                 writer.WritePropertyName("AccessLevel");

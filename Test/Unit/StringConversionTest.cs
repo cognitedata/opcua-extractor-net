@@ -263,13 +263,13 @@ namespace Test.Unit
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true}}");
+                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":1}}");
 
             node.Attributes.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalData"":{""EventNotifier"":5,""ShouldSubscribe"":true}}");
+                + @"""InternalData"":{""EventNotifier"":5,""ShouldSubscribe"":true,""NodeClass"":1}}");
 
             var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.Variable);
             serializer = new JsonSerializer();
@@ -280,7 +280,8 @@ namespace Test.Unit
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""AccessLevel"":5,""Historizing"":true}}");
+                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":2,""AccessLevel"":5,"
+                + @"""Historizing"":true}}");
 
             variable.VariableAttributes.ValueRank = ValueRanks.OneDimension;
             variable.VariableAttributes.ArrayDimensions = new Collection<int> { 5 };
@@ -288,8 +289,8 @@ namespace Test.Unit
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""AccessLevel"":5,""Historizing"":true,"
-                + @"""ValueRank"":1,""ArrayDimensions"":[5],""Index"":-1}}"
+                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":2,""AccessLevel"":5,"
+                + @"""Historizing"":true,""ValueRank"":1,""ArrayDimensions"":[5],""Index"":-1}}"
                 );
         }
     }

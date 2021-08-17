@@ -23,5 +23,6 @@ namespace Cognite.OpcUa.NodeSources
         public int ValueRank { get; set; }
         public int[] ArrayDimensions { get; set; }
         public int Index { get; set; }
+        public NodeClass NodeClass { get; set; }
     }
 }

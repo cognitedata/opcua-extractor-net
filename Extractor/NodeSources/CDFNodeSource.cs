@@ -92,7 +92,7 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
-                    var variable = new UAVariable(node.NodeId, node.Name, node.ParentNodeId, NodeClass.Variable);
+                    var variable = new UAVariable(node.NodeId, node.Name, node.ParentNodeId, node.InternalInfo.NodeClass);
                     variable.VariableAttributes.AccessLevel = node.InternalInfo.AccessLevel;
                     variable.VariableAttributes.ArrayDimensions = new Collection<int>(node.InternalInfo.ArrayDimensions);
                     variable.VariableAttributes.DataType = extractor.DataTypeManager.GetDataType(node.DataTypeId);
@@ -124,7 +124,7 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
-                    var obj = new UANode(node.NodeId, node.Name, node.ParentNodeId, NodeClass.Object);
+                    var obj = new UANode(node.NodeId, node.Name, node.ParentNodeId, node.InternalInfo.NodeClass);
                     obj.Attributes.EventNotifier = node.InternalInfo.EventNotifier;
                     obj.Attributes.ShouldSubscribe = node.InternalInfo.ShouldSubscribe;
                     readNodes.Add(obj);
