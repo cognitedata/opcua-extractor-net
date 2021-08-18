@@ -53,6 +53,10 @@ namespace Cognite.OpcUa
 
         private static readonly Counter missedArrayPoints = Metrics
             .CreateCounter("opcua_array_points_missed", "Points missed due to incorrect ArrayDimensions");
+        private static readonly Summary timeToExtractorDps = Metrics.CreateSummary("opcua_streaming_delay_data",
+            "Time difference between datapoint SourceTimestamp to local time when they reach the extractor from subscriptions, in ms");
+        private static readonly Summary timeToExtractorEvents = Metrics.CreateSummary("opcua_streaming_delay_events",
+            "Time difference between event Time to local time when they reach the extractor from subscriptions, in ms");
 
         public bool AllowEvents { get; set; }
         public bool AllowData { get; set; }
@@ -322,6 +326,8 @@ namespace Cognite.OpcUa
                 var buffDps = ToDataPoint(datapoint, node);
                 node.UpdateFromStream(buffDps);
 
+                timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalMilliseconds);
+
                 if ((extractor.StateStorage == null || config.StateStorage.Interval <= 0)
                     && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
                         || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) continue;
@@ -419,6 +425,9 @@ namespace Cognite.OpcUa
                     UAExtractor.BadEvents.Inc();
                     continue;
                 }
+
+                timeToExtractorEvents.Observe((DateTime.UtcNow - buffEvent.Time).TotalMilliseconds);
+
                 eventState.UpdateFromStream(buffEvent);
 
                 // Either backfill/frontfill is done, or we are not outside of each respective bound
