@@ -280,7 +280,11 @@ namespace Cognite.OpcUa
             if (setup.NoConfig)
             {
                 services.AddConfig(setup.Config,
-                    typeof(CogniteConfig), typeof(LoggerConfig), typeof(MetricsConfig), typeof(StateStoreConfig));
+                    typeof(CogniteConfig),
+                    typeof(LoggerConfig),
+                    typeof(MetricsConfig),
+                    typeof(StateStoreConfig));
+                services.AddSingleton(setup.Config);
             }
 
             services.AddMetrics();
