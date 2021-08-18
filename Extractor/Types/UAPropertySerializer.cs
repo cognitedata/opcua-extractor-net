@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Opc.Ua;
 using Serilog;
 using System;
@@ -414,74 +415,43 @@ namespace Cognite.OpcUa.Types
             NodeId existingValue, bool hasExistingValue, Newtonsoft.Json.JsonSerializer serializer)
         {
             if (reader.TokenType != JsonToken.StartObject) return NodeId.Null;
-            reader.Read();
-            if (reader.TokenType == JsonToken.EndObject) return NodeId.Null;
-            object identifier = null;
-            int? idType = null;
-            string ns = null;
-            while (reader.TokenType != JsonToken.EndObject)
-            {
-                var key = reader.Value as string;
-                switch (key)
-                {
-                    case "namespace":
-                        ns = reader.ReadAsString();
-                        break;
-                    case "identifier":
-                        reader.Read();
-                        identifier = reader.Value;
-                        break;
-                    case "idType":
-                        idType = reader.ReadAsInt32();
-                        break;
-                }
-                reader.Read();
-            }
-            if (idType == null || identifier == null || idType.Value > 3 || idType.Value < 0) return NodeId.Null;
+            var obj = JToken.ReadFrom(reader);
+            if (obj == null || obj.Type != JTokenType.Object) return NodeId.Null;
+            string ns = obj.Value<string>("namespace");
+            int? idType = obj.Value<int?>("idType");
+            if (idType == null || idType.Value > 3 || idType.Value < 0) return NodeId.Null;
+
             int nsIdx = 0;
             if (ns != null)
             {
                 nsIdx = uaClient.NamespaceTable.GetIndex(ns);
                 if (nsIdx < 0) return NodeId.Null;
             }
-            switch ((IdType)idType.Value)
+
+            try
             {
-                case IdType.Numeric:
-                    uint val;
-                    try
-                    {
-                        val = Convert.ToUInt32(identifier);
-                    }
-                    catch
-                    {
-                        return NodeId.Null;
-                    }
-                    return new NodeId(val, (ushort)nsIdx);
-                case IdType.String:
-                    return new NodeId(identifier.ToString(), (ushort)nsIdx);
-                case IdType.Guid:
-                    Guid guid;
-                    try
-                    {
-                        guid = Guid.Parse(identifier.ToString());
-                    }
-                    catch (FormatException)
-                    {
-                        return NodeId.Null;
-                    }
-                    return new NodeId(guid, (ushort)nsIdx);
-                case IdType.Opaque:
-                    byte[] opaque;
-                    try
-                    {
-                        opaque = Convert.FromBase64String(identifier.ToString());
-                    }
-                    catch
-                    {
-                        return NodeId.Null;
-                    }
-                    return new NodeId(opaque, (ushort)nsIdx);
+                switch ((IdType)idType.Value)
+                {
+                    case IdType.Numeric:
+                        uint? numIdf = obj.Value<uint?>("identifier");
+                        if (numIdf == null) return NodeId.Null;
+                        return new NodeId(numIdf, (ushort)nsIdx);
+                    case IdType.String:
+                        string strIdf = obj.Value<string>("identifier");
+                        if (strIdf == null) return NodeId.Null;
+                        return new NodeId(strIdf, (ushort)nsIdx);
+                    case IdType.Guid:
+                        strIdf = obj.Value<string>("identifier");
+                        Guid guid = Guid.Parse(strIdf);
+                        return new NodeId(guid, (ushort)nsIdx);
+                    case IdType.Opaque:
+                        strIdf = obj.Value<string>("identifier");
+                        if (strIdf == null) return NodeId.Null;
+                        var opqIdf = Convert.FromBase64String(strIdf);
+                        return new NodeId(opqIdf, (ushort)nsIdx);
+                }
             }
+            catch { }
             return NodeId.Null;
         }
 
@@ -507,7 +477,7 @@ namespace Cognite.OpcUa.Types
                     writer.WriteValue(value.Identifier as Guid? ?? Guid.Empty);
                     break;
                 case IdType.Opaque:
-                    writer.WriteValue(Convert.ToBase64String(value.Identifier as byte[] ?? Array.Empty<byte>()));
+                    writer.WriteValue(value.Identifier as byte[]);
                     break;
                 case IdType.String:
                     writer.WriteValue(value.Identifier as string);
