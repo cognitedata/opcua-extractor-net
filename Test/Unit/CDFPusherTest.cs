@@ -948,6 +948,8 @@ namespace Test.Unit
             string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
             string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
             handler.Timeseries.Clear();
+            extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
+            extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
 
@@ -1019,6 +1021,8 @@ namespace Test.Unit
             string oldAssets = System.Text.Json.JsonSerializer.Serialize(handler.AssetRaw);
             string oldTimeseries = System.Text.Json.JsonSerializer.Serialize(handler.TimeseriesRaw);
             handler.Timeseries.Clear();
+            extractor.GetType().GetField("subscribed", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, 0);
+            extractor.GetType().GetField("subscribeFlag", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(extractor, false);
             await extractor.RunExtractor(true);
             Assert.True(extractor.State.NodeStates.Any());
 
