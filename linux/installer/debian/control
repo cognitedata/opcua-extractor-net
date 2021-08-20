@@ -1,4 +1,4 @@
-Package: cognite-opcua-extractor
+Package: opcua-extractor
 Version: {version}
 Section: misc
 Priority: optional

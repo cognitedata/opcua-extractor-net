@@ -3,6 +3,7 @@
 Name: opcua-extractor
 Version: %{extversion}
 Release: 1%{?dist}
+Obsoletes: %{name} <= %{version}
 Summary: Cognite OPC-UA Extractor
 
 License: GPLv2

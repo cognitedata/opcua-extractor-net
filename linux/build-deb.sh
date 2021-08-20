@@ -14,7 +14,7 @@ then
 	exit 1
 fi
 
-name="cognite-opcua-extractor_${version}_${architecture}"
+name="opcua-extractor_${version}_${architecture}"
 
 mkdir -p "$name"
 cd "$name"
