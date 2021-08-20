@@ -398,16 +398,25 @@ namespace Cognite.OpcUa
         private void CertificateValidationHandler(CertificateValidator validator,
             CertificateValidationEventArgs eventArgs)
         {
-            if (eventArgs.Error.StatusCode != StatusCodes.BadCertificateUntrusted) return;
-            eventArgs.Accept = config.Source.AutoAccept;
-            // TODO Verify client acceptance here somehow?
+
+            if (eventArgs.Error.StatusCode == StatusCodes.BadCertificateUntrusted)
+            {
+                eventArgs.Accept |= config.Source.AutoAccept;
+            }
+            else if (!StatusCode.IsGood(eventArgs.Error.StatusCode) && config.Source.IgnoreCertificateIssues)
+            {
+                log.Warning("Ignoring bad certificate: {err}", eventArgs.Error.StatusCode);
+                eventArgs.Accept = true;
+            }
+
             if (eventArgs.Accept)
             {
-                log.Warning("Accepted Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
+                log.Warning("Accepted Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
             }
             else
             {
-                log.Error("Rejected Bad Certificate {CertificateSubject}", eventArgs.Certificate.Subject);
+                log.Error("Rejected Bad Certificate {CertificateSubject}, {err}",
+                    eventArgs.Certificate.Subject, eventArgs.Error.StatusCode);
             }
         }
         /// <summary>
