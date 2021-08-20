@@ -157,6 +157,26 @@ cognite:
         # Table to store relationships in
         relationships-table:
 
+    # Read from CDF instead of OPC-UA when starting, to speed up start on slow servers.
+    # Requires extraction.data-types.expand-node-ids and append-internal-values to be set to true.
+
+    # This should generally be enabled along with skip-metadata or raw-metadata
+    # If browse-on-empty is set to true, and raw-metadata is configured with the same
+    # database and tables, the extractor will read into raw on first run, then use raw later,
+    # and the raw database can be deleted to reset on next read.
+    raw-node-buffer:
+        # Enable the raw node buffer
+        enable: false
+        # Raw database to read from
+        database:
+        # Table to read assets from, for events.
+        assets-table:
+        # Table to read timeseries from
+        timeseries-table:
+        # Run normal browse if nothing is found when reading from CDF, either because the tables are empty, or they do not exist.
+        # No valid nodes must be found to run this at all, meaning it may run if there are nodes, but none of them are
+        # potentially valid extraction targets.
+        browse-on-empty: false
     # Map metadata to asset/timeseries attributes. Each of "assets" and "timeseries" is a map from property DisplayName to
     # CDF attribute. Legal attributes are "name, description, parentId" and "unit" for timeseries. "parentId" must somehow refer to
     # an existing asset. For timeseries it must be a mapped asset, for assets it can be any asset.
@@ -505,6 +525,13 @@ extraction:
 
         # True to treat null nodeIds as numeric instead of string
         null-as-numeric: false
+
+        # Add full JSON node-ids to data pushed to Raw. TypeDefintionId, ParentNodeId, NodeId and DataTypeId.
+        expand-node-ids: false
+
+        # Add attributes generally used internally like AccessLevel, Historizing, ArrayDimensions, ValueRank etc.
+        # to data pushed to Raw.
+        append-internal-values: false 
 
 
     # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
