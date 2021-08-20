@@ -39,5 +39,7 @@ mkdir -p etc/systemd/system/
 cp ../installer/opcua-extractor.service etc/systemd/system/
 cp ../installer/opcua-extractor@.service etc/systemd/system/
 
-dpkg-deb --build --root-owner-group $name/
+cd ..
+
+dpkg-deb --build --root-owner-group $name
 
