@@ -84,7 +84,6 @@ podTemplate(
                 bridgeDockerImageName2 = "eu.gcr.io/cognite-registry/mqtt-cdf-bridge"
                 version = sh(returnStdout: true, script: "git describe --tags HEAD || true").trim()
                 version = version.replaceFirst(/-(\d+)-.*/, '-pre.$1')
-                version = "2.4.0-alpha-01"
                 lastTag = sh(returnStdout: true, script: "git describe --tags --abbrev=0").trim()
                 desc = sh(returnStdout: true, script: "git describe --tags --dirty").trim()
                 time = sh(returnStdout: true, script: "git log -1  --format=%ai").trim()
@@ -114,7 +113,6 @@ podTemplate(
             stage('Build') {
                 sh('dotnet build ExtractorLauncher/')
             }
-            if (false) {
             timeout(20) {
                 stage('Run tests') {
                     sh('mosquitto -p 4060 &')
@@ -125,8 +123,7 @@ podTemplate(
             stage("Upload report to codecov.io") {
 			    jenkinsHelpersUtil.uploadCodecovReport()
             }
-            }
-            if ("$lastTag" == "$version" && env.BRANCH_NAME == "master" || true) {
+            if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
                 stage('Install release dependencies') {
                     sh('apt-get install -y python3-pip rpm build-essential sed')
                     sh('pip3 install PyGithub')
