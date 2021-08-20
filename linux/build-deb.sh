@@ -20,15 +20,15 @@ mkdir -p "$name"
 cd "$name"
 mkdir -p DEBIAN
 cp -r ../installer/debian/* DEBIAN/
-chmod +x DEBIAN/postinst
-chmod +x DEBIAN/prerm
+chmod 0755 DEBIAN/postinst
+chmod 0755 DEBIAN/prerm
 
 sed -i "s/{version}/$version/" DEBIAN/control
 sed -i "s/{architecture}/$architecture/" DEBIAN/control
 
 mkdir -p usr/bin
 cp ../publish/OpcuaExtractor usr/bin/opcua-extractor
-chmod +x usr/bin/opcua-extractor
+chmod 0755 usr/bin/opcua-extractor
 
 mkdir -p var/lib/cognite/opcua
 mkdir -p var/log/cognite/opcua
