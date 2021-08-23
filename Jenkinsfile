@@ -121,10 +121,8 @@ podTemplate(
                 stage('Build release versions') {
                     sh('apt-get install -y zip')
                     packProject('win-x64', "$version", false)
-                    packProject('win81-x64', "$version", false)
                     packProject('linux-x64', "$version", true)
                     packBridge('win-x64', "$version", false)
-                    packBridge('win81-x64', "$version", false)
                     packBridge('linux-x64', "$version", true)
                 }
                 stage('Install release dependencies') {
@@ -134,8 +132,8 @@ podTemplate(
                 stage('Deploy to github release') {
                     withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
                         sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version "
-                            + "opcua-extractor.win-x64.${version}.zip opcua-extractor.win81-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip "
-                            + "mqtt-cdf-bridge.win-x64.${version}.zip mqtt-cdf-bridge.win81-x64.${version}.zip mqtt-cdf-bridge.linux-x64.${version}.zip")
+                            + "opcua-extractor.win-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip "
+                            + "mqtt-cdf-bridge.win-x64.${version}.zip mqtt-cdf-bridge.linux-x64.${version}.zip")
                     }
                 }
             }
