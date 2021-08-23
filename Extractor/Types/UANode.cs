@@ -363,7 +363,7 @@ namespace Cognite.OpcUa.Types
             // This is inefficient. A better solution would use System.Text.Json directly, but that requires .NET 6
             // for WriteRaw in Utf8JsonWriter.
             var serializer = new Newtonsoft.Json.JsonSerializer();
-            serializer.Converters.Add(converter.GetConverter(type));
+            converter.AddConverters(serializer, type);
             using var stream = new MemoryStream();
             var sw = new StreamWriter(stream);
             using var writer = new JsonTextWriter(sw);
