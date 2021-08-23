@@ -53,7 +53,7 @@ namespace Cognite.OpcUa
 
         private static readonly Counter missedArrayPoints = Metrics
             .CreateCounter("opcua_array_points_missed", "Points missed due to incorrect ArrayDimensions");
-        private static readonly Summary timeToExtractorDps = Metrics.CreateSummary("opcua_streaming_delay_data",
+        private static readonly Summary timeToExtractorDps = Metrics.CreateSummary("opcua_streaming_delay_datapoints",
             "Time difference between datapoint SourceTimestamp to local time when they reach the extractor from subscriptions, in ms");
         private static readonly Summary timeToExtractorEvents = Metrics.CreateSummary("opcua_streaming_delay_events",
             "Time difference between event Time to local time when they reach the extractor from subscriptions, in ms");
