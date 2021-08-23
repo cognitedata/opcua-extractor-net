@@ -85,7 +85,7 @@
                         Account="LocalSystem"
                         ErrorControl="ignore"
                         Interactive="no"
-                        Arguments="-e">
+                        Arguments="-s">
           <util:ServiceConfig FirstFailureActionType="restart"
                               SecondFailureActionType="restart" 
                               ThirdFailureActionType="restart"
