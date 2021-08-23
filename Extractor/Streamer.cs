@@ -54,9 +54,9 @@ namespace Cognite.OpcUa
         private static readonly Counter missedArrayPoints = Metrics
             .CreateCounter("opcua_array_points_missed", "Points missed due to incorrect ArrayDimensions");
         private static readonly Summary timeToExtractorDps = Metrics.CreateSummary("opcua_streaming_delay_datapoints",
-            "Time difference between datapoint SourceTimestamp to local time when they reach the extractor from subscriptions, in ms");
+            "Time difference between datapoint SourceTimestamp to local time when they reach the extractor from subscriptions, in seconds");
         private static readonly Summary timeToExtractorEvents = Metrics.CreateSummary("opcua_streaming_delay_events",
-            "Time difference between event Time to local time when they reach the extractor from subscriptions, in ms");
+            "Time difference between event Time to local time when they reach the extractor from subscriptions, in seconds");
 
         public bool AllowEvents { get; set; }
         public bool AllowData { get; set; }
@@ -326,7 +326,7 @@ namespace Cognite.OpcUa
                 var buffDps = ToDataPoint(datapoint, node);
                 node.UpdateFromStream(buffDps);
 
-                timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalMilliseconds);
+                timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
 
                 if ((extractor.StateStorage == null || config.StateStorage.Interval <= 0)
                     && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
@@ -426,7 +426,7 @@ namespace Cognite.OpcUa
                     continue;
                 }
 
-                timeToExtractorEvents.Observe((DateTime.UtcNow - buffEvent.Time).TotalMilliseconds);
+                timeToExtractorEvents.Observe((DateTime.UtcNow - buffEvent.Time).TotalSeconds);
 
                 eventState.UpdateFromStream(buffEvent);
 
