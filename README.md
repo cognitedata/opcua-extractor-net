@@ -39,19 +39,7 @@ There will be binaries for the most recent release here on github. There are thr
 There should be a system specific executable at the top level, which launches the extractor. These should be able to run with no extra setup.
 
 ### Command line arguments
-The extractor also takes a few command line arguments for convenience, though it can run without any:
- - `-t|--tool` - Run the configuration tool
- - `-h|--host [host]` - Override configured OPC-UA endpoint
- - `-u|--user [username]` - Override configured OPC-UA username
- - `-p|--password [password]` - Override configured OPC-UA password
- - `-s|--secure` - Use a secure connection to OPC-UA
- - `-f|--config-file [path]` - Set the config-file path. Overrides config-dir for .yml config files
- - `-a|--auto-accept` - Auto-accept server certificates
- - `-d|--config-dir [path]` - Set the path to the config directory
- - `-ct|--config-target [path]` - Set the path to the output file for the config tool. By default [config-dir]/config.config-tool-output.yml. This file is overwritten.
- - `-nc|--no-config` - Do not attempt to load yml config files. The OPC-UA XML config file will still be needed.
- - `-l|--log-level` - Set the console log-level [fatal/error/warning/information/debug/verbose].
- - `-x|--exit` - Exit the extractor on failure, equivalent to Source.ExitOnFailure.
+The extractor also takes a few command line arguments for convenience, use `OpcuaExtractor -h` for documentation.
 
 ### Configuration
 Documentation can be found [here](https://cognitedata.atlassian.net/wiki/spaces/DSC/pages/1049264826/OPC+UA+Extractor)
@@ -60,10 +48,13 @@ Documentation can be found [here](https://cognitedata.atlassian.net/wiki/spaces/
 You will need .net 5.0. Then simply run `dotnet build` to compile,
 or `dotnet run --project ExtractorLauncher` to compile and run.
 
+The compiler may complain about OpcUaExtractorSetup, which isn't generally necessary to compile during development.
+You can use `dotnet build Test` or `dotnet build ExtractorLauncher` to only compile some parts.
+
 For testing metrics, a good solution is the prom-stack found [here](https://github.com/evnsio/prom-stack)
 
 ### Testing
-There is a test script `test.sh`. To run the tests locally, run `dotnet test`. 
+To run the tests locally, run `dotnet test`, or use the `test.sh` script. 
 
 Some tests require an instance of influxdb 1.8 found [here](https://portal.influxdata.com/downloads/) running on port 8086,
 and some require a version of mosquitto, found [here](https://mosquitto.org/) running on port 4060. The tests now run their own OPC-UA servers.
