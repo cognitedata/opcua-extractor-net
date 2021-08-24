@@ -312,7 +312,7 @@ namespace Test.Unit
             tester.Client.Browser.ResetVisitedNodes();
         }
         [Fact]
-        public void TestGetNodeChildrenChunking()
+        public void TestGetReferencesChunking()
         {
             CommonTestUtils.ResetMetricValue("opcua_browse_operations");
             var nums = new int[2000];
@@ -367,6 +367,28 @@ namespace Test.Unit
             {
                 tester.Client.Browser.ResetVisitedNodes();
                 tester.Config.Source.BrowseNodesChunk = 100;
+            }
+            Assert.Equal(147, nodes.Count);
+            Assert.Equal(151, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 91));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 31));
+        }
+        [Fact]
+        public async Task TestBrowseThrottling()
+        {
+            // When running alone limiting node parallelism should have the same effect as chunking.
+            CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
+            tester.Client.Browser.ResetVisitedNodes();
+            var (callback, nodes) = UAClientTestFixture.GetCallback();
+            tester.Config.Source.BrowseThrottling = new ContinuationPointThrottlingConfig { MaxNodeParallelism = 2, MaxParallelism = 1 };
+            using var browser = new Cognite.OpcUa.Browser(tester.Client, tester.Config);
+            try
+            {
+                await browser.BrowseNodeHierarchy(tester.Server.Ids.Full.DeepRoot, callback, tester.Source.Token);
+            }
+            finally
+            {
+                tester.Config.Source.BrowseThrottling = null;
             }
             Assert.Equal(147, nodes.Count);
             Assert.Equal(151, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));

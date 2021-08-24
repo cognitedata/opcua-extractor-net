@@ -85,7 +85,6 @@ namespace Cognite.OpcUa
                 if (chunk.Any())
                 {
                     var browseParams = new BrowseParams(baseParams) { Nodes = chunk };
-                    log.Information("Add new chunk: {cnt}, {idx}, {num}", chunk.Count, index, numActiveNodes);
                     chunks.Add(browseParams);
                 }
             } while (chunk.Any());

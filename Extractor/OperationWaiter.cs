@@ -47,8 +47,14 @@ namespace Cognite.OpcUa
 
         public void Dispose()
         {
-            sem.Release(waiting);
-            sem.Dispose();
+            lock (sLock)
+            {
+                if (waiting > 0)
+                {
+                    sem.Release(waiting);
+                }
+                sem.Dispose();
+            }
         }
         public OperationInstance GetInstance()
         {
