@@ -249,4 +249,34 @@ namespace Cognite.OpcUa
             return true;
         }
     }
+    public class BrowseParams
+    {
+        public IEnumerable<BrowseNode> Nodes { get; set; }
+        public NodeId ReferenceTypeId { get; set; } = ReferenceTypeIds.HierarchicalReferences;
+        public uint NodeClassMask { get; set; }
+        public bool IncludeSubTypes { get; set; } = true;
+        public BrowseDirection BrowseDirection { get; set; } = BrowseDirection.Forward;
+        public uint ResultMask { get; set; } =
+            (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName | (uint)BrowseResultMask.IsForward
+            | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition | (uint)BrowseResultMask.BrowseName;
+        public BrowseDescription ToDescription(BrowseNode node)
+        {
+            if (node == null) throw new ArgumentNullException(nameof(node));
+            if (node.ContinuationPoint != null) throw new ArgumentException("Node has already been read");
+            return new BrowseDescription
+            {
+                BrowseDirection = BrowseDirection,
+                NodeClassMask = NodeClassMask,
+                IncludeSubtypes = IncludeSubTypes,
+                NodeId = node.Id,
+                ReferenceTypeId = ReferenceTypeId,
+                ResultMask = ResultMask
+            };
+        }
+    }
+    public class BrowseNode
+    {
+        public NodeId Id { get; }
+        public byte[] ContinuationPoint { get; set; }
+    }
 }

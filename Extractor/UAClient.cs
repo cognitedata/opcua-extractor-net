@@ -63,8 +63,6 @@ namespace Cognite.OpcUa
         public event EventHandler OnServerDisconnect;
         public event EventHandler OnServerReconnect;
 
-        private int pendingOperations;
-
         private static readonly Counter connects = Metrics
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
         private static readonly Gauge connected = Metrics
@@ -412,26 +410,15 @@ namespace Cognite.OpcUa
                     eventArgs.Certificate.Subject, eventArgs.Error.StatusCode);
             }
         }
-        /// <summary>
-        /// Safely increment number of active opcua operations
-        /// </summary>
-        private void IncOperations()
-        {
-            Interlocked.Increment(ref pendingOperations);
-        }
-        /// <summary>
-        /// Safely decrement number of active opcua operations
-        /// </summary>
-        private void DecOperations()
-        {
-            Interlocked.Decrement(ref pendingOperations);
-        }
+
+        private readonly OperationWaiter waiter = new OperationWaiter();
+
         /// <summary>
         /// Wait for all opcua operations to finish
         /// </summary>
-        public async Task WaitForOperations()
+        public async Task WaitForOperations(CancellationToken token)
         {
-            while (pendingOperations > 0) await Task.Delay(100);
+            await waiter.Wait(100_000, token);
         }
 
         /// <summary>
@@ -474,6 +461,7 @@ namespace Cognite.OpcUa
         {
             nodeOverrides.Clear();
         }
+
         /// <summary>
         /// Get all children of the given list of parents as a map from parentId to list of children descriptions
         /// </summary>
@@ -490,7 +478,9 @@ namespace Cognite.OpcUa
             BrowseDirection direction = BrowseDirection.Forward)
         {
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            IncOperations();
+
+            using var operation = waiter.GetInstance();
+
             var tobrowse = new BrowseDescriptionCollection(parents.Select(id =>
                 new BrowseDescription
                 {
@@ -503,11 +493,7 @@ namespace Cognite.OpcUa
                         | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition | (uint)BrowseResultMask.BrowseName
                 }
             ));
-            if (!parents.Any())
-            {
-                DecOperations();
-                return finalResults;
-            }
+            if (!parents.Any()) return finalResults;
             try
             {
                 BrowseResultCollection results;
@@ -590,15 +576,8 @@ namespace Cognite.OpcUa
                 browseFailures.Inc();
                 throw;
             }
-            finally
-            {
-                DecOperations();
-            }
             return finalResults;
         }
-        
-
-        
 
         #endregion
 
@@ -614,7 +593,7 @@ namespace Cognite.OpcUa
         {
             var values = new List<DataValue>();
             if (readValueIds == null || !readValueIds.Any()) return values;
-            IncOperations();
+            using var operation = waiter.GetInstance();
             int total = readValueIds.Count;
             int attrCount = 0;
             try
@@ -645,10 +624,7 @@ namespace Cognite.OpcUa
                 attributeRequestFailures.Inc();
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
-            finally
-            {
-                DecOperations();
-            }
+
             return values;
         }
 
@@ -827,7 +803,7 @@ namespace Cognite.OpcUa
         public IEnumerable<(HistoryReadNode Node, IEncodeable RawData)> DoHistoryRead(HistoryReadParams readParams)
         {
             if (readParams == null) throw new ArgumentNullException(nameof(readParams));
-            IncOperations();
+            using var operation = waiter.GetInstance();
             var ids = new HistoryReadValueIdCollection();
             foreach (var node in readParams.Nodes)
             {
@@ -886,10 +862,6 @@ namespace Cognite.OpcUa
                 historyReadFailures.Inc();
                 throw;
             }
-            finally
-            {
-                DecOperations();
-            }
 
             return result;
         }
@@ -926,7 +898,7 @@ namespace Cognite.OpcUa
                 var hasSubscription = subscription.MonitoredItems.Select(sub => sub.ResolvedNodeId).ToHashSet();
                 int total = nodeList.Count();
 
-                IncOperations();
+                using var operation = waiter.GetInstance();
                 try
                 {
                     foreach (var chunk in nodeList.ChunkBy(config.Source.SubscriptionChunk))
@@ -974,7 +946,6 @@ namespace Cognite.OpcUa
                 }
                 finally
                 {
-                    DecOperations();
                     if (!subscription.Created)
                     {
                         subscription.Dispose();
@@ -1242,7 +1213,7 @@ namespace Cognite.OpcUa
                 subscription.AddItem(item);
                 log.Information("Subscribe to auditing events on the server node");
 
-                IncOperations();
+                using var operation = waiter.GetInstance();
                 try
                 {
                     if (subscription.Created && subscription.MonitoredItemCount == 0)
@@ -1264,10 +1235,6 @@ namespace Cognite.OpcUa
                 {
                     log.Error("Failed to create audit subscription");
                     throw;
-                }
-                finally
-                {
-                    DecOperations();
                 }
             }
         }
@@ -1502,6 +1469,7 @@ namespace Cognite.OpcUa
             }
             reconnectHandler?.Dispose();
             reverseConnectManager?.Dispose();
+            waiter.Dispose();
             if (AppConfig != null)
             {
                 AppConfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;
