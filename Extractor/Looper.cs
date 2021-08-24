@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Prometheus;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -46,6 +47,9 @@ namespace Cognite.OpcUa
         private readonly ManualResetEvent triggerPush = new ManualResetEvent(false);
         private readonly ManualResetEvent triggerStoreState = new ManualResetEvent(false);
         private readonly ManualResetEvent triggerRebrowse = new ManualResetEvent(false);
+
+        private static readonly Counter numPushes = Metrics.CreateCounter("opcua_num_pushes",
+            "Increments by one after each push to destination systems");
 
         public Looper(UAExtractor extractor, FullConfig config, IEnumerable<IPusher> pushers)
         {
@@ -268,6 +272,8 @@ namespace Cognite.OpcUa
                     failingPushers.Add(pusher);
                     passingPushers.Remove(pusher);
                 }
+
+                numPushes.Inc();
 
                 await waitTask;
                 triggerPush.Reset();
