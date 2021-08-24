@@ -416,7 +416,7 @@ namespace Cognite.OpcUa.Config
             var roots = config.Extraction.GetRootNodes(this);
             try
             {
-                await BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token, false);
+                await Browser.BrowseNodeHierarchy(roots, ToolUtil.GetSimpleListWriterCallback(nodeList, this), token, false);
                 nodesRead = true;
             }
             catch (Exception ex)
@@ -436,7 +436,7 @@ namespace Cognite.OpcUa.Config
             log.Information("Mapping out data type hierarchy");
             try
             {
-                BrowseDirectory(
+                Browser.BrowseDirectory(
                     new List<NodeId> { DataTypes.BaseDataType },
                     ToolUtil.GetSimpleListWriterCallback(dataTypes, this),
                     token,
@@ -1184,7 +1184,7 @@ namespace Cognite.OpcUa.Config
             var emitterReferences = new List<UANode>();
             try
             {
-                BrowseDirectory(nodeList.Select(node => node.Id).Append(ObjectIds.Server).ToList(),
+                Browser.BrowseDirectory(nodeList.Select(node => node.Id).Append(ObjectIds.Server).ToList(),
                     ToolUtil.GetSimpleListWriterCallback(emitterReferences, this),
                     token,
                     ReferenceTypeIds.GeneratesEvent, (uint)NodeClass.ObjectType, false);

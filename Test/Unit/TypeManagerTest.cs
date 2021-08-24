@@ -377,7 +377,7 @@ namespace Test.Unit
         [Fact]
         public void TestCollectCustomOnly()
         {
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
             var config = new EventConfig() { Enabled = true, AllEvents = false };
             var collector = new EventFieldCollector(tester.Client, config);
 
@@ -413,7 +413,7 @@ namespace Test.Unit
         [Fact]
         public void TestCollectAllEvents()
         {
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
             var config = new EventConfig { Enabled = true, AllEvents = true };
             var collector = new EventFieldCollector(tester.Client, config);
 
@@ -442,7 +442,7 @@ namespace Test.Unit
         [Fact]
         public void TestIgnoreEvents()
         {
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
             // Audit and conditions/alarms account for most of the event types in the base namespace
             // Also check if we still get child events once the parent is excluded (should this be how it works?)
             var config = new EventConfig { Enabled = true, AllEvents = true, ExcludeEventFilter = "Audit|Condition|Alarm|SystemEventType" };
@@ -458,7 +458,7 @@ namespace Test.Unit
         [Fact]
         public void TestEventExcludeProperties()
         {
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
             var config = new EventConfig { Enabled = true, AllEvents = false, ExcludeProperties = new List<string> { "SubType" } };
             var collector = new EventFieldCollector(tester.Client, config);
 
@@ -475,7 +475,7 @@ namespace Test.Unit
         [Fact]
         public void TestEventWhitelist()
         {
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
             var eventIds = tester.Server.Ids.Event;
             var config = new EventConfig
             {

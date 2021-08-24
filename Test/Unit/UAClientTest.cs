@@ -307,7 +307,7 @@ namespace Test.Unit
             Assert.True(nodes.ContainsKey("WrongRoot"));
             Assert.True(nodes.ContainsKey("BaseRoot"));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 1));
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
         }
         [Fact]
         public void TestGetNodeChildrenChunking()
@@ -329,7 +329,7 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Client.ResetVisitedNodes();
+                tester.Client.Browser.ResetVisitedNodes();
                 tester.Config.Source.BrowseChunk = 1000;
             }
             Assert.All(nums, cnt => Assert.Equal(1, cnt));
@@ -339,29 +339,29 @@ namespace Test.Unit
         public async Task TestBrowseNode()
         {
             CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
-            await tester.Client.BrowseNodeHierarchy(tester.Server.Ids.Full.DeepRoot, callback, tester.Source.Token);
+            await tester.Client.Browser.BrowseNodeHierarchy(tester.Server.Ids.Full.DeepRoot, callback, tester.Source.Token);
             Assert.Equal(147, nodes.Count);
             Assert.Equal(151, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 31));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 31));
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
         }
         [Fact]
         public async Task TestBrowseNodesChunk()
         {
             CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
             tester.Config.Source.BrowseNodesChunk = 2;
             try
             {
-                await tester.Client.BrowseNodeHierarchy(tester.Server.Ids.Full.DeepRoot, callback, tester.Source.Token);
+                await tester.Client.Browser.BrowseNodeHierarchy(tester.Server.Ids.Full.DeepRoot, callback, tester.Source.Token);
             }
             finally
             {
-                tester.Client.ResetVisitedNodes();
+                tester.Client.Browser.ResetVisitedNodes();
                 tester.Config.Source.BrowseNodesChunk = 100;
             }
             Assert.Equal(147, nodes.Count);
@@ -373,10 +373,10 @@ namespace Test.Unit
         public async Task TestBrowseIgnoreName()
         {
             CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
-            tester.Client.IgnoreFilters = new List<NodeFilter>
+            tester.Client.Browser.IgnoreFilters = new List<NodeFilter>
             {
                 new NodeFilter(new RawNodeFilter
                 {
@@ -385,12 +385,12 @@ namespace Test.Unit
             };
             try
             {
-                await tester.Client.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
+                await tester.Client.Browser.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
             }
             finally
             {
-                tester.Client.ResetVisitedNodes();
-                tester.Client.IgnoreFilters = null;
+                tester.Client.Browser.ResetVisitedNodes();
+                tester.Client.Browser.IgnoreFilters = null;
             }
             Assert.False(nodes.ContainsKey(tester.Server.Ids.Full.WideRoot));
             Assert.Equal(152, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
@@ -401,10 +401,10 @@ namespace Test.Unit
         public async Task TestBrowseIgnorePrefix()
         {
             CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
-            tester.Client.IgnoreFilters = new List<NodeFilter>
+            tester.Client.Browser.IgnoreFilters = new List<NodeFilter>
             {
                 new NodeFilter(new RawNodeFilter
                 {
@@ -414,12 +414,12 @@ namespace Test.Unit
 
             try
             {
-                await tester.Client.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
+                await tester.Client.Browser.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
             }
             finally
             {
-                tester.Client.ResetVisitedNodes();
-                tester.Client.IgnoreFilters = null;
+                tester.Client.Browser.ResetVisitedNodes();
+                tester.Client.Browser.IgnoreFilters = null;
             }
             Assert.Equal(2, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 3));
@@ -429,10 +429,10 @@ namespace Test.Unit
         public async Task TestIgnoreVisited()
         {
             CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
-            tester.Client.IgnoreFilters = new List<NodeFilter>
+            tester.Client.Browser.IgnoreFilters = new List<NodeFilter>
             {
                 new NodeFilter(new RawNodeFilter
                 {
@@ -442,11 +442,11 @@ namespace Test.Unit
 
             try
             {
-                await tester.Client.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
+                await tester.Client.Browser.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
             }
             finally
             {
-                tester.Client.IgnoreFilters = null;
+                tester.Client.Browser.IgnoreFilters = null;
             }
             Assert.False(nodes.ContainsKey(tester.Server.Ids.Full.WideRoot));
             Assert.Equal(152, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
@@ -454,26 +454,26 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 32));
 
             nodes.Clear();
-            await tester.Client.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
+            await tester.Client.Browser.BrowseNodeHierarchy(tester.Server.Ids.Full.Root, callback, tester.Source.Token);
             Assert.False(nodes.ContainsKey(tester.Server.Ids.Full.DeepRoot));
             Assert.True(nodes.ContainsKey(tester.Server.Ids.Full.WideRoot));
             Assert.Equal(2001, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 32 + 32 + 1));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 32));
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
         }
         [Fact]
         public async Task TestBrowseTypes()
         {
             CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
-            tester.Client.ResetVisitedNodes();
+            tester.Client.Browser.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
 
             tester.Config.Extraction.NodeTypes.AsNodes = true;
 
             try
             {
-                await tester.Client.BrowseNodeHierarchy(ObjectIds.TypesFolder, callback, tester.Source.Token);
+                await tester.Client.Browser.BrowseNodeHierarchy(ObjectIds.TypesFolder, callback, tester.Source.Token);
             }
             finally
             {
@@ -804,7 +804,7 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Client.ResetVisitedNodes();
+                tester.Client.Browser.ResetVisitedNodes();
                 tester.Config.Events.Enabled = false;
                 tester.Client.ClearEventFields();
             }
@@ -851,7 +851,7 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Client.ResetVisitedNodes();
+                tester.Client.Browser.ResetVisitedNodes();
                 tester.Config.Source.SubscriptionChunk = 1000;
                 tester.Config.Events.Enabled = false;
                 tester.Client.ClearEventFields();
@@ -892,7 +892,7 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Client.ResetVisitedNodes();
+                tester.Client.Browser.ResetVisitedNodes();
                 tester.Config.Source.SubscriptionChunk = 1000;
                 tester.Config.Events.Enabled = false;
                 tester.Config.Events.EventIds = null;

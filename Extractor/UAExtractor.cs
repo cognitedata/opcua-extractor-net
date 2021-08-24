@@ -164,7 +164,7 @@ namespace Cognite.OpcUa
                 client.DataTypeManager.Configure();
                 client.ClearNodeOverrides();
                 client.ClearEventFields();
-                client.ResetVisitedNodes();
+                client.Browser.ResetVisitedNodes();
                 RestartExtractor();
             }
         }
@@ -271,7 +271,7 @@ namespace Cognite.OpcUa
             await historyReader.Terminate(source.Token, 30);
             await uaClient.WaitForOperations();
             ConfigureExtractor();
-            uaClient.ResetVisitedNodes();
+            uaClient.Browser.ResetVisitedNodes();
 
             var synchTasks = await RunMapping(RootNodes, true);
 
@@ -480,7 +480,7 @@ namespace Cognite.OpcUa
                 var handler = new BrowseResultHandler(config, this, uaClient);
                 try
                 {
-                    await uaClient.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, source.Token, ignoreVisited);
+                    await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, source.Token, ignoreVisited);
                 }
                 catch (Exception ex)
                 {
@@ -592,7 +592,7 @@ namespace Cognite.OpcUa
                 log.Debug(trans.ToString());
             }
             
-            uaClient.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
+            uaClient.Browser.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
             Transformations = transformations;
         }
 

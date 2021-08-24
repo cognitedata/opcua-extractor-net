@@ -101,12 +101,12 @@ namespace Test.Utils
             {
                 Client.ClearNodeOverrides();
                 Client.ClearEventFields();
-                Client.ResetVisitedNodes();
+                Client.Browser.ResetVisitedNodes();
                 Client.DataTypeManager.Reset();
                 Client.RemoveSubscription("EventListener");
                 Client.RemoveSubscription("DataChangeListener");
                 Client.RemoveSubscription("AuditListener");
-                Client.IgnoreFilters = null;
+                Client.Browser.IgnoreFilters = null;
             }
             return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
         }

@@ -317,7 +317,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
             }
 
-            await Task.Run(() => uaClient.BrowseDirectory(new List<NodeId> { DataTypeIds.BaseDataType },
+            await Task.Run(() => uaClient.Browser.BrowseDirectory(new List<NodeId> { DataTypeIds.BaseDataType },
                 Callback,
                 token,
                 ReferenceTypeIds.HasSubtype,
