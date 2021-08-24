@@ -2,6 +2,7 @@
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
@@ -375,6 +376,13 @@ namespace Test.Unit
             Assert.Equal("Test1", extractor.GetUniqueId(new NodeId("test")));
             Assert.Equal("Test2", tester.Client.GetUniqueId(new NodeId("test2", 2)));
             Assert.Equal("Test1[0]", extractor.GetUniqueId(new NodeId("test"), 0));
+        }
+        [Fact]
+        public async Task TestNodeSetSource()
+        {
+            using var extractor = tester.BuildExtractor();
+            var source = new NodeSetSource(tester.Config, extractor, tester.Client);
+            Assert.True(false);
         }
     }
 }
