@@ -796,7 +796,7 @@ namespace Test.Unit
 
             CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
 
-            cfg.Throttling = new HistoryThrottlingConfig
+            cfg.Throttling = new ContinuationPointThrottlingConfig
             {
                 MaxNodeParallelism = 1,
             };

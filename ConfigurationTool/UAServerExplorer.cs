@@ -246,8 +246,12 @@ namespace Cognite.OpcUa.Config
                 foreach (var chunk in nextIds.ChunkBy(nodesChunk))
                 {
                     if (token.IsCancellationRequested) return nodes;
-                    var result = GetNodeChildren(chunk, ReferenceTypeIds.HierarchicalReferences,
-                        (uint)NodeClass.Object | (uint)NodeClass.Variable, token);
+                    var result = GetReferences(new BrowseParams
+                    {
+                        NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
+                        Nodes = chunk.Select(node => new BrowseNode(node))
+                    }, token);
+
                     foreach (var res in result)
                     {
                         references[res.Key] = res.Value;
@@ -336,9 +340,11 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     log.Information("Try to get the children of {cnt} nodes", ids.Count);
-                    var children = await ToolUtil.RunWithTimeout(Task.Run(() => GetNodeChildren(ids,
-                        ReferenceTypeIds.HierarchicalReferences,
-                        (uint)NodeClass.Object | (uint)NodeClass.Variable, token)), 30);
+                    var children = await ToolUtil.RunWithTimeout(Task.Run(() => GetReferences(new BrowseParams
+                    {
+                        NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
+                        Nodes = ids.Select(node => new BrowseNode(node))
+                    }, token)), 30);
                     break;
                 }
                 catch (Exception ex)
@@ -375,9 +381,11 @@ namespace Cognite.OpcUa.Config
                 {
                     log.Information("Try to get the children of the {cnt} largest parent nodes, with return chunk size {size}", 
                         toBrowse.Count, chunkSize);
-                    children = await ToolUtil.RunWithTimeout(Task.Run(() => GetNodeChildren(toBrowse.Select(group => group.Key),
-                        ReferenceTypeIds.HierarchicalReferences,
-                        (uint)NodeClass.Object | (uint)NodeClass.Variable, token)), 60);
+                    children = await ToolUtil.RunWithTimeout(Task.Run(() => GetReferences(new BrowseParams
+                    {
+                        NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
+                        Nodes = toBrowse.Select(group => new BrowseNode(group.Key))
+                    }, token)), 60);
                 }
                 catch (Exception ex)
                 {

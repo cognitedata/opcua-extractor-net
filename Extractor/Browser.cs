@@ -9,10 +9,149 @@ using System.Threading.Tasks;
 using System.Threading;
 using Cognite.Extractor.Common;
 using Prometheus;
+using System.Collections.Concurrent;
 
 namespace Cognite.OpcUa
 {
-    public class Browser
+    internal sealed class BrowseScheduler : IDisposable
+    {
+        private readonly TaskThrottler throttler;
+        private readonly BrowseParams baseParams;
+        private int numActiveNodes;
+        private readonly UAClient uaClient;
+        private readonly int chunkSize;
+        private readonly int maxNodeParallelism;
+        private ILogger log = Log.Logger.ForContext(typeof(BrowseScheduler));
+
+        private Dictionary<NodeId, ReferenceDescriptionCollection> results = new Dictionary<NodeId, ReferenceDescriptionCollection>();
+        private object dictLock = new object();
+        public BrowseScheduler(TaskThrottler throttler, BrowseParams baseParams, UAClient client, int nodesChunk, int maxNodeParallelism)
+        {
+            this.throttler = throttler;
+            uaClient = client;
+            chunkSize = nodesChunk;
+            this.maxNodeParallelism = maxNodeParallelism;
+            this.baseParams = baseParams;
+        }
+
+        private readonly BlockingCollection<BrowseParams> finishedReads = new BlockingCollection<BrowseParams>();
+
+        private void BrowseOp(BrowseParams browseParams, CancellationToken token)
+        {
+            if (token.IsCancellationRequested) return;
+            try
+            {
+                var references = uaClient.GetReferences(browseParams, token);
+                int found = 0;
+                lock (dictLock)
+                {
+                    foreach (var kvp in references)
+                    {
+                        found += kvp.Value.Count;
+                        results[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex, "Unexpected failure during browse: {msg}", ex.Message);
+            }
+            finally
+            {
+                finishedReads.Add(browseParams, token);
+            }
+        }
+
+        private IEnumerable<BrowseNode> GetBrowseChunk(List<BrowseNode> nodes, int idx)
+        {
+            if (idx >= nodes.Count) yield break;
+            for (int i = idx; i < nodes.Count; i++)
+            {
+                if (chunkSize > 0 && i - idx + 1 > chunkSize) yield break;
+                if (maxNodeParallelism > 0 && i - idx + numActiveNodes >= maxNodeParallelism) yield break;
+                yield return nodes[i];
+            }
+        }
+
+        private List<BrowseParams> GetNextChunks(List<BrowseNode> nodes, ref int index)
+        {
+            List<BrowseParams> chunks = new List<BrowseParams>();
+            List<BrowseNode> chunk;
+            do
+            {
+                chunk = GetBrowseChunk(nodes, index).ToList();
+                numActiveNodes += chunk.Count;
+                index += chunk.Count;
+                if (chunk.Any())
+                {
+                    var browseParams = new BrowseParams(baseParams) { Nodes = chunk };
+                    log.Information("Add new chunk: {cnt}, {idx}, {num}", chunk.Count, index, numActiveNodes);
+                    chunks.Add(browseParams);
+                }
+            } while (chunk.Any());
+            return chunks;
+        }
+
+
+        public Dictionary<NodeId, ReferenceDescriptionCollection> BrowseLevel(CancellationToken token)
+        {
+            var nodes = baseParams.Nodes.ToList();
+            int index = 0;
+            int totalRead = 0;
+            int toRead = nodes.Count;
+            List<BrowseParams> chunks = GetNextChunks(nodes, ref index);
+
+            while (numActiveNodes > 0 || chunks.Any())
+            {
+                var generators = chunks
+                    .Select<BrowseParams, Func<Task>>(
+                        chunk => () => {
+                            return Task.Run(() => BrowseOp(chunk, token));
+                        })
+                    .ToList();
+                chunks.Clear();
+
+                foreach (var generator in generators)
+                {
+                    throttler.EnqueueTask(generator);
+                }
+                var finished = new List<BrowseParams>();
+                try
+                {
+                    finished.Add(finishedReads.Take(token));
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                while (finishedReads.TryTake(out var finishedRead))
+                {
+                    finished.Add(finishedRead);
+                }
+
+                foreach (var chunk in finished)
+                {
+                    int numRead = chunk.Nodes.Count();
+                    numActiveNodes -= numRead;
+                    totalRead += numRead;
+
+                    log.Debug("Read children for {cnt}/{total} nodes", totalRead, toRead);
+                }
+
+                chunks.AddRange(GetNextChunks(nodes, ref index));
+            }
+            return results;
+        }
+
+        public void Dispose()
+        {
+            finishedReads.Dispose();
+        }
+    }
+
+
+
+    public sealed class Browser : IDisposable
     {
         private static readonly ILogger log = Log.Logger.ForContext(typeof(Browser));
         private readonly UAClient uaClient;
@@ -22,12 +161,24 @@ namespace Cognite.OpcUa
         private static readonly Gauge depth = Metrics
             .CreateGauge("opcua_tree_depth", "Depth of node tree from rootnode");
 
+        private readonly ContinuationPointThrottlingConfig throttling;
+        private readonly TaskThrottler throttler;
+
         public IEnumerable<NodeFilter> IgnoreFilters { get; set; }
 
         public Browser(UAClient client, FullConfig config)
         {
             uaClient = client ?? throw new ArgumentNullException(nameof(client));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
+            if (config.Source.BrowseThrottling == null)
+            {
+                throttling = new ContinuationPointThrottlingConfig { MaxNodeParallelism = 0, MaxParallelism = 0, MaxPerMinute = 0 };
+            }
+            else
+            {
+                throttling = config.Source.BrowseThrottling;
+            }
+            throttler = new TaskThrottler(throttling.MaxParallelism, false, throttling.MaxPerMinute, TimeSpan.FromMinutes(1));
         }
 
 
@@ -117,8 +268,15 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    var children = uaClient.GetNodeChildren(new[] { nodeId }, ReferenceTypeIds.HasTypeDefinition, (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType, token);
-                    var references = children.GetValueOrDefault(nodeId);
+                    var children = uaClient.GetReferences(new BrowseParams
+                    {
+                        NodeClassMask = (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType,
+                        ReferenceTypeId = ReferenceTypeIds.HasTypeDefinition,
+                        IncludeSubTypes = false,
+                        Nodes = new [] { new BrowseNode(nodeId) },
+                        MaxPerNode = 1
+                    }, token);
+                    var references = children[nodeId];
                     if (references?.Any() ?? false)
                     {
                         refd.TypeDefinition = references.First().NodeId;
@@ -133,6 +291,13 @@ namespace Cognite.OpcUa
             refd.ReferenceTypeId = null;
             refd.IsForward = true;
             return refd;
+        }
+
+        
+        public Dictionary<NodeId, ReferenceDescriptionCollection> BrowseLevel(BrowseParams baseParams, CancellationToken token)
+        {
+            using var scheduler = new BrowseScheduler(throttler, baseParams, uaClient, config.Source.BrowseNodesChunk, throttling.MaxNodeParallelism);
+            return scheduler.BrowseLevel(token);
         }
 
         /// <summary>
@@ -160,28 +325,34 @@ namespace Cognite.OpcUa
             int levelCnt = 0;
             int nodeCnt = 0;
             var localVisitedNodes = new HashSet<NodeId>();
+            var baseParams = new BrowseParams
+            {
+                NodeClassMask = nodeClassMask,
+                ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
+                MaxPerNode = (uint)config.Source.BrowseChunk
+            };
+
             foreach (var root in roots)
             {
                 localVisitedNodes.Add(root);
             }
             do
             {
-                var references = new Dictionary<NodeId, ReferenceDescriptionCollection>();
                 var total = nextIds.Count;
                 int count = 0;
                 int countChildren = 0;
-                foreach (var chunk in nextIds.ChunkBy(config.Source.BrowseNodesChunk))
+
+                baseParams.Nodes = nextIds.Select(id => new BrowseNode(id)).ToList();
+
+                var references = BrowseLevel(baseParams, token);
+
+                foreach (var res in references)
                 {
-                    if (token.IsCancellationRequested) return;
-                    var result = uaClient.GetNodeChildren(chunk, referenceTypes, nodeClassMask, token);
-                    foreach (var res in result)
-                    {
-                        references[res.Key] = res.Value;
-                        countChildren += res.Value.Count;
-                    }
-                    count += result.Count;
-                    log.Debug("Read node children {cnt} / {total}. Children: {childcnt}", count, total, countChildren);
+                    countChildren += res.Value.Count;
                 }
+                count += references.Count;
+
+                log.Information("Found {cnt} children of {cnt2} nodes", countChildren, count);
 
                 nextIds.Clear();
                 levelCnt++;
@@ -248,6 +419,11 @@ namespace Cognite.OpcUa
             if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, uaClient.NamespaceTable, nc))) return false;
             return true;
         }
+
+        public void Dispose()
+        {
+            throttler.Dispose();
+        }
     }
     public class BrowseParams
     {
@@ -256,6 +432,7 @@ namespace Cognite.OpcUa
         public uint NodeClassMask { get; set; }
         public bool IncludeSubTypes { get; set; } = true;
         public BrowseDirection BrowseDirection { get; set; } = BrowseDirection.Forward;
+        public uint MaxPerNode { get; set; }
         public uint ResultMask { get; set; } =
             (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName | (uint)BrowseResultMask.IsForward
             | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition | (uint)BrowseResultMask.BrowseName;
@@ -273,9 +450,25 @@ namespace Cognite.OpcUa
                 ResultMask = ResultMask
             };
         }
+
+        public BrowseParams() { }
+        public BrowseParams(BrowseParams other)
+        {
+            if (other == null) return;
+            ReferenceTypeId = other.ReferenceTypeId;
+            NodeClassMask = other.NodeClassMask;
+            IncludeSubTypes = other.IncludeSubTypes;
+            BrowseDirection = other.BrowseDirection;
+            MaxPerNode = other.MaxPerNode;
+            ResultMask = other.ResultMask;
+        }
     }
     public class BrowseNode
     {
+        public BrowseNode(NodeId id)
+        {
+            Id = id;
+        }
         public NodeId Id { get; }
         public byte[] ContinuationPoint { get; set; }
     }

@@ -290,8 +290,10 @@ namespace Test.Unit
         public void TestGetRoots()
         {
             CommonTestUtils.ResetMetricValue("opcua_browse_operations");
-            var childrenDict = tester.Client.GetNodeChildren(new[] { ObjectIds.ObjectsFolder }, ReferenceTypeIds.HierarchicalReferences,
-                0, tester.Source.Token);
+            var childrenDict = tester.Client.GetReferences(new BrowseParams
+            {
+                Nodes = new[] { new BrowseNode(ObjectIds.ObjectsFolder) }
+            }, tester.Source.Token);
             var children = childrenDict[ObjectIds.ObjectsFolder];
             Assert.Equal(8, children.Count);
 
@@ -313,12 +315,15 @@ namespace Test.Unit
         public void TestGetNodeChildrenChunking()
         {
             CommonTestUtils.ResetMetricValue("opcua_browse_operations");
-            tester.Config.Source.BrowseChunk = 100;
             var nums = new int[2000];
             try
             {
-                var childrenDict = tester.Client.GetNodeChildren(new[] { tester.Server.Ids.Full.WideRoot }, ReferenceTypeIds.HierarchicalReferences,
-                    0, tester.Source.Token);
+                var childrenDict = tester.Client.GetReferences(new BrowseParams
+                {
+                    Nodes = new[] { new BrowseNode(tester.Server.Ids.Full.WideRoot) },
+                    MaxPerNode = 100
+                }, tester.Source.Token);
+
                 var children = childrenDict[tester.Server.Ids.Full.WideRoot];
                 Assert.Equal(2000, children.Count);
                 var suffixNums = children.Select(child => int.Parse(Regex.Match(child.DisplayName.Text, @"\d+$").Value, CultureInfo.InvariantCulture));
@@ -330,7 +335,6 @@ namespace Test.Unit
             finally
             {
                 tester.Client.Browser.ResetVisitedNodes();
-                tester.Config.Source.BrowseChunk = 1000;
             }
             Assert.All(nums, cnt => Assert.Equal(1, cnt));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 20));

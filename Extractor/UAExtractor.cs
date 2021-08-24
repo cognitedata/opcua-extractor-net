@@ -269,7 +269,7 @@ namespace Cognite.OpcUa
             extraNodesToBrowse.Clear();
             Started = false;
             await historyReader.Terminate(source.Token, 30);
-            await uaClient.WaitForOperations();
+            await uaClient.WaitForOperations(source.Token);
             ConfigureExtractor();
             uaClient.Browser.ResetVisitedNodes();
 
@@ -326,7 +326,7 @@ namespace Cognite.OpcUa
                     "",
                     "");
             }
-            uaClient.WaitForOperations().Wait(10000);
+            uaClient.WaitForOperations(source.Token).Wait();
             log.Information("Extractor closed");
         }
 

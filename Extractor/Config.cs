@@ -58,6 +58,7 @@ namespace Cognite.OpcUa
         public X509CertConfig X509Certificate { get; set; }
         public string ReverseConnectUrl { get; set; }
         public bool IgnoreCertificateIssues { get; set; }
+        public ContinuationPointThrottlingConfig BrowseThrottling { get; set; }
     }
     public enum X509CertificateLocation
     {
@@ -373,14 +374,14 @@ namespace Cognite.OpcUa
         public int Granularity { get; set; } = 600;
         public bool IgnoreContinuationPoints { get; set; }
         public int RestartPeriod { get; set; }
-        public HistoryThrottlingConfig Throttling { get; set; }
+        public ContinuationPointThrottlingConfig Throttling { get; set; }
     }
     public class UAThrottlingConfig
     {
         public int MaxPerMinute { get; set; }
         public int MaxParallelism { get; set; }
     }
-    public class HistoryThrottlingConfig : UAThrottlingConfig
+    public class ContinuationPointThrottlingConfig : UAThrottlingConfig
     {
         public int MaxNodeParallelism { get; set; }
     }

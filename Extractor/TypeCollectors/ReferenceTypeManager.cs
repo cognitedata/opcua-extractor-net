@@ -95,12 +95,16 @@ namespace Cognite.OpcUa.TypeCollectors
             // We only care about references to objects or variables, at least for now.
             // Only references between objects represented in the extracted hierarchy are relevant.
             log.Information("Get extra references from the server for {cnt} nodes", nodeMap.Count);
-            var references = await Task.Run(() => uaClient.GetNodeChildren(
-                nodeMap.Keys,
-                referenceTypes,
-                (uint)NodeClass.Object | (uint)NodeClass.Variable,
-                token,
-                BrowseDirection.Both));
+
+            var baseParams = new BrowseParams
+            {
+                BrowseDirection = BrowseDirection.Both,
+                NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
+                ReferenceTypeId = referenceTypes,
+                Nodes = nodeMap.Keys.Select(node => new BrowseNode(node))
+            };
+
+            var references = await Task.Run(() => uaClient.Browser.BrowseLevel(baseParams, token));
 
             var results = new List<UAReference>();
 

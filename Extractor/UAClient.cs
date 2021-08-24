@@ -462,121 +462,107 @@ namespace Cognite.OpcUa
             nodeOverrides.Clear();
         }
 
-        /// <summary>
-        /// Get all children of the given list of parents as a map from parentId to list of children descriptions
-        /// </summary>
-        /// <param name="parents">List of parents to browse</param>
-        /// <param name="referenceTypes">Referencetype to browse, defaults to HierarchicalReferences</param>
-        /// <param name="nodeClassMask">Mask for node classes, as specified in the OPC-UA specification</param>
-        /// <param name="direction">BrowseDirection, default forward</param>
-        /// <returns>Dictionary from parent nodeId to collection of children as ReferenceDescriptions</returns>
-        public Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(
-            IEnumerable<NodeId> parents,
-            NodeId referenceTypes,
-            uint nodeClassMask,
-            CancellationToken token,
-            BrowseDirection direction = BrowseDirection.Forward)
+        public Dictionary<NodeId, ReferenceDescriptionCollection> GetReferences(BrowseParams browseParams, CancellationToken token)
         {
-            var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
+            if (browseParams == null) throw new ArgumentNullException(nameof(browseParams));
+            var toBrowse = new List<BrowseNode>();
+            var toBrowseNext = new List<BrowseNode>();
+            foreach (var node in browseParams.Nodes)
+            {
+                if (node.ContinuationPoint == null) toBrowse.Add(node);
+                else toBrowseNext.Add(node);
+            }
+
+            var intResults = new List<(BrowseNode node, Opc.Ua.BrowseResult result)>();
 
             using var operation = waiter.GetInstance();
 
-            var tobrowse = new BrowseDescriptionCollection(parents.Select(id =>
-                new BrowseDescription
-                {
-                    NodeId = id,
-                    ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
-                    IncludeSubtypes = true,
-                    NodeClassMask = nodeClassMask,
-                    BrowseDirection = direction,
-                    ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName | (uint)BrowseResultMask.IsForward
-                        | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition | (uint)BrowseResultMask.BrowseName
-                }
-            ));
-            if (!parents.Any()) return finalResults;
-            try
+            if (toBrowse.Any())
             {
+                var descriptions = new BrowseDescriptionCollection(toBrowse.Select(node => browseParams.ToDescription(node)));
                 BrowseResultCollection results;
-                DiagnosticInfoCollection diagnostics;
                 try
                 {
                     Session.Browse(
                         null,
                         null,
-                        (uint)config.Source.BrowseChunk,
-                        tobrowse,
+                        browseParams.MaxPerNode,
+                        descriptions,
                         out results,
-                        out diagnostics
+                        out var _
                     );
+                    numBrowse.Inc();
                 }
                 catch (ServiceResultException ex)
                 {
+                    browseFailures.Inc();
                     throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.Browse);
                 }
+                if (toBrowse.Count != results.Count) throw
+                        new FatalException($"Incorrect number of results from browse service. Got {results.Count}, expected {toBrowse.Count}. " +
+                        "This is illegal behavior, and caused by a bug in the server.");
 
-                var indexMap = new NodeId[parents.Count()];
-                var continuationPoints = new ByteStringCollection();
-                int index = 0;
-                int bindex = 0;
-                foreach (var result in results)
+                for (int i = 0; i < toBrowse.Count; i++)
                 {
-                    if (StatusCode.IsBad(result.StatusCode))
-                    {
-                        throw new ServiceResultException(result.StatusCode);
-                    }
-                    var nodeId = parents.ElementAt(bindex++);
-                    log.Verbose("GetNodeChildren Browse result {nodeId}: {cnt}", nodeId, result.References.Count);
-                    finalResults[nodeId] = result.References;
-                    if (result.ContinuationPoint != null)
-                    {
-                        indexMap[index++] = nodeId;
-                        continuationPoints.Add(result.ContinuationPoint);
-                    }
+                    var result = results[i];
+                    var node = toBrowse[i];
+                    if (StatusCode.IsBad(result.StatusCode)) throw new ServiceResultException(result.StatusCode);
+
+                    intResults.Add((node, result));
+                    node.ContinuationPoint = result.ContinuationPoint;
+                    if (node.ContinuationPoint != null) toBrowseNext.Add(node);
                 }
-                numBrowse.Inc();
-                while (continuationPoints.Any() && !token.IsCancellationRequested)
+            }
+
+            while (toBrowseNext.Any())
+            {
+                var cps = new ByteStringCollection(toBrowseNext.Select(node => node.ContinuationPoint));
+                var ids = toBrowseNext;
+                toBrowseNext = new List<BrowseNode>();
+                BrowseResultCollection results;
+                try
                 {
-                    try
-                    {
-                        Session.BrowseNext(
-                            null,
-                            false,
-                            continuationPoints,
-                            out results,
-                            out diagnostics
-                        );
-                    }
-                    catch (ServiceResultException ex)
-                    {
-                        throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
-                    }
-
-                    int nindex = 0;
-                    int pindex = 0;
-                    continuationPoints.Clear();
-                    foreach (var result in results)
-                    {
-                        if (StatusCode.IsBad(result.StatusCode))
-                        {
-                            throw new ServiceResultException(result.StatusCode);
-                        }
-                        var nodeId = indexMap[pindex++];
-                        log.Verbose("GetNodeChildren BrowseNext result {nodeId}", nodeId);
-                        finalResults[nodeId].AddRange(result.References);
-                        if (result.ContinuationPoint == null) continue;
-                        indexMap[nindex++] = nodeId;
-                        continuationPoints.Add(result.ContinuationPoint);
-                    }
-
+                    Session.BrowseNext(
+                        null,
+                        token.IsCancellationRequested,
+                        cps,
+                        out results,
+                        out var _);
                     numBrowse.Inc();
                 }
+                catch (ServiceResultException ex)
+                {
+                    browseFailures.Inc();
+                    throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
+                }
+                if (ids.Count != results.Count) throw
+                        new FatalException($"Incorrect number of results from browseNext service. Got {results.Count}, expected {toBrowseNext.Count}. " +
+                        "This is illegal behavior, and caused by a bug in the server.");
+
+                for (int i = 0; i < ids.Count; i++)
+                {
+                    var result = results[i];
+                    var node = ids[i];
+                    if (StatusCode.IsBad(result.StatusCode)) throw new ServiceResultException(result.StatusCode);
+                    intResults.Add((node, result));
+                    node.ContinuationPoint = result.ContinuationPoint;
+                    if (node.ContinuationPoint != null) toBrowseNext.Add(node);
+                }
             }
-            catch
+
+            var finalResult = new Dictionary<NodeId, ReferenceDescriptionCollection>();
+            foreach (var pair in intResults)
             {
-                browseFailures.Inc();
-                throw;
+                if (!finalResult.TryGetValue(pair.node.Id, out var references))
+                {
+                    finalResult[pair.node.Id] = references = pair.result.References;
+                }
+                else
+                {
+                    references.AddRange(pair.result.References);
+                }
             }
-            return finalResults;
+            return finalResult;
         }
 
         #endregion
