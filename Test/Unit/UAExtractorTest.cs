@@ -382,6 +382,9 @@ namespace Test.Unit
         {
             using var extractor = tester.BuildExtractor();
             var source = new NodeSetSource(tester.Config, extractor, tester.Client);
+            tester.Config.Extraction.NodeTypes.AsNodes = true;
+            source.BuildNodes(new[] { ObjectIds.ObjectsFolder });
+
             Assert.True(false);
         }
     }
