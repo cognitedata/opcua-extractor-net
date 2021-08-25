@@ -12,6 +12,8 @@ using System.Xml;
 using Newtonsoft.Json;
 using System.IO;
 using System.Collections.ObjectModel;
+using System.Text.Json;
+using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Test.Unit
 {
@@ -107,13 +109,74 @@ namespace Test.Unit
                 "   <test2 key3='val3' key4='val4'>Content</test2>" +
                 "</test1>");
             var xmlJson = converter.ConvertToString(xml.DocumentElement, null, null, true);
-            Console.WriteLine(xmlJson);
             Assert.Equal(@"{""test1"":{""@key1"":""val1"",""@key2"":""val2"",""test2"":"
                 + @"{""@key3"":""val3"",""@key4"":""val4"",""#text"":""Content""}}}", xmlJson);
 #pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
             var m1 = new Matrix(new int[3, 3] { { 1, 2, 3 }, { 4, 5, 6 }, { 7, 8, 9 } }, BuiltInType.Int32);
 #pragma warning restore CA1814 // Prefer jagged arrays over multidimensional
             Assert.Equal("[[1,2,3],[4,5,6],[7,8,9]]", converter.ConvertToString(new Variant(m1), null, null, true));
+
+            Assert.Equal(@"""Anonymous""", converter.ConvertToString(new Variant(UserTokenType.Anonymous), null, null, true));
+            Assert.Equal(@"""bcabfe0c-1fe6-42c4-8dad-2d72e50e2dbd""", converter.ConvertToString(new Guid("bcabfe0c-1fe6-42c4-8dad-2d72e50e2dbd"), null, null, true));
+            Assert.Equal(@"""Good""", converter.ConvertToString(new Variant(StatusCodes.Good, new TypeInfo(BuiltInType.StatusCode, -1)), null, null, true));
+
+        }
+        [Fact]
+        public void TestConvertToStringJsonIssues()
+        {
+            // The OPC-UA JsonEncoder can be a bit unreliable, this is a brute-force way to check that it behaves properly
+            // for all types, or they are handled externally.
+            var converter = new StringConverter(tester.Client, tester.Config);
+            var failedTypes = new List<Type>();
+            void TestJsonEncoder(Type type, Variant variant)
+            {
+                var builder = new StringBuilder("{");
+                builder.Append(@"""value"":");
+                try
+                {
+                    builder.Append(converter.ConvertToString(variant, null, null, true));
+                }
+                catch
+                {
+                    Console.WriteLine("Type: " + type + ", could not be serialized");
+                    throw;
+                }
+                builder.Append('}');
+
+                try
+                {
+                    JsonDocument.Parse(builder.ToString());
+                }
+                catch
+                {
+                    Console.WriteLine($"Type {type} produced invalid JSON: " + builder.ToString());
+                    failedTypes.Add(type);
+                }
+            }
+
+            foreach (var type in typeof(EnumValueType).Assembly.GetTypes())
+            {
+                if (type.IsAbstract || type.IsInterface) continue;
+                Variant variant;
+                // If we can't create it, we don't care
+                try
+                {
+                    var obj = Activator.CreateInstance(type);
+                    variant = new Variant(obj);
+                }
+                catch
+                {
+                    // None of the encodable types are unassignable, keeping this here just in case
+                    if (typeof(IEncodeable).IsAssignableFrom(type))
+                    {
+                        throw;
+                    }
+                    continue;
+                }
+                TestJsonEncoder(type, variant);
+            }
+
+            Assert.Empty(failedTypes);
         }
         [Fact]
         public void TestNodeIdSerialization()
