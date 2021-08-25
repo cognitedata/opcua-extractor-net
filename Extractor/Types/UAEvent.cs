@@ -24,6 +24,7 @@ using Newtonsoft.Json;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -40,14 +41,17 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Message sent with the original event.
         /// </summary>
+        [MaybeNull, AllowNull]
         public string Message { get; set; }
         /// <summary>
         /// Transformed ID of the event. The Raw id is a byte-string. This is the byte-string transformed into Base64 and prepended the globalprefix.
         /// </summary>
+        [MaybeNull]
         public string EventId { get; set; } // Base64
         /// <summary>
         /// NodeId of the SourceNode
         /// </summary>
+        [MaybeNull]
         public NodeId SourceNode { get; set; }
         /// <summary>
         /// Time this event triggered.
@@ -56,14 +60,17 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// NodeId of the eventType of this event.
         /// </summary>
+        [MaybeNull]
         public NodeId EventType { get; set; }
         /// <summary>
         /// Metadata fields
         /// </summary>
+        [MaybeNull]
         public Dictionary<string, string> MetaData { get; set; }
         /// <summary>
         /// Id of the node that emitted the event in opc-ua
         /// </summary>
+        [MaybeNull]
         public NodeId EmittingNode { get; set; }
 
         public override string ToString()
@@ -97,14 +104,15 @@ namespace Cognite.OpcUa.Types
         {
             MetaData = GetMetadata(converter, values);
         }
-        private static Dictionary<string, string> GetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values)
+        [return: NotNullIfNotNull("values")]
+        private static Dictionary<string, string>? GetMetadata(StringConverter converter, IEnumerable<EventFieldValue> values)
         {
             if (values == null) return null;
             var parents = new Dictionary<string, EventFieldNode>();
             foreach (var field in values)
             {
                 IDictionary<string, EventFieldNode> next = parents;
-                EventFieldNode current = null;
+                EventFieldNode? current = null;
                 for (int i = 0; i < field.Field.BrowsePath.Count; i++)
                 {
                     if (!next.TryGetValue(field.Field.BrowsePath[i].Name, out current))
@@ -177,6 +185,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="stream">Stream to read from</param>
         /// <param name="extractor">Extractor to use for nodeId conversions</param>
         /// <returns>Converted event</returns>
+        [return: MaybeNull]
         public static UAEvent FromStream(Stream stream, UAExtractor extractor)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
@@ -271,13 +280,11 @@ namespace Cognite.OpcUa.Types
         /// <param name="parentIdMap">Map from parent NodeIds to externalIds</param>
         /// <returns>Converted event or null</returns>
         public StatelessEventCreate ToStatelessCDFEvent(
-            IUAClientAccess client,
+            [DisallowNull] IUAClientAccess client,
             long? dataSetId,
             IDictionary<NodeId, string> parentIdMap)
         {
-            if (client == null) return null;
-
-            string sourceId = null;
+            string? sourceId = null;
             if (SourceNode != null && !SourceNode.IsNullNodeId)
             {
                 if (parentIdMap != null && parentIdMap.TryGetValue(SourceNode, out var parentId))
@@ -308,11 +315,10 @@ namespace Cognite.OpcUa.Types
         /// <param name="nodeToAssetIds">Map from parent NodeIds to internalIds</param>
         /// <returns>Converted event or null</returns>
         public EventCreate ToCDFEvent(
-            IUAClientAccess client,
+            [DisallowNull] IUAClientAccess client,
             long? dataSetId,
             IDictionary<NodeId, long> nodeToAssetIds)
         {
-            if (client == null) return null;
             var evt = new EventCreate();
 
             if (nodeToAssetIds != null

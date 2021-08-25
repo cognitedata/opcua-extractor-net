@@ -57,7 +57,7 @@ namespace Cognite.OpcUa.Types
         }
         public override string ToString()
         {
-            string refName = Type.GetName(!IsForward);
+            string? refName = Type.GetName(!IsForward);
             if (refName == null)
             {
                 refName = $"{Type.Id} {(IsForward ? "Forward" : "Inverse")}";
@@ -65,7 +65,7 @@ namespace Cognite.OpcUa.Types
 
             return $"Reference: {Source} {refName} {Target}";
         }
-        public string GetName()
+        public string? GetName()
         {
             return Type.GetName(!IsForward);
         }

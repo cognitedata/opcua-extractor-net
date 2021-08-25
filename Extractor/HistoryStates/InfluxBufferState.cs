@@ -19,6 +19,7 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Opc.Ua;
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Cognite.OpcUa.HistoryStates
 {
@@ -34,9 +35,8 @@ namespace Cognite.OpcUa.HistoryStates
         public InfluxBufferType Type { get; set; }
         public NodeId SourceId { get; }
 
-        public InfluxBufferState(BaseExtractionState other) : base(other?.Id)
+        public InfluxBufferState([DisallowNull] BaseExtractionState other) : base(other.Id)
         {
-            if (other == null) throw new ArgumentNullException(nameof(other));
             DestinationExtractedRange = TimeRange.Empty;
             if (other is EventExtractionState eState)
             {
@@ -52,6 +52,10 @@ namespace Cognite.OpcUa.HistoryStates
             {
                 Type = iState.Type;
                 SourceId = iState.SourceId;
+            }
+            else
+            {
+                throw new ArgumentException($"Illegal type: {other.GetType()}");
             }
         }
         /// <summary>

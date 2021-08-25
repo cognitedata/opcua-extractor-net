@@ -32,6 +32,7 @@ using Prometheus;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -47,7 +48,7 @@ namespace Cognite.OpcUa.Pushers
         public bool NoInit { get; set; }
         public List<UANode> PendingNodes { get; } = new List<UANode>();
         public List<UAReference> PendingReferences { get; } = new List<UAReference>();
-        public UAExtractor Extractor { get; set; }
+        public UAExtractor? Extractor { get; set; }
         public IPusherConfig BaseConfig => config;
         private readonly MqttPusherConfig config;
         private readonly IMqttClient client;
@@ -249,9 +250,6 @@ namespace Cognite.OpcUa.Pushers
             CancellationToken token)
         {
             if (!client.IsConnected) return false;
-            if (variables == null) throw new ArgumentNullException(nameof(variables));
-            if (objects == null) throw new ArgumentNullException(nameof(objects));
-            if (update == null) throw new ArgumentNullException(nameof(update));
 
             if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
@@ -506,7 +504,7 @@ namespace Cognite.OpcUa.Pushers
                         new NumericDatapoint
                         {
                             Timestamp = new DateTimeOffset(ipoint.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = ipoint.DoubleValue.Value
+                            Value = ipoint.DoubleValue ?? 0.0
                         }));
                 }
 
@@ -549,7 +547,8 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True on success, false on failure.</returns>
         private async Task<bool> PushAssets(IEnumerable<UANode> objects, TypeUpdateConfig update, CancellationToken token)
         {
-            bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+            bool useRawStore = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
 
             if (useRawStore)
@@ -557,7 +556,9 @@ namespace Cognite.OpcUa.Pushers
                 var jsonAssets = ConvertNodesJson(objects, ConverterType.Node);
                 var rawObj = new RawRequestWrapper<JsonElement>
                 {
+#pragma warning disable CS8602 // Dereference of a possibly null reference. Warning is incorrect here.
                     Database = config.RawMetadata.Database,
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
                     Table = config.RawMetadata.AssetsTable,
                     Rows = jsonAssets.Select(pair => new RawRowCreateDto<JsonElement> { Key = pair.id, Columns = pair.node })
                 };
@@ -605,6 +606,11 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
+        private enum ResourceType
+        {
+            Assets, Timeseries, Relationships
+        }
+
         /// <summary>
         /// Convert nodes to assets, setting fields that should not be updated to null.
         /// </summary>
@@ -637,6 +643,7 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>List of assets to create</returns>
         private IEnumerable<(string id, JsonElement node)> ConvertNodesJson(IEnumerable<UANode> nodes, ConverterType type)
         {
+            if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
             foreach (var node in nodes)
             {
                 var create = node.ToJson(Extractor.StringConverter, type);

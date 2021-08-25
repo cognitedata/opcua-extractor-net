@@ -22,6 +22,7 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -38,6 +39,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Data type of this variable
         /// </summary>
+        [NotNull, AllowNull]
         public UADataType DataType => VariableAttributes.DataType;
         /// <summary>
         /// True if the opcua node stores its own history
@@ -97,7 +99,7 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
-                var meta = BuildMetadata(null, null, new StringConverter(null, null), false);
+                var meta = BuildMetadataBase(null, new StringConverter(null, null));
                 builder.Append("Properties: {\n");
                 foreach (var prop in meta)
                 {
@@ -110,15 +112,17 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Parent if this represents an element of an array.
         /// </summary>
+        [MaybeNull]
         public UAVariable ArrayParent { get; }
         /// <summary>
         /// Children if this represents the parent in an array
         /// </summary>
+        [MaybeNull]
         public IEnumerable<UAVariable> ArrayChildren { get; private set; }
         /// <summary>
         /// Fixed dimensions of the array-type variable, if any
         /// </summary>
-        public int[] ArrayDimensions => VariableAttributes.ArrayDimensions;
+        public int[]? ArrayDimensions => VariableAttributes.ArrayDimensions;
         /// <summary>
         /// Index of the variable in array, if relevant. -1 if the variable is scalar.
         /// </summary>
@@ -134,6 +138,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// True if this node represents an array
         /// </summary>
+        [MemberNotNullWhen(true, nameof(ArrayDimensions))]
         public bool IsArray => ArrayDimensions != null && ArrayDimensions.Length == 1 && ArrayDimensions[0] > 0;
         /// <summary>
         /// Sets the datapoint to provided DataValue.
@@ -219,10 +224,10 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Create a stateless timeseries, setting the AssetExternalId property, from this variable.
         /// </summary>
-        /// <param name="extractor">Active extractor, used for metadata.</param>
         /// <param name="dataSetId">Optional dataSetId</param>
         /// <param name="metaMap">Configured mapping from property name to timeseries attribute</param>
         /// <returns>Stateless timeseries to create or null.</returns>
+        [return: MaybeNull]
         public StatelessTimeSeriesCreate ToStatelessTimeSeries(
             ExtractionConfig config,
             IUAClientAccess client,

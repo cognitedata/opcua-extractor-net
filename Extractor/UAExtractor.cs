@@ -29,6 +29,7 @@ using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -101,7 +102,7 @@ namespace Cognite.OpcUa
         public UAExtractor(FullConfig config,
             IEnumerable<IPusher> pushers,
             UAClient uaClient,
-            IExtractionStateStore stateStore,
+            [AllowNull] IExtractionStateStore stateStore,
             CancellationToken token)
         {
             this.pushers = pushers ?? throw new ArgumentNullException(nameof(pushers));

@@ -19,6 +19,7 @@ using Opc.Ua;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Cognite.OpcUa.Types
 {
@@ -29,12 +30,15 @@ namespace Cognite.OpcUa.Types
     /// </summary>
     public class NodeAttributes
     {
-        public string Description { get; set; }
+        [MaybeNull, AllowNull]
+        public string? Description { get; set; }
         public byte EventNotifier { get; set; }
-        public UANodeType NodeType { get; set; }
+        [MaybeNull, AllowNull]
+        public UANodeType? NodeType { get; set; }
         public bool IsProperty { get; set; }
         public bool Ignore { get; set; }
-        public IList<UANode> Properties { get; set; }
+        [MaybeNull, AllowNull]
+        public IList<UANode>? Properties { get; set; }
         public NodeClass NodeClass { get; }
         public bool PropertiesRead { get; set; }
         public bool DataRead { get; set; }
@@ -97,7 +101,7 @@ namespace Cognite.OpcUa.Types
         {
             if (values == null) throw new ArgumentNullException(nameof(values));
             if (config == null) throw new ArgumentNullException(nameof(config));
-            Description = values[idx++].GetValue<LocalizedText>(null)?.Text;
+            Description = values[idx++].GetValue<LocalizedText?>(null)?.Text;
             if ((NodeClass == NodeClass.Object || NodeClass == NodeClass.Variable) && config.Events.Enabled && config.Events.DiscoverEmitters)
             {
                 EventNotifier = values[idx++].GetValue(EventNotifiers.None);
@@ -118,9 +122,10 @@ namespace Cognite.OpcUa.Types
     public class VariableAttributes : NodeAttributes
     {
         public bool Historizing { get; set; }
+        [NotNull, AllowNull]
         public UADataType DataType { get; set; }
         public int ValueRank { get; set; }
-        public int[] ArrayDimensions { get; set; }
+        public int[]? ArrayDimensions { get; set; }
         public byte AccessLevel { get; set; }
         public bool ReadHistory { get; set; }
         public VariableAttributes(NodeClass nc) : base(nc) { }
@@ -137,7 +142,7 @@ namespace Cognite.OpcUa.Types
             if (values == null) throw new ArgumentNullException(nameof(values));
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (config == null) throw new ArgumentNullException(nameof(config));
-            Description = values[idx++].GetValue<LocalizedText>(null)?.Text;
+            Description = values[idx++].GetValue<LocalizedText?>(null)?.Text;
             if (NodeClass == NodeClass.Variable)
             {
                 if (config.History.Enabled)

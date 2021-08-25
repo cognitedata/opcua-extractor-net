@@ -20,6 +20,7 @@ using Opc.Ua;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace Cognite.OpcUa
@@ -60,6 +61,24 @@ namespace Cognite.OpcUa
 
             return (objects, timeseries);
         }
+        /// <summary>
+        /// Select elements from <typeparamref name="R"/> to <typeparamref name="T"/>,
+        /// returning only when the result is not null.
+        /// </summary>
+        /// <typeparam name="R">Source type</typeparam>
+        /// <typeparam name="T">Target type</typeparam>
+        /// <param name="enumerable">Source enumerable</param>
+        /// <param name="map">Mapping function</param>
+        /// <returns>Enumerable with non-null elements</returns>
+        public static IEnumerable<T> SelectNonNull<R, T>(this IEnumerable<R> enumerable, Func<R, T?> map) where T : class
+        {
+            foreach (var item in enumerable)
+            {
+                var result = map(item);
+                if (result == null) continue;
+                yield return result;
+            }
+        }
 
         public enum SourceOp
         {
@@ -73,6 +92,7 @@ namespace Cognite.OpcUa
         /// <typeparam name="T">Type of exception to find</typeparam>
         /// <param name="aex">AggregateException to look through</param>
         /// <returns>Null or a root exception</returns>
+        [return: MaybeNull]
         public static T GetRootExceptionOfType<T>(AggregateException aex) where T : Exception
         {
             if (aex == null) throw new ArgumentNullException(nameof(aex));
@@ -93,10 +113,14 @@ namespace Cognite.OpcUa
         /// <param name="e">Exception to log</param>
         /// <param name="message">Message to give with normal exceptions</param>
         /// <param name="silentMessage">Message to give with silent exceptions</param>
-        public static void LogException(ILogger log, Exception e, string message, string silentMessage)
+        public static void LogException(ILogger log, [AllowNull] Exception e, string message, string silentMessage)
         {
             if (log == null) throw new ArgumentNullException(nameof(log));
-            if (e is AggregateException aex)
+            if (e == null)
+            {
+                log.Error(message);
+            }
+            else if (e is AggregateException aex)
             {
                 var silent = GetRootExceptionOfType<SilentServiceException>(aex);
                 if (silent != null)

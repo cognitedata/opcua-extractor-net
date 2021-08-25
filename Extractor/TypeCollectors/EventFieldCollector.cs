@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -78,6 +79,7 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly Dictionary<NodeId, UAEventType> types = new Dictionary<NodeId, UAEventType>();
         private readonly Dictionary<NodeId, ChildNode> nodes = new Dictionary<NodeId, ChildNode>();
         private readonly EventConfig config;
+        [MaybeNull]
         private readonly Regex ignoreFilter;
         private HashSet<string> excludeProperties;
         private HashSet<string> baseExcludeProperties;
@@ -105,11 +107,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// <returns>The collected fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).</returns>
         public Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token)
         {
-            types[ObjectTypeIds.BaseEventType] = new UAEventType
-            {
-                Id = ObjectTypeIds.BaseEventType,
-                DisplayName = "BaseEventType"
-            };
+            types[ObjectTypeIds.BaseEventType] = new UAEventType(ObjectTypeIds.BaseEventType, "BaseEventType");
 
             uaClient.BrowseDirectory(
                 new List<NodeId> { ObjectTypeIds.BaseEventType },
@@ -123,7 +121,7 @@ namespace Cognite.OpcUa.TypeCollectors
 
             var result = new Dictionary<NodeId, HashSet<EventField>>();
 
-            HashSet<NodeId> whitelist = null;
+            HashSet<NodeId>? whitelist = null;
             if (config.EventIds != null && config.EventIds.Any())
             {
                 whitelist = new HashSet<NodeId>(config.EventIds.Select(proto => proto.ToNodeId(uaClient, ObjectTypeIds.BaseEventType)));
@@ -156,11 +154,9 @@ namespace Cognite.OpcUa.TypeCollectors
             if (child.NodeClass == NodeClass.ObjectType)
             {
                 var parentType = types.GetValueOrDefault(parent);
-                types[id] = new UAEventType
+                types[id] = new UAEventType(id, child.DisplayName)
                 {
-                    Id = id,
-                    Parent = parentType,
-                    DisplayName = child.DisplayName
+                    Parent = parentType
                 };
             }
             else if (child.NodeClass == NodeClass.Object || child.NodeClass == NodeClass.Variable)
@@ -192,10 +188,16 @@ namespace Cognite.OpcUa.TypeCollectors
         /// </summary>
         private class UAEventType
         {
-            public NodeId Id { get; set; }
-            public LocalizedText DisplayName { get; set; }
+            public NodeId Id { get; }
+            public LocalizedText DisplayName { get; }
+            [MaybeNull]
             public UAEventType Parent { get; set; }
             private IList<ChildNode> children = new List<ChildNode>();
+            public UAEventType([NotNull] NodeId id, [MaybeNull] LocalizedText displayName)
+            {
+                Id = id;
+                DisplayName = displayName;
+            }
             /// <summary>
             /// Add a child node to the internal collection of children
             /// </summary>
@@ -223,6 +225,7 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             private readonly NodeClass nodeClass;
             private readonly QualifiedName browseName;
+            [MaybeNull]
             private IList<ChildNode> children;
 
             public ChildNode(QualifiedName browseName, NodeClass nc)

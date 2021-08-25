@@ -29,6 +29,7 @@ using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -53,7 +54,8 @@ namespace Cognite.OpcUa.Pushers
 
         public List<UANode> PendingNodes { get; } = new List<UANode>();
         public List<UAReference> PendingReferences { get; } = new List<UAReference>();
-        public UAExtractor Extractor { get; set; }
+        [NotNull, DisallowNull]
+        public UAExtractor? Extractor { get; set; }
         public IPusherConfig BaseConfig { get; }
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
@@ -93,6 +95,7 @@ namespace Cognite.OpcUa.Pushers
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusher));
         #region Interface
 
+
         /// <summary>
         /// Attempts to push the given list of datapoints to CDF.
         /// </summary>'
@@ -100,12 +103,12 @@ namespace Cognite.OpcUa.Pushers
         public async Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             if (points == null) return null;
-            var dataPointList = points
+            Dictionary<string, List<UADataPoint>> dataPointList = points
                 .Where(dp => dp.Timestamp > DateTime.UnixEpoch)
                 .GroupBy(dp => dp.Id)
                 .Where(group => !mismatchedTimeseries.Contains(group.Key) && !missingTimeseries.Contains(group.Key))
                 .ToDictionary(group => group.Key, group =>
-                    group.Select(dp =>
+                    group.SelectNonNull(dp =>
                     {
                         if (dp.IsString) return dp;
                         if (!double.IsFinite(dp.DoubleValue.Value))
@@ -114,7 +117,7 @@ namespace Cognite.OpcUa.Pushers
                             return new UADataPoint(dp, config.NonFiniteReplacement.Value);
                         }
                         return dp;
-                    }).Where(dp => dp != null).ToList());
+                    }).ToList());
 
             int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count);
 

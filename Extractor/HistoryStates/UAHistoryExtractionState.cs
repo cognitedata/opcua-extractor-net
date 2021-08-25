@@ -19,6 +19,7 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Opc.Ua;
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Cognite.OpcUa.HistoryStates
 {
@@ -26,8 +27,11 @@ namespace Cognite.OpcUa.HistoryStates
     {
         public NodeId SourceId { get; }
         public bool Initialized { get; private set; }
-        public UAHistoryExtractionState(IUAClientAccess client, NodeId id, bool frontfill, bool backfill)
-            : base(client?.GetUniqueId(id), frontfill, backfill)
+        public UAHistoryExtractionState(
+            [DisallowNull] IUAClientAccess client,
+            [DisallowNull] NodeId id,
+            bool frontfill, bool backfill)
+            : base(client.GetUniqueId(id), frontfill, backfill)
         {
             SourceId = id;
         }

@@ -19,6 +19,7 @@ using Cognite.OpcUa.Types;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace Cognite.OpcUa.HistoryStates
@@ -43,6 +44,7 @@ namespace Cognite.OpcUa.HistoryStates
         public bool ShouldSubscribe { get; }
         public string DisplayName { get; }
 
+        [MaybeNull]
         private readonly List<UADataPoint> buffer;
 
         public bool IsArray => ArrayDimensions != null && ArrayDimensions.Length == 1 && ArrayDimensions[0] > 0;
@@ -52,7 +54,7 @@ namespace Cognite.OpcUa.HistoryStates
         /// </summary>
         /// <param name="variable">Variable to be used as base</param>
         public VariableExtractionState(IUAClientAccess client, UAVariable variable, bool frontfill, bool backfill)
-            : base(client, variable?.Id, frontfill, backfill)
+            : base(client, variable.Id, frontfill, backfill)
         {
             if (variable == null) throw new ArgumentNullException(nameof(variable));
             DataType = variable.DataType;

@@ -19,6 +19,7 @@ using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace Cognite.OpcUa.HistoryStates
@@ -33,10 +34,14 @@ namespace Cognite.OpcUa.HistoryStates
         /// <summary>
         /// Last known timestamp of events from OPC-UA.
         /// </summary>
+        [MaybeNull]
         private IList<UAEvent> buffer;
         public bool ShouldSubscribe { get; }
 
-        public EventExtractionState(IUAClientAccess client, NodeId emitterId, bool frontfill, bool backfill, bool subscription)
+        public EventExtractionState(
+            IUAClientAccess client,
+            NodeId emitterId,
+            bool frontfill, bool backfill, bool subscription)
             : base(client, emitterId, frontfill, backfill)
         {
             if (frontfill)
@@ -50,7 +55,7 @@ namespace Cognite.OpcUa.HistoryStates
         /// Update timestamp and buffer from stream.
         /// </summary>
         /// <param name="points">Event received for current stream iteration</param>
-        public void UpdateFromStream(UAEvent evt)
+        public void UpdateFromStream([AllowNull] UAEvent evt)
         {
             if (evt == null) return;
             UpdateFromStream(evt.Time, evt.Time);
@@ -91,6 +96,7 @@ namespace Cognite.OpcUa.HistoryStates
         /// Retrieve contents of the buffer after final historyRead iteration
         /// </summary>
         /// <returns>The contents of the buffer</returns>
+        [return: NotNull]
         public IEnumerable<UAEvent> FlushBuffer()
         {
             if (IsFrontfilling || buffer == null || !buffer.Any()) return Array.Empty<UAEvent>();

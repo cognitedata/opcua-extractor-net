@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 
@@ -32,6 +33,7 @@ namespace Cognite.OpcUa.Types
         public bool IsStep { get; set; }
         public bool IsString { get; set; }
         public NodeId Raw { get; }
+        [MaybeNull, AllowNull]
         public IDictionary<long, string> EnumValues { get; set; }
         /// <summary>
         /// Construct BufferedDataType from NodeId of datatype

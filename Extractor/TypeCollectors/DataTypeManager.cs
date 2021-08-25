@@ -20,6 +20,7 @@ using Opc.Ua;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -211,11 +212,12 @@ namespace Cognite.OpcUa.TypeCollectors
         /// </summary>
         /// <param name="variable">Variable to get metadata for</param>
         /// <returns>Dictionary containing datatype-related metadata for the given variable.</returns>
+        [return: MaybeNull]
         public Dictionary<string, string> GetAdditionalMetadata(UAVariable variable)
         {
             if (variable == null || variable.DataType == null) return null;
             var dt = variable.DataType;
-            Dictionary<string, string> ret = null;
+            Dictionary<string, string>? ret = null;
             if (dt.EnumValues != null)
             {
                 ret = new Dictionary<string, string>();
@@ -313,7 +315,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 parentIds[id] = parent;
                 if (id.NamespaceIndex != 0)
                 {
-                    customTypeNames[id] = child.DisplayName?.Text;
+                    customTypeNames[id] = child.DisplayName.Text;
                 }
             }
 

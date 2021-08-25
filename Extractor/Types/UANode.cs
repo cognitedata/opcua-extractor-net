@@ -24,6 +24,7 @@ using Opc.Ua;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -66,6 +67,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Description in OPC-UA
         /// </summary>
+        [MaybeNull]
         public string Description => Attributes.Description;
         /// <summary>
         /// Whether to subscribe to this node, independent of reading history.
@@ -82,7 +84,8 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// OPC-UA node type
         /// </summary>
-        public UANodeType NodeType => Attributes.NodeType;
+        [MaybeNull]
+        public UANodeType? NodeType => Attributes.NodeType;
         /// <summary>
         /// True if node is a property
         /// </summary>
@@ -90,7 +93,8 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Parent node
         /// </summary>
-        public UANode Parent { get; set; }
+        [MaybeNull]
+        public UANode? Parent { get; set; }
         /// <summary>
         /// True if this node should not be pushed to destinations.
         /// </summary>
@@ -130,7 +134,7 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
-                var meta = BuildMetadata(null, null, new StringConverter(null, null), false);
+                var meta = BuildMetadataBase(null, new StringConverter(null, null));
                 builder.Append("Properties: {\n");
                 foreach (var prop in meta)
                 {
@@ -143,12 +147,15 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Properties in OPC-UA
         /// </summary>
+        [MaybeNull]
         public IEnumerable<UANode> Properties => Attributes.Properties;
         public UANode(NodeId id, string displayName, NodeId parentId, NodeClass nodeClass) : this(id, displayName, parentId)
         {
             Attributes = new NodeAttributes(nodeClass);
         }
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         protected UANode(NodeId id, string displayName, NodeId parentId)
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         {
             Id = id;
             DisplayName = displayName;
@@ -220,12 +227,10 @@ namespace Cognite.OpcUa.Types
             }
             return checksum;
         }
+        [return: MaybeNull]
         public Dictionary<string, string> GetExtraMetadata(ExtractionConfig config, DataTypeManager manager, StringConverter converter)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
-            if (manager == null) throw new ArgumentNullException(nameof(manager));
-            if (converter == null) throw new ArgumentNullException(nameof(converter));
-            Dictionary<string, string> fields = null;
+            Dictionary<string, string>? fields = null;
             if (this is UAVariable variable)
             {
                 fields = manager.GetAdditionalMetadata(variable);
@@ -245,25 +250,12 @@ namespace Cognite.OpcUa.Types
             }
             return fields;
         }
-        /// <summary>
-        /// Return a dictionary of metadata fields for this node.
-        /// </summary>
-        /// <param name="config">Extraction config object</param>
-        /// <param name="manager">DataTypeManager used to get information about the datatype</param>
-        /// <param name="converter">StringConverter used for building metadata</param>
-        /// <param name="getExtras">True to get extra metadata</param>
-        /// <returns>Created metadata dictionary.</returns>
-        public Dictionary<string, string> BuildMetadata(ExtractionConfig config, DataTypeManager manager, StringConverter converter, bool getExtras)
+
+        protected Dictionary<string, string> BuildMetadataBase(Dictionary<string, string>? extras, StringConverter converter)
         {
-            if (converter == null) throw new ArgumentNullException(nameof(converter));
-            Dictionary<string, string> extras = null;
-            if (getExtras)
-            {
-                extras = GetExtraMetadata(config, manager, converter);
-            }
-            if (Properties == null && extras == null) return new Dictionary<string, string>();
-            if (Properties == null) return extras;
             var result = extras ?? new Dictionary<string, string>();
+
+            if (Properties == null) return result;
 
             foreach (var prop in Properties)
             {
@@ -277,7 +269,7 @@ namespace Cognite.OpcUa.Types
 
                     if (prop.Properties != null)
                     {
-                        var nestedProperties = prop.BuildMetadata(config, manager, converter, false);
+                        var nestedProperties = prop.BuildMetadataBase(null, converter);
                         foreach (var sprop in nestedProperties)
                         {
                             result[$"{prop.DisplayName}_{sprop.Key}"] = sprop.Value;
@@ -285,8 +277,26 @@ namespace Cognite.OpcUa.Types
                     }
                 }
             }
-
             return result;
+        }
+
+
+        /// <summary>
+        /// Return a dictionary of metadata fields for this node.
+        /// </summary>
+        /// <param name="config">Extraction config object</param>
+        /// <param name="manager">DataTypeManager used to get information about the datatype</param>
+        /// <param name="converter">StringConverter used for building metadata</param>
+        /// <param name="getExtras">True to get extra metadata</param>
+        /// <returns>Created metadata dictionary.</returns>
+        public Dictionary<string, string> BuildMetadata(ExtractionConfig config, DataTypeManager manager, StringConverter converter, bool getExtras)
+        {
+            Dictionary<string, string>? extras = null;
+            if (getExtras)
+            {
+                extras = GetExtraMetadata(config, manager, converter);
+            }
+            return BuildMetadataBase(extras, converter);
         }
 
         /// <summary>
@@ -366,6 +376,7 @@ namespace Cognite.OpcUa.Types
 
             return asset;
         }
+        [return: MaybeNull]
         public JsonDocument ToJson(StringConverter converter, ConverterType type)
         {
             // This is inefficient. A better solution would use System.Text.Json directly, but that requires .NET 6
@@ -397,7 +408,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="prop">Property to add</param>
         public void AddProperty(UANode prop)
         {
-            if (Properties == null)
+            if (Attributes.Properties == null)
             {
                 Attributes.Properties = new List<UANode> { prop };
                 return;

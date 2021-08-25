@@ -25,6 +25,7 @@ using Opc.Ua;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -89,12 +90,12 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Create timeseries update from existing timeseries and new OPC-UA variable.
         /// </summary>
-        /// <param name="extractor">Active extractor, used for building metadata</param>
         /// <param name="old">Existing timeseries</param>
         /// <param name="newTs">New OPC-UA variable</param>
         /// <param name="update">Configuration for which fields to update</param>
         /// <param name="nodeToAssetIds">Map from NodeIds to assetIds, necessary for setting parents</param>
         /// <returns>Update object, or null if updating was unnecessary</returns>
+        [return: MaybeNull]
         public static TimeSeriesUpdate GetTSUpdate(
             ExtractionConfig config,
             DataTypeManager manager,
@@ -139,15 +140,15 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.TimeSeriesMetadataMaxPerValue,
                         Sanitation.TimeSeriesMetadataMaxBytes);
 
-                if (old.Metadata == null && newMetaData.Any()
-                    || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
+                if (newMetaData.Any() && (old.Metadata == null
+                        || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal)))
                 {
                     tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
                 }
             }
             return tsUpdate;
         }
-        
+
         /// <summary>
         /// Create asset update from existing asset and new OPC-UA node.
         /// </summary>
@@ -156,6 +157,7 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="newAsset">New OPC-UA node</param>
         /// <param name="update">Configuration for which fields to update</param>
         /// <returns>Update object, or null if updating was unnecessary</returns>
+        [return: MaybeNull]
         public static AssetUpdate GetAssetUpdate(
             ExtractionConfig config,
             Asset old,
@@ -191,8 +193,8 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.AssetMetadataMaxPerValue,
                         Sanitation.AssetMetadataMaxBytes);
 
-                if (old.Metadata == null && newMetaData.Any()
-                    || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
+                if (newMetaData.Any() && (old.Metadata == null
+                        || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal)))
                 {
                     assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
                 }
@@ -205,6 +207,7 @@ namespace Cognite.OpcUa.Pushers
     /// </summary>
     public class StatelessEventCreate : EventCreate
     {
+        [MaybeNull]
         public IEnumerable<string> AssetExternalIds { get; set; }
     }
     /// <summary>
@@ -212,6 +215,7 @@ namespace Cognite.OpcUa.Pushers
     /// </summary>
     public class StatelessTimeSeriesCreate : TimeSeriesCreate
     {
+        [MaybeNull]
         public string AssetExternalId { get; set; }
     }
 }

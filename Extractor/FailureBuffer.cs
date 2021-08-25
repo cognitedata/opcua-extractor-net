@@ -22,6 +22,7 @@ using Prometheus;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -34,12 +35,15 @@ namespace Cognite.OpcUa
     /// </summary>
     public sealed class FailureBuffer
     {
+        [MaybeNull]
         private readonly InfluxPusher influxPusher;
         private readonly FailureBufferConfig config;
         private readonly FullConfig fullConfig;
         private readonly UAExtractor extractor;
 
+        [MaybeNull]
         private readonly Dictionary<string, InfluxBufferState> nodeBufferStates;
+        [MaybeNull]
         private readonly Dictionary<string, InfluxBufferState> eventBufferStates;
 
         public bool AnyPoints => anyPoints || fileAnyPoints;
@@ -99,6 +103,19 @@ namespace Cognite.OpcUa
             nodeBufferStates = new Dictionary<string, InfluxBufferState>();
             eventBufferStates = new Dictionary<string, InfluxBufferState>();
         }
+
+        [MemberNotNullWhen(true, nameof(nodeBufferStates))]
+        [MemberNotNullWhen(true, nameof(eventBufferStates))]
+        [MemberNotNullWhen(true, nameof(influxPusher))]
+        private bool UseInflux()
+        {
+            if (influxPusher == null) return false;
+            if (!config.Influx) return false;
+#pragma warning disable CS8775 // Member must have a non-null value when exiting in some condition. Implicit
+            return true;
+#pragma warning restore CS8775 // Member must have a non-null value when exiting in some condition.
+        }
+
         /// <summary>
         /// Restore influx extraction states, called on startup if influxdb buffering is enabled.
         /// </summary>
@@ -145,7 +162,7 @@ namespace Cognite.OpcUa
             IEnumerable<EventExtractionState> evtStates,
             CancellationToken token)
         {
-            if (!config.Influx || influxPusher == null || !config.InfluxStateStore) return;
+            if (!UseInflux() || !config.InfluxStateStore) return;
 
             var results = await Task.WhenAll(
                 RestoreStates(states, fullConfig.StateStorage.InfluxVariableStore, nodeBufferStates, token),
@@ -161,6 +178,7 @@ namespace Cognite.OpcUa
         /// <param name="pointRanges">Written ranges</param>
         private async Task WriteDatapointsInflux(IDictionary<string, TimeRange> pointRanges, CancellationToken token)
         {
+            if (!UseInflux()) return;
             if (influxPusher.DataFailing)
             {
                 log.Warning("Influx pusher is failing, datapoints will not be buffered in influxdb");
@@ -237,7 +255,7 @@ namespace Cognite.OpcUa
             if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
-            if (config.Influx && influxPusher != null && nodeBufferStates.Any())
+            if (UseInflux() && nodeBufferStates.Any())
             {
                 try
                 {
@@ -278,6 +296,7 @@ namespace Cognite.OpcUa
         /// <param name="events">Events to register</param>
         private async Task WriteEventsInflux(IEnumerable<UAEvent> events, CancellationToken token)
         {
+            if (!UseInflux()) return;
             if (influxPusher.EventsFailing)
             {
                 log.Warning("Influx pusher is failing, events will not be buffered in influxdb");
@@ -355,7 +374,7 @@ namespace Cognite.OpcUa
             if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
-            if (config.Influx && influxPusher != null && eventBufferStates.Any())
+            if (UseInflux() && eventBufferStates.Any())
             {
                 try
                 {

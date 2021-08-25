@@ -36,6 +36,7 @@ namespace Cognite.OpcUa.NodeSources
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAExtractor));
 
         private Dictionary<NodeId, UANode> nodeMap = new Dictionary<NodeId, UANode>();
+        private bool parsed = false;
 
         private List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
         public Action<ReferenceDescription, NodeId> Callback => HandleNode;
@@ -56,9 +57,9 @@ namespace Cognite.OpcUa.NodeSources
         /// This reads necessary information from the state and the server.
         /// </summary>
         /// <returns>Resulting lists of populated and sorted nodes.</returns>
-        public override async Task<BrowseResult> ParseResults(CancellationToken token)
+        public override async Task<BrowseResult?> ParseResults(CancellationToken token)
         {
-            if (nodeMap == null) throw new InvalidOperationException("Browse result has already been parsed");
+            if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
             if (!nodeMap.Any()) return null;
             await Task.Run(() => Client.ReadNodeData(nodeMap.Values, token), CancellationToken.None);
 
@@ -66,7 +67,8 @@ namespace Cognite.OpcUa.NodeSources
             {
                 SortNode(node);
             }
-            nodeMap = null;
+            parsed = true;
+            nodeMap.Clear();
 
             var update = Config.Extraction.Update;
             await GetExtraNodeData(update, token);
@@ -191,8 +193,7 @@ namespace Cognite.OpcUa.NodeSources
             if (Config.Extraction.NodeTypes.AsNodes)
             {
                 var toRead = nodes.Where(node => node.NodeClass == NodeClass.VariableType)
-                    .Select(node => node as UAVariable)
-                    .Where(node => node != null)
+                    .SelectNonNull(node => node as UAVariable)
                     .ToList();
                 extraMetaTasks.Add(Task.Run(() => Client.ReadNodeValues(toRead, token), CancellationToken.None));
             }

@@ -25,6 +25,7 @@ using Cognite.OpcUa.Pushers;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace Cognite.OpcUa
@@ -33,13 +34,13 @@ namespace Cognite.OpcUa
     public class UAClientConfig
     {
         public string ConfigRoot { get; set; } = "config";
-        public string EndpointUrl { get; set; }
+        public string? EndpointUrl { get; set; }
         public bool AutoAccept { get; set; } = true;
         public int PublishingInterval { get; set; } = 500;
         public int SamplingInterval { get; set; } = 100;
         public int QueueLength { get; set; } = 100;
-        public string Username { get; set; }
-        public string Password { get; set; }
+        public string? Username { get; set; }
+        public string? Password { get; set; }
         public bool Secure { get; set; }
         public bool ForceRestart { get; set; }
         public bool ExitOnFailure { get; set; }
@@ -55,8 +56,8 @@ namespace Cognite.OpcUa
         public int KeepAliveInterval { get; set; } = 5000;
         public bool RestartOnReconnect { get; set; }
         [YamlDotNet.Serialization.YamlMember(Alias = "x509-certificate")]
-        public X509CertConfig X509Certificate { get; set; }
-        public string ReverseConnectUrl { get; set; }
+        public X509CertConfig? X509Certificate { get; set; }
+        public string? ReverseConnectUrl { get; set; }
         public bool IgnoreCertificateIssues { get; set; }
     }
     public enum X509CertificateLocation
@@ -67,21 +68,21 @@ namespace Cognite.OpcUa
     };
     public class X509CertConfig
     {
-        public string FileName { get; set; }
-        public string Password { get; set; }
+        public string? FileName { get; set; }
+        public string? Password { get; set; }
         public X509CertificateLocation Store { get; set; } = X509CertificateLocation.None;
-        public string CertName { get; set; }
+        public string? CertName { get; set; }
     }
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1721:Property names should not match get methods", Justification = "Config")]
     public class ExtractionConfig
     {
-        public string IdPrefix { get; set; }
-        public IEnumerable<string> IgnoreNamePrefix { get; set; }
-        public IEnumerable<string> IgnoreName { get; set; }
-        public ProtoNodeId RootNode { get; set; }
+        public string? IdPrefix { get; set; }
+        public IEnumerable<string>? IgnoreNamePrefix { get; set; }
+        public IEnumerable<string>? IgnoreName { get; set; }
+        public ProtoNodeId? RootNode { get; set; }
 
-        public IEnumerable<ProtoNodeId> RootNodes { get; set; }
-        public Dictionary<string, ProtoNodeId> NodeMap { get; set; }
+        public IEnumerable<ProtoNodeId>? RootNodes { get; set; }
+        public Dictionary<string, ProtoNodeId>? NodeMap { get; set; }
         public Dictionary<string, string> NamespaceMap { get => namespaceMap; set => namespaceMap = value ?? namespaceMap; }
         private Dictionary<string, string> namespaceMap = new Dictionary<string, string>();
         public int AutoRebrowsePeriod { get; set; }
@@ -91,13 +92,13 @@ namespace Cognite.OpcUa
         private UpdateConfig update = new UpdateConfig();
         public DataTypeConfig DataTypes { get => dataTypes; set => dataTypes = value ?? dataTypes; }
         private DataTypeConfig dataTypes = new DataTypeConfig();
-        public string PropertyNameFilter { get; set; }
-        public string PropertyIdFilter { get; set; }
+        public string? PropertyNameFilter { get; set; }
+        public string? PropertyIdFilter { get; set; }
         public RelationshipConfig Relationships { get => relationships; set => relationships = value ?? relationships; }
         private RelationshipConfig relationships = new RelationshipConfig();
         public NodeTypeConfig NodeTypes { get => nodeTypes; set => nodeTypes = value ?? nodeTypes; }
         private NodeTypeConfig nodeTypes = new NodeTypeConfig();
-        public IEnumerable<RawNodeTransformation> Transformations { get; set; }
+        public IEnumerable<RawNodeTransformation>? Transformations { get; set; }
         public IEnumerable<NodeId> GetRootNodes(UAClient client)
         {
             var roots = new List<NodeId>();
@@ -119,8 +120,8 @@ namespace Cognite.OpcUa
     }
     public class DataTypeConfig
     {
-        public IEnumerable<ProtoDataType> CustomNumericTypes { get; set; }
-        public IEnumerable<ProtoNodeId> IgnoreDataTypes { get; set; }
+        public IEnumerable<ProtoDataType>? CustomNumericTypes { get; set; }
+        public IEnumerable<ProtoNodeId>? IgnoreDataTypes { get; set; }
         public bool UnknownAsScalar { get; set; }
         public int MaxArraySize { get; set; }
         public bool AllowStringVariables { get; set; }
@@ -176,7 +177,7 @@ namespace Cognite.OpcUa
     }
     public class SubscriptionConfig
     {
-        public DataSubscriptionConfig DataChangeFilter { get; set; }
+        public DataSubscriptionConfig? DataChangeFilter { get; set; }
         public bool DataPoints { get; set; } = true;
         public bool Events { get; set; } = true;
         public bool IgnoreAccessLevel { get; set; }
@@ -191,13 +192,13 @@ namespace Cognite.OpcUa
     public class CognitePusherConfig : CogniteConfig, IPusherConfig
     {
         public long? DataSetId { get; set; }
-        public string DataSetExternalId { get; set; }
+        public string? DataSetExternalId { get; set; }
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; } = true;
         public bool SkipMetadata { get; set; }
-        public RawMetadataConfig RawMetadata { get; set; }
-        public MetadataMapConfig MetadataMapping { get; set; }
-        public CDFNodeSourceConfig RawNodeBuffer { get; set; }
+        public RawMetadataConfig? RawMetadata { get; set; }
+        public MetadataMapConfig? MetadataMapping { get; set; }
+        public CDFNodeSourceConfig? RawNodeBuffer { get; set; }
         public double? NonFiniteReplacement
         {
             get => nonFiniteReplacement;
@@ -213,30 +214,30 @@ namespace Cognite.OpcUa
     }
     public class RawMetadataConfig
     {
-        public string Database { get; set; }
-        public string AssetsTable { get; set; }
-        public string TimeseriesTable { get; set; }
-        public string RelationshipsTable { get; set; }
+        public string? Database { get; set; }
+        public string? AssetsTable { get; set; }
+        public string? TimeseriesTable { get; set; }
+        public string? RelationshipsTable { get; set; }
     }
     public class MetadataMapConfig
     {
-        public Dictionary<string, string> Assets { get; set; }
-        public Dictionary<string, string> Timeseries { get; set; }
+        public Dictionary<string, string>? Assets { get; set; }
+        public Dictionary<string, string>? Timeseries { get; set; }
     }
     public class CDFNodeSourceConfig
     {
         public bool Enable { get; set; }
-        public string Database { get; set; }
-        public string AssetsTable { get; set; }
-        public string TimeseriesTable { get; set; }
+        public string? Database { get; set; }
+        public string? AssetsTable { get; set; }
+        public string? TimeseriesTable { get; set; }
         public bool BrowseOnEmpty { get; set; }
     }
     public class InfluxPusherConfig : IPusherConfig
     {
-        public string Host { get; set; }
-        public string Username { get; set; }
-        public string Password { get; set; }
-        public string Database { get; set; }
+        public string? Host { get; set; }
+        public string? Username { get; set; }
+        public string? Password { get; set; }
+        public string? Database { get; set; }
         public int PointChunkSize { get; set; } = 100000;
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; } = true;
@@ -258,10 +259,10 @@ namespace Cognite.OpcUa
     }
     public class MqttPusherConfig : IPusherConfig
     {
-        public string Host { get; set; }
+        public string? Host { get; set; }
         public int? Port { get; set; }
-        public string Username { get; set; }
-        public string Password { get; set; }
+        public string? Username { get; set; }
+        public string? Password { get; set; }
         public bool UseTls { get; set; }
         public string ClientId { get; set; } = "cognite-opcua-extractor";
         public long? DataSetId { get; set; }
@@ -271,13 +272,13 @@ namespace Cognite.OpcUa
         public string DatapointTopic { get; set; } = "cognite/opcua/datapoints";
         public string RawTopic { get; set; } = "cognite/opcua/raw";
         public string RelationshipTopic { get; set; } = "cognite/opcua/relationships";
-        public string LocalState { get; set; }
+        public string? LocalState { get; set; }
         public long InvalidateBefore { get; set; }
         public bool Debug { get; set; }
         public bool ReadExtractedRanges { get; set; }
         public bool SkipMetadata { get; set; }
-        public RawMetadataConfig RawMetadata { get; set; }
-        public MetadataMapConfig MetadataMapping { get; set; }
+        public RawMetadataConfig? RawMetadata { get; set; }
+        public MetadataMapConfig? MetadataMapping { get; set; }
         public double? NonFiniteReplacement
         {
             get => nonFiniteReplacement;
@@ -298,22 +299,31 @@ namespace Cognite.OpcUa
         public bool Enabled { get; set; }
         public bool InfluxStateStore { get; set; }
         public bool Influx { get; set; }
-        public string DatapointPath { get; set; }
-        public string EventPath { get; set; }
+        public string? DatapointPath { get; set; }
+        public string? EventPath { get; set; }
     }
     public class FullConfig : VersionedConfig
     {
+        [NotNull, AllowNull]
         public UAClientConfig Source { get; set; }
+        [NotNull, AllowNull]
         public LoggerConfig Logger { get; set; }
+        [NotNull, AllowNull]
         public UAMetricsConfig Metrics { get; set; }
-        public CognitePusherConfig Cognite { get; set; }
-        public MqttPusherConfig Mqtt { get; set; }
-        public InfluxPusherConfig Influx { get; set; }
+        public CognitePusherConfig? Cognite { get; set; }
+        public MqttPusherConfig? Mqtt { get; set; }
+        public InfluxPusherConfig? Influx { get; set; }
+        [NotNull, AllowNull]
         public ExtractionConfig Extraction { get; set; }
+        [NotNull, AllowNull]
         public EventConfig Events { get; set; }
+        [NotNull, AllowNull]
         public FailureBufferConfig FailureBuffer { get; set; }
+        [NotNull, AllowNull]
         public HistoryConfig History { get; set; }
+        [NotNull, AllowNull]
         public StateStorageConfig StateStorage { get; set; }
+        [NotNull, AllowNull]
         public SubscriptionConfig Subscriptions { get; set; }
         public override void GenerateDefaults()
         {
@@ -337,14 +347,14 @@ namespace Cognite.OpcUa
     }
     public class EventConfig
     {
-        public IEnumerable<ProtoNodeId> EventIds { get; set; }
-        public IEnumerable<ProtoNodeId> EmitterIds { get; set; }
-        public IEnumerable<ProtoNodeId> HistorizingEmitterIds { get; set; }
+        public IEnumerable<ProtoNodeId>? EventIds { get; set; }
+        public IEnumerable<ProtoNodeId>? EmitterIds { get; set; }
+        public IEnumerable<ProtoNodeId>? HistorizingEmitterIds { get; set; }
         public bool Enabled { get; set; }
         public bool DiscoverEmitters { get; set; } = true;
         public bool AllEvents { get; set; } = true;
         public bool History { get; set; }
-        public string ExcludeEventFilter { get; set; }
+        public string? ExcludeEventFilter { get; set; }
         public bool ReadServer { get; set; } = true;
         public IEnumerable<string> ExcludeProperties { get => excludeProperties; set => excludeProperties = value ?? excludeProperties; }
         private IEnumerable<string> excludeProperties = new List<string>();
@@ -373,7 +383,7 @@ namespace Cognite.OpcUa
         public int Granularity { get; set; } = 600;
         public bool IgnoreContinuationPoints { get; set; }
         public int RestartPeriod { get; set; }
-        public HistoryThrottlingConfig Throttling { get; set; }
+        public HistoryThrottlingConfig? Throttling { get; set; }
     }
     public class UAThrottlingConfig
     {
@@ -387,9 +397,9 @@ namespace Cognite.OpcUa
 
     public class ProtoNodeId
     {
-        public string NamespaceUri { get; set; }
-        public string NodeId { get; set; }
-        public NodeId ToNodeId(UAClient client, NodeId defaultValue = null)
+        public string? NamespaceUri { get; set; }
+        public string? NodeId { get; set; }
+        public NodeId ToNodeId(UAClient client, NodeId? defaultValue = null)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             var node = client.ToNodeId(NodeId, NamespaceUri);
@@ -402,7 +412,7 @@ namespace Cognite.OpcUa
     }
     public class ProtoDataType
     {
-        public ProtoNodeId NodeId { get; set; }
+        public ProtoNodeId? NodeId { get; set; }
         public bool IsStep { get; set; }
         public bool Enum { get; set; }
     }
@@ -417,28 +427,28 @@ namespace Cognite.OpcUa
     }
     public class RawNodeFilter
     {
-        public string Name { get; set; }
-        public string Description { get; set; }
-        public string Id { get; set; }
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public string? Id { get; set; }
         public bool? IsArray { get; set; }
-        public string Namespace { get; set; }
-        public string TypeDefinition { get; set; }
+        public string? Namespace { get; set; }
+        public string? TypeDefinition { get; set; }
         public NodeClass? NodeClass { get; set; }
-        public RawNodeFilter Parent { get; set; }
+        public RawNodeFilter? Parent { get; set; }
     }
     public class RawNodeTransformation
     {
         public TransformationType Type { get; set; }
-        public RawNodeFilter Filter { get; set; }
+        public RawNodeFilter? Filter { get; set; }
     }
 
     public class UAMetricsConfig : MetricsConfig
     {
-        public NodeMetricsConfig Nodes { get; set; }
+        public NodeMetricsConfig? Nodes { get; set; }
     }
     public class NodeMetricsConfig
     {
         public bool ServerMetrics { get; set; }
-        public IEnumerable<ProtoNodeId> OtherMetrics { get; set; }
+        public IEnumerable<ProtoNodeId>? OtherMetrics { get; set; }
     }
 }

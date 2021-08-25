@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Opc.Ua;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Cognite.OpcUa.Types
 {
@@ -25,6 +26,7 @@ namespace Cognite.OpcUa.Types
     public class UANodeType
     {
         public NodeId Id { get; }
+        [MaybeNull, AllowNull]
         public string Name { get; set; }
         public bool IsVariableType { get; }
         public UANodeType(NodeId id, bool isVariableType)

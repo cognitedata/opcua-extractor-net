@@ -29,6 +29,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -1514,7 +1515,7 @@ namespace Cognite.OpcUa
         /// <param name="identifier">Full identifier on form i=123 or s=abc etc.</param>
         /// <param name="namespaceUri">Full namespaceUri</param>
         /// <returns>Resulting NodeId</returns>
-        public NodeId ToNodeId(string identifier, string namespaceUri)
+        public NodeId ToNodeId([AllowNull] string identifier, [AllowNull] string namespaceUri)
         {
             if (identifier == null || namespaceUri == null) return NodeId.Null;
             int idx = Session.NamespaceUris.GetIndex(namespaceUri);

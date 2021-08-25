@@ -115,7 +115,7 @@ namespace Cognite.OpcUa.TypeCollectors
                     if (!extractor.State.IsMappedNode(childId)) continue;
                     if (child.TypeDefinition == VariableTypeIds.PropertyType) continue;
 
-                    VariableExtractionState childState = null;
+                    VariableExtractionState? childState = null;
                     if (child.NodeClass == NodeClass.Variable)
                     {
                         childState = extractor.State.GetNodeState(childId);

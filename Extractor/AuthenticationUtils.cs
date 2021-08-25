@@ -8,7 +8,7 @@ namespace Cognite.OpcUa
 {
     static class AuthenticationUtils
     {
-        private static X509Certificate2 GetCertificate(X509CertConfig certConf)
+        private static X509Certificate2? GetCertificate(X509CertConfig certConf)
         {
             if (certConf == null) return null;
             if (certConf.Store != X509CertificateLocation.None)

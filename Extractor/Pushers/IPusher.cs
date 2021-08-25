@@ -20,6 +20,7 @@ using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -37,7 +38,8 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Parent extractor
         /// </summary>
-        UAExtractor Extractor { get; set; }
+        [NotNull, DisallowNull]
+        UAExtractor? Extractor { get; set; }
 
 
         /// <summary>
