@@ -836,7 +836,7 @@ namespace Test.Unit
             variable = new UAVariable(new NodeId("test4"), "test4", NodeId.Null, NodeClass.Variable);
             variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
             variable.VariableAttributes.ValueRank = 1;
-            variable.VariableAttributes.ArrayDimensions = new Collection<int> { 4 };
+            variable.VariableAttributes.ArrayDimensions = new [] { 4 };
             NodeToRaw(extractor, variable, ConverterType.Node, false);
             foreach (var child in variable.CreateArrayChildren())
             {

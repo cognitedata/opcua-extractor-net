@@ -632,7 +632,7 @@ namespace Test.Unit
         {
             CommonTestUtils.ResetMetricValues("opcua_attribute_requests", "opcua_browse_operations");
             var arrayVar = new UAVariable(tester.Server.Ids.Custom.Array, "Array", tester.Server.Ids.Custom.Root);
-            arrayVar.VariableAttributes.ArrayDimensions = new Collection<int> { 4 };
+            arrayVar.VariableAttributes.ArrayDimensions = new [] { 4 };
             var nodes = new[]
             {
                 // Normal variable

@@ -172,8 +172,8 @@ namespace Test.Unit
                 new UANode(new NodeId(4), "Other", new NodeId("parent"), NodeClass.Object),
                 new UAVariable(new NodeId(5), "Test", new NodeId("parent"))
             };
-            (nodes[2].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new Collection<int> { 4 };
-            (nodes[4].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new Collection<int> { 4 };
+            (nodes[2].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new [] { 4 };
+            (nodes[4].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new [] { 4 };
 
             var filter = new NodeFilter(raw);
             var matched = nodes.Where(node => filter.IsMatch(node, nss)).ToList();
@@ -293,7 +293,7 @@ namespace Test.Unit
                 var node = new UAVariable(id, i == 4 ? "not" : "target", NodeId.Null, nodeClass);
                 node.Attributes.Description = i == 1 ? "not" : "target";
                 node.Attributes.NodeType = new UANodeType(i == 2 ? new NodeId(2) : new NodeId(1), true);
-                node.VariableAttributes.ArrayDimensions = i == 3 ? null : new Collection<int> { 4 };
+                node.VariableAttributes.ArrayDimensions = i == 3 ? null : new [] { 4 };
                 node.Parent = i == 5 ? parent2 : parent1;
 
                 nodes.Add(node);

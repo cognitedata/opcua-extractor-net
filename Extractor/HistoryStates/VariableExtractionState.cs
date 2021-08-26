@@ -39,13 +39,13 @@ namespace Cognite.OpcUa.HistoryStates
         /// Each entry in the array defines the fixed size of the given dimension of the variable.
         /// The extractor generally requires fixed dimensions in order to push arrays to destination systems.
         /// </summary>
-        public Collection<int> ArrayDimensions { get; }
+        public int[] ArrayDimensions { get; }
         public bool ShouldSubscribe { get; }
         public string DisplayName { get; }
 
         private readonly List<UADataPoint> buffer;
 
-        public bool IsArray => ArrayDimensions != null && ArrayDimensions.Count == 1 && ArrayDimensions[0] > 0;
+        public bool IsArray => ArrayDimensions != null && ArrayDimensions.Length == 1 && ArrayDimensions[0] > 0;
 
         /// <summary>
         /// Constructor. Copies relevant data from BufferedVariable, initializes the buffer if Historizing is true.

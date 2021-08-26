@@ -350,7 +350,7 @@ namespace Test.Unit
                 + @"""Historizing"":true,""ValueRank"":-1}}");
 
             variable.VariableAttributes.ValueRank = ValueRanks.OneDimension;
-            variable.VariableAttributes.ArrayDimensions = new Collection<int> { 5 };
+            variable.VariableAttributes.ArrayDimensions = new [] { 5 };
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
@@ -418,7 +418,7 @@ namespace Test.Unit
             Assert.Equal(variable.ValueRank, saved.InternalInfo.ValueRank);
 
             variable.VariableAttributes.ValueRank = 2;
-            variable.VariableAttributes.ArrayDimensions = new Collection<int> { 3, 4 };
+            variable.VariableAttributes.ArrayDimensions = new [] { 3, 4 };
 
             saved = Convert(variable);
             Assert.Equal(variable.ArrayDimensions, saved.InternalInfo.ArrayDimensions);

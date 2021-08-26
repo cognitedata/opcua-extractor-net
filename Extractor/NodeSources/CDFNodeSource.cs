@@ -82,18 +82,19 @@ namespace Cognite.OpcUa.NodeSources
                         var postfix = $"[{node.InternalInfo.Index}]";
                         name = name.Substring(0, name.Length - postfix.Length);
                     }
-                    var variable = new UAVariable(node.NodeId, name, node.ParentNodeId, node.InternalInfo.NodeClass);
-                    variable.VariableAttributes.AccessLevel = node.InternalInfo.AccessLevel;
-                    if (node.InternalInfo.ArrayDimensions != null)
+                    var variable = new UAVariable(node.NodeId, name, node.ParentNodeId, node.InternalInfo.NodeClass)
                     {
-                        variable.VariableAttributes.ArrayDimensions = new Collection<int>(node.InternalInfo.ArrayDimensions);
-                    }
-                    variable.VariableAttributes.DataType = Extractor.DataTypeManager.GetDataType(node.DataTypeId);
-                    variable.VariableAttributes.EventNotifier = node.InternalInfo.EventNotifier;
-                    variable.VariableAttributes.Historizing = node.InternalInfo.Historizing;
-                    variable.VariableAttributes.ShouldSubscribe = node.InternalInfo.ShouldSubscribe;
-                    variable.VariableAttributes.ValueRank = node.InternalInfo.ValueRank;
-                    variable.Source = NodeSource.CDF;
+                        VariableAttributes =
+                        {
+                            AccessLevel = node.InternalInfo.AccessLevel,
+                            ArrayDimensions = node.InternalInfo.ArrayDimensions,
+                            DataType = Extractor.DataTypeManager.GetDataType(node.DataTypeId),
+                            EventNotifier = node.InternalInfo.EventNotifier,
+                            ShouldSubscribe = node.InternalInfo.ShouldSubscribe,
+                            ValueRank = node.InternalInfo.ValueRank,
+                        },
+                        Source = NodeSource.CDF
+                    };
                     readVariables.Add(variable);
                 }
             }
@@ -118,10 +119,15 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
-                    var obj = new UANode(node.NodeId, node.Name, node.ParentNodeId, node.InternalInfo.NodeClass);
-                    obj.Attributes.EventNotifier = node.InternalInfo.EventNotifier;
-                    obj.Attributes.ShouldSubscribe = node.InternalInfo.ShouldSubscribe;
-                    obj.Source = NodeSource.CDF;
+                    var obj = new UANode(node.NodeId, node.Name, node.ParentNodeId, node.InternalInfo.NodeClass)
+                    {
+                        Attributes =
+                        {
+                            EventNotifier = node.InternalInfo.EventNotifier,
+                            ShouldSubscribe = node.InternalInfo.ShouldSubscribe
+                        },
+                        Source = NodeSource.CDF
+                    };
                     readNodes.Add(obj);
                 }
             }

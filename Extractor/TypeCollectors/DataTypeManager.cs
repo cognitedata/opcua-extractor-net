@@ -175,7 +175,7 @@ namespace Cognite.OpcUa.TypeCollectors
             }
             if (node.ValueRank == ValueRanks.Scalar) return true;
 
-            if (node.ArrayDimensions != null && node.ArrayDimensions.Count == 1)
+            if (node.ArrayDimensions != null && node.ArrayDimensions.Length == 1)
             {
                 int length = node.ArrayDimensions.First();
                 int maxArraySize = arraySizeOverride.HasValue ? Math.Max(arraySizeOverride.Value, config.MaxArraySize) : config.MaxArraySize;
@@ -201,7 +201,7 @@ namespace Cognite.OpcUa.TypeCollectors
             else
             {
                 log.Debug("Skipping variable {name} {id} due to non-scalar ValueRank {rank} and too high dimensionality {dim}",
-                    node.DisplayName, node.Id, node.ValueRank, node.ArrayDimensions.Count);
+                    node.DisplayName, node.Id, node.ValueRank, node.ArrayDimensions.Length);
                 return false;
             }
         }

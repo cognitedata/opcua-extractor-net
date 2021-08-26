@@ -455,7 +455,7 @@ namespace Cognite.OpcUa
             if (config.Cognite?.RawNodeBuffer?.Enable ?? false)
             {
                 log.Debug("Begin fetching data from CDF");
-                var handler = new CDFNodeSource(config, this, uaClient, pushers.First(pusher => pusher is CDFPusher) as CDFPusher);
+                var handler = new CDFNodeSource(config, this, uaClient, pushers.OfType<CDFPusher>().First());
                 await handler.ReadRawNodes(source.Token);
 
                 result = await handler.ParseResults(source.Token);

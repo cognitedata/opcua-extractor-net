@@ -120,7 +120,7 @@ namespace Cognite.OpcUa.Types
         public bool Historizing { get; set; }
         public UADataType DataType { get; set; }
         public int ValueRank { get; set; }
-        public Collection<int> ArrayDimensions { get; set; }
+        public int[] ArrayDimensions { get; set; }
         public byte AccessLevel { get; set; }
         public bool ReadHistory { get; set; }
         public VariableAttributes(NodeClass nc) : base(nc) { }
@@ -170,7 +170,7 @@ namespace Cognite.OpcUa.Types
             {
                 if (values[idx++].GetValue(typeof(int[])) is int[] dimVal)
                 {
-                    ArrayDimensions = new Collection<int>(dimVal);
+                    ArrayDimensions = dimVal;
                 }
             }
 

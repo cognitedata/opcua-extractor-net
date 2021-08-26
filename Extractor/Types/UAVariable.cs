@@ -86,7 +86,7 @@ namespace Cognite.OpcUa.Types
             {
                 builder.AppendFormat(CultureInfo.InvariantCulture, "ValueRank: {0}\n", ValueRank);
             }
-            if (ArrayDimensions != null && ArrayDimensions.Count == 1)
+            if (ArrayDimensions != null && ArrayDimensions.Length == 1)
             {
                 builder.AppendFormat(CultureInfo.InvariantCulture, "Dimension: {0}\n", ArrayDimensions[0]);
             }
@@ -118,7 +118,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Fixed dimensions of the array-type variable, if any
         /// </summary>
-        public Collection<int> ArrayDimensions => VariableAttributes.ArrayDimensions;
+        public int[] ArrayDimensions => VariableAttributes.ArrayDimensions;
         /// <summary>
         /// Index of the variable in array, if relevant. -1 if the variable is scalar.
         /// </summary>
@@ -134,7 +134,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// True if this node represents an array
         /// </summary>
-        public bool IsArray => ArrayDimensions != null && ArrayDimensions.Count == 1 && ArrayDimensions[0] > 0;
+        public bool IsArray => ArrayDimensions != null && ArrayDimensions.Length == 1 && ArrayDimensions[0] > 0;
         /// <summary>
         /// Sets the datapoint to provided DataValue.
         /// </summary>
