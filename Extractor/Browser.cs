@@ -13,25 +13,47 @@ using System.Collections.Concurrent;
 
 namespace Cognite.OpcUa
 {
+    internal class DirectoryBrowseParams
+    {
+        public IEnumerable<NodeFilter> Filters { get; set; }
+        public Action<ReferenceDescription, NodeId> Callback { get; set; }
+        public bool ReadVariableChildren { get; set; }
+        public int NodesChunk { get; set; }
+        public int MaxNodeParallelism { get; set; }
+        public BrowseParams InitialParams { get; set; }
+        public HashSet<NodeId> VisitedNodes { get; set; }
+        public int MaxDepth { get; set; } = -1;
+    }
+
+
     internal sealed class BrowseScheduler : IDisposable
     {
         private readonly TaskThrottler throttler;
         private readonly BrowseParams baseParams;
         private int numActiveNodes;
         private readonly UAClient uaClient;
-        private readonly int chunkSize;
-        private readonly int maxNodeParallelism;
         private ILogger log = Log.Logger.ForContext(typeof(BrowseScheduler));
 
         private Dictionary<NodeId, ReferenceDescriptionCollection> results = new Dictionary<NodeId, ReferenceDescriptionCollection>();
         private object dictLock = new object();
-        public BrowseScheduler(TaskThrottler throttler, BrowseParams baseParams, UAClient client, int nodesChunk, int maxNodeParallelism)
+
+        private readonly DirectoryBrowseParams options;
+
+        private readonly IEnumerable<NodeFilter> filters;
+        private readonly HashSet<NodeId> visitedNodes;
+        private readonly Action<ReferenceDescription, NodeId> callback;
+        private readonly HashSet<NodeId> localVisitedNodes = new HashSet<NodeId>();
+        public BrowseScheduler(
+            TaskThrottler throttler,
+            UAClient client,
+            DirectoryBrowseParams options)
         {
             this.throttler = throttler;
             uaClient = client;
-            chunkSize = nodesChunk;
-            this.maxNodeParallelism = maxNodeParallelism;
-            this.baseParams = baseParams;
+            this.options = options;
+            visitedNodes = options.VisitedNodes ?? new HashSet<NodeId>();
+            callback = options.Callback;
+            baseParams = options.InitialParams;
         }
 
         private readonly BlockingCollection<BrowseParams> finishedReads = new BlockingCollection<BrowseParams>();
@@ -41,16 +63,7 @@ namespace Cognite.OpcUa
             if (token.IsCancellationRequested) return;
             try
             {
-                var references = uaClient.GetReferences(browseParams, token);
-                int found = 0;
-                lock (dictLock)
-                {
-                    foreach (var kvp in references)
-                    {
-                        found += kvp.Value.Count;
-                        results[kvp.Key] = kvp.Value;
-                    }
-                }
+                uaClient.GetReferences(browseParams, false, token);
             }
             catch (Exception ex)
             {
@@ -61,44 +74,98 @@ namespace Cognite.OpcUa
                 finishedReads.Add(browseParams, token);
             }
         }
-
-        private IEnumerable<BrowseNode> GetBrowseChunk(List<BrowseNode> nodes, int idx)
+        /// <summary>
+        /// Apply ignore filters, if any are set.
+        /// </summary>
+        /// <param name="displayName">DisplayName of node to filter</param>
+        /// <param name="id">NodeId of node to filter</param>
+        /// <param name="typeDefinition">TypeDefinition of node to filter</param>
+        /// <param name="nc">NodeClass of node to filter</param>
+        /// <returns>True if the node should be kept</returns>
+        public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition, NodeClass nc)
         {
-            if (idx >= nodes.Count) yield break;
-            for (int i = idx; i < nodes.Count; i++)
-            {
-                if (chunkSize > 0 && i - idx + 1 > chunkSize) yield break;
-                if (maxNodeParallelism > 0 && i - idx + numActiveNodes >= maxNodeParallelism) yield break;
-                yield return nodes[i];
-            }
+            if (filters == null) return true;
+            if (filters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, uaClient.NamespaceTable, nc))) return false;
+            return true;
         }
 
-        private List<BrowseParams> GetNextChunks(List<BrowseNode> nodes, ref int index)
+        private ICollection<BrowseNode> HandleReadResult(ICollection<BrowseNode> nextIds, BrowseNode node)
+        {
+            if (node.Result == null || !node.Result.References.Any()) return nextIds;
+            log.Verbose("Read {cnt} children from node {id}", node.Result.References.Count);
+
+            foreach (var rd in node.Result.References)
+            {
+                var nodeId = uaClient.ToNodeId(rd.NodeId);
+                if (nodeId == ObjectIds.Server || nodeId == ObjectIds.Aliases) continue;
+                if (!NodeFilter(rd.DisplayName.Text, uaClient.ToNodeId(rd.TypeDefinition), nodeId, rd.NodeClass))
+                {
+                    log.Verbose("Ignoring filtered {nodeId}", nodeId);
+                    continue;
+                }
+
+                bool docb = true;
+                if (visitedNodes != null && visitedNodes.Contains(nodeId))
+                {
+                    docb = false;
+                    log.Verbose("Ignoring visited {nodeId}", nodeId);
+                }
+                if (docb)
+                {
+                    log.Verbose("Discovered new node {nodeId}", nodeId);
+                    callback?.Invoke(rd, node.Id);
+                }
+                if (!options.ReadVariableChildren && rd.NodeClass == NodeClass.Variable) continue;
+                if (options.ReadVariableChildren && rd.TypeDefinition == VariableTypeIds.PropertyType) continue;
+                if ((options.MaxDepth < 0 || node.Depth < options.MaxDepth) && localVisitedNodes.Add(nodeId))
+                {
+                    nextIds.Add(new BrowseNode(nodeId, node));
+                }
+            }
+
+            return nextIds;
+        }
+
+        private List<BrowseNode> GetBrowseChunk(LinkedListNode<BrowseNode> first, out LinkedListNode<BrowseNode> current)
+        {
+            var result = new List<BrowseNode>();
+            int cnt = 0;
+            current = first;
+            do
+            {
+                if (options.NodesChunk > 0 && cnt >= options.NodesChunk) return result;
+                if (options.MaxNodeParallelism > 0 && cnt + numActiveNodes >= options.MaxNodeParallelism) return result;
+                result.Add(current.Value);
+                current = current.Next;
+            } while (current != null);
+            return result;
+        }
+
+        private List<BrowseParams> GetNextChunks(LinkedListNode<BrowseNode> first, out LinkedListNode<BrowseNode> current)
         {
             List<BrowseParams> chunks = new List<BrowseParams>();
             List<BrowseNode> chunk;
+            current = first;
             do
             {
-                chunk = GetBrowseChunk(nodes, index).ToList();
+                chunk = GetBrowseChunk(current, out current);
                 numActiveNodes += chunk.Count;
-                index += chunk.Count;
                 if (chunk.Any())
                 {
-                    var browseParams = new BrowseParams(baseParams) { Nodes = chunk };
+                    var browseParams = new BrowseParams(baseParams) { Nodes = chunk.ToDictionary(node => node.Id) };
                     chunks.Add(browseParams);
                 }
             } while (chunk.Any());
             return chunks;
         }
 
-
-        public Dictionary<NodeId, ReferenceDescriptionCollection> BrowseLevel(CancellationToken token)
+        public Dictionary<NodeId, ReferenceDescriptionCollection> Browse(CancellationToken token)
         {
-            var nodes = baseParams.Nodes.ToList();
-            int index = 0;
+            var nodes = new LinkedList<BrowseNode>(baseParams.Nodes.Values);
             int totalRead = 0;
             int toRead = nodes.Count;
-            List<BrowseParams> chunks = GetNextChunks(nodes, ref index);
+            var continued = new List<BrowseNode>();
+            List<BrowseParams> chunks = GetNextChunks(nodes.First, out var current);
 
             while (numActiveNodes > 0 || chunks.Any())
             {
@@ -130,14 +197,18 @@ namespace Cognite.OpcUa
 
                 foreach (var chunk in finished)
                 {
-                    int numRead = chunk.Nodes.Count();
-                    numActiveNodes -= numRead;
-                    totalRead += numRead;
-
-                    log.Debug("Read children for {cnt}/{total} nodes", totalRead, toRead);
+                    foreach (var node in chunk.Nodes.Values)
+                    {
+                        HandleReadResult(nodes, node);
+                        if (node.ContinuationPoint != null)
+                        {
+                            nodes.AddBefore(current, node);
+                        }
+                    }
                 }
+                log.Debug("Read children for {cnt}/{total} nodes", totalRead, nodes.Count);
 
-                chunks.AddRange(GetNextChunks(nodes, ref index));
+                chunks.AddRange(GetNextChunks(current, out current));
             }
             return results;
         }
@@ -267,18 +338,19 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    var children = uaClient.GetReferences(new BrowseParams
+                    var node = new BrowseNode(nodeId);
+                    uaClient.GetReferences(new BrowseParams
                     {
                         NodeClassMask = (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType,
                         ReferenceTypeId = ReferenceTypeIds.HasTypeDefinition,
                         IncludeSubTypes = false,
-                        Nodes = new [] { new BrowseNode(nodeId) },
+                        Nodes = new Dictionary<NodeId, BrowseNode> { { nodeId, node } },
                         MaxPerNode = 1
-                    }, token);
-                    var references = children[nodeId];
-                    if (references?.Any() ?? false)
+                    }, true, token);
+                    var result = node.Result;
+                    if (result.References.Any())
                     {
-                        refd.TypeDefinition = references.First().NodeId;
+                        refd.TypeDefinition = result.References.First().NodeId;
                     }
                 }
                 catch (ServiceResultException ex)
@@ -292,11 +364,46 @@ namespace Cognite.OpcUa
             return refd;
         }
 
-        
-        public Dictionary<NodeId, ReferenceDescriptionCollection> BrowseLevel(BrowseParams baseParams, CancellationToken token)
+        private Action<ReferenceDescription, NodeId> GetDictWriteCallback(Dictionary<NodeId, ReferenceDescriptionCollection> dict)
         {
-            using var scheduler = new BrowseScheduler(throttler, baseParams, uaClient, config.Source.BrowseNodesChunk, throttling.MaxNodeParallelism);
-            return scheduler.BrowseLevel(token);
+            object lck = new object();
+            return (rd, nodeId) =>
+            {
+                lock(lck)
+                {
+                    if (!dict.TryGetValue(nodeId, out var refs))
+                    {
+                        dict[nodeId] = refs = new ReferenceDescriptionCollection();
+                    }
+                    refs.Add(rd);
+                }
+            };
+        }
+
+
+
+
+        public Dictionary<NodeId, ReferenceDescriptionCollection> BrowseLevel(
+            BrowseParams baseParams,
+            CancellationToken token,
+            bool doFilter = true,
+            bool ignoreVisited = false)
+        {
+            var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
+            var options = new DirectoryBrowseParams
+            {
+                Callback = GetDictWriteCallback(result),
+                Filters = doFilter ? IgnoreFilters : null,
+                InitialParams = baseParams,
+                MaxNodeParallelism = throttling.MaxNodeParallelism,
+                NodesChunk = config.Source.BrowseNodesChunk,
+                ReadVariableChildren = false,
+                VisitedNodes = null,
+                MaxDepth = 0
+            };
+
+            using var scheduler = new BrowseScheduler(throttler, uaClient, options);
+            return scheduler.Browse(token);
         }
 
         /// <summary>
@@ -341,7 +448,7 @@ namespace Cognite.OpcUa
                 int count = 0;
                 int countChildren = 0;
 
-                baseParams.Nodes = nextIds.Select(id => new BrowseNode(id)).ToList();
+                baseParams.Nodes = nextIds.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
 
                 var references = BrowseLevel(baseParams, token);
 
@@ -362,11 +469,6 @@ namespace Cognite.OpcUa
                     {
                         var nodeId = uaClient.ToNodeId(rd.NodeId);
                         if (rd.NodeId == ObjectIds.Server || rd.NodeId == ObjectIds.Aliases) continue;
-                        if (doFilter && !NodeFilter(rd.DisplayName.Text, uaClient.ToNodeId(rd.TypeDefinition), uaClient.ToNodeId(rd.NodeId), rd.NodeClass))
-                        {
-                            log.Verbose("Ignoring filtered {nodeId}", nodeId);
-                            continue;
-                        }
 
                         bool docb = true;
                         lock (visitedNodesLock)
@@ -404,20 +506,7 @@ namespace Cognite.OpcUa
                 visitedNodes.Clear();
             }
         }
-        /// <summary>
-        /// Apply ignore filters, if any are set.
-        /// </summary>
-        /// <param name="displayName">DisplayName of node to filter</param>
-        /// <param name="id">NodeId of node to filter</param>
-        /// <param name="typeDefinition">TypeDefinition of node to filter</param>
-        /// <param name="nc">NodeClass of node to filter</param>
-        /// <returns>True if the node should be kept</returns>
-        public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition, NodeClass nc)
-        {
-            if (IgnoreFilters == null) return true;
-            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, uaClient.NamespaceTable, nc))) return false;
-            return true;
-        }
+        
 
         public void Dispose()
         {
@@ -426,7 +515,7 @@ namespace Cognite.OpcUa
     }
     public class BrowseParams
     {
-        public IEnumerable<BrowseNode> Nodes { get; set; }
+        public Dictionary<NodeId, BrowseNode> Nodes { get; set; }
         public NodeId ReferenceTypeId { get; set; } = ReferenceTypeIds.HierarchicalReferences;
         public uint NodeClassMask { get; set; }
         public bool IncludeSubTypes { get; set; } = true;
@@ -467,8 +556,38 @@ namespace Cognite.OpcUa
         public BrowseNode(NodeId id)
         {
             Id = id;
+            Depth = 0;
         }
+        public BrowseNode(NodeId id, BrowseNode parent)
+        {
+            Id = id;
+            Depth = parent.Depth + 1;
+        }
+        public int Depth { get; }
         public NodeId Id { get; }
         public byte[] ContinuationPoint { get; set; }
+        public BrowseResult Result { get; private set; }
+        public void AddReferences(ReferenceDescriptionCollection references)
+        {
+            if (references == null) references = new ReferenceDescriptionCollection();
+            if (Result == null)
+            {
+                Result = new BrowseResult(this, references);
+            }
+            else
+            {
+                Result.References.AddRange(references);
+            }
+        }
+    }
+    public class BrowseResult
+    {
+        public BrowseNode Parent { get; }
+        public ReferenceDescriptionCollection References { get; }
+        public BrowseResult(BrowseNode parent, ReferenceDescriptionCollection references)
+        {
+            Parent = parent;
+            References = references;
+        }
     }
 }

@@ -451,7 +451,7 @@ namespace Cognite.OpcUa
         private async Task<IEnumerable<Task>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited)
         {
             bool readFromOpc = true;
-            NodeSources.BrowseResult result = null;
+            NodeSources.NodeSourceResult result = null;
             if (config.Cognite?.RawNodeBuffer?.Enable ?? false)
             {
                 log.Debug("Begin fetching data from CDF");
@@ -477,7 +477,7 @@ namespace Cognite.OpcUa
             if (readFromOpc)
             {
                 log.Debug("Begin mapping directory");
-                var handler = new BrowseResultHandler(config, this, uaClient);
+                var handler = new UANodeSource(config, this, uaClient);
                 try
                 {
                     await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, source.Token, ignoreVisited);
@@ -509,7 +509,7 @@ namespace Cognite.OpcUa
         /// This is the entry point for mapping on the extractor.
         /// </summary>
         /// <returns>A list of history tasks</returns>
-        private async Task<IEnumerable<Task>> MapUAToDestinations(NodeSources.BrowseResult result)
+        private async Task<IEnumerable<Task>> MapUAToDestinations(NodeSources.NodeSourceResult result)
         {
             if (result == null) return Enumerable.Empty<Task>();
 

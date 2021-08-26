@@ -253,11 +253,13 @@ namespace Cognite.OpcUa.TypeCollectors
             log.Information("Get enum properties for {cnt} enum types", typeSet.Count);
             var enumPropMap = new Dictionary<NodeId, NodeId>();
 
+            var nodes = typeSet.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
+
             var baseParams = new BrowseParams
             {
                 NodeClassMask = (uint)NodeClass.Variable,
                 ReferenceTypeId = ReferenceTypes.HierarchicalReferences,
-                Nodes = typeSet.Select(id => new BrowseNode(id))
+                Nodes = nodes
             };
             var children = await Task.Run(() => uaClient.Browser.BrowseLevel(baseParams, token));
 

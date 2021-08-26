@@ -290,11 +290,12 @@ namespace Test.Unit
         public void TestGetRoots()
         {
             CommonTestUtils.ResetMetricValue("opcua_browse_operations");
-            var childrenDict = tester.Client.GetReferences(new BrowseParams
+            var node = new BrowseNode(ObjectIds.ObjectsFolder);
+            tester.Client.GetReferences(new BrowseParams
             {
-                Nodes = new[] { new BrowseNode(ObjectIds.ObjectsFolder) }
-            }, tester.Source.Token);
-            var children = childrenDict[ObjectIds.ObjectsFolder];
+                Nodes = new Dictionary<NodeId, BrowseNode> { { ObjectIds.ObjectsFolder, node } }
+            }, true, tester.Source.Token);
+            var children = node.Result.References;
             Assert.Equal(8, children.Count);
 
             var nodes = children.ToDictionary(child => child.DisplayName.Text);
@@ -316,26 +317,23 @@ namespace Test.Unit
         {
             CommonTestUtils.ResetMetricValue("opcua_browse_operations");
             var nums = new int[2000];
-            try
-            {
-                var childrenDict = tester.Client.GetReferences(new BrowseParams
-                {
-                    Nodes = new[] { new BrowseNode(tester.Server.Ids.Full.WideRoot) },
-                    MaxPerNode = 100
-                }, tester.Source.Token);
 
-                var children = childrenDict[tester.Server.Ids.Full.WideRoot];
-                Assert.Equal(2000, children.Count);
-                var suffixNums = children.Select(child => int.Parse(Regex.Match(child.DisplayName.Text, @"\d+$").Value, CultureInfo.InvariantCulture));
-                foreach (var num in suffixNums)
-                {
-                    nums[num]++;
-                }
-            }
-            finally
+            var node = new BrowseNode(tester.Server.Ids.Full.WideRoot);
+            tester.Client.GetReferences(new BrowseParams
             {
-                tester.Client.Browser.ResetVisitedNodes();
+                Nodes = new Dictionary<NodeId, BrowseNode> { { tester.Server.Ids.Full.WideRoot, node } },
+                MaxPerNode = 100
+            }, true, tester.Source.Token);
+
+            var children = node.Result.References;
+            Assert.Equal(2000, children.Count);
+            var suffixNums = children.Select(child =>
+                int.Parse(Regex.Match(child.DisplayName.Text, @"\d+$").Value, CultureInfo.InvariantCulture));
+            foreach (var num in suffixNums)
+            {
+                nums[num]++;
             }
+
             Assert.All(nums, cnt => Assert.Equal(1, cnt));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 20));
         }

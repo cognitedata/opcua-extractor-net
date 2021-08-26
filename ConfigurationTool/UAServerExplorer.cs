@@ -246,18 +246,20 @@ namespace Cognite.OpcUa.Config
                 foreach (var chunk in nextIds.ChunkBy(nodesChunk))
                 {
                     if (token.IsCancellationRequested) return nodes;
-                    var result = GetReferences(new BrowseParams
+                    var browseNodes = chunk.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
+                    GetReferences(new BrowseParams
                     {
                         NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
-                        Nodes = chunk.Select(node => new BrowseNode(node))
-                    }, token);
+                        Nodes = browseNodes
+                    }, true, token);
 
-                    foreach (var res in result)
+                    foreach (var node in browseNodes.Values)
                     {
-                        references[res.Key] = res.Value;
-                        countChildren += res.Value.Count;
+                        if (node.Result == null) continue;
+                        references[node.Id] = node.Result.References;
+                        countChildren += node.Result.References.Count;
                     }
-                    count += result.Count;
+                    count += browseNodes.Count;
                     log.Debug("Read node children {cnt} / {total}. Children: {childcnt}", count, total, countChildren);
                     totalChildCount += countChildren;
                     if (totalChildCount >= 10000) break;
@@ -340,11 +342,12 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     log.Information("Try to get the children of {cnt} nodes", ids.Count);
-                    var children = await ToolUtil.RunWithTimeout(Task.Run(() => GetReferences(new BrowseParams
+                    var browseNodes = ids.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
+                    await ToolUtil.RunWithTimeout(Task.Run(() => GetReferences(new BrowseParams
                     {
                         NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
-                        Nodes = ids.Select(node => new BrowseNode(node))
-                    }, token)), 30);
+                        Nodes = browseNodes
+                    }, true, token)), 30);
                     break;
                 }
                 catch (Exception ex)
@@ -376,16 +379,18 @@ namespace Cognite.OpcUa.Config
                 if (total < chunkSize) continue;
 
                 config.Source.BrowseChunk = chunkSize;
-                Dictionary<NodeId, ReferenceDescriptionCollection> children;
+                Dictionary<NodeId, BrowseResult> children;
                 try
                 {
                     log.Information("Try to get the children of the {cnt} largest parent nodes, with return chunk size {size}", 
                         toBrowse.Count, chunkSize);
-                    children = await ToolUtil.RunWithTimeout(Task.Run(() => GetReferences(new BrowseParams
+                    var nodes = toBrowse.Select(group => new BrowseNode(group.Key)).ToDictionary(node => node.Id);
+                    await ToolUtil.RunWithTimeout(Task.Run(() => GetReferences(new BrowseParams
                     {
                         NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
-                        Nodes = toBrowse.Select(group => new BrowseNode(group.Key))
-                    }, token)), 60);
+                        Nodes = nodes
+                    }, true, token)), 60);
+                    children = nodes.ToDictionary(node => node.Key, node => node.Value.Result);
                 }
                 catch (Exception ex)
                 {
@@ -393,7 +398,7 @@ namespace Cognite.OpcUa.Config
                     log.Debug(ex, "Failed to browse nodes");
                     continue;
                 }
-                int childCount = children.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count);
+                int childCount = children.Aggregate(0, (seed, kvp) => seed + kvp.Value.References.Count);
                 if (childCount < total)
                 {
                     log.Warning("Expected to receive {cnt} nodes but only got {cnt2}!", total, childCount);

@@ -462,18 +462,16 @@ namespace Cognite.OpcUa
             nodeOverrides.Clear();
         }
 
-        public Dictionary<NodeId, ReferenceDescriptionCollection> GetReferences(BrowseParams browseParams, CancellationToken token)
+        public void GetReferences(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
         {
             if (browseParams == null) throw new ArgumentNullException(nameof(browseParams));
             var toBrowse = new List<BrowseNode>();
             var toBrowseNext = new List<BrowseNode>();
-            foreach (var node in browseParams.Nodes)
+            foreach (var node in browseParams.Nodes.Values)
             {
                 if (node.ContinuationPoint == null) toBrowse.Add(node);
                 else toBrowseNext.Add(node);
             }
-
-            var intResults = new List<(BrowseNode node, Opc.Ua.BrowseResult result)>();
 
             using var operation = waiter.GetInstance();
 
@@ -508,9 +506,9 @@ namespace Cognite.OpcUa
                     var node = toBrowse[i];
                     if (StatusCode.IsBad(result.StatusCode)) throw new ServiceResultException(result.StatusCode);
 
-                    intResults.Add((node, result));
+                    node.AddReferences(result.References);
                     node.ContinuationPoint = result.ContinuationPoint;
-                    if (node.ContinuationPoint != null) toBrowseNext.Add(node);
+                    if (node.ContinuationPoint != null && readToCompletion) toBrowseNext.Add(node);
                 }
             }
 
@@ -519,7 +517,7 @@ namespace Cognite.OpcUa
                 var cps = new ByteStringCollection(toBrowseNext.Select(node => node.ContinuationPoint));
                 var ids = toBrowseNext;
                 toBrowseNext = new List<BrowseNode>();
-                BrowseResultCollection results;
+                Opc.Ua.BrowseResultCollection results;
                 try
                 {
                     Session.BrowseNext(
@@ -544,25 +542,12 @@ namespace Cognite.OpcUa
                     var result = results[i];
                     var node = ids[i];
                     if (StatusCode.IsBad(result.StatusCode)) throw new ServiceResultException(result.StatusCode);
-                    intResults.Add((node, result));
-                    node.ContinuationPoint = result.ContinuationPoint;
-                    if (node.ContinuationPoint != null) toBrowseNext.Add(node);
-                }
-            }
 
-            var finalResult = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            foreach (var pair in intResults)
-            {
-                if (!finalResult.TryGetValue(pair.node.Id, out var references))
-                {
-                    finalResult[pair.node.Id] = references = pair.result.References;
-                }
-                else
-                {
-                    references.AddRange(pair.result.References);
+                    node.AddReferences(result.References);
+                    node.ContinuationPoint = result.ContinuationPoint;
+                    if (node.ContinuationPoint != null && readToCompletion) toBrowseNext.Add(node);
                 }
             }
-            return finalResult;
         }
 
         #endregion
