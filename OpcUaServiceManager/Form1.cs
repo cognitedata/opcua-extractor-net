@@ -93,7 +93,7 @@ namespace OpcUaServiceManager
                 return;
             }
 
-            string cmd = string.Format(@"/C sc create {2} binPath= ""\""{0}\"" -e -w \""{1}\"" "" DisplayName= ""{3}""",
+            string cmd = string.Format(@"/C sc create {2} binPath= ""\""{0}\"" -s -w \""{1}\"" "" DisplayName= ""{3}""",
                 _opcuaExtractorDir + _opcuaExtractorExe, txtSvcFolder.Text, _serviceBaseName + _nextServiceNumber, txtSvcName.Text);
             string result = RunCommand.Run(cmd);
             if (result.Contains("SUCCESS"))

@@ -47,6 +47,10 @@ source:
         cert-name:
     # Use secured connection
     secure: false
+    # Ignore other server certificate issues, like missing flags, too short key length, or bad issuer chain.
+    # Note that enabling this makes the connection less secure, and that a better solution is to resolve these issues on
+    # the server.
+    ignore-certificate-issues: false
     # If true, force restart the extractor on disconnect. Required for some servers
     force-restart: false
     # Completely exit the extractor on failure, instead of doing an internal restart. Internal reset should re-initialize everything relevant,

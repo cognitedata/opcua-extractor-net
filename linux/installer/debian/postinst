@@ -1,0 +1,5 @@
+#!/bin/sh
+
+ln -sfn /var/log/cognite/opcua/ /var/lib/cognite/opcua/logs
+ln -sfn /etc/cognite/opcua/ /var/lib/cognite/opcua/config
+

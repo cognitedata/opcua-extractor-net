@@ -118,24 +118,37 @@ podTemplate(
 			    jenkinsHelpersUtil.uploadCodecovReport()
             }
             if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
+                stage('Install release dependencies') {
+                    sh('apt-get install -y python3-pip rpm build-essential sed')
+                    sh('pip3 install PyGithub')
+				}
                 stage('Build release versions') {
                     sh('apt-get install -y zip')
                     packProject('win-x64', "$version", false)
-                    packProject('win81-x64', "$version", false)
                     packProject('linux-x64', "$version", true)
                     packBridge('win-x64', "$version", false)
-                    packBridge('win81-x64', "$version", false)
                     packBridge('linux-x64', "$version", true)
                 }
-                stage('Install release dependencies') {
-                    sh('apt-get install -y python3-pip')
-                    sh('pip3 install PyGithub')
-				}
+                stage('Build linux installers') {
+                    sh('cp -r ExtractorLauncher/bin/Release/net5.0/linux-x64/publish/ linux/publish/')
+                    sh('cp LICENSE.md linux/')
+                    sh('cp -r config/ linux/')
+                    dir ('linux') {
+                        sh("./build-deb.sh $version amd64")
+                        // RPMS cannot have - in version
+                        rpmver = version.replace('-', '_')
+                        sh("./build-rpm.sh $rpmver x86_64")
+                    }
+                    sh('mv linux/*.deb .')
+                    sh('mv linux/rpmbuild/RPMS/x86_64/*.rpm .')
+                }
+                
                 stage('Deploy to github release') {
                     withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
                         sh("python3 deploy.py cognitedata opcua-extractor-net $ghpassword $version "
-                            + "opcua-extractor.win-x64.${version}.zip opcua-extractor.win81-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip "
-                            + "mqtt-cdf-bridge.win-x64.${version}.zip mqtt-cdf-bridge.win81-x64.${version}.zip mqtt-cdf-bridge.linux-x64.${version}.zip")
+                            + "opcua-extractor.win-x64.${version}.zip opcua-extractor.linux-x64.${version}.zip "
+                            + "mqtt-cdf-bridge.win-x64.${version}.zip mqtt-cdf-bridge.linux-x64.${version}.zip "
+                            + "opcua-extractor_${version}_amd64.deb opcua-extractor-${rpmver}-1.x86_64.rpm")
                     }
                 }
             }
@@ -220,7 +233,7 @@ void packBridge(String configuration, String version, boolean linux) {
     sh("dotnet publish -c Release -r $configuration --self-contained true /p:PublishSingleFile=\"true\" MQTTCDFBridge/")
     sh("mkdir -p ./${configuration}")
     sh("mv MQTTCDFBridge/bin/Release/net5.0/${configuration}/publish/* ./${configuration}/")
-    sh("rm ./${configuration}/*.config ./${configuration}/*.pdb ./${configuration}/*.xml")
+    sh("rm -f ./${configuration}/*.config ./${configuration}/*.pdb ./${configuration}/*.xml")
     sh("mkdir -p ./${configuration}/config")
     sh("cp ./config/config.bridge.example.yml ./${configuration}/config/")
     sh("cp ./LICENSE.md ./${configuration}/")
@@ -236,8 +249,12 @@ void packBridge(String configuration, String version, boolean linux) {
 void packProject(String configuration, String version, boolean linux) {
     sh("dotnet publish -c Release -r $configuration $publishArgs ExtractorLauncher/")
     sh("mkdir -p ./${configuration}/")
-    sh("mv ExtractorLauncher/bin/Release/net5.0/${configuration}/publish/* ./${configuration}/")
-    sh("rm ./${configuration}/*.config ./${configuration}/*.pdb ./${configuration}/*.xml")
+    if (linux) {
+        sh("cp -r ExtractorLauncher/bin/Release/net5.0/${configuration}/publish/* ./${configuration}/")
+    } else {
+        sh("mv ExtractorLauncher/bin/Release/net5.0/${configuration}/publish/* ./${configuration}/")
+    }
+    sh("rm -f ./${configuration}/*.config ./${configuration}/*.pdb ./${configuration}/*.xml")
     sh("cp -r ./config ./${configuration}/")
     sh("cp ./LICENSE.md ./${configuration}/")
     sh("cp ./CHANGELOG.md ./${configuration}/")

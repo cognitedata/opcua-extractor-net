@@ -79,6 +79,7 @@ namespace Cognite.OpcUa.Types
                     log.Warning("Failed to serialize built in type: {err}", ex.Message);
                 }
             }
+            
             // If the type is enumerable we can write it to a JSON array.
             if (typeof(IEnumerable).IsAssignableFrom(value.GetType()) && !(value is System.Xml.XmlElement))
             {
@@ -128,15 +129,40 @@ namespace Cognite.OpcUa.Types
                 if (json) return $"{{{JsonConvert.ToString(enumType.DisplayName?.Text ?? "null")}:{enumType.Value}}}";
                 return $"{enumType.DisplayName?.Text}: {enumType.Value}";
             }
+            else if (value.GetType().IsEnum) returnStr = Enum.GetName(value.GetType(), value);
             else if (value is Opc.Ua.KeyValuePair kvp)
             {
                 if (json) return $"{{{JsonConvert.ToString(kvp.Key?.Name ?? "null")}:{ConvertToString(kvp.Value, enumValues, typeInfo, json)}}}";
                 return $"{kvp.Key?.Name}: {ConvertToString(kvp.Value, enumValues, typeInfo, json)}";
             }
+            else if (typeInfo != null && typeInfo.BuiltInType == BuiltInType.StatusCode && value is uint uintVal)
+            {
+                returnStr = StatusCode.LookupSymbolicId(uintVal);
+            }
             else if (value is System.Xml.XmlElement xml) return JsonConvert.SerializeXmlNode(xml);
+            else if (value is Uuid uuid) returnStr = uuid.GuidString;
+            else if (value is DiagnosticInfo diagInfo)
+            {
+                var builder = new StringBuilder();
+                builder.Append('{');
+                builder.Append(@"""LocalizedText"":");
+                builder.Append(diagInfo.LocalizedText);
+                builder.Append(@",""AdditionalInfo"":");
+                builder.Append(diagInfo.AdditionalInfo == null ? "null" : JsonConvert.ToString(diagInfo.AdditionalInfo));
+                builder.Append(@",""InnerStatusCode"":");
+                builder.Append(ConvertToString(diagInfo.InnerStatusCode, null, null, true));
+                builder.Append(@",""InnerDiagnosticInfo"":");
+                builder.Append(ConvertToString(diagInfo.InnerDiagnosticInfo, null, null, true));
+                builder.Append('}');
+                return builder.ToString();
+            }
             else if (value is ExtensionObject extensionObject)
             {
                 var body = extensionObject.Body;
+                if (body == null)
+                {
+                    return json ? "null" : "";
+                }
                 if (typeof(IEnumerable).IsAssignableFrom(body.GetType())
                     || customHandledTypes.Contains(body.GetType())
                     || typeInfo == null)
@@ -175,7 +201,7 @@ namespace Cognite.OpcUa.Types
         {
             typeof(NodeId), typeof(DataValue), typeof(ExpandedNodeId), typeof(LocalizedText),
             typeof(QualifiedName), typeof(Opc.Ua.Range), typeof(Opc.Ua.KeyValuePair), typeof(System.Xml.XmlElement),
-            typeof(EUInformation), typeof(EnumValueType), typeof(Variant)
+            typeof(EUInformation), typeof(EnumValueType), typeof(Variant), typeof(Uuid), typeof(DiagnosticInfo)
         };
 
         /// <summary>
@@ -185,6 +211,7 @@ namespace Cognite.OpcUa.Types
         /// <returns>True if this type is best handled by Opc.Ua.JsonEncoder</returns>
         private static bool ShouldUseJson(object value)
         {
+            if (value == null) return false;
             // Go through the value to check if we can parse it ourselves.
             // i.e. this is either an enumerable of a handled type, or an extensionobject
             // around a handled type.
@@ -206,6 +233,7 @@ namespace Cognite.OpcUa.Types
             }
             if (!type.Namespace.StartsWith("Opc.Ua", StringComparison.InvariantCulture)) return false;
             if (customHandledTypes.Contains(type)) return false;
+            if (type.IsEnum) return false;
             return true;
         }
 

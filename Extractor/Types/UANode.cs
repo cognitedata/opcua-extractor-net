@@ -21,6 +21,7 @@ using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
 using Newtonsoft.Json;
 using Opc.Ua;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -94,6 +95,8 @@ namespace Cognite.OpcUa.Types
         /// True if this node should not be pushed to destinations.
         /// </summary>
         public bool Ignore => Attributes.Ignore;
+
+        private static readonly ILogger log = Log.Logger.ForContext(typeof(UANode));
 
         /// <summary>
         /// Where this node was first generated from
@@ -383,9 +386,8 @@ namespace Cognite.OpcUa.Types
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
                 stream.Seek(0, SeekOrigin.Begin);
-                Console.WriteLine(Encoding.UTF8.GetString(stream.ToArray()));
+                log.Error("Failed to parse JSON data: {msg}, invalid JSON: {data}", ex.Message, Encoding.UTF8.GetString(stream.ToArray()));
                 return null;
             }
         }

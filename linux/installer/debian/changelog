@@ -1,0 +1,8 @@
+cognite-opcua-extractor (2.4.0) unstable; urgency=low
+ * Initial release of linux package versions
+ * Support for running extractor as linux service.
+ * Changes to command line interface.
+ * Support for using CDF as source for nodes, to reduce startup time.
+
+-- Einar Omang <einar.omang@cognite.com>  Wed, 18 Aug 2021 10:53:00 +0100
+
