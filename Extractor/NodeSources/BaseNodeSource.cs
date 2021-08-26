@@ -46,7 +46,7 @@ namespace Cognite.OpcUa.NodeSources
         }
 
 
-        public abstract Task<BrowseResult> ParseResults(CancellationToken token);
+        public abstract Task<BrowseResult?> ParseResults(CancellationToken token);
 
         /// <summary>
         /// Write a variable to the correct output lists. This assumes the variable should be mapped.
@@ -123,14 +123,14 @@ namespace Cognite.OpcUa.NodeSources
 
                 if (variable.IsArray)
                 {
-                    foreach (var child in variable.ArrayChildren)
+                    foreach (var child in variable.CreateArrayChildren())
                     {
                         var uniqueId = Extractor.GetUniqueId(child.Id, child.Index);
-                        if (setState) Extractor.State.SetNodeState(state, uniqueId);
+                        if (setState && state != null) Extractor.State.SetNodeState(state, uniqueId);
                         Extractor.State.RegisterNode(node.Id, uniqueId);
                     }
                 }
-                else if (setState)
+                if (setState && state != null)
                 {
                     Extractor.State.SetNodeState(state);
                 }

@@ -135,7 +135,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// </summary>
         /// <param name="id">Id to create or retrieve a datatype for.</param>
         /// <returns>UADataType for <paramref name="id"/></returns>
-        public UADataType GetDataType(NodeId id)
+        public UADataType GetDataType(NodeId? id)
         {
             if (id == null) id = NodeId.Null;
             if (dataTypes.TryGetValue(id, out var dt)) return dt;

@@ -23,18 +23,21 @@ namespace Cognite.OpcUa.NodeSources
         private readonly CDFPusher pusher;
         private readonly CDFNodeSourceConfig sourceConfig;
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFNodeSource));
+        private readonly string database;
 
         public CDFNodeSource(FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher)
             : base(config, extractor, client)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
+            if (config.Cognite?.RawNodeBuffer == null) throw new InvalidOperationException("RawNodeBuffer config required");
+            if (config.Cognite.RawNodeBuffer.Database == null) throw new ConfigurationException("Database must be set");
+            database = config.Cognite.RawNodeBuffer.Database;
             this.pusher = pusher;
             sourceConfig = config.Cognite.RawNodeBuffer;
         }
         private readonly List<UAVariable> readVariables = new List<UAVariable>();
         private readonly List<UANode> readNodes = new List<UANode>();
 
-        private static async Task<IEnumerable<SavedNode>> DeserializeRawData(IEnumerable<RawRow> rows, JsonSerializer serializer, CancellationToken token)
+        private static async Task<IEnumerable<SavedNode>?> DeserializeRawData(IEnumerable<RawRow> rows, JsonSerializer serializer, CancellationToken token)
         {
             using var stream = new MemoryStream();
             await System.Text.Json.JsonSerializer.SerializeAsync(stream, rows.Select(row => row.Columns), null, token);
@@ -60,10 +63,10 @@ namespace Cognite.OpcUa.NodeSources
                 IEnumerable<SavedNode> nodes;
                 try
                 {
-                    var tsData = await pusher.GetRawRows(sourceConfig.Database, sourceConfig.TimeseriesTable, new[] {
+                    var tsData = await pusher.GetRawRows(database, sourceConfig.TimeseriesTable, new[] {
                         "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo"
                     }, token);
-                    nodes = await DeserializeRawData(tsData, serializer, token);
+                    nodes = await DeserializeRawData(tsData, serializer, token) ?? Enumerable.Empty<SavedNode>();
                 }
                 catch (Exception ex)
                 {
@@ -74,7 +77,8 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
-                    string name = node.Name;
+                    string? name = node.Name;
+                    if (name == null || node.InternalInfo == null) continue;
                     // If this is an array element, we need to strip the postfix from the name, since we are treating it
                     // as its parent.
                     if (node.InternalInfo.ArrayDimensions != null && node.InternalInfo.Index >= 0)
@@ -82,7 +86,7 @@ namespace Cognite.OpcUa.NodeSources
                         var postfix = $"[{node.InternalInfo.Index}]";
                         name = name.Substring(0, name.Length - postfix.Length);
                     }
-                    var variable = new UAVariable(node.NodeId, name, node.ParentNodeId, node.InternalInfo.NodeClass)
+                    var variable = new UAVariable(node.NodeId, name, node.ParentNodeId ?? NodeId.Null, node.InternalInfo.NodeClass)
                     {
                         VariableAttributes =
                         {
@@ -104,11 +108,11 @@ namespace Cognite.OpcUa.NodeSources
                 IEnumerable<SavedNode> nodes;
                 try
                 {
-                    var assetData = await pusher.GetRawRows(sourceConfig.Database, sourceConfig.AssetsTable, new[]
+                    var assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, new[]
                     {
                         "NodeId", "ParentNodeId", "name", "InternalInfo"
                     }, token);
-                    nodes = await DeserializeRawData(assetData, serializer, token);
+                    nodes = await DeserializeRawData(assetData, serializer, token) ?? Enumerable.Empty<SavedNode>();
                 }
                 catch (Exception ex)
                 {
@@ -119,7 +123,9 @@ namespace Cognite.OpcUa.NodeSources
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
-                    var obj = new UANode(node.NodeId, node.Name, node.ParentNodeId, node.InternalInfo.NodeClass)
+                    if (node.Name == null || node.InternalInfo == null) continue;
+
+                    var obj = new UANode(node.NodeId, node.Name, node.ParentNodeId ?? NodeId.Null, node.InternalInfo.NodeClass)
                     {
                         Attributes =
                         {
@@ -135,7 +141,7 @@ namespace Cognite.OpcUa.NodeSources
         }
 
 
-        public override async Task<BrowseResult> ParseResults(CancellationToken token)
+        public override async Task<BrowseResult?> ParseResults(CancellationToken token)
         {
             if (!readVariables.Any() && !readNodes.Any()) return null;
 

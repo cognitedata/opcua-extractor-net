@@ -452,7 +452,7 @@ namespace Cognite.OpcUa
         private async Task<IEnumerable<Task>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited)
         {
             bool readFromOpc = true;
-            NodeSources.BrowseResult result = null;
+            NodeSources.BrowseResult? result = null;
             if (config.Cognite?.RawNodeBuffer?.Enable ?? false)
             {
                 log.Debug("Begin fetching data from CDF");
@@ -495,7 +495,9 @@ namespace Cognite.OpcUa
 
             try
             {
+#pragma warning disable CS8604 // Possible null reference argument.
                 return await MapUAToDestinations(result);
+#pragma warning restore CS8604 // Possible null reference argument.
             }
             catch (Exception ex)
             {
