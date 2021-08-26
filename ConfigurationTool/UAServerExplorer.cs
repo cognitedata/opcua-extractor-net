@@ -250,14 +250,14 @@ namespace Cognite.OpcUa.Config
                     {
                         NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
                         Nodes = chunk.Select(node => new BrowseNode(node))
-                    }, token);
+                    }, true, token);
 
-                    foreach (var res in result)
+                    foreach (var res in result.Results)
                     {
-                        references[res.Key] = res.Value;
-                        countChildren += res.Value.Count;
+                        references[res.Key] = res.Value.References;
+                        countChildren += res.Value.References.Count;
                     }
-                    count += result.Count;
+                    count += result.Results.Count;
                     log.Debug("Read node children {cnt} / {total}. Children: {childcnt}", count, total, countChildren);
                     totalChildCount += countChildren;
                     if (totalChildCount >= 10000) break;
@@ -344,7 +344,7 @@ namespace Cognite.OpcUa.Config
                     {
                         NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
                         Nodes = ids.Select(node => new BrowseNode(node))
-                    }, token)), 30);
+                    }, true, token)), 30);
                     break;
                 }
                 catch (Exception ex)
@@ -376,16 +376,17 @@ namespace Cognite.OpcUa.Config
                 if (total < chunkSize) continue;
 
                 config.Source.BrowseChunk = chunkSize;
-                Dictionary<NodeId, ReferenceDescriptionCollection> children;
+                Dictionary<NodeId, BrowseResult> children;
                 try
                 {
                     log.Information("Try to get the children of the {cnt} largest parent nodes, with return chunk size {size}", 
                         toBrowse.Count, chunkSize);
-                    children = await ToolUtil.RunWithTimeout(Task.Run(() => GetReferences(new BrowseParams
+                    var result = await ToolUtil.RunWithTimeout(Task.Run(() => GetReferences(new BrowseParams
                     {
                         NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
                         Nodes = toBrowse.Select(group => new BrowseNode(group.Key))
-                    }, token)), 60);
+                    }, true, token)), 60);
+                    children = result.Results;
                 }
                 catch (Exception ex)
                 {
@@ -393,7 +394,7 @@ namespace Cognite.OpcUa.Config
                     log.Debug(ex, "Failed to browse nodes");
                     continue;
                 }
-                int childCount = children.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count);
+                int childCount = children.Aggregate(0, (seed, kvp) => seed + kvp.Value.References.Count);
                 if (childCount < total)
                 {
                     log.Warning("Expected to receive {cnt} nodes but only got {cnt2}!", total, childCount);

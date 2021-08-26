@@ -21,11 +21,11 @@ using System.Collections.Generic;
 namespace Cognite.OpcUa.NodeSources
 {
     /// <summary>
-    /// Contains the result of a round of browsing the server node hierarchy.
+    /// Contains the result of obtaining references from source systems.
     /// </summary>
-    public class BrowseResult
+    public class NodeSourceResult
     {
-        public BrowseResult(
+        public NodeSourceResult(
             IEnumerable<UANode> sourceObjects,
             IEnumerable<UAVariable> sourceVariables,
             IEnumerable<UANode> destinationObjects,

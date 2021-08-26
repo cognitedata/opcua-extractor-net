@@ -462,7 +462,8 @@ namespace Cognite.OpcUa
             nodeOverrides.Clear();
         }
 
-        public Dictionary<NodeId, ReferenceDescriptionCollection> GetReferences(BrowseParams browseParams, CancellationToken token)
+        public BrowseResultCollection GetReferences(
+            BrowseParams browseParams, bool readToCompletion, CancellationToken token)
         {
             if (browseParams == null) throw new ArgumentNullException(nameof(browseParams));
             var toBrowse = new List<BrowseNode>();
@@ -473,14 +474,14 @@ namespace Cognite.OpcUa
                 else toBrowseNext.Add(node);
             }
 
-            var intResults = new List<(BrowseNode node, Opc.Ua.BrowseResult result)>();
+            var finalResult = new BrowseResultCollection();
 
             using var operation = waiter.GetInstance();
 
             if (toBrowse.Any())
             {
                 var descriptions = new BrowseDescriptionCollection(toBrowse.Select(node => browseParams.ToDescription(node)));
-                BrowseResultCollection results;
+                Opc.Ua.BrowseResultCollection results;
                 try
                 {
                     Session.Browse(
@@ -508,9 +509,9 @@ namespace Cognite.OpcUa
                     var node = toBrowse[i];
                     if (StatusCode.IsBad(result.StatusCode)) throw new ServiceResultException(result.StatusCode);
 
-                    intResults.Add((node, result));
+                    finalResult.AddReferences(node, result.References);
                     node.ContinuationPoint = result.ContinuationPoint;
-                    if (node.ContinuationPoint != null) toBrowseNext.Add(node);
+                    if (node.ContinuationPoint != null && readToCompletion) toBrowseNext.Add(node);
                 }
             }
 
@@ -519,7 +520,7 @@ namespace Cognite.OpcUa
                 var cps = new ByteStringCollection(toBrowseNext.Select(node => node.ContinuationPoint));
                 var ids = toBrowseNext;
                 toBrowseNext = new List<BrowseNode>();
-                BrowseResultCollection results;
+                Opc.Ua.BrowseResultCollection results;
                 try
                 {
                     Session.BrowseNext(
@@ -544,24 +545,13 @@ namespace Cognite.OpcUa
                     var result = results[i];
                     var node = ids[i];
                     if (StatusCode.IsBad(result.StatusCode)) throw new ServiceResultException(result.StatusCode);
-                    intResults.Add((node, result));
+
+                    finalResult.AddReferences(node, result.References);
                     node.ContinuationPoint = result.ContinuationPoint;
-                    if (node.ContinuationPoint != null) toBrowseNext.Add(node);
+                    if (node.ContinuationPoint != null && readToCompletion) toBrowseNext.Add(node);
                 }
             }
 
-            var finalResult = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            foreach (var pair in intResults)
-            {
-                if (!finalResult.TryGetValue(pair.node.Id, out var references))
-                {
-                    finalResult[pair.node.Id] = references = pair.result.References;
-                }
-                else
-                {
-                    references.AddRange(pair.result.References);
-                }
-            }
             return finalResult;
         }
 

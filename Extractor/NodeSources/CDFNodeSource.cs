@@ -135,7 +135,7 @@ namespace Cognite.OpcUa.NodeSources
         }
 
 
-        public override async Task<BrowseResult> ParseResults(CancellationToken token)
+        public override async Task<NodeSourceResult> ParseResults(CancellationToken token)
         {
             if (!readVariables.Any() && !readNodes.Any()) return null;
 
@@ -168,7 +168,7 @@ namespace Cognite.OpcUa.NodeSources
                 finalDestinationObjects.Count, finalDestinationVariables.Count,
                 finalSourceObjects.Count, finalSourceVariables.Count);
 
-            return new BrowseResult(
+            return new NodeSourceResult(
                 finalSourceObjects,
                 finalSourceVariables,
                 finalDestinationObjects,

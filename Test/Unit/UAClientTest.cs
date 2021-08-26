@@ -293,11 +293,11 @@ namespace Test.Unit
             var childrenDict = tester.Client.GetReferences(new BrowseParams
             {
                 Nodes = new[] { new BrowseNode(ObjectIds.ObjectsFolder) }
-            }, tester.Source.Token);
-            var children = childrenDict[ObjectIds.ObjectsFolder];
-            Assert.Equal(8, children.Count);
+            }, true, tester.Source.Token);
+            var children = childrenDict.Results[ObjectIds.ObjectsFolder];
+            Assert.Equal(8, children.References.Count);
 
-            var nodes = children.ToDictionary(child => child.DisplayName.Text);
+            var nodes = children.References.ToDictionary(child => child.DisplayName.Text);
             var fullRoot = nodes["FullRoot"];
             Assert.Equal(tester.Server.Ids.Full.Root, fullRoot.NodeId);
             Assert.Equal(ReferenceTypeIds.Organizes, fullRoot.ReferenceTypeId);
@@ -322,11 +322,12 @@ namespace Test.Unit
                 {
                     Nodes = new[] { new BrowseNode(tester.Server.Ids.Full.WideRoot) },
                     MaxPerNode = 100
-                }, tester.Source.Token);
+                }, true, tester.Source.Token);
 
-                var children = childrenDict[tester.Server.Ids.Full.WideRoot];
-                Assert.Equal(2000, children.Count);
-                var suffixNums = children.Select(child => int.Parse(Regex.Match(child.DisplayName.Text, @"\d+$").Value, CultureInfo.InvariantCulture));
+                var children = childrenDict.Results[tester.Server.Ids.Full.WideRoot];
+                Assert.Equal(2000, children.References.Count);
+                var suffixNums = children.References.Select(child =>
+                    int.Parse(Regex.Match(child.DisplayName.Text, @"\d+$").Value, CultureInfo.InvariantCulture));
                 foreach (var num in suffixNums)
                 {
                     nums[num]++;

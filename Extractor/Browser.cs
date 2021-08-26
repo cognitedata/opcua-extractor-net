@@ -41,14 +41,14 @@ namespace Cognite.OpcUa
             if (token.IsCancellationRequested) return;
             try
             {
-                var references = uaClient.GetReferences(browseParams, token);
+                var result = uaClient.GetReferences(browseParams, false, token);
                 int found = 0;
                 lock (dictLock)
                 {
-                    foreach (var kvp in references)
+                    foreach (var kvp in result.Results)
                     {
-                        found += kvp.Value.Count;
-                        results[kvp.Key] = kvp.Value;
+                        found += kvp.Value.References.Count;
+                        results[kvp.Key] = kvp.Value.References;
                     }
                 }
             }
@@ -60,6 +60,45 @@ namespace Cognite.OpcUa
             {
                 finishedReads.Add(browseParams, token);
             }
+        }
+
+        private void HandleResult(Dictionary<NodeId, ReferenceDescriptionCollection> references)
+        {
+            /* foreach (var (parentId, children) in references)
+            {
+                nodeCnt += children.Count;
+                foreach (var rd in children)
+                {
+                    var nodeId = uaClient.ToNodeId(rd.NodeId);
+                    if (rd.NodeId == ObjectIds.Server || rd.NodeId == ObjectIds.Aliases) continue;
+                    if (doFilter && !NodeFilter(rd.DisplayName.Text, uaClient.ToNodeId(rd.TypeDefinition), uaClient.ToNodeId(rd.NodeId), rd.NodeClass))
+                    {
+                        log.Verbose("Ignoring filtered {nodeId}", nodeId);
+                        continue;
+                    }
+
+                    bool docb = true;
+                    lock (visitedNodesLock)
+                    {
+                        if (ignoreVisited && !visitedNodes.Add(nodeId))
+                        {
+                            docb = false;
+                            log.Verbose("Ignoring visited {nodeId}", nodeId);
+                        }
+                    }
+                    if (docb)
+                    {
+                        log.Verbose("Discovered new node {nodeid}", nodeId);
+                        callback?.Invoke(rd, parentId);
+                    }
+                    if (!readVariableChildren && rd.NodeClass == NodeClass.Variable) continue;
+                    if (readVariableChildren && rd.TypeDefinition == VariableTypeIds.PropertyType) continue;
+                    if (localVisitedNodes.Add(nodeId))
+                    {
+                        nextIds.Add(nodeId);
+                    }
+                }
+            } */
         }
 
         private IEnumerable<BrowseNode> GetBrowseChunk(List<BrowseNode> nodes, int idx)
@@ -90,7 +129,6 @@ namespace Cognite.OpcUa
             } while (chunk.Any());
             return chunks;
         }
-
 
         public Dictionary<NodeId, ReferenceDescriptionCollection> BrowseLevel(CancellationToken token)
         {
@@ -131,11 +169,14 @@ namespace Cognite.OpcUa
                 foreach (var chunk in finished)
                 {
                     int numRead = chunk.Nodes.Count();
-                    numActiveNodes -= numRead;
-                    totalRead += numRead;
+                    chunk.Nodes = chunk.Nodes.Where(node => node.ContinuationPoint != null).ToList();
+                    int numCompleted = numRead - chunk.Nodes.Count();
+                    numActiveNodes -= numCompleted;
+                    totalRead += numCompleted;
 
-                    log.Debug("Read children for {cnt}/{total} nodes", totalRead, toRead);
+                    if (chunk.Nodes.Any()) chunks.Add(chunk);
                 }
+                log.Debug("Read children for {cnt}/{total} nodes: ", totalRead, toRead);
 
                 chunks.AddRange(GetNextChunks(nodes, ref index));
             }
@@ -274,11 +315,11 @@ namespace Cognite.OpcUa
                         IncludeSubTypes = false,
                         Nodes = new [] { new BrowseNode(nodeId) },
                         MaxPerNode = 1
-                    }, token);
-                    var references = children[nodeId];
-                    if (references?.Any() ?? false)
+                    }, true, token);
+                    var result = children.Results[nodeId];
+                    if (result.References.Any())
                     {
-                        refd.TypeDefinition = references.First().NodeId;
+                        refd.TypeDefinition = result.References.First().NodeId;
                     }
                 }
                 catch (ServiceResultException ex)
@@ -470,5 +511,30 @@ namespace Cognite.OpcUa
         }
         public NodeId Id { get; }
         public byte[] ContinuationPoint { get; set; }
+    }
+    public class BrowseResult
+    {
+        public BrowseNode Parent { get; }
+        public ReferenceDescriptionCollection References { get; }
+        public BrowseResult(BrowseNode parent, ReferenceDescriptionCollection references)
+        {
+            Parent = parent;
+            References = references;
+        }
+    }
+    public class BrowseResultCollection
+    {
+        public Dictionary<NodeId, BrowseResult> Results { get; } = new Dictionary<NodeId, BrowseResult>();
+        public void AddReferences(BrowseNode parent, ReferenceDescriptionCollection references)
+        {
+            if (!Results.TryGetValue(parent.Id, out var result))
+            {
+                Results[parent.Id] = new BrowseResult(parent, references);
+            }
+            else
+            {
+                result.References.AddRange(references);
+            }
+        }
     }
 }
