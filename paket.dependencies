@@ -8,7 +8,6 @@ nuget Cognite.ExtractorUtils
 nuget Microsoft.CSharp
 nuget coverlet.msbuild
 nuget Microsoft.NET.Test.Sdk
-nuget Nullable
 nuget System.CommandLine >= 2.0.0-beta1.21308.1
 nuget xunit
 nuget xunit.runner.visualstudio
