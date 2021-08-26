@@ -18,6 +18,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -219,31 +221,7 @@ namespace Cognite.OpcUa
                 pusher.Reset();
             }
 
-            log.Debug("Begin mapping directory");
-            var handler = new BrowseResultHandler(config, this, uaClient);
-            try
-            {
-                await uaClient.BrowseNodeHierarchy(RootNodes, handler.Callback, source.Token);
-            }
-            catch (Exception ex)
-            {
-                ExtractorUtils.LogException(log, ex, "Unexpected error browsing node hierarchy",
-                    "Handled service result exception browsing node hierarchy");
-                throw;
-            }
-            log.Debug("End mapping directory");
-
-            IEnumerable<Task> synchTasks;
-            try
-            {
-                synchTasks = await MapUAToDestinations(handler);
-            }
-            catch (Exception ex)
-            {
-                ExtractorUtils.LogException(log, ex, "Unexpected error in MapUAToDestinations",
-                    "Handled service result exception in MapUAToDestinations");
-                throw;
-            }
+            var synchTasks = await RunMapping(RootNodes, true);
 
             if (config.FailureBuffer.Enabled)
             {
@@ -295,9 +273,7 @@ namespace Cognite.OpcUa
             ConfigureExtractor();
             uaClient.ResetVisitedNodes();
 
-            var handler = new BrowseResultHandler(config, this, uaClient);
-            await uaClient.BrowseNodeHierarchy(RootNodes, handler.Callback, source.Token);
-            var synchTasks = await MapUAToDestinations(handler);
+            var synchTasks = await RunMapping(RootNodes, true);
 
             Looper.ScheduleTasks(synchTasks);
             Started = true;
@@ -316,9 +292,8 @@ namespace Cognite.OpcUa
                 {
                     nodesToBrowse.Add(id);
                 }
-                var handler = new BrowseResultHandler(config, this, uaClient);
-                await uaClient.BrowseNodeHierarchy(nodesToBrowse.Distinct(), handler.Callback, source.Token);
-                var historyTasks = await MapUAToDestinations(handler);
+                var historyTasks = await RunMapping(nodesToBrowse.Distinct(), true);
+
                 Looper.ScheduleTasks(historyTasks);
             }
         }
@@ -450,11 +425,8 @@ namespace Cognite.OpcUa
         public async Task Rebrowse()
         {
             // If we are updating we want to re-discover nodes in order to run them through mapping again.
-            var handler = new BrowseResultHandler(config, this, uaClient);
-
-            await uaClient.BrowseNodeHierarchy(RootNodes, handler.Callback, source.Token,
+            var historyTasks = await RunMapping(RootNodes,
                 !config.Extraction.Update.AnyUpdate && !config.Extraction.Relationships.Enabled);
-            var historyTasks = await MapUAToDestinations(handler);
             Looper.ScheduleTasks(historyTasks);
         }
 
@@ -476,14 +448,69 @@ namespace Cognite.OpcUa
 
         #region Mapping
 
+        private async Task<IEnumerable<Task>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited)
+        {
+            bool readFromOpc = true;
+            NodeSources.BrowseResult result = null;
+            if (config.Cognite?.RawNodeBuffer?.Enable ?? false)
+            {
+                log.Debug("Begin fetching data from CDF");
+                var handler = new CDFNodeSource(config, this, uaClient, pushers.OfType<CDFPusher>().First());
+                await handler.ReadRawNodes(source.Token);
+
+                result = await handler.ParseResults(source.Token);
+
+                if (result == null || !result.DestinationObjects.Any() && !result.DestinationVariables.Any())
+                {
+                    if (!config.Cognite.RawNodeBuffer.BrowseOnEmpty)
+                    {
+                        throw new ExtractorFailureException("Found no nodes in CDF, restarting");
+                    }
+                    log.Information("Found no nodes in CDF, reading from OPC-UA server");
+                }
+                else
+                {
+                    readFromOpc = false;
+                }
+            }
+
+            if (readFromOpc)
+            {
+                log.Debug("Begin mapping directory");
+                var handler = new BrowseResultHandler(config, this, uaClient);
+                try
+                {
+                    await uaClient.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, source.Token, ignoreVisited);
+                }
+                catch (Exception ex)
+                {
+                    ExtractorUtils.LogException(log, ex, "Unexpected error browsing node hierarchy",
+                        "Handled service result exception browsing node hierarchy");
+                    throw;
+                }
+                result = await handler.ParseResults(source.Token);
+                log.Debug("End mapping directory");
+            }
+
+            try
+            {
+                return await MapUAToDestinations(result);
+            }
+            catch (Exception ex)
+            {
+                ExtractorUtils.LogException(log, ex, "Unexpected error in MapUAToDestinations",
+                    "Handled service result exception in MapUAToDestinations");
+                throw;
+            }
+        }
+
         /// <summary>
         /// Empties the node queue, pushing nodes to each destination, and starting subscriptions and history.
         /// This is the entry point for mapping on the extractor.
         /// </summary>
         /// <returns>A list of history tasks</returns>
-        private async Task<IEnumerable<Task>> MapUAToDestinations(BrowseResultHandler handler)
+        private async Task<IEnumerable<Task>> MapUAToDestinations(NodeSources.BrowseResult result)
         {
-            var result = await handler.ParseResults(source.Token);
             if (result == null) return Enumerable.Empty<Task>();
 
             Streamer.AllowData = State.NodeStates.Any();

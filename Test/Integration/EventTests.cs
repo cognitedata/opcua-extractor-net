@@ -27,11 +27,6 @@ namespace Test.Integration
             Config.Events.Enabled = true;
             Config.Extraction.RootNode = Server.Ids.Event.Root.ToProtoNodeId(Client);
         }
-        public void WipeEventHistory()
-        {
-            Server.WipeEventHistory(Server.Ids.Event.Obj1);
-            Server.WipeEventHistory(ObjectIds.Server);
-        }
     }
     public class EventTests : MakeConsoleWork, IClassFixture<EventTestFixture>
     {

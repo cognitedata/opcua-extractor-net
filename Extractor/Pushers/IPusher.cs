@@ -16,6 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using System;
 using System.Collections.Generic;
@@ -25,7 +26,6 @@ using System.Threading.Tasks;
 namespace Cognite.OpcUa
 {
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "IList lacks AddRange")]
-
     public interface IPusher : IDisposable
     {
         bool DataFailing { get; set; }

@@ -25,43 +25,15 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Cognite.OpcUa
+namespace Cognite.OpcUa.NodeSources
 {
-    /// <summary>
-    /// Contains the result of a round of browsing the server node hierarchy.
-    /// </summary>
-    public class BrowseResult
-    {
-        public BrowseResult(
-            IEnumerable<UANode> sourceObjects,
-            IEnumerable<UAVariable> sourceVariables,
-            IEnumerable<UANode> destinationObjects,
-            IEnumerable<UAVariable> destinationVariables,
-            IEnumerable<UAReference> destinationReferences)
-        {
-            SourceObjects = sourceObjects;
-            SourceVariables = sourceVariables;
-            DestinationObjects = destinationObjects;
-            DestinationVariables = destinationVariables;
-            DestinationReferences = destinationReferences;
-        }
-        public IEnumerable<UANode> SourceObjects { get; }
-        public IEnumerable<UAVariable> SourceVariables { get; }
-        public IEnumerable<UANode> DestinationObjects { get; }
-        public IEnumerable<UAVariable> DestinationVariables { get; }
-        public IEnumerable<UAReference> DestinationReferences { get; }
-    }
     /// <summary>
     /// Contains the results of a browse operation, and parses the nodes to produce
     /// lists of nodes that should be mapped to destinations.
     /// </summary>
-    public class BrowseResultHandler
+    public class BrowseResultHandler : BaseNodeSource
     {
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAExtractor));
-
-        private readonly FullConfig config;
-        private readonly UAExtractor extractor;
-        private readonly UAClient client;
 
         private Dictionary<NodeId, UANode> nodeMap = new Dictionary<NodeId, UANode>();
 
@@ -71,27 +43,9 @@ namespace Cognite.OpcUa
         private List<UAVariable> rawVariables = new List<UAVariable>();
         private List<UANode> rawObjects = new List<UANode>();
 
-        // Nodes that are treated as variables (and synchronized) in the source system
-        private readonly List<UAVariable> finalSourceVariables = new List<UAVariable>();
-        // Nodes that are treated as objects (so not synchronized) in the source system.
-        // finalSourceVariables and finalSourceObjects should together contain all mapped nodes
-        // in the source system.
-        private readonly List<UANode> finalSourceObjects = new List<UANode>();
-
-        // Nodes that are treated as objects in the destination systems (i.e. mapped to assets)
-        private readonly List<UANode> finalDestinationObjects = new List<UANode>();
-        // Nodes that are treated as variables in the destination systems (i.e. mapped to timeseries)
-        // May contain duplicate NodeIds, but all should produce distinct UniqueIds.
-        private readonly List<UAVariable> finalDestinationVariables = new List<UAVariable>();
-
-        private readonly HashSet<UAReference> finalReferences = new HashSet<UAReference>();
-
-
         public BrowseResultHandler(FullConfig config, UAExtractor extractor, UAClient client)
+            : base(config, extractor, client)
         {
-            this.config = config;
-            this.extractor = extractor;
-            this.client = client;
         }
 
         /// <summary>
@@ -102,11 +56,11 @@ namespace Cognite.OpcUa
         /// This reads necessary information from the state and the server.
         /// </summary>
         /// <returns>Resulting lists of populated and sorted nodes.</returns>
-        public async Task<BrowseResult> ParseResults(CancellationToken token)
+        public override async Task<BrowseResult> ParseResults(CancellationToken token)
         {
             if (nodeMap == null) throw new InvalidOperationException("Browse result has already been parsed");
             if (!nodeMap.Any()) return null;
-            await Task.Run(() => client.ReadNodeData(nodeMap.Values, token), CancellationToken.None);
+            await Task.Run(() => Client.ReadNodeData(nodeMap.Values, token), CancellationToken.None);
 
             foreach (var node in nodeMap.Values)
             {
@@ -114,7 +68,7 @@ namespace Cognite.OpcUa
             }
             nodeMap = null;
 
-            var update = config.Extraction.Update;
+            var update = Config.Extraction.Update;
             await GetExtraNodeData(update, token);
 
             var mappedObjects = rawObjects.Where(obj => FilterObject(update, obj)).ToList();
@@ -130,7 +84,7 @@ namespace Cognite.OpcUa
                 InitNodeState(update, node);
             }
 
-            if (config.Extraction.Relationships.Enabled)
+            if (Config.Extraction.Relationships.Enabled)
             {
                 await GetRelationshipData(token);
             }
@@ -170,11 +124,11 @@ namespace Cognite.OpcUa
             }
 
             bool initialProperty = node.IsProperty;
-            if (extractor.Transformations != null)
+            if (Extractor.Transformations != null)
             {
-                foreach (var trns in extractor.Transformations)
+                foreach (var trns in Extractor.Transformations)
                 {
-                    trns.ApplyTransformation(node, client.NamespaceTable);
+                    trns.ApplyTransformation(node, Client.NamespaceTable);
                     if (node.Ignore) return;
                 }
             }
@@ -185,7 +139,7 @@ namespace Cognite.OpcUa
                 node.Parent.AddProperty(node);
                 // Edge-case, since attributes are read before transformations, if transformations cause a node to become a property,
                 // ArrayDimensions won't be read. We can just read them later at minimal cost.
-                if (!initialProperty && config.Extraction.DataTypes.MaxArraySize == 0 && (node is UAVariable variable) && variable.ValueRank >= 0)
+                if (!initialProperty && Config.Extraction.DataTypes.MaxArraySize == 0 && (node is UAVariable variable) && variable.ValueRank >= 0)
                 {
                     node.Attributes.DataRead = false;
                 }
@@ -214,33 +168,33 @@ namespace Cognite.OpcUa
             if (update.Objects.Metadata || update.Variables.Metadata)
             {
                 var toReadProperties = nodes
-                    .Where(node => extractor.State.IsMappedNode(node.Id)
+                    .Where(node => Extractor.State.IsMappedNode(node.Id)
                         && (update.Objects.Metadata && !(node is UAVariable)
                             || update.Variables.Metadata && (node is UAVariable)))
                     .ToList();
                 if (toReadProperties.Any())
                 {
-                    await extractor.ReadProperties(toReadProperties);
+                    await Extractor.ReadProperties(toReadProperties);
                 }
             }
 
             var extraMetaTasks = new List<Task>();
 
             var distinctDataTypes = rawVariables.Select(variable => variable.DataType.Raw).ToHashSet();
-            extraMetaTasks.Add(extractor.DataTypeManager.GetDataTypeMetadataAsync(distinctDataTypes, token));
+            extraMetaTasks.Add(Extractor.DataTypeManager.GetDataTypeMetadataAsync(distinctDataTypes, token));
 
-            if (config.Extraction.NodeTypes.Metadata)
+            if (Config.Extraction.NodeTypes.Metadata)
             {
-                extraMetaTasks.Add(client.ObjectTypeManager.GetObjectTypeMetadataAsync(token));
+                extraMetaTasks.Add(Client.ObjectTypeManager.GetObjectTypeMetadataAsync(token));
             }
 
-            if (config.Extraction.NodeTypes.AsNodes)
+            if (Config.Extraction.NodeTypes.AsNodes)
             {
                 var toRead = nodes.Where(node => node.NodeClass == NodeClass.VariableType)
                     .Select(node => node as UAVariable)
                     .Where(node => node != null)
                     .ToList();
-                extraMetaTasks.Add(Task.Run(() => client.ReadNodeValues(toRead, token), CancellationToken.None));
+                extraMetaTasks.Add(Task.Run(() => Client.ReadNodeValues(toRead, token), CancellationToken.None));
             }
 
             await Task.WhenAll(extraMetaTasks);
@@ -256,13 +210,13 @@ namespace Cognite.OpcUa
         {
             if (update.AnyUpdate)
             {
-                var oldChecksum = extractor.State.GetNodeChecksum(node.Id);
+                var oldChecksum = Extractor.State.GetNodeChecksum(node.Id);
                 if (oldChecksum != null)
                 {
                     node.Changed |= oldChecksum != node.GetUpdateChecksum(
                         update.Objects,
-                        config.Extraction.DataTypes.DataTypeMetadata,
-                        config.Extraction.NodeTypes.Metadata);
+                        Config.Extraction.DataTypes.DataTypeMetadata,
+                        Config.Extraction.NodeTypes.Metadata);
                     return node.Changed;
                 }
             }
@@ -272,52 +226,22 @@ namespace Cognite.OpcUa
         }
 
         /// <summary>
-        /// Write a variable to the correct output lists. This assumes the variable should be mapped.
-        /// </summary>
-        /// <param name="node">Variable to write</param>
-        private void AddVariableToLists(UAVariable node)
-        {
-            if (node.IsArray)
-            {
-                finalDestinationVariables.AddRange(node.CreateArrayChildren());
-            }
-
-            if (node.IsArray || node.NodeClass != NodeClass.Variable)
-            {
-                finalDestinationObjects.Add(node);
-            }
-            else
-            {
-                finalDestinationVariables.Add(node);
-            }
-
-            if (node.NodeClass == NodeClass.Variable)
-            {
-                finalSourceVariables.Add(node);
-            }
-            else
-            {
-                finalSourceObjects.Add(node);
-            }
-        }
-
-        /// <summary>
         /// Filter a node, creating new objects and variables based on attributes and config.
         /// </summary>
         /// <param name="update">Configuration used to determine what nodes have changed.</param>
         /// <param name="node">Node to sort.</param>
         private void SortVariable(UpdateConfig update, UAVariable node)
         {
-            if (!extractor.DataTypeManager.AllowTSMap(node)) return;
+            if (!Extractor.DataTypeManager.AllowTSMap(node)) return;
             if (update.AnyUpdate)
             {
-                var oldChecksum = extractor.State.GetNodeChecksum(node.Id);
+                var oldChecksum = Extractor.State.GetNodeChecksum(node.Id);
                 if (oldChecksum != null)
                 {
                     node.Changed |= oldChecksum != node.GetUpdateChecksum(
                         update.Variables,
-                        config.Extraction.DataTypes.DataTypeMetadata,
-                        config.Extraction.NodeTypes.Metadata);
+                        Config.Extraction.DataTypes.DataTypeMetadata,
+                        Config.Extraction.NodeTypes.Metadata);
 
                     if (node.Changed)
                     {
@@ -339,7 +263,7 @@ namespace Cognite.OpcUa
         {
             var nodes = rawObjects.Concat(rawVariables);
 
-            var nonHierarchicalReferences = await extractor.ReferenceTypeManager.GetReferencesAsync(
+            var nonHierarchicalReferences = await Extractor.ReferenceTypeManager.GetReferencesAsync(
                 nodes,
                 ReferenceTypeIds.NonHierarchicalReferences,
                 token);
@@ -350,7 +274,7 @@ namespace Cognite.OpcUa
             }
             log.Information("Found {cnt} non-hierarchical references", finalReferences.Count);
 
-            if (config.Extraction.Relationships.Hierarchical)
+            if (Config.Extraction.Relationships.Hierarchical)
             {
                 var nodeMap = finalSourceObjects.Concat(finalSourceVariables)
                     .ToDictionary(node => node.Id);
@@ -360,7 +284,7 @@ namespace Cognite.OpcUa
                 foreach (var pair in references)
                 {
                     // The child should always be in the list of mapped nodes here
-                    var nodeId = client.ToNodeId(pair.Node.NodeId);
+                    var nodeId = Client.ToNodeId(pair.Node.NodeId);
                     if (!nodeMap.TryGetValue(nodeId, out var childNode)) continue;
                     if (childNode == null || childNode is UAVariable childVar && childVar.IsProperty) continue;
 
@@ -373,9 +297,9 @@ namespace Cognite.OpcUa
                         childNode.Id,
                         false,
                         childIsTs,
-                        extractor.ReferenceTypeManager));
+                        Extractor.ReferenceTypeManager));
 
-                    if (config.Extraction.Relationships.InverseHierarchical)
+                    if (Config.Extraction.Relationships.InverseHierarchical)
                     {
                         finalReferences.Add(new UAReference(
                             pair.Node.ReferenceTypeId,
@@ -384,64 +308,12 @@ namespace Cognite.OpcUa
                             pair.ParentId,
                             childIsTs,
                             true,
-                            extractor.ReferenceTypeManager));
+                            Extractor.ReferenceTypeManager));
                     }
                 }
             }
 
-            await extractor.ReferenceTypeManager.GetReferenceTypeDataAsync(token);
-        }
-
-        /// <summary>
-        /// Write the node to the extractor state
-        /// </summary>
-        /// <param name="update">Update configuration</param>
-        /// <param name="node">Node to store</param>
-        private void InitNodeState(UpdateConfig update, UANode node)
-        {
-            var updateConfig = node is UAVariable ? update.Variables : update.Objects;
-
-            extractor.State.AddActiveNode(
-                node,
-                updateConfig,
-                config.Extraction.DataTypes.DataTypeMetadata,
-                config.Extraction.NodeTypes.Metadata);
-
-            if (config.Events.Enabled
-                && node.EventNotifier != 0
-                && extractor.State.GetEmitterState(node.Id) == null)
-            {
-                bool history = (node.EventNotifier & EventNotifiers.HistoryRead) != 0 && config.Events.History;
-                bool subscription = (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0 && node.ShouldSubscribe;
-                var eventState = new EventExtractionState(extractor, node.Id, history, history && config.History.Backfill, subscription);
-                extractor.State.SetEmitterState(eventState);
-            }
-
-            if (node is UAVariable variable && variable.NodeClass == NodeClass.Variable)
-            {
-                var state = extractor.State.GetNodeState(node.Id);
-                if (state != null) return;
-
-                state = new VariableExtractionState(
-                            extractor,
-                            variable,
-                            variable.ReadHistory,
-                            variable.ReadHistory && config.History.Backfill);
-
-                if (variable.IsArray)
-                {
-                    foreach (var child in variable.ArrayChildren)
-                    {
-                        var uniqueId = extractor.GetUniqueId(child.Id, child.Index);
-                        extractor.State.SetNodeState(state, uniqueId);
-                        extractor.State.RegisterNode(node.Id, uniqueId);
-                    }
-                }
-                else
-                {
-                    extractor.State.SetNodeState(state);
-                }
-            }
+            await Extractor.ReferenceTypeManager.GetReferenceTypeDataAsync(token);
         }
 
         /// <summary>
@@ -453,26 +325,26 @@ namespace Cognite.OpcUa
         {
             bool mapped = false;
 
-            if (node.NodeClass == NodeClass.Object || config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
+            if (node.NodeClass == NodeClass.Object || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
             {
-                var uaNode = new UANode(client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
-                uaNode.SetNodeType(client, node.TypeDefinition);
+                var uaNode = new UANode(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
+                uaNode.SetNodeType(Client, node.TypeDefinition);
 
                 mapped = !uaNode.IsProperty;
 
-                extractor.State.RegisterNode(uaNode.Id, extractor.GetUniqueId(uaNode.Id));
+                Extractor.State.RegisterNode(uaNode.Id, Extractor.GetUniqueId(uaNode.Id));
                 log.Verbose("HandleNode {class} {name}", uaNode.NodeClass, uaNode.DisplayName);
 
                 nodeMap[uaNode.Id] = uaNode;
             }
-            else if (node.NodeClass == NodeClass.Variable || config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
+            else if (node.NodeClass == NodeClass.Variable || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
             {
-                var variable = new UAVariable(client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
-                variable.SetNodeType(client, node.TypeDefinition);
+                var variable = new UAVariable(Client.ToNodeId(node.NodeId), node.DisplayName.Text, parentId, node.NodeClass);
+                variable.SetNodeType(Client, node.TypeDefinition);
 
                 mapped = !variable.IsProperty;
 
-                extractor.State.RegisterNode(variable.Id, extractor.GetUniqueId(variable.Id));
+                Extractor.State.RegisterNode(variable.Id, Extractor.GetUniqueId(variable.Id));
                 log.Verbose("HandleNode Variable {name}", variable.DisplayName);
 
                 nodeMap[variable.Id] = variable;
@@ -482,7 +354,7 @@ namespace Cognite.OpcUa
                 log.Warning("Node of unknown type received: {type}, {id}", node.NodeClass, node.NodeId);
             }
 
-            if (mapped && config.Extraction.Relationships.Enabled && config.Extraction.Relationships.Hierarchical)
+            if (mapped && Config.Extraction.Relationships.Enabled && Config.Extraction.Relationships.Hierarchical)
             {
                 if (parentId == null || parentId.IsNullNodeId) return;
                 references.Add((node, parentId));

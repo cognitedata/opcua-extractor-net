@@ -12,6 +12,7 @@ using System.Xml;
 using Newtonsoft.Json;
 using System.IO;
 using System.Collections.ObjectModel;
+using Cognite.OpcUa.NodeSources;
 using System.Text.Json;
 using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
@@ -26,6 +27,7 @@ namespace Test.Unit
         private StringConversionTestFixture tester;
         public StringConversionTest(ITestOutputHelper output, StringConversionTestFixture tester) : base(output)
         {
+            if (tester == null) throw new ArgumentNullException(nameof(tester));
             this.tester = tester;
             tester.ResetConfig();
         }
@@ -326,34 +328,101 @@ namespace Test.Unit
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true}}");
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":1}}");
 
             node.Attributes.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
             TestConvert(node,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""parentExternalId"":null,"
-                + @"""InternalData"":{""EventNotifier"":5,""ShouldSubscribe"":true}}");
+                + @"""InternalInfo"":{""EventNotifier"":5,""ShouldSubscribe"":true,""NodeClass"":1}}");
 
             var variable = new UAVariable(new NodeId("test"), "test", NodeId.Null, NodeClass.Variable);
             serializer = new JsonSerializer();
             converter.AddConverters(serializer, ConverterType.Variable);
             variable.VariableAttributes.AccessLevel |= AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             variable.VariableAttributes.Historizing = true;
+            variable.VariableAttributes.ValueRank = -1;
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""AccessLevel"":5,""Historizing"":true}}");
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":2,""AccessLevel"":5,"
+                + @"""Historizing"":true,""ValueRank"":-1}}");
 
             variable.VariableAttributes.ValueRank = ValueRanks.OneDimension;
-            variable.VariableAttributes.ArrayDimensions = new Collection<int> { 5 };
+            variable.VariableAttributes.ArrayDimensions = new [] { 5 };
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
                 + @"""isString"":false,""isStep"":false,"
-                + @"""InternalData"":{""EventNotifier"":0,""ShouldSubscribe"":true,""AccessLevel"":5,""Historizing"":true,"
-                + @"""ValueRank"":1,""ArrayDimensions"":[5],""Index"":-1}}"
+                + @"""InternalInfo"":{""EventNotifier"":0,""ShouldSubscribe"":true,""NodeClass"":2,""AccessLevel"":5,"
+                + @"""Historizing"":true,""ValueRank"":1,""ArrayDimensions"":[5],""Index"":-1}}"
                 );
+        }
+        [Fact]
+        public void TestNodeDeserialization()
+        {
+            // Objects
+            var serializer = new JsonSerializer();
+            var converter = tester.Client.StringConverter;
+            converter.AddConverters(serializer, ConverterType.Node);
+
+            var node = new UANode(new NodeId("test", 2), "test", new NodeId("parent"), NodeClass.Object);
+            node.Attributes.EventNotifier = 5;
+            node.Attributes.ShouldSubscribe = true;
+
+            tester.Config.Extraction.DataTypes.AppendInternalValues = true;
+            tester.Config.Extraction.DataTypes.ExpandNodeIds = true;
+
+            SavedNode Convert(UANode node)
+            {
+                var sb = new StringBuilder();
+                using var sw = new StringWriter(sb);
+                using var writer = new JsonTextWriter(sw);
+                serializer.Serialize(writer, node);
+                writer.Flush();
+                var json = sb.ToString();
+                Console.WriteLine(json);
+                var sr = new StringReader(json);
+                using var reader = new JsonTextReader(sr);
+                return serializer.Deserialize<SavedNode>(reader);
+            }
+
+            var saved = Convert(node);
+            Assert.Equal(node.Id, saved.NodeId);
+            Assert.Equal(node.NodeClass, saved.InternalInfo.NodeClass);
+            Assert.Equal(node.ParentId, saved.ParentNodeId);
+            Assert.Equal(node.ShouldSubscribe, saved.InternalInfo.ShouldSubscribe);
+            Assert.Equal(node.EventNotifier, saved.InternalInfo.EventNotifier);
+
+            // Variables
+            serializer = new JsonSerializer();
+            converter.AddConverters(serializer, ConverterType.Variable);
+
+            var variable = new UAVariable(new NodeId("test", 2), "test", new NodeId("parent"), NodeClass.Variable);
+            variable.VariableAttributes.AccessLevel = 5;
+            variable.VariableAttributes.EventNotifier = 5;
+            variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
+            variable.VariableAttributes.ValueRank = -1;
+
+            saved = Convert(variable);
+            Assert.Equal(variable.Id, saved.NodeId);
+            Assert.Equal(variable.NodeClass, saved.InternalInfo.NodeClass);
+            Assert.Equal(variable.ParentId, saved.ParentNodeId);
+            Assert.Equal(variable.ShouldSubscribe, saved.InternalInfo.ShouldSubscribe);
+            Assert.Equal(variable.EventNotifier, saved.InternalInfo.EventNotifier);
+            Assert.Equal(variable.DisplayName, saved.Name);
+            Assert.Equal(variable.DataType.Raw, saved.DataTypeId);
+            Assert.Equal(variable.AccessLevel, saved.InternalInfo.AccessLevel);
+            Assert.Equal(variable.VariableAttributes.Historizing, saved.InternalInfo.Historizing);
+            Assert.Equal(variable.ValueRank, saved.InternalInfo.ValueRank);
+
+            variable.VariableAttributes.ValueRank = 2;
+            variable.VariableAttributes.ArrayDimensions = new [] { 3, 4 };
+
+            saved = Convert(variable);
+            Assert.Equal(variable.ArrayDimensions, saved.InternalInfo.ArrayDimensions);
+            Assert.Equal(variable.ValueRank, saved.InternalInfo.ValueRank);
         }
     }
 }

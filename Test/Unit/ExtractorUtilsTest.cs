@@ -32,7 +32,7 @@ namespace Test.Unit
 
             var arrParent = new UAVariable(new NodeId("arr1"), "arr1", NodeId.Null);
             arrParent.VariableAttributes.ValueRank = 1;
-            arrParent.VariableAttributes.ArrayDimensions = new Collection<int> { 2 };
+            arrParent.VariableAttributes.ArrayDimensions = new [] { 2 };
             var children = arrParent.CreateArrayChildren();
             // Populated
             var nodes = new UANode[]
@@ -45,7 +45,7 @@ namespace Test.Unit
                 new UAVariable(new NodeId("arr2"), "arr2", NodeId.Null)
             };
             (nodes[5].Attributes as Cognite.OpcUa.Types.VariableAttributes).ValueRank = 1;
-            (nodes[5].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new Collection<int> { 2 };
+            (nodes[5].Attributes as Cognite.OpcUa.Types.VariableAttributes).ArrayDimensions = new [] { 2 };
 
             (objects, variables) = ExtractorUtils.SortNodes(nodes.Concat(children));
             Assert.Equal(4, objects.Count());

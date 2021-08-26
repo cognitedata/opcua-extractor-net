@@ -727,15 +727,15 @@ namespace Cognite.OpcUa.Config
             foreach (var variable in variables)
             {
                 if (variable.ArrayDimensions != null
-                    && variable.ArrayDimensions.Count == 1
+                    && variable.ArrayDimensions.Length == 1
                     && variable.ArrayDimensions[0] <= arrayLimit
                     && variable.ArrayDimensions[0] > maxLimitedArrayLength)
                 {
                     maxLimitedArrayLength = variable.ArrayDimensions[0];
                 }
                 else if (variable.ArrayDimensions != null
-                         && (variable.ArrayDimensions.Count > 1
-                             || variable.ArrayDimensions.Count == 1 &&
+                         && (variable.ArrayDimensions.Length > 1
+                             || variable.ArrayDimensions.Length == 1 &&
                              variable.ArrayDimensions[0] > arrayLimit)
                          || variable.ValueRank >= ValueRanks.TwoDimensions)
                 {
@@ -827,7 +827,7 @@ namespace Cognite.OpcUa.Config
 
             if (node.ValueRank == ValueRanks.Scalar) return true;
 
-            if (node.ArrayDimensions == null || node.ArrayDimensions.Count != 1) return false;
+            if (node.ArrayDimensions == null || node.ArrayDimensions.Length != 1) return false;
 
             int length = node.ArrayDimensions.First();
 

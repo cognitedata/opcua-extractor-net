@@ -199,11 +199,11 @@ namespace Test.Unit
             Assert.False(mgr.AllowTSMap(node));
 
             // Too high dimension
-            node.VariableAttributes.ArrayDimensions = new System.Collections.ObjectModel.Collection<int> { 4, 4 };
+            node.VariableAttributes.ArrayDimensions = new [] { 4, 4 };
             Assert.False(mgr.AllowTSMap(node));
 
             // Too large array
-            node.VariableAttributes.ArrayDimensions = new System.Collections.ObjectModel.Collection<int> { 4 };
+            node.VariableAttributes.ArrayDimensions = new [] { 4 };
             Assert.False(mgr.AllowTSMap(node));
 
             // Override size

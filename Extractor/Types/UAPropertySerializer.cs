@@ -379,25 +379,27 @@ namespace Cognite.OpcUa.Types
 
         private void WriteInternalInfo(JsonWriter writer, UANode node, Newtonsoft.Json.JsonSerializer serializer)
         {
-            writer.WritePropertyName("InternalData");
+            writer.WritePropertyName("InternalInfo");
             writer.WriteStartObject();
 
             writer.WritePropertyName("EventNotifier");
             writer.WriteValue(node.EventNotifier);
             writer.WritePropertyName("ShouldSubscribe");
             writer.WriteValue(node.ShouldSubscribe);
+            writer.WritePropertyName("NodeClass");
+            writer.WriteValue(node.NodeClass);
             if (Type == ConverterType.Variable && node is UAVariable variable)
             {
                 writer.WritePropertyName("AccessLevel");
                 writer.WriteValue(variable.AccessLevel);
                 writer.WritePropertyName("Historizing");
                 writer.WriteValue(variable.VariableAttributes.Historizing);
+                writer.WritePropertyName("ValueRank");
+                writer.WriteValue(variable.ValueRank);
                 if (variable.ArrayDimensions != null)
                 {
-                    writer.WritePropertyName("ValueRank");
-                    writer.WriteValue(variable.ValueRank);
                     writer.WritePropertyName("ArrayDimensions");
-                    serializer.Serialize(writer, variable.ArrayDimensions);
+                    serializer.Serialize(writer, variable.ArrayDimensions.ToArray());
                     writer.WritePropertyName("Index");
                     writer.WriteValue(variable.Index);
                 }

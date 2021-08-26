@@ -24,18 +24,6 @@ namespace Test.Integration
         {
             DeleteFiles("lite-");
         }
-        public void WipeBaseHistory()
-        {
-            var ids = Server.Ids.Base;
-            Server.WipeHistory(ids.DoubleVar1, 0.0);
-            Server.WipeHistory(ids.StringVar, null);
-            Server.WipeHistory(ids.IntVar, 0);
-        }
-        public void WipeEventHistory()
-        {
-            Server.WipeEventHistory(Server.Ids.Event.Obj1);
-            Server.WipeEventHistory(ObjectIds.Server);
-        }
     }
 
     public class LiteDbStorageTests : MakeConsoleWork, IClassFixture<LiteDbStorageTestFixture>

@@ -157,7 +157,7 @@ namespace Cognite.OpcUa.Config
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (variable == null || value == null) return Array.Empty<UADataPoint>();
-            if (variable.ArrayDimensions != null && variable.ArrayDimensions.Count > 0 && variable.ArrayDimensions[0] > 0)
+            if (variable.IsArray)
             {
                 var ret = new List<UADataPoint>();
                 if (!(value.Value is Array))

@@ -472,7 +472,7 @@ namespace Test.Unit
             node.VariableAttributes.AccessLevel = AccessLevels.CurrentRead | AccessLevels.HistoryRead;
             node.VariableAttributes.ReadHistory = true;
             node.VariableAttributes.ValueRank = ValueRanks.Any;
-            node.VariableAttributes.ArrayDimensions = new System.Collections.ObjectModel.Collection<int>(new int[] { 4 });
+            node.VariableAttributes.ArrayDimensions = new int[] { 4 };
             node.VariableAttributes.NodeType = new UANodeType(new NodeId("type"), false);
 
             var propA = CommonTestUtils.GetSimpleVariable("propA", pdt);
@@ -537,7 +537,7 @@ namespace Test.Unit
             node.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
             node.VariableAttributes.NodeType = new UANodeType(new NodeId("test"), true);
             node.VariableAttributes.ValueRank = ValueRanks.OneDimension;
-            node.VariableAttributes.ArrayDimensions = new System.Collections.ObjectModel.Collection<int>(new int[] { 4 });
+            node.VariableAttributes.ArrayDimensions = new int[] { 4 };
 
             var children = node.CreateArrayChildren().ToList();
             Assert.Equal(4, children.Count);

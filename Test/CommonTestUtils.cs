@@ -488,7 +488,7 @@ namespace Test
             variable.VariableAttributes.DataType = dt;
             if (dim > 0)
             {
-                variable.VariableAttributes.ArrayDimensions = new Collection<int> { dim };
+                variable.VariableAttributes.ArrayDimensions = new [] { dim };
             }
             return variable;
         }
