@@ -165,17 +165,22 @@ namespace Cognite.OpcUa
 
         private static void RunService(ExtractorParams setup)
         {
-            Host.CreateDefaultBuilder()
+            var builder = Host.CreateDefaultBuilder()
                 .ConfigureServices((hostContext, services) =>
                 {
                     Configure(setup, services);
                     services.AddHostedService<Worker>();
-                })
-                .ConfigureLogging(loggerFactory => loggerFactory.AddEventLog())
-                .UseWindowsService(options => options.ServiceName = "OpcuaExtractor")
-                .UseSystemd()
-                .Build()
-                .Run();
+                });
+            if (OperatingSystem.IsWindows())
+            {
+                builder = builder.ConfigureLogging(loggerFactory => loggerFactory.AddEventLog())
+                    .UseWindowsService(options => options.ServiceName = "OpcuaExtractor");
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                builder = builder.UseSystemd();
+            }
+            builder.Build().Run();
         }
         private static void RunStandalone(ExtractorParams setup)
         {

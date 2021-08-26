@@ -1,0 +1,9 @@
+Package: opcua-extractor
+Version: {version}
+Section: misc
+Priority: optional
+Standards-Version: 4.0.0
+Architecture: {architecture}
+Maintainer: Cognite AS <team-data-integration@cognite.com>
+Description: Cognite OPC-UA Extractor
+ Reads an OPC-UA node hierarchy and inserts it into Cognite Data Fusion.

@@ -1,0 +1,13 @@
+[Unit] 
+Description=Cognite OPC-UA Extractor Service
+After=network.target 
+StartLimitIntervalSec=0 
+ 
+[Service] 
+Type=simple 
+Restart=always 
+RestartSec=1 
+ExecStart=/usr/bin/opcua-extractor -s -w /var/lib/cognite/opcua/ --log-dir logs/.log
+
+[Install] 
+WantedBy=multi-user.target
