@@ -41,7 +41,6 @@ namespace Cognite.OpcUa.Types
         /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
         public UADataType(NodeId rawDataType)
         {
-            if (rawDataType == null) throw new ArgumentNullException(nameof(rawDataType));
             Raw = rawDataType;
             if (rawDataType.IdType == IdType.Numeric && rawDataType.NamespaceIndex == 0)
             {
@@ -67,7 +66,6 @@ namespace Cognite.OpcUa.Types
         /// <returns>Created UADataPoint</returns>
         public UADataPoint ToDataPoint(IUAClientAccess client, object value, DateTime timestamp, string id, bool stringOverride = false)
         {
-            if (client == null) throw new ArgumentNullException(nameof(client));
             if (timestamp == DateTime.MinValue) timestamp = DateTime.UtcNow;
             if (IsString || stringOverride)
             {
@@ -83,8 +81,6 @@ namespace Cognite.OpcUa.Types
         /// <param name="rawDataType">NodeId of the datatype to be transformed into a BufferedDataType</param>
         public UADataType(ProtoDataType protoDataType, NodeId rawDataType, DataTypeConfig config) : this(rawDataType)
         {
-            if (protoDataType == null) throw new ArgumentNullException(nameof(protoDataType));
-            if (config == null) throw new ArgumentNullException(nameof(config));
             IsStep = protoDataType.IsStep;
             IsString = config.EnumsAsStrings && protoDataType.Enum;
             if (protoDataType.Enum)
@@ -100,7 +96,6 @@ namespace Cognite.OpcUa.Types
         /// <param name="other">Parent datatype</param>
         public UADataType(NodeId rawDataType, UADataType other) : this(rawDataType)
         {
-            if (other == null) throw new ArgumentNullException(nameof(other));
             IsStep = other.IsStep;
             IsString = other.IsString;
             Raw = rawDataType;

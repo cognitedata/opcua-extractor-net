@@ -35,7 +35,6 @@ namespace Cognite.OpcUa
         /// <returns>Tuple of sorted objects and variables</returns>
         public static (IEnumerable<UANode> objects, IEnumerable<UAVariable> variables) SortNodes(IEnumerable<UANode> nodes)
         {
-            if (nodes == null) throw new ArgumentNullException(nameof(nodes));
             if (!nodes.Any()) return (Enumerable.Empty<UANode>(), Enumerable.Empty<UAVariable>());
 
             var timeseries = new List<UAVariable>();
@@ -95,7 +94,6 @@ namespace Cognite.OpcUa
         [return: MaybeNull]
         public static T GetRootExceptionOfType<T>(AggregateException aex) where T : Exception
         {
-            if (aex == null) throw new ArgumentNullException(nameof(aex));
             if (aex.InnerException is T ex)
             {
                 return ex;
@@ -115,7 +113,6 @@ namespace Cognite.OpcUa
         /// <param name="silentMessage">Message to give with silent exceptions</param>
         public static void LogException(ILogger log, [AllowNull] Exception e, string message, string silentMessage)
         {
-            if (log == null) throw new ArgumentNullException(nameof(log));
             if (e == null)
             {
                 log.Error(message);
@@ -161,8 +158,6 @@ namespace Cognite.OpcUa
         /// <returns>Transformed exception if recognized, otherwise the given exception</returns>
         public static Exception HandleServiceResult(ILogger log, ServiceResultException ex, SourceOp op)
         {
-            if (ex == null) throw new ArgumentNullException(nameof(ex));
-            if (log == null) throw new ArgumentNullException(nameof(log));
             uint code = ex.StatusCode;
             string symId = StatusCode.LookupSymbolicId(code);
             switch (code)

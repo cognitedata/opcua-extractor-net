@@ -105,8 +105,6 @@ namespace Cognite.OpcUa.Pushers
             TypeUpdateConfig update,
             IDictionary<NodeId, long> nodeToAssetIds)
         {
-            if (manager == null) throw new ArgumentNullException(nameof(manager));
-            if (converter == null) throw new ArgumentNullException(nameof(converter));
             if (update == null || newTs == null || nodeToAssetIds == null || old == null) return null;
             var tsUpdate = new TimeSeriesUpdate();
             if (update.Context)
@@ -207,15 +205,13 @@ namespace Cognite.OpcUa.Pushers
     /// </summary>
     public class StatelessEventCreate : EventCreate
     {
-        [MaybeNull]
-        public IEnumerable<string> AssetExternalIds { get; set; }
+        public IEnumerable<string>? AssetExternalIds { get; set; }
     }
     /// <summary>
     /// TimeSeriesCreate which can can be created without access to CDF Clean.
     /// </summary>
     public class StatelessTimeSeriesCreate : TimeSeriesCreate
     {
-        [MaybeNull]
-        public string AssetExternalId { get; set; }
+        public string? AssetExternalId { get; set; }
     }
 }

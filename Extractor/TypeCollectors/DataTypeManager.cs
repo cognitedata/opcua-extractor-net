@@ -45,8 +45,6 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public DataTypeManager(UAClient client, DataTypeConfig config)
         {
-            if (client == null) throw new ArgumentNullException(nameof(client));
-            if (config == null) throw new ArgumentNullException(nameof(config));
             uaClient = client;
             this.config = config;
         }
@@ -59,6 +57,7 @@ namespace Cognite.OpcUa.TypeCollectors
             {
                 foreach (var type in config.CustomNumericTypes)
                 {
+                    if (type.NodeId == null) continue;
                     var id = type.NodeId.ToNodeId(uaClient);
                     if (id == null || id.IsNullNodeId)
                     {
@@ -152,7 +151,6 @@ namespace Cognite.OpcUa.TypeCollectors
         /// <returns>True if variable may be mapped to a timeseries</returns>
         public bool AllowTSMap(UAVariable node, int? arraySizeOverride = null, bool overrideString = false)
         {
-            if (node == null) throw new ArgumentNullException(nameof(node));
             // We don't care about the data type of variable types except for as metadata.
             if (node.NodeClass == NodeClass.VariableType) return true;
             if (node.DataType == null)
@@ -280,7 +278,9 @@ namespace Cognite.OpcUa.TypeCollectors
                 {
                     for (int i = 0; i < strings.Length; i++)
                     {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                         type.EnumValues[i] = strings[i].Text;
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
                     }
                 }
                 else if (value.Value is ExtensionObject[] exts)
@@ -289,7 +289,9 @@ namespace Cognite.OpcUa.TypeCollectors
                     {
                         if (ext.Body is EnumValueType val)
                         {
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                             type.EnumValues[val.Value] = val.DisplayName.Text;
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
                         }
                     }
                 }

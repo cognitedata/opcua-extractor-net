@@ -270,9 +270,9 @@ namespace Cognite.OpcUa.Types
         public ConverterType Type { get; }
         public NodeSerializer(StringConverter converter, FullConfig config, UAClient uaClient, ConverterType type)
         {
-            this.converter = converter ?? throw new ArgumentNullException(nameof(converter));
-            this.config = config ?? throw new ArgumentNullException(nameof(config));
-            this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
+            this.converter = converter;
+            this.config = config;
+            this.uaClient = uaClient;
             Type = type;
         }
 

@@ -1004,7 +1004,7 @@ namespace Test.Unit
             {
                 ServerMetrics = true
             };
-            var mgr = new NodeMetricsManager(tester.Client, tester.Config);
+            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Source, tester.Config.Metrics.Nodes);
             await mgr.StartNodeMetrics(tester.Source.Token);
 
             tester.Server.SetDiagnosticsEnabled(true);
@@ -1030,7 +1030,7 @@ namespace Test.Unit
             };
             tester.Server.UpdateNode(ids.DoubleVar1, 0);
             tester.Server.UpdateNode(ids.DoubleVar2, 0);
-            var mgr = new NodeMetricsManager(tester.Client, tester.Config);
+            var mgr = new NodeMetricsManager(tester.Client, tester.Config.Source, tester.Config.Metrics.Nodes);
             await mgr.StartNodeMetrics(tester.Source.Token);
 
             tester.Server.UpdateNode(ids.DoubleVar1, 15);

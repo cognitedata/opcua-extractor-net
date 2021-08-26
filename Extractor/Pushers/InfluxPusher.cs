@@ -76,7 +76,7 @@ namespace Cognite.OpcUa
 
         public InfluxPusher(InfluxPusherConfig config)
         {
-            this.config = config ?? throw new ArgumentNullException(nameof(config));
+            this.config = config;
             BaseConfig = config;
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
         }
@@ -568,7 +568,6 @@ namespace Cognite.OpcUa
         {
             if (config.Debug) return Array.Empty<UADataPoint>();
             token.ThrowIfCancellationRequested();
-            if (states == null) throw new ArgumentNullException(nameof(states));
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT * FROM \"{state.Key}\""

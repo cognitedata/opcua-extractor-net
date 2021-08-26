@@ -247,10 +247,6 @@ namespace Cognite.OpcUa.Pushers
             UpdateConfig update,
             CancellationToken token)
         {
-            if (variables == null) throw new ArgumentNullException(nameof(variables));
-            if (objects == null) throw new ArgumentNullException(nameof(objects));
-            if (update == null) throw new ArgumentNullException(nameof(update));
-
             if (!variables.Any() && !objects.Any())
             {
                 log.Debug("Testing 0 nodes against CDF");
@@ -312,7 +308,6 @@ namespace Cognite.OpcUa.Pushers
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (states == null) throw new ArgumentNullException(nameof(states));
             if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
             var ids = new List<string>();
             foreach (var state in states)
@@ -388,7 +383,6 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True if pushing is possible, false if not.</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
-            if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
             if (config.Debug) return true;
             try
             {
@@ -493,6 +487,7 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
         private async Task UpdateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
+            if (config.RawMetadata?.Database == null || config.RawMetadata?.AssetsTable == null) return;
             await Extractor.ReadProperties(assetMap.Select(kvp => kvp.Value));
 
             await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, rows =>
@@ -534,13 +529,17 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
         private async Task CreateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
+            if (config.RawMetadata?.Database == null || config.RawMetadata?.AssetsTable == null) return;
+
             await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async ids =>
             {
                 var assets = ids.Select(id => (assetMap[id], id));
                 await Extractor.ReadProperties(assets.Select(pair => pair.Item1));
                 return assets.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Node), pair.id))
                     .Where(pair => pair.Item1 != null)
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                     .ToDictionary(pair => pair.Item2, pair => pair.Item1.RootElement);
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
         /// <summary>
@@ -662,6 +661,7 @@ namespace Cognite.OpcUa.Pushers
             IDictionary<string, UAVariable> tsMap,
             CancellationToken token)
         {
+            if (config.RawMetadata?.Database == null || config.RawMetadata.TimeseriesTable == null) return;
             await Extractor.ReadProperties(tsMap.Select(kvp => kvp.Value));
 
             await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, rows =>
@@ -705,13 +705,17 @@ namespace Cognite.OpcUa.Pushers
             IDictionary<string, UAVariable> tsMap,
             CancellationToken token)
         {
+            if (config.RawMetadata?.Database == null || config.RawMetadata.TimeseriesTable == null) return;
+
             await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, async ids =>
             {
                 var timeseries = ids.Select(id => (tsMap[id], id));
                 await Extractor.ReadProperties(timeseries.Select(pair => pair.Item1));
                 return timeseries.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Variable), pair.id))
                     .Where(pair => pair.Item1 != null)
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                     .ToDictionary(pair => pair.Item2, pair => pair.Item1.RootElement);
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
         /// <summary>
@@ -926,10 +930,10 @@ namespace Cognite.OpcUa.Pushers
         public async Task<IEnumerable<RawRow>> GetRawRows(
             string dbName,
             string tableName,
-            IEnumerable<string> columns,
+            IEnumerable<string>? columns,
             CancellationToken token)
         {
-            string cursor = null;
+            string? cursor = null;
             var rows = new List<RawRow>();
             do
             {
@@ -971,7 +975,10 @@ namespace Cognite.OpcUa.Pushers
                     {
                         if (dict.TryGetValue("externalId", out var value))
                         {
-                            existing.Add((value as MultiValue.String).Value);
+                            if (value is MultiValue.String strValue)
+                            {
+                                existing.Add(strValue.Value);
+                            }
                         }
                     }
                     if (!existing.Any()) throw;
@@ -991,6 +998,8 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="relationships">Relationships to create.</param>
         private async Task PushRawReferences(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
+            if (config.RawMetadata?.Database == null || config.RawMetadata.RelationshipsTable == null) return;
+
             await EnsureRawRows(
                 config.RawMetadata.Database,
                 config.RawMetadata.RelationshipsTable,

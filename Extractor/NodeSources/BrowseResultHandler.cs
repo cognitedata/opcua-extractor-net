@@ -262,6 +262,7 @@ namespace Cognite.OpcUa.NodeSources
         /// <returns>A list of references.</returns>
         private async Task GetRelationshipData(CancellationToken token)
         {
+            if (extractor.ReferenceTypeManager == null) return;
             var nodes = rawObjects.Concat(rawVariables);
 
             var nonHierarchicalReferences = await Extractor.ReferenceTypeManager.GetReferencesAsync(

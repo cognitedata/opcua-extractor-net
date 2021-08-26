@@ -48,6 +48,7 @@ namespace Cognite.OpcUa.Pushers
         public bool NoInit { get; set; }
         public List<UANode> PendingNodes { get; } = new List<UANode>();
         public List<UAReference> PendingReferences { get; } = new List<UAReference>();
+        [NotNull, AllowNull]
         public UAExtractor? Extractor { get; set; }
         public IPusherConfig BaseConfig => config;
         private readonly MqttPusherConfig config;
@@ -93,7 +94,7 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="config">Config to use</param>
         public MQTTPusher(MqttPusherConfig config, IServiceProvider provider)
         {
-            this.config = config ?? throw new ArgumentNullException(nameof(config));
+            this.config = config;
             extractionConfig = provider.GetRequiredService<FullConfig>().Extraction;
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.ClientId)
@@ -259,7 +260,7 @@ namespace Cognite.OpcUa.Pushers
                     states = variables
                         .Select(node => Extractor.GetUniqueId(node.Id))
                         .Where(node => !existingNodes.Contains(node))
-                        .Select(id => new ExistingState { Id = id })
+                        .Select(id => new ExistingState(id))
                         .ToDictionary(state => state.Id);
                 }
                 else
@@ -268,7 +269,7 @@ namespace Cognite.OpcUa.Pushers
                        .Select(node => Extractor.GetUniqueId(node.Id))
                        .Where(node => !existingNodes.Contains(node))
                        .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
-                       .Select(id => new ExistingState { Id = id })
+                       .Select(id => new ExistingState(id))
                        .ToDictionary(state => state.Id);
                 }
 
@@ -339,7 +340,7 @@ namespace Cognite.OpcUa.Pushers
             var newStates = objects
                     .Select(node => Extractor.GetUniqueId(node.Id))
                     .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
-                    .Select(id => new ExistingState { Id = id, Existing = true, LastTimeModified = DateTime.UtcNow })
+                    .Select(id => new ExistingState(id) { Existing = true, LastTimeModified = DateTime.UtcNow })
                     .ToList();
 
             foreach (var state in newStates)
@@ -407,7 +408,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var states = relationships
                     .Select(rel => rel.ExternalId)
-                    .Select(id => new ExistingState { Id = id })
+                    .Select(id => new ExistingState(id))
                     .ToDictionary(state => state.Id);
 
                 await Extractor.StateStorage.RestoreExtractionState<MqttState, ExistingState>(
@@ -442,7 +443,7 @@ namespace Cognite.OpcUa.Pushers
 
             var newStates = relationships
                 .Select(rel => rel.ExternalId)
-                .Select(id => new ExistingState { Id = id, Existing = true, LastTimeModified = DateTime.UtcNow })
+                .Select(id => new ExistingState(id) { Existing = true, LastTimeModified = DateTime.UtcNow })
                 .ToList();
 
             foreach (var state in newStates)
@@ -554,14 +555,12 @@ namespace Cognite.OpcUa.Pushers
             if (useRawStore)
             {
                 var jsonAssets = ConvertNodesJson(objects, ConverterType.Node);
-                var rawObj = new RawRequestWrapper<JsonElement>
-                {
-#pragma warning disable CS8602 // Dereference of a possibly null reference. Warning is incorrect here.
-                    Database = config.RawMetadata.Database,
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
-                    Table = config.RawMetadata.AssetsTable,
-                    Rows = jsonAssets.Select(pair => new RawRowCreateDto<JsonElement> { Key = pair.id, Columns = pair.node })
-                };
+                var rawObj = new RawRequestWrapper<JsonElement>(
+#pragma warning disable CS8602, CS8604 // Dereference of a possibly null reference. Warning is incorrect here.
+                    config.RawMetadata.Database,
+                    config.RawMetadata.AssetsTable,
+#pragma warning restore CS8602, CS8604 // Dereference of a possibly null reference.
+                    jsonAssets.Select(pair => new RawRowCreateDto<JsonElement>(pair.id, pair.node)));
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -726,12 +725,12 @@ namespace Cognite.OpcUa.Pushers
             if (useRawStore)
             {
                 var rawTimeseries = ConvertNodesJson(variables, ConverterType.Variable);
-                var rawObj = new RawRequestWrapper<JsonElement>
-                {
-                    Database = config.RawMetadata.Database,
-                    Table = config.RawMetadata.TimeseriesTable,
-                    Rows = rawTimeseries.Select(pair => new RawRowCreateDto<JsonElement> { Key = pair.id, Columns = pair.node })
-                };
+                var rawObj = new RawRequestWrapper<JsonElement>(
+#pragma warning disable CS8602, CS8604
+                    config.RawMetadata.Database,
+                    config.RawMetadata.TimeseriesTable,
+#pragma warning restore CS8602, CS8604
+                    rawTimeseries.Select(pair => new RawRowCreateDto<JsonElement>(pair.id, pair.node)));
 
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
@@ -822,13 +821,13 @@ namespace Cognite.OpcUa.Pushers
 
             if (useRawStore)
             {
-                var rawObj = new RawRequestWrapper<RelationshipCreate>
-                {
-                    Database = config.RawMetadata.Database,
-                    Table = config.RawMetadata.RelationshipsTable,
-                    Rows = references.Select(rel =>
-                        new RawRowCreateDto<RelationshipCreate> { Key = rel.ExternalId, Columns = rel })
-                };
+                var rawObj = new RawRequestWrapper<RelationshipCreate>(
+#pragma warning disable CS8602, CS8604
+                    config.RawMetadata.Database,
+                    config.RawMetadata.RelationshipsTable,
+#pragma warning restore CS8602, CS8604
+                    references.Select(rel => new RawRowCreateDto<RelationshipCreate>(rel.ExternalId, rel)));
+
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -880,20 +879,36 @@ namespace Cognite.OpcUa.Pushers
         class ExistingState : IExtractionState
         {
             public bool Existing { get; set; }
-            public string Id { get; set; }
+            public string Id { get; }
             public DateTime? LastTimeModified { get; set; }
+
+            public ExistingState(string id)
+            {
+                Id = id;
+            }
         }
         class RawRequestWrapper<T>
         {
-            public string Database { get; set; }
-            public string Table { get; set; }
-            public IEnumerable<RawRowCreateDto<T>> Rows { get; set; }
+            public string Database { get; }
+            public string Table { get; }
+            public IEnumerable<RawRowCreateDto<T>> Rows { get; }
+            public RawRequestWrapper(string database, string table, IEnumerable<RawRowCreateDto<T>> rows)
+            {
+                Database = database;
+                Table = table;
+                Rows = rows;
+            }
         }
 
         class RawRowCreateDto<T>
         {
             public string Key { get; set; }
             public T Columns { get; set; }
+            public RawRowCreateDto(string key, T columns)
+            {
+                Key = key;
+                Columns = columns;
+            }
         }
         public async Task Disconnect()
         {

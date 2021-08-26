@@ -70,7 +70,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Id of the node that emitted the event in opc-ua
         /// </summary>
-        [MaybeNull]
+        [NotNull, AllowNull]
         public NodeId EmittingNode { get; set; }
 
         public override string ToString()
@@ -155,7 +155,6 @@ namespace Cognite.OpcUa.Types
         /// <returns>Array of converted bytes</returns>
         public byte[] ToStorableBytes(UAExtractor extractor)
         {
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             var bytes = new List<byte>();
             bytes.AddRange(CogniteUtils.StringToStorable(Message));
             bytes.AddRange(CogniteUtils.StringToStorable(EventId));
@@ -188,8 +187,6 @@ namespace Cognite.OpcUa.Types
         [return: MaybeNull]
         public static UAEvent FromStream(Stream stream, UAExtractor extractor)
         {
-            if (stream == null) throw new ArgumentNullException(nameof(stream));
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             var evt = new UAEvent();
             evt.Message = CogniteUtils.StringFromStream(stream);
             evt.EventId = CogniteUtils.StringFromStream(stream);
@@ -348,8 +345,6 @@ namespace Cognite.OpcUa.Types
         public Variant? Value { get; set; }
         public void ToJson(StringConverter converter, JsonWriter writer)
         {
-            if (writer == null) throw new ArgumentNullException(nameof(writer));
-            if (converter == null) throw new ArgumentNullException(nameof(converter));
             if (Children.Any())
             {
                 writer.WriteStartObject();

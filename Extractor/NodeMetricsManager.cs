@@ -68,11 +68,10 @@ namespace Cognite.OpcUa
         private readonly UAClient client;
         private readonly Dictionary<NodeId, NodeMetricState> metrics = new Dictionary<NodeId, NodeMetricState>();
         
-        public NodeMetricsManager(UAClient client, FullConfig config)
+        public NodeMetricsManager(UAClient client, UAClientConfig sourceConfig, NodeMetricsConfig config)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
-            this.config = config.Metrics.Nodes;
-            sourceConfig = config.Source;
+            this.config = config;
+            this.sourceConfig = sourceConfig;
             this.client = client;
         }
 
@@ -141,14 +140,14 @@ namespace Cognite.OpcUa
                 if (nc != NodeClass.Variable) continue;
                 var rawDt = results[i * attrPerNode + 1].GetValue(NodeId.Null);
                 var dt = client.DataTypeManager.GetDataType(rawDt) ?? new UADataType(rawDt);
-                var name = results[i * attrPerNode].GetValue<LocalizedText>(null)?.Text;
+                var name = results[i * attrPerNode].GetValue<LocalizedText?>(null)?.Text;
                 if (name == null) continue;
 
-                var desc = results[i * attrPerNode + 3].GetValue<LocalizedText>(null)?.Text;
+                var desc = results[i * attrPerNode + 3].GetValue<LocalizedText?>(null)?.Text;
 
                 var cleanName = cleanRegex.Replace(name, "_");
 
-                var state = new NodeMetricState(client, nodes[i], dt, Metrics.CreateGauge($"opcua_node_{cleanName}", desc));
+                var state = new NodeMetricState(client, nodes[i], dt, Metrics.CreateGauge($"opcua_node_{cleanName}", desc ?? ""));
                 metrics[nodes[i]] = state;
             }
 

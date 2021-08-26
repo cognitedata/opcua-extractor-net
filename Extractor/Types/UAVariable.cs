@@ -156,21 +156,12 @@ namespace Cognite.OpcUa.Types
         /// <param name="other">Parent variable</param>
         /// <param name="index">Index in the array</param>
         private UAVariable(UAVariable other, int index)
-            : base(OtherNonNull(other).Id, other.DisplayName + $"[{index}]", other.Id)
+            : base(other.Id, other.DisplayName + $"[{index}]", other.Id)
         {
             ArrayParent = other;
             Index = index;
             Changed = other.Changed;
             VariableAttributes = other.VariableAttributes;
-        }
-        /// <summary>
-        /// Returns given variable if it is not null, otherwise throws an error.
-        /// Used to prevent warnings when calling base constructor.
-        /// </summary>
-        private static UAVariable OtherNonNull(UAVariable other)
-        {
-            if (other == null) throw new ArgumentNullException(nameof(other));
-            return other;
         }
         /// <summary>
         /// Create array child nodes
@@ -196,7 +187,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="parentIdHandler">Method called for each string mapped to parentId, should set
         /// parentId as dictated by external context.</param>
         private void HandleMetaMap(
-            Dictionary<string, string> metaMap,
+            Dictionary<string, string>? metaMap,
             TimeSeriesCreate writePoco,
             Action<string> parentIdHandler,
             StringConverter converter)
@@ -234,10 +225,9 @@ namespace Cognite.OpcUa.Types
             DataTypeManager manager,
             StringConverter converter,
             long? dataSetId,
-            Dictionary<string, string> metaMap)
+            Dictionary<string, string>? metaMap)
         {
             if (manager == null || converter == null) return null;
-            if (client == null) throw new ArgumentNullException(nameof(client));
             string externalId = client.GetUniqueId(Id, Index);
             var writePoco = new StatelessTimeSeriesCreate
             {
@@ -271,14 +261,10 @@ namespace Cognite.OpcUa.Types
             DataTypeManager manager,
             StringConverter converter,
             long? dataSetId,
-            IDictionary<NodeId, long> nodeToAssetIds,
-            Dictionary<string, string> metaMap,
+            IDictionary<NodeId, long>? nodeToAssetIds,
+            Dictionary<string, string>? metaMap,
             bool minimal = false)
         {
-            if (manager == null) throw new ArgumentNullException(nameof(manager));
-            if (converter == null) throw new ArgumentNullException(nameof(converter));
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
-
             string externalId = extractor.GetUniqueId(Id, Index);
 
             if (minimal)

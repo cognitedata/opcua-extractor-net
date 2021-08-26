@@ -167,7 +167,7 @@ namespace Cognite.OpcUa
                     log.Warning("Pushers of types {types} failed while pushing datapoints",
                         string.Concat(failedPushers.Select(pusher => pusher.GetType().ToString())));
                 }
-                if (config.FailureBuffer.Enabled)
+                if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
                 {
                     await extractor.FailureBuffer.WriteDatapoints(dataPointList, pointRanges, token);
                 }
@@ -197,14 +197,14 @@ namespace Cognite.OpcUa
                 }
             }
 
-            if (config.FailureBuffer.Enabled && extractor.FailureBuffer.AnyPoints)
+            if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null && extractor.FailureBuffer.AnyPoints)
             {
                 await extractor.FailureBuffer.ReadDatapoints(passingPushers, token);
             }
             foreach ((string id, var range) in pointRanges)
             {
                 var state = extractor.State.GetNodeState(id);
-                state.UpdateDestinationRange(range.First, range.Last);
+                state?.UpdateDestinationRange(range.First, range.Last);
             }
             return restartHistory;
         }
@@ -259,7 +259,7 @@ namespace Cognite.OpcUa
                         failedPushers.Select(pusher => pusher.GetType().ToString()).Aggregate((src, val) => src + ", " + val));
                 }
 
-                if (config.FailureBuffer.Enabled)
+                if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null)
                 {
                     await extractor.FailureBuffer.WriteEvents(eventList, token);
                 }
@@ -288,14 +288,14 @@ namespace Cognite.OpcUa
                     pusher.EventsFailing = false;
                 }
             }
-            if (config.FailureBuffer.Enabled && extractor.FailureBuffer.AnyEvents)
+            if (config.FailureBuffer.Enabled && extractor.FailureBuffer != null && extractor.FailureBuffer.AnyEvents)
             {
                 await extractor.FailureBuffer.ReadEvents(passingPushers, token);
             }
             foreach (var (id, range) in eventRanges)
             {
                 var state = extractor.State.GetEmitterState(id);
-                state.UpdateDestinationRange(range.First, range.Last);
+                state?.UpdateDestinationRange(range.First, range.Last);
             }
 
 
@@ -354,9 +354,6 @@ namespace Cognite.OpcUa
         /// <returns>List of converted datapoints</returns>
         public IEnumerable<UADataPoint> ToDataPoint(DataValue value, VariableExtractionState variable)
         {
-            if (value == null) throw new ArgumentNullException(nameof(value));
-            if (variable == null) throw new ArgumentNullException(nameof(value));
-
             string uniqueId = variable.Id;
 
             if (value.Value is Array values)
@@ -444,11 +441,8 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="filter">Filter that resulted in this event</param>
         /// <param name="eventFields">Fields for a single event</param>
-        public UAEvent ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
+        public UAEvent? ConstructEvent(EventFilter filter, VariantCollection eventFields, NodeId emitter)
         {
-            if (filter == null) throw new ArgumentNullException(nameof(filter));
-            if (eventFields == null) throw new ArgumentNullException(nameof(eventFields));
-
             int eventTypeIndex = filter.SelectClauses.FindIndex(atr =>
                 atr.BrowsePath.Count == 1
                 && atr.BrowsePath[0] == BrowseNames.EventType);

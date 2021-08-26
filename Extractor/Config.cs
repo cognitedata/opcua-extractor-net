@@ -401,7 +401,6 @@ namespace Cognite.OpcUa
         public string? NodeId { get; set; }
         public NodeId ToNodeId(UAClient client, NodeId? defaultValue = null)
         {
-            if (client == null) throw new ArgumentNullException(nameof(client));
             var node = client.ToNodeId(NodeId, NamespaceUri);
             if (node.IsNullNodeId)
             {

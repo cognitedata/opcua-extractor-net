@@ -58,7 +58,6 @@ namespace Cognite.OpcUa
     {
         public HistoryReadNode(HistoryReadType type, UAHistoryExtractionState state)
         {
-            if (state == null) throw new ArgumentNullException(nameof(state));
             Type = type;
             State = state;
             Id = state.SourceId;
@@ -126,7 +125,6 @@ namespace Cognite.OpcUa
         private bool Data => type == HistoryReadType.FrontfillData || type == HistoryReadType.BackfillData;
         public HistoryScheduler(UAClient uaClient, UAExtractor extractor, HistoryConfig config, HistoryReadType type)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
             if (config.Throttling == null)
             {
                 throttling = new HistoryThrottlingConfig { MaxNodeParallelism = 0, MaxParallelism = 0, MaxPerMinute = 0 };
@@ -554,6 +552,8 @@ namespace Cognite.OpcUa
 
             var nodeState = node.State as VariableExtractionState;
 
+            if (nodeState == null) return;
+
             foreach (var datapoint in dataPoints)
             {
                 var buffDps = extractor.Streamer.ToDataPoint(datapoint, nodeState);
@@ -688,6 +688,8 @@ namespace Cognite.OpcUa
 
             var emitterState = node.State as EventExtractionState;
 
+            if (emitterState == null) return;
+
             var buffered = emitterState.FlushBuffer();
             if (buffered.Any())
             {
@@ -729,9 +731,6 @@ namespace Cognite.OpcUa
         private ILogger log = Log.Logger.ForContext<HistoryReader>();
         public HistoryReader(UAClient uaClient, UAExtractor extractor, HistoryConfig config, CancellationToken token)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
-            if (uaClient == null) throw new ArgumentNullException(nameof(uaClient));
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             this.config = config;
             this.uaClient = uaClient;
             this.extractor = extractor;

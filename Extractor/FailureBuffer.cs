@@ -67,10 +67,8 @@ namespace Cognite.OpcUa
         /// <param name="fullConfig"></param>
         /// <param name="extractor"></param>
         /// <param name="influxPusher">InfluxPusher to use when reading from influxdb</param>
-        public FailureBuffer(FullConfig fullConfig, UAExtractor extractor, InfluxPusher influxPusher)
+        public FailureBuffer(FullConfig fullConfig, UAExtractor extractor, InfluxPusher? influxPusher)
         {
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
-            if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
             config = fullConfig.FailureBuffer;
             this.fullConfig = fullConfig;
 
@@ -130,6 +128,7 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             if (!states.Any()) return false;
+            if (extractor.StateStorage == null) return false;
             var influxStates = states
                 .Where(state => !state.FrontfillEnabled)
                 .Select(state => new InfluxBufferState(state))
@@ -190,12 +189,12 @@ namespace Cognite.OpcUa
                 if (!nodeBufferStates.TryGetValue(key, out var bufferState))
                 {
                     var state = extractor.State.GetNodeState(key);
-                    if (state.FrontfillEnabled) continue;
+                    if (state == null || state.FrontfillEnabled) continue;
                     nodeBufferStates[key] = bufferState = new InfluxBufferState(state);
                 }
                 bufferState.UpdateDestinationRange(value.First, value.Last);
             }
-            if (config.InfluxStateStore)
+            if (config.InfluxStateStore && extractor.StateStorage != null)
             {
                 log.Information("Try to write {cnt} states to state store", nodeBufferStates.Count);
                 await extractor.StateStorage.StoreExtractionState(nodeBufferStates.Values,
@@ -216,7 +215,7 @@ namespace Cognite.OpcUa
             if (points == null || !points.Any() || pointRanges == null || !pointRanges.Any()) return true;
 
             points = points.GroupBy(pt => pt.Id)
-                .Where(group => !extractor.State.GetNodeState(group.Key).FrontfillEnabled)
+                .Where(group => !extractor.State.GetNodeState(group.Key)?.FrontfillEnabled ?? false)
                 .SelectMany(group => group)
                 .ToList();
 
@@ -252,7 +251,6 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool> ReadDatapoints(IEnumerable<IPusher> pushers, CancellationToken token)
         {
-            if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
             if (UseInflux() && nodeBufferStates.Any())
@@ -267,7 +265,7 @@ namespace Cognite.OpcUa
 
                     if (result.All(res => res ?? true))
                     {
-                        if (config.InfluxStateStore)
+                        if (config.InfluxStateStore && extractor.StateStorage != null)
                         {
                             await extractor.StateStorage.DeleteExtractionState(nodeBufferStates.Values,
                                 fullConfig.StateStorage.InfluxVariableStore, token);
@@ -311,12 +309,14 @@ namespace Cognite.OpcUa
             {
                 if (!eventBufferStates.TryGetValue(group.Id, out var bufferState))
                 {
-                    eventBufferStates[group.Id] = bufferState = new InfluxBufferState(extractor.State.GetEmitterState(group.Id));
+                    var emitterState = extractor.State.GetEmitterState(group.Id);
+                    if (emitterState == null) continue;
+                    eventBufferStates[group.Id] = bufferState = new InfluxBufferState(emitterState);
                 }
                 bufferState.UpdateDestinationRange(group.Range.Min, group.Range.Max);
             }
 
-            if (config.InfluxStateStore)
+            if (config.InfluxStateStore && extractor.StateStorage != null)
             {
                 await extractor.StateStorage.StoreExtractionState(eventBufferStates.Values,
                     fullConfig.StateStorage.InfluxEventStore, token);
@@ -335,7 +335,7 @@ namespace Cognite.OpcUa
             if (events == null || !events.Any()) return true;
 
             events = events.GroupBy(evt => evt.EmittingNode)
-                .Where(group => !extractor.State.GetEmitterState(group.Key).FrontfillEnabled)
+                .Where(group => !extractor.State.GetEmitterState(group.Key)?.FrontfillEnabled ?? false)
                 .SelectMany(group => group)
                 .ToList();
 
@@ -371,7 +371,6 @@ namespace Cognite.OpcUa
         /// <returns>True on success</returns>
         public async Task<bool> ReadEvents(IEnumerable<IPusher> pushers, CancellationToken token)
         {
-            if (pushers == null) throw new ArgumentNullException(nameof(pushers));
             bool success = true;
 
             if (UseInflux() && eventBufferStates.Any())
@@ -387,7 +386,7 @@ namespace Cognite.OpcUa
 
                     if (result.All(res => res ?? true))
                     {
-                        if (config.InfluxStateStore)
+                        if (config.InfluxStateStore && extractor.StateStorage != null)
                         {
                             await extractor.StateStorage.DeleteExtractionState(eventBufferStates.Values,
                                 fullConfig.StateStorage.InfluxEventStore, token);
@@ -458,6 +457,7 @@ namespace Cognite.OpcUa
                     foreach (var group in ranges)
                     {
                         var state = extractor.State.GetNodeState(group.Id);
+                        if (state == null) continue;
                         state.UpdateDestinationRange(group.Range.Min, group.Range.Max);
                     }
 
@@ -526,6 +526,7 @@ namespace Cognite.OpcUa
                     foreach (var group in ranges)
                     {
                         var state = extractor.State.GetEmitterState(group.Id);
+                        if (state == null) continue;
                         state.UpdateDestinationRange(group.Range.Min, group.Range.Max);
                     }
 
@@ -553,7 +554,6 @@ namespace Cognite.OpcUa
         /// <param name="dps">Datapoints to write</param>
         private void WriteDatapointsToFile(IEnumerable<UADataPoint> dps, CancellationToken token)
         {
-            if (dps == null) throw new ArgumentNullException(nameof(dps));
             int count = 0;
 
             using (var fs = new FileStream(config.DatapointPath, FileMode.Append, FileAccess.Write, FileShare.None))
@@ -580,7 +580,6 @@ namespace Cognite.OpcUa
         /// <param name="evts">Events to write</param>
         private void WriteEventsToFile(IEnumerable<UAEvent> evts, CancellationToken token)
         {
-            if (evts == null) throw new ArgumentNullException(nameof(evts));
             int count = 0;
             using (var fs = new FileStream(config.EventPath, FileMode.Append, FileAccess.Write, FileShare.None))
             {

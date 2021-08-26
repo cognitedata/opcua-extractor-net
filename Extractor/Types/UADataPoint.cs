@@ -63,7 +63,6 @@ namespace Cognite.OpcUa.Types
         /// <param name="replacement">Replacement value</param>
         public UADataPoint(UADataPoint other, string replacement)
         {
-            if (other == null) throw new ArgumentNullException(nameof(other));
             Timestamp = other.Timestamp;
             Id = other.Id;
             StringValue = replacement;
@@ -75,7 +74,6 @@ namespace Cognite.OpcUa.Types
         /// <param name="replacement">Replacement value</param>
         public UADataPoint(UADataPoint other, double replacement)
         {
-            if (other == null) throw new ArgumentNullException(nameof(other));
             Timestamp = other.Timestamp;
             Id = other.Id;
             DoubleValue = replacement;
@@ -116,7 +114,6 @@ namespace Cognite.OpcUa.Types
         [return: MaybeNull]
         public static UADataPoint FromStream(Stream stream)
         {
-            if (stream == null) throw new ArgumentNullException(nameof(stream));
             string id = CogniteUtils.StringFromStream(stream);
             if (id == null) return null;
             var buffer = new byte[sizeof(long)];

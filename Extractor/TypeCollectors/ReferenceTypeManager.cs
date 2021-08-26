@@ -38,7 +38,7 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly Dictionary<NodeId, UAReferenceType> mappedTypes = new Dictionary<NodeId, UAReferenceType>();
         public ReferenceTypeManager(UAClient client, UAExtractor extractor)
         {
-            uaClient = client ?? throw new ArgumentNullException(nameof(client));
+            uaClient = client;
             this.extractor = extractor;
         }
         /// <summary>

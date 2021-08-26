@@ -40,13 +40,14 @@ namespace Cognite.OpcUa.HistoryStates
         /// Each entry in the array defines the fixed size of the given dimension of the variable.
         /// The extractor generally requires fixed dimensions in order to push arrays to destination systems.
         /// </summary>
-        public int[] ArrayDimensions { get; }
+        public int[]? ArrayDimensions { get; }
         public bool ShouldSubscribe { get; }
         public string DisplayName { get; }
 
         [MaybeNull]
         private readonly List<UADataPoint> buffer;
 
+        [MemberNotNullWhen(true, nameof(ArrayDimensions))]
         public bool IsArray => ArrayDimensions != null && ArrayDimensions.Length == 1 && ArrayDimensions[0] > 0;
 
         /// <summary>
@@ -56,7 +57,6 @@ namespace Cognite.OpcUa.HistoryStates
         public VariableExtractionState(IUAClientAccess client, UAVariable variable, bool frontfill, bool backfill)
             : base(client, variable.Id, frontfill, backfill)
         {
-            if (variable == null) throw new ArgumentNullException(nameof(variable));
             DataType = variable.DataType;
             ArrayDimensions = variable.ArrayDimensions;
             DisplayName = variable.DisplayName;

@@ -90,7 +90,6 @@ namespace Cognite.OpcUa.TypeCollectors
         /// <param name="config">Event configuration to use</param>
         public EventFieldCollector(UAClient parent, EventConfig config)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
             uaClient = parent;
             this.config = config;
             if (!string.IsNullOrEmpty(config.ExcludeEventFilter))

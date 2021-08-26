@@ -319,7 +319,7 @@ namespace Cognite.OpcUa.Types
             IUAClientAccess client,
             StringConverter converter,
             long? dataSetId,
-            Dictionary<string, string> metaMap,
+            Dictionary<string, string>? metaMap,
             AssetCreate asset)
         {
             var id = client.GetUniqueId(Id);
@@ -366,10 +366,8 @@ namespace Cognite.OpcUa.Types
             StringConverter converter,
             DataTypeManager manager,
             long? dataSetId,
-            Dictionary<string, string> metaMap)
+            Dictionary<string, string>? metaMap)
         {
-            if (client == null) throw new ArgumentNullException(nameof(client));
-            if (converter == null) throw new ArgumentNullException(nameof(converter));
             var asset = new AssetCreate();
             PopulateAssetCreate(client, converter, dataSetId, metaMap, asset);
             asset.Metadata = BuildMetadata(config, manager, converter, true);
@@ -424,7 +422,6 @@ namespace Cognite.OpcUa.Types
         public void SetNodeType(UAClient client, ExpandedNodeId nodeId)
         {
             if (nodeId == null || nodeId.IsNull) return;
-            if (client == null) throw new ArgumentNullException(nameof(client));
             var id = client.ToNodeId(nodeId);
             Attributes.NodeType = client.ObjectTypeManager.GetObjectType(id, NodeClass == NodeClass.Variable);
             if (NodeClass == NodeClass.Variable && id == VariableTypeIds.PropertyType)

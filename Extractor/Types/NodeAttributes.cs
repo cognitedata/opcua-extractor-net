@@ -54,7 +54,6 @@ namespace Cognite.OpcUa.Types
         /// <returns>List of attributes</returns>
         public IEnumerable<uint> GetAttributeIds(FullConfig config)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
             var result = new List<uint> { Attributes.Description };
             switch (NodeClass)
             {
@@ -99,8 +98,6 @@ namespace Cognite.OpcUa.Types
         /// <returns>New index in list</returns>
         public virtual int HandleAttributeRead(FullConfig config, IList<DataValue> values, int idx, UAClient client)
         {
-            if (values == null) throw new ArgumentNullException(nameof(values));
-            if (config == null) throw new ArgumentNullException(nameof(config));
             Description = values[idx++].GetValue<LocalizedText?>(null)?.Text;
             if ((NodeClass == NodeClass.Object || NodeClass == NodeClass.Variable) && config.Events.Enabled && config.Events.DiscoverEmitters)
             {
@@ -139,9 +136,6 @@ namespace Cognite.OpcUa.Types
         /// <returns>New index in list</returns>
         public override int HandleAttributeRead(FullConfig config, IList<DataValue> values, int idx, UAClient client)
         {
-            if (values == null) throw new ArgumentNullException(nameof(values));
-            if (client == null) throw new ArgumentNullException(nameof(client));
-            if (config == null) throw new ArgumentNullException(nameof(config));
             Description = values[idx++].GetValue<LocalizedText?>(null)?.Text;
             if (NodeClass == NodeClass.Variable)
             {
