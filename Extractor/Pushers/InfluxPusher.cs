@@ -228,7 +228,9 @@ namespace Cognite.OpcUa
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        ids.Add(Extractor.GetUniqueId(state.SourceId, i));
+                        var id = Extractor.GetUniqueId(state.SourceId, i);
+                        if (id == null) break;
+                        ids.Add(id);
                     }
                 }
                 else
@@ -277,7 +279,9 @@ namespace Cognite.OpcUa
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        if (ranges.TryGetValue(Extractor.GetUniqueId(state.SourceId, i), out var range))
+                        var id = Extractor.GetUniqueId(state.SourceId, i);
+                        if (id == null) break;
+                        if (ranges.TryGetValue(id, out var range))
                         {
                             if (range == TimeRange.Empty)
                             {
@@ -536,7 +540,7 @@ namespace Cognite.OpcUa
 
             idp.Fields.Add("value", evt.Message ?? "");
             idp.Fields.Add("id", evt.EventId ?? "");
-            string sourceNode;
+            string? sourceNode;
             if (evt.MetaData != null && evt.MetaData.TryGetValue("SourceNode", out var rawSourceNode))
             {
                 sourceNode = Extractor.StringConverter.ConvertToString(rawSourceNode);

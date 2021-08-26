@@ -65,7 +65,7 @@ namespace Cognite.OpcUa.Pushers
 
         private HashSet<string> existingNodes = new HashSet<string>();
 
-        private Dictionary<NodeId, string> eventParents = new Dictionary<NodeId, string>();
+        private Dictionary<NodeId, string?> eventParents = new Dictionary<NodeId, string?>();
 
         private ExtractionConfig extractionConfig;
 
@@ -258,7 +258,7 @@ namespace Cognite.OpcUa.Pushers
                 if (config.SkipMetadata)
                 {
                     states = variables
-                        .Select(node => Extractor.GetUniqueId(node.Id))
+                        .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
                         .Where(node => !existingNodes.Contains(node))
                         .Select(id => new ExistingState(id))
                         .ToDictionary(state => state.Id);
@@ -266,9 +266,9 @@ namespace Cognite.OpcUa.Pushers
                 else
                 {
                     states = objects
-                       .Select(node => Extractor.GetUniqueId(node.Id))
+                       .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
                        .Where(node => !existingNodes.Contains(node))
-                       .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
+                       .Concat(variables.SelectNonNull(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
                        .Select(id => new ExistingState(id))
                        .ToDictionary(state => state.Id);
                 }
@@ -293,20 +293,33 @@ namespace Cognite.OpcUa.Pushers
                 if (!update.Objects.AnyUpdate)
                 {
                     objects = objects
-                        .Where(obj => !existingNodes.Contains(Extractor.GetUniqueId(obj.Id))).ToList();
+#pragma warning disable CS8604 // Possible null reference argument.
+                        .Where(obj => !obj.Id.IsNullNodeId && !existingNodes.Contains(Extractor.GetUniqueId(obj.Id))).ToList();
+#pragma warning restore CS8604 // Possible null reference argument.
                 }
                 else
                 {
-                    foreach (var obj in objects) obj.Changed = existingNodes.Contains(Extractor.GetUniqueId(obj.Id));
+                    foreach (var obj in objects)
+                    {
+                        string? id = Extractor.GetUniqueId(obj.Id);
+                        obj.Changed = id != null && existingNodes.Contains(id);
+                    }
                 }
                 if (!update.Variables.AnyUpdate)
                 {
                     variables = variables
-                        .Where(variable => !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index))).ToList();
+                        .Where(variable => !variable.Id.IsNullNodeId
+#pragma warning disable CS8604 // Possible null reference argument.
+                            && !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index))).ToList();
+#pragma warning restore CS8604 // Possible null reference argument.
                 }
                 else
                 {
-                    foreach (var node in variables) node.Changed = existingNodes.Contains(Extractor.GetUniqueId(node.Id, node.Index));
+                    foreach (var node in variables)
+                    {
+                        string? id = Extractor.GetUniqueId(node.Id, node.Index);
+                        node.Changed = id != null && existingNodes.Contains(id);
+                    }
                 }
             }
 
@@ -338,8 +351,8 @@ namespace Cognite.OpcUa.Pushers
             }
 
             var newStates = objects
-                    .Select(node => Extractor.GetUniqueId(node.Id))
-                    .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
+                    .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
+                    .Concat(variables.SelectNonNull(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
                     .Select(id => new ExistingState(id) { Existing = true, LastTimeModified = DateTime.UtcNow })
                     .ToList();
 
@@ -647,7 +660,9 @@ namespace Cognite.OpcUa.Pushers
             {
                 var create = node.ToJson(Extractor.StringConverter, type);
                 if (create == null) continue;
-                yield return (Extractor.GetUniqueId(node.Id), create.RootElement);
+                string? id = Extractor.GetUniqueId(node.Id);
+                if (id == null) continue;
+                yield return (id, create.RootElement);
             }
         }
         /// <summary>

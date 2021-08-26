@@ -337,7 +337,7 @@ namespace Cognite.OpcUa
         /// <param name="id">NodeId to convert</param>
         /// <param name="index">Index to use for uniqueId</param>
         /// <returns>Converted uniqueId</returns>
-        public string GetUniqueId(ExpandedNodeId id, int index = -1)
+        public string? GetUniqueId(ExpandedNodeId id, int index = -1)
         {
             return uaClient.GetUniqueId(id, index);
         }
@@ -1044,7 +1044,7 @@ namespace Cognite.OpcUa
     }
     public interface IUAClientAccess
     {
-        string GetUniqueId(ExpandedNodeId id, int index = -1);
+        string? GetUniqueId(ExpandedNodeId id, int index = -1);
         StringConverter StringConverter { get; }
         string GetRelationshipId(UAReference reference);
     }

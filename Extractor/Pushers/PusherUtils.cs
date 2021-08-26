@@ -170,7 +170,9 @@ namespace Cognite.OpcUa.Pushers
                 var parentId = extractor.GetUniqueId(newAsset.ParentId);
                 if (parentId != old.ParentExternalId)
                 {
+#pragma warning disable CS8604 // Possible null reference argument.
                     assetUpdate.ParentExternalId = new UpdateNullable<string>(parentId);
+#pragma warning restore CS8604 // Possible null reference argument.
                 }
             }
 

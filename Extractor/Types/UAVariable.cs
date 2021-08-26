@@ -228,7 +228,7 @@ namespace Cognite.OpcUa.Types
             Dictionary<string, string>? metaMap)
         {
             if (manager == null || converter == null) return null;
-            string externalId = client.GetUniqueId(Id, Index);
+            string? externalId = client.GetUniqueId(Id, Index);
             var writePoco = new StatelessTimeSeriesCreate
             {
                 Description = Description,
@@ -265,7 +265,7 @@ namespace Cognite.OpcUa.Types
             Dictionary<string, string>? metaMap,
             bool minimal = false)
         {
-            string externalId = extractor.GetUniqueId(Id, Index);
+            string? externalId = extractor.GetUniqueId(Id, Index);
 
             if (minimal)
             {

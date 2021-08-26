@@ -316,7 +316,9 @@ namespace Cognite.OpcUa.Pushers
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        ids.Add(Extractor.GetUniqueId(state.SourceId, i));
+                        var id = Extractor.GetUniqueId(state.SourceId, i);
+                        if (id == null) break;
+                        ids.Add(id);
                     }
                 }
                 else
@@ -344,7 +346,9 @@ namespace Cognite.OpcUa.Pushers
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        if (ranges.TryGetValue(Extractor.GetUniqueId(state.SourceId, i), out var range))
+                        var id = Extractor.GetUniqueId(state.SourceId, i);
+                        if (id == null) break;
+                        if (ranges.TryGetValue(id, out var range))
                         {
                             if (range == TimeRange.Empty)
                             {
@@ -617,9 +621,11 @@ namespace Cognite.OpcUa.Pushers
         {
             if (config.SkipMetadata) return;
 
+#pragma warning disable CS8620 // Argument cannot be used for parameter due to differences in the nullability of reference types.
             var assetIds = new ConcurrentDictionary<string, UANode>(objects
                 .Where(node => node.Source != NodeSource.CDF)
                 .ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
+#pragma warning restore CS8620 // Argument cannot be used for parameter due to differences in the nullability of reference types.
 
             if (!assetIds.Any()) return;
 
@@ -816,7 +822,10 @@ namespace Cognite.OpcUa.Pushers
             TypeUpdateConfig update,
             CancellationToken token)
         {
-            var tsIds = new ConcurrentDictionary<string, UAVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
+            var tsIds = new ConcurrentDictionary<string, UAVariable>(
+#pragma warning disable CS8620 // Argument cannot be used for parameter due to differences in the nullability of reference types.
+                tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
+#pragma warning restore CS8620 // Argument cannot be used for parameter due to differences in the nullability of reference types.
             bool useRawTimeseries = config.RawMetadata != null
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);

@@ -1572,9 +1572,10 @@ namespace Cognite.OpcUa
         /// </remarks>
         /// <param name="id">Nodeid to be converted</param>
         /// <returns>Unique string representation</returns>
-        public string GetUniqueId(ExpandedNodeId id, int index = -1)
+        public string? GetUniqueId(ExpandedNodeId id, int index = -1)
         {
             var nodeId = ToNodeId(id);
+            if (nodeId.IsNullNodeId) return null;
             if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride))
             {
                 if (index <= -1) return nodeOverride;

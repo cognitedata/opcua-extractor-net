@@ -517,8 +517,6 @@ namespace Test.Unit
             var emitter = new NodeId("emitter");
 
             UAEvent created = null;
-            Assert.Throws<ArgumentNullException>(() => extractor.Streamer.ConstructEvent(null, values, emitter));
-            Assert.Throws<ArgumentNullException>(() => extractor.Streamer.ConstructEvent(filter, null, emitter));
 
             // Check that default results in created event
             created = extractor.Streamer.ConstructEvent(filter, values, emitter);

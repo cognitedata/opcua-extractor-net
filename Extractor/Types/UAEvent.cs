@@ -46,13 +46,11 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Transformed ID of the event. The Raw id is a byte-string. This is the byte-string transformed into Base64 and prepended the globalprefix.
         /// </summary>
-        [MaybeNull]
-        public string EventId { get; set; } // Base64
+        public string? EventId { get; set; } // Base64
         /// <summary>
         /// NodeId of the SourceNode
         /// </summary>
-        [MaybeNull]
-        public NodeId SourceNode { get; set; }
+        public NodeId? SourceNode { get; set; }
         /// <summary>
         /// Time this event triggered.
         /// </summary>
@@ -60,13 +58,11 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// NodeId of the eventType of this event.
         /// </summary>
-        [MaybeNull]
-        public NodeId EventType { get; set; }
+        public NodeId? EventType { get; set; }
         /// <summary>
         /// Metadata fields
         /// </summary>
-        [MaybeNull]
-        public Dictionary<string, string> MetaData { get; set; }
+        public Dictionary<string, string>? MetaData { get; set; }
         /// <summary>
         /// Id of the node that emitted the event in opc-ua
         /// </summary>
@@ -237,7 +233,7 @@ namespace Cognite.OpcUa.Types
             evt.DataSetId = dataSetId;
 
             var finalMetaData = new Dictionary<string, string>();
-            finalMetaData["Emitter"] = client.GetUniqueId(EmittingNode);
+            finalMetaData["Emitter"] = client.GetUniqueId(EmittingNode) ?? "null";
             if (MetaData == null)
             {
                 evt.Metadata = finalMetaData;
@@ -245,7 +241,9 @@ namespace Cognite.OpcUa.Types
             }
             if (!MetaData.ContainsKey("SourceNode") && SourceNode != null && !SourceNode.IsNullNodeId)
             {
+#pragma warning disable CS8601 // Possible null reference assignment. Not null here
                 finalMetaData["SourceNode"] = client.GetUniqueId(SourceNode);
+#pragma warning restore CS8601 // Possible null reference assignment.
             }
             if (MetaData.TryGetValue("SubType", out var subtype))
             {
@@ -279,7 +277,7 @@ namespace Cognite.OpcUa.Types
         public StatelessEventCreate ToStatelessCDFEvent(
             [DisallowNull] IUAClientAccess client,
             long? dataSetId,
-            IDictionary<NodeId, string> parentIdMap)
+            IDictionary<NodeId, string?> parentIdMap)
         {
             string? sourceId = null;
             if (SourceNode != null && !SourceNode.IsNullNodeId)

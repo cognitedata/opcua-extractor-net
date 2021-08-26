@@ -131,8 +131,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="nodeId">NodeId value</param>
         /// <param name="id">UniqueId key</param>
-        public void RegisterNode(NodeId nodeId, string id)
+        public void RegisterNode(NodeId nodeId, string? id)
         {
+            if (id == null) return;
             externalToNodeId[id] = nodeId;
         }
         /// <summary>

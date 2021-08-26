@@ -307,6 +307,7 @@ namespace Cognite.OpcUa
 
             foreach (var group in ranges)
             {
+                if (group.Id == null) continue;
                 if (!eventBufferStates.TryGetValue(group.Id, out var bufferState))
                 {
                     var emitterState = extractor.State.GetEmitterState(group.Id);

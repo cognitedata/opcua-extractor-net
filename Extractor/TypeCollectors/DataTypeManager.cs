@@ -233,7 +233,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
                 else
                 {
-                    ret["dataType"] = customTypeNames.GetValueOrDefault(dt.Raw) ?? uaClient.GetUniqueId(dt.Raw);
+                    ret["dataType"] = customTypeNames.GetValueOrDefault(dt.Raw) ?? uaClient.GetUniqueId(dt.Raw) ?? "null";
                 }
             }
             return ret;
