@@ -1,5 +1,27 @@
 # OPC-UA Extractor Changelog
 
+2.4.0 2021-08-26
+------------------
+* Option to store additional metadata in Raw.
+* Service version and installers for Linux.
+* New command line interface.
+* Service version and standalone now use the same executable.
+* Option to suppress certificate errors.
+* Option to start extractor using nodes in CDF Raw.
+* Fix issues when serializing certain built in OPC-UA types.
+
+2.3.0 2021-08-10
+------------------
+* System to obtain server diagnostic metrics.
+* Authenticate using x509 certificates
+* Throttle history reads.
+* Configure the OPC-UA data change filter.
+* Write asset and timeseries metadata as JSON when pushing to Raw.
+* Disable history or subscriptions on all or specific nodes.
+* Automatically restart history without restarting the extractor.
+* Use AccessLevel to determine which nodes to read from.
+* Fix issue in standalone version of extractor.
+
 2.2.0 2021-04-06
 ------------------
 * Reduce memory usage.
