@@ -7,6 +7,7 @@ RUN dotnet tool restore
 RUN dotnet paket restore
 RUN dotnet build ExtractorLauncher/
 
-ARG VERSION_ARGS
+ARG VERSION
+ARG DESCRIPTION
 
-RUN dotnet publish -c Release -o /build/deploy "$VERSION_ARGS" ExtractorLauncher/
+RUN dotnet publish -c Release -o /build/deploy /p:InformationalVersion="$VERSION" /p:Description="$DESCRIPTION" ExtractorLauncher/
