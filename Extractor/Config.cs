@@ -58,7 +58,9 @@ namespace Cognite.OpcUa
         public X509CertConfig X509Certificate { get; set; }
         public string ReverseConnectUrl { get; set; }
         public bool IgnoreCertificateIssues { get; set; }
-        public ContinuationPointThrottlingConfig BrowseThrottling { get; set; }
+        private ContinuationPointThrottlingConfig browseThrottling = new ContinuationPointThrottlingConfig();
+        public ContinuationPointThrottlingConfig BrowseThrottling {
+            get => browseThrottling; set => browseThrottling = value ?? browseThrottling; }
     }
     public enum X509CertificateLocation
     {

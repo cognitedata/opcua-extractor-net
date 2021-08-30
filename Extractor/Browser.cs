@@ -21,7 +21,7 @@ namespace Cognite.OpcUa
         public int NodesChunk { get; set; }
         public int MaxNodeParallelism { get; set; }
         public BrowseParams InitialParams { get; set; }
-        public HashSet<NodeId> VisitedNodes { get; set; }
+        public ISet<NodeId> VisitedNodes { get; set; }
         public int MaxDepth { get; set; } = -1;
     }
 
@@ -34,15 +34,19 @@ namespace Cognite.OpcUa
         private readonly UAClient uaClient;
         private ILogger log = Log.Logger.ForContext(typeof(BrowseScheduler));
 
-        private Dictionary<NodeId, ReferenceDescriptionCollection> results = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-        private object dictLock = new object();
+        private static readonly Gauge depth = Metrics
+            .CreateGauge("opcua_tree_depth", "Depth of node tree from rootnode");
 
         private readonly DirectoryBrowseParams options;
 
         private readonly IEnumerable<NodeFilter> filters;
-        private readonly HashSet<NodeId> visitedNodes;
+        private readonly ISet<NodeId> visitedNodes;
         private readonly Action<ReferenceDescription, NodeId> callback;
-        private readonly HashSet<NodeId> localVisitedNodes = new HashSet<NodeId>();
+        private readonly ISet<NodeId> localVisitedNodes = new HashSet<NodeId>();
+
+        private List<int> depthCounts = new List<int>();
+        private int numOperations;
+
         public BrowseScheduler(
             TaskThrottler throttler,
             UAClient client,
@@ -54,6 +58,15 @@ namespace Cognite.OpcUa
             visitedNodes = options.VisitedNodes ?? new HashSet<NodeId>();
             callback = options.Callback;
             baseParams = options.InitialParams;
+            filters = options.Filters;
+            if (baseParams.Nodes?.Any() ?? false)
+            {
+                foreach (var node in baseParams.Nodes)
+                {
+                    localVisitedNodes.Add(node.Value.Id);
+                    visitedNodes.Add(node.Value.Id);
+                }
+            }
         }
 
         private readonly BlockingCollection<BrowseParams> finishedReads = new BlockingCollection<BrowseParams>();
@@ -89,9 +102,10 @@ namespace Cognite.OpcUa
             return true;
         }
 
-        private ICollection<BrowseNode> HandleReadResult(ICollection<BrowseNode> nextIds, BrowseNode node)
+        private int HandleReadResult(ICollection<BrowseNode> nextIds, BrowseNode node)
         {
-            if (node.Result == null || !node.Result.References.Any()) return nextIds;
+            if (node.Result == null || !node.Result.References.Any()) return 0;
+            int cnt = 0;
             log.Verbose("Read {cnt} children from node {id}", node.Result.References.Count);
 
             foreach (var rd in node.Result.References)
@@ -105,7 +119,7 @@ namespace Cognite.OpcUa
                 }
 
                 bool docb = true;
-                if (visitedNodes != null && visitedNodes.Contains(nodeId))
+                if (visitedNodes != null && !visitedNodes.Add(nodeId))
                 {
                     docb = false;
                     log.Verbose("Ignoring visited {nodeId}", nodeId);
@@ -115,29 +129,38 @@ namespace Cognite.OpcUa
                     log.Verbose("Discovered new node {nodeId}", nodeId);
                     callback?.Invoke(rd, node.Id);
                 }
+
+                if (node.Depth + 1 == depthCounts.Count) depthCounts.Add(1);
+                else depthCounts[node.Depth + 1]++;
+
                 if (!options.ReadVariableChildren && rd.NodeClass == NodeClass.Variable) continue;
                 if (options.ReadVariableChildren && rd.TypeDefinition == VariableTypeIds.PropertyType) continue;
                 if ((options.MaxDepth < 0 || node.Depth < options.MaxDepth) && localVisitedNodes.Add(nodeId))
                 {
                     nextIds.Add(new BrowseNode(nodeId, node));
+                    cnt++;
                 }
+                
             }
 
-            return nextIds;
+            return cnt;
         }
 
         private List<BrowseNode> GetBrowseChunk(LinkedListNode<BrowseNode> first, out LinkedListNode<BrowseNode> current)
         {
             var result = new List<BrowseNode>();
             int cnt = 0;
+
             current = first;
-            do
+            while (current != null)
             {
-                if (options.NodesChunk > 0 && cnt >= options.NodesChunk) return result;
-                if (options.MaxNodeParallelism > 0 && cnt + numActiveNodes >= options.MaxNodeParallelism) return result;
+                if (options.NodesChunk > 0 && cnt >= options.NodesChunk) break;
+                if (options.MaxNodeParallelism > 0 && cnt + numActiveNodes >= options.MaxNodeParallelism) break;
                 result.Add(current.Value);
+                cnt++;
                 current = current.Next;
-            } while (current != null);
+            }
+
             return result;
         }
 
@@ -155,16 +178,33 @@ namespace Cognite.OpcUa
                     var browseParams = new BrowseParams(baseParams) { Nodes = chunk.ToDictionary(node => node.Id) };
                     chunks.Add(browseParams);
                 }
-            } while (chunk.Any());
+            } while (chunk.Any() && current != null);
             return chunks;
         }
 
-        public Dictionary<NodeId, ReferenceDescriptionCollection> Browse(CancellationToken token)
+        private void LogBrowseResult(IEnumerable<BrowseNode> nodes)
+        {
+            int total = depthCounts.Sum();
+            log.Information("Browsed a total of {cnt} nodes in {cnt2} operations, and found {cnt3} nodes total",
+                nodes.Count(), numOperations, total);
+
+            var builder = new StringBuilder("Total results by depth: \n");
+            for (int i = 0; i < depthCounts.Count; i++)
+            {
+                builder.AppendFormat("    {0}: {1}\n", i, depthCounts[i]);
+            }
+            log.Debug(builder.ToString());
+            depth.IncTo(depthCounts.Count);
+        }
+
+        public void Browse(CancellationToken token)
         {
             var nodes = new LinkedList<BrowseNode>(baseParams.Nodes.Values);
+            depthCounts.Add(nodes.Count);
+            log.Information("Browse node hierarchy for {cnt} nodes", nodes.Count);
             int totalRead = 0;
+            int totalToRead = nodes.Count;
             int toRead = nodes.Count;
-            var continued = new List<BrowseNode>();
             List<BrowseParams> chunks = GetNextChunks(nodes.First, out var current);
 
             while (numActiveNodes > 0 || chunks.Any())
@@ -195,22 +235,39 @@ namespace Cognite.OpcUa
                     finished.Add(finishedRead);
                 }
 
+                if (current == null) nodes.Clear();
+
                 foreach (var chunk in finished)
                 {
+                    numOperations++;
                     foreach (var node in chunk.Nodes.Values)
                     {
-                        HandleReadResult(nodes, node);
+                        totalToRead += HandleReadResult(nodes, node);
+                        numActiveNodes--;
                         if (node.ContinuationPoint != null)
                         {
-                            nodes.AddBefore(current, node);
+                            if (current == null)
+                            {
+                                nodes.AddFirst(node);
+                            }
+                            else
+                            {
+                                nodes.AddAfter(current, node);
+                            }
+                        }
+                        else
+                        {
+                            totalRead++;
                         }
                     }
                 }
-                log.Debug("Read children for {cnt}/{total} nodes", totalRead, nodes.Count);
+                log.Debug("Read children for {cnt}/{total} nodes", totalRead, totalToRead);
+
+                if (current == null) current = nodes.First;
 
                 chunks.AddRange(GetNextChunks(current, out current));
             }
-            return results;
+            LogBrowseResult(nodes);
         }
 
         public void Dispose()
@@ -228,8 +285,6 @@ namespace Cognite.OpcUa
         private readonly FullConfig config;
         private readonly object visitedNodesLock = new object();
         private readonly ISet<NodeId> visitedNodes = new HashSet<NodeId>();
-        private static readonly Gauge depth = Metrics
-            .CreateGauge("opcua_tree_depth", "Depth of node tree from rootnode");
 
         private readonly ContinuationPointThrottlingConfig throttling;
         private readonly TaskThrottler throttler;
@@ -240,14 +295,7 @@ namespace Cognite.OpcUa
         {
             uaClient = client ?? throw new ArgumentNullException(nameof(client));
             this.config = config ?? throw new ArgumentNullException(nameof(config));
-            if (config.Source.BrowseThrottling == null)
-            {
-                throttling = new ContinuationPointThrottlingConfig { MaxNodeParallelism = 0, MaxParallelism = 0, MaxPerMinute = 0 };
-            }
-            else
-            {
-                throttling = config.Source.BrowseThrottling;
-            }
+            throttling = config.Source.BrowseThrottling;
             throttler = new TaskThrottler(throttling.MaxParallelism, false, throttling.MaxPerMinute, TimeSpan.FromMinutes(1));
         }
 
@@ -278,22 +326,18 @@ namespace Cognite.OpcUa
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
             log.Debug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
-            foreach (var root in roots)
+            var rootRefs = GetRootNodes(roots, token);
+            foreach (var root in rootRefs)
             {
                 bool docb = true;
                 lock (visitedNodesLock)
                 {
-                    if (!visitedNodes.Add(root) && ignoreVisited)
+                    if (!visitedNodes.Add(uaClient.ToNodeId(root.NodeId)) && ignoreVisited)
                     {
                         docb = false;
                     }
                 }
-                if (docb)
-                {
-                    var rootNode = GetRootNode(root, token);
-                    if (rootNode == null) throw new ExtractorFailureException($"Root node does not exist: {root}");
-                    callback?.Invoke(rootNode, null);
-                }
+                if (docb) callback?.Invoke(root, null);
             }
             uint classMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
             if (config.Extraction.NodeTypes.AsNodes)
@@ -303,21 +347,19 @@ namespace Cognite.OpcUa
             await Task.Run(() => BrowseDirectory(roots, callback, token, null,
                 classMask, ignoreVisited), token);
         }
-        /// <summary>
-        /// Get the root node and return it as a reference description.
-        /// </summary>
-        /// <param name="nodeId">Id of the root node</param>
-        /// <returns>A partial description of the root node</returns>
-        public ReferenceDescription GetRootNode(NodeId nodeId, CancellationToken token)
+        public IEnumerable<ReferenceDescription> GetRootNodes(IEnumerable<NodeId> ids, CancellationToken token)
         {
-            var attributes = new List<uint>
+            var attributes = new uint[]
             {
                 Attributes.NodeId,
                 Attributes.BrowseName,
                 Attributes.DisplayName,
                 Attributes.NodeClass
             };
-            var readValueIds = attributes.Select(attr => new ReadValueId { NodeId = nodeId, AttributeId = attr }).ToList();
+            var readValueIds = ids
+                .SelectMany(id => attributes.Select(attr => new ReadValueId { NodeId = id, AttributeId = attr }))
+                .ToList();
+
             IList<DataValue> results;
             try
             {
@@ -327,30 +369,46 @@ namespace Cognite.OpcUa
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadRootNode);
             }
-            var refd = new ReferenceDescription();
-            refd.NodeId = results[0].GetValue(NodeId.Null);
-            if (refd.NodeId == NodeId.Null) return null;
-            refd.BrowseName = results[1].GetValue(QualifiedName.Null);
-            refd.DisplayName = results[2].GetValue(LocalizedText.Null);
-            refd.NodeClass = (NodeClass)results[3].GetValue(0);
+
+            var roots = new Dictionary<NodeId, ReferenceDescription>();
+
+            for (int i = 0; i < ids.Count(); i++)
+            {
+                var id = results[i * attributes.Length].GetValue(NodeId.Null);
+                if (id == NodeId.Null) throw new ExtractorFailureException($"Root node does not exist: {ids.ElementAt(i)}");
+                var refd = new ReferenceDescription
+                {
+                    NodeId = id,
+                    BrowseName = results[i * attributes.Length + 1].GetValue(QualifiedName.Null),
+                    DisplayName = results[i * attributes.Length + 2].GetValue(LocalizedText.Null),
+                    NodeClass = (NodeClass)results[i * attributes.Length + 3].GetValue(0),
+                    ReferenceTypeId = null,
+                    IsForward = true
+                };
+                roots[id] = refd;
+            }
 
             if (config.Extraction.NodeTypes.Metadata)
             {
                 try
                 {
-                    var node = new BrowseNode(nodeId);
+                    var nodes = ids.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
+
                     uaClient.GetReferences(new BrowseParams
                     {
                         NodeClassMask = (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType,
                         ReferenceTypeId = ReferenceTypeIds.HasTypeDefinition,
                         IncludeSubTypes = false,
-                        Nodes = new Dictionary<NodeId, BrowseNode> { { nodeId, node } },
+                        Nodes = nodes,
                         MaxPerNode = 1
                     }, true, token);
-                    var result = node.Result;
-                    if (result.References.Any())
+                    foreach (var node in nodes.Values)
                     {
-                        refd.TypeDefinition = result.References.First().NodeId;
+                        var result = node.Result;
+                        if (result.References.Any())
+                        {
+                            roots[node.Id].TypeDefinition = result.References.First().NodeId;
+                        }
                     }
                 }
                 catch (ServiceResultException ex)
@@ -359,9 +417,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            refd.ReferenceTypeId = null;
-            refd.IsForward = true;
-            return refd;
+            return roots.Values;
         }
 
         private Action<ReferenceDescription, NodeId> GetDictWriteCallback(Dictionary<NodeId, ReferenceDescriptionCollection> dict)
@@ -380,9 +436,6 @@ namespace Cognite.OpcUa
             };
         }
 
-
-
-
         public Dictionary<NodeId, ReferenceDescriptionCollection> BrowseLevel(
             BrowseParams baseParams,
             CancellationToken token,
@@ -398,12 +451,17 @@ namespace Cognite.OpcUa
                 MaxNodeParallelism = throttling.MaxNodeParallelism,
                 NodesChunk = config.Source.BrowseNodesChunk,
                 ReadVariableChildren = false,
-                VisitedNodes = null,
+                VisitedNodes = ignoreVisited ? null : visitedNodes,
                 MaxDepth = 0
             };
 
             using var scheduler = new BrowseScheduler(throttler, uaClient, options);
-            return scheduler.Browse(token);
+            scheduler.Browse(token);
+            foreach (var node in baseParams.Nodes)
+            {
+                result[node.Key] = node.Value.Result.References;
+            }
+            return result;
         }
 
         /// <summary>
@@ -428,73 +486,28 @@ namespace Cognite.OpcUa
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
             var nextIds = roots.ToList();
-            int levelCnt = 0;
-            int nodeCnt = 0;
-            var localVisitedNodes = new HashSet<NodeId>();
+
             var baseParams = new BrowseParams
             {
                 NodeClassMask = nodeClassMask,
                 ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
-                MaxPerNode = (uint)config.Source.BrowseChunk
+                MaxPerNode = (uint)config.Source.BrowseChunk,
+                Nodes = roots.ToDictionary(id => id, id => new BrowseNode(id))
+            };
+            var options = new DirectoryBrowseParams
+            {
+                Callback = callback,
+                NodesChunk = config.Source.BrowseNodesChunk,
+                ReadVariableChildren = readVariableChildren,
+                MaxDepth = -1,
+                Filters = doFilter ? IgnoreFilters : null,
+                InitialParams = baseParams,
+                MaxNodeParallelism = throttling.MaxNodeParallelism,
+                VisitedNodes = ignoreVisited ? visitedNodes : null
             };
 
-            foreach (var root in roots)
-            {
-                localVisitedNodes.Add(root);
-            }
-            do
-            {
-                var total = nextIds.Count;
-                int count = 0;
-                int countChildren = 0;
-
-                baseParams.Nodes = nextIds.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
-
-                var references = BrowseLevel(baseParams, token);
-
-                foreach (var res in references)
-                {
-                    countChildren += res.Value.Count;
-                }
-                count += references.Count;
-
-                log.Information("Found {cnt} children of {cnt2} nodes", countChildren, count);
-
-                nextIds.Clear();
-                levelCnt++;
-                foreach (var (parentId, children) in references)
-                {
-                    nodeCnt += children.Count;
-                    foreach (var rd in children)
-                    {
-                        var nodeId = uaClient.ToNodeId(rd.NodeId);
-                        if (rd.NodeId == ObjectIds.Server || rd.NodeId == ObjectIds.Aliases) continue;
-
-                        bool docb = true;
-                        lock (visitedNodesLock)
-                        {
-                            if (ignoreVisited && !visitedNodes.Add(nodeId))
-                            {
-                                docb = false;
-                                log.Verbose("Ignoring visited {nodeId}", nodeId);
-                            }
-                        }
-                        if (docb)
-                        {
-                            log.Verbose("Discovered new node {nodeid}", nodeId);
-                            callback?.Invoke(rd, parentId);
-                        }
-                        if (!readVariableChildren && rd.NodeClass == NodeClass.Variable) continue;
-                        if (readVariableChildren && rd.TypeDefinition == VariableTypeIds.PropertyType) continue;
-                        if (localVisitedNodes.Add(nodeId))
-                        {
-                            nextIds.Add(nodeId);
-                        }
-                    }
-                }
-            } while (nextIds.Any());
-            log.Information("Found {NumUANodes} nodes in {NumNodeLevels} levels", nodeCnt, levelCnt);
-            depth.Set(levelCnt);
+            using var scheduler = new BrowseScheduler(throttler, uaClient, options);
+            scheduler.Browse(token);
         }
         /// <summary>
         /// Clear internal list of visited nodes, allowing callbacks to be called for visited nodes again.

@@ -368,7 +368,12 @@ namespace Test.Unit
             }
             Assert.Equal(147, nodes.Count);
             Assert.Equal(151, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 91));
+            double reads = CommonTestUtils.GetMetricValue("opcua_browse_operations");
+
+            // Best case, it takes 91 reads: 1 read at level 0, 3 reads for each of the 30 remaining.
+            // Timing might cause nodes to be read in a sligthly different order, so we might read 2 more times.
+            // In practice this slight variance is irrelevant.
+            Assert.True(reads >= 91 && reads <= 93);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 31));
         }
         [Fact]
@@ -378,7 +383,8 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
             tester.Client.Browser.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
-            tester.Config.Source.BrowseThrottling = new ContinuationPointThrottlingConfig { MaxNodeParallelism = 2, MaxParallelism = 1 };
+            tester.Config.Source.BrowseThrottling.MaxNodeParallelism = 2;
+            tester.Config.Source.BrowseThrottling.MaxParallelism = 1;
             using var browser = new Cognite.OpcUa.Browser(tester.Client, tester.Config);
             try
             {
@@ -386,11 +392,12 @@ namespace Test.Unit
             }
             finally
             {
-                tester.Config.Source.BrowseThrottling = null;
+                tester.Config.Source.BrowseThrottling.MaxParallelism = 0;
+                tester.Config.Source.BrowseThrottling.MaxNodeParallelism = 0;
             }
             Assert.Equal(147, nodes.Count);
             Assert.Equal(151, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 91));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 76));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 31));
         }
         [Fact]
@@ -503,9 +510,16 @@ namespace Test.Unit
             {
                 tester.Config.Extraction.NodeTypes.AsNodes = false;
             }
+            var distinctNodes = nodes.SelectMany(kvp => kvp.Value).GroupBy(rd => rd.NodeId);
+            foreach (var node in distinctNodes.Where(group => group.Count() > 1))
+            {
+                Console.WriteLine("Duplicate node: " + node.Key);
+            }
+
+            Assert.Equal(distinctNodes.Count(), nodes.Sum(kvp => kvp.Value.Count));
             Assert.Equal(1451, nodes.Sum(kvp => kvp.Value.Count));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 10));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 10));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 11));
         }
         #endregion
 

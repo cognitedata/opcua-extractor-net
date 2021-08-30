@@ -439,7 +439,7 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         public UANode GetServerNode(CancellationToken token)
         {
-            var desc = Browser.GetRootNode(ObjectIds.Server, token);
+            var desc = Browser.GetRootNodes(new[] { ObjectIds.Server }, token).First();
             var node = new UANode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null, NodeClass.Object);
             ReadNodeData(new[] { node }, token);
             return node;
