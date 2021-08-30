@@ -389,8 +389,8 @@ namespace Cognite.OpcUa
             {
                 var measurements = await client.QueryMultiSeriesAsync(config.Database, "SHOW MEASUREMENTS");
                 eventSeries = measurements.SelectMany(series => series.Entries
-                    .Where(entry => entry.Name is string)
-                    .Select(entry => (string)entry.Name));
+                    .Select(entry => entry.Name)
+                    .OfType<string>());
                 eventSeries = eventSeries.Where(series => series.StartsWith("events.", StringComparison.InvariantCulture));
 
             }
