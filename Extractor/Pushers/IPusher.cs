@@ -38,8 +38,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Parent extractor
         /// </summary>
-        [NotNull, DisallowNull]
-        UAExtractor? Extractor { get; set; }
+        UAExtractor Extractor { get; set; }
 
 
         /// <summary>

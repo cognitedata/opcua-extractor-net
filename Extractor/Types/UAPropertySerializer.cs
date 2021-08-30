@@ -21,9 +21,7 @@ namespace Cognite.OpcUa.Types
     /// </summary>
     public class StringConverter
     {
-        [MaybeNull, AllowNull]
         private readonly UAClient? uaClient;
-        [MaybeNull, AllowNull]
         private readonly FullConfig? config;
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
 
@@ -46,11 +44,10 @@ namespace Cognite.OpcUa.Types
         /// <param name="typeInfo">TypeInfo for <paramref name="value"/></param>
         /// <param name="json">True to return valid JSON.</param>
         /// <returns></returns>
-        [return: NotNull]
         public string ConvertToString(
-            [AllowNull] object value,
-            [AllowNull] IDictionary<long, string> enumValues = null,
-            [AllowNull] TypeInfo typeInfo = null, bool json = false)
+            object? value,
+            IDictionary<long, string>? enumValues = null,
+            TypeInfo? typeInfo = null, bool json = false)
         {
             if (value == null)
             {
@@ -419,8 +416,8 @@ namespace Cognite.OpcUa.Types
         }
 
         public override void WriteJson(
-            [DisallowNull] JsonWriter writer,
-            [AllowNull] UANode value,
+            JsonWriter writer,
+            UANode? value,
             Newtonsoft.Json.JsonSerializer serializer)
         {
             if (value == null)
@@ -442,9 +439,9 @@ namespace Cognite.OpcUa.Types
         }
 
         public override UANode ReadJson(
-            [DisallowNull] JsonReader reader,
-            [DisallowNull] Type objectType,
-            [AllowNull] UANode existingValue,
+            JsonReader reader,
+            Type objectType,
+            UANode? existingValue,
             bool hasExistingValue,
             Newtonsoft.Json.JsonSerializer serializer)
         {
@@ -459,9 +456,9 @@ namespace Cognite.OpcUa.Types
             this.uaClient = uaClient;
         }
         public override NodeId ReadJson(
-            [DisallowNull] JsonReader reader,
-            [DisallowNull] Type objectType,
-            [AllowNull] NodeId existingValue,
+            JsonReader reader,
+            Type objectType,
+            NodeId? existingValue,
             bool hasExistingValue,
             Newtonsoft.Json.JsonSerializer serializer)
         {
@@ -475,7 +472,7 @@ namespace Cognite.OpcUa.Types
             int nsIdx = 0;
             if (ns != null)
             {
-                nsIdx = uaClient.NamespaceTable.GetIndex(ns);
+                nsIdx = uaClient.NamespaceTable!.GetIndex(ns);
                 if (nsIdx < 0) return NodeId.Null;
             }
 
@@ -508,8 +505,8 @@ namespace Cognite.OpcUa.Types
         }
 
         public override void WriteJson(
-            [DisallowNull] JsonWriter writer,
-            [AllowNull] NodeId value,
+            JsonWriter writer,
+            NodeId? value,
             Newtonsoft.Json.JsonSerializer serializer)
         {
             if (value == null)
@@ -521,7 +518,7 @@ namespace Cognite.OpcUa.Types
             if (value.NamespaceIndex != 0)
             {
                 writer.WritePropertyName("namespace");
-                var ns = uaClient.NamespaceTable.GetString(value.NamespaceIndex);
+                var ns = uaClient.NamespaceTable!.GetString(value.NamespaceIndex);
                 writer.WriteValue(ns);
             }
 

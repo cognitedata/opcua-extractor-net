@@ -35,16 +35,13 @@ namespace Cognite.OpcUa
     /// </summary>
     public sealed class FailureBuffer
     {
-        [MaybeNull]
-        private readonly InfluxPusher influxPusher;
+        private readonly InfluxPusher? influxPusher;
         private readonly FailureBufferConfig config;
         private readonly FullConfig fullConfig;
         private readonly UAExtractor extractor;
 
-        [MaybeNull]
-        private readonly Dictionary<string, InfluxBufferState> nodeBufferStates;
-        [MaybeNull]
-        private readonly Dictionary<string, InfluxBufferState> eventBufferStates;
+        private readonly Dictionary<string, InfluxBufferState>? nodeBufferStates;
+        private readonly Dictionary<string, InfluxBufferState>? eventBufferStates;
 
         public bool AnyPoints => anyPoints || fileAnyPoints;
         private bool fileAnyPoints;

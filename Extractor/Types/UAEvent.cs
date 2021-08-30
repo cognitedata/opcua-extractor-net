@@ -41,8 +41,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Message sent with the original event.
         /// </summary>
-        [MaybeNull, AllowNull]
-        public string Message { get; set; }
+        public string? Message { get; set; }
         /// <summary>
         /// Transformed ID of the event. The Raw id is a byte-string. This is the byte-string transformed into Base64 and prepended the globalprefix.
         /// </summary>
@@ -66,8 +65,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Id of the node that emitted the event in opc-ua
         /// </summary>
-        [NotNull, AllowNull]
-        public NodeId EmittingNode { get; set; }
+        public NodeId EmittingNode { get; set; } = null!;
 
         public override string ToString()
         {
@@ -180,8 +178,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="stream">Stream to read from</param>
         /// <param name="extractor">Extractor to use for nodeId conversions</param>
         /// <returns>Converted event</returns>
-        [return: MaybeNull]
-        public static UAEvent FromStream(Stream stream, UAExtractor extractor)
+        public static UAEvent? FromStream(Stream stream, UAExtractor extractor)
         {
             var evt = new UAEvent();
             evt.Message = CogniteUtils.StringFromStream(stream);
@@ -241,9 +238,7 @@ namespace Cognite.OpcUa.Types
             }
             if (!MetaData.ContainsKey("SourceNode") && SourceNode != null && !SourceNode.IsNullNodeId)
             {
-#pragma warning disable CS8601 // Possible null reference assignment. Not null here
-                finalMetaData["SourceNode"] = client.GetUniqueId(SourceNode);
-#pragma warning restore CS8601 // Possible null reference assignment.
+                finalMetaData["SourceNode"] = client.GetUniqueId(SourceNode)!;
             }
             if (MetaData.TryGetValue("SubType", out var subtype))
             {
@@ -275,7 +270,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="parentIdMap">Map from parent NodeIds to externalIds</param>
         /// <returns>Converted event or null</returns>
         public StatelessEventCreate ToStatelessCDFEvent(
-            [DisallowNull] IUAClientAccess client,
+            IUAClientAccess client,
             long? dataSetId,
             IDictionary<NodeId, string?> parentIdMap)
         {
@@ -310,7 +305,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="nodeToAssetIds">Map from parent NodeIds to internalIds</param>
         /// <returns>Converted event or null</returns>
         public EventCreate ToCDFEvent(
-            [DisallowNull] IUAClientAccess client,
+            IUAClientAccess client,
             long? dataSetId,
             IDictionary<NodeId, long> nodeToAssetIds)
         {

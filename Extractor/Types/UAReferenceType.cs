@@ -26,10 +26,8 @@ namespace Cognite.OpcUa.Types
     public class UAReferenceType
     {
         public NodeId Id { get; }
-        [MaybeNull, AllowNull]
-        private string name;
-        [MaybeNull, AllowNull]
-        private string inverseName;
+        private string? name;
+        private string? inverseName;
         public bool HasName => name != null;
         public UAReferenceType(NodeId id)
         {
@@ -40,7 +38,7 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         /// <param name="name">Forward name</param>
         /// <param name="inverseName">Inverse name</param>
-        public void SetNames([AllowNull] string name, [AllowNull] string inverseName)
+        public void SetNames(string? name, string? inverseName)
         {
             this.name = name;
             this.inverseName = inverseName;
@@ -50,8 +48,7 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         /// <param name="isInverse">True to get the inverse name of this reference type.</param>
         /// <returns>Descriptor for this reference, if set.</returns>
-        [return: MaybeNull]
-        public string GetName(bool isInverse)
+        public string? GetName(bool isInverse)
         {
             if (isInverse && !string.IsNullOrEmpty(inverseName)) return inverseName;
             return name;

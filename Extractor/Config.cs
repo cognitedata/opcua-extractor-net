@@ -304,27 +304,18 @@ namespace Cognite.OpcUa
     }
     public class FullConfig : VersionedConfig
     {
-        [NotNull, AllowNull]
-        public UAClientConfig Source { get; set; }
-        [NotNull, AllowNull]
-        public LoggerConfig Logger { get; set; }
-        [NotNull, AllowNull]
-        public UAMetricsConfig Metrics { get; set; }
+        public UAClientConfig Source { get; set; } = null!;
+        public LoggerConfig Logger { get; set; } = null!;
+        public UAMetricsConfig Metrics { get; set; } = null!;
         public CognitePusherConfig? Cognite { get; set; }
         public MqttPusherConfig? Mqtt { get; set; }
         public InfluxPusherConfig? Influx { get; set; }
-        [NotNull, AllowNull]
-        public ExtractionConfig Extraction { get; set; }
-        [NotNull, AllowNull]
-        public EventConfig Events { get; set; }
-        [NotNull, AllowNull]
-        public FailureBufferConfig FailureBuffer { get; set; }
-        [NotNull, AllowNull]
-        public HistoryConfig History { get; set; }
-        [NotNull, AllowNull]
-        public StateStorageConfig StateStorage { get; set; }
-        [NotNull, AllowNull]
-        public SubscriptionConfig Subscriptions { get; set; }
+        public ExtractionConfig Extraction { get; set; } = null!;
+        public EventConfig Events { get; set; } = null!;
+        public FailureBufferConfig FailureBuffer { get; set; } = null!;
+        public HistoryConfig History { get; set; } = null!;
+        public StateStorageConfig StateStorage { get; set; } = null!;
+        public SubscriptionConfig Subscriptions { get; set; } = null!;
         public override void GenerateDefaults()
         {
             if (Source == null) Source = new UAClientConfig();

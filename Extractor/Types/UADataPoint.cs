@@ -110,9 +110,8 @@ namespace Cognite.OpcUa.Types
         /// Initializes BufferedDataPoint from array of bytes, array should not contain the short size, which is just used to know how much
         /// to read at a time.
         /// </summary>
-        /// <param name="bytes">Bytes to convert</param>
-        [return: MaybeNull]
-        public static UADataPoint FromStream(Stream stream)
+        /// <param name="stream">Stream to read bytes from</param>
+        public static UADataPoint? FromStream(Stream stream)
         {
             string id = CogniteUtils.StringFromStream(stream);
             if (id == null) return null;

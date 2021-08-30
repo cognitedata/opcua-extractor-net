@@ -26,8 +26,7 @@ namespace Cognite.OpcUa.Types
     public class UANodeType
     {
         public NodeId Id { get; }
-        [MaybeNull, AllowNull]
-        public string Name { get; set; }
+        public string? Name { get; set; }
         public bool IsVariableType { get; }
         public UANodeType(NodeId id, bool isVariableType)
         {

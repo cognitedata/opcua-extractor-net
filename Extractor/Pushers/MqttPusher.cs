@@ -48,8 +48,7 @@ namespace Cognite.OpcUa.Pushers
         public bool NoInit { get; set; }
         public List<UANode> PendingNodes { get; } = new List<UANode>();
         public List<UAReference> PendingReferences { get; } = new List<UAReference>();
-        [NotNull, AllowNull]
-        public UAExtractor? Extractor { get; set; }
+        public UAExtractor Extractor { get; set; } = null!;
         public IPusherConfig BaseConfig => config;
         private readonly MqttPusherConfig config;
         private readonly IMqttClient client;
@@ -293,9 +292,7 @@ namespace Cognite.OpcUa.Pushers
                 if (!update.Objects.AnyUpdate)
                 {
                     objects = objects
-#pragma warning disable CS8604 // Possible null reference argument.
-                        .Where(obj => !obj.Id.IsNullNodeId && !existingNodes.Contains(Extractor.GetUniqueId(obj.Id))).ToList();
-#pragma warning restore CS8604 // Possible null reference argument.
+                        .Where(obj => !obj.Id.IsNullNodeId && !existingNodes.Contains(Extractor.GetUniqueId(obj.Id)!)).ToList();
                 }
                 else
                 {
@@ -309,9 +306,7 @@ namespace Cognite.OpcUa.Pushers
                 {
                     variables = variables
                         .Where(variable => !variable.Id.IsNullNodeId
-#pragma warning disable CS8604 // Possible null reference argument.
-                            && !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index))).ToList();
-#pragma warning restore CS8604 // Possible null reference argument.
+                            && !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index)!)).ToList();
                 }
                 else
                 {
@@ -569,10 +564,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 var jsonAssets = ConvertNodesJson(objects, ConverterType.Node);
                 var rawObj = new RawRequestWrapper<JsonElement>(
-#pragma warning disable CS8602, CS8604 // Dereference of a possibly null reference. Warning is incorrect here.
-                    config.RawMetadata.Database,
-                    config.RawMetadata.AssetsTable,
-#pragma warning restore CS8602, CS8604 // Dereference of a possibly null reference.
+                    config.RawMetadata!.Database!,
+                    config.RawMetadata!.AssetsTable!,
                     jsonAssets.Select(pair => new RawRowCreateDto<JsonElement>(pair.id, pair.node)));
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
@@ -741,10 +734,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 var rawTimeseries = ConvertNodesJson(variables, ConverterType.Variable);
                 var rawObj = new RawRequestWrapper<JsonElement>(
-#pragma warning disable CS8602, CS8604
-                    config.RawMetadata.Database,
-                    config.RawMetadata.TimeseriesTable,
-#pragma warning restore CS8602, CS8604
+                    config.RawMetadata!.Database!,
+                    config.RawMetadata!.TimeseriesTable!,
                     rawTimeseries.Select(pair => new RawRowCreateDto<JsonElement>(pair.id, pair.node)));
 
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
@@ -837,10 +828,8 @@ namespace Cognite.OpcUa.Pushers
             if (useRawStore)
             {
                 var rawObj = new RawRequestWrapper<RelationshipCreate>(
-#pragma warning disable CS8602, CS8604
-                    config.RawMetadata.Database,
-                    config.RawMetadata.RelationshipsTable,
-#pragma warning restore CS8602, CS8604
+                    config.RawMetadata!.Database!,
+                    config.RawMetadata!.RelationshipsTable!,
                     references.Select(rel => new RawRowCreateDto<RelationshipCreate>(rel.ExternalId, rel)));
 
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions

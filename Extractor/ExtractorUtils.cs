@@ -91,8 +91,7 @@ namespace Cognite.OpcUa
         /// <typeparam name="T">Type of exception to find</typeparam>
         /// <param name="aex">AggregateException to look through</param>
         /// <returns>Null or a root exception</returns>
-        [return: MaybeNull]
-        public static T GetRootExceptionOfType<T>(AggregateException aex) where T : Exception
+        public static T? GetRootExceptionOfType<T>(AggregateException aex) where T : Exception
         {
             if (aex.InnerException is T ex)
             {
@@ -111,7 +110,7 @@ namespace Cognite.OpcUa
         /// <param name="e">Exception to log</param>
         /// <param name="message">Message to give with normal exceptions</param>
         /// <param name="silentMessage">Message to give with silent exceptions</param>
-        public static void LogException(ILogger log, [AllowNull] Exception e, string message, string silentMessage)
+        public static void LogException(ILogger log, Exception? e, string message, string silentMessage)
         {
             if (e == null)
             {

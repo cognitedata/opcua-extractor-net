@@ -30,14 +30,11 @@ namespace Cognite.OpcUa.Types
     /// </summary>
     public class NodeAttributes
     {
-        [MaybeNull, AllowNull]
         public string? Description { get; set; }
         public byte EventNotifier { get; set; }
-        [MaybeNull, AllowNull]
         public UANodeType? NodeType { get; set; }
         public bool IsProperty { get; set; }
         public bool Ignore { get; set; }
-        [MaybeNull, AllowNull]
         public IList<UANode>? Properties { get; set; }
         public NodeClass NodeClass { get; }
         public bool PropertiesRead { get; set; }
@@ -119,8 +116,7 @@ namespace Cognite.OpcUa.Types
     public class VariableAttributes : NodeAttributes
     {
         public bool Historizing { get; set; }
-        [NotNull, AllowNull]
-        public UADataType DataType { get; set; }
+        public UADataType DataType { get; set; } = null!;
         public int ValueRank { get; set; }
         public int[]? ArrayDimensions { get; set; }
         public byte AccessLevel { get; set; }

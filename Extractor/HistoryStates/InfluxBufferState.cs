@@ -35,7 +35,7 @@ namespace Cognite.OpcUa.HistoryStates
         public InfluxBufferType Type { get; set; }
         public NodeId SourceId { get; }
 
-        public InfluxBufferState([DisallowNull] BaseExtractionState other) : base(other.Id)
+        public InfluxBufferState(BaseExtractionState other) : base(other.Id)
         {
             DestinationExtractedRange = TimeRange.Empty;
             if (other is EventExtractionState eState)

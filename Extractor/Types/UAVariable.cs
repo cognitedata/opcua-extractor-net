@@ -39,8 +39,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Data type of this variable
         /// </summary>
-        [NotNull, AllowNull]
-        public UADataType DataType => VariableAttributes.DataType;
+        public UADataType DataType => VariableAttributes.DataType!;
         /// <summary>
         /// True if the opcua node stores its own history
         /// </summary>
@@ -112,13 +111,11 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Parent if this represents an element of an array.
         /// </summary>
-        [MaybeNull]
-        public UAVariable ArrayParent { get; }
+        public UAVariable? ArrayParent { get; }
         /// <summary>
         /// Children if this represents the parent in an array
         /// </summary>
-        [MaybeNull]
-        public IEnumerable<UAVariable> ArrayChildren { get; private set; }
+        public IEnumerable<UAVariable>? ArrayChildren { get; private set; }
         /// <summary>
         /// Fixed dimensions of the array-type variable, if any
         /// </summary>
@@ -218,8 +215,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="dataSetId">Optional dataSetId</param>
         /// <param name="metaMap">Configured mapping from property name to timeseries attribute</param>
         /// <returns>Stateless timeseries to create or null.</returns>
-        [return: MaybeNull]
-        public StatelessTimeSeriesCreate ToStatelessTimeSeries(
+        public StatelessTimeSeriesCreate? ToStatelessTimeSeries(
             ExtractionConfig config,
             IUAClientAccess client,
             DataTypeManager manager,

@@ -34,8 +34,7 @@ namespace Cognite.OpcUa.HistoryStates
         /// <summary>
         /// Last known timestamp of events from OPC-UA.
         /// </summary>
-        [MaybeNull]
-        private IList<UAEvent> buffer;
+        private IList<UAEvent>? buffer;
         public bool ShouldSubscribe { get; }
 
         public EventExtractionState(
@@ -55,7 +54,7 @@ namespace Cognite.OpcUa.HistoryStates
         /// Update timestamp and buffer from stream.
         /// </summary>
         /// <param name="points">Event received for current stream iteration</param>
-        public void UpdateFromStream([AllowNull] UAEvent evt)
+        public void UpdateFromStream(UAEvent? evt)
         {
             if (evt == null) return;
             UpdateFromStream(evt.Time, evt.Time);
@@ -96,7 +95,6 @@ namespace Cognite.OpcUa.HistoryStates
         /// Retrieve contents of the buffer after final historyRead iteration
         /// </summary>
         /// <returns>The contents of the buffer</returns>
-        [return: NotNull]
         public IEnumerable<UAEvent> FlushBuffer()
         {
             if (IsFrontfilling || buffer == null || !buffer.Any()) return Array.Empty<UAEvent>();

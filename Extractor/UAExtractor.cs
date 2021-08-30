@@ -54,8 +54,7 @@ namespace Cognite.OpcUa
 
         private readonly HistoryReader historyReader;
         public ReferenceTypeManager? ReferenceTypeManager { get; private set; }
-        [NotNull, AllowNull]
-        public IEnumerable<NodeId> RootNodes { get; private set; }
+        public IEnumerable<NodeId> RootNodes { get; private set; } = null!;
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
 
@@ -103,7 +102,7 @@ namespace Cognite.OpcUa
         public UAExtractor(FullConfig config,
             IEnumerable<IPusher> pushers,
             UAClient uaClient,
-            [AllowNull] IExtractionStateStore stateStore,
+            IExtractionStateStore? stateStore,
             CancellationToken token)
         {
             this.uaClient = uaClient;
@@ -495,9 +494,7 @@ namespace Cognite.OpcUa
 
             try
             {
-#pragma warning disable CS8604 // Possible null reference argument.
                 return await MapUAToDestinations(result);
-#pragma warning restore CS8604 // Possible null reference argument.
             }
             catch (Exception ex)
             {
@@ -512,7 +509,7 @@ namespace Cognite.OpcUa
         /// This is the entry point for mapping on the extractor.
         /// </summary>
         /// <returns>A list of history tasks</returns>
-        private async Task<IEnumerable<Task>> MapUAToDestinations(NodeSources.BrowseResult result)
+        private async Task<IEnumerable<Task>> MapUAToDestinations(NodeSources.BrowseResult? result)
         {
             if (result == null) return Enumerable.Empty<Task>();
 

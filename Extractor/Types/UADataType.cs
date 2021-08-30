@@ -33,8 +33,7 @@ namespace Cognite.OpcUa.Types
         public bool IsStep { get; set; }
         public bool IsString { get; set; }
         public NodeId Raw { get; }
-        [MaybeNull, AllowNull]
-        public IDictionary<long, string> EnumValues { get; set; }
+        public IDictionary<long, string>? EnumValues { get; set; }
         /// <summary>
         /// Construct BufferedDataType from NodeId of datatype
         /// </summary>

@@ -54,8 +54,7 @@ namespace Cognite.OpcUa.Pushers
 
         public List<UANode> PendingNodes { get; } = new List<UANode>();
         public List<UAReference> PendingReferences { get; } = new List<UAReference>();
-        [NotNull, DisallowNull]
-        public UAExtractor? Extractor { get; set; }
+        public UAExtractor Extractor { get; set; } = null!;
         public IPusherConfig BaseConfig { get; }
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
@@ -541,9 +540,7 @@ namespace Cognite.OpcUa.Pushers
                 await Extractor.ReadProperties(assets.Select(pair => pair.Item1));
                 return assets.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Node), pair.id))
                     .Where(pair => pair.Item1 != null)
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-                    .ToDictionary(pair => pair.Item2, pair => pair.Item1.RootElement);
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
+                    .ToDictionary(pair => pair.Item2, pair => pair.Item1!.RootElement);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
         /// <summary>
@@ -621,11 +618,9 @@ namespace Cognite.OpcUa.Pushers
         {
             if (config.SkipMetadata) return;
 
-#pragma warning disable CS8620 // Argument cannot be used for parameter due to differences in the nullability of reference types.
             var assetIds = new ConcurrentDictionary<string, UANode>(objects
                 .Where(node => node.Source != NodeSource.CDF)
-                .ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
-#pragma warning restore CS8620 // Argument cannot be used for parameter due to differences in the nullability of reference types.
+                .ToDictionary(obj => Extractor.GetUniqueId(obj.Id)!));
 
             if (!assetIds.Any()) return;
 
@@ -719,9 +714,7 @@ namespace Cognite.OpcUa.Pushers
                 await Extractor.ReadProperties(timeseries.Select(pair => pair.Item1));
                 return timeseries.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Variable), pair.id))
                     .Where(pair => pair.Item1 != null)
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-                    .ToDictionary(pair => pair.Item2, pair => pair.Item1.RootElement);
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
+                    .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
         /// <summary>
@@ -796,7 +789,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (existing.TryGetValue(kvp.Key, out var ts))
                 {
-                    var tsUpdate = PusherUtils.GetTSUpdate(extractionConfig, Extractor.DataTypeManager, Extractor.StringConverter, ts, kvp.Value, update, nodeToAssetIds);
+                    var tsUpdate = PusherUtils.GetTSUpdate(extractionConfig, Extractor.DataTypeManager,
+                        Extractor.StringConverter, ts, kvp.Value, update, nodeToAssetIds);
                     if (tsUpdate == null) continue;
                     if (tsUpdate.AssetId != null || tsUpdate.Description != null
                         || tsUpdate.Name != null || tsUpdate.Metadata != null)
@@ -823,9 +817,7 @@ namespace Cognite.OpcUa.Pushers
             CancellationToken token)
         {
             var tsIds = new ConcurrentDictionary<string, UAVariable>(
-#pragma warning disable CS8620 // Argument cannot be used for parameter due to differences in the nullability of reference types.
-                tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
-#pragma warning restore CS8620 // Argument cannot be used for parameter due to differences in the nullability of reference types.
+                tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)!));
             bool useRawTimeseries = config.RawMetadata != null
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);

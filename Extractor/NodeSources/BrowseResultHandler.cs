@@ -130,7 +130,7 @@ namespace Cognite.OpcUa.NodeSources
             {
                 foreach (var trns in Extractor.Transformations)
                 {
-                    trns.ApplyTransformation(node, Client.NamespaceTable);
+                    trns.ApplyTransformation(node, Client.NamespaceTable!);
                     if (node.Ignore) return;
                 }
             }

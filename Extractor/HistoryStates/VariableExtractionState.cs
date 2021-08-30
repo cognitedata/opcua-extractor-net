@@ -44,8 +44,7 @@ namespace Cognite.OpcUa.HistoryStates
         public bool ShouldSubscribe { get; }
         public string DisplayName { get; }
 
-        [MaybeNull]
-        private readonly List<UADataPoint> buffer;
+        private readonly List<UADataPoint>? buffer;
 
         [MemberNotNullWhen(true, nameof(ArrayDimensions))]
         public bool IsArray => ArrayDimensions != null && ArrayDimensions.Length == 1 && ArrayDimensions[0] > 0;

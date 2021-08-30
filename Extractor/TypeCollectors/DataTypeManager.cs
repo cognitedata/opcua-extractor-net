@@ -210,8 +210,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// </summary>
         /// <param name="variable">Variable to get metadata for</param>
         /// <returns>Dictionary containing datatype-related metadata for the given variable.</returns>
-        [return: MaybeNull]
-        public Dictionary<string, string> GetAdditionalMetadata(UAVariable variable)
+        public Dictionary<string, string>? GetAdditionalMetadata(UAVariable variable)
         {
             if (variable == null || variable.DataType == null) return null;
             var dt = variable.DataType;
@@ -278,9 +277,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 {
                     for (int i = 0; i < strings.Length; i++)
                     {
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-                        type.EnumValues[i] = strings[i].Text;
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
+                        type.EnumValues![i] = strings[i].Text;
                     }
                 }
                 else if (value.Value is ExtensionObject[] exts)
@@ -289,9 +286,7 @@ namespace Cognite.OpcUa.TypeCollectors
                     {
                         if (ext.Body is EnumValueType val)
                         {
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-                            type.EnumValues[val.Value] = val.DisplayName.Text;
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
+                            type.EnumValues![val.Value] = val.DisplayName.Text;
                         }
                     }
                 }

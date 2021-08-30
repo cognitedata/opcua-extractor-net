@@ -79,8 +79,7 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly Dictionary<NodeId, UAEventType> types = new Dictionary<NodeId, UAEventType>();
         private readonly Dictionary<NodeId, ChildNode> nodes = new Dictionary<NodeId, ChildNode>();
         private readonly EventConfig config;
-        [MaybeNull]
-        private readonly Regex ignoreFilter;
+        private readonly Regex? ignoreFilter;
         private HashSet<string> excludeProperties;
         private HashSet<string> baseExcludeProperties;
         /// <summary>
@@ -189,10 +188,9 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             public NodeId Id { get; }
             public LocalizedText DisplayName { get; }
-            [MaybeNull]
-            public UAEventType Parent { get; set; }
+            public UAEventType? Parent { get; set; }
             private IList<ChildNode> children = new List<ChildNode>();
-            public UAEventType([NotNull] NodeId id, [MaybeNull] LocalizedText displayName)
+            public UAEventType(NodeId id, LocalizedText displayName)
             {
                 Id = id;
                 DisplayName = displayName;
@@ -224,8 +222,7 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             private readonly NodeClass nodeClass;
             private readonly QualifiedName browseName;
-            [MaybeNull]
-            private IList<ChildNode> children;
+            private IList<ChildNode>? children;
 
             public ChildNode(QualifiedName browseName, NodeClass nc)
             {

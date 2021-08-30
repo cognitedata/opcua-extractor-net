@@ -95,8 +95,7 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="update">Configuration for which fields to update</param>
         /// <param name="nodeToAssetIds">Map from NodeIds to assetIds, necessary for setting parents</param>
         /// <returns>Update object, or null if updating was unnecessary</returns>
-        [return: MaybeNull]
-        public static TimeSeriesUpdate GetTSUpdate(
+        public static TimeSeriesUpdate? GetTSUpdate(
             ExtractionConfig config,
             DataTypeManager manager,
             StringConverter converter,
@@ -155,8 +154,7 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="newAsset">New OPC-UA node</param>
         /// <param name="update">Configuration for which fields to update</param>
         /// <returns>Update object, or null if updating was unnecessary</returns>
-        [return: MaybeNull]
-        public static AssetUpdate GetAssetUpdate(
+        public static AssetUpdate? GetAssetUpdate(
             ExtractionConfig config,
             Asset old,
             UANode newAsset,

@@ -46,9 +46,7 @@ namespace Cognite.OpcUa
     public class UAClient : IDisposable, IUAClientAccess
     {
         protected FullConfig config { get; set; }
-        [NotNull, AllowNull]
-        protected Session Session { get; set; }
-        [NotNull, AllowNull]
+        protected Session? Session { get; set; }
         protected ApplicationConfiguration? AppConfig { get; set; }
         private ReverseConnectManager? reverseConnectManager;
         private SessionReconnectHandler? reconnectHandler;
@@ -235,9 +233,9 @@ namespace Cognite.OpcUa
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
             }
         }
-
         private async Task WaitForReverseConnect()
         {
+            if (AppConfig == null) throw new InvalidOperationException("AppConfig must be initialized");
             reverseConnectManager?.Dispose();
 
             AppConfig.ClientConfiguration.ReverseConnect = new ReverseConnectClientConfiguration
@@ -332,7 +330,7 @@ namespace Cognite.OpcUa
             {
                 await CreateSessionDirect();
             }
-
+            if (Session == null) return;
             Session.KeepAliveInterval = config.Source.KeepAliveInterval;
             Session.KeepAlive += ClientKeepAlive;
             Started = true;
@@ -385,7 +383,7 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    Session.Close();
+                    Session?.Close();
                 }
                 catch
                 {
@@ -511,6 +509,7 @@ namespace Cognite.OpcUa
         /// <returns>A partial description of the root node</returns>
         private ReferenceDescription? GetRootNode(NodeId nodeId)
         {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             var attributes = new List<uint>
             {
                 Attributes.NodeId,
@@ -600,6 +599,7 @@ namespace Cognite.OpcUa
             CancellationToken token,
             BrowseDirection direction = BrowseDirection.Forward)
         {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             IncOperations();
             var tobrowse = new BrowseDescriptionCollection(parents.Select(id =>
@@ -728,7 +728,7 @@ namespace Cognite.OpcUa
         public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition, NodeClass nc)
         {
             if (IgnoreFilters == null) return true;
-            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, NamespaceTable, nc))) return false;
+            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, NamespaceTable!, nc))) return false;
             return true;
         }
 
@@ -833,6 +833,7 @@ namespace Cognite.OpcUa
         /// if the server is compliant this will have length equal to <paramref name="readValueIds"/></returns>
         public IList<DataValue> ReadAttributes(ReadValueIdCollection readValueIds, int distinctNodeCount, CancellationToken token)
         {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             var values = new List<DataValue>();
             if (readValueIds == null || !readValueIds.Any()) return values;
             IncOperations();
@@ -1049,6 +1050,7 @@ namespace Cognite.OpcUa
         /// <returns>Pairs of NodeId and history read results as IEncodable</returns>
         public IEnumerable<(HistoryReadNode Node, IEncodeable RawData)> DoHistoryRead(HistoryReadParams readParams)
         {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             IncOperations();
             var ids = new HistoryReadValueIdCollection();
             foreach (var node in readParams.Nodes)
@@ -1130,6 +1132,7 @@ namespace Cognite.OpcUa
             Func<UAHistoryExtractionState, MonitoredItem> builder,
             CancellationToken token)
         {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             lock (subscriptionLock)
             {
                 var subscription = Session.Subscriptions.FirstOrDefault(sub =>
@@ -1437,6 +1440,7 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback to use for subscriptions</param>
         public void SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback)
         {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             var filter = BuildAuditFilter();
             lock (subscriptionLock)
             {
@@ -1496,7 +1500,7 @@ namespace Cognite.OpcUa
 
         #region Utils
 
-        public NamespaceTable NamespaceTable => Session.NamespaceUris;
+        public NamespaceTable? NamespaceTable => Session?.NamespaceUris;
         /// <summary>
         /// Converts an ExpandedNodeId into a NodeId using the Session
         /// </summary>
@@ -1504,7 +1508,7 @@ namespace Cognite.OpcUa
         /// <returns>Resulting NodeId</returns>
         public NodeId ToNodeId(ExpandedNodeId nodeid)
         {
-            if (nodeid == null || nodeid.IsNull) return NodeId.Null;
+            if (nodeid == null || nodeid.IsNull || Session == null) return NodeId.Null;
             return ExpandedNodeId.ToNodeId(nodeid, Session.NamespaceUris);
         }
         /// <summary>
@@ -1513,9 +1517,9 @@ namespace Cognite.OpcUa
         /// <param name="identifier">Full identifier on form i=123 or s=abc etc.</param>
         /// <param name="namespaceUri">Full namespaceUri</param>
         /// <returns>Resulting NodeId</returns>
-        public NodeId ToNodeId([AllowNull] string identifier, [AllowNull] string namespaceUri)
+        public NodeId ToNodeId(string? identifier, string? namespaceUri)
         {
-            if (identifier == null || namespaceUri == null) return NodeId.Null;
+            if (identifier == null || namespaceUri == null || Session == null) return NodeId.Null;
             int idx = Session.NamespaceUris.GetIndex(namespaceUri);
             if (idx < 0)
             {
@@ -1588,7 +1592,7 @@ namespace Cognite.OpcUa
 
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
-                var namespaceUri = id.NamespaceUri ?? Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
+                var namespaceUri = id.NamespaceUri ?? Session!.NamespaceUris.GetString(nodeId.NamespaceIndex);
                 string newPrefix = config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
@@ -1647,7 +1651,7 @@ namespace Cognite.OpcUa
 
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
-                var namespaceUri = Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
+                var namespaceUri = Session!.NamespaceUris.GetString(nodeId.NamespaceIndex);
                 string newPrefix = config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }

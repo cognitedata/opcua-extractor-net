@@ -67,8 +67,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Description in OPC-UA
         /// </summary>
-        [MaybeNull]
-        public string Description => Attributes.Description;
+        public string? Description => Attributes.Description;
         /// <summary>
         /// Whether to subscribe to this node, independent of reading history.
         /// </summary>
@@ -84,7 +83,6 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// OPC-UA node type
         /// </summary>
-        [MaybeNull]
         public UANodeType? NodeType => Attributes.NodeType;
         /// <summary>
         /// True if node is a property
@@ -93,7 +91,6 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Parent node
         /// </summary>
-        [MaybeNull]
         public UANode? Parent { get; set; }
         /// <summary>
         /// True if this node should not be pushed to destinations.
@@ -147,8 +144,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Properties in OPC-UA
         /// </summary>
-        [MaybeNull]
-        public IEnumerable<UANode> Properties => Attributes.Properties;
+        public IEnumerable<UANode>? Properties => Attributes.Properties;
         public UANode(NodeId id, string displayName, NodeId parentId, NodeClass nodeClass) : this(id, displayName, parentId)
         {
             Attributes = new NodeAttributes(nodeClass);
@@ -227,8 +223,7 @@ namespace Cognite.OpcUa.Types
             }
             return checksum;
         }
-        [return: MaybeNull]
-        public Dictionary<string, string> GetExtraMetadata(ExtractionConfig config, DataTypeManager manager, StringConverter converter)
+        public Dictionary<string, string>? GetExtraMetadata(ExtractionConfig config, DataTypeManager manager, StringConverter converter)
         {
             Dictionary<string, string>? fields = null;
             if (this is UAVariable variable)
@@ -374,8 +369,7 @@ namespace Cognite.OpcUa.Types
 
             return asset;
         }
-        [return: MaybeNull]
-        public JsonDocument ToJson(StringConverter converter, ConverterType type)
+        public JsonDocument? ToJson(StringConverter converter, ConverterType type)
         {
             // This is inefficient. A better solution would use System.Text.Json directly, but that requires .NET 6
             // for WriteRaw in Utf8JsonWriter.
