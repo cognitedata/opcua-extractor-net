@@ -182,11 +182,11 @@ namespace Cognite.OpcUa
             return chunks;
         }
 
-        private void LogBrowseResult(IEnumerable<BrowseNode> nodes)
+        private void LogBrowseResult(int numBrowsed)
         {
             int total = depthCounts.Sum();
             log.Information("Browsed a total of {cnt} nodes in {cnt2} operations, and found {cnt3} nodes total",
-                nodes.Count(), numOperations, total);
+                numBrowsed, numOperations, total);
 
             var builder = new StringBuilder("Total results by depth: \n");
             for (int i = 0; i < depthCounts.Count; i++)
@@ -267,7 +267,7 @@ namespace Cognite.OpcUa
 
                 chunks.AddRange(GetNextChunks(current, out current));
             }
-            LogBrowseResult(nodes);
+            LogBrowseResult(totalRead);
         }
 
         public void Dispose()
@@ -443,7 +443,7 @@ namespace Cognite.OpcUa
             bool ignoreVisited = false)
         {
             var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            if (baseParams == null || (baseParams.Nodes?.Any() ?? false)) return result;
+            if (baseParams == null || (!baseParams.Nodes?.Any() ?? false)) return result;
             var options = new DirectoryBrowseParams
             {
                 Callback = GetDictWriteCallback(result),
@@ -457,6 +457,7 @@ namespace Cognite.OpcUa
             };
 
             using var scheduler = new BrowseScheduler(throttler, uaClient, options);
+            log.Information("Enter browse");
             scheduler.Browse(token);
             foreach (var node in baseParams.Nodes)
             {
