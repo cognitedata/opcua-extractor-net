@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Prometheus;
 using Microsoft.Extensions.Logging;
+using Cognite.Extractor.Metrics;
 
 namespace Cognite.OpcUa.Service
 {
@@ -31,6 +32,9 @@ namespace Cognite.OpcUa.Service
             config = provider.GetRequiredService<FullConfig>();
             eventLog.LogInformation("Starting OPC UA Extractor service version {version}", Version.GetVersion());
             eventLog.LogInformation("Revision information: {status}", Version.Status());
+
+            var metrics = provider.GetRequiredService<MetricsService>();
+            metrics.Start();
 
             var runTime = new ExtractorRuntime(config, provider);
 
