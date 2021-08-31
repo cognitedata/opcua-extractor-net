@@ -13,27 +13,33 @@ namespace Cognite.OpcUa.NodeSources
 {
     class NodeSetConfig
     {
-        public string FileName { get; set; }
-        public Uri URL { get; set; }
+        public string? FileName { get; set; }
+        public Uri? URL { get; set; }
     }
 
     internal class BasicReference : IReference
     {
-        public NodeId ReferenceTypeId { get; set; }
+        public NodeId? ReferenceTypeId { get; set; }
         public bool IsInverse { get; set; }
-        public ExpandedNodeId TargetId { get; set; }
+        public ExpandedNodeId? TargetId { get; set; }
     }
 
     internal class PlainType
     {
         public NodeId NodeId { get; set; }
-        public PlainType Parent { get; set; }
+        public PlainType? Parent { get; set; }
         public NodeClass NodeClass { get; set; }
-        public string DisplayName { get; set; }
+        public string? DisplayName { get; set; }
+
+        public PlainType(NodeId id, string? displayName)
+        {
+            NodeId = id;
+            DisplayName = displayName;
+        }
 
         public bool IsOfType(NodeId type)
         {
-            PlainType node = this;
+            PlainType? node = this;
             do
             {
                 if (node.NodeId == type) return true;
@@ -61,7 +67,7 @@ namespace Cognite.OpcUa.NodeSources
             });
             LoadNodeSet(new NodeSetConfig
             {
-                URL = new Uri("https://files.opcfoundation.org/schemas/MTConnect/2.0/MTConnect.NodeSet2.xml")
+                FileName = "TestServer.NodeSet2.xml"
             });
         }
 
@@ -69,7 +75,7 @@ namespace Cognite.OpcUa.NodeSources
         {
             if (set.URL != null)
             {
-                string fileName = set.URL.Segments.Last();
+                string fileName = set.FileName ?? set.URL.Segments.Last();
                 if (!File.Exists(fileName))
                 {
                     using (var client = new WebClient())
@@ -79,7 +85,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 set.FileName = fileName;
             }
-            LoadNodeSet(set.FileName);
+            LoadNodeSet(set.FileName!);
         }
 
         private void LoadNodeSet(string file)
@@ -180,7 +186,7 @@ namespace Cognite.OpcUa.NodeSources
                     && node.NodeClass != NodeClass.ObjectType
                     && node.NodeClass != NodeClass.ReferenceType
                     && node.NodeClass != NodeClass.DataType) continue;
-                types[node.NodeId] = new PlainType { NodeClass = node.NodeClass,
+                types[node.NodeId] = new PlainType(node.NodeId, node.DisplayName?.Text) { NodeClass = node.NodeClass,
                     NodeId = node.NodeId, DisplayName = node.DisplayName?.Text };
                 
             }
@@ -195,7 +201,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 if (type.Value.NodeClass == NodeClass.DataType)
                 {
-                    PropertyState enumVarNode = null;
+                    PropertyState? enumVarNode = null;
                     foreach (var rf in references[type.Key])
                     {
                         if (rf.ReferenceTypeId != ReferenceTypeIds.HasProperty || rf.IsInverse) continue;
@@ -246,14 +252,14 @@ namespace Cognite.OpcUa.NodeSources
             if (node.NodeClass == NodeClass.Variable
                 || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
             {
-                var variable = new UAVariable(id, node.DisplayName?.Text, parent, node.NodeClass);
+                var variable = new UAVariable(id, node.DisplayName?.Text ?? "", parent, node.NodeClass);
                 if (node is BaseVariableState varState)
                 {
                     variable.VariableAttributes.AccessLevel = varState.AccessLevel;
                     variable.VariableAttributes.ArrayDimensions =
                         varState.ArrayDimensions == null
                         ? null
-                        : new Collection<int>(varState.ArrayDimensions.Select(val => (int)val).ToList());
+                        : varState.ArrayDimensions.Select(val => (int)val).ToArray();
                     variable.VariableAttributes.ValueRank = varState.ValueRank;
                     variable.VariableAttributes.Description = varState.Description?.Text;
                     variable.VariableAttributes.Historizing = varState.Historizing;
@@ -265,7 +271,7 @@ namespace Cognite.OpcUa.NodeSources
                     variable.VariableAttributes.ArrayDimensions =
                         typeState.ArrayDimensions == null
                         ? null
-                        : new Collection<int>(typeState.ArrayDimensions.Select(val => (int)val).ToList());
+                        : typeState.ArrayDimensions.Select(val => (int)val).ToArray();
                     variable.VariableAttributes.ValueRank = typeState.ValueRank;
                     variable.VariableAttributes.Description = typeState.Description?.Text;
                     variable.SetDataPoint(new Variant(typeState.Value));
@@ -278,7 +284,8 @@ namespace Cognite.OpcUa.NodeSources
             else if (node.NodeClass == NodeClass.Object
                 || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.ObjectType)
             {
-                var obj = new UANode(id, node.DisplayName?.Text, parent, node.NodeClass);
+                if (id == ObjectIds.Server || id == ObjectIds.Aliases) return false;
+                var obj = new UANode(id, node.DisplayName?.Text ?? "", parent, node.NodeClass);
                 if (node is BaseObjectState objState)
                 {
                     obj.Attributes.Description = objState.Description?.Text;
@@ -308,15 +315,19 @@ namespace Cognite.OpcUa.NodeSources
 
             // Load all references into dictionary
             LoadReferences();
+            // Build internal type tree for browsing, and insert types into type managers where relevant.
             LoadTypeTree();
 
-            
+            var visitedNodes = new HashSet<NodeId>();
 
+            // Simulate browsing the node hierarchy. We do it this way to ensure that we visit the correct nodes.
             var nextIds = rootNodes.ToList();
 
-            foreach (var id in rootNodes) BuildNode(id, NodeId.Null);
-
-            var visitedNodes = new HashSet<NodeId>();
+            foreach (var id in rootNodes)
+            {
+                visitedNodes.Add(id);
+                BuildNode(id, NodeId.Null);
+            }
 
             while (nextIds.Any())
             {

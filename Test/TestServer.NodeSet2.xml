@@ -1,0 +1,329 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+
+<UANodeSet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
+  <Aliases>
+    <Alias Alias="Boolean">i=1</Alias>
+    <Alias Alias="SByte">i=2</Alias>
+    <Alias Alias="Byte">i=3</Alias>
+    <Alias Alias="Int16">i=4</Alias>
+    <Alias Alias="UInt16">i=5</Alias>
+    <Alias Alias="Int32">i=6</Alias>
+    <Alias Alias="UInt32">i=7</Alias>
+    <Alias Alias="Int64">i=8</Alias>
+    <Alias Alias="UInt64">i=9</Alias>
+    <Alias Alias="Float">i=10</Alias>
+    <Alias Alias="Double">i=11</Alias>
+    <Alias Alias="DateTime">i=13</Alias>
+    <Alias Alias="String">i=12</Alias>
+    <Alias Alias="ByteString">i=15</Alias>
+    <Alias Alias="Guid">i=14</Alias>
+    <Alias Alias="XmlElement">i=16</Alias>
+    <Alias Alias="NodeId">i=17</Alias>
+    <Alias Alias="ExpandedNodeId">i=18</Alias>
+    <Alias Alias="QualifiedName">i=20</Alias>
+    <Alias Alias="LocalizedText">i=21</Alias>
+    <Alias Alias="StatusCode">i=19</Alias>
+    <Alias Alias="Structure">i=22</Alias>
+    <Alias Alias="Number">i=26</Alias>
+    <Alias Alias="Integer">i=27</Alias>
+    <Alias Alias="UInteger">i=28</Alias>
+    <Alias Alias="HasComponent">i=47</Alias>
+    <Alias Alias="HasProperty">i=46</Alias>
+    <Alias Alias="Organizes">i=35</Alias>
+    <Alias Alias="HasSubtype">i=45</Alias>
+    <Alias Alias="HasTypeDefinition">i=40</Alias>
+  </Aliases>
+  <NamespaceUris>
+    <Uri>opc.tcp://test.localhost</Uri>
+  </NamespaceUris>
+  <Models>
+    <Model ModelUri="http://cognite.com/opcua/testserver" Version="1.00" PublicationDate="2021-08-30T00:00:00Z">
+      <RequiredModel ModelUri="http://opcfoundation.org/UA/" Version="1.03" PublicationDate="2013-12-02T00:00:00Z" />
+    </Model>
+  </Models>
+  <!-- Reference Types -->
+  <UAReferenceType NodeId="ns=1;i=31" BrowseName="1:HasCustomRelation">
+    <DisplayName>HasCustomRelation</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=32</Reference>
+    </References>
+    <InverseName>IsCustomRelationOf</InverseName>
+  </UAReferenceType>
+  <UAReferenceType NodeId="ns=1;i=32" BrowseName="1:HasSymmetricRelation" Symmetric="true">
+    <DisplayName>HasSymmetricRelation</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=32</Reference>
+    </References>
+  </UAReferenceType>
+  
+  
+  <!-- Base Objects-->
+  <UAObject NodeId="ns=1;i=1" BrowseName="1:CustomRoot">
+    <DisplayName>CustomRoot</DisplayName>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">i=85</Reference>
+    </References>
+  </UAObject>
+  <UAObject NodeId="ns=1;i=14" BrowseName="1:ChildObject">
+    <DisplayName>ChildObject</DisplayName>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=1</Reference>
+    </References>
+  </UAObject>
+  <UAObject NodeId="ns=1;i=15" BrowseName="1:ChildObject2">
+    <DisplayName>ChildObject2</DisplayName>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=1</Reference>
+    </References>
+  </UAObject>
+  <UAVariable NodeId="ns=1;i=16" BrowseName="1:NumericProp" DataType="i=8" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>NumericProp</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=15</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=16" BrowseName="1:StringProp" DataType="i=12" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>StringProp</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=15</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+
+  <!-- Enum types -->
+  <UADataType NodeId="ns=1;i=24" BrowseName="1:CustomEnumType1">
+    <DisplayName>CustomEnumType1</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=29</Reference>
+    </References>
+  </UADataType>
+  <UAVariable NodeId="ns=1;i=25" BrowseName="1:EnumStrings" DataType="i=21" ValueRank="1">
+    <DisplayName>EnumStrings</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=24</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+    <Value>
+      <ListOfLocalizedText xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <LocalizedText>
+          <Text>Enum1</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>Enum2</Text>
+        </LocalizedText>
+        <LocalizedText>
+          <Text>Enum3</Text>
+        </LocalizedText>
+      </ListOfLocalizedText>
+    </Value>
+  </UAVariable>
+  <UADataType NodeId="ns=1;i=26" BrowseName="1:CustomEnumType2">
+    <DisplayName>CustomEnumType2</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=29</Reference>
+    </References>
+  </UADataType>
+  <UAVariable NodeId="ns=1;i=27" BrowseName="1:EnumValues" DataType="i=7594" ValueRank="1">
+    <DisplayName>EnumValues</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=26</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+    <Value>
+      <ListOfExtensionObject xmlns="http://opcfoundation.org/UA/2008/02/Types.xsd">
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=7616</Identifier>
+          </TypeId>
+          <Body>
+            <EnumValueType>
+              <Value>321</Value>
+              <DisplayName>
+                <Text>VEnum1</Text>
+              </DisplayName>
+              <Description>
+                <Text>VEnumDesc1</Text>
+              </Description>
+            </EnumValueType>
+          </Body>
+        </ExtensionObject>
+        <ExtensionObject>
+          <TypeId>
+            <Identifier>i=7616</Identifier>
+          </TypeId>
+          <Body>
+            <EnumValueType>
+              <Value>123</Value>
+              <DisplayName>
+                <Text>VEnum2</Text>
+              </DisplayName>
+              <Description>
+                <Text>VEnumDesc2</Text>
+              </Description>
+            </EnumValueType>
+          </Body>
+        </ExtensionObject>
+      </ListOfExtensionObject>
+    </Value>
+  </UAVariable>
+  
+  <!-- Enum variables-->
+  <UAVariable NodeId="ns=1;i=28" BrowseName="1:EnumVar1" DataType="ns=1;i=24" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>EnumVar1</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;s=enumvar" BrowseName="1:EnumVar2" DataType="ns=1;i=26" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>EnumVar2</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=30" BrowseName="1:EnumVar3" DataType="ns=1;i=26" AccessLevel="1" UserAccessLevel="1" ValueRank="1" ArrayDimensions="4">
+    <DisplayName>EnumVar1</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  
+  <!-- Other types-->
+  <UADataType NodeId="ns=1;i=4" BrowseName="1:StringyType">
+    <DisplayName>StringyType</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=24</Reference>
+    </References>
+  </UADataType>
+  <UADataType NodeId="ns=1;i=5" BrowseName="1:IgnoreType">
+    <DisplayName>IgnoreType</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=24</Reference>
+    </References>
+  </UADataType>
+  <UADataType NodeId="ns=1;i=6" BrowseName="1:MysteryType">
+    <DisplayName>MysteryType</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=26</Reference>
+    </References>
+  </UADataType>
+  <UADataType NodeId="ns=1;i=7" BrowseName="1:NumberType">
+    <DisplayName>NumberType</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=24</Reference>
+    </References>
+  </UADataType>
+
+
+  <!-- Typed variables -->
+  <UAVariable NodeId="ns=1;i=8" BrowseName="1:StringyVar" DataType="ns=1;i=4" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>StringyVar</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+      <Reference ReferenceType="ns=1;i=32" IsForward="false">ns=1;i=9</Reference>
+      <Reference ReferenceType="ns=1;i=32" IsForward="true">ns=1;i=10</Reference>
+      <Reference ReferenceType="ns=1;i=31" IsForward="true">ns=1;i=1</Reference>
+    </References>
+  </UAVariable>
+
+  <UAVariable NodeId="ns=1;i=9" BrowseName="1:IgnoreVar" DataType="ns=1;i=5" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>IgnoreVar</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  
+  <UAVariable NodeId="ns=1;i=10" BrowseName="1:MysteryVar" DataType="ns=1;i=6" AccessLevel="5" UserAccessLevel="5">
+    <DisplayName>MysteryVar</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=13" BrowseName="1:EURange" DataType="i=884" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>EURange</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=10</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=12" BrowseName="1:EngineeringUnits" DataType="i=887" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>EngineeringUnits</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=10</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+  
+  <UAVariable NodeId="ns=1;i=11" BrowseName="1:NumberVar" DataType="ns=1;i=7" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>NumberVar</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  <UAObject NodeId="ns=1;i=20" BrowseName="1:DeepProp">
+    <DisplayName>DeepProp</DisplayName>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=11</Reference>
+    </References>
+  </UAObject>
+  <UAObject NodeId="ns=1;i=21" BrowseName="1:DeepProp2">
+    <DisplayName>DeepProp2</DisplayName>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=20</Reference>
+    </References>
+  </UAObject>
+  <UAVariable NodeId="ns=1;i=22" BrowseName="1:val1" DataType="i=12" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>val1</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=21</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=23" BrowseName="1:val2" DataType="i=12" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>val2</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=21</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+  
+  <!-- Arrays -->
+  <UAVariable NodeId="ns=1;i=2" BrowseName="1:Variable Array" DataType="i=11" AccessLevel="5" UserAccessLevel="5" ValueRank="1" ArrayDimensions="4">
+    <DisplayName>Variable Array</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+      <Reference ReferenceType="ns=1;i=32" IsForward="false">ns=1;i=3</Reference>
+      <Reference ReferenceType="ns=1;i=31" IsForward="true">ns=1;i=1</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=19" BrowseName="1:EURange" DataType="i=884" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>EURange</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=2</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=18" BrowseName="1:EngineeringUnits" DataType="i=887" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>EngineeringUnits</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=2</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+
+  <UAVariable NodeId="ns=1;i=3" BrowseName="1:Variable StringArray" DataType="i=12" AccessLevel="1" UserAccessLevel="1" ValueRank="1" ArrayDimensions="2">
+    <DisplayName>Variable StringArray</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+</UANodeSet>

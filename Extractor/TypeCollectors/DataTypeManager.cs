@@ -307,10 +307,10 @@ namespace Cognite.OpcUa.TypeCollectors
         /// <param name="id">NodeId of type</param>
         /// <param name="parent">NodeId of supertype, if present</param>
         /// <param name="name">Name of node</param>
-        public void RegisterType(NodeId id, NodeId parent, string name)
+        public void RegisterType(NodeId id, NodeId parent, string? name)
         {
             parentIds[id] = parent;
-            if (id.NamespaceIndex != 0)
+            if (id.NamespaceIndex != 0 && name != null)
             {
                 customTypeNames[id] = name;
             }
