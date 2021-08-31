@@ -490,18 +490,38 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
         private async Task UpdateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
-            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async rows =>
+            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, async rows =>
             {
-                var rowDict = rows.ToDictionary(row => row.Key);
+                if (rows == null)
+                {
+                    await Extractor.ReadProperties(assetMap.Select(kvp => kvp.Value));
 
-                var toReadProperties = assetMap.Select(kvp => kvp.Value);
-                await Extractor.ReadProperties(toReadProperties);
-
-                var updates = assetMap
-                    .Select(kvp => (kvp.Key, PusherUtils.CreateRawUpdate(Extractor.StringConverter,
-                        kvp.Value, rowDict.GetValueOrDefault(kvp.Key), ConverterType.Node)))
-                    .Where(elem => elem.Item2 != null)
+                    return assetMap.Select(kvp => (
+                        kvp.Key,
+                        PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Node)
+                    )).Where(elem => elem.Item2 != null)
                     .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
+                }
+
+                var toWrite = new List<(string, RawRow, UANode)>();
+
+                foreach (var row in rows)
+                {
+                    if (assetMap.TryGetValue(row.Key, out var ts))
+                    {
+                        toWrite.Add((row.Key, row, ts));
+                        assetMap.Remove(row.Key);
+                    }
+                }
+
+                await Extractor.ReadProperties(toWrite.Select(kvp => kvp.Item3));
+
+                var updates = toWrite
+                    .Select(elem => (
+                        elem.Item1,
+                        PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.Item3, elem.Item2, ConverterType.Node)
+                    )).Where(elem => elem.Item2 != null)
+                    .ToDictionary(pair => pair.Item1, pair => pair.Item2.Value);
 
                 return updates;
             }, null, token);
@@ -637,23 +657,42 @@ namespace Cognite.OpcUa.Pushers
         /// Update list of nodes as timeseries in CDF Raw.
         /// </summary>
         /// <param name="tsMap">Id, node map for the timeseries that should be pushed.</param>
-        /// <param name="update">Config for what should be updated on each timeseries.</param>
         private async Task UpdateRawTimeseries(
             IDictionary<string, UAVariable> tsMap,
             CancellationToken token)
         {
-            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, async rows =>
+            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, async rows =>
             {
-                var rowDict = rows.ToDictionary(row => row.Key);
+                if (rows == null)
+                {
+                    await Extractor.ReadProperties(tsMap.Select(kvp => kvp.Value));
 
-                var toReadProperties = tsMap.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
-                await Extractor.ReadProperties(toReadProperties);
-
-                var updates = tsMap
-                    .Select(kvp => (kvp.Key, PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value,
-                        rowDict.GetValueOrDefault(kvp.Key), ConverterType.Variable)))
-                    .Where(elem => elem.Item2 != null)
+                    return tsMap.Select(kvp => (
+                        kvp.Key,
+                        PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Variable)
+                    )).Where(elem => elem.Item2 != null)
                     .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
+                }
+
+                var toWrite = new List<(string, RawRow, UAVariable)>();
+
+                foreach (var row in rows)
+                {
+                    if (tsMap.TryGetValue(row.Key, out var ts))
+                    {
+                        toWrite.Add((row.Key, row, ts));
+                        tsMap.Remove(row.Key);
+                    }
+                }
+
+                await Extractor.ReadProperties(toWrite.Select(kvp => kvp.Item3));
+
+                var updates = toWrite
+                    .Select(elem => (
+                        elem.Item1,
+                        PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.Item3, elem.Item2, ConverterType.Variable)
+                    )).Where(elem => elem.Item2 != null)
+                    .ToDictionary(pair => pair.Item1, pair => pair.Item2.Value);
 
                 return updates;
             }, null, token);
@@ -840,32 +879,49 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Insert or update raw rows given by <paramref name="toRetrieve"/> in table
         /// given by <paramref name="dbName"/> and <paramref name="tableName"/>.
-        /// The dtoBuilder is called with all rows that already exist,
-        /// so it must determine which rows should be updated and which should be created.
+        /// The dtoBuilder is called with chunks of 10000 rows, and finally with null to indicate that there are no more rows.
         /// </summary>
         /// <typeparam name="T">Type of DTO to build</typeparam>
         /// <param name="dbName">Name of database in CDF Raw</param>
         /// <param name="tableName">Name of table in CDF Raw</param>
-        /// <param name="toRetrieve">Rows to retrieve</param>
         /// <param name="dtoBuilder">Method to build DTOs, called with existing rows.</param>
         /// <param name="options"><see cref="JsonSerializerOptions"/> used for serialization.</param>
         private async Task UpsertRawRows<T>(
             string dbName,
             string tableName,
-            IEnumerable<string> toRetrieve,
             Func<IEnumerable<RawRow>, Task<IDictionary<string, T>>> dtoBuilder,
             JsonSerializerOptions options,
             CancellationToken token)
         {
-            var existing = await GetRawRows(dbName, tableName, null, token);
-            
-            var keys = new HashSet<string>(toRetrieve);
+            int count = 0;
+            async Task CallAndCreate(IEnumerable<RawRow> rows)
+            {
+                var toUpsert = await dtoBuilder(rows);
+                Interlocked.Add(ref count, toUpsert.Count);
+                await destination.InsertRawRowsAsync(dbName, tableName, toUpsert, options, token);
+            }
 
-            var toCreate = await dtoBuilder(existing.Where(row => keys.Contains(row.Key)));
-            if (!toCreate.Any()) return;
-            log.Information("Creating or updating {cnt} raw rows in CDF", toCreate.Count);
+            string cursor = null;
+            do
+            {
+                try
+                {
+                    var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
+                        new RawRowQuery { Cursor = cursor, Limit = 10_000 }, token);
+                    cursor = result.NextCursor;
 
-            await destination.InsertRawRowsAsync(dbName, tableName, toCreate, options, token);
+                    await CallAndCreate(result.Items);
+                }
+                catch (ResponseException ex) when (ex.Code == 404)
+                {
+                    log.Warning("Table or database not found: {msg}", ex.Message);
+                    break;
+                }
+            } while (cursor != null);
+
+            await CallAndCreate(null);
+
+            log.Information("Updated or created {cnt} rows in CDF Raw", count);
         }
 
         public async Task<IEnumerable<RawRow>> GetRawRows(
