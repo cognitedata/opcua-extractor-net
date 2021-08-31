@@ -490,12 +490,12 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
         private async Task UpdateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
-            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, async rows =>
+            await Extractor.ReadProperties(assetMap.Select(kvp => kvp.Value));
+
+            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, rows =>
             {
                 if (rows == null)
                 {
-                    await Extractor.ReadProperties(assetMap.Select(kvp => kvp.Value));
-
                     return assetMap.Select(kvp => (
                         kvp.Key,
                         PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Node)
@@ -513,8 +513,6 @@ namespace Cognite.OpcUa.Pushers
                         assetMap.Remove(row.Key);
                     }
                 }
-
-                await Extractor.ReadProperties(toWrite.Select(kvp => kvp.Item3));
 
                 var updates = toWrite
                     .Select(elem => (
@@ -661,12 +659,12 @@ namespace Cognite.OpcUa.Pushers
             IDictionary<string, UAVariable> tsMap,
             CancellationToken token)
         {
-            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, async rows =>
+            await Extractor.ReadProperties(tsMap.Select(kvp => kvp.Value));
+
+            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, rows =>
             {
                 if (rows == null)
                 {
-                    await Extractor.ReadProperties(tsMap.Select(kvp => kvp.Value));
-
                     return tsMap.Select(kvp => (
                         kvp.Key,
                         PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Variable)
@@ -684,8 +682,6 @@ namespace Cognite.OpcUa.Pushers
                         tsMap.Remove(row.Key);
                     }
                 }
-
-                await Extractor.ReadProperties(toWrite.Select(kvp => kvp.Item3));
 
                 var updates = toWrite
                     .Select(elem => (
@@ -889,15 +885,15 @@ namespace Cognite.OpcUa.Pushers
         private async Task UpsertRawRows<T>(
             string dbName,
             string tableName,
-            Func<IEnumerable<RawRow>, Task<IDictionary<string, T>>> dtoBuilder,
+            Func<IEnumerable<RawRow>, IDictionary<string, T>> dtoBuilder,
             JsonSerializerOptions options,
             CancellationToken token)
         {
             int count = 0;
             async Task CallAndCreate(IEnumerable<RawRow> rows)
             {
-                var toUpsert = await dtoBuilder(rows);
-                Interlocked.Add(ref count, toUpsert.Count);
+                var toUpsert = dtoBuilder(rows);
+                count += toUpsert.Count;
                 await destination.InsertRawRowsAsync(dbName, tableName, toUpsert, options, token);
             }
 

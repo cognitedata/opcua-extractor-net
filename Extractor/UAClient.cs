@@ -1031,6 +1031,7 @@ namespace Cognite.OpcUa
             BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
                 (uint)NodeClass.Object | (uint)NodeClass.Variable, false, true, true);
 
+            log.Information("Read attributes for {cnt} properties", properties.Count);
             ReadNodeData(properties, token);
             var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true)).ToList();
             await DataTypeManager.GetDataTypeMetadataAsync(toGetValue.Select(prop => prop.DataType?.Raw), token);
