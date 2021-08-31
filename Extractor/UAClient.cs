@@ -628,7 +628,7 @@ namespace Cognite.OpcUa
             int total = values.Count;
 
             log.Information("Retrieved {total}/{expected} attributes", total, expected);
-            if (total < expected)
+            if (total < expected && !token.IsCancellationRequested)
             {
                 throw new ExtractorFailureException(
                     $"Too few results in ReadNodeData, this is a bug in the OPC-UA server implementation, total : {total}, expected: {expected}");
