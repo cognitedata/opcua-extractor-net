@@ -160,7 +160,7 @@ podTemplate(
                     sh('#!/bin/sh -e\n'
                             + 'docker login -u _json_key -p "$(cat /jenkins-docker-builder/credentials.json)" https://eu.gcr.io')
 
-                    sh("image=\$(docker build --build-arg VERSION_ARGS='$versionArgs' -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
+                    sh("image=\$(docker build --build-arg VERSION='$version' --build-arg DESCRIPTION='$desc $time' -f Dockerfile.build . | awk '/Successfully built/ {print \$3}')"
                         + "&& id=\$(docker create \$image)"
                         + "&& docker cp \$id:/build/deploy ."
                         + "&& docker rm -v \$id"
