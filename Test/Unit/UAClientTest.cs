@@ -376,6 +376,23 @@ namespace Test.Unit
             Assert.True(reads >= 91 && reads <= 93);
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 31));
         }
+        [Theory]
+        [InlineData(-1, 150, 31)]
+        [InlineData(0, 5, 1)]
+        [InlineData(1, 10, 2)]
+        [InlineData(15, 80, 16)]
+        public void TestBrowseDepth(int depth, int numNodes, int numBrowse)
+        {
+            CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
+            tester.Client.Browser.ResetVisitedNodes();
+            var (callback, nodes) = UAClientTestFixture.GetCallback();
+            tester.Client.Browser.BrowseDirectory(new[] { tester.Server.Ids.Full.DeepRoot }, callback, tester.Source.Token,
+                null, 3, true, true, false, depth);
+
+            Assert.Equal(numNodes, nodes.Sum(node => node.Value.Count));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", numBrowse));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", depth < 0 ? 31 : depth + 2));
+        }
         [Fact]
         public async Task TestBrowseThrottling()
         {

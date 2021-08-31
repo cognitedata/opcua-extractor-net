@@ -420,7 +420,7 @@ namespace Cognite.OpcUa
             return roots.Values;
         }
 
-        private Action<ReferenceDescription, NodeId> GetDictWriteCallback(Dictionary<NodeId, ReferenceDescriptionCollection> dict)
+        private static Action<ReferenceDescription, NodeId> GetDictWriteCallback(Dictionary<NodeId, ReferenceDescriptionCollection> dict)
         {
             object lck = new object();
             return (rd, nodeId) =>
@@ -443,6 +443,7 @@ namespace Cognite.OpcUa
             bool ignoreVisited = false)
         {
             var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
+            if (baseParams == null || (baseParams.Nodes?.Any() ?? false)) return result;
             var options = new DirectoryBrowseParams
             {
                 Callback = GetDictWriteCallback(result),
@@ -482,7 +483,8 @@ namespace Cognite.OpcUa
             uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
             bool ignoreVisited = true,
             bool doFilter = true,
-            bool readVariableChildren = false)
+            bool readVariableChildren = false,
+            int maxDepth = -1)
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
             var nextIds = roots.ToList();
@@ -492,14 +494,14 @@ namespace Cognite.OpcUa
                 NodeClassMask = nodeClassMask,
                 ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
                 MaxPerNode = (uint)config.Source.BrowseChunk,
-                Nodes = roots.ToDictionary(id => id, id => new BrowseNode(id))
+                Nodes = roots.ToDictionary(id => id, id => new BrowseNode(id)),
             };
             var options = new DirectoryBrowseParams
             {
                 Callback = callback,
                 NodesChunk = config.Source.BrowseNodesChunk,
                 ReadVariableChildren = readVariableChildren,
-                MaxDepth = -1,
+                MaxDepth = maxDepth,
                 Filters = doFilter ? IgnoreFilters : null,
                 InitialParams = baseParams,
                 MaxNodeParallelism = throttling.MaxNodeParallelism,
