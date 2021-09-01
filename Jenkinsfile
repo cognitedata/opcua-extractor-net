@@ -199,7 +199,11 @@ podTemplate(
                 stage ('Build MSI') {
                     powershell('dotnet tool restore')
                     powershell('dotnet paket restore')
+
                     powershell("dotnet publish -c Release -r win-x64 $publishArgs .\\ExtractorLauncher\\ -o extractorbuild\\")
+
+                    codeSign.signOnWindows('extractorbuild\\OpcuaExtractor.exe')
+
                     powershell(".\\MsiVersionUpdate.ps1 .\\OpcUaExtractorSetup\\OpcUaExtractor.wxs ${version}")
                     dir ('.\\OpcUaExtractorSetup\\') {
                         buildStatus = bat(returnStatus: true, script: "${msbuild} /t:rebuild /p:Configuration=Release .\\OpcUaExtractorSetup.wixproj")
@@ -207,6 +211,7 @@ podTemplate(
                             error("Build MSI failed.")
                         }
                     }
+                    codeSign.signOnWindows('OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi')
                 }
                 stage ('Deploy to github') {
                     powershell("mv OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi .\\OpcUaExtractorSetup-${version}.msi")
