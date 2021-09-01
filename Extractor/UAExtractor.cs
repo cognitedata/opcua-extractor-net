@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -30,7 +30,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -45,15 +44,15 @@ namespace Cognite.OpcUa
         private readonly FullConfig config;
         public FullConfig FullConfig => config;
         public Looper Looper { get; }
-        public FailureBuffer FailureBuffer { get; }
-        public IExtractionStateStore StateStorage { get; }
+        public FailureBuffer? FailureBuffer { get; }
+        public IExtractionStateStore? StateStorage { get; }
         public State State { get; }
         public Streamer Streamer { get; }
         public DataTypeManager DataTypeManager => uaClient.DataTypeManager;
 
         private readonly HistoryReader historyReader;
-        public ReferenceTypeManager ReferenceTypeManager { get; private set; }
-        public IEnumerable<NodeId> RootNodes { get; private set; }
+        public ReferenceTypeManager? ReferenceTypeManager { get; private set; }
+        public IEnumerable<NodeId> RootNodes { get; private set; } = null!;
         private readonly IEnumerable<IPusher> pushers;
         private readonly ConcurrentQueue<NodeId> extraNodesToBrowse = new ConcurrentQueue<NodeId>();
 
@@ -61,7 +60,7 @@ namespace Cognite.OpcUa
         private readonly HashSet<NodeId> pendingProperties = new HashSet<NodeId>();
         private readonly object propertySetLock = new object();
         private readonly List<Task> propertyReadTasks = new List<Task>();
-        public IEnumerable<NodeTransformation> Transformations { get; private set; }
+        public IEnumerable<NodeTransformation>? Transformations { get; private set; }
         public StringConverter StringConverter => uaClient.StringConverter;
 
         public bool Started { get; private set; }
@@ -101,12 +100,12 @@ namespace Cognite.OpcUa
         public UAExtractor(FullConfig config,
             IEnumerable<IPusher> pushers,
             UAClient uaClient,
-            IExtractionStateStore stateStore,
+            IExtractionStateStore? stateStore,
             CancellationToken token)
         {
-            this.pushers = pushers ?? throw new ArgumentNullException(nameof(pushers));
-            this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
-            this.config = config ?? throw new ArgumentNullException(nameof(config));
+            this.uaClient = uaClient;
+            this.pushers = pushers;
+            this.config = config;
 
             this.uaClient.OnServerReconnect += UaClient_OnServerReconnect;
             this.uaClient.OnServerDisconnect += UaClient_OnServerDisconnect;
@@ -123,7 +122,7 @@ namespace Cognite.OpcUa
 
             if (config.FailureBuffer.Enabled)
             {
-                FailureBuffer = new FailureBuffer(config, this, pushers.FirstOrDefault(pusher => pusher is InfluxPusher) as InfluxPusher);
+                FailureBuffer = new FailureBuffer(config, this, pushers.OfType<InfluxPusher>().FirstOrDefault());
             }
             historyReader = new HistoryReader(uaClient, this, config.History, source.Token);
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
@@ -158,8 +157,7 @@ namespace Cognite.OpcUa
         /// <param name="e">EventArgs for this event</param>
         private void UaClient_OnServerReconnect(object sender, EventArgs e)
         {
-            var client = sender as UAClient;
-            if (config.Source.RestartOnReconnect && !source.IsCancellationRequested)
+            if (sender is UAClient client && config.Source.RestartOnReconnect && !source.IsCancellationRequested)
             {
                 client.DataTypeManager.Configure();
                 client.ClearNodeOverrides();
@@ -223,7 +221,7 @@ namespace Cognite.OpcUa
 
             var synchTasks = await RunMapping(RootNodes, true);
 
-            if (config.FailureBuffer.Enabled)
+            if (config.FailureBuffer.Enabled && FailureBuffer != null)
             {
                 await FailureBuffer.InitializeBufferStates(State.NodeStates, State.EmitterStates, source.Token);
             }
@@ -239,7 +237,7 @@ namespace Cognite.OpcUa
         {
             subscribed = 0;
             subscribeFlag = false;
-            historyReader.Terminate(source.Token, 30).Wait();
+            historyReader?.Terminate(source.Token, 30).Wait();
             foreach (var state in State.NodeStates)
             {
                 state.RestartHistory();
@@ -336,7 +334,7 @@ namespace Cognite.OpcUa
         /// <param name="id">NodeId to convert</param>
         /// <param name="index">Index to use for uniqueId</param>
         /// <returns>Converted uniqueId</returns>
-        public string GetUniqueId(ExpandedNodeId id, int index = -1)
+        public string? GetUniqueId(ExpandedNodeId id, int index = -1)
         {
             return uaClient.GetUniqueId(id, index);
         }
@@ -361,7 +359,7 @@ namespace Cognite.OpcUa
         /// <param name="nodes">Nodes to get properties for</param>
         public async Task ReadProperties(IEnumerable<UANode> nodes)
         {
-            Task newTask = null;
+            Task? newTask = null;
             List<Task> tasksToWaitFor;
             lock (propertySetLock)
             {
@@ -451,7 +449,7 @@ namespace Cognite.OpcUa
         private async Task<IEnumerable<Task>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited)
         {
             bool readFromOpc = true;
-            NodeSources.BrowseResult result = null;
+            NodeSources.BrowseResult? result = null;
             if (config.Cognite?.RawNodeBuffer?.Enable ?? false)
             {
                 log.Debug("Begin fetching data from CDF");
@@ -509,7 +507,7 @@ namespace Cognite.OpcUa
         /// This is the entry point for mapping on the extractor.
         /// </summary>
         /// <returns>A list of history tasks</returns>
-        private async Task<IEnumerable<Task>> MapUAToDestinations(NodeSources.BrowseResult result)
+        private async Task<IEnumerable<Task>> MapUAToDestinations(NodeSources.BrowseResult? result)
         {
             if (result == null) return Enumerable.Empty<Task>();
 
@@ -591,7 +589,7 @@ namespace Cognite.OpcUa
             {
                 log.Debug(trans.ToString());
             }
-            
+
             uaClient.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
             Transformations = transformations;
         }
@@ -639,7 +637,7 @@ namespace Cognite.OpcUa
                     var emitterIds = new HashSet<NodeId>((config.Events.EmitterIds ?? Enumerable.Empty<ProtoNodeId>())
                         .Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)));
                     var eventEmitterIds = new HashSet<NodeId>(histEmitterIds.Concat(emitterIds));
-                                                                                                          ;
+
                     foreach (var id in eventEmitterIds)
                     {
                         var history = (histEmitterIds.Contains(id)) && config.Events.History;
@@ -675,7 +673,7 @@ namespace Cognite.OpcUa
         private void PushNodesFailure(
             IEnumerable<UANode> objects,
             IEnumerable<UAVariable> timeseries,
-            IEnumerable<UAReference> references,
+            IEnumerable<UAReference>? references,
             bool nodesPassed,
             bool referencesPassed,
             bool dpRangesPassed,
@@ -714,7 +712,6 @@ namespace Cognite.OpcUa
             IEnumerable<UAReference> references,
             IPusher pusher, bool initial)
         {
-            if (pusher == null) throw new ArgumentNullException(nameof(pusher));
             if (pusher.NoInit)
             {
                 log.Warning("Skipping pushing on pusher {name}", pusher.GetType());
@@ -749,8 +746,8 @@ namespace Cognite.OpcUa
                 var statesToSync = timeseries
                     .Select(ts => ts.Id)
                     .Distinct()
-                    .Select(id => State.GetNodeState(id))
-                    .Where(state => state != null && state.FrontfillEnabled && !state.Initialized);
+                    .SelectNonNull(id => State.GetNodeState(id))
+                    .Where(state => state.FrontfillEnabled && !state.Initialized);
 
                 var eventStatesToSync = State.EmitterStates.Where(state => state.FrontfillEnabled && !state.Initialized);
 
@@ -802,7 +799,7 @@ namespace Cognite.OpcUa
                 if (Streamer.AllowData)
                 {
                     pushTasks = pushTasks.Append(StateStorage.RestoreExtractionState(
-                        newStates.Where(state => state.FrontfillEnabled).ToDictionary(state => state.Id),
+                        newStates.Where(state => state != null && state.FrontfillEnabled).ToDictionary(state => state?.Id),
                         config.StateStorage.VariableStore,
                         false,
                         source.Token));
@@ -823,9 +820,9 @@ namespace Cognite.OpcUa
                 trackedTimeseres.Inc(timeseries.Count());
             }
 
-            foreach (var state in newStates.Concat<UAHistoryExtractionState>(State.EmitterStates))
+            foreach (var state in newStates.Concat<UAHistoryExtractionState?>(State.EmitterStates))
             {
-                state.FinalizeRangeInit();
+                state?.FinalizeRangeInit();
             }
         }
 
@@ -894,7 +891,7 @@ namespace Cognite.OpcUa
         /// <returns>Two tasks, one for data and one for events</returns>
         private IEnumerable<Task> Synchronize(IEnumerable<UAVariable> variables)
         {
-            var states = variables.Select(ts => ts.Id).Distinct().Select(id => State.GetNodeState(id)).Where(state => state != null);
+            var states = variables.Select(ts => ts.Id).Distinct().SelectNonNull(id => State.GetNodeState(id));
 
             log.Information("Synchronize {NumNodesToSynch} nodes", variables.Count());
             var tasks = new List<Task>();
@@ -1042,7 +1039,7 @@ namespace Cognite.OpcUa
     }
     public interface IUAClientAccess
     {
-        string GetUniqueId(ExpandedNodeId id, int index = -1);
+        string? GetUniqueId(ExpandedNodeId id, int index = -1);
         StringConverter StringConverter { get; }
         string GetRelationshipId(UAReference reference);
     }

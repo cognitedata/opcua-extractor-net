@@ -9,8 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using Server;
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -111,7 +109,7 @@ namespace Test.Utils
             return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
         }
 
-        
+
 
         public (InfluxPusher pusher, InfluxDBClient client) GetInfluxPusher(string dbName, bool clear = true)
         {

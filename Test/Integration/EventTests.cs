@@ -430,7 +430,7 @@ namespace Test.Integration
 
                 await extractor.Looper.WaitForNextPush();
 
-                await CommonTestUtils.WaitForCondition(() => 
+                await CommonTestUtils.WaitForCondition(() =>
                     pusher.Events.ContainsKey(ObjectIds.Server) && pusher.Events[ObjectIds.Server].Count == 707, 5);
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
 

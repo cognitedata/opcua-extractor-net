@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -59,7 +59,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="externalId">ExternalId for lookup</param>
         /// <returns>State if it exists</returns>
-        public VariableExtractionState GetNodeState(string externalId)
+        public VariableExtractionState? GetNodeState(string externalId)
         {
             if (externalId == null) return null;
             return nodeStatesByExtId.GetValueOrDefault(externalId);
@@ -69,7 +69,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="id">NodeId for lookup</param>
         /// <returns>State if it exists</returns>
-        public VariableExtractionState GetNodeState(NodeId id)
+        public VariableExtractionState? GetNodeState(NodeId id)
         {
             if (id == null || id.IsNullNodeId) return null;
             return nodeStates.GetValueOrDefault(id);
@@ -79,7 +79,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="externalId">ExternalId for lookup</param>
         /// <returns>State if it exists</returns>
-        public EventExtractionState GetEmitterState(string externalId)
+        public EventExtractionState? GetEmitterState(string externalId)
         {
             if (externalId == null) return null;
             return emitterStatesByExtId.GetValueOrDefault(externalId);
@@ -89,7 +89,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="id">NodeId for lookup</param>
         /// <returns>State if it exists</returns>
-        public EventExtractionState GetEmitterState(NodeId id)
+        public EventExtractionState? GetEmitterState(NodeId id)
         {
             if (id == null || id.IsNullNodeId) return null;
             return emitterStates.GetValueOrDefault(id);
@@ -100,9 +100,8 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="state">State to add</param>
         /// <param name="uniqueId">ExternalId, leave empty to auto generate</param>
-        public void SetNodeState(VariableExtractionState state, string uniqueId = null)
+        public void SetNodeState(VariableExtractionState state, string? uniqueId = null)
         {
-            if (state == null) throw new ArgumentNullException(nameof(state));
             nodeStates[state.SourceId] = state;
             nodeStatesByExtId[uniqueId ?? state.Id] = state;
         }
@@ -113,7 +112,6 @@ namespace Cognite.OpcUa
         /// <param name="uniqueId">ExternalId, leave empty to auto generate</param>
         public void SetEmitterState(EventExtractionState state)
         {
-            if (state == null) throw new ArgumentNullException(nameof(state));
             emitterStates[state.SourceId] = state;
             emitterStatesByExtId[state.Id] = state;
         }
@@ -133,9 +131,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="nodeId">NodeId value</param>
         /// <param name="id">UniqueId key</param>
-        public void RegisterNode(NodeId nodeId, string id)
+        public void RegisterNode(NodeId nodeId, string? id)
         {
-            if (nodeId == null || nodeId.IsNullNodeId) throw new ArgumentNullException(nameof(nodeId));
+            if (id == null) return;
             externalToNodeId[id] = nodeId;
         }
         /// <summary>
@@ -154,7 +152,6 @@ namespace Cognite.OpcUa
         /// <param name="node">Node to add</param>
         public void AddActiveNode(UANode node, TypeUpdateConfig update, bool dataTypeMetadata, bool nodeTypeMetadata)
         {
-            if (node == null) throw new ArgumentNullException(nameof(node));
             if (node is UAVariable variable && variable.Index != -1) throw new InvalidOperationException();
             nodeChecksums[node.Id] = node.GetUpdateChecksum(update, dataTypeMetadata, nodeTypeMetadata);
         }
@@ -162,7 +159,6 @@ namespace Cognite.OpcUa
         /// Get node checksum by NodeId and index if it exists
         /// </summary>
         /// <param name="id">NodeId to use for lookup</param>
-        /// <param name="index">Index of node, default is -1</param>
         /// <returns></returns>
         public int? GetNodeChecksum(NodeId id)
         {

@@ -29,3 +29,11 @@ dotnet_diagnostic.CA1819.severity = none
 
 # CA1305: Specify IFormatProvider
 dotnet_diagnostic.CA1305.severity = none
+
+# CA1062: Validate parameters of public methods.
+# Disabled due to nullable analysis
+dotnet_diagnostic.CA1062.severity = none
+
+# CA1002: Do not expose generic lists
+# Nice in theory, but IList or other basic interfaces do not support AddRange, which means that this has a potentially serious performance cost.
+dotnet_diagnostic.CA1002.severity = none

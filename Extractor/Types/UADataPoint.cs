@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extensions;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 
@@ -31,8 +32,12 @@ namespace Cognite.OpcUa.Types
         public DateTime Timestamp { get; }
         public string Id { get; }
         public double? DoubleValue { get; }
-        public string StringValue { get; }
-        public bool IsString { get => !DoubleValue.HasValue; }
+        public string? StringValue { get; }
+        [MemberNotNullWhen(false, nameof(DoubleValue))]
+        [MemberNotNullWhen(true, nameof(StringValue))]
+#pragma warning disable CS8775 // Member must have a non-null value when exiting in some condition. - Implicit due to constructors.
+        public bool IsString => !DoubleValue.HasValue;
+#pragma warning restore CS8775 // Member must have a non-null value when exiting in some condition.
         /// <param name="timestamp">Timestamp in ms since epoch</param>
         /// <param name="id">Converted id of node this belongs to, equal to externalId of timeseries in CDF</param>
         /// <param name="value">Value to set</param>
@@ -58,7 +63,6 @@ namespace Cognite.OpcUa.Types
         /// <param name="replacement">Replacement value</param>
         public UADataPoint(UADataPoint other, string replacement)
         {
-            if (other == null) throw new ArgumentNullException(nameof(other));
             Timestamp = other.Timestamp;
             Id = other.Id;
             StringValue = replacement;
@@ -70,7 +74,6 @@ namespace Cognite.OpcUa.Types
         /// <param name="replacement">Replacement value</param>
         public UADataPoint(UADataPoint other, double replacement)
         {
-            if (other == null) throw new ArgumentNullException(nameof(other));
             Timestamp = other.Timestamp;
             Id = other.Id;
             DoubleValue = replacement;
@@ -107,10 +110,9 @@ namespace Cognite.OpcUa.Types
         /// Initializes BufferedDataPoint from array of bytes, array should not contain the short size, which is just used to know how much
         /// to read at a time.
         /// </summary>
-        /// <param name="bytes">Bytes to convert</param>
-        public static UADataPoint FromStream(Stream stream)
+        /// <param name="stream">Stream to read bytes from</param>
+        public static UADataPoint? FromStream(Stream stream)
         {
-            if (stream == null) throw new ArgumentNullException(nameof(stream));
             string id = CogniteUtils.StringFromStream(stream);
             if (id == null) return null;
             var buffer = new byte[sizeof(long)];

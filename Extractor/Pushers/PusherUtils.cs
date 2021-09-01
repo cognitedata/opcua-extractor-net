@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -17,17 +17,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
-using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Opc.Ua;
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 
 namespace Cognite.OpcUa.Pushers
@@ -64,7 +61,7 @@ namespace Cognite.OpcUa.Pushers
         public static JsonElement? CreateRawUpdate(
             StringConverter converter,
             UANode node,
-            RawRow raw,
+            RawRow? raw,
             ConverterType type)
         {
             if (node == null) return null;
@@ -89,13 +86,12 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Create timeseries update from existing timeseries and new OPC-UA variable.
         /// </summary>
-        /// <param name="extractor">Active extractor, used for building metadata</param>
         /// <param name="old">Existing timeseries</param>
         /// <param name="newTs">New OPC-UA variable</param>
         /// <param name="update">Configuration for which fields to update</param>
         /// <param name="nodeToAssetIds">Map from NodeIds to assetIds, necessary for setting parents</param>
         /// <returns>Update object, or null if updating was unnecessary</returns>
-        public static TimeSeriesUpdate GetTSUpdate(
+        public static TimeSeriesUpdate? GetTSUpdate(
             ExtractionConfig config,
             DataTypeManager manager,
             StringConverter converter,
@@ -104,8 +100,6 @@ namespace Cognite.OpcUa.Pushers
             TypeUpdateConfig update,
             IDictionary<NodeId, long> nodeToAssetIds)
         {
-            if (manager == null) throw new ArgumentNullException(nameof(manager));
-            if (converter == null) throw new ArgumentNullException(nameof(converter));
             if (update == null || newTs == null || nodeToAssetIds == null || old == null) return null;
             var tsUpdate = new TimeSeriesUpdate();
             if (update.Context)
@@ -139,15 +133,15 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.TimeSeriesMetadataMaxPerValue,
                         Sanitation.TimeSeriesMetadataMaxBytes);
 
-                if (old.Metadata == null && newMetaData.Any()
-                    || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
+                if (newMetaData.Any() && (old.Metadata == null
+                        || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal)))
                 {
                     tsUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
                 }
             }
             return tsUpdate;
         }
-        
+
         /// <summary>
         /// Create asset update from existing asset and new OPC-UA node.
         /// </summary>
@@ -156,7 +150,7 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="newAsset">New OPC-UA node</param>
         /// <param name="update">Configuration for which fields to update</param>
         /// <returns>Update object, or null if updating was unnecessary</returns>
-        public static AssetUpdate GetAssetUpdate(
+        public static AssetUpdate? GetAssetUpdate(
             ExtractionConfig config,
             Asset old,
             UANode newAsset,
@@ -170,7 +164,9 @@ namespace Cognite.OpcUa.Pushers
                 var parentId = extractor.GetUniqueId(newAsset.ParentId);
                 if (parentId != old.ParentExternalId)
                 {
+#pragma warning disable CS8604 // Possible null reference argument.
                     assetUpdate.ParentExternalId = new UpdateNullable<string>(parentId);
+#pragma warning restore CS8604 // Possible null reference argument.
                 }
             }
 
@@ -191,8 +187,8 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.AssetMetadataMaxPerValue,
                         Sanitation.AssetMetadataMaxBytes);
 
-                if (old.Metadata == null && newMetaData.Any()
-                    || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal))
+                if (newMetaData.Any() && (old.Metadata == null
+                        || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal)))
                 {
                     assetUpdate.Metadata = new UpdateDictionary<string>(newMetaData);
                 }
@@ -205,13 +201,13 @@ namespace Cognite.OpcUa.Pushers
     /// </summary>
     public class StatelessEventCreate : EventCreate
     {
-        public IEnumerable<string> AssetExternalIds { get; set; }
+        public IEnumerable<string>? AssetExternalIds { get; set; }
     }
     /// <summary>
     /// TimeSeriesCreate which can can be created without access to CDF Clean.
     /// </summary>
     public class StatelessTimeSeriesCreate : TimeSeriesCreate
     {
-        public string AssetExternalId { get; set; }
+        public string? AssetExternalId { get; set; }
     }
 }

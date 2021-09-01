@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -18,7 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.Types;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace Cognite.OpcUa.HistoryStates
@@ -39,12 +39,13 @@ namespace Cognite.OpcUa.HistoryStates
         /// Each entry in the array defines the fixed size of the given dimension of the variable.
         /// The extractor generally requires fixed dimensions in order to push arrays to destination systems.
         /// </summary>
-        public int[] ArrayDimensions { get; }
+        public int[]? ArrayDimensions { get; }
         public bool ShouldSubscribe { get; }
         public string DisplayName { get; }
 
-        private readonly List<UADataPoint> buffer;
+        private readonly List<UADataPoint>? buffer;
 
+        [MemberNotNullWhen(true, nameof(ArrayDimensions))]
         public bool IsArray => ArrayDimensions != null && ArrayDimensions.Length == 1 && ArrayDimensions[0] > 0;
 
         /// <summary>
@@ -52,9 +53,8 @@ namespace Cognite.OpcUa.HistoryStates
         /// </summary>
         /// <param name="variable">Variable to be used as base</param>
         public VariableExtractionState(IUAClientAccess client, UAVariable variable, bool frontfill, bool backfill)
-            : base(client, variable?.Id, frontfill, backfill)
+            : base(client, variable.Id, frontfill, backfill)
         {
-            if (variable == null) throw new ArgumentNullException(nameof(variable));
             DataType = variable.DataType;
             ArrayDimensions = variable.ArrayDimensions;
             DisplayName = variable.DisplayName;

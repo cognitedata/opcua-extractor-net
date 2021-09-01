@@ -303,7 +303,7 @@ namespace Server
             if (server)
             {
                 serverNode.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
-                
+
             }
             else
             {
@@ -799,7 +799,7 @@ namespace Server
                 Ids.Audit.ExcludeObj = exclude.NodeId;
             }
         }
-        
+
         public void CreateWrongAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)

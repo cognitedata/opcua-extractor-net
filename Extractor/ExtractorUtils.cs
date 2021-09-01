@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -34,7 +34,6 @@ namespace Cognite.OpcUa
         /// <returns>Tuple of sorted objects and variables</returns>
         public static (IEnumerable<UANode> objects, IEnumerable<UAVariable> variables) SortNodes(IEnumerable<UANode> nodes)
         {
-            if (nodes == null) throw new ArgumentNullException(nameof(nodes));
             if (!nodes.Any()) return (Enumerable.Empty<UANode>(), Enumerable.Empty<UAVariable>());
 
             var timeseries = new List<UAVariable>();
@@ -60,6 +59,24 @@ namespace Cognite.OpcUa
 
             return (objects, timeseries);
         }
+        /// <summary>
+        /// Select elements from <typeparamref name="R"/> to <typeparamref name="T"/>,
+        /// returning only when the result is not null.
+        /// </summary>
+        /// <typeparam name="TIn">Source type</typeparam>
+        /// <typeparam name="TOut">Target type</typeparam>
+        /// <param name="enumerable">Source enumerable</param>
+        /// <param name="map">Mapping function</param>
+        /// <returns>Enumerable with non-null elements</returns>
+        public static IEnumerable<TOut> SelectNonNull<TIn, TOut>(this IEnumerable<TIn> enumerable, Func<TIn, TOut?> map) where TOut : class
+        {
+            foreach (var item in enumerable)
+            {
+                var result = map(item);
+                if (result == null) continue;
+                yield return result;
+            }
+        }
 
         public enum SourceOp
         {
@@ -73,9 +90,8 @@ namespace Cognite.OpcUa
         /// <typeparam name="T">Type of exception to find</typeparam>
         /// <param name="aex">AggregateException to look through</param>
         /// <returns>Null or a root exception</returns>
-        public static T GetRootExceptionOfType<T>(AggregateException aex) where T : Exception
+        public static T? GetRootExceptionOfType<T>(AggregateException aex) where T : Exception
         {
-            if (aex == null) throw new ArgumentNullException(nameof(aex));
             if (aex.InnerException is T ex)
             {
                 return ex;
@@ -93,10 +109,13 @@ namespace Cognite.OpcUa
         /// <param name="e">Exception to log</param>
         /// <param name="message">Message to give with normal exceptions</param>
         /// <param name="silentMessage">Message to give with silent exceptions</param>
-        public static void LogException(ILogger log, Exception e, string message, string silentMessage)
+        public static void LogException(ILogger log, Exception? e, string message, string silentMessage)
         {
-            if (log == null) throw new ArgumentNullException(nameof(log));
-            if (e is AggregateException aex)
+            if (e == null)
+            {
+                log.Error(message);
+            }
+            else if (e is AggregateException aex)
             {
                 var silent = GetRootExceptionOfType<SilentServiceException>(aex);
                 if (silent != null)
@@ -137,8 +156,6 @@ namespace Cognite.OpcUa
         /// <returns>Transformed exception if recognized, otherwise the given exception</returns>
         public static Exception HandleServiceResult(ILogger log, ServiceResultException ex, SourceOp op)
         {
-            if (ex == null) throw new ArgumentNullException(nameof(ex));
-            if (log == null) throw new ArgumentNullException(nameof(log));
             uint code = ex.StatusCode;
             string symId = StatusCode.LookupSymbolicId(code);
             switch (code)

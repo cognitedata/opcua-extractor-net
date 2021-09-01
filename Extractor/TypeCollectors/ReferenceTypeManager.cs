@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -19,7 +19,6 @@ using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -38,7 +37,7 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly Dictionary<NodeId, UAReferenceType> mappedTypes = new Dictionary<NodeId, UAReferenceType>();
         public ReferenceTypeManager(UAClient client, UAExtractor extractor)
         {
-            uaClient = client ?? throw new ArgumentNullException(nameof(client));
+            uaClient = client;
             this.extractor = extractor;
         }
         /// <summary>
@@ -115,7 +114,7 @@ namespace Cognite.OpcUa.TypeCollectors
                     if (!extractor.State.IsMappedNode(childId)) continue;
                     if (child.TypeDefinition == VariableTypeIds.PropertyType) continue;
 
-                    VariableExtractionState childState = null;
+                    VariableExtractionState? childState = null;
                     if (child.NodeClass == NodeClass.Variable)
                     {
                         childState = extractor.State.GetNodeState(childId);

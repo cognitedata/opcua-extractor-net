@@ -5,7 +5,6 @@ using Opc.Ua;
 using Opc.Ua.Client;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -517,8 +516,6 @@ namespace Test.Unit
             var emitter = new NodeId("emitter");
 
             UAEvent created = null;
-            Assert.Throws<ArgumentNullException>(() => extractor.Streamer.ConstructEvent(null, values, emitter));
-            Assert.Throws<ArgumentNullException>(() => extractor.Streamer.ConstructEvent(filter, null, emitter));
 
             // Check that default results in created event
             created = extractor.Streamer.ConstructEvent(filter, values, emitter);

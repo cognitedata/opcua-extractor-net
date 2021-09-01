@@ -1,14 +1,28 @@
-﻿using Opc.Ua;
-using System;
-using System.Collections.Generic;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Opc.Ua;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 
 namespace Cognite.OpcUa
 {
     static class AuthenticationUtils
     {
-        private static X509Certificate2 GetCertificate(X509CertConfig certConf)
+        private static X509Certificate2? GetCertificate(X509CertConfig certConf)
         {
             if (certConf == null) return null;
             if (certConf.Store != X509CertificateLocation.None)
@@ -54,7 +68,7 @@ namespace Cognite.OpcUa
             if (!string.IsNullOrEmpty(config.Username)) return new UserIdentity(config.Username, config.Password);
             if (config.X509Certificate != null)
             {
-#pragma warning disable CA2000 // Dispose objects before losing scope - object is owned by SDK
+#pragma warning disable CA2000 // Dispose objects before losing scope. Owned by UAClient
                 var cert = GetCertificate(config.X509Certificate);
 #pragma warning restore CA2000 // Dispose objects before losing scope
 

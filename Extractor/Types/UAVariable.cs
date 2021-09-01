@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -21,7 +21,7 @@ using CogniteSdk;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -38,7 +38,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Data type of this variable
         /// </summary>
-        public UADataType DataType => VariableAttributes.DataType;
+        public UADataType DataType => VariableAttributes.DataType!;
         /// <summary>
         /// True if the opcua node stores its own history
         /// </summary>
@@ -97,7 +97,7 @@ namespace Cognite.OpcUa.Types
 
             if (Properties != null && Properties.Any())
             {
-                var meta = BuildMetadata(null, null, new StringConverter(null, null), false);
+                var meta = BuildMetadataBase(null, new StringConverter(null, null));
                 builder.Append("Properties: {\n");
                 foreach (var prop in meta)
                 {
@@ -110,15 +110,15 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Parent if this represents an element of an array.
         /// </summary>
-        public UAVariable ArrayParent { get; }
+        public UAVariable? ArrayParent { get; }
         /// <summary>
         /// Children if this represents the parent in an array
         /// </summary>
-        public IEnumerable<UAVariable> ArrayChildren { get; private set; }
+        public IEnumerable<UAVariable>? ArrayChildren { get; private set; }
         /// <summary>
         /// Fixed dimensions of the array-type variable, if any
         /// </summary>
-        public int[] ArrayDimensions => VariableAttributes.ArrayDimensions;
+        public int[]? ArrayDimensions => VariableAttributes.ArrayDimensions;
         /// <summary>
         /// Index of the variable in array, if relevant. -1 if the variable is scalar.
         /// </summary>
@@ -134,6 +134,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// True if this node represents an array
         /// </summary>
+        [MemberNotNullWhen(true, nameof(ArrayDimensions))]
         public bool IsArray => ArrayDimensions != null && ArrayDimensions.Length == 1 && ArrayDimensions[0] > 0;
         /// <summary>
         /// Sets the datapoint to provided DataValue.
@@ -151,21 +152,12 @@ namespace Cognite.OpcUa.Types
         /// <param name="other">Parent variable</param>
         /// <param name="index">Index in the array</param>
         private UAVariable(UAVariable other, int index)
-            : base(OtherNonNull(other).Id, other.DisplayName + $"[{index}]", other.Id)
+            : base(other.Id, other.DisplayName + $"[{index}]", other.Id)
         {
             ArrayParent = other;
             Index = index;
             Changed = other.Changed;
             VariableAttributes = other.VariableAttributes;
-        }
-        /// <summary>
-        /// Returns given variable if it is not null, otherwise throws an error.
-        /// Used to prevent warnings when calling base constructor.
-        /// </summary>
-        private static UAVariable OtherNonNull(UAVariable other)
-        {
-            if (other == null) throw new ArgumentNullException(nameof(other));
-            return other;
         }
         /// <summary>
         /// Create array child nodes
@@ -191,7 +183,7 @@ namespace Cognite.OpcUa.Types
         /// <param name="parentIdHandler">Method called for each string mapped to parentId, should set
         /// parentId as dictated by external context.</param>
         private void HandleMetaMap(
-            Dictionary<string, string> metaMap,
+            Dictionary<string, string>? metaMap,
             TimeSeriesCreate writePoco,
             Action<string> parentIdHandler,
             StringConverter converter)
@@ -219,21 +211,19 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// Create a stateless timeseries, setting the AssetExternalId property, from this variable.
         /// </summary>
-        /// <param name="extractor">Active extractor, used for metadata.</param>
         /// <param name="dataSetId">Optional dataSetId</param>
         /// <param name="metaMap">Configured mapping from property name to timeseries attribute</param>
         /// <returns>Stateless timeseries to create or null.</returns>
-        public StatelessTimeSeriesCreate ToStatelessTimeSeries(
+        public StatelessTimeSeriesCreate? ToStatelessTimeSeries(
             ExtractionConfig config,
             IUAClientAccess client,
             DataTypeManager manager,
             StringConverter converter,
             long? dataSetId,
-            Dictionary<string, string> metaMap)
+            Dictionary<string, string>? metaMap)
         {
             if (manager == null || converter == null) return null;
-            if (client == null) throw new ArgumentNullException(nameof(client));
-            string externalId = client.GetUniqueId(Id, Index);
+            string? externalId = client.GetUniqueId(Id, Index);
             var writePoco = new StatelessTimeSeriesCreate
             {
                 Description = Description,
@@ -266,15 +256,11 @@ namespace Cognite.OpcUa.Types
             DataTypeManager manager,
             StringConverter converter,
             long? dataSetId,
-            IDictionary<NodeId, long> nodeToAssetIds,
-            Dictionary<string, string> metaMap,
+            IDictionary<NodeId, long>? nodeToAssetIds,
+            Dictionary<string, string>? metaMap,
             bool minimal = false)
         {
-            if (manager == null) throw new ArgumentNullException(nameof(manager));
-            if (converter == null) throw new ArgumentNullException(nameof(converter));
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
-
-            string externalId = extractor.GetUniqueId(Id, Index);
+            string? externalId = extractor.GetUniqueId(Id, Index);
 
             if (minimal)
             {

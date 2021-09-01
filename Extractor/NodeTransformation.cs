@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
-using System;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -29,15 +28,15 @@ namespace Cognite.OpcUa
     /// </summary>
     public class NodeFilter
     {
-        private Regex Name { get; }
-        private Regex Description { get; }
-        private Regex Id { get; }
+        private Regex? Name { get; }
+        private Regex? Description { get; }
+        private Regex? Id { get; }
         private bool? IsArray { get; }
         private NodeClass? NodeClass { get; }
-        private Regex Namespace { get; }
-        private Regex TypeDefinition { get; }
-        private NodeFilter Parent { get; }
-        public NodeFilter(RawNodeFilter filter)
+        private Regex? Namespace { get; }
+        private Regex? TypeDefinition { get; }
+        private NodeFilter? Parent { get; }
+        public NodeFilter(RawNodeFilter? filter)
         {
             // Filter with no elements applies to everything, which may be bizarre, but that's on the user.
             if (filter == null) return;
@@ -72,7 +71,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="raw">Raw string to create regex for.</param>
         /// <returns>Created regex.</returns>
-        private static Regex CreateRegex(string raw)
+        private static Regex? CreateRegex(string? raw)
         {
             if (string.IsNullOrEmpty(raw)) return null;
 
@@ -103,7 +102,7 @@ namespace Cognite.OpcUa
         /// <param name="namespaces">Source namespacetable</param>
         /// <param name="nc">NodeClass</param>
         /// <returns>True if match</returns>
-        private bool MatchBasic(string name, NodeId id, NodeId typeDefinition, NamespaceTable namespaces, NodeClass nc)
+        private bool MatchBasic(string? name, NodeId id, NodeId? typeDefinition, NamespaceTable namespaces, NodeClass nc)
         {
             if (Name != null && (string.IsNullOrEmpty(name) || !Name.IsMatch(name))) return false;
             if (Id != null)
@@ -151,7 +150,6 @@ namespace Cognite.OpcUa
         /// <param name="idx">Level of nesting, for clean indentation.</param>
         public void Format(StringBuilder builder, int idx)
         {
-            if (builder == null) throw new ArgumentNullException(nameof(builder));
             if (Name != null)
             {
                 builder.Append(' ', (idx + 1) * 4);
@@ -209,7 +207,6 @@ namespace Cognite.OpcUa
         private readonly int index;
         public NodeTransformation(RawNodeTransformation raw, int index)
         {
-            if (raw == null) throw new ArgumentNullException(nameof(raw));
             Filter = new NodeFilter(raw.Filter);
             Type = raw.Type;
             this.index = index;
@@ -263,5 +260,5 @@ namespace Cognite.OpcUa
         Ignore,
         Property,
         DropSubscriptions
-    }    
+    }
 }

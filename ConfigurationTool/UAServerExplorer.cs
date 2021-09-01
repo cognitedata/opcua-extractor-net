@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -102,7 +102,7 @@ namespace Cognite.OpcUa.Config
             1
         };
 
-        
+
 
         private Summary summary;
 
@@ -301,7 +301,7 @@ namespace Cognite.OpcUa.Config
             int browseChunkSize = 0;
 
             // First try to find a chunk size that works
-            foreach (int chunkSize in new [] { 1000, 100, 10, 1 }.Where(chunk => chunk <= config.Source.BrowseNodesChunk))
+            foreach (int chunkSize in new[] { 1000, 100, 10, 1 }.Where(chunk => chunk <= config.Source.BrowseNodesChunk))
             {
                 try
                 {
@@ -373,7 +373,7 @@ namespace Cognite.OpcUa.Config
                 Dictionary<NodeId, ReferenceDescriptionCollection> children;
                 try
                 {
-                    log.Information("Try to get the children of the {cnt} largest parent nodes, with return chunk size {size}", 
+                    log.Information("Try to get the children of the {cnt} largest parent nodes, with return chunk size {size}",
                         toBrowse.Count, chunkSize);
                     children = await ToolUtil.RunWithTimeout(Task.Run(() => GetNodeChildren(toBrowse.Select(group => group.Key),
                         ReferenceTypeIds.HierarchicalReferences,

@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -25,8 +25,8 @@ namespace Cognite.OpcUa.Types
     public class UAReferenceType
     {
         public NodeId Id { get; }
-        private string name;
-        private string inverseName;
+        private string? name;
+        private string? inverseName;
         public bool HasName => name != null;
         public UAReferenceType(NodeId id)
         {
@@ -37,7 +37,7 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         /// <param name="name">Forward name</param>
         /// <param name="inverseName">Inverse name</param>
-        public void SetNames(string name, string inverseName)
+        public void SetNames(string? name, string? inverseName)
         {
             this.name = name;
             this.inverseName = inverseName;
@@ -47,7 +47,7 @@ namespace Cognite.OpcUa.Types
         /// </summary>
         /// <param name="isInverse">True to get the inverse name of this reference type.</param>
         /// <returns>Descriptor for this reference, if set.</returns>
-        public string GetName(bool isInverse)
+        public string? GetName(bool isInverse)
         {
             if (isInverse && !string.IsNullOrEmpty(inverseName)) return inverseName;
             return name;

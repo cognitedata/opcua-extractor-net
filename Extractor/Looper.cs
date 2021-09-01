@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -145,7 +145,7 @@ namespace Cognite.OpcUa
 
             tasks.Add(SafeWait(triggerGrowTaskList, Timeout.InfiniteTimeSpan, token));
 
-            Task failedTask = null;
+            Task? failedTask = null;
 
             while (tasks.Any())
             {
@@ -184,7 +184,7 @@ namespace Cognite.OpcUa
             }
 
             if (token.IsCancellationRequested) throw new TaskCanceledException();
-            ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
+            if (failedTask != null) ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
         }
         /// <summary>
         /// Wait until the manual event is triggered, the token is canceled, or a timeout has occured.
@@ -287,6 +287,7 @@ namespace Cognite.OpcUa
         /// <returns></returns>
         public async Task StoreState(CancellationToken token)
         {
+            if (extractor.StateStorage == null) return;
             await Task.WhenAll(
                 extractor.StateStorage.StoreExtractionState(extractor.State.NodeStates
                     .Where(state => state.FrontfillEnabled), config.StateStorage.VariableStore, token),

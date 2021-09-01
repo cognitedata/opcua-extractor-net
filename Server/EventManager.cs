@@ -193,7 +193,7 @@ namespace Server
         }
         private PropertyState<string> subType;
     }
-    
+
     /// <summary>
     /// Plain event type
     /// </summary>
@@ -201,7 +201,7 @@ namespace Server
     {
         public BasicEvent1(NodeState parent, TestEventManager manager) : base(parent, manager) { }
     }
-    
+
     /// <summary>
     /// Alternative plain event type.
     /// </summary>
@@ -209,7 +209,7 @@ namespace Server
     {
         public BasicEvent2(NodeState parent, TestEventManager manager) : base(parent, manager) { }
     }
-    
+
     /// <summary>
     /// Event with a custom "TypeProp" field, used for testing mapping in the extractor.
     /// </summary>
