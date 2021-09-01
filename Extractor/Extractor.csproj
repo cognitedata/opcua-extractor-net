@@ -5,6 +5,8 @@
     <RootNamespace>Cognite.OpcUa</RootNamespace>
     <AssemblyName>Extractor</AssemblyName>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+    <Nullable>enable</Nullable>
+    <LangVersion>9.0</LangVersion>
   </PropertyGroup>
   <!--ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />

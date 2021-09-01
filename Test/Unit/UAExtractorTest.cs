@@ -2,7 +2,6 @@
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
-using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;

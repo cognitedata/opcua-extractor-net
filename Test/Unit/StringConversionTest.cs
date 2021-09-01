@@ -1,19 +1,16 @@
-﻿using System;
+﻿using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.Types;
+using Newtonsoft.Json;
+using Opc.Ua;
+using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.IO;
 using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json;
+using System.Xml;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
-using Cognite.OpcUa.Types;
-using Opc.Ua;
-using System.Xml;
-using Newtonsoft.Json;
-using System.IO;
-using System.Collections.ObjectModel;
-using Cognite.OpcUa.NodeSources;
-using System.Text.Json;
 using JsonSerializer = Newtonsoft.Json.JsonSerializer;
 
 namespace Test.Unit
@@ -350,7 +347,7 @@ namespace Test.Unit
                 + @"""Historizing"":true,""ValueRank"":-1}}");
 
             variable.VariableAttributes.ValueRank = ValueRanks.OneDimension;
-            variable.VariableAttributes.ArrayDimensions = new [] { 5 };
+            variable.VariableAttributes.ArrayDimensions = new[] { 5 };
             TestConvert(variable,
                 @"{""externalId"":""gp.base:s=test"",""name"":""test"","
                 + @"""description"":null,""metadata"":null,""assetExternalId"":null,"
@@ -418,7 +415,7 @@ namespace Test.Unit
             Assert.Equal(variable.ValueRank, saved.InternalInfo.ValueRank);
 
             variable.VariableAttributes.ValueRank = 2;
-            variable.VariableAttributes.ArrayDimensions = new [] { 3, 4 };
+            variable.VariableAttributes.ArrayDimensions = new[] { 3, 4 };
 
             saved = Convert(variable);
             Assert.Equal(variable.ArrayDimensions, saved.InternalInfo.ArrayDimensions);

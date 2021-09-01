@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -46,10 +46,6 @@ namespace Cognite.OpcUa.Types
         public UAReference(NodeId type, bool isForward, NodeId source, NodeId target,
             bool sourceTs, bool targetTs, ReferenceTypeManager manager)
         {
-            if (type == null) throw new ArgumentNullException(nameof(type));
-            if (source == null) throw new ArgumentNullException(nameof(source));
-            if (target == null) throw new ArgumentNullException(nameof(target));
-            if (manager == null) throw new ArgumentNullException(nameof(manager));
             Type = manager.GetReferenceType(type);
             IsForward = isForward;
             Source = new ReferenceVertex(source, sourceTs);
@@ -57,7 +53,7 @@ namespace Cognite.OpcUa.Types
         }
         public override string ToString()
         {
-            string refName = Type.GetName(!IsForward);
+            string? refName = Type.GetName(!IsForward);
             if (refName == null)
             {
                 refName = $"{Type.Id} {(IsForward ? "Forward" : "Inverse")}";
@@ -65,7 +61,7 @@ namespace Cognite.OpcUa.Types
 
             return $"Reference: {Source} {refName} {Target}";
         }
-        public string GetName()
+        public string? GetName()
         {
             return Type.GetName(!IsForward);
         }
@@ -90,7 +86,6 @@ namespace Cognite.OpcUa.Types
         /// <returns>Created relationship</returns>
         public RelationshipCreate ToRelationship(long? dataSetId, IUAClientAccess client)
         {
-            if (client == null) throw new ArgumentNullException(nameof(client));
             var relationship = new RelationshipCreate
             {
                 DataSetId = dataSetId,

@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -33,10 +33,13 @@ namespace Cognite.OpcUa.HistoryStates
         /// <summary>
         /// Last known timestamp of events from OPC-UA.
         /// </summary>
-        private IList<UAEvent> buffer;
+        private IList<UAEvent>? buffer;
         public bool ShouldSubscribe { get; }
 
-        public EventExtractionState(IUAClientAccess client, NodeId emitterId, bool frontfill, bool backfill, bool subscription)
+        public EventExtractionState(
+            IUAClientAccess client,
+            NodeId emitterId,
+            bool frontfill, bool backfill, bool subscription)
             : base(client, emitterId, frontfill, backfill)
         {
             if (frontfill)
@@ -50,7 +53,7 @@ namespace Cognite.OpcUa.HistoryStates
         /// Update timestamp and buffer from stream.
         /// </summary>
         /// <param name="points">Event received for current stream iteration</param>
-        public void UpdateFromStream(UAEvent evt)
+        public void UpdateFromStream(UAEvent? evt)
         {
             if (evt == null) return;
             UpdateFromStream(evt.Time, evt.Time);

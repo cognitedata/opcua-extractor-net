@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -25,7 +25,7 @@ namespace Cognite.OpcUa.Types
     public class UANodeType
     {
         public NodeId Id { get; }
-        public string Name { get; set; }
+        public string? Name { get; set; }
         public bool IsVariableType { get; }
         public UANodeType(NodeId id, bool isVariableType)
         {

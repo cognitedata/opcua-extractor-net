@@ -1,4 +1,21 @@
-﻿using Newtonsoft.Json;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Opc.Ua;
 using Serilog;
@@ -7,10 +24,8 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 
 namespace Cognite.OpcUa.Types
 {
@@ -20,15 +35,18 @@ namespace Cognite.OpcUa.Types
     /// </summary>
     public class StringConverter
     {
-        private readonly UAClient uaClient;
-        private readonly FullConfig config;
+        private readonly UAClient? uaClient;
+        private readonly FullConfig? config;
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
 
-        public StringConverter(UAClient uaClient, FullConfig config)
+        public StringConverter(UAClient? uaClient, FullConfig? config)
         {
             this.uaClient = uaClient;
             this.config = config;
-            nodeIdConverter = new NodeIdConverter(uaClient);
+            if (uaClient != null)
+            {
+                nodeIdConverter = new NodeIdConverter(uaClient);
+            }
         }
 
         /// <summary>
@@ -40,7 +58,10 @@ namespace Cognite.OpcUa.Types
         /// <param name="typeInfo">TypeInfo for <paramref name="value"/></param>
         /// <param name="json">True to return valid JSON.</param>
         /// <returns></returns>
-        public string ConvertToString(object value, IDictionary<long, string> enumValues = null, TypeInfo typeInfo = null, bool json = false)
+        public string ConvertToString(
+            object? value,
+            IDictionary<long, string>? enumValues = null,
+            TypeInfo? typeInfo = null, bool json = false)
         {
             if (value == null)
             {
@@ -79,13 +100,13 @@ namespace Cognite.OpcUa.Types
                     log.Warning("Failed to serialize built in type: {err}", ex.Message);
                 }
             }
-            
+
             // If the type is enumerable we can write it to a JSON array.
-            if (typeof(IEnumerable).IsAssignableFrom(value.GetType()) && !(value is System.Xml.XmlElement))
+            if (value is IEnumerable enumerableVal && !(value is System.Xml.XmlElement))
             {
                 var builder = new StringBuilder("[");
                 int count = 0;
-                foreach (var dvalue in value as IEnumerable)
+                foreach (var dvalue in enumerableVal)
                 {
                     if (count++ > 0)
                     {
@@ -217,9 +238,8 @@ namespace Cognite.OpcUa.Types
             // around a handled type.
             // If not, use the converter.
             var type = value.GetType();
-            if (typeof(IEnumerable).IsAssignableFrom(type))
+            if (value is IEnumerable enumerable)
             {
-                var enumerable = value as IEnumerable;
                 var enumerator = enumerable.GetEnumerator();
                 if (enumerator.MoveNext())
                 {
@@ -238,15 +258,18 @@ namespace Cognite.OpcUa.Types
         }
 
         private readonly ConcurrentDictionary<ConverterType, NodeSerializer> converters = new ConcurrentDictionary<ConverterType, NodeSerializer>();
-        private readonly NodeIdConverter nodeIdConverter;
+        private readonly NodeIdConverter? nodeIdConverter;
         public void AddConverters(Newtonsoft.Json.JsonSerializer serializer, ConverterType type)
         {
+            if (config == null || uaClient == null || nodeIdConverter == null)
+                throw new InvalidOperationException("Config and UAClient must be supplied to create converters");
             serializer.Converters.Add(converters.GetOrAdd(type, key => new NodeSerializer(this, config, uaClient, key)));
             serializer.Converters.Add(nodeIdConverter);
         }
     }
 
-    public enum ConverterType {
+    public enum ConverterType
+    {
         Node,
         Variable
     }
@@ -259,15 +282,15 @@ namespace Cognite.OpcUa.Types
         public ConverterType Type { get; }
         public NodeSerializer(StringConverter converter, FullConfig config, UAClient uaClient, ConverterType type)
         {
-            this.converter = converter ?? throw new ArgumentNullException(nameof(converter));
-            this.config = config ?? throw new ArgumentNullException(nameof(config));
-            this.uaClient = uaClient ?? throw new ArgumentNullException(nameof(uaClient));
+            this.converter = converter;
+            this.config = config;
+            this.uaClient = uaClient;
             Type = type;
         }
 
         private void WriteProperties(JsonWriter writer, UANode node, bool getExtras, bool writeValue)
         {
-            Dictionary<string, string> extras = null;
+            Dictionary<string, string>? extras = null;
 
             if (getExtras)
             {
@@ -407,9 +430,11 @@ namespace Cognite.OpcUa.Types
             writer.WriteEndObject();
         }
 
-        public override void WriteJson(JsonWriter writer, UANode value, Newtonsoft.Json.JsonSerializer serializer)
+        public override void WriteJson(
+            JsonWriter writer,
+            UANode? value,
+            Newtonsoft.Json.JsonSerializer serializer)
         {
-            if (writer == null) throw new ArgumentNullException(nameof(writer));
             if (value == null)
             {
                 writer.WriteNull();
@@ -428,8 +453,12 @@ namespace Cognite.OpcUa.Types
             writer.WriteEndObject();
         }
 
-        public override UANode ReadJson(JsonReader reader, Type objectType,
-            UANode existingValue, bool hasExistingValue, Newtonsoft.Json.JsonSerializer serializer)
+        public override UANode ReadJson(
+            JsonReader reader,
+            Type objectType,
+            UANode? existingValue,
+            bool hasExistingValue,
+            Newtonsoft.Json.JsonSerializer serializer)
         {
             throw new NotImplementedException();
         }
@@ -441,20 +470,24 @@ namespace Cognite.OpcUa.Types
         {
             this.uaClient = uaClient;
         }
-        public override NodeId ReadJson(JsonReader reader, Type objectType,
-            NodeId existingValue, bool hasExistingValue, Newtonsoft.Json.JsonSerializer serializer)
+        public override NodeId ReadJson(
+            JsonReader reader,
+            Type objectType,
+            NodeId? existingValue,
+            bool hasExistingValue,
+            Newtonsoft.Json.JsonSerializer serializer)
         {
             if (reader.TokenType != JsonToken.StartObject) return NodeId.Null;
             var obj = JToken.ReadFrom(reader);
             if (obj == null || obj.Type != JTokenType.Object) return NodeId.Null;
-            string ns = obj.Value<string>("namespace");
+            string? ns = obj.Value<string>("namespace");
             int? idType = obj.Value<int?>("idType");
             if (idType == null || idType.Value > 3 || idType.Value < 0) return NodeId.Null;
 
             int nsIdx = 0;
             if (ns != null)
             {
-                nsIdx = uaClient.NamespaceTable.GetIndex(ns);
+                nsIdx = uaClient.NamespaceTable!.GetIndex(ns);
                 if (nsIdx < 0) return NodeId.Null;
             }
 
@@ -467,11 +500,12 @@ namespace Cognite.OpcUa.Types
                         if (numIdf == null) return NodeId.Null;
                         return new NodeId(numIdf, (ushort)nsIdx);
                     case IdType.String:
-                        string strIdf = obj.Value<string>("identifier");
+                        string? strIdf = obj.Value<string>("identifier");
                         if (strIdf == null) return NodeId.Null;
                         return new NodeId(strIdf, (ushort)nsIdx);
                     case IdType.Guid:
                         strIdf = obj.Value<string>("identifier");
+                        if (strIdf == null) return NodeId.Null;
                         Guid guid = Guid.Parse(strIdf);
                         return new NodeId(guid, (ushort)nsIdx);
                     case IdType.Opaque:
@@ -485,13 +519,21 @@ namespace Cognite.OpcUa.Types
             return NodeId.Null;
         }
 
-        public override void WriteJson(JsonWriter writer, NodeId value, Newtonsoft.Json.JsonSerializer serializer)
+        public override void WriteJson(
+            JsonWriter writer,
+            NodeId? value,
+            Newtonsoft.Json.JsonSerializer serializer)
         {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
             writer.WriteStartObject();
             if (value.NamespaceIndex != 0)
             {
                 writer.WritePropertyName("namespace");
-                var ns = uaClient.NamespaceTable.GetString(value.NamespaceIndex);
+                var ns = uaClient.NamespaceTable!.GetString(value.NamespaceIndex);
                 writer.WriteValue(ns);
             }
 

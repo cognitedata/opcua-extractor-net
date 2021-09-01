@@ -5,12 +5,9 @@ using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Opc.Ua;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
@@ -265,7 +262,7 @@ namespace Test.Integration
                 await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
             }
         }
-        
+
         [Fact]
         public async Task TestEventsInfluxBuffering()
         {

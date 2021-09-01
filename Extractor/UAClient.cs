@@ -1,5 +1,5 @@
 /* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -19,7 +19,6 @@ using Cognite.Extractor.Common;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
-using Newtonsoft.Json;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
@@ -28,11 +27,9 @@ using Serilog;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -45,10 +42,10 @@ namespace Cognite.OpcUa
     public class UAClient : IDisposable, IUAClientAccess
     {
         protected FullConfig config { get; set; }
-        protected Session Session { get; set; }
-        protected ApplicationConfiguration AppConfig { get; set; }
-        private ReverseConnectManager reverseConnectManager;
-        private SessionReconnectHandler reconnectHandler;
+        protected Session? Session { get; set; }
+        protected ApplicationConfiguration? AppConfig { get; set; }
+        private ReverseConnectManager? reverseConnectManager;
+        private SessionReconnectHandler? reconnectHandler;
         public DataTypeManager DataTypeManager { get; }
         public NodeTypeManager ObjectTypeManager { get; }
         private readonly object visitedNodesLock = new object();
@@ -57,14 +54,14 @@ namespace Cognite.OpcUa
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         private CancellationToken liveToken;
-        private Dictionary<NodeId, HashSet<EventField>> eventFields;
+        private Dictionary<NodeId, HashSet<EventField>>? eventFields;
 
         private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
-        public IEnumerable<NodeFilter> IgnoreFilters { get; set; }
+        public IEnumerable<NodeFilter>? IgnoreFilters { get; set; }
 
-        public event EventHandler OnServerDisconnect;
-        public event EventHandler OnServerReconnect;
+        public event EventHandler? OnServerDisconnect;
+        public event EventHandler? OnServerReconnect;
 
         private int pendingOperations;
 
@@ -89,11 +86,11 @@ namespace Cognite.OpcUa
         private static readonly Counter browseFailures = Metrics
             .CreateCounter("opcua_browse_failures", "Number of failures on browse operations");
 
-        private readonly NodeMetricsManager metricsManager;
+        private readonly NodeMetricsManager? metricsManager;
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
 
-        public StringConverter StringConverter { get; } 
+        public StringConverter StringConverter { get; }
 
 
         /// <summary>
@@ -102,13 +99,12 @@ namespace Cognite.OpcUa
         /// <param name="config">Full configuartion object</param>
         public UAClient(FullConfig config)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
             this.config = config;
             DataTypeManager = new DataTypeManager(this, config.Extraction.DataTypes);
             ObjectTypeManager = new NodeTypeManager(this);
             if (config.Metrics.Nodes != null)
             {
-                metricsManager = new NodeMetricsManager(this, config);
+                metricsManager = new NodeMetricsManager(this, config.Source, config.Metrics.Nodes);
             }
             StringConverter = new StringConverter(this, config);
         }
@@ -168,7 +164,7 @@ namespace Cognite.OpcUa
             {
                 throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
             }
-            
+
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
             {
@@ -233,9 +229,9 @@ namespace Cognite.OpcUa
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
             }
         }
-
         private async Task WaitForReverseConnect()
         {
+            if (AppConfig == null) throw new InvalidOperationException("AppConfig must be initialized");
             reverseConnectManager?.Dispose();
 
             AppConfig.ClientConfiguration.ReverseConnect = new ReverseConnectClientConfiguration
@@ -330,7 +326,7 @@ namespace Cognite.OpcUa
             {
                 await CreateSessionDirect();
             }
-
+            if (Session == null) return;
             Session.KeepAliveInterval = config.Source.KeepAliveInterval;
             Session.KeepAlive += ClientKeepAlive;
             Started = true;
@@ -383,7 +379,7 @@ namespace Cognite.OpcUa
             {
                 try
                 {
-                    Session.Close();
+                    Session?.Close();
                 }
                 catch
                 {
@@ -476,7 +472,6 @@ namespace Cognite.OpcUa
             CancellationToken token,
             bool ignoreVisited = true)
         {
-            if (roots == null) throw new ArgumentNullException(nameof(roots));
             log.Debug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
             foreach (var root in roots)
             {
@@ -492,7 +487,7 @@ namespace Cognite.OpcUa
                 {
                     var rootNode = GetRootNode(root);
                     if (rootNode == null) throw new ExtractorFailureException($"Root node does not exist: {root}");
-                    callback?.Invoke(rootNode, null);
+                    callback?.Invoke(rootNode, NodeId.Null);
                 }
             }
             uint classMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
@@ -508,8 +503,9 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="nodeId">Id of the root node</param>
         /// <returns>A partial description of the root node</returns>
-        private ReferenceDescription GetRootNode(NodeId nodeId)
+        private ReferenceDescription? GetRootNode(NodeId nodeId)
         {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             var attributes = new List<uint>
             {
                 Attributes.NodeId,
@@ -562,6 +558,7 @@ namespace Cognite.OpcUa
         public UANode GetServerNode(CancellationToken token)
         {
             var desc = GetRootNode(ObjectIds.Server);
+            if (desc == null) throw new ExtractorFailureException("Server node is null. Invalid server configuration");
             var node = new UANode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null, NodeClass.Object);
             ReadNodeData(new[] { node }, token);
             return node;
@@ -593,11 +590,12 @@ namespace Cognite.OpcUa
         /// <returns>Dictionary from parent nodeId to collection of children as ReferenceDescriptions</returns>
         public Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(
             IEnumerable<NodeId> parents,
-            NodeId referenceTypes,
+            NodeId? referenceTypes,
             uint nodeClassMask,
             CancellationToken token,
             BrowseDirection direction = BrowseDirection.Forward)
         {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
             IncOperations();
             var tobrowse = new BrowseDescriptionCollection(parents.Select(id =>
@@ -726,7 +724,7 @@ namespace Cognite.OpcUa
         public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition, NodeClass nc)
         {
             if (IgnoreFilters == null) return true;
-            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, NamespaceTable, nc))) return false;
+            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, NamespaceTable!, nc))) return false;
             return true;
         }
 
@@ -744,13 +742,12 @@ namespace Cognite.OpcUa
             IEnumerable<NodeId> roots,
             Action<ReferenceDescription, NodeId> callback,
             CancellationToken token,
-            NodeId referenceTypes = null,
+            NodeId? referenceTypes = null,
             uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
             bool ignoreVisited = true,
             bool doFilter = true,
             bool readVariableChildren = false)
         {
-            if (roots == null) throw new ArgumentNullException(nameof(roots));
             var nextIds = roots.ToList();
             int levelCnt = 0;
             int nodeCnt = 0;
@@ -832,6 +829,7 @@ namespace Cognite.OpcUa
         /// if the server is compliant this will have length equal to <paramref name="readValueIds"/></returns>
         public IList<DataValue> ReadAttributes(ReadValueIdCollection readValueIds, int distinctNodeCount, CancellationToken token)
         {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             var values = new List<DataValue>();
             if (readValueIds == null || !readValueIds.Any()) return values;
             IncOperations();
@@ -1011,8 +1009,9 @@ namespace Cognite.OpcUa
                 }
                 else if (desc.NodeClass == NodeClass.Variable || desc.NodeClass == NodeClass.VariableType)
                 {
-                    prop = new UAVariable(id, desc.DisplayName.Text, parentId, desc.NodeClass);
-                    properties.Add(prop as UAVariable);
+                    var varProp = new UAVariable(id, desc.DisplayName.Text, parentId, desc.NodeClass);
+                    properties.Add(varProp);
+                    prop = varProp;
                 }
                 else return;
 
@@ -1034,7 +1033,7 @@ namespace Cognite.OpcUa
             log.Information("Read attributes for {cnt} properties", properties.Count);
             ReadNodeData(properties, token);
             var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true)).ToList();
-            await DataTypeManager.GetDataTypeMetadataAsync(toGetValue.Select(prop => prop.DataType?.Raw), token);
+            await DataTypeManager.GetDataTypeMetadataAsync(toGetValue.SelectNonNull(prop => prop.DataType?.Raw), token);
             ReadNodeValues(toGetValue, token);
         }
         #endregion
@@ -1047,7 +1046,7 @@ namespace Cognite.OpcUa
         /// <returns>Pairs of NodeId and history read results as IEncodable</returns>
         public IEnumerable<(HistoryReadNode Node, IEncodeable RawData)> DoHistoryRead(HistoryReadParams readParams)
         {
-            if (readParams == null) throw new ArgumentNullException(nameof(readParams));
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             IncOperations();
             var ids = new HistoryReadValueIdCollection();
             foreach (var node in readParams.Nodes)
@@ -1129,6 +1128,7 @@ namespace Cognite.OpcUa
             Func<UAHistoryExtractionState, MonitoredItem> builder,
             CancellationToken token)
         {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             lock (subscriptionLock)
             {
                 var subscription = Session.Subscriptions.FirstOrDefault(sub =>
@@ -1227,7 +1227,7 @@ namespace Cognite.OpcUa
                 node => new MonitoredItem
                 {
                     StartNodeId = node.SourceId,
-                    DisplayName = "Value: " + (node as VariableExtractionState).DisplayName,
+                    DisplayName = "Value: " + (node as VariableExtractionState)?.DisplayName,
                     SamplingInterval = config.Source.SamplingInterval,
                     QueueSize = (uint)Math.Max(0, config.Source.QueueLength),
                     AttributeId = Attributes.Value,
@@ -1250,8 +1250,6 @@ namespace Cognite.OpcUa
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
-            if (emitters == null) throw new ArgumentNullException(nameof(emitters));
-
             var filter = BuildEventFilter();
 
 #pragma warning disable CA2000 // Dispose objects before losing scope
@@ -1293,11 +1291,11 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Return systemContext. Can be used by SDK-tools for converting events.
         /// </summary>
-        public ISystemContext SystemContext => Session?.SystemContext;
+        public ISystemContext? SystemContext => Session?.SystemContext;
         /// <summary>
         /// Return MessageContext, used for serialization
         /// </summary>
-        public ServiceMessageContext MessageContext => Session?.MessageContext;
+        public ServiceMessageContext? MessageContext => Session?.MessageContext;
         /// <summary>
         /// Fetch event fields from the server and store them on the client
         /// </summary>
@@ -1338,6 +1336,8 @@ namespace Cognite.OpcUa
              * using the internal query language in OPC-UA
              */
             var whereClause = new ContentFilter();
+
+            if (eventFields == null) eventFields = new Dictionary<NodeId, HashSet<EventField>>();
 
             if (eventFields.Keys.Any() && ((config.Events.EventIds?.Any() ?? false) || !config.Events.AllEvents))
             {
@@ -1438,6 +1438,7 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback to use for subscriptions</param>
         public void SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback)
         {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
             var filter = BuildAuditFilter();
             lock (subscriptionLock)
             {
@@ -1497,7 +1498,7 @@ namespace Cognite.OpcUa
 
         #region Utils
 
-        public NamespaceTable NamespaceTable => Session.NamespaceUris;
+        public NamespaceTable? NamespaceTable => Session?.NamespaceUris;
         /// <summary>
         /// Converts an ExpandedNodeId into a NodeId using the Session
         /// </summary>
@@ -1505,7 +1506,7 @@ namespace Cognite.OpcUa
         /// <returns>Resulting NodeId</returns>
         public NodeId ToNodeId(ExpandedNodeId nodeid)
         {
-            if (nodeid == null || nodeid.IsNull) return NodeId.Null;
+            if (nodeid == null || nodeid.IsNull || Session == null) return NodeId.Null;
             return ExpandedNodeId.ToNodeId(nodeid, Session.NamespaceUris);
         }
         /// <summary>
@@ -1514,9 +1515,9 @@ namespace Cognite.OpcUa
         /// <param name="identifier">Full identifier on form i=123 or s=abc etc.</param>
         /// <param name="namespaceUri">Full namespaceUri</param>
         /// <returns>Resulting NodeId</returns>
-        public NodeId ToNodeId(string identifier, string namespaceUri)
+        public NodeId ToNodeId(string? identifier, string? namespaceUri)
         {
-            if (identifier == null || namespaceUri == null) return NodeId.Null;
+            if (identifier == null || namespaceUri == null || Session == null) return NodeId.Null;
             int idx = Session.NamespaceUris.GetIndex(namespaceUri);
             if (idx < 0)
             {
@@ -1545,9 +1546,9 @@ namespace Cognite.OpcUa
             if (datavalue == null) return 0;
             if (datavalue is Variant variant) return ConvertToDouble(variant.Value);
             // Check if the value is somehow an array
-            if (typeof(IEnumerable).IsAssignableFrom(datavalue.GetType()))
+            if (datavalue is IEnumerable enumerable)
             {
-                var enumerator = (datavalue as IEnumerable).GetEnumerator();
+                var enumerator = enumerable.GetEnumerator();
                 enumerator.MoveNext();
                 return ConvertToDouble(enumerator.Current);
             }
@@ -1573,11 +1574,10 @@ namespace Cognite.OpcUa
         /// </remarks>
         /// <param name="id">Nodeid to be converted</param>
         /// <returns>Unique string representation</returns>
-        public string GetUniqueId(ExpandedNodeId id, int index = -1)
+        public string? GetUniqueId(ExpandedNodeId id, int index = -1)
         {
-            if (id == null || id.IsNull) return null;
             var nodeId = ToNodeId(id);
-            if (nodeId == null || nodeId.IsNullNodeId) return null;
+            if (nodeId.IsNullNodeId) return null;
             if (nodeOverrides.TryGetValue(nodeId, out var nodeOverride))
             {
                 if (index <= -1) return nodeOverride;
@@ -1590,7 +1590,7 @@ namespace Cognite.OpcUa
 
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
-                var namespaceUri = id.NamespaceUri ?? Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
+                var namespaceUri = id.NamespaceUri ?? Session!.NamespaceUris.GetString(nodeId.NamespaceIndex);
                 string newPrefix = config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
@@ -1649,7 +1649,7 @@ namespace Cognite.OpcUa
 
             if (!nsPrefixMap.TryGetValue(nodeId.NamespaceIndex, out var prefix))
             {
-                var namespaceUri = Session.NamespaceUris.GetString(nodeId.NamespaceIndex);
+                var namespaceUri = Session!.NamespaceUris.GetString(nodeId.NamespaceIndex);
                 string newPrefix = config.Extraction.NamespaceMap.TryGetValue(namespaceUri, out string prefixNode) ? prefixNode : (namespaceUri + ":");
                 nsPrefixMap[nodeId.NamespaceIndex] = prefix = newPrefix;
             }
@@ -1680,7 +1680,6 @@ namespace Cognite.OpcUa
         /// <returns>String reference id</returns>
         public string GetRelationshipId(UAReference reference)
         {
-            if (reference == null) throw new ArgumentNullException(nameof(reference));
             var buffer = new StringBuilder(config.Extraction.IdPrefix, 64);
             buffer.Append(reference.GetName());
             buffer.Append(';');

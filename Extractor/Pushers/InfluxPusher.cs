@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -37,7 +37,7 @@ namespace Cognite.OpcUa
     /// </summary>
     public sealed class InfluxPusher : IPusher
     {
-        public UAExtractor Extractor { set; get; }
+        public UAExtractor Extractor { set; get; } = null!;
         public IPusherConfig BaseConfig { get; }
         public bool DataFailing { get; set; }
         public bool EventsFailing { get; set; }
@@ -74,7 +74,7 @@ namespace Cognite.OpcUa
 
         public InfluxPusher(InfluxPusherConfig config)
         {
-            this.config = config ?? throw new ArgumentNullException(nameof(config));
+            this.config = config;
             BaseConfig = config;
             client = new InfluxDBClient(config.Host, config.Username, config.Password);
         }
@@ -120,7 +120,7 @@ namespace Cognite.OpcUa
 
             foreach (var group in groups)
             {
-                var ts = Extractor.State.GetNodeState(group.Key);
+                var ts = Extractor?.State.GetNodeState(group.Key);
                 if (ts == null) continue;
                 ipoints.AddRange(group.Select(dp => UADataPointToInflux(ts, dp)));
             }
@@ -216,6 +216,7 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             if (states == null || !states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
+            if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
             var ranges = new ConcurrentDictionary<string, TimeRange>();
 
             var ids = new List<string>();
@@ -225,7 +226,8 @@ namespace Cognite.OpcUa
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        ids.Add(Extractor.GetUniqueId(state.SourceId, i));
+                        var id = Extractor.GetUniqueId(state.SourceId, i)!;
+                        ids.Add(id);
                     }
                 }
                 else
@@ -274,7 +276,9 @@ namespace Cognite.OpcUa
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        if (ranges.TryGetValue(Extractor.GetUniqueId(state.SourceId, i), out var range))
+                        var id = Extractor.GetUniqueId(state.SourceId, i);
+                        if (id == null) break;
+                        if (ranges.TryGetValue(id, out var range))
                         {
                             if (range == TimeRange.Empty)
                             {
@@ -382,7 +386,9 @@ namespace Cognite.OpcUa
             try
             {
                 var measurements = await client.QueryMultiSeriesAsync(config.Database, "SHOW MEASUREMENTS");
-                eventSeries = measurements.SelectMany(series => series.Entries.Select(entry => entry.Name as string));
+                eventSeries = measurements.SelectMany(series => series.Entries
+                    .Select(entry => entry.Name)
+                    .OfType<string>());
                 eventSeries = eventSeries.Where(series => series.StartsWith("events.", StringComparison.InvariantCulture));
 
             }
@@ -482,7 +488,7 @@ namespace Cognite.OpcUa
                     UtcTimestamp = dp.Timestamp,
                     MeasurementName = dp.Id
                 };
-                idp.Fields.Add("value", Math.Abs(dp.DoubleValue.Value) < 0.1);
+                idp.Fields.Add("value", Math.Abs(dp.DoubleValue ?? 0.0) < 0.1);
                 return idp;
             }
             if (state.DataType.IsStep || IsInteger(state.DataType.Identifier))
@@ -492,7 +498,7 @@ namespace Cognite.OpcUa
                     UtcTimestamp = dp.Timestamp,
                     MeasurementName = dp.Id
                 };
-                idp.Fields.Add("value", (long)dp.DoubleValue);
+                idp.Fields.Add("value", (long)(dp.DoubleValue ?? 0.0));
                 return idp;
             }
             else
@@ -502,7 +508,7 @@ namespace Cognite.OpcUa
                     UtcTimestamp = dp.Timestamp,
                     MeasurementName = dp.Id
                 };
-                idp.Fields.Add("value", dp.DoubleValue.Value);
+                idp.Fields.Add("value", dp.DoubleValue ?? 0.0);
                 return idp;
             }
         }
@@ -513,6 +519,7 @@ namespace Cognite.OpcUa
         /// <returns>Converted event</returns>
         private IInfluxDatapoint UAEventToInflux(UAEvent evt)
         {
+            if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
             var idp = new InfluxDatapoint<string>
             {
                 UtcTimestamp = evt.Time
@@ -530,7 +537,7 @@ namespace Cognite.OpcUa
 
             idp.Fields.Add("value", evt.Message ?? "");
             idp.Fields.Add("id", evt.EventId ?? "");
-            string sourceNode;
+            string? sourceNode;
             if (evt.MetaData != null && evt.MetaData.TryGetValue("SourceNode", out var rawSourceNode))
             {
                 sourceNode = Extractor.StringConverter.ConvertToString(rawSourceNode);
@@ -562,7 +569,6 @@ namespace Cognite.OpcUa
         {
             if (config.Debug) return Array.Empty<UADataPoint>();
             token.ThrowIfCancellationRequested();
-            if (states == null) throw new ArgumentNullException(nameof(states));
 
             var fetchTasks = states.Select(state => client.QueryMultiSeriesAsync(config.Database,
                     $"SELECT * FROM \"{state.Key}\""
@@ -632,6 +638,37 @@ namespace Cognite.OpcUa
             "id", "value", "source", "time", "type"
         };
 
+        private IEnumerable<UAEvent> EntriesToEvents(InfluxBufferState state, string name, IReadOnlyList<dynamic> entries)
+        {
+            if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
+            foreach (var res in entries)
+            {
+                if (res is not IDictionary<string, object> values) continue;
+                var sourceNode = Extractor.State.GetNodeId((string)values["Source"]);
+                var type = Extractor.State.GetNodeId(name.Substring(state.Id.Length + 1));
+                var evt = new UAEvent
+                {
+                    Time = (DateTime)values["Time"],
+                    EventId = (string)values["Id"],
+                    Message = (string)values["Value"],
+                    EmittingNode = state.SourceId,
+                    SourceNode = sourceNode,
+                    EventType = type,
+                    MetaData = new Dictionary<string, string>()
+                };
+                foreach (var kvp in values)
+                {
+#pragma warning disable CA1308 // Normalize strings to uppercase
+                    if (string.IsNullOrEmpty(kvp.Value as string) || excludeEventTags.Contains(kvp.Key.ToLower(CultureInfo.InvariantCulture))) continue;
+#pragma warning restore CA1308 // Normalize strings to uppercase
+                    evt.MetaData.Add(kvp.Key, kvp.Value.ToString());
+                }
+                log.Verbose(evt.ToString());
+
+                yield return evt;
+            }
+        }
+
         /// <summary>
         /// Read events from influxdb back into <see cref="UAEvent"/>s
         /// </summary>
@@ -641,6 +678,7 @@ namespace Cognite.OpcUa
             IDictionary<string, InfluxBufferState> states,
             CancellationToken token)
         {
+            if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
             if (config.Debug || states == null) return Array.Empty<UAEvent>();
             token.ThrowIfCancellationRequested();
 
@@ -662,34 +700,7 @@ namespace Cognite.OpcUa
                 var state = states.Values.FirstOrDefault(state => name.StartsWith(state.Id, StringComparison.InvariantCulture));
                 if (state == null) continue;
 
-
-                finalEvents.AddRange(series.Entries.Select(res =>
-                {
-                    // The client uses ExpandoObject as dynamic, which implements IDictionary
-                    if (!(res is IDictionary<string, object> values)) return null;
-                    var sourceNode = Extractor.State.GetNodeId((string)values["Source"]);
-                    var type = Extractor.State.GetNodeId(name.Substring(state.Id.Length + 1));
-                    var evt = new UAEvent
-                    {
-                        Time = (DateTime)values["Time"],
-                        EventId = (string)values["Id"],
-                        Message = (string)values["Value"],
-                        EmittingNode = state.SourceId,
-                        SourceNode = sourceNode,
-                        EventType = type,
-                        MetaData = new Dictionary<string, string>()
-                    };
-                    foreach (var kvp in values)
-                    {
-#pragma warning disable CA1308 // Normalize strings to uppercase
-                        if (string.IsNullOrEmpty(kvp.Value as string) || excludeEventTags.Contains(kvp.Key.ToLower(CultureInfo.InvariantCulture))) continue;
-#pragma warning restore CA1308 // Normalize strings to uppercase
-                        evt.MetaData.Add(kvp.Key, kvp.Value.ToString());
-                    }
-                    log.Verbose(evt.ToString());
-
-                    return evt;
-                }).Where(evt => evt != null));
+                finalEvents.AddRange(EntriesToEvents(state, name, series.Entries));
             }
 
             return finalEvents;

@@ -1,9 +1,5 @@
-﻿using Cognite.Extractor.Utils;
-using Cognite.OpcUa;
-using Cognite.OpcUa.Pushers;
+﻿using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
-using Google.Protobuf.WellKnownTypes;
-using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -13,7 +9,6 @@ using System.Threading.Tasks;
 using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Test.Integration
 {
@@ -893,7 +888,7 @@ namespace Test.Integration
 
             CommonTestUtils.VerifyStartingConditions(
                 handler.AssetRaw
-                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())), 
+                .ToDictionary(kvp => kvp.Key, kvp => (AssetDummy)JsonSerializer.Deserialize<AssetDummyJson>(kvp.Value.ToString())),
                 handler.TimeseriesRaw
                 .ToDictionary(kvp => kvp.Key, kvp => (TimeseriesDummy)
                     JsonSerializer.Deserialize<StatelessTimeseriesDummy>(kvp.Value.ToString())), null, extractor, tester.Server.Ids.Custom, true);

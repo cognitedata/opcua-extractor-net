@@ -275,7 +275,7 @@ namespace Test.Unit
             var variable = new UAVariable(new NodeId("test"), "test", new NodeId("parent"), NodeClass.Variable);
             variable.VariableAttributes.DataType = new UADataType(new NodeId("dt"));
             variable.SetDataPoint("test");
-            
+
             foreach (var prop in properties) variable.AddProperty(prop);
             result = PusherUtils.CreateRawUpdate(tester.Client.StringConverter, variable, null, ConverterType.Variable);
             Assert.Equal(@"{""externalId"":""gp.base:s=test"",""name"":""test"",""description"":null,""metadata"":{""prop1"":[1,2,3,4]," +

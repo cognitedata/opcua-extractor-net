@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
-using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
@@ -47,7 +46,7 @@ namespace Cognite.OpcUa.Pushers
         public bool NoInit { get; set; }
         public List<UANode> PendingNodes { get; } = new List<UANode>();
         public List<UAReference> PendingReferences { get; } = new List<UAReference>();
-        public UAExtractor Extractor { get; set; }
+        public UAExtractor Extractor { get; set; } = null!;
         public IPusherConfig BaseConfig => config;
         private readonly MqttPusherConfig config;
         private readonly IMqttClient client;
@@ -63,7 +62,7 @@ namespace Cognite.OpcUa.Pushers
 
         private HashSet<string> existingNodes = new HashSet<string>();
 
-        private Dictionary<NodeId, string> eventParents = new Dictionary<NodeId, string>();
+        private Dictionary<NodeId, string?> eventParents = new Dictionary<NodeId, string?>();
 
         private ExtractionConfig extractionConfig;
 
@@ -92,7 +91,7 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="config">Config to use</param>
         public MQTTPusher(MqttPusherConfig config, IServiceProvider provider)
         {
-            this.config = config ?? throw new ArgumentNullException(nameof(config));
+            this.config = config;
             extractionConfig = provider.GetRequiredService<FullConfig>().Extraction;
             var builder = new MqttClientOptionsBuilder()
                 .WithClientId(config.ClientId)
@@ -249,9 +248,6 @@ namespace Cognite.OpcUa.Pushers
             CancellationToken token)
         {
             if (!client.IsConnected) return false;
-            if (variables == null) throw new ArgumentNullException(nameof(variables));
-            if (objects == null) throw new ArgumentNullException(nameof(objects));
-            if (update == null) throw new ArgumentNullException(nameof(update));
 
             if (!string.IsNullOrEmpty(config.LocalState) && Extractor.StateStorage != null)
             {
@@ -259,18 +255,18 @@ namespace Cognite.OpcUa.Pushers
                 if (config.SkipMetadata)
                 {
                     states = variables
-                        .Select(node => Extractor.GetUniqueId(node.Id))
+                        .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
                         .Where(node => !existingNodes.Contains(node))
-                        .Select(id => new ExistingState { Id = id })
+                        .Select(id => new ExistingState(id))
                         .ToDictionary(state => state.Id);
                 }
                 else
                 {
                     states = objects
-                       .Select(node => Extractor.GetUniqueId(node.Id))
+                       .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
                        .Where(node => !existingNodes.Contains(node))
-                       .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
-                       .Select(id => new ExistingState { Id = id })
+                       .Concat(variables.SelectNonNull(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
+                       .Select(id => new ExistingState(id))
                        .ToDictionary(state => state.Id);
                 }
 
@@ -294,20 +290,29 @@ namespace Cognite.OpcUa.Pushers
                 if (!update.Objects.AnyUpdate)
                 {
                     objects = objects
-                        .Where(obj => !existingNodes.Contains(Extractor.GetUniqueId(obj.Id))).ToList();
+                        .Where(obj => !obj.Id.IsNullNodeId && !existingNodes.Contains(Extractor.GetUniqueId(obj.Id)!)).ToList();
                 }
                 else
                 {
-                    foreach (var obj in objects) obj.Changed = existingNodes.Contains(Extractor.GetUniqueId(obj.Id));
+                    foreach (var obj in objects)
+                    {
+                        string? id = Extractor.GetUniqueId(obj.Id);
+                        obj.Changed = id != null && existingNodes.Contains(id);
+                    }
                 }
                 if (!update.Variables.AnyUpdate)
                 {
                     variables = variables
-                        .Where(variable => !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index))).ToList();
+                        .Where(variable => !variable.Id.IsNullNodeId
+                            && !existingNodes.Contains(Extractor.GetUniqueId(variable.Id, variable.Index)!)).ToList();
                 }
                 else
                 {
-                    foreach (var node in variables) node.Changed = existingNodes.Contains(Extractor.GetUniqueId(node.Id, node.Index));
+                    foreach (var node in variables)
+                    {
+                        string? id = Extractor.GetUniqueId(node.Id, node.Index);
+                        node.Changed = id != null && existingNodes.Contains(id);
+                    }
                 }
             }
 
@@ -339,9 +344,9 @@ namespace Cognite.OpcUa.Pushers
             }
 
             var newStates = objects
-                    .Select(node => Extractor.GetUniqueId(node.Id))
-                    .Concat(variables.Select(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
-                    .Select(id => new ExistingState { Id = id, Existing = true, LastTimeModified = DateTime.UtcNow })
+                    .SelectNonNull(node => Extractor.GetUniqueId(node.Id))
+                    .Concat(variables.SelectNonNull(variable => Extractor.GetUniqueId(variable.Id, variable.Index)))
+                    .Select(id => new ExistingState(id) { Existing = true, LastTimeModified = DateTime.UtcNow })
                     .ToList();
 
             foreach (var state in newStates)
@@ -409,7 +414,7 @@ namespace Cognite.OpcUa.Pushers
             {
                 var states = relationships
                     .Select(rel => rel.ExternalId)
-                    .Select(id => new ExistingState { Id = id })
+                    .Select(id => new ExistingState(id))
                     .ToDictionary(state => state.Id);
 
                 await Extractor.StateStorage.RestoreExtractionState<MqttState, ExistingState>(
@@ -444,7 +449,7 @@ namespace Cognite.OpcUa.Pushers
 
             var newStates = relationships
                 .Select(rel => rel.ExternalId)
-                .Select(id => new ExistingState { Id = id, Existing = true, LastTimeModified = DateTime.UtcNow })
+                .Select(id => new ExistingState(id) { Existing = true, LastTimeModified = DateTime.UtcNow })
                 .ToList();
 
             foreach (var state in newStates)
@@ -506,7 +511,7 @@ namespace Cognite.OpcUa.Pushers
                         new NumericDatapoint
                         {
                             Timestamp = new DateTimeOffset(ipoint.Timestamp).ToUnixTimeMilliseconds(),
-                            Value = ipoint.DoubleValue.Value
+                            Value = ipoint.DoubleValue ?? 0.0
                         }));
                 }
 
@@ -549,18 +554,17 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True on success, false on failure.</returns>
         private async Task<bool> PushAssets(IEnumerable<UANode> objects, TypeUpdateConfig update, CancellationToken token)
         {
-            bool useRawStore = config.RawMetadata != null && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
+            bool useRawStore = config.RawMetadata != null
+                && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.AssetsTable);
 
             if (useRawStore)
             {
                 var jsonAssets = ConvertNodesJson(objects, ConverterType.Node);
-                var rawObj = new RawRequestWrapper<JsonElement>
-                {
-                    Database = config.RawMetadata.Database,
-                    Table = config.RawMetadata.AssetsTable,
-                    Rows = jsonAssets.Select(pair => new RawRowCreateDto<JsonElement> { Key = pair.id, Columns = pair.node })
-                };
+                var rawObj = new RawRequestWrapper<JsonElement>(
+                    config.RawMetadata!.Database!,
+                    config.RawMetadata!.AssetsTable!,
+                    jsonAssets.Select(pair => new RawRowCreateDto<JsonElement>(pair.id, pair.node)));
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -605,6 +609,11 @@ namespace Cognite.OpcUa.Pushers
 
             return true;
         }
+        private enum ResourceType
+        {
+            Assets, Timeseries, Relationships
+        }
+
         /// <summary>
         /// Convert nodes to assets, setting fields that should not be updated to null.
         /// </summary>
@@ -637,11 +646,14 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>List of assets to create</returns>
         private IEnumerable<(string id, JsonElement node)> ConvertNodesJson(IEnumerable<UANode> nodes, ConverterType type)
         {
+            if (Extractor == null) throw new InvalidOperationException("Extractor must be set");
             foreach (var node in nodes)
             {
                 var create = node.ToJson(Extractor.StringConverter, type);
                 if (create == null) continue;
-                yield return (Extractor.GetUniqueId(node.Id), create.RootElement);
+                string? id = Extractor.GetUniqueId(node.Id);
+                if (id == null) continue;
+                yield return (id, create.RootElement);
             }
         }
         /// <summary>
@@ -719,12 +731,10 @@ namespace Cognite.OpcUa.Pushers
             if (useRawStore)
             {
                 var rawTimeseries = ConvertNodesJson(variables, ConverterType.Variable);
-                var rawObj = new RawRequestWrapper<JsonElement>
-                {
-                    Database = config.RawMetadata.Database,
-                    Table = config.RawMetadata.TimeseriesTable,
-                    Rows = rawTimeseries.Select(pair => new RawRowCreateDto<JsonElement> { Key = pair.id, Columns = pair.node })
-                };
+                var rawObj = new RawRequestWrapper<JsonElement>(
+                    config.RawMetadata!.Database!,
+                    config.RawMetadata!.TimeseriesTable!,
+                    rawTimeseries.Select(pair => new RawRowCreateDto<JsonElement>(pair.id, pair.node)));
 
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
@@ -815,13 +825,11 @@ namespace Cognite.OpcUa.Pushers
 
             if (useRawStore)
             {
-                var rawObj = new RawRequestWrapper<RelationshipCreate>
-                {
-                    Database = config.RawMetadata.Database,
-                    Table = config.RawMetadata.RelationshipsTable,
-                    Rows = references.Select(rel =>
-                        new RawRowCreateDto<RelationshipCreate> { Key = rel.ExternalId, Columns = rel })
-                };
+                var rawObj = new RawRequestWrapper<RelationshipCreate>(
+                    config.RawMetadata!.Database!,
+                    config.RawMetadata!.RelationshipsTable!,
+                    references.Select(rel => new RawRowCreateDto<RelationshipCreate>(rel.ExternalId, rel)));
+
                 var rawData = JsonSerializer.SerializeToUtf8Bytes(rawObj, new JsonSerializerOptions
                 {
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -873,20 +881,36 @@ namespace Cognite.OpcUa.Pushers
         class ExistingState : IExtractionState
         {
             public bool Existing { get; set; }
-            public string Id { get; set; }
+            public string Id { get; }
             public DateTime? LastTimeModified { get; set; }
+
+            public ExistingState(string id)
+            {
+                Id = id;
+            }
         }
         class RawRequestWrapper<T>
         {
-            public string Database { get; set; }
-            public string Table { get; set; }
-            public IEnumerable<RawRowCreateDto<T>> Rows { get; set; }
+            public string Database { get; }
+            public string Table { get; }
+            public IEnumerable<RawRowCreateDto<T>> Rows { get; }
+            public RawRequestWrapper(string database, string table, IEnumerable<RawRowCreateDto<T>> rows)
+            {
+                Database = database;
+                Table = table;
+                Rows = rows;
+            }
         }
 
         class RawRowCreateDto<T>
         {
             public string Key { get; set; }
             public T Columns { get; set; }
+            public RawRowCreateDto(string key, T columns)
+            {
+                Key = key;
+                Columns = columns;
+            }
         }
         public async Task Disconnect()
         {

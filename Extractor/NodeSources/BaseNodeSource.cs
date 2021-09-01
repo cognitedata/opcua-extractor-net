@@ -1,9 +1,24 @@
-﻿using Cognite.OpcUa.HistoryStates;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
+using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
-using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -21,18 +36,18 @@ namespace Cognite.OpcUa.NodeSources
     public abstract class BaseNodeSource
     {
         // Nodes that are treated as variables (and synchronized) in the source system
-        protected readonly List<UAVariable> finalSourceVariables = new List<UAVariable>();
+        protected List<UAVariable> FinalSourceVariables { get; } = new List<UAVariable>();
         // Nodes that are treated as objects (so not synchronized) in the source system.
         // finalSourceVariables and finalSourceObjects should together contain all mapped nodes
         // in the source system.
-        protected readonly List<UANode> finalSourceObjects = new List<UANode>();
+        protected List<UANode> FinalSourceObjects { get; } = new List<UANode>();
 
         // Nodes that are treated as objects in the destination systems (i.e. mapped to assets)
-        protected readonly List<UANode> finalDestinationObjects = new List<UANode>();
+        protected List<UANode> FinalDestinationObjects { get; } = new List<UANode>();
         // Nodes that are treated as variables in the destination systems (i.e. mapped to timeseries)
         // May contain duplicate NodeIds, but all should produce distinct UniqueIds.
-        protected readonly List<UAVariable> finalDestinationVariables = new List<UAVariable>();
-        protected readonly HashSet<UAReference> finalReferences = new HashSet<UAReference>();
+        protected List<UAVariable> FinalDestinationVariables { get; } = new List<UAVariable>();
+        protected HashSet<UAReference> FinalReferences { get; } = new HashSet<UAReference>();
 
         protected FullConfig Config { get; }
         protected UAExtractor Extractor { get; }
@@ -46,7 +61,7 @@ namespace Cognite.OpcUa.NodeSources
         }
 
 
-        public abstract Task<BrowseResult> ParseResults(CancellationToken token);
+        public abstract Task<BrowseResult?> ParseResults(CancellationToken token);
 
         /// <summary>
         /// Write a variable to the correct output lists. This assumes the variable should be mapped.
@@ -56,25 +71,25 @@ namespace Cognite.OpcUa.NodeSources
         {
             if (node.IsArray)
             {
-                finalDestinationVariables.AddRange(node.CreateArrayChildren());
+                FinalDestinationVariables.AddRange(node.CreateArrayChildren());
             }
 
             if (node.IsArray || node.NodeClass != NodeClass.Variable)
             {
-                finalDestinationObjects.Add(node);
+                FinalDestinationObjects.Add(node);
             }
             else
             {
-                finalDestinationVariables.Add(node);
+                FinalDestinationVariables.Add(node);
             }
 
             if (node.NodeClass == NodeClass.Variable)
             {
-                finalSourceVariables.Add(node);
+                FinalSourceVariables.Add(node);
             }
             else
             {
-                finalSourceObjects.Add(node);
+                FinalSourceObjects.Add(node);
             }
         }
         /// <summary>
@@ -123,14 +138,14 @@ namespace Cognite.OpcUa.NodeSources
 
                 if (variable.IsArray)
                 {
-                    foreach (var child in variable.ArrayChildren)
+                    foreach (var child in variable.CreateArrayChildren())
                     {
                         var uniqueId = Extractor.GetUniqueId(child.Id, child.Index);
-                        if (setState) Extractor.State.SetNodeState(state, uniqueId);
+                        if (setState && state != null) Extractor.State.SetNodeState(state, uniqueId);
                         Extractor.State.RegisterNode(node.Id, uniqueId);
                     }
                 }
-                else if (setState)
+                if (setState && state != null)
                 {
                     Extractor.State.SetNodeState(state);
                 }
