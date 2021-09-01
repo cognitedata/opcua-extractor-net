@@ -84,7 +84,6 @@ podTemplate(
                 bridgeDockerImageName2 = "eu.gcr.io/cognite-registry/mqtt-cdf-bridge"
                 version = sh(returnStdout: true, script: "git describe --tags HEAD || true").trim()
                 version = version.replaceFirst(/-(\d+)-.*/, '-pre.$1')
-                version = "2.4.0"
                 lastTag = sh(returnStdout: true, script: "git describe --tags --abbrev=0").trim()
                 desc = sh(returnStdout: true, script: "git describe --tags --dirty").trim()
                 time = sh(returnStdout: true, script: "git log -1  --format=%ai").trim()
@@ -96,7 +95,6 @@ podTemplate(
                 echo "${env.BRANCH_NAME}"
             }
         }
-        if (false) {
         container('dotnet') {
             stage('Install dependencies') {
                 sh('apt-get update && apt-get -y install gnupg curl procps gawk grep')
@@ -155,7 +153,6 @@ podTemplate(
                 }
             }
         }
-        }
         if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
             container('docker') {
                 stage("Build Docker images") {
@@ -185,7 +182,7 @@ podTemplate(
             }
         }
     }
-    if ("$lastTag" == "$version" && env.BRANCH_NAME == "master" || true) {
+    if ("$lastTag" == "$version" && env.BRANCH_NAME == "master") {
         node('windows') {
             stage('Building MSI on windows node') {
                 powershell('echo $env:Path')
@@ -214,13 +211,13 @@ podTemplate(
                             error("Build MSI failed.")
                         }
                     }
-                    powershell('.\\signexe.ps1 OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi')
+                    codeSign.signOnWindows('OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi')
                 }
                 stage ('Deploy to github') {
-                    // powershell("mv OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi .\\OpcUaExtractorSetup-${version}.msi")
-                    // withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
-                    //     powershell("py deploy.py cognitedata opcua-extractor-net $ghpassword $version OpcUaExtractorSetup-${version}.msi")
-                    // }
+                    powershell("mv OpcUaExtractorSetup\\bin\\Release\\OpcUaExtractorSetup.msi .\\OpcUaExtractorSetup-${version}.msi")
+                    withCredentials([usernamePassword(credentialsId: 'githubapp', usernameVariable: 'ghusername', passwordVariable: 'ghpassword')]) {
+                        powershell("py deploy.py cognitedata opcua-extractor-net $ghpassword $version OpcUaExtractorSetup-${version}.msi")
+                    }
                 }
             }
             catch (e)
