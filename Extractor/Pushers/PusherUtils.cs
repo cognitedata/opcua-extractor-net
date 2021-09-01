@@ -61,7 +61,7 @@ namespace Cognite.OpcUa.Pushers
         public static JsonElement? CreateRawUpdate(
             StringConverter converter,
             UANode node,
-            RawRow raw,
+            RawRow? raw,
             ConverterType type)
         {
             if (node == null) return null;

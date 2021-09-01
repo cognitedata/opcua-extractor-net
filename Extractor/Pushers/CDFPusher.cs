@@ -500,7 +500,7 @@ namespace Cognite.OpcUa.Pushers
                         kvp.Key,
                         update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Node)
                     )).Where(elem => elem.update != null)
-                    .ToDictionary(pair => pair.Key, pair => pair.update.Value);
+                    .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
                 }
 
                 var toWrite = new List<(string key, RawRow row, UANode node)>();
@@ -519,7 +519,7 @@ namespace Cognite.OpcUa.Pushers
                         elem.key,
                         update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.node, elem.row, ConverterType.Node)
                     )).Where(elem => elem.update != null)
-                    .ToDictionary(pair => pair.key, pair => pair.update.Value);
+                    .ToDictionary(pair => pair.key, pair => pair.update!.Value);
 
                 return updates;
             }, null, token);
@@ -672,7 +672,7 @@ namespace Cognite.OpcUa.Pushers
                         kvp.Key,
                         update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Variable)
                     )).Where(elem => elem.update != null)
-                    .ToDictionary(pair => pair.Key, pair => pair.update.Value);
+                    .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
                 }
 
                 var toWrite = new List<(string key, RawRow row, UAVariable node)>();
@@ -691,7 +691,7 @@ namespace Cognite.OpcUa.Pushers
                         elem.key,
                         update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.node, elem.row, ConverterType.Variable)
                     )).Where(elem => elem.update != null)
-                    .ToDictionary(pair => pair.key, pair => pair.update.Value);
+                    .ToDictionary(pair => pair.key, pair => pair.update!.Value);
 
                 return updates;
             }, null, token);
@@ -892,19 +892,19 @@ namespace Cognite.OpcUa.Pushers
         private async Task UpsertRawRows<T>(
             string dbName,
             string tableName,
-            Func<IEnumerable<RawRow>, IDictionary<string, T>> dtoBuilder,
-            JsonSerializerOptions options,
+            Func<IEnumerable<RawRow>?, IDictionary<string, T>> dtoBuilder,
+            JsonSerializerOptions? options,
             CancellationToken token)
         {
             int count = 0;
-            async Task CallAndCreate(IEnumerable<RawRow> rows)
+            async Task CallAndCreate(IEnumerable<RawRow>? rows)
             {
                 var toUpsert = dtoBuilder(rows);
                 count += toUpsert.Count;
                 await destination.InsertRawRowsAsync(dbName, tableName, toUpsert, options, token);
             }
 
-            string cursor = null;
+            string? cursor = null;
             do
             {
                 try
