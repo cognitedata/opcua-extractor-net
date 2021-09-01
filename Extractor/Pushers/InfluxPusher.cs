@@ -226,8 +226,7 @@ namespace Cognite.OpcUa
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        var id = Extractor.GetUniqueId(state.SourceId, i);
-                        if (id == null) break;
+                        var id = Extractor.GetUniqueId(state.SourceId, i)!;
                         ids.Add(id);
                     }
                 }
