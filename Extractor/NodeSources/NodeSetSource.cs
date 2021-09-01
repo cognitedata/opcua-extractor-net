@@ -1,4 +1,5 @@
-﻿using Cognite.OpcUa.Types;
+﻿using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -49,7 +50,17 @@ namespace Cognite.OpcUa.NodeSources
         }
     }
 
-    public class NodeSetSource : BaseNodeSource
+    internal class PlainEventType : PlainType
+    {
+        public IList<NodeState> Properties { get; } = new List<NodeState>();
+        public PlainEventType(PlainType other) : base(other.NodeId, other.DisplayName)
+        {
+            Parent = other.Parent;
+            NodeClass = other.NodeClass;
+        }
+    }
+
+    public class NodeSetSource : BaseNodeSource, IEventFieldSource
     {
         private readonly NodeStateCollection nodes = new NodeStateCollection();
         private readonly Dictionary<NodeId, NodeState> nodeDict = new Dictionary<NodeId, NodeState>();
@@ -365,6 +376,39 @@ namespace Cognite.OpcUa.NodeSources
 
         public override Task<BrowseResult> ParseResults(CancellationToken token)
         {
+            throw new NotImplementedException();
+        }
+
+        private IEnumerable<EventField> ToFields(NodeState state)
+        {
+            var refs = references[state.NodeId];
+            var children = refs
+                .Where(rf => !rf.IsInverse && IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences))
+                .Select(rf => nodeDict.GetValueOrDefault(Client.ToNodeId(rf.TargetId)))
+                .Where(node => node != null && (node.NodeClass == NodeClass.Object || node.NodeClass == NodeClass.Variable))
+                .ToList();
+            if (state.NodeClass == NodeClass.Object && !children.Any()) yield break;
+            else if (state.NodeClass != NodeClass.Variable) yield break;
+        }
+
+        public Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token)
+        {
+            var evtTypes = types.Where(type => type.Value.NodeClass == NodeClass.ObjectType
+                && IsOfType(type.Key, ObjectTypeIds.BaseEventType)).ToDictionary(kvp => kvp.Key, kvp => new PlainEventType(kvp.Value));
+
+            HashSet<NodeId>? whitelist = null;
+            if (Config.Events.EventIds != null && Config.Events.EventIds.Any())
+            {
+                whitelist = new HashSet<NodeId>(Config.Events.EventIds.Select(proto => proto.ToNodeId(Client, ObjectTypeIds.BaseEventType)));
+            }
+
+            foreach (var (id, type) in evtTypes)
+            {
+
+            }
+
+
+
             throw new NotImplementedException();
         }
     }
