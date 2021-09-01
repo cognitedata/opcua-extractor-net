@@ -12,7 +12,9 @@ namespace System.Diagnostics.CodeAnalysis
     {
         public bool ReturnValue { get; }
         public string[] Members { get; }
+#pragma warning disable CA1019 // Define accessors for attribute arguments
         public MemberNotNullWhenAttribute(bool returnValue, string member)
+#pragma warning restore CA1019 // Define accessors for attribute arguments
         {
             ReturnValue = returnValue;
             Members = new[] { member };

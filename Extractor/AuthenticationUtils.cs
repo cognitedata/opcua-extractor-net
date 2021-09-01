@@ -54,7 +54,9 @@ namespace Cognite.OpcUa
             if (!string.IsNullOrEmpty(config.Username)) return new UserIdentity(config.Username, config.Password);
             if (config.X509Certificate != null)
             {
+#pragma warning disable CA2000 // Dispose objects before losing scope. Owned by UAClient
                 var cert = GetCertificate(config.X509Certificate);
+#pragma warning restore CA2000 // Dispose objects before losing scope
 
                 return new UserIdentity(cert);
             }

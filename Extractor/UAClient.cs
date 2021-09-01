@@ -19,7 +19,6 @@ using Cognite.Extractor.Common;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
-using Newtonsoft.Json;
 using Opc.Ua;
 using Opc.Ua.Client;
 using Opc.Ua.Configuration;
@@ -28,12 +27,9 @@ using Serilog;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -1223,6 +1219,7 @@ namespace Cognite.OpcUa
         {
             if (!nodeList.Any()) return;
 
+#pragma warning disable CA2000 // Dispose objects before losing scope
             var sub = AddSubscriptions(
                 nodeList,
                 "DataChangeListener",
@@ -1238,6 +1235,7 @@ namespace Cognite.OpcUa
                     CacheQueueSize = Math.Max(0, config.Source.QueueLength),
                     Filter = config.Subscriptions.DataChangeFilter?.Filter
                 }, token);
+#pragma warning restore CA2000 // Dispose objects before losing scope
 
             numSubscriptions.Set(sub.MonitoredItemCount);
         }

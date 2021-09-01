@@ -21,18 +21,18 @@ namespace Cognite.OpcUa.NodeSources
     public abstract class BaseNodeSource
     {
         // Nodes that are treated as variables (and synchronized) in the source system
-        protected readonly List<UAVariable> finalSourceVariables = new List<UAVariable>();
+        protected List<UAVariable> FinalSourceVariables { get; } = new List<UAVariable>();
         // Nodes that are treated as objects (so not synchronized) in the source system.
         // finalSourceVariables and finalSourceObjects should together contain all mapped nodes
         // in the source system.
-        protected readonly List<UANode> finalSourceObjects = new List<UANode>();
+        protected List<UANode> FinalSourceObjects { get; } = new List<UANode>();
 
         // Nodes that are treated as objects in the destination systems (i.e. mapped to assets)
-        protected readonly List<UANode> finalDestinationObjects = new List<UANode>();
+        protected List<UANode> FinalDestinationObjects { get; } = new List<UANode>();
         // Nodes that are treated as variables in the destination systems (i.e. mapped to timeseries)
         // May contain duplicate NodeIds, but all should produce distinct UniqueIds.
-        protected readonly List<UAVariable> finalDestinationVariables = new List<UAVariable>();
-        protected readonly HashSet<UAReference> finalReferences = new HashSet<UAReference>();
+        protected List<UAVariable> FinalDestinationVariables { get; } = new List<UAVariable>();
+        protected HashSet<UAReference> FinalReferences { get; } = new HashSet<UAReference>();
 
         protected FullConfig Config { get; }
         protected UAExtractor Extractor { get; }
@@ -56,25 +56,25 @@ namespace Cognite.OpcUa.NodeSources
         {
             if (node.IsArray)
             {
-                finalDestinationVariables.AddRange(node.CreateArrayChildren());
+                FinalDestinationVariables.AddRange(node.CreateArrayChildren());
             }
 
             if (node.IsArray || node.NodeClass != NodeClass.Variable)
             {
-                finalDestinationObjects.Add(node);
+                FinalDestinationObjects.Add(node);
             }
             else
             {
-                finalDestinationVariables.Add(node);
+                FinalDestinationVariables.Add(node);
             }
 
             if (node.NodeClass == NodeClass.Variable)
             {
-                finalSourceVariables.Add(node);
+                FinalSourceVariables.Add(node);
             }
             else
             {
-                finalSourceObjects.Add(node);
+                FinalSourceObjects.Add(node);
             }
         }
         /// <summary>

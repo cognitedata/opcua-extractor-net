@@ -36,7 +36,7 @@ namespace Cognite.OpcUa.NodeSources
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAExtractor));
 
         private Dictionary<NodeId, UANode> nodeMap = new Dictionary<NodeId, UANode>();
-        private bool parsed = false;
+        private bool parsed;
 
         private List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
         public Action<ReferenceDescription, NodeId> Callback => HandleNode;
@@ -74,14 +74,14 @@ namespace Cognite.OpcUa.NodeSources
             await GetExtraNodeData(update, token);
 
             var mappedObjects = rawObjects.Where(obj => FilterObject(update, obj)).ToList();
-            finalDestinationObjects.AddRange(mappedObjects);
-            finalSourceObjects.AddRange(mappedObjects);
+            FinalDestinationObjects.AddRange(mappedObjects);
+            FinalSourceObjects.AddRange(mappedObjects);
             foreach (var variable in rawVariables)
             {
                 SortVariable(update, variable);
             }
 
-            foreach (var node in finalSourceObjects.Concat(finalSourceVariables))
+            foreach (var node in FinalSourceObjects.Concat(FinalSourceVariables))
             {
                 InitNodeState(update, node);
             }
@@ -91,7 +91,7 @@ namespace Cognite.OpcUa.NodeSources
                 await GetRelationshipData(token);
             }
 
-            if (!finalDestinationObjects.Any() && !finalDestinationVariables.Any() && !finalSourceVariables.Any() && !finalReferences.Any())
+            if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {
                 log.Information("Mapping resulted in no new nodes");
                 return null;
@@ -99,19 +99,19 @@ namespace Cognite.OpcUa.NodeSources
 
             log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
                 " {robj} objects and {var} variables.",
-                finalDestinationObjects.Count, finalDestinationVariables.Count,
-                finalSourceObjects.Count, finalSourceVariables.Count);
-            if (finalReferences.Any())
+                FinalDestinationObjects.Count, FinalDestinationVariables.Count,
+                FinalSourceObjects.Count, FinalSourceVariables.Count);
+            if (FinalReferences.Any())
             {
-                log.Information("Found a total of {cnt} references", finalReferences.Count);
+                log.Information("Found a total of {cnt} references", FinalReferences.Count);
             }
 
             return new BrowseResult(
-                finalSourceObjects,
-                finalSourceVariables,
-                finalDestinationObjects,
-                finalDestinationVariables,
-                finalReferences);
+                FinalSourceObjects,
+                FinalSourceVariables,
+                FinalDestinationObjects,
+                FinalDestinationVariables,
+                FinalReferences);
         }
 
         /// <summary>
@@ -272,13 +272,13 @@ namespace Cognite.OpcUa.NodeSources
 
             foreach (var reference in nonHierarchicalReferences)
             {
-                finalReferences.Add(reference);
+                FinalReferences.Add(reference);
             }
-            log.Information("Found {cnt} non-hierarchical references", finalReferences.Count);
+            log.Information("Found {cnt} non-hierarchical references", FinalReferences.Count);
 
             if (Config.Extraction.Relationships.Hierarchical)
             {
-                var nodeMap = finalSourceObjects.Concat(finalSourceVariables)
+                var nodeMap = FinalSourceObjects.Concat(FinalSourceVariables)
                     .ToDictionary(node => node.Id);
 
                 log.Information("Mapping {cnt} hierarchical references", references.Count);
@@ -292,7 +292,7 @@ namespace Cognite.OpcUa.NodeSources
 
                     bool childIsTs = childNode is UAVariable cVar && !cVar.IsArray && cVar.NodeClass == NodeClass.Variable;
 
-                    finalReferences.Add(new UAReference(
+                    FinalReferences.Add(new UAReference(
                         pair.Node.ReferenceTypeId,
                         true,
                         pair.ParentId,
@@ -303,7 +303,7 @@ namespace Cognite.OpcUa.NodeSources
 
                     if (Config.Extraction.Relationships.InverseHierarchical)
                     {
-                        finalReferences.Add(new UAReference(
+                        FinalReferences.Add(new UAReference(
                             pair.Node.ReferenceTypeId,
                             false,
                             childNode.Id,

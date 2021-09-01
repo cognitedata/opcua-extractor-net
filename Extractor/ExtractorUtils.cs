@@ -64,12 +64,12 @@ namespace Cognite.OpcUa
         /// Select elements from <typeparamref name="R"/> to <typeparamref name="T"/>,
         /// returning only when the result is not null.
         /// </summary>
-        /// <typeparam name="R">Source type</typeparam>
-        /// <typeparam name="T">Target type</typeparam>
+        /// <typeparam name="TIn">Source type</typeparam>
+        /// <typeparam name="TOut">Target type</typeparam>
         /// <param name="enumerable">Source enumerable</param>
         /// <param name="map">Mapping function</param>
         /// <returns>Enumerable with non-null elements</returns>
-        public static IEnumerable<T> SelectNonNull<R, T>(this IEnumerable<R> enumerable, Func<R, T?> map) where T : class
+        public static IEnumerable<TOut> SelectNonNull<TIn, TOut>(this IEnumerable<TIn> enumerable, Func<TIn, TOut?> map) where TOut : class
         {
             foreach (var item in enumerable)
             {

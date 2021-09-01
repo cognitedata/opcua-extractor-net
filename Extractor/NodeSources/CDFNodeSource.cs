@@ -147,8 +147,8 @@ namespace Cognite.OpcUa.NodeSources
 
             await GetExtraNodeData(token);
 
-            finalDestinationObjects.AddRange(readNodes);
-            finalSourceObjects.AddRange(readNodes);
+            FinalDestinationObjects.AddRange(readNodes);
+            FinalSourceObjects.AddRange(readNodes);
             foreach (var variable in readVariables)
             {
                 if (!Extractor.DataTypeManager.AllowTSMap(variable)) continue;
@@ -158,28 +158,28 @@ namespace Cognite.OpcUa.NodeSources
             readNodes.Clear();
             readVariables.Clear();
 
-            if (!finalDestinationObjects.Any() && !finalDestinationVariables.Any() && !finalSourceVariables.Any() && !finalReferences.Any())
+            if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {
                 log.Information("Mapping resulted in no new nodes");
                 return null;
             }
 
-            foreach (var node in finalSourceObjects.Concat(finalSourceVariables))
+            foreach (var node in FinalSourceObjects.Concat(FinalSourceVariables))
             {
                 InitNodeState(Config.Extraction.Update, node);
             }
 
             log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
                 " {robj} objects and {var} variables.",
-                finalDestinationObjects.Count, finalDestinationVariables.Count,
-                finalSourceObjects.Count, finalSourceVariables.Count);
+                FinalDestinationObjects.Count, FinalDestinationVariables.Count,
+                FinalSourceObjects.Count, FinalSourceVariables.Count);
 
             return new BrowseResult(
-                finalSourceObjects,
-                finalSourceVariables,
-                finalDestinationObjects,
-                finalDestinationVariables,
-                finalReferences);
+                FinalSourceObjects,
+                FinalSourceVariables,
+                FinalDestinationObjects,
+                FinalDestinationVariables,
+                FinalReferences);
         }
 
         private async Task GetExtraNodeData(CancellationToken token)
