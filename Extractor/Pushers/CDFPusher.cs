@@ -498,12 +498,12 @@ namespace Cognite.OpcUa.Pushers
                 {
                     return assetMap.Select(kvp => (
                         kvp.Key,
-                        PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Node)
-                    )).Where(elem => elem.Item2 != null)
-                    .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
+                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Node)
+                    )).Where(elem => elem.update != null)
+                    .ToDictionary(pair => pair.Key, pair => pair.update.Value);
                 }
 
-                var toWrite = new List<(string, RawRow, UANode)>();
+                var toWrite = new List<(string key, RawRow row, UANode node)>();
 
                 foreach (var row in rows)
                 {
@@ -516,10 +516,10 @@ namespace Cognite.OpcUa.Pushers
 
                 var updates = toWrite
                     .Select(elem => (
-                        elem.Item1,
-                        PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.Item3, elem.Item2, ConverterType.Node)
-                    )).Where(elem => elem.Item2 != null)
-                    .ToDictionary(pair => pair.Item1, pair => pair.Item2.Value);
+                        elem.key,
+                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.node, elem.row, ConverterType.Node)
+                    )).Where(elem => elem.update != null)
+                    .ToDictionary(pair => pair.key, pair => pair.update.Value);
 
                 return updates;
             }, null, token);
@@ -667,12 +667,12 @@ namespace Cognite.OpcUa.Pushers
                 {
                     return tsMap.Select(kvp => (
                         kvp.Key,
-                        PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Variable)
-                    )).Where(elem => elem.Item2 != null)
-                    .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
+                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Variable)
+                    )).Where(elem => elem.update != null)
+                    .ToDictionary(pair => pair.Key, pair => pair.update.Value);
                 }
 
-                var toWrite = new List<(string, RawRow, UAVariable)>();
+                var toWrite = new List<(string key, RawRow row, UAVariable node)>();
 
                 foreach (var row in rows)
                 {
@@ -685,10 +685,10 @@ namespace Cognite.OpcUa.Pushers
 
                 var updates = toWrite
                     .Select(elem => (
-                        elem.Item1,
-                        PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.Item3, elem.Item2, ConverterType.Variable)
-                    )).Where(elem => elem.Item2 != null)
-                    .ToDictionary(pair => pair.Item1, pair => pair.Item2.Value);
+                        elem.key,
+                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.node, elem.row, ConverterType.Variable)
+                    )).Where(elem => elem.update != null)
+                    .ToDictionary(pair => pair.key, pair => pair.update.Value);
 
                 return updates;
             }, null, token);
