@@ -90,7 +90,7 @@ namespace Cognite.OpcUa
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
 
-        public StringConverter StringConverter { get; } 
+        public StringConverter StringConverter { get; }
 
 
         /// <summary>
@@ -164,7 +164,7 @@ namespace Cognite.OpcUa
             {
                 throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
             }
-            
+
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
             {

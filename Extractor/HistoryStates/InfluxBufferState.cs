@@ -19,7 +19,6 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Opc.Ua;
 using System;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Cognite.OpcUa.HistoryStates
 {

@@ -1,5 +1,4 @@
-﻿using Cognite.Extractor.Common;
-using Cognite.OpcUa.Pushers;
+﻿using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Newtonsoft.Json;
@@ -7,14 +6,10 @@ using Opc.Ua;
 using Serilog;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
-using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa.NodeSources
 {
@@ -73,7 +68,7 @@ namespace Cognite.OpcUa.NodeSources
                     log.Error("Failed to retrieve and deserialize raw timeseries from CDF: {msg}", ex.Message);
                     return;
                 }
-                
+
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
@@ -119,7 +114,7 @@ namespace Cognite.OpcUa.NodeSources
                     log.Error("Failed to retrieve and deserialize raw assets from CDF: {msg}", ex.Message);
                     return;
                 }
-            
+
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;

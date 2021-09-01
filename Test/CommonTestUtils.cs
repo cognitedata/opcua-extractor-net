@@ -27,7 +27,6 @@ using Server;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -347,7 +346,7 @@ namespace Test
                 Assert.Equal(2, mysteryMeta.Count);
                 Assert.Equal("(0, 100)", mysteryMeta["EURange"]);
             }
-            
+
         }
 
         public static void VerifyModified(
@@ -488,7 +487,7 @@ namespace Test
             variable.VariableAttributes.DataType = dt;
             if (dim > 0)
             {
-                variable.VariableAttributes.ArrayDimensions = new [] { dim };
+                variable.VariableAttributes.ArrayDimensions = new[] { dim };
             }
             return variable;
         }

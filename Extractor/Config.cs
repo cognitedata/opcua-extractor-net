@@ -25,7 +25,6 @@ using Cognite.OpcUa.Pushers;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace Cognite.OpcUa
@@ -349,7 +348,8 @@ namespace Cognite.OpcUa
         public bool ReadServer { get; set; } = true;
         public IEnumerable<string> ExcludeProperties { get => excludeProperties; set => excludeProperties = value ?? excludeProperties; }
         private IEnumerable<string> excludeProperties = new List<string>();
-        public IEnumerable<string> BaseExcludeProperties {
+        public IEnumerable<string> BaseExcludeProperties
+        {
             get => baseExcludeProperties;
             set => baseExcludeProperties = value ?? baseExcludeProperties;
         }

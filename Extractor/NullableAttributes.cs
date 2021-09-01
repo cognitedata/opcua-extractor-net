@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace System.Diagnostics.CodeAnalysis
+﻿namespace System.Diagnostics.CodeAnalysis
 {
     using global::System;
 

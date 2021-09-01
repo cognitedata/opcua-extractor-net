@@ -19,7 +19,6 @@ using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;

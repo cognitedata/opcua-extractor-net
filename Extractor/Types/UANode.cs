@@ -16,7 +16,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.OpcUa.NodeSources;
-using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using CogniteSdk;
 using Newtonsoft.Json;
@@ -24,13 +23,11 @@ using Opc.Ua;
 using Serilog;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Xml.Linq;
 
 namespace Cognite.OpcUa.Types
 {

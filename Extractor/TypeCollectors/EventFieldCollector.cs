@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -209,11 +208,14 @@ namespace Cognite.OpcUa.TypeCollectors
             /// <summary>
             /// Retrieve all fields for this type, combining own fields with parent node fields.
             /// </summary>
-            public IEnumerable<EventField> CollectedFields { get
+            public IEnumerable<EventField> CollectedFields
             {
-                var childFields = children.SelectMany(child => child.ToFields());
-                return Parent?.CollectedFields?.Concat(childFields) ?? childFields;
-            } }
+                get
+                {
+                    var childFields = children.SelectMany(child => child.ToFields());
+                    return Parent?.CollectedFields?.Concat(childFields) ?? childFields;
+                }
+            }
         }
         /// <summary>
         /// Internal representation of node in EventType hierarchy

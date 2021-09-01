@@ -77,7 +77,7 @@ namespace Cognite.OpcUa
         public HistoryReadType Type { get; }
         [NotNull, AllowNull]
         public UAHistoryExtractionState? State { get; set; }
-        public DateTime Time => 
+        public DateTime Time =>
             Type == HistoryReadType.BackfillData || Type == HistoryReadType.BackfillEvents
             ? State.SourceExtractedRange.First : State.SourceExtractedRange.Last;
         public NodeId Id { get; }
@@ -404,7 +404,8 @@ namespace Cognite.OpcUa
                 if (token.IsCancellationRequested) break;
                 var generators = chunks
                     .Select<HistoryReadParams, Func<Task>>(
-                        chunk => () => {
+                        chunk => () =>
+                        {
                             return Task.Run(() => BaseHistoryReadOp(chunk, cb, finishedReads, source.Token));
                         })
                     .ToList();

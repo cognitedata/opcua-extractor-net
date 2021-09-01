@@ -394,7 +394,7 @@ namespace Cognite.OpcUa
             var sdp = variable.DataType.ToDataPoint(extractor, value.WrappedValue, value.SourceTimestamp, uniqueId);
             return new[] { sdp };
         }
-        
+
         /// <summary>
         /// Handle subscription callback for events
         /// </summary>
@@ -435,7 +435,7 @@ namespace Cognite.OpcUa
                 Enqueue(buffEvent);
             }
         }
-        
+
         /// <summary>
         /// Construct event from filter and collection of event fields
         /// </summary>

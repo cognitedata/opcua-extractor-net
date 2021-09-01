@@ -67,7 +67,7 @@ namespace Cognite.OpcUa
         private readonly UAClientConfig sourceConfig;
         private readonly UAClient client;
         private readonly Dictionary<NodeId, NodeMetricState> metrics = new Dictionary<NodeId, NodeMetricState>();
-        
+
         public NodeMetricsManager(UAClient client, UAClientConfig sourceConfig, NodeMetricsConfig config)
         {
             this.config = config;

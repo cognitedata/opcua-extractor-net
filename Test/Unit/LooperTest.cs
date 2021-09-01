@@ -1,6 +1,5 @@
 ﻿using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
-using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;

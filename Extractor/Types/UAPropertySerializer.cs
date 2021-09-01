@@ -6,12 +6,9 @@ using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 
 namespace Cognite.OpcUa.Types
 {
@@ -86,7 +83,7 @@ namespace Cognite.OpcUa.Types
                     log.Warning("Failed to serialize built in type: {err}", ex.Message);
                 }
             }
-            
+
             // If the type is enumerable we can write it to a JSON array.
             if (value is IEnumerable enumerableVal && !(value is System.Xml.XmlElement))
             {
@@ -254,7 +251,8 @@ namespace Cognite.OpcUa.Types
         }
     }
 
-    public enum ConverterType {
+    public enum ConverterType
+    {
         Node,
         Variable
     }

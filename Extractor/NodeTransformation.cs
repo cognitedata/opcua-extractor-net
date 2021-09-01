@@ -18,7 +18,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
-using System;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -261,5 +260,5 @@ namespace Cognite.OpcUa
         Ignore,
         Property,
         DropSubscriptions
-    }    
+    }
 }

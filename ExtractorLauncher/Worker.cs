@@ -1,15 +1,12 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Cognite.OpcUa;
-using Serilog;
+using Cognite.Extractor.Metrics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Prometheus;
 using Microsoft.Extensions.Logging;
-using Cognite.Extractor.Metrics;
+using Prometheus;
+using Serilog;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.Service
 {

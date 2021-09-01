@@ -29,9 +29,7 @@ using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -591,7 +589,7 @@ namespace Cognite.OpcUa
             {
                 log.Debug(trans.ToString());
             }
-            
+
             uaClient.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
             Transformations = transformations;
         }
@@ -639,7 +637,7 @@ namespace Cognite.OpcUa
                     var emitterIds = new HashSet<NodeId>((config.Events.EmitterIds ?? Enumerable.Empty<ProtoNodeId>())
                         .Select(proto => proto.ToNodeId(uaClient, ObjectIds.Server)));
                     var eventEmitterIds = new HashSet<NodeId>(histEmitterIds.Concat(emitterIds));
-                                                                                                          ;
+
                     foreach (var id in eventEmitterIds)
                     {
                         var history = (histEmitterIds.Contains(id)) && config.Events.History;

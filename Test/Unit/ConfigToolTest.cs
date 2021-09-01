@@ -4,16 +4,13 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Config;
 using Microsoft.Extensions.DependencyInjection;
-using Opc.Ua;
 using Server;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Test.Utils;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -199,7 +196,7 @@ namespace Test.Unit
             summary = tester.Explorer.Summary;
             Assert.Equal(100, summary.AttributeChunkSize);
             Assert.False(summary.VariableLimitWarning);
-            
+
             tester.Config.Extraction.RootNode = null;
             tester.Server.Issues.MaxAttributes = 0;
             tester.Config.Source.AttributesChunk = 1000;
