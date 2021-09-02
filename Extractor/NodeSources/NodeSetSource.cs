@@ -1,6 +1,7 @@
 ﻿using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -58,20 +59,20 @@ namespace Cognite.OpcUa.NodeSources
 
     public class NodeSetSource : BaseNodeSource, IEventFieldSource
     {
+        protected override ILogger Log { get; set; } = Serilog.Log.Logger.ForContext<NodeSetSource>();
         private readonly NodeStateCollection nodes = new NodeStateCollection();
         private readonly Dictionary<NodeId, NodeState> nodeDict = new Dictionary<NodeId, NodeState>();
 
         private Dictionary<NodeId, PlainType> types = new Dictionary<NodeId, PlainType>();
 
         private Dictionary<NodeId, IList<IReference>> references = new Dictionary<NodeId, IList<IReference>>();
-        private List<UAVariable> rawVariables = new List<UAVariable>();
-        private List<UANode> rawObjects = new List<UANode>();
         private readonly object buildLock = new object();
         private bool built;
         public NodeSetSource(FullConfig config, UAExtractor extractor, UAClient client) : base(config, extractor, client)
         {
         }
 
+        #region build
         private void LoadNodeSet(NodeSetConfig set)
         {
             if (set.URL != null)
@@ -191,19 +192,19 @@ namespace Cognite.OpcUa.NodeSources
                     NodeId = node.NodeId, DisplayName = node.DisplayName?.Text };
                 
             }
-            foreach (var type in types)
+            foreach (var (id, type) in types)
             {
-                var parentRef = references[type.Key].FirstOrDefault(rf =>
+                var parentRef = references[id].FirstOrDefault(rf =>
                     rf.ReferenceTypeId == ReferenceTypeIds.HasSubtype
                     && rf.IsInverse);
                 if (parentRef != null)
                 {
-                    type.Value.Parent = types.GetValueOrDefault(Client.ToNodeId(parentRef.TargetId));
+                    type.Parent = types.GetValueOrDefault(Client.ToNodeId(parentRef.TargetId));
                 }
-                if (type.Value.NodeClass == NodeClass.DataType)
+                if (type.NodeClass == NodeClass.DataType)
                 {
                     PropertyState? enumVarNode = null;
-                    foreach (var rf in references[type.Key])
+                    foreach (var rf in references[id])
                     {
                         if (rf.ReferenceTypeId != ReferenceTypeIds.HasProperty || rf.IsInverse) continue;
                         if (!nodeDict.TryGetValue(Client.ToNodeId(rf.TargetId), out var node)) continue;
@@ -213,12 +214,27 @@ namespace Cognite.OpcUa.NodeSources
                     }                       
                     
 
-                    Client.DataTypeManager.RegisterType(type.Value.NodeId,
-                        type.Value.Parent?.NodeId ?? NodeId.Null, type.Value.DisplayName);
+                    Client.DataTypeManager.RegisterType(type.NodeId,
+                        type.Parent?.NodeId ?? NodeId.Null, type.DisplayName);
 
                     if (enumVarNode != null)
                     {
-                        Client.DataTypeManager.SetEnumStrings(type.Value.NodeId, enumVarNode.Value);
+                        Client.DataTypeManager.SetEnumStrings(type.NodeId, enumVarNode.Value);
+                    }
+                }
+                else if ((type.NodeClass == NodeClass.ObjectType || type.NodeClass == NodeClass.VariableType)
+                        && !type.IsOfType(ObjectTypeIds.BaseEventType))
+                {
+                    var nodeType = Client.ObjectTypeManager.GetObjectType(type.NodeId, type.NodeClass == NodeClass.VariableType);
+                    nodeType.Name = type.DisplayName;
+                }
+                else if (type.NodeClass == NodeClass.ReferenceType && Extractor.ReferenceTypeManager != null)
+                {
+                    var refType = Extractor.ReferenceTypeManager.GetReferenceType(type.NodeId);
+                    var state = nodeDict[type.NodeId];
+                    if (state is ReferenceTypeState refState)
+                    {
+                        refType.SetNames(refState.DisplayName?.Text, refState.InverseName?.Text);
                     }
                 }
             }
@@ -266,6 +282,20 @@ namespace Cognite.OpcUa.NodeSources
                     variable.VariableAttributes.Historizing = varState.Historizing;
                     variable.SetNodeType(Client, varState.TypeDefinitionId);
                     variable.VariableAttributes.DataType = Client.DataTypeManager.GetDataType(varState.DataType);
+                    if (Config.History.Enabled && Config.History.Data)
+                    {
+                        if (Config.Subscriptions.IgnoreAccessLevel)
+                        {
+                            variable.VariableAttributes.ReadHistory = varState.Historizing;
+                        }
+                        else
+                        {
+                            variable.VariableAttributes.ReadHistory = (varState.AccessLevel & AccessLevels.HistoryRead) != 0;
+                        }
+                    }
+                    variable.VariableAttributes.ShouldSubscribe = Config.Subscriptions.DataPoints && (
+                        Config.Subscriptions.IgnoreAccessLevel
+                        || (varState.AccessLevel & AccessLevels.CurrentRead) != 0);
                 }
                 else if (node is BaseVariableTypeState typeState)
                 {
@@ -278,8 +308,9 @@ namespace Cognite.OpcUa.NodeSources
                     variable.SetDataPoint(new Variant(typeState.Value));
                     variable.ValueRead = true;
                     variable.VariableAttributes.DataType = Client.DataTypeManager.GetDataType(typeState.DataType);
+                    variable.VariableAttributes.ShouldSubscribe = false;
                 }
-                rawVariables.Add(variable);
+                NodeMap[id] = variable;
                 return true;
             }
             else if (node.NodeClass == NodeClass.Object
@@ -297,7 +328,7 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     obj.Attributes.Description = typeState.Description?.Text;
                 }
-                rawObjects.Add(obj);
+                NodeMap[id] = obj;
                 return true;
             }
             return false;
@@ -332,12 +363,15 @@ namespace Cognite.OpcUa.NodeSources
             var visitedNodes = new HashSet<NodeId>();
 
             // Simulate browsing the node hierarchy. We do it this way to ensure that we visit the correct nodes.
-            var nextIds = rootNodes.ToList();
+            var nextIds = new HashSet<NodeId>();
 
             foreach (var id in rootNodes)
             {
                 visitedNodes.Add(id);
-                BuildNode(id, NodeId.Null);
+                if (BuildNode(id, NodeId.Null))
+                {
+                    nextIds.Add(id);
+                }
             }
 
             while (nextIds.Any())
@@ -360,25 +394,104 @@ namespace Cognite.OpcUa.NodeSources
                     }
                 }
             }
-
-
-            foreach (var node in rawObjects)
-            {
-                Console.WriteLine(node.ToString());
-            }
-
-            foreach (var node in rawVariables)
-            {
-                Console.WriteLine(node.ToString());
-            }
         }
+        #endregion
 
+        #region parse
 
-        public override Task<BrowseResult> ParseResults(CancellationToken token)
+        public override Task<BrowseResult?> ParseResults(CancellationToken token)
         {
-            Build();
-            throw new NotImplementedException();
+            if (!NodeMap.Any()) return Task.FromResult<BrowseResult?>(null);
+
+            var properties = new List<UAVariable>();
+
+            foreach (var node in NodeMap.Values)
+            {
+                SortNode(node);
+                node.Attributes.DataRead = true;
+                if ((node.IsProperty || Config.Extraction.NodeTypes.AsNodes && node.NodeClass == NodeClass.VariableType)
+                    && (node is UAVariable variable))
+                {
+                    properties.Add(variable);
+                }
+                node.Attributes.PropertiesRead = true;
+            }
+
+            var update = Config.Extraction.Update;
+            var mappedObjects = RawObjects.Where(obj => FilterObject(update, obj)).ToList();
+            FinalDestinationObjects.AddRange(mappedObjects);
+            FinalSourceObjects.AddRange(mappedObjects);
+            foreach (var variable in RawVariables)
+            {
+                SortVariable(update, variable);
+            }
+
+            foreach (var node in FinalSourceObjects.Concat(FinalSourceVariables))
+            {
+                InitNodeState(update, node);
+            }
+
+            Client.ReadNodeValues(properties, token);
+
+            if (Config.Extraction.Relationships.Enabled)
+            {
+                GetRelationshipData();
+            }
+
+            if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
+            {
+                Log.Information("Mapping resulted in no new nodes");
+                return Task.FromResult<BrowseResult?>(null);
+            }
+
+            Log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
+                " {robj} objects and {var} variables.",
+                FinalDestinationObjects.Count, FinalDestinationVariables.Count,
+                FinalSourceObjects.Count, FinalSourceVariables.Count);
+
+            if (FinalReferences.Any())
+            {
+                Log.Information("Found a total of {cnt} references", FinalReferences.Count);
+            }
+
+            return Task.FromResult<BrowseResult?>(new BrowseResult(
+                FinalSourceObjects,
+                FinalSourceVariables,
+                FinalDestinationObjects,
+                FinalDestinationVariables,
+                FinalReferences));
         }
+
+        private void GetRelationshipData()
+        {
+            foreach (var (id, refs) in references)
+            {
+                if (!NodeMap.TryGetValue(id, out var node)) continue;
+                bool sourceIsTs = node is UAVariable variable && !variable.IsArray && variable.NodeClass == NodeClass.Variable;
+                foreach (var rf in refs)
+                {
+                    bool isHierarchical = IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences);
+                    if (isHierarchical && !Config.Extraction.Relationships.Hierarchical) continue;
+                    if (isHierarchical && rf.IsInverse && !Config.Extraction.Relationships.InverseHierarchical) continue;
+                    if (!NodeMap.TryGetValue(Client.ToNodeId(rf.TargetId), out var target)) continue;
+                    bool targetIsTs = node is UAVariable targetVariable && !targetVariable.IsArray && targetVariable.NodeClass == NodeClass.Variable;
+
+
+                    var reference = new UAReference(
+                        Client.ToNodeId(rf.ReferenceTypeId),
+                        !rf.IsInverse,
+                        id,
+                        target.Id,
+                        sourceIsTs,
+                        targetIsTs,
+                        Extractor.ReferenceTypeManager!);
+
+                    FinalReferences.Add(reference);
+                }
+            }
+        }
+
+        #endregion
 
         #region event-types
 
