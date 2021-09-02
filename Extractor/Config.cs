@@ -58,6 +58,7 @@ namespace Cognite.OpcUa
         public X509CertConfig? X509Certificate { get; set; }
         public string? ReverseConnectUrl { get; set; }
         public bool IgnoreCertificateIssues { get; set; }
+        public NodeSetSourceConfig? NodeSetSource { get; set; }
     }
     public enum X509CertificateLocation
     {
@@ -71,6 +72,17 @@ namespace Cognite.OpcUa
         public string? Password { get; set; }
         public X509CertificateLocation Store { get; set; } = X509CertificateLocation.None;
         public string? CertName { get; set; }
+    }
+    public class NodeSetConfig
+    {
+        public string? FileName { get; set; }
+        public Uri? URL { get; set; }
+    }
+    public class NodeSetSourceConfig
+    {
+        public IEnumerable<NodeSetConfig>? NodeSets { get; set; }
+        public bool Instance { get; set; }
+        public bool Types { get; set; }
     }
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1721:Property names should not match get methods", Justification = "Config")]
     public class ExtractionConfig

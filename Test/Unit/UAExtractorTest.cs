@@ -384,6 +384,22 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor();
             var source = new NodeSetSource(tester.Config, extractor, tester.Client);
             tester.Config.Extraction.NodeTypes.AsNodes = true;
+
+            tester.Config.Source.NodeSetSource = new NodeSetSourceConfig
+            {
+                NodeSets = new[]
+                {
+                    new NodeSetConfig
+                    {
+                        URL = new Uri("https://files.opcfoundation.org/schemas/UA/1.04/Opc.Ua.NodeSet2.xml")
+                    },
+                    new NodeSetConfig
+                    {
+                        FileName = "TestServer.NodeSet2.xml"
+                    }
+                }
+            };
+
             source.BuildNodes(new[] { ObjectIds.ObjectsFolder });
 
             tester.Config.Events.AllEvents = true;
@@ -409,7 +425,7 @@ namespace Test.Unit
             Assert.DoesNotContain(new EventField(new QualifiedName("OldValues")),
                 fields[ObjectTypeIds.AuditHistoryUpdateEventType]);
 
-            Assert.True(false);
+            // Assert.True(false);
         }
     }
 }

@@ -13,12 +13,6 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.NodeSources
 {
-    class NodeSetConfig
-    {
-        public string? FileName { get; set; }
-        public Uri? URL { get; set; }
-    }
-
     internal class BasicReference : IReference
     {
         public NodeId? ReferenceTypeId { get; set; }
@@ -72,16 +66,10 @@ namespace Cognite.OpcUa.NodeSources
         private Dictionary<NodeId, IList<IReference>> references = new Dictionary<NodeId, IList<IReference>>();
         private List<UAVariable> rawVariables = new List<UAVariable>();
         private List<UANode> rawObjects = new List<UANode>();
+        private readonly object buildLock = new object();
+        private bool built;
         public NodeSetSource(FullConfig config, UAExtractor extractor, UAClient client) : base(config, extractor, client)
         {
-            LoadNodeSet(new NodeSetConfig
-            {
-                URL = new Uri("https://files.opcfoundation.org/schemas/UA/1.04/Opc.Ua.NodeSet2.xml")
-            });
-            LoadNodeSet(new NodeSetConfig
-            {
-                FileName = "TestServer.NodeSet2.xml"
-            });
         }
 
         private void LoadNodeSet(NodeSetConfig set)
@@ -315,21 +303,31 @@ namespace Cognite.OpcUa.NodeSources
             return false;
         }
 
+        private void Build()
+        {
+            lock (buildLock)
+            {
+                if (built) return;
+                foreach (var set in Config.Source.NodeSetSource!.NodeSets!)
+                {
+                    LoadNodeSet(set);
+                }
+                foreach (var node in nodes)
+                {
+                    nodeDict[node.NodeId] = node;
+                }
+                LoadReferences();
+                LoadTypeTree();
+            }
+        }
+
 
         /// <summary>
         /// Construct 
         /// </summary>
         public void BuildNodes(IEnumerable<NodeId> rootNodes)
         {
-            foreach (var node in nodes)
-            {
-                nodeDict[node.NodeId] = node;
-            }
-
-            // Load all references into dictionary
-            LoadReferences();
-            // Build internal type tree for browsing, and insert types into type managers where relevant.
-            LoadTypeTree();
+            Build();
 
             var visitedNodes = new HashSet<NodeId>();
 
@@ -378,6 +376,7 @@ namespace Cognite.OpcUa.NodeSources
 
         public override Task<BrowseResult> ParseResults(CancellationToken token)
         {
+            Build();
             throw new NotImplementedException();
         }
 
@@ -385,8 +384,8 @@ namespace Cognite.OpcUa.NodeSources
 
         private IEnumerable<EventField> ToFields(NodeId parent, NodeState state)
         {
-            if (parent == ObjectTypeIds.BaseEventType && baseExcludeProperties.Contains(state.BrowseName.Name)
-                        || excludeProperties.Contains(state.BrowseName.Name)) yield break;
+            if (parent == ObjectTypeIds.BaseEventType && baseExcludeProperties!.Contains(state.BrowseName.Name)
+                        || excludeProperties!.Contains(state.BrowseName.Name)) yield break;
 
             var refs = references[state.NodeId];
             var children = refs
@@ -431,11 +430,13 @@ namespace Cognite.OpcUa.NodeSources
             return fields;
         }
 
-        private HashSet<string> excludeProperties;
-        private HashSet<string> baseExcludeProperties;
+        private HashSet<string>? excludeProperties;
+        private HashSet<string>? baseExcludeProperties;
 
         public Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token)
         {
+            Build();
+
             excludeProperties = new HashSet<string>(Config.Events.ExcludeProperties);
             baseExcludeProperties = new HashSet<string>(Config.Events.BaseExcludeProperties);
 
