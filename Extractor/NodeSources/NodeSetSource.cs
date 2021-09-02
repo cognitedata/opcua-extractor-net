@@ -7,6 +7,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -53,6 +54,7 @@ namespace Cognite.OpcUa.NodeSources
     internal class PlainEventType : PlainType
     {
         public IList<NodeState> Properties { get; } = new List<NodeState>();
+        public IEnumerable<EventField>? Fields { get; set; }
         public PlainEventType(PlainType other) : base(other.NodeId, other.DisplayName)
         {
             Parent = other.Parent;
@@ -379,8 +381,13 @@ namespace Cognite.OpcUa.NodeSources
             throw new NotImplementedException();
         }
 
-        private IEnumerable<EventField> ToFields(NodeState state)
+        #region event-types
+
+        private IEnumerable<EventField> ToFields(NodeId parent, NodeState state)
         {
+            if (parent == ObjectTypeIds.BaseEventType && baseExcludeProperties.Contains(state.BrowseName.Name)
+                        || excludeProperties.Contains(state.BrowseName.Name)) yield break;
+
             var refs = references[state.NodeId];
             var children = refs
                 .Where(rf => !rf.IsInverse && IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences))
@@ -388,28 +395,96 @@ namespace Cognite.OpcUa.NodeSources
                 .Where(node => node != null && (node.NodeClass == NodeClass.Object || node.NodeClass == NodeClass.Variable))
                 .ToList();
             if (state.NodeClass == NodeClass.Object && !children.Any()) yield break;
-            else if (state.NodeClass != NodeClass.Variable) yield break;
+            else if (state.NodeClass != NodeClass.Variable && state.NodeClass != NodeClass.Object) yield break;
+
+            if (state.NodeClass == NodeClass.Variable)
+            {
+                yield return new EventField(state.BrowseName);
+            }
+            foreach (var child in children)
+            {
+                
+                var childFields = ToFields(state.NodeId, child);
+                foreach (var childField in childFields)
+                {
+                    childField.BrowsePath.Insert(0, state.BrowseName);
+                    yield return childField;
+                }
+            }
         }
+
+        private IEnumerable<EventField> CollectFields(PlainEventType type)
+        {
+            if (type.Fields != null) return type.Fields;
+
+            var fields = new List<EventField>();
+
+            if (type.Parent is PlainEventType parent)
+            {
+                fields.AddRange(CollectFields(parent));
+            }
+            foreach (var child in type.Properties)
+            {
+                fields.AddRange(ToFields(type.NodeId, child));
+            }
+            type.Fields = fields;
+            return fields;
+        }
+
+        private HashSet<string> excludeProperties;
+        private HashSet<string> baseExcludeProperties;
 
         public Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token)
         {
+            excludeProperties = new HashSet<string>(Config.Events.ExcludeProperties);
+            baseExcludeProperties = new HashSet<string>(Config.Events.BaseExcludeProperties);
+
             var evtTypes = types.Where(type => type.Value.NodeClass == NodeClass.ObjectType
                 && IsOfType(type.Key, ObjectTypeIds.BaseEventType)).ToDictionary(kvp => kvp.Key, kvp => new PlainEventType(kvp.Value));
+
+            foreach (var (id, type) in evtTypes)
+            {
+                if (type.NodeId != ObjectTypeIds.BaseEventType)
+                {
+                    type.Parent = evtTypes[type.Parent!.NodeId];
+                }
+                else
+                {
+                    type.Parent = null;
+                }
+
+                var refs = references[id];
+                var children = refs
+                    .Where(rf => !rf.IsInverse && IsOfType(rf.ReferenceTypeId, ReferenceTypeIds.HierarchicalReferences))
+                    .Select(rf => nodeDict.GetValueOrDefault(Client.ToNodeId(rf.TargetId)))
+                    .Where(node => node != null && (node.NodeClass == NodeClass.Object || node.NodeClass == NodeClass.Variable))
+                    .ToList();
+
+                foreach (var child in children) type.Properties.Add(child);
+            }
 
             HashSet<NodeId>? whitelist = null;
             if (Config.Events.EventIds != null && Config.Events.EventIds.Any())
             {
                 whitelist = new HashSet<NodeId>(Config.Events.EventIds.Select(proto => proto.ToNodeId(Client, ObjectTypeIds.BaseEventType)));
             }
+            Regex? ignoreFilter = Config.Events.ExcludeEventFilter == null ? null : new Regex(Config.Events.ExcludeEventFilter);
+
+            var result = new Dictionary<NodeId, HashSet<EventField>>();
 
             foreach (var (id, type) in evtTypes)
             {
-
+                if (type.DisplayName != null && ignoreFilter != null && ignoreFilter.IsMatch(type.DisplayName)) continue;
+                if (whitelist != null && whitelist.Any())
+                {
+                    if (!whitelist.Contains(type.NodeId)) continue;
+                }
+                else if (!Config.Events.AllEvents && type.NodeId.NamespaceIndex == 0) continue;
+                result[type.NodeId] = new HashSet<EventField>(CollectFields(type));
             }
 
-
-
-            throw new NotImplementedException();
+            return result;
         }
+        #endregion
     }
 }

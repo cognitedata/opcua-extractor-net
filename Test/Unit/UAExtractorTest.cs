@@ -3,6 +3,7 @@ using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;
@@ -384,6 +385,29 @@ namespace Test.Unit
             var source = new NodeSetSource(tester.Config, extractor, tester.Client);
             tester.Config.Extraction.NodeTypes.AsNodes = true;
             source.BuildNodes(new[] { ObjectIds.ObjectsFolder });
+
+            tester.Config.Events.AllEvents = true;
+            var fields = source.GetEventIdFields(tester.Source.Token);
+
+            Assert.Equal(96, fields.Count);
+
+            // Check that all parent properties are present in a deep event
+            Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].Count);
+            Assert.Contains(new EventField(new QualifiedName("EventType")),
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+            Assert.Contains(new EventField(new QualifiedName("ActionTimeStamp")),
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+            Assert.Contains(new EventField(new QualifiedName("ParameterDataTypeId")),
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+            Assert.Contains(new EventField(new QualifiedName("UpdatedNode")),
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+            Assert.Contains(new EventField(new QualifiedName("OldValues")),
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+
+            // Check that nodes in the middle only have higher level properties
+            Assert.Equal(13, fields[ObjectTypeIds.AuditHistoryUpdateEventType].Count);
+            Assert.DoesNotContain(new EventField(new QualifiedName("OldValues")),
+                fields[ObjectTypeIds.AuditHistoryUpdateEventType]);
 
             Assert.True(false);
         }

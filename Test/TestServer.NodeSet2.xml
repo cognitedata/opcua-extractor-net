@@ -326,4 +326,80 @@
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
     </References>
   </UAVariable>
+  
+  <!-- Event types -->
+  <UAObjectType NodeId="ns=1;i=55" BrowseName="1:EventBasic 1">
+    <DisplayName>EventBasic 1</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=2041</Reference>
+    </References>
+  </UAObjectType>
+  <UAObjectType NodeId="ns=1;i=56" BrowseName="1:EventBasic 2">
+    <DisplayName>EventBasic 2</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=2041</Reference>
+    </References>
+  </UAObjectType>
+
+  <UAObjectType NodeId="ns=1;i=57" BrowseName="1:EventCustomType">
+    <DisplayName>EventCustomType</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=2041</Reference>
+    </References>
+  </UAObjectType>
+  <UAVariable NodeId="ns=1;i=58" BrowseName="1:TypeProp" DataType="i=12" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>TypeProp</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=57</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+
+  <UAObjectType NodeId="ns=1;i=51" BrowseName="1:EventExtraProperties">
+    <DisplayName>EventExtraProperties</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">i=2041</Reference>
+    </References>
+  </UAObjectType>
+  <UAVariable NodeId="ns=1;i=52" BrowseName="1:PropertyNum" DataType="i=10" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>PropertyNum</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=51</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=53" BrowseName="1:PropertyString" DataType="i=12" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>PropertyString</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=51</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=54" BrowseName="1:SubType" DataType="i=12" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>SubType</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=51</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+
+  <UAObjectType NodeId="ns=1;i=59" BrowseName="1:EventDeepProperties">
+    <DisplayName>EventDeepProperties</DisplayName>
+    <References>
+      <Reference ReferenceType="HasSubtype" IsForward="false">ns=1;i=51</Reference>
+    </References>
+  </UAObjectType>
+  <UAObject NodeId="ns=1;i=60" BrowseName="1:DeepObj">
+    <DisplayName>DeepObj</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=59</Reference>
+    </References>
+  </UAObject>
+  <UAVariable NodeId="ns=1;i=61" BrowseName="1:DeepProp" DataType="i=12" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>DeepProp</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=60</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
 </UANodeSet>
