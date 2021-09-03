@@ -332,33 +332,6 @@ namespace Test.Unit
             Assert.True(nodes[2].Ignore);
             Assert.False(nodes[3].Ignore);
         }
-        [Fact]
-        public void TestIgnoreInherit()
-        {
-            var raw = new RawNodeTransformation
-            {
-                Filter = new RawNodeFilter
-                {
-                    Id = "parent"
-                },
-                Type = TransformationType.Ignore
-            };
-
-            var node1 = new UANode(new NodeId("parent"), null, NodeId.Null, NodeClass.Object);
-            var node2 = new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Object);
-            node2.Parent = node1;
-            var nodes = new[]
-            {
-                node1, node2
-            };
-            var trans = new NodeTransformation(raw, 0);
-            foreach (var node in nodes)
-            {
-                trans.ApplyTransformation(node, nss);
-            }
-            Assert.True(nodes[0].Ignore);
-            Assert.True(nodes[1].Ignore);
-        }
 
         [Fact]
         public void TestPropertyTransformation()
@@ -387,34 +360,6 @@ namespace Test.Unit
             Assert.True(nodes[1].IsProperty);
             Assert.True(nodes[2].IsProperty);
             Assert.False(nodes[3].IsProperty);
-        }
-        [Fact]
-        public void TestPropertyInherit()
-        {
-            var raw = new RawNodeTransformation
-            {
-                Filter = new RawNodeFilter
-                {
-                    Id = "parent"
-                },
-                Type = TransformationType.Property
-            };
-
-
-            var node1 = new UANode(new NodeId("parent"), null, NodeId.Null, NodeClass.Object);
-            var node2 = new UANode(new NodeId(1), null, new NodeId("parent"), NodeClass.Object);
-            node2.Parent = node1;
-            var nodes = new[]
-            {
-                node1, node2
-            };
-            var trans = new NodeTransformation(raw, 0);
-            foreach (var node in nodes)
-            {
-                trans.ApplyTransformation(node, nss);
-            }
-            Assert.True(nodes[0].IsProperty);
-            Assert.True(nodes[1].IsProperty);
         }
     }
 }
