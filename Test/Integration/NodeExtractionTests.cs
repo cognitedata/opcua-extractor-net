@@ -1143,7 +1143,7 @@ namespace Test.Integration
                 {
                     new NodeSetConfig
                     {
-                        URL = new Uri("https://files.opcfoundation.org/schemas/UA/1.04/Opc.Ua.NodeSet2.xml")
+                        Url = new Uri("https://files.opcfoundation.org/schemas/UA/1.04/Opc.Ua.NodeSet2.xml")
                     },
                     new NodeSetConfig
                     {

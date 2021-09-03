@@ -74,14 +74,14 @@ namespace Cognite.OpcUa.NodeSources
         #region build
         private void LoadNodeSet(NodeSetConfig set)
         {
-            if (set.URL != null)
+            if (set.Url != null)
             {
-                string fileName = set.FileName ?? set.URL.Segments.Last();
+                string fileName = set.FileName ?? set.Url.Segments.Last();
                 if (!File.Exists(fileName))
                 {
                     using (var client = new WebClient())
                     {
-                        client.DownloadFile(set.URL, fileName);
+                        client.DownloadFile(set.Url, fileName);
                     }
                 }
                 set.FileName = fileName;

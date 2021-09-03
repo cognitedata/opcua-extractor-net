@@ -76,7 +76,7 @@ namespace Cognite.OpcUa
     public class NodeSetConfig
     {
         public string? FileName { get; set; }
-        public Uri? URL { get; set; }
+        public Uri? Url { get; set; }
     }
     public class NodeSetSourceConfig
     {
