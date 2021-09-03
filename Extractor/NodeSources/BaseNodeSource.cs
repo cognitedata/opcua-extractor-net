@@ -168,14 +168,15 @@ namespace Cognite.OpcUa.NodeSources
             if (node.ParentId != null && !node.ParentId.IsNullNodeId && NodeMap.TryGetValue(node.ParentId, out var parent))
             {
                 node.Parent = parent;
+                node.Attributes.Ignore |= node.Parent.Ignore;
+                node.Attributes.IsProperty |= node.Parent.IsProperty || node.Parent.NodeClass == NodeClass.Variable;
             }
 
             if (Extractor.Transformations != null)
             {
                 if (node.Parent != null)
                 {
-                    node.Attributes.Ignore |= node.Parent.Ignore;
-                    node.Attributes.IsProperty |= node.Parent.IsProperty || node.Parent.NodeClass == NodeClass.Variable;
+                    
                     if (node.Parent.NodeClass == NodeClass.Variable || node.Parent.IsProperty)
                     {
                         node.Attributes.IsProperty = true;

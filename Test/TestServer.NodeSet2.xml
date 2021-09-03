@@ -402,4 +402,46 @@
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
     </References>
   </UAVariable>
+
+  <!-- Event objects -->
+  <UAObject NodeId="ns=1;i=45" BrowseName="1:EventRoot">
+    <DisplayName>EventRoot</DisplayName>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">i=85</Reference>
+    </References>
+  </UAObject>
+  <UAObject NodeId="ns=1;i=48" BrowseName="1:EXCLUDE Object">
+    <DisplayName>EXCLUDE Object</DisplayName>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=45</Reference>
+    </References>
+  </UAObject>
+  
+  <UAObject NodeId="ns=1;i=46" BrowseName="1:Object 1" EventNotifier="5">
+    <DisplayName>Object 1</DisplayName>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=45</Reference>
+    </References>
+  </UAObject>
+  <UAVariable NodeId="ns=1;i=49" BrowseName="1:Variable 1" DataType="i=11" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>Variable 1</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=46</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=50" BrowseName="1:Variable 2" DataType="i=11" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>Variable 2</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=46</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+
+  <UAObject NodeId="ns=1;i=47" BrowseName="1:Object 2" EventNotifier="1">
+    <DisplayName>Object 2</DisplayName>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=45</Reference>
+    </References>
+  </UAObject>
 </UANodeSet>

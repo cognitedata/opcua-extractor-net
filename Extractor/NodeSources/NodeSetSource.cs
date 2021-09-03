@@ -87,6 +87,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 set.FileName = fileName;
             }
+            Log.Information("Loading nodeset from {file}", set.FileName);
             LoadNodeSet(set.FileName!);
         }
 
@@ -95,23 +96,6 @@ namespace Cognite.OpcUa.NodeSources
             using var stream = new FileStream(file, FileMode.Open, FileAccess.Read);
             var set = Opc.Ua.Export.UANodeSet.Read(stream);
             set.Import(Client.SystemContext, nodes);
-            /* foreach (var node in nodes)
-            {
-                Console.WriteLine($"{node.NodeId}: {node.DisplayName}, {node.NodeClass}");
-                var references = new List<IReference>();
-                node.GetReferences(Client.SystemContext, references);
-                var children = new List<BaseInstanceState>();
-                node.GetChildren(Client.SystemContext, children);
-                if (references.Any()) Console.WriteLine(references.Any() + ", " + string.Join(',', references.Select(reference => reference.TargetId)));
-                if (children.Any()) Console.WriteLine(children.Any() + ", " + string.Join(',', children.Select(child => child.DisplayName)));
-                if (node is BaseTypeState type) Console.WriteLine(type.SuperTypeId);
-                if (node is BaseInstanceState instance) Console.WriteLine(instance.ModellingRuleId + ", " + instance.TypeDefinitionId);
-                
-            }
-            foreach (var ns in Client.NamespaceTable.ToArray())
-            {
-                Console.WriteLine(ns);
-            } */
         }
 
         private void LoadReferences()
@@ -148,7 +132,6 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 cnt += refs.Count;
             }
-            Console.WriteLine($"Found {cnt} references");
             // Create all inverse references
             foreach (var node in nodes)
             {
@@ -175,7 +158,7 @@ namespace Cognite.OpcUa.NodeSources
                     }
                 }
             }
-            Console.WriteLine($"Found or created {cnt} references");
+            Log.Information("Found or created {cnt} references in nodeset files", cnt);
         }
 
 
@@ -349,6 +332,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 LoadReferences();
                 LoadTypeTree();
+                built = true;
             }
         }
 
@@ -360,6 +344,7 @@ namespace Cognite.OpcUa.NodeSources
         {
             Build();
 
+            NodeMap.Clear();
             var visitedNodes = new HashSet<NodeId>();
 
             // Simulate browsing the node hierarchy. We do it this way to ensure that we visit the correct nodes.
@@ -403,6 +388,14 @@ namespace Cognite.OpcUa.NodeSources
         {
             if (!NodeMap.Any()) return Task.FromResult<BrowseResult?>(null);
 
+            RawObjects.Clear();
+            RawVariables.Clear();
+            FinalDestinationObjects.Clear();
+            FinalDestinationVariables.Clear();
+            FinalReferences.Clear();
+            FinalSourceObjects.Clear();
+            FinalSourceVariables.Clear();
+
             var properties = new List<UAVariable>();
 
             foreach (var node in NodeMap.Values)
@@ -435,7 +428,7 @@ namespace Cognite.OpcUa.NodeSources
 
             if (Config.Extraction.Relationships.Enabled)
             {
-                GetRelationshipData();
+                GetRelationshipData(FinalSourceObjects.Concat(FinalSourceVariables));
             }
 
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
@@ -462,11 +455,14 @@ namespace Cognite.OpcUa.NodeSources
                 FinalReferences));
         }
 
-        private void GetRelationshipData()
+        private void GetRelationshipData(IEnumerable<UANode> mappedNodes)
         {
+            var validNodeIds = new HashSet<NodeId>(mappedNodes.Select(node => node.Id));
             foreach (var (id, refs) in references)
             {
                 if (!NodeMap.TryGetValue(id, out var node)) continue;
+                if (!validNodeIds.Contains(id)) continue;
+                if (node.IsProperty) continue;
                 bool sourceIsTs = node is UAVariable variable && !variable.IsArray && variable.NodeClass == NodeClass.Variable;
                 foreach (var rf in refs)
                 {
@@ -474,8 +470,9 @@ namespace Cognite.OpcUa.NodeSources
                     if (isHierarchical && !Config.Extraction.Relationships.Hierarchical) continue;
                     if (isHierarchical && rf.IsInverse && !Config.Extraction.Relationships.InverseHierarchical) continue;
                     if (!NodeMap.TryGetValue(Client.ToNodeId(rf.TargetId), out var target)) continue;
+                    if (!validNodeIds.Contains(target.Id)) continue;
+                    if (target.IsProperty) continue;
                     bool targetIsTs = node is UAVariable targetVariable && !targetVariable.IsArray && targetVariable.NodeClass == NodeClass.Variable;
-
 
                     var reference = new UAReference(
                         Client.ToNodeId(rf.ReferenceTypeId),

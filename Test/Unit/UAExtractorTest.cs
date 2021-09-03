@@ -378,54 +378,6 @@ namespace Test.Unit
             Assert.Equal("Test2", tester.Client.GetUniqueId(new NodeId("test2", 2)));
             Assert.Equal("Test1[0]", extractor.GetUniqueId(new NodeId("test"), 0));
         }
-        [Fact]
-        public async Task TestNodeSetSource()
-        {
-            using var extractor = tester.BuildExtractor();
-            var source = new NodeSetSource(tester.Config, extractor, tester.Client);
-            tester.Config.Extraction.NodeTypes.AsNodes = true;
-
-            tester.Config.Source.NodeSetSource = new NodeSetSourceConfig
-            {
-                NodeSets = new[]
-                {
-                    new NodeSetConfig
-                    {
-                        URL = new Uri("https://files.opcfoundation.org/schemas/UA/1.04/Opc.Ua.NodeSet2.xml")
-                    },
-                    new NodeSetConfig
-                    {
-                        FileName = "TestServer.NodeSet2.xml"
-                    }
-                }
-            };
-
-            source.BuildNodes(new[] { ObjectIds.ObjectsFolder });
-
-            tester.Config.Events.AllEvents = true;
-            var fields = source.GetEventIdFields(tester.Source.Token);
-
-            Assert.Equal(96, fields.Count);
-
-            // Check that all parent properties are present in a deep event
-            Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].Count);
-            Assert.Contains(new EventField(new QualifiedName("EventType")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
-            Assert.Contains(new EventField(new QualifiedName("ActionTimeStamp")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
-            Assert.Contains(new EventField(new QualifiedName("ParameterDataTypeId")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
-            Assert.Contains(new EventField(new QualifiedName("UpdatedNode")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
-            Assert.Contains(new EventField(new QualifiedName("OldValues")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
-
-            // Check that nodes in the middle only have higher level properties
-            Assert.Equal(13, fields[ObjectTypeIds.AuditHistoryUpdateEventType].Count);
-            Assert.DoesNotContain(new EventField(new QualifiedName("OldValues")),
-                fields[ObjectTypeIds.AuditHistoryUpdateEventType]);
-
-            // Assert.True(false);
-        }
+        
     }
 }
