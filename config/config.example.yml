@@ -71,6 +71,18 @@ source:
     attributes-chunk: 10000
     # Maximum number of monitoredItems to create on the server per call. Higher is faster.
     subscription-chunk: 1000
+    # Read from NodeSet2 files instead of browsing the OPC-UA node hierarchy.
+    node-set-source:
+        # List of nodesets to read. Specified by URL, file name, or both. If no name is specified, the last segment of
+        # the URL is used as file name.
+        # File name is path both of downloaded files, and where the extractor looks for existing files.
+        node-sets:
+            # - url: "https://files.opcfoundation.org/schemas/UA/1.04/Opc.Ua.NodeSet2.xml"
+            # - file-name: "Server.NodeSet2.xml"
+        # Map the instance hierarchy. This entirely skips normal browse, and just "browses" the nodeset file.
+        # instance: false
+        # Map types. This skips mapping of data-types, events types, reference types and object types.
+        # types: false
 
 # Config for reading of history from the server
 history:
