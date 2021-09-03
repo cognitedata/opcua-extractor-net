@@ -209,7 +209,12 @@ namespace Cognite.OpcUa
             }
 
             ConfigureExtractor();
-            await DataTypeManager.GetDataTypeStructureAsync(source.Token);
+            if (config.Source.NodeSetSource == null
+                || (!config.Source.NodeSetSource.NodeSets?.Any() ?? false)
+                || !config.Source.NodeSetSource.Types)
+            {
+                await DataTypeManager.GetDataTypeStructureAsync(source.Token);
+            }
 
             Started = true;
             startTime.Set(new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds());
@@ -219,7 +224,7 @@ namespace Cognite.OpcUa
                 pusher.Reset();
             }
 
-            var synchTasks = await RunMapping(RootNodes, true);
+            var synchTasks = await RunMapping(RootNodes, true, true);
 
             if (config.FailureBuffer.Enabled && FailureBuffer != null)
             {
@@ -271,7 +276,7 @@ namespace Cognite.OpcUa
             ConfigureExtractor();
             uaClient.ResetVisitedNodes();
 
-            var synchTasks = await RunMapping(RootNodes, true);
+            var synchTasks = await RunMapping(RootNodes, true, false);
 
             Looper.ScheduleTasks(synchTasks);
             Started = true;
@@ -290,7 +295,7 @@ namespace Cognite.OpcUa
                 {
                     nodesToBrowse.Add(id);
                 }
-                var historyTasks = await RunMapping(nodesToBrowse.Distinct(), true);
+                var historyTasks = await RunMapping(nodesToBrowse.Distinct(), true, false);
 
                 Looper.ScheduleTasks(historyTasks);
             }
@@ -424,7 +429,8 @@ namespace Cognite.OpcUa
         {
             // If we are updating we want to re-discover nodes in order to run them through mapping again.
             var historyTasks = await RunMapping(RootNodes,
-                !config.Extraction.Update.AnyUpdate && !config.Extraction.Relationships.Enabled);
+                !config.Extraction.Update.AnyUpdate && !config.Extraction.Relationships.Enabled,
+                false);
             Looper.ScheduleTasks(historyTasks);
         }
 
@@ -446,11 +452,12 @@ namespace Cognite.OpcUa
 
         #region Mapping
 
-        private async Task<IEnumerable<Task>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited)
+        private async Task<IEnumerable<Task>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited, bool initial)
         {
             bool readFromOpc = true;
             NodeSources.BrowseResult? result = null;
-            if (config.Cognite?.RawNodeBuffer?.Enable ?? false)
+            IEventFieldSource? eventSource = null;
+            if ((config.Cognite?.RawNodeBuffer?.Enable ?? false) && initial)
             {
                 log.Debug("Begin fetching data from CDF");
                 var handler = new CDFNodeSource(config, this, uaClient, pushers.OfType<CDFPusher>().First());
@@ -469,6 +476,34 @@ namespace Cognite.OpcUa
                 else
                 {
                     readFromOpc = false;
+                }
+            }
+
+            if ((config.Source.NodeSetSource?.NodeSets?.Any() ?? false) && initial
+                && (config.Source.NodeSetSource.Instance || config.Source.NodeSetSource.Types))
+            {
+                log.Debug("Begin fetching data from internal node set");
+                var handler = new NodeSetSource(config, this, uaClient);
+                handler.BuildNodes(nodesToBrowse);
+
+                if (config.Source.NodeSetSource.Instance)
+                {
+                    result = await handler.ParseResults(source.Token);
+                    readFromOpc = false;
+                }
+                if (config.Source.NodeSetSource.Types)
+                {
+                    eventSource = handler;
+                }
+            }
+
+            if (config.Events.Enabled)
+            {
+                var eventFields = uaClient.GetEventFields(eventSource, source.Token);
+                foreach (var field in eventFields)
+                {
+                    State.ActiveEvents[field.Key] = field.Value;
+                    State.RegisterNode(field.Key, uaClient.GetUniqueId(field.Key));
                 }
             }
 
@@ -623,12 +658,6 @@ namespace Cognite.OpcUa
             if (config.Events.Enabled)
             {
                 Streamer.AllowEvents = true;
-                var eventFields = uaClient.GetEventFields(source.Token);
-                foreach (var field in eventFields)
-                {
-                    State.ActiveEvents[field.Key] = field.Value;
-                    State.RegisterNode(field.Key, uaClient.GetUniqueId(field.Key));
-                }
                 if (config.Events.EmitterIds != null && config.Events.EmitterIds.Any()
                     || config.Events.HistorizingEmitterIds != null && config.Events.HistorizingEmitterIds.Any())
                 {

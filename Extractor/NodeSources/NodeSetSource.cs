@@ -2,9 +2,7 @@
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
-using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -194,7 +192,7 @@ namespace Cognite.OpcUa.NodeSources
                         if (node.BrowseName?.Name != "EnumStrings" && node.BrowseName?.Name != "EnumValues") continue;
                         enumVarNode = node as PropertyState;
                         break;
-                    }                       
+                    }
                     
 
                     Client.DataTypeManager.RegisterType(type.NodeId,

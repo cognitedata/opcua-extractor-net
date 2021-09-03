@@ -1151,7 +1151,7 @@ namespace Cognite.OpcUa.Config
             {
                 config.Events.AllEvents = true;
                 config.Events.Enabled = true;
-                GetEventFields(token);
+                GetEventFields(null, token);
             }
             catch (Exception ex)
             {

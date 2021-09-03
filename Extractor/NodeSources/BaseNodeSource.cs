@@ -174,14 +174,6 @@ namespace Cognite.OpcUa.NodeSources
 
             if (Extractor.Transformations != null)
             {
-                if (node.Parent != null)
-                {
-                    
-                    if (node.Parent.NodeClass == NodeClass.Variable || node.Parent.IsProperty)
-                    {
-                        node.Attributes.IsProperty = true;
-                    }
-                }
                 foreach (var trns in Extractor.Transformations)
                 {
                     trns.ApplyTransformation(node, Client.NamespaceTable!);
