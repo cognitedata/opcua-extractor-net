@@ -207,7 +207,7 @@ namespace Cognite.OpcUa.NodeSources
                             childNode.Id,
                             pair.ParentId,
                             childIsTs,
-                            true,
+                            false,
                             Extractor.ReferenceTypeManager));
                     }
                 }

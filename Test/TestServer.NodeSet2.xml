@@ -62,18 +62,21 @@
     <DisplayName>CustomRoot</DisplayName>
     <References>
       <Reference ReferenceType="Organizes" IsForward="false">i=85</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
     </References>
   </UAObject>
   <UAObject NodeId="ns=1;i=14" BrowseName="1:ChildObject">
     <DisplayName>ChildObject</DisplayName>
     <References>
       <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=1</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
     </References>
   </UAObject>
   <UAObject NodeId="ns=1;i=15" BrowseName="1:ChildObject2">
     <DisplayName>ChildObject2</DisplayName>
     <References>
       <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=1</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
     </References>
   </UAObject>
   <UAVariable NodeId="ns=1;i=16" BrowseName="1:NumericProp" DataType="i=8" AccessLevel="1" UserAccessLevel="1">
@@ -184,7 +187,7 @@
     </References>
   </UAVariable>
   <UAVariable NodeId="ns=1;i=30" BrowseName="1:EnumVar3" DataType="ns=1;i=26" AccessLevel="1" UserAccessLevel="1" ValueRank="1" ArrayDimensions="4">
-    <DisplayName>EnumVar1</DisplayName>
+    <DisplayName>EnumVar3</DisplayName>
     <References>
       <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1</Reference>
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
@@ -219,7 +222,7 @@
 
 
   <!-- Typed variables -->
-  <UAVariable NodeId="ns=1;i=8" BrowseName="1:StringyVar" DataType="ns=1;i=4" AccessLevel="1" UserAccessLevel="1">
+  <UAVariable NodeId="ns=1;i=8" BrowseName="1:StringyVar" DataType="ns=1;i=4" AccessLevel="5" UserAccessLevel="5">
     <DisplayName>StringyVar</DisplayName>
     <References>
       <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=1</Reference>
@@ -271,12 +274,14 @@
     <DisplayName>DeepProp</DisplayName>
     <References>
       <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=11</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
     </References>
   </UAObject>
   <UAObject NodeId="ns=1;i=21" BrowseName="1:DeepProp2">
     <DisplayName>DeepProp2</DisplayName>
     <References>
       <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=20</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
     </References>
   </UAObject>
   <UAVariable NodeId="ns=1;i=22" BrowseName="1:val1" DataType="i=12" AccessLevel="1" UserAccessLevel="1">
@@ -393,6 +398,7 @@
     <DisplayName>DeepObj</DisplayName>
     <References>
       <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=59</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
     </References>
   </UAObject>
   <UAVariable NodeId="ns=1;i=61" BrowseName="1:DeepProp" DataType="i=12" AccessLevel="1" UserAccessLevel="1">
@@ -408,12 +414,14 @@
     <DisplayName>EventRoot</DisplayName>
     <References>
       <Reference ReferenceType="Organizes" IsForward="false">i=85</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
     </References>
   </UAObject>
   <UAObject NodeId="ns=1;i=48" BrowseName="1:EXCLUDE Object">
     <DisplayName>EXCLUDE Object</DisplayName>
     <References>
       <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=45</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
     </References>
   </UAObject>
   
@@ -421,6 +429,7 @@
     <DisplayName>Object 1</DisplayName>
     <References>
       <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=45</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
     </References>
   </UAObject>
   <UAVariable NodeId="ns=1;i=49" BrowseName="1:Variable 1" DataType="i=11" AccessLevel="1" UserAccessLevel="1">
@@ -442,6 +451,7 @@
     <DisplayName>Object 2</DisplayName>
     <References>
       <Reference ReferenceType="Organizes" IsForward="false">ns=1;i=45</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
     </References>
   </UAObject>
 </UANodeSet>

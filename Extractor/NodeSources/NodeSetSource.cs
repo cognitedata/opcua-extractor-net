@@ -2,6 +2,7 @@
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -255,7 +256,7 @@ namespace Cognite.OpcUa.NodeSources
                 {
                     variable.VariableAttributes.AccessLevel = varState.AccessLevel;
                     variable.VariableAttributes.ArrayDimensions =
-                        varState.ArrayDimensions == null
+                        varState.ArrayDimensions == null || !varState.ArrayDimensions.Any()
                         ? null
                         : varState.ArrayDimensions.Select(val => (int)val).ToArray();
                     variable.VariableAttributes.ValueRank = varState.ValueRank;
@@ -281,7 +282,7 @@ namespace Cognite.OpcUa.NodeSources
                 else if (node is BaseVariableTypeState typeState)
                 {
                     variable.VariableAttributes.ArrayDimensions =
-                        typeState.ArrayDimensions == null
+                        typeState.ArrayDimensions == null || !typeState.ArrayDimensions.Any()
                         ? null
                         : typeState.ArrayDimensions.Select(val => (int)val).ToArray();
                     variable.VariableAttributes.ValueRank = typeState.ValueRank;
@@ -470,7 +471,7 @@ namespace Cognite.OpcUa.NodeSources
                     if (!NodeMap.TryGetValue(Client.ToNodeId(rf.TargetId), out var target)) continue;
                     if (!validNodeIds.Contains(target.Id)) continue;
                     if (target.IsProperty) continue;
-                    bool targetIsTs = node is UAVariable targetVariable && !targetVariable.IsArray && targetVariable.NodeClass == NodeClass.Variable;
+                    bool targetIsTs = target is UAVariable targetVariable && !targetVariable.IsArray && targetVariable.NodeClass == NodeClass.Variable;
 
                     var reference = new UAReference(
                         Client.ToNodeId(rf.ReferenceTypeId),
