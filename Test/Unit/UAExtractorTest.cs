@@ -82,6 +82,8 @@ namespace Test.Unit
         {
             tester.Config.Source.ForceRestart = true;
             var pusher = new DummyPusher(new DummyPusherConfig());
+            if (!tester.Client.Started) await tester.Client.Run(tester.Source.Token);
+            tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
             using var extractor = tester.BuildExtractor(pushers: pusher);
 
             var task = extractor.RunExtractor();
@@ -98,6 +100,8 @@ namespace Test.Unit
         public async Task TestRestartOnReconnect()
         {
             tester.Config.Source.RestartOnReconnect = true;
+            if (!tester.Client.Started) await tester.Client.Run(tester.Source.Token);
+            tester.Config.Extraction.RootNode = tester.Ids.Base.Root.ToProtoNodeId(tester.Client);
 
             var pusher = new DummyPusher(new DummyPusherConfig());
             using var extractor = tester.BuildExtractor(pushers: pusher);
@@ -113,6 +117,7 @@ namespace Test.Unit
             await CommonTestUtils.WaitForCondition(() => pusher.PushedNodes.Count > 0, 10);
 
             extractor.Close();
+            await tester.Client.Run(tester.Source.Token);
         }
         [Theory]
         [InlineData(0, 2, 2, 1, 0, 0)]
