@@ -479,7 +479,7 @@ namespace Test.Unit
             propA.SetDataPoint("valueA");
             var propB = CommonTestUtils.GetSimpleVariable("propB", pdt);
             var nestedProp = CommonTestUtils.GetSimpleVariable("propN", pdt); ;
-            
+
             nestedProp.SetDataPoint("nProp");
             nestedProp.Attributes.Properties = new List<UANode> { propA };
 

@@ -94,9 +94,9 @@
     <MaxSessionCount>100</MaxSessionCount>
     <MinSessionTimeout>10000</MinSessionTimeout>
     <MaxSessionTimeout>3600000</MaxSessionTimeout>
-    <MaxBrowseContinuationPoints>10</MaxBrowseContinuationPoints>
+    <MaxBrowseContinuationPoints>1000</MaxBrowseContinuationPoints>
     <MaxQueryContinuationPoints>10</MaxQueryContinuationPoints>
-    <MaxHistoryContinuationPoints>100</MaxHistoryContinuationPoints>
+    <MaxHistoryContinuationPoints>1000</MaxHistoryContinuationPoints>
     <MaxRequestAge>600000</MaxRequestAge>
     <MinPublishingInterval>100</MinPublishingInterval>
     <MaxPublishingInterval>3600000</MaxPublishingInterval>

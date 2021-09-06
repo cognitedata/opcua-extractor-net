@@ -303,7 +303,7 @@ namespace Server
             if (server)
             {
                 serverNode.EventNotifier |= EventNotifiers.HistoryRead | EventNotifiers.SubscribeToEvents;
-                
+
             }
             else
             {
@@ -396,6 +396,9 @@ namespace Server
                                 break;
                             case PredefinedSetup.Wrong:
                                 CreateWrongAddressSpace(externalReferences);
+                                break;
+                            case PredefinedSetup.VeryLarge:
+                                CreateVeryLargeAddressSpace(externalReferences);
                                 break;
                         }
                     }
@@ -796,7 +799,7 @@ namespace Server
                 Ids.Audit.ExcludeObj = exclude.NodeId;
             }
         }
-        
+
         public void CreateWrongAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
         {
             lock (Lock)
@@ -834,6 +837,37 @@ namespace Server
             }
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification =
+            "NodeStates are disposed in CustomNodeManager2, so long as they are added to the list of predefined nodes")]
+        public void CreateVeryLargeAddressSpace(IDictionary<NodeId, IList<IReference>> externalReferences)
+        {
+            lock (Lock)
+            {
+                var root = CreateObject("VeryLargeRoot");
+                AddNodeToExt(root, ObjectIds.ObjectsFolder, ReferenceTypeIds.Organizes, externalReferences);
+                AddPredefinedNode(SystemContext, root);
+                for (int i = 0; i < 100; i++)
+                {
+                    var obj1 = CreateObject($"Object {i}");
+                    AddNodeRelation(obj1, root, ReferenceTypeIds.Organizes);
+                    AddPredefinedNode(SystemContext, obj1);
+                    for (int j = 0; j < 2000; j++)
+                    {
+                        var obj2 = CreateObject($"Object {i} {j}");
+                        var prop1 = obj2.AddProperty<string>($"Property {i} {j}", DataTypeIds.String, ValueRanks.Scalar);
+                        prop1.NodeId = GenerateNodeId();
+                        prop1.Value = $"string-value-{i}-{j}";
+                        var prop2 = obj2.AddProperty<long>($"Property {i} {j} long", DataTypeIds.Int64, ValueRanks.Scalar);
+                        prop2.NodeId = GenerateNodeId();
+                        prop2.Value = i * j;
+                        AddNodeRelation(obj2, obj1, ReferenceTypeIds.HasComponent);
+                        AddPredefinedNodes(SystemContext, obj2, prop1, prop2);
+
+                    }
+                }
+                
+            }
+        }
         // Utility methods to create nodes
         private static void AddNodeToExt(NodeState state, NodeId id, NodeId typeId,
             IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -970,7 +1004,6 @@ namespace Server
         {
             foreach (var node in nodes)
             {
-                log.Debug("Adding node: {name}, {id}", node.DisplayName, node.NodeId);
                 AddPredefinedNode(context, node);
             }
         }
@@ -1383,7 +1416,8 @@ namespace Server
         Custom,
         Events,
         Auditing,
-        Wrong
+        Wrong,
+        VeryLarge
     }
 
     #region nodeid_reference

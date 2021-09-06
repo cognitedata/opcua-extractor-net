@@ -89,9 +89,6 @@ namespace Test.Unit
             using var extractor = tester.BuildExtractor(true, stateStore);
             var cfg = BuildConfig();
 
-            Assert.Throws<ArgumentNullException>(() => new FailureBuffer(null, extractor, null));
-            Assert.Throws<ArgumentNullException>(() => new FailureBuffer(cfg, null, null));
-
             Assert.False(File.Exists(cfg.FailureBuffer.DatapointPath));
             Assert.False(File.Exists(cfg.FailureBuffer.EventPath));
 

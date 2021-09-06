@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -34,9 +34,8 @@ namespace Cognite.OpcUa.HistoryStates
         public InfluxBufferType Type { get; set; }
         public NodeId SourceId { get; }
 
-        public InfluxBufferState(BaseExtractionState other) : base(other?.Id)
+        public InfluxBufferState(BaseExtractionState other) : base(other.Id)
         {
-            if (other == null) throw new ArgumentNullException(nameof(other));
             DestinationExtractedRange = TimeRange.Empty;
             if (other is EventExtractionState eState)
             {
@@ -52,6 +51,10 @@ namespace Cognite.OpcUa.HistoryStates
             {
                 Type = iState.Type;
                 SourceId = iState.SourceId;
+            }
+            else
+            {
+                throw new ArgumentException($"Illegal type: {other.GetType()}");
             }
         }
         /// <summary>

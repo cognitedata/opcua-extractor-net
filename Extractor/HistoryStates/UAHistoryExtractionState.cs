@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -26,8 +26,11 @@ namespace Cognite.OpcUa.HistoryStates
     {
         public NodeId SourceId { get; }
         public bool Initialized { get; private set; }
-        public UAHistoryExtractionState(IUAClientAccess client, NodeId id, bool frontfill, bool backfill)
-            : base(client?.GetUniqueId(id), frontfill, backfill)
+        public UAHistoryExtractionState(
+            IUAClientAccess client,
+            NodeId id,
+            bool frontfill, bool backfill)
+            : base(client.GetUniqueId(id), frontfill, backfill)
         {
             SourceId = id;
         }

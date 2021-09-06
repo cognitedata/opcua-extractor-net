@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -19,7 +19,6 @@ using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
 using Google.Protobuf;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 using Serilog;
 using System;
@@ -147,7 +146,7 @@ namespace Test
                 }
                 catch { }
             }
-            
+
             lock (handlerLock)
             {
                 HttpResponseMessage res;
@@ -1045,7 +1044,8 @@ namespace Test
             var data = JsonConvert.SerializeObject(new ItemWrapper<DataSet>
             {
                 Items = items
-            }, new JsonSerializerSettings {
+            }, new JsonSerializerSettings
+            {
                 ContractResolver = new DefaultContractResolver { NamingStrategy = new CamelCaseNamingStrategy() }
             });
             return new HttpResponseMessage(HttpStatusCode.OK)

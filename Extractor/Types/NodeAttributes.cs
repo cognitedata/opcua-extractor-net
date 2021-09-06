@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -16,9 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Opc.Ua;
-using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 
 namespace Cognite.OpcUa.Types
 {
@@ -29,12 +27,12 @@ namespace Cognite.OpcUa.Types
     /// </summary>
     public class NodeAttributes
     {
-        public string Description { get; set; }
+        public string? Description { get; set; }
         public byte EventNotifier { get; set; }
-        public UANodeType NodeType { get; set; }
+        public UANodeType? NodeType { get; set; }
         public bool IsProperty { get; set; }
         public bool Ignore { get; set; }
-        public IList<UANode> Properties { get; set; }
+        public IList<UANode>? Properties { get; set; }
         public NodeClass NodeClass { get; }
         public bool PropertiesRead { get; set; }
         public bool DataRead { get; set; }
@@ -50,7 +48,6 @@ namespace Cognite.OpcUa.Types
         /// <returns>List of attributes</returns>
         public IEnumerable<uint> GetAttributeIds(FullConfig config)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
             var result = new List<uint> { Attributes.Description };
             switch (NodeClass)
             {
@@ -95,9 +92,7 @@ namespace Cognite.OpcUa.Types
         /// <returns>New index in list</returns>
         public virtual int HandleAttributeRead(FullConfig config, IList<DataValue> values, int idx, UAClient client)
         {
-            if (values == null) throw new ArgumentNullException(nameof(values));
-            if (config == null) throw new ArgumentNullException(nameof(config));
-            Description = values[idx++].GetValue<LocalizedText>(null)?.Text;
+            Description = values[idx++].GetValue<LocalizedText?>(null)?.Text;
             if ((NodeClass == NodeClass.Object || NodeClass == NodeClass.Variable) && config.Events.Enabled && config.Events.DiscoverEmitters)
             {
                 EventNotifier = values[idx++].GetValue(EventNotifiers.None);
@@ -118,9 +113,9 @@ namespace Cognite.OpcUa.Types
     public class VariableAttributes : NodeAttributes
     {
         public bool Historizing { get; set; }
-        public UADataType DataType { get; set; }
+        public UADataType DataType { get; set; } = null!;
         public int ValueRank { get; set; }
-        public int[] ArrayDimensions { get; set; }
+        public int[]? ArrayDimensions { get; set; }
         public byte AccessLevel { get; set; }
         public bool ReadHistory { get; set; }
         public VariableAttributes(NodeClass nc) : base(nc) { }
@@ -134,10 +129,7 @@ namespace Cognite.OpcUa.Types
         /// <returns>New index in list</returns>
         public override int HandleAttributeRead(FullConfig config, IList<DataValue> values, int idx, UAClient client)
         {
-            if (values == null) throw new ArgumentNullException(nameof(values));
-            if (client == null) throw new ArgumentNullException(nameof(client));
-            if (config == null) throw new ArgumentNullException(nameof(config));
-            Description = values[idx++].GetValue<LocalizedText>(null)?.Text;
+            Description = values[idx++].GetValue<LocalizedText?>(null)?.Text;
             if (NodeClass == NodeClass.Variable)
             {
                 if (config.History.Enabled)

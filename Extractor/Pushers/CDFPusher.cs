@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -53,7 +53,7 @@ namespace Cognite.OpcUa.Pushers
 
         public List<UANode> PendingNodes { get; } = new List<UANode>();
         public List<UAReference> PendingReferences { get; } = new List<UAReference>();
-        public UAExtractor Extractor { get; set; }
+        public UAExtractor Extractor { get; set; } = null!;
         public IPusherConfig BaseConfig { get; }
 
         private readonly HashSet<string> mismatchedTimeseries = new HashSet<string>();
@@ -93,6 +93,7 @@ namespace Cognite.OpcUa.Pushers
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFPusher));
         #region Interface
 
+
         /// <summary>
         /// Attempts to push the given list of datapoints to CDF.
         /// </summary>'
@@ -100,12 +101,12 @@ namespace Cognite.OpcUa.Pushers
         public async Task<bool?> PushDataPoints(IEnumerable<UADataPoint> points, CancellationToken token)
         {
             if (points == null) return null;
-            var dataPointList = points
+            Dictionary<string, List<UADataPoint>> dataPointList = points
                 .Where(dp => dp.Timestamp > DateTime.UnixEpoch)
                 .GroupBy(dp => dp.Id)
                 .Where(group => !mismatchedTimeseries.Contains(group.Key) && !missingTimeseries.Contains(group.Key))
                 .ToDictionary(group => group.Key, group =>
-                    group.Select(dp =>
+                    group.SelectNonNull(dp =>
                     {
                         if (dp.IsString) return dp;
                         if (!double.IsFinite(dp.DoubleValue.Value))
@@ -114,7 +115,7 @@ namespace Cognite.OpcUa.Pushers
                             return new UADataPoint(dp, config.NonFiniteReplacement.Value);
                         }
                         return dp;
-                    }).Where(dp => dp != null).ToList());
+                    }).ToList());
 
             int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count);
 
@@ -244,10 +245,6 @@ namespace Cognite.OpcUa.Pushers
             UpdateConfig update,
             CancellationToken token)
         {
-            if (variables == null) throw new ArgumentNullException(nameof(variables));
-            if (objects == null) throw new ArgumentNullException(nameof(objects));
-            if (update == null) throw new ArgumentNullException(nameof(update));
-
             if (!variables.Any() && !objects.Any())
             {
                 log.Debug("Testing 0 nodes against CDF");
@@ -309,7 +306,6 @@ namespace Cognite.OpcUa.Pushers
             bool backfillEnabled,
             CancellationToken token)
         {
-            if (states == null) throw new ArgumentNullException(nameof(states));
             if (!states.Any() || config.Debug || !config.ReadExtractedRanges) return true;
             var ids = new List<string>();
             foreach (var state in states)
@@ -318,7 +314,9 @@ namespace Cognite.OpcUa.Pushers
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        ids.Add(Extractor.GetUniqueId(state.SourceId, i));
+                        var id = Extractor.GetUniqueId(state.SourceId, i);
+                        if (id == null) break;
+                        ids.Add(id);
                     }
                 }
                 else
@@ -346,7 +344,9 @@ namespace Cognite.OpcUa.Pushers
                 {
                     for (int i = 0; i < state.ArrayDimensions[0]; i++)
                     {
-                        if (ranges.TryGetValue(Extractor.GetUniqueId(state.SourceId, i), out var range))
+                        var id = Extractor.GetUniqueId(state.SourceId, i);
+                        if (id == null) break;
+                        if (ranges.TryGetValue(id, out var range))
                         {
                             if (range == TimeRange.Empty)
                             {
@@ -385,7 +385,6 @@ namespace Cognite.OpcUa.Pushers
         /// <returns>True if pushing is possible, false if not.</returns>
         public async Task<bool?> TestConnection(FullConfig fullConfig, CancellationToken token)
         {
-            if (fullConfig == null) throw new ArgumentNullException(nameof(fullConfig));
             if (config.Debug) return true;
             try
             {
@@ -490,18 +489,37 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
         private async Task UpdateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
-            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async rows =>
+            if (config.RawMetadata?.Database == null || config.RawMetadata?.AssetsTable == null) return;
+            await Extractor.ReadProperties(assetMap.Select(kvp => kvp.Value));
+
+            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, rows =>
             {
-                var rowDict = rows.ToDictionary(row => row.Key);
+                if (rows == null)
+                {
+                    return assetMap.Select(kvp => (
+                        kvp.Key,
+                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Node)
+                    )).Where(elem => elem.update != null)
+                    .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
+                }
 
-                var toReadProperties = assetMap.Select(kvp => kvp.Value);
-                await Extractor.ReadProperties(toReadProperties);
+                var toWrite = new List<(string key, RawRow row, UANode node)>();
 
-                var updates = assetMap
-                    .Select(kvp => (kvp.Key, PusherUtils.CreateRawUpdate(Extractor.StringConverter,
-                        kvp.Value, rowDict.GetValueOrDefault(kvp.Key), ConverterType.Node)))
-                    .Where(elem => elem.Item2 != null)
-                    .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
+                foreach (var row in rows)
+                {
+                    if (assetMap.TryGetValue(row.Key, out var ts))
+                    {
+                        toWrite.Add((row.Key, row, ts));
+                        assetMap.Remove(row.Key);
+                    }
+                }
+
+                var updates = toWrite
+                    .Select(elem => (
+                        elem.key,
+                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.node, elem.row, ConverterType.Node)
+                    )).Where(elem => elem.update != null)
+                    .ToDictionary(pair => pair.key, pair => pair.update!.Value);
 
                 return updates;
             }, null, token);
@@ -513,13 +531,15 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="assetMap">Id, node map for the assets that should be pushed.</param>
         private async Task CreateRawAssets(IDictionary<string, UANode> assetMap, CancellationToken token)
         {
+            if (config.RawMetadata?.Database == null || config.RawMetadata?.AssetsTable == null) return;
+
             await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.AssetsTable, assetMap.Keys, async ids =>
             {
                 var assets = ids.Select(id => (assetMap[id], id));
                 await Extractor.ReadProperties(assets.Select(pair => pair.Item1));
                 return assets.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Node), pair.id))
                     .Where(pair => pair.Item1 != null)
-                    .ToDictionary(pair => pair.Item2, pair => pair.Item1.RootElement);
+                    .ToDictionary(pair => pair.Item2, pair => pair.Item1!.RootElement);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
         /// <summary>
@@ -599,7 +619,7 @@ namespace Cognite.OpcUa.Pushers
 
             var assetIds = new ConcurrentDictionary<string, UANode>(objects
                 .Where(node => node.Source != NodeSource.CDF)
-                .ToDictionary(obj => Extractor.GetUniqueId(obj.Id)));
+                .ToDictionary(obj => Extractor.GetUniqueId(obj.Id)!));
 
             if (!assetIds.Any()) return;
 
@@ -637,23 +657,41 @@ namespace Cognite.OpcUa.Pushers
         /// Update list of nodes as timeseries in CDF Raw.
         /// </summary>
         /// <param name="tsMap">Id, node map for the timeseries that should be pushed.</param>
-        /// <param name="update">Config for what should be updated on each timeseries.</param>
         private async Task UpdateRawTimeseries(
             IDictionary<string, UAVariable> tsMap,
             CancellationToken token)
         {
-            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, async rows =>
+            if (config.RawMetadata?.Database == null || config.RawMetadata.TimeseriesTable == null) return;
+            await Extractor.ReadProperties(tsMap.Select(kvp => kvp.Value));
+
+            await UpsertRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, rows =>
             {
-                var rowDict = rows.ToDictionary(row => row.Key);
+                if (rows == null)
+                {
+                    return tsMap.Select(kvp => (
+                        kvp.Key,
+                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value, null, ConverterType.Variable)
+                    )).Where(elem => elem.update != null)
+                    .ToDictionary(pair => pair.Key, pair => pair.update!.Value);
+                }
 
-                var toReadProperties = tsMap.Where(kvp => !rowDict.ContainsKey(kvp.Key)).Select(kvp => kvp.Value);
-                await Extractor.ReadProperties(toReadProperties);
+                var toWrite = new List<(string key, RawRow row, UAVariable node)>();
 
-                var updates = tsMap
-                    .Select(kvp => (kvp.Key, PusherUtils.CreateRawUpdate(Extractor.StringConverter, kvp.Value,
-                        rowDict.GetValueOrDefault(kvp.Key), ConverterType.Variable)))
-                    .Where(elem => elem.Item2 != null)
-                    .ToDictionary(pair => pair.Key, pair => pair.Item2.Value);
+                foreach (var row in rows)
+                {
+                    if (tsMap.TryGetValue(row.Key, out var ts))
+                    {
+                        toWrite.Add((row.Key, row, ts));
+                        tsMap.Remove(row.Key);
+                    }
+                }
+
+                var updates = toWrite
+                    .Select(elem => (
+                        elem.key,
+                        update: PusherUtils.CreateRawUpdate(Extractor.StringConverter, elem.node, elem.row, ConverterType.Variable)
+                    )).Where(elem => elem.update != null)
+                    .ToDictionary(pair => pair.key, pair => pair.update!.Value);
 
                 return updates;
             }, null, token);
@@ -667,13 +705,15 @@ namespace Cognite.OpcUa.Pushers
             IDictionary<string, UAVariable> tsMap,
             CancellationToken token)
         {
+            if (config.RawMetadata?.Database == null || config.RawMetadata.TimeseriesTable == null) return;
+
             await EnsureRawRows<JsonElement>(config.RawMetadata.Database, config.RawMetadata.TimeseriesTable, tsMap.Keys, async ids =>
             {
                 var timeseries = ids.Select(id => (tsMap[id], id));
                 await Extractor.ReadProperties(timeseries.Select(pair => pair.Item1));
                 return timeseries.Select(pair => (pair.Item1.ToJson(Extractor.StringConverter, ConverterType.Variable), pair.id))
                     .Where(pair => pair.Item1 != null)
-                    .ToDictionary(pair => pair.Item2, pair => pair.Item1.RootElement);
+                    .ToDictionary(pair => pair.id, pair => pair.Item1!.RootElement);
             }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }, token);
         }
         /// <summary>
@@ -748,7 +788,8 @@ namespace Cognite.OpcUa.Pushers
             {
                 if (existing.TryGetValue(kvp.Key, out var ts))
                 {
-                    var tsUpdate = PusherUtils.GetTSUpdate(extractionConfig, Extractor.DataTypeManager, Extractor.StringConverter, ts, kvp.Value, update, nodeToAssetIds);
+                    var tsUpdate = PusherUtils.GetTSUpdate(extractionConfig, Extractor.DataTypeManager,
+                        Extractor.StringConverter, ts, kvp.Value, update, nodeToAssetIds);
                     if (tsUpdate == null) continue;
                     if (tsUpdate.AssetId != null || tsUpdate.Description != null
                         || tsUpdate.Name != null || tsUpdate.Metadata != null)
@@ -774,7 +815,8 @@ namespace Cognite.OpcUa.Pushers
             TypeUpdateConfig update,
             CancellationToken token)
         {
-            var tsIds = new ConcurrentDictionary<string, UAVariable>(tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)));
+            var tsIds = new ConcurrentDictionary<string, UAVariable>(
+                tsList.ToDictionary(ts => Extractor.GetUniqueId(ts.Id, ts.Index)!));
             bool useRawTimeseries = config.RawMetadata != null
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.Database)
                 && !string.IsNullOrWhiteSpace(config.RawMetadata.TimeseriesTable);
@@ -840,41 +882,58 @@ namespace Cognite.OpcUa.Pushers
         /// <summary>
         /// Insert or update raw rows given by <paramref name="toRetrieve"/> in table
         /// given by <paramref name="dbName"/> and <paramref name="tableName"/>.
-        /// The dtoBuilder is called with all rows that already exist,
-        /// so it must determine which rows should be updated and which should be created.
+        /// The dtoBuilder is called with chunks of 10000 rows, and finally with null to indicate that there are no more rows.
         /// </summary>
         /// <typeparam name="T">Type of DTO to build</typeparam>
         /// <param name="dbName">Name of database in CDF Raw</param>
         /// <param name="tableName">Name of table in CDF Raw</param>
-        /// <param name="toRetrieve">Rows to retrieve</param>
         /// <param name="dtoBuilder">Method to build DTOs, called with existing rows.</param>
         /// <param name="options"><see cref="JsonSerializerOptions"/> used for serialization.</param>
         private async Task UpsertRawRows<T>(
             string dbName,
             string tableName,
-            IEnumerable<string> toRetrieve,
-            Func<IEnumerable<RawRow>, Task<IDictionary<string, T>>> dtoBuilder,
-            JsonSerializerOptions options,
+            Func<IEnumerable<RawRow>?, IDictionary<string, T>> dtoBuilder,
+            JsonSerializerOptions? options,
             CancellationToken token)
         {
-            var existing = await GetRawRows(dbName, tableName, null, token);
-            
-            var keys = new HashSet<string>(toRetrieve);
+            int count = 0;
+            async Task CallAndCreate(IEnumerable<RawRow>? rows)
+            {
+                var toUpsert = dtoBuilder(rows);
+                count += toUpsert.Count;
+                await destination.InsertRawRowsAsync(dbName, tableName, toUpsert, options, token);
+            }
 
-            var toCreate = await dtoBuilder(existing.Where(row => keys.Contains(row.Key)));
-            if (!toCreate.Any()) return;
-            log.Information("Creating or updating {cnt} raw rows in CDF", toCreate.Count);
+            string? cursor = null;
+            do
+            {
+                try
+                {
+                    var result = await destination.CogniteClient.Raw.ListRowsAsync(dbName, tableName,
+                        new RawRowQuery { Cursor = cursor, Limit = 10_000 }, token);
+                    cursor = result.NextCursor;
 
-            await destination.InsertRawRowsAsync(dbName, tableName, toCreate, options, token);
+                    await CallAndCreate(result.Items);
+                }
+                catch (ResponseException ex) when (ex.Code == 404)
+                {
+                    log.Warning("Table or database not found: {msg}", ex.Message);
+                    break;
+                }
+            } while (cursor != null);
+
+            await CallAndCreate(null);
+
+            log.Information("Updated or created {cnt} rows in CDF Raw", count);
         }
 
         public async Task<IEnumerable<RawRow>> GetRawRows(
             string dbName,
             string tableName,
-            IEnumerable<string> columns,
+            IEnumerable<string>? columns,
             CancellationToken token)
         {
-            string cursor = null;
+            string? cursor = null;
             var rows = new List<RawRow>();
             do
             {
@@ -916,7 +975,10 @@ namespace Cognite.OpcUa.Pushers
                     {
                         if (dict.TryGetValue("externalId", out var value))
                         {
-                            existing.Add((value as MultiValue.String).Value);
+                            if (value is MultiValue.String strValue)
+                            {
+                                existing.Add(strValue.Value);
+                            }
                         }
                     }
                     if (!existing.Any()) throw;
@@ -936,6 +998,8 @@ namespace Cognite.OpcUa.Pushers
         /// <param name="relationships">Relationships to create.</param>
         private async Task PushRawReferences(IEnumerable<RelationshipCreate> relationships, CancellationToken token)
         {
+            if (config.RawMetadata?.Database == null || config.RawMetadata.RelationshipsTable == null) return;
+
             await EnsureRawRows(
                 config.RawMetadata.Database,
                 config.RawMetadata.RelationshipsTable,

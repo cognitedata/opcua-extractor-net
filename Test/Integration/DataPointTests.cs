@@ -694,7 +694,7 @@ namespace Test.Integration
                     Type = TransformationType.DropSubscriptions
                 }
             };
-            
+
             tester.Config.Subscriptions.DataPoints = true;
             await extractor.RunExtractor(true);
             state = extractor.State.GetNodeState(ids.DoubleVar1);

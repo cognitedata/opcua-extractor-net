@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -78,7 +78,7 @@ namespace Cognite.OpcUa.TypeCollectors
         private readonly Dictionary<NodeId, UAEventType> types = new Dictionary<NodeId, UAEventType>();
         private readonly Dictionary<NodeId, ChildNode> nodes = new Dictionary<NodeId, ChildNode>();
         private readonly EventConfig config;
-        private readonly Regex ignoreFilter;
+        private readonly Regex? ignoreFilter;
         private HashSet<string> excludeProperties;
         private HashSet<string> baseExcludeProperties;
         /// <summary>
@@ -88,7 +88,6 @@ namespace Cognite.OpcUa.TypeCollectors
         /// <param name="config">Event configuration to use</param>
         public EventFieldCollector(UAClient parent, EventConfig config)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
             uaClient = parent;
             this.config = config;
             if (!string.IsNullOrEmpty(config.ExcludeEventFilter))
@@ -105,11 +104,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// <returns>The collected fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).</returns>
         public Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token)
         {
-            types[ObjectTypeIds.BaseEventType] = new UAEventType
-            {
-                Id = ObjectTypeIds.BaseEventType,
-                DisplayName = "BaseEventType"
-            };
+            types[ObjectTypeIds.BaseEventType] = new UAEventType(ObjectTypeIds.BaseEventType, "BaseEventType");
 
             uaClient.Browser.BrowseDirectory(
                 new List<NodeId> { ObjectTypeIds.BaseEventType },
@@ -123,7 +118,7 @@ namespace Cognite.OpcUa.TypeCollectors
 
             var result = new Dictionary<NodeId, HashSet<EventField>>();
 
-            HashSet<NodeId> whitelist = null;
+            HashSet<NodeId>? whitelist = null;
             if (config.EventIds != null && config.EventIds.Any())
             {
                 whitelist = new HashSet<NodeId>(config.EventIds.Select(proto => proto.ToNodeId(uaClient, ObjectTypeIds.BaseEventType)));
@@ -156,11 +151,9 @@ namespace Cognite.OpcUa.TypeCollectors
             if (child.NodeClass == NodeClass.ObjectType)
             {
                 var parentType = types.GetValueOrDefault(parent);
-                types[id] = new UAEventType
+                types[id] = new UAEventType(id, child.DisplayName)
                 {
-                    Id = id,
-                    Parent = parentType,
-                    DisplayName = child.DisplayName
+                    Parent = parentType
                 };
             }
             else if (child.NodeClass == NodeClass.Object || child.NodeClass == NodeClass.Variable)
@@ -192,10 +185,15 @@ namespace Cognite.OpcUa.TypeCollectors
         /// </summary>
         private class UAEventType
         {
-            public NodeId Id { get; set; }
-            public LocalizedText DisplayName { get; set; }
-            public UAEventType Parent { get; set; }
+            public NodeId Id { get; }
+            public LocalizedText DisplayName { get; }
+            public UAEventType? Parent { get; set; }
             private IList<ChildNode> children = new List<ChildNode>();
+            public UAEventType(NodeId id, LocalizedText displayName)
+            {
+                Id = id;
+                DisplayName = displayName;
+            }
             /// <summary>
             /// Add a child node to the internal collection of children
             /// </summary>
@@ -210,11 +208,14 @@ namespace Cognite.OpcUa.TypeCollectors
             /// <summary>
             /// Retrieve all fields for this type, combining own fields with parent node fields.
             /// </summary>
-            public IEnumerable<EventField> CollectedFields { get
+            public IEnumerable<EventField> CollectedFields
             {
-                var childFields = children.SelectMany(child => child.ToFields());
-                return Parent?.CollectedFields?.Concat(childFields) ?? childFields;
-            } }
+                get
+                {
+                    var childFields = children.SelectMany(child => child.ToFields());
+                    return Parent?.CollectedFields?.Concat(childFields) ?? childFields;
+                }
+            }
         }
         /// <summary>
         /// Internal representation of node in EventType hierarchy
@@ -223,7 +224,7 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             private readonly NodeClass nodeClass;
             private readonly QualifiedName browseName;
-            private IList<ChildNode> children;
+            private IList<ChildNode>? children;
 
             public ChildNode(QualifiedName browseName, NodeClass nc)
             {

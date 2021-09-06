@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -24,6 +24,7 @@ using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -45,7 +46,7 @@ namespace Cognite.OpcUa
     {
         public HistoryReadDetails Details { get; }
         public IList<HistoryReadNode> Nodes { get; set; }
-        public Exception Exception { get; set; }
+        public Exception? Exception { get; set; }
 
         public HistoryReadParams(IEnumerable<HistoryReadNode> nodes, HistoryReadDetails details)
         {
@@ -57,12 +58,16 @@ namespace Cognite.OpcUa
     {
         public HistoryReadNode(HistoryReadType type, UAHistoryExtractionState state)
         {
-            if (state == null) throw new ArgumentNullException(nameof(state));
             Type = type;
             State = state;
             Id = state.SourceId;
             if (Id == null || Id.IsNullNodeId) throw new InvalidOperationException("NodeId may not be null");
         }
+        /// <summary>
+        /// Results in silently uninitilized State, unsafe.
+        /// </summary>
+        /// <param name="type"></param>
+        /// <param name="id"></param>
         public HistoryReadNode(HistoryReadType type, NodeId id)
         {
             Type = type;
@@ -70,11 +75,13 @@ namespace Cognite.OpcUa
             if (Id == null || Id.IsNullNodeId) throw new InvalidOperationException("NodeId may not be null");
         }
         public HistoryReadType Type { get; }
-        public UAHistoryExtractionState State { get; set; }
-        public DateTime Time => Type == HistoryReadType.BackfillData || Type == HistoryReadType.BackfillEvents
+        [NotNull, AllowNull]
+        public UAHistoryExtractionState? State { get; set; }
+        public DateTime Time =>
+            Type == HistoryReadType.BackfillData || Type == HistoryReadType.BackfillEvents
             ? State.SourceExtractedRange.First : State.SourceExtractedRange.Last;
         public NodeId Id { get; }
-        public byte[] ContinuationPoint { get; set; }
+        public byte[]? ContinuationPoint { get; set; }
         public bool Completed { get; set; }
         public int LastRead { get; set; }
         public int TotalRead { get; set; }
@@ -118,7 +125,6 @@ namespace Cognite.OpcUa
         private bool Data => type == HistoryReadType.FrontfillData || type == HistoryReadType.BackfillData;
         public HistoryScheduler(UAClient uaClient, UAExtractor extractor, HistoryConfig config, HistoryReadType type)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
             if (config.Throttling == null)
             {
                 throttling = new ContinuationPointThrottlingConfig { MaxNodeParallelism = 0, MaxParallelism = 0, MaxPerMinute = 0 };
@@ -275,7 +281,7 @@ namespace Cognite.OpcUa
         private void LogReadFailure(HistoryReadParams finishedRead)
         {
             string msg = $"HistoryRead {type} failed for nodes" +
-                $" {string.Join(',', finishedRead.Nodes.Select(node => node.State.Id))}: {finishedRead.Exception.Message}";
+                $" {string.Join(',', finishedRead.Nodes.Select(node => node.State.Id))}: {finishedRead.Exception?.Message ?? ""}";
             log.Error(msg);
             ExtractorUtils.LogException(log, finishedRead.Exception, "Critical failure in HistoryRead", "Failure in HistoryRead");
         }
@@ -390,7 +396,7 @@ namespace Cognite.OpcUa
             var chunks = GetNextChunks(nodes, index, out index);
 
             var cb = Data
-                ? (Action<IEncodeable, HistoryReadNode, HistoryReadDetails>)HistoryDataHandler
+                ? (Action<IEncodeable?, HistoryReadNode, HistoryReadDetails>)HistoryDataHandler
                 : HistoryEventHandler;
 
             while (numActiveNodes > 0 || chunks.Any())
@@ -398,7 +404,8 @@ namespace Cognite.OpcUa
                 if (token.IsCancellationRequested) break;
                 var generators = chunks
                     .Select<HistoryReadParams, Func<Task>>(
-                        chunk => () => {
+                        chunk => () =>
+                        {
                             return Task.Run(() => BaseHistoryReadOp(chunk, cb, finishedReads, source.Token));
                         })
                     .ToList();
@@ -436,7 +443,7 @@ namespace Cognite.OpcUa
                         // for cases when the server operates on a lower resolution than ticks.
                         foreach (var chunk in chunks)
                         {
-                            var details = chunk.Details as ReadRawModifiedDetails;
+                            if (!(chunk.Details is ReadRawModifiedDetails details)) continue;
                             details.StartTime = details.StartTime.AddTicks(Frontfill ? 1 : -1);
                         }
                     }
@@ -488,7 +495,7 @@ namespace Cognite.OpcUa
         /// <param name="rawData">Data to be transformed into events</param>
         /// <param name="node">Active HistoryReadNode</param>
         /// <returns>Number of points read</returns>
-        private void HistoryDataHandler(IEncodeable rawData, HistoryReadNode node, HistoryReadDetails _)
+        private void HistoryDataHandler(IEncodeable? rawData, HistoryReadNode node, HistoryReadDetails _)
         {
             var data = rawData as HistoryData;
 
@@ -546,6 +553,8 @@ namespace Cognite.OpcUa
 
             var nodeState = node.State as VariableExtractionState;
 
+            if (nodeState == null) return;
+
             foreach (var datapoint in dataPoints)
             {
                 var buffDps = extractor.Streamer.ToDataPoint(datapoint, nodeState);
@@ -593,7 +602,7 @@ namespace Cognite.OpcUa
         /// <param name="node">Active HistoryReadNode</param>
         /// <param name="details">History read details used to generate this HistoryRead result</param>
         /// <returns>Number of events read</returns>
-        private void HistoryEventHandler(IEncodeable rawEvts, HistoryReadNode node, HistoryReadDetails details)
+        private void HistoryEventHandler(IEncodeable? rawEvts, HistoryReadNode node, HistoryReadDetails details)
         {
             var evts = rawEvts as HistoryEvent;
             if (!(details is ReadEventDetails eventDetails))
@@ -680,6 +689,8 @@ namespace Cognite.OpcUa
 
             var emitterState = node.State as EventExtractionState;
 
+            if (emitterState == null) return;
+
             var buffered = emitterState.FlushBuffer();
             if (buffered.Any())
             {
@@ -721,9 +732,6 @@ namespace Cognite.OpcUa
         private ILogger log = Log.Logger.ForContext<HistoryReader>();
         public HistoryReader(UAClient uaClient, UAExtractor extractor, HistoryConfig config, CancellationToken token)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
-            if (uaClient == null) throw new ArgumentNullException(nameof(uaClient));
-            if (extractor == null) throw new ArgumentNullException(nameof(extractor));
             this.config = config;
             this.uaClient = uaClient;
             this.extractor = extractor;

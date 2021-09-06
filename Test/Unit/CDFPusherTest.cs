@@ -1,5 +1,4 @@
 ﻿using Cognite.Extractor.Common;
-using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.NodeSources;
@@ -8,12 +7,10 @@ using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
 using Com.Cognite.V1.Timeseries.Proto;
-using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -581,7 +578,7 @@ namespace Test.Unit
                     CommonTestUtils.GetSimpleVariable("double", new UADataType(DataTypeIds.Double)), true, true);
                 var state2 = new VariableExtractionState(tester.Client,
                     CommonTestUtils.GetSimpleVariable("string", new UADataType(DataTypeIds.String)), true, true);
-                var state3 = new VariableExtractionState(tester.Client, 
+                var state3 = new VariableExtractionState(tester.Client,
                     CommonTestUtils.GetSimpleVariable("array", new UADataType(DataTypeIds.Double), 3), true, true);
                 return new[] { state1, state2, state3 };
             }
@@ -641,7 +638,7 @@ namespace Test.Unit
             // Normal init
             handler.FailedRoutes.Clear();
             Assert.True(await pusher.InitExtractedRanges(states, true, tester.Source.Token));
-            var range = new Cognite.Extractor.Common.TimeRange(CogniteTime.FromUnixTimeMilliseconds(1000), 
+            var range = new Cognite.Extractor.Common.TimeRange(CogniteTime.FromUnixTimeMilliseconds(1000),
                 CogniteTime.FromUnixTimeMilliseconds(3000));
             Assert.Equal(range, states[0].DestinationExtractedRange);
             Assert.Equal(range, states[1].DestinationExtractedRange);
@@ -836,7 +833,7 @@ namespace Test.Unit
             variable = new UAVariable(new NodeId("test4"), "test4", NodeId.Null, NodeClass.Variable);
             variable.VariableAttributes.DataType = new UADataType(DataTypeIds.Double);
             variable.VariableAttributes.ValueRank = 1;
-            variable.VariableAttributes.ArrayDimensions = new [] { 4 };
+            variable.VariableAttributes.ArrayDimensions = new[] { 4 };
             NodeToRaw(extractor, variable, ConverterType.Node, false);
             foreach (var child in variable.CreateArrayChildren())
             {

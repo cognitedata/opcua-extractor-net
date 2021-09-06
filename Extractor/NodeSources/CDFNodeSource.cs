@@ -1,4 +1,20 @@
-﻿using Cognite.Extractor.Common;
+﻿/* Cognite Extractor for OPC-UA
+Copyright (C) 2021 Cognite AS
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
+
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.Types;
 using CogniteSdk;
@@ -7,14 +23,10 @@ using Opc.Ua;
 using Serilog;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
-using YamlDotNet.Serialization;
 
 namespace Cognite.OpcUa.NodeSources
 {
@@ -23,18 +35,21 @@ namespace Cognite.OpcUa.NodeSources
         private readonly CDFPusher pusher;
         private readonly CDFNodeSourceConfig sourceConfig;
         private readonly ILogger log = Log.Logger.ForContext(typeof(CDFNodeSource));
+        private readonly string database;
 
         public CDFNodeSource(FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher)
             : base(config, extractor, client)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
+            if (config.Cognite?.RawNodeBuffer == null) throw new InvalidOperationException("RawNodeBuffer config required");
+            if (config.Cognite.RawNodeBuffer.Database == null) throw new ConfigurationException("Database must be set");
+            database = config.Cognite.RawNodeBuffer.Database;
             this.pusher = pusher;
             sourceConfig = config.Cognite.RawNodeBuffer;
         }
         private readonly List<UAVariable> readVariables = new List<UAVariable>();
         private readonly List<UANode> readNodes = new List<UANode>();
 
-        private static async Task<IEnumerable<SavedNode>> DeserializeRawData(IEnumerable<RawRow> rows, JsonSerializer serializer, CancellationToken token)
+        private static async Task<IEnumerable<SavedNode>?> DeserializeRawData(IEnumerable<RawRow> rows, JsonSerializer serializer, CancellationToken token)
         {
             using var stream = new MemoryStream();
             await System.Text.Json.JsonSerializer.SerializeAsync(stream, rows.Select(row => row.Columns), null, token);
@@ -60,21 +75,22 @@ namespace Cognite.OpcUa.NodeSources
                 IEnumerable<SavedNode> nodes;
                 try
                 {
-                    var tsData = await pusher.GetRawRows(sourceConfig.Database, sourceConfig.TimeseriesTable, new[] {
+                    var tsData = await pusher.GetRawRows(database, sourceConfig.TimeseriesTable, new[] {
                         "NodeId", "ParentNodeId", "name", "DataTypeId", "InternalInfo"
                     }, token);
-                    nodes = await DeserializeRawData(tsData, serializer, token);
+                    nodes = await DeserializeRawData(tsData, serializer, token) ?? Enumerable.Empty<SavedNode>();
                 }
                 catch (Exception ex)
                 {
                     log.Error("Failed to retrieve and deserialize raw timeseries from CDF: {msg}", ex.Message);
                     return;
                 }
-                
+
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
-                    string name = node.Name;
+                    string? name = node.Name;
+                    if (name == null || node.InternalInfo == null) continue;
                     // If this is an array element, we need to strip the postfix from the name, since we are treating it
                     // as its parent.
                     if (node.InternalInfo.ArrayDimensions != null && node.InternalInfo.Index >= 0)
@@ -82,7 +98,7 @@ namespace Cognite.OpcUa.NodeSources
                         var postfix = $"[{node.InternalInfo.Index}]";
                         name = name.Substring(0, name.Length - postfix.Length);
                     }
-                    var variable = new UAVariable(node.NodeId, name, node.ParentNodeId, node.InternalInfo.NodeClass)
+                    var variable = new UAVariable(node.NodeId, name, node.ParentNodeId ?? NodeId.Null, node.InternalInfo.NodeClass)
                     {
                         VariableAttributes =
                         {
@@ -104,22 +120,24 @@ namespace Cognite.OpcUa.NodeSources
                 IEnumerable<SavedNode> nodes;
                 try
                 {
-                    var assetData = await pusher.GetRawRows(sourceConfig.Database, sourceConfig.AssetsTable, new[]
+                    var assetData = await pusher.GetRawRows(database, sourceConfig.AssetsTable, new[]
                     {
                         "NodeId", "ParentNodeId", "name", "InternalInfo"
                     }, token);
-                    nodes = await DeserializeRawData(assetData, serializer, token);
+                    nodes = await DeserializeRawData(assetData, serializer, token) ?? Enumerable.Empty<SavedNode>();
                 }
                 catch (Exception ex)
                 {
                     log.Error("Failed to retrieve and deserialize raw assets from CDF: {msg}", ex.Message);
                     return;
                 }
-            
+
                 foreach (var node in nodes)
                 {
                     if (node.NodeId == null || node.NodeId.IsNullNodeId || !nodeSet.Add(node.NodeId)) continue;
-                    var obj = new UANode(node.NodeId, node.Name, node.ParentNodeId, node.InternalInfo.NodeClass)
+                    if (node.Name == null || node.InternalInfo == null) continue;
+
+                    var obj = new UANode(node.NodeId, node.Name, node.ParentNodeId ?? NodeId.Null, node.InternalInfo.NodeClass)
                     {
                         Attributes =
                         {
@@ -134,15 +152,14 @@ namespace Cognite.OpcUa.NodeSources
             log.Information("Retrieved {as} objects and {ts} variables from CDF Raw", readNodes.Count, readVariables.Count);
         }
 
-
-        public override async Task<NodeSourceResult> ParseResults(CancellationToken token)
+        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
         {
             if (!readVariables.Any() && !readNodes.Any()) return null;
 
             await GetExtraNodeData(token);
 
-            finalDestinationObjects.AddRange(readNodes);
-            finalSourceObjects.AddRange(readNodes);
+            FinalDestinationObjects.AddRange(readNodes);
+            FinalSourceObjects.AddRange(readNodes);
             foreach (var variable in readVariables)
             {
                 if (!Extractor.DataTypeManager.AllowTSMap(variable)) continue;
@@ -152,28 +169,28 @@ namespace Cognite.OpcUa.NodeSources
             readNodes.Clear();
             readVariables.Clear();
 
-            if (!finalDestinationObjects.Any() && !finalDestinationVariables.Any() && !finalSourceVariables.Any() && !finalReferences.Any())
+            if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {
                 log.Information("Mapping resulted in no new nodes");
                 return null;
             }
 
-            foreach (var node in finalSourceObjects.Concat(finalSourceVariables))
+            foreach (var node in FinalSourceObjects.Concat(FinalSourceVariables))
             {
                 InitNodeState(Config.Extraction.Update, node);
             }
 
             log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
                 " {robj} objects and {var} variables.",
-                finalDestinationObjects.Count, finalDestinationVariables.Count,
-                finalSourceObjects.Count, finalSourceVariables.Count);
+                FinalDestinationObjects.Count, FinalDestinationVariables.Count,
+                FinalSourceObjects.Count, FinalSourceVariables.Count);
 
             return new NodeSourceResult(
-                finalSourceObjects,
-                finalSourceVariables,
-                finalDestinationObjects,
-                finalDestinationVariables,
-                finalReferences);
+                FinalSourceObjects,
+                FinalSourceVariables,
+                FinalDestinationObjects,
+                FinalDestinationVariables,
+                FinalReferences);
         }
 
         private async Task GetExtraNodeData(CancellationToken token)

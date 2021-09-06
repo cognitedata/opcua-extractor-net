@@ -1,5 +1,5 @@
 ﻿/* Cognite Extractor for OPC-UA
-Copyright (C) 2020 Cognite AS
+Copyright (C) 2021 Cognite AS
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -44,8 +44,6 @@ namespace Cognite.OpcUa.TypeCollectors
 
         public DataTypeManager(UAClient client, DataTypeConfig config)
         {
-            if (client == null) throw new ArgumentNullException(nameof(client));
-            if (config == null) throw new ArgumentNullException(nameof(config));
             uaClient = client;
             this.config = config;
         }
@@ -58,6 +56,7 @@ namespace Cognite.OpcUa.TypeCollectors
             {
                 foreach (var type in config.CustomNumericTypes)
                 {
+                    if (type.NodeId == null) continue;
                     var id = type.NodeId.ToNodeId(uaClient);
                     if (id == null || id.IsNullNodeId)
                     {
@@ -135,7 +134,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// </summary>
         /// <param name="id">Id to create or retrieve a datatype for.</param>
         /// <returns>UADataType for <paramref name="id"/></returns>
-        public UADataType GetDataType(NodeId id)
+        public UADataType GetDataType(NodeId? id)
         {
             if (id == null) id = NodeId.Null;
             if (dataTypes.TryGetValue(id, out var dt)) return dt;
@@ -151,7 +150,6 @@ namespace Cognite.OpcUa.TypeCollectors
         /// <returns>True if variable may be mapped to a timeseries</returns>
         public bool AllowTSMap(UAVariable node, int? arraySizeOverride = null, bool overrideString = false)
         {
-            if (node == null) throw new ArgumentNullException(nameof(node));
             // We don't care about the data type of variable types except for as metadata.
             if (node.NodeClass == NodeClass.VariableType) return true;
             if (node.DataType == null)
@@ -211,11 +209,11 @@ namespace Cognite.OpcUa.TypeCollectors
         /// </summary>
         /// <param name="variable">Variable to get metadata for</param>
         /// <returns>Dictionary containing datatype-related metadata for the given variable.</returns>
-        public Dictionary<string, string> GetAdditionalMetadata(UAVariable variable)
+        public Dictionary<string, string>? GetAdditionalMetadata(UAVariable variable)
         {
             if (variable == null || variable.DataType == null) return null;
             var dt = variable.DataType;
-            Dictionary<string, string> ret = null;
+            Dictionary<string, string>? ret = null;
             if (dt.EnumValues != null)
             {
                 ret = new Dictionary<string, string>();
@@ -233,7 +231,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
                 else
                 {
-                    ret["dataType"] = customTypeNames.GetValueOrDefault(dt.Raw) ?? uaClient.GetUniqueId(dt.Raw);
+                    ret["dataType"] = customTypeNames.GetValueOrDefault(dt.Raw) ?? uaClient.GetUniqueId(dt.Raw) ?? "null";
                 }
             }
             return ret;
@@ -287,7 +285,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 {
                     for (int i = 0; i < strings.Length; i++)
                     {
-                        type.EnumValues[i] = strings[i].Text;
+                        type.EnumValues![i] = strings[i].Text;
                     }
                 }
                 else if (value.Value is ExtensionObject[] exts)
@@ -296,7 +294,7 @@ namespace Cognite.OpcUa.TypeCollectors
                     {
                         if (ext.Body is EnumValueType val)
                         {
-                            type.EnumValues[val.Value] = val.DisplayName.Text;
+                            type.EnumValues![val.Value] = val.DisplayName.Text;
                         }
                     }
                 }
@@ -322,7 +320,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 parentIds[id] = parent;
                 if (id.NamespaceIndex != 0)
                 {
-                    customTypeNames[id] = child.DisplayName?.Text;
+                    customTypeNames[id] = child.DisplayName.Text;
                 }
             }
 
