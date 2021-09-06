@@ -86,7 +86,7 @@
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
     </References>
   </UAVariable>
-  <UAVariable NodeId="ns=1;i=16" BrowseName="1:StringProp" DataType="i=12" AccessLevel="1" UserAccessLevel="1">
+  <UAVariable NodeId="ns=1;i=17" BrowseName="1:StringProp" DataType="i=12" AccessLevel="1" UserAccessLevel="1">
     <DisplayName>StringProp</DisplayName>
     <References>
       <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=15</Reference>

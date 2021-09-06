@@ -1158,6 +1158,28 @@ namespace Test.Integration
             var tss = pusher.PushedVariables.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             var refs = pusher.PushedReferences.ToHashSet();
 
+            void CompareProperties(UANode node, UANode other)
+            {
+                var props = node.GetAllProperties();
+                var otherProps = other.GetAllProperties();
+                Assert.Equal(otherProps.Count(), props.Count());
+                var dict = otherProps.ToDictionary(prop => prop.Id);
+                foreach (var prop in props)
+                {
+                    Assert.True(dict.TryGetValue(prop.Id, out var otherProp));
+                    Assert.Equal(prop.DisplayName, otherProp.DisplayName);
+                    Assert.True(prop.IsProperty);
+                    Assert.True(otherProp.IsProperty);
+                    if (otherProp is UAVariable otherVar)
+                    {
+                        var propVar = Assert.IsType<UAVariable>(prop);
+                        Assert.Equal(otherVar.DataType.Raw, propVar.DataType.Raw);
+                        Assert.Equal(otherVar.Value, propVar.Value);
+                    }
+                }
+            }
+
+
             void Compare(IEnumerable<UANode> nodes, IEnumerable<UAVariable> variables, HashSet<UAReference> references)
             {
                 Assert.Equal(assets.Count, nodes.Count());
@@ -1173,6 +1195,7 @@ namespace Test.Integration
                     Assert.False(node.IsProperty);
                     Assert.Equal(other.ParentId, node.ParentId);
                     Assert.Equal(other.EventNotifier, node.EventNotifier);
+                    CompareProperties(node, other);
                 }
 
                 foreach (var node in variables)
@@ -1196,6 +1219,7 @@ namespace Test.Integration
                     Assert.Equal(other.Index, node.Index);
                     Assert.Equal(other.ValueRank, node.ValueRank);
                     Assert.Equal(other.IsArray, node.IsArray);
+                    CompareProperties(node, other);
                 }
 
                 foreach (var rf in references)
