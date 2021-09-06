@@ -727,6 +727,26 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 3));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_attribute_requests", 2));
         }
+
+        [Fact]
+        public async Task TestMissingNodes()
+        {
+            var nodes = new[]
+            {
+                new UAVariable(tester.Server.Ids.Base.DoubleVar1, "DoubleVar1", tester.Server.Ids.Base.Root),
+                new UAVariable(new NodeId("missing-node"), "MissingNode", tester.Server.Ids.Base.Root),
+                new UAVariable(new NodeId("missing-node2"), "MissingNode2", tester.Server.Ids.Base.Root),
+            };
+
+            tester.Client.ReadNodeData(nodes, tester.Source.Token);
+
+            Assert.NotNull(nodes[0].DataType);
+            Assert.False(nodes[0].Ignore);
+            Assert.True(nodes[1].DataType.Raw.IsNullNodeId);
+            Assert.True(nodes[2].DataType.Raw.IsNullNodeId);
+            Assert.True(nodes[1].Ignore);
+            Assert.True(nodes[2].Ignore);
+        }
         #endregion
 
         #region synchronization
