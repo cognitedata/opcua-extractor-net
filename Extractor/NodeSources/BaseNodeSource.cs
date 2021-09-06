@@ -103,6 +103,10 @@ namespace Cognite.OpcUa.NodeSources
         }
         protected async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
+            if (!Config.Extraction.DataTypes.EstimateArraySizes) return;
+            nodes = nodes.Where(node =>
+                (node.ArrayDimensions == null || !node.ArrayDimensions.Any() || node.ArrayDimensions[0] == 0)
+                && (node.ValueRank == ValueRanks.OneDimension || node.ValueRank == ValueRanks.ScalarOrOneDimension));
             // Start by looking for "MaxArrayLength" standard property. This is defined in OPC-UA 5/6.3.2
             if (!nodes.Any()) return;
             await Extractor.ReadProperties(nodes);
@@ -115,7 +119,10 @@ namespace Cognite.OpcUa.NodeSources
                     try
                     {
                         int size = Convert.ToInt32(varProp.Value.Value);
-                        node.VariableAttributes.ArrayDimensions = new[] { size };
+                        if (size > 1)
+                        {
+                            node.VariableAttributes.ArrayDimensions = new[] { size };
+                        }
                         continue;
                     }
                     catch { }
@@ -139,7 +146,7 @@ namespace Cognite.OpcUa.NodeSources
                     var e = enumVal.GetEnumerator();
                     while (e.MoveNext()) size++;
                 }
-                if (size > 0)
+                if (size > 1)
                 {
                     node.VariableAttributes.ArrayDimensions = new[] { size };
                 }
