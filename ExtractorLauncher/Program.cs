@@ -185,7 +185,7 @@ namespace Cognite.OpcUa
             IServiceProvider provider;
             try
             {
-                provider = loader.TryLoadConfig();
+                provider = loader.LoadConfig();
             }
             catch { return; }
             Log.Logger = provider.GetRequiredService<Serilog.ILogger>();

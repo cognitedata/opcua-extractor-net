@@ -45,7 +45,7 @@ namespace Cognite.OpcUa
 
         public async Task<IServiceProvider> WaitForConfig(CancellationToken token)
         {
-            while (!token.IsCancellationRequested && !LoadConfig())
+            while (!token.IsCancellationRequested && !TryLoadConfig())
             {
                 await Task.Delay(10_000, token);
             }
@@ -54,9 +54,9 @@ namespace Cognite.OpcUa
             return services.BuildServiceProvider();
         }
 
-        public IServiceProvider TryLoadConfig()
+        public IServiceProvider LoadConfig()
         {
-            if (!LoadConfig()) throw new ConfigurationException("Failed to load config");
+            if (!TryLoadConfig()) throw new ConfigurationException("Failed to load config");
             Configure();
             return services.BuildServiceProvider();
         }
@@ -77,7 +77,7 @@ namespace Cognite.OpcUa
             return null;
         }
 
-        private bool LoadConfig()
+        private bool TryLoadConfig()
         {
             services.Clear();
             string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
