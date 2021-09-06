@@ -559,6 +559,7 @@ namespace Test.Integration
 
             pusher.PushEventResult = false;
             pusher.PushDataPointResult = false;
+            pusher.TestConnectionResult = false;
 
             var runTask = extractor.RunExtractor();
             await extractor.WaitForSubscriptions();
@@ -596,6 +597,7 @@ namespace Test.Integration
 
             pusher.PushEventResult = true;
             pusher.PushDataPointResult = true;
+            pusher.TestConnectionResult = true;
 
             await CommonTestUtils.WaitForCondition(() => pusher.Events.Count == 3 && pusher.Events[ObjectIds.Server].Count == 714, 10);
 
