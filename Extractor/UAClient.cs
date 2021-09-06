@@ -461,7 +461,7 @@ namespace Cognite.OpcUa
 
         public void GetReferences(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
         {
-            if (browseParams == null) throw new ArgumentNullException(nameof(browseParams));
+            if (browseParams == null || browseParams.Nodes == null) throw new ArgumentNullException(nameof(browseParams));
             if (Session == null) throw new InvalidOperationException("Requires open session");
 
             var toBrowse = new List<BrowseNode>();

@@ -15,13 +15,13 @@ namespace Cognite.OpcUa
 {
     internal class DirectoryBrowseParams
     {
-        public IEnumerable<NodeFilter> Filters { get; set; }
-        public Action<ReferenceDescription, NodeId> Callback { get; set; }
+        public IEnumerable<NodeFilter>? Filters { get; set; }
+        public Action<ReferenceDescription, NodeId>? Callback { get; set; }
         public bool ReadVariableChildren { get; set; }
         public int NodesChunk { get; set; }
         public int MaxNodeParallelism { get; set; }
-        public BrowseParams InitialParams { get; set; }
-        public ISet<NodeId> VisitedNodes { get; set; }
+        public BrowseParams? InitialParams { get; set; }
+        public ISet<NodeId>? VisitedNodes { get; set; }
         public int MaxDepth { get; set; } = -1;
     }
 
@@ -39,9 +39,9 @@ namespace Cognite.OpcUa
 
         private readonly DirectoryBrowseParams options;
 
-        private readonly IEnumerable<NodeFilter> filters;
+        private readonly IEnumerable<NodeFilter>? filters;
         private readonly ISet<NodeId> visitedNodes;
-        private readonly Action<ReferenceDescription, NodeId> callback;
+        private readonly Action<ReferenceDescription, NodeId>? callback;
         private readonly ISet<NodeId> localVisitedNodes = new HashSet<NodeId>();
 
         private List<int> depthCounts = new List<int>();
@@ -52,6 +52,8 @@ namespace Cognite.OpcUa
             UAClient client,
             DirectoryBrowseParams options)
         {
+            if (options.InitialParams == null
+                || options.InitialParams.Nodes == null) throw new ArgumentNullException("InitialParams");
             this.throttler = throttler;
             uaClient = client;
             this.options = options;
@@ -98,7 +100,7 @@ namespace Cognite.OpcUa
         public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition, NodeClass nc)
         {
             if (filters == null) return true;
-            if (filters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, uaClient.NamespaceTable, nc))) return false;
+            if (filters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, uaClient.NamespaceTable!, nc))) return false;
             return true;
         }
 
@@ -199,7 +201,7 @@ namespace Cognite.OpcUa
 
         public void Browse(CancellationToken token)
         {
-            var nodes = new LinkedList<BrowseNode>(baseParams.Nodes.Values);
+            var nodes = new LinkedList<BrowseNode>(baseParams.Nodes!.Values);
             depthCounts.Add(nodes.Count);
             log.Information("Browse node hierarchy for {cnt} nodes", nodes.Count);
             int totalRead = 0;
@@ -240,7 +242,7 @@ namespace Cognite.OpcUa
                 foreach (var chunk in finished)
                 {
                     numOperations++;
-                    foreach (var node in chunk.Nodes.Values)
+                    foreach (var node in chunk.Nodes!.Values)
                     {
                         totalToRead += HandleReadResult(nodes, node);
                         numActiveNodes--;
@@ -289,7 +291,7 @@ namespace Cognite.OpcUa
         private readonly ContinuationPointThrottlingConfig throttling;
         private readonly TaskThrottler throttler;
 
-        public IEnumerable<NodeFilter> IgnoreFilters { get; set; }
+        public IEnumerable<NodeFilter>? IgnoreFilters { get; set; }
 
         public Browser(UAClient client, FullConfig config)
         {
@@ -307,7 +309,7 @@ namespace Cognite.OpcUa
         /// <param name="callback">Callback to call for each found node</param>
         /// <param name="ignoreVisited">Default true, do not call callback for previously visited nodes</param>
         public Task BrowseNodeHierarchy(NodeId root,
-            Action<ReferenceDescription, NodeId> callback,
+            Action<ReferenceDescription, NodeId?> callback,
             CancellationToken token,
             bool ignoreVisited = true)
         {
@@ -337,7 +339,7 @@ namespace Cognite.OpcUa
                         docb = false;
                     }
                 }
-                if (docb) callback?.Invoke(root, null);
+                if (docb) callback?.Invoke(root, NodeId.Null);
             }
             uint classMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
             if (config.Extraction.NodeTypes.AsNodes)
@@ -405,7 +407,7 @@ namespace Cognite.OpcUa
                     foreach (var node in nodes.Values)
                     {
                         var result = node.Result;
-                        if (result.References.Any())
+                        if (result != null && result.References.Any())
                         {
                             roots[node.Id].TypeDefinition = result.References.First().NodeId;
                         }
@@ -443,7 +445,7 @@ namespace Cognite.OpcUa
             bool ignoreVisited = false)
         {
             var result = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            if (baseParams == null || (!baseParams.Nodes?.Any() ?? false)) return result;
+            if (baseParams == null || baseParams.Nodes == null || !baseParams.Nodes.Any()) return result;
             var options = new DirectoryBrowseParams
             {
                 Callback = GetDictWriteCallback(result),
@@ -461,6 +463,7 @@ namespace Cognite.OpcUa
             scheduler.Browse(token);
             foreach (var node in baseParams.Nodes)
             {
+                if (node.Value.Result == null) continue;
                 result[node.Key] = node.Value.Result.References;
             }
             return result;
@@ -478,9 +481,9 @@ namespace Cognite.OpcUa
         /// <param name="readVariableChildren">Read the children of variables.</param>
         public void BrowseDirectory(
             IEnumerable<NodeId> roots,
-            Action<ReferenceDescription, NodeId> callback,
+            Action<ReferenceDescription, NodeId>? callback,
             CancellationToken token,
-            NodeId referenceTypes = null,
+            NodeId? referenceTypes = null,
             uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
             bool ignoreVisited = true,
             bool doFilter = true,
@@ -531,7 +534,7 @@ namespace Cognite.OpcUa
     }
     public class BrowseParams
     {
-        public Dictionary<NodeId, BrowseNode> Nodes { get; set; }
+        public Dictionary<NodeId, BrowseNode>? Nodes { get; set; }
         public NodeId ReferenceTypeId { get; set; } = ReferenceTypeIds.HierarchicalReferences;
         public uint NodeClassMask { get; set; }
         public bool IncludeSubTypes { get; set; } = true;
@@ -581,8 +584,8 @@ namespace Cognite.OpcUa
         }
         public int Depth { get; }
         public NodeId Id { get; }
-        public byte[] ContinuationPoint { get; set; }
-        public BrowseResult Result { get; private set; }
+        public byte[]? ContinuationPoint { get; set; }
+        public BrowseResult? Result { get; private set; }
         public void AddReferences(ReferenceDescriptionCollection references)
         {
             if (references == null) references = new ReferenceDescriptionCollection();

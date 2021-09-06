@@ -105,7 +105,7 @@ namespace Cognite.OpcUa
         }
 
         public static void RemoveWhere<R, T>(this IDictionary<R, T> dict,
-            Func<R, bool> keyPred, Func<T, bool> valuePred = null)
+            Func<R, bool>? keyPred, Func<T, bool>? valuePred = null)
         {
             foreach (var kvp in dict.ToList())
             {
