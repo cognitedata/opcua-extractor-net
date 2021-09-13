@@ -32,16 +32,19 @@ namespace Cognite.OpcUa.Service
         private static readonly Gauge version =
             Metrics.CreateGauge("opcua_version", $"version: {Version.GetVersion()}, status: {Version.Status()}");
         private FullConfig config;
-        private readonly IServiceProvider provider;
+        private readonly ExtractorParams setup;
         private Microsoft.Extensions.Logging.ILogger eventLog;
-        public Worker(ILogger<Worker> eventLog, IServiceProvider provider)
+        public Worker(ILogger<Worker> eventLog, ExtractorParams setup)
         {
-            this.provider = provider;
+            this.setup = setup;
             this.eventLog = eventLog;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            var loader = new ConfigLoader(setup);
+            var provider = await loader.WaitForConfig(stoppingToken);
+
             Log.Logger = provider.GetRequiredService<Serilog.ILogger>();
             config = provider.GetRequiredService<FullConfig>();
             eventLog.LogInformation("Starting OPC UA Extractor service version {version}", Version.GetVersion());
