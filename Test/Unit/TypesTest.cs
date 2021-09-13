@@ -1054,8 +1054,9 @@ namespace Test.Unit
             var conv = evt.ToStatelessCDFEvent(extractor, 123, null);
             Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
             Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
-            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal(4, conv.Metadata.Count);
             Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("EventType", conv.Metadata["TypeName"]);
             Assert.Equal("gp.base:s=type", conv.Type);
             Assert.Equal("eventid", conv.ExternalId);
             Assert.Equal("message", conv.Description);
@@ -1080,8 +1081,9 @@ namespace Test.Unit
             conv = evt.ToStatelessCDFEvent(extractor, 123, null);
             Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
             Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
-            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal(4, conv.Metadata.Count);
             Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("EventType", conv.Metadata["TypeName"]);
             Assert.Equal("SomeOtherType", conv.Type);
             Assert.Equal("SomeSubType", conv.Subtype);
             Assert.Equal("eventid", conv.ExternalId);
@@ -1119,8 +1121,9 @@ namespace Test.Unit
             var conv = evt.ToCDFEvent(extractor, 123, null);
             Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
             Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
-            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal(4, conv.Metadata.Count);
             Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("EventType", conv.Metadata["TypeName"]);
             Assert.Equal("gp.base:s=type", conv.Type);
             Assert.Equal("eventid", conv.ExternalId);
             Assert.Equal("message", conv.Description);
@@ -1138,8 +1141,9 @@ namespace Test.Unit
             conv = evt.ToCDFEvent(extractor, 123, nodeToAsset);
             Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
             Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
-            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal(4, conv.Metadata.Count);
             Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("EventType", conv.Metadata["TypeName"]);
             Assert.Equal("SomeOtherType", conv.Type);
             Assert.Equal("SomeSubType", conv.Subtype);
             Assert.Equal("eventid", conv.ExternalId);
