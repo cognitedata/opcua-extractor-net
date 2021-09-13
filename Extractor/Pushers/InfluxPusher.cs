@@ -531,7 +531,7 @@ namespace Cognite.OpcUa
             }
             else
             {
-                name += Extractor.GetUniqueId(evt.EventType);
+                name += Extractor.GetUniqueId(evt.EventType?.Id);
             }
             idp.MeasurementName = name;
 
@@ -653,7 +653,7 @@ namespace Cognite.OpcUa
                     Message = (string)values["Value"],
                     EmittingNode = state.SourceId,
                     SourceNode = sourceNode,
-                    EventType = type,
+                    EventType = Extractor.State.ActiveEvents.GetValueOrDefault(type),
                     MetaData = new Dictionary<string, string>()
                 };
                 foreach (var kvp in values)

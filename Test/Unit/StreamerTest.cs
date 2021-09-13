@@ -523,7 +523,7 @@ namespace Test.Unit
             Assert.Equal(emitter, created.EmittingNode);
             Assert.Equal("message", created.Message);
             Assert.Equal(new NodeId("source"), created.SourceNode);
-            Assert.Equal(new NodeId("test"), created.EventType);
+            Assert.Equal(new NodeId("test"), created.EventType.Id);
             Assert.Equal(DateTime.UtcNow, created.Time, TimeSpan.FromMinutes(10));
             Assert.Single(created.MetaData);
             Assert.True(created.MetaData.ContainsKey("EUProp"));

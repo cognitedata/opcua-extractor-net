@@ -2,6 +2,7 @@
 using Cognite.Extractor.Common;
 using Cognite.OpcUa;
 using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
@@ -239,7 +240,7 @@ namespace Test.Unit
                     Time = time,
                     EmittingNode = new NodeId("emitter"),
                     SourceNode = new NodeId("source"),
-                    EventType = new NodeId("type"),
+                    EventType = new UAEventType(new NodeId("type"), "EventType"),
                     EventId = "someid",
                     MetaData = new Dictionary<string, string>
                     {
@@ -252,7 +253,7 @@ namespace Test.Unit
                     Time = time.AddSeconds(1),
                     EmittingNode = new NodeId("emitter"),
                     SourceNode = new NodeId("source"),
-                    EventType = new NodeId("type"),
+                    EventType = new UAEventType(new NodeId("type"), "EventType"),
                     EventId = "someid2",
                     MetaData = new Dictionary<string, string>
                     {
@@ -299,7 +300,7 @@ namespace Test.Unit
                 Time = time,
                 EmittingNode = new NodeId("emitter"),
                 SourceNode = new NodeId("source"),
-                EventType = new NodeId("type"),
+                EventType = new UAEventType(new NodeId("type"), "EventType"),
                 EventId = "someid3"
             }).ToArray();
 
@@ -451,28 +452,28 @@ namespace Test.Unit
                 {
                     Time = GetTs(1000),
                     EmittingNode = new NodeId("emitter"),
-                    EventType = new NodeId("type"),
+                    EventType = new UAEventType(new NodeId("type"), "EventType"),
                     EventId = "someid"
                 },
                 new UAEvent
                 {
                     Time = GetTs(3000),
                     EmittingNode = new NodeId("emitter"),
-                    EventType = new NodeId("type2"),
+                    EventType = new UAEventType(new NodeId("type2"), "EventType2"),
                     EventId = "someid2"
                 },
                 new UAEvent
                 {
                     Time = GetTs(1000),
                     EmittingNode = new NodeId("emitter2"),
-                    EventType = new NodeId("type"),
+                    EventType = new UAEventType(new NodeId("type"), "EventType"),
                     EventId = "someid3"
                 },
                 new UAEvent
                 {
                     Time = GetTs(2000),
                     EmittingNode = new NodeId("emitter2"),
-                    EventType = new NodeId("type"),
+                    EventType = new UAEventType(new NodeId("type"), "EventType"),
                     EventId = "someid4"
                 }
             };

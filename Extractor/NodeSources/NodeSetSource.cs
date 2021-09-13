@@ -542,7 +542,7 @@ namespace Cognite.OpcUa.NodeSources
         private HashSet<string>? excludeProperties;
         private HashSet<string>? baseExcludeProperties;
 
-        public Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token)
+        public Dictionary<NodeId, UAEventType> GetEventIdFields(CancellationToken token)
         {
             Build();
 
@@ -580,7 +580,7 @@ namespace Cognite.OpcUa.NodeSources
             }
             Regex? ignoreFilter = Config.Events.ExcludeEventFilter == null ? null : new Regex(Config.Events.ExcludeEventFilter);
 
-            var result = new Dictionary<NodeId, HashSet<EventField>>();
+            var result = new Dictionary<NodeId, UAEventType>();
 
             foreach (var (id, type) in evtTypes)
             {
@@ -590,7 +590,7 @@ namespace Cognite.OpcUa.NodeSources
                     if (!whitelist.Contains(type.NodeId)) continue;
                 }
                 else if (!Config.Events.AllEvents && type.NodeId.NamespaceIndex == 0) continue;
-                result[type.NodeId] = new HashSet<EventField>(CollectFields(type));
+                result[type.NodeId] = new UAEventType(type.NodeId, type.DisplayName, CollectFields(type));
             }
 
             return result;

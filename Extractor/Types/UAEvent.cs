@@ -56,7 +56,7 @@ namespace Cognite.OpcUa.Types
         /// <summary>
         /// NodeId of the eventType of this event.
         /// </summary>
-        public NodeId? EventType { get; set; }
+        public UAEventType? EventType { get; set; }
         /// <summary>
         /// Metadata fields
         /// </summary>
@@ -71,7 +71,7 @@ namespace Cognite.OpcUa.Types
             var builder = new StringBuilder();
             builder.AppendFormat(CultureInfo.InvariantCulture, "Event: {0}\n", EventId);
             builder.AppendFormat(CultureInfo.InvariantCulture, "Time: {0}\n", Time);
-            builder.AppendFormat(CultureInfo.InvariantCulture, "Type: {0}\n", EventType);
+            builder.AppendFormat(CultureInfo.InvariantCulture, "Type: {0}\n", EventType?.DisplayName);
             builder.AppendFormat(CultureInfo.InvariantCulture, "Emitter: {0}\n", EmittingNode);
             if (Message != null)
             {
@@ -153,7 +153,7 @@ namespace Cognite.OpcUa.Types
             bytes.AddRange(CogniteUtils.StringToStorable(EventId));
             bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(SourceNode)));
             bytes.AddRange(BitConverter.GetBytes(Time.ToBinary()));
-            bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EventType)));
+            bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EventType?.Id)));
             bytes.AddRange(CogniteUtils.StringToStorable(extractor.GetUniqueId(EmittingNode)));
             var metaDataBytes = new List<byte>();
             ushort count = 0;
@@ -188,7 +188,8 @@ namespace Cognite.OpcUa.Types
             if (stream.Read(buffer, 0, sizeof(long)) < sizeof(long)) return null;
             long dt = BitConverter.ToInt64(buffer, 0);
             evt.Time = DateTime.FromBinary(dt);
-            evt.EventType = extractor.State.GetNodeId(CogniteUtils.StringFromStream(stream));
+            var typeId = extractor.State.GetNodeId(CogniteUtils.StringFromStream(stream));
+            evt.EventType = extractor.State.ActiveEvents.GetValueOrDefault(typeId);
             evt.EmittingNode = extractor.State.GetEmitterState(CogniteUtils.StringFromStream(stream))?.SourceId ?? NodeId.Null;
 
             if (stream.Read(buffer, 0, sizeof(ushort)) < sizeof(ushort)) return null;
@@ -225,7 +226,7 @@ namespace Cognite.OpcUa.Types
             evt.ExternalId = EventId;
             evt.Type = MetaData != null && MetaData.TryGetValue("Type", out var rawType)
                 ? client.StringConverter.ConvertToString(rawType)
-                : client.GetUniqueId(EventType);
+                : client.GetUniqueId(EventType?.Id);
             evt.DataSetId = dataSetId;
 
             var finalMetaData = new Dictionary<string, string>();
@@ -331,7 +332,7 @@ namespace Cognite.OpcUa.Types
             Value = value;
         }
     }
-    public class EventFieldNode
+    internal class EventFieldNode
     {
         public IDictionary<string, EventFieldNode> Children { get; } = new Dictionary<string, EventFieldNode>();
         public Variant? Value { get; set; }
