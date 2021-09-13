@@ -1,6 +1,7 @@
 ﻿using Cognite.OpcUa;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
+using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
 using System.Collections.Generic;
@@ -190,6 +191,46 @@ namespace Test.Unit
             Assert.NotNull(extractor.State.GetEmitterState(tester.Ids.Event.Obj1));
             Assert.NotNull(extractor.State.GetEmitterState(tester.Ids.Event.Obj2));
             // Assert.True(false);
+        }
+        [Fact]
+        public async Task TestEstimateArraySize()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            tester.Config.History.Enabled = false;
+            var extConfig = tester.Config.Extraction;
+            extConfig.RootNode = tester.Ids.Wrong.Root.ToProtoNodeId(tester.Client);
+            extConfig.DataTypes.MaxArraySize = 6;
+            extConfig.DataTypes.EstimateArraySizes = true;
+
+            tester.Server.UpdateNode(tester.Ids.Wrong.RankImpreciseNoDim, new double[] { 1.0, 2.0, 3.0, 4.0 });
+
+            await extractor.RunExtractor(true);
+
+            Assert.Equal(6, pusher.PushedNodes.Count);
+            Assert.Equal(5, pusher.PushedNodes.Values.Count(node => node is UAVariable variable && variable.IsArray));
+            Assert.Equal(19, pusher.PushedVariables.Count);
+        }
+        [Fact]
+        public async Task TestNodeSetEstimateArraySize()
+        {
+            using var extractor = tester.BuildExtractor();
+            var source = new NodeSetSource(tester.Config, extractor, tester.Client);
+
+            source.BuildNodes(new[] { tester.Ids.Wrong.Root });
+            var extConfig = tester.Config.Extraction;
+            extConfig.DataTypes.MaxArraySize = 6;
+            extConfig.DataTypes.EstimateArraySizes = true;
+
+            tester.Server.UpdateNode(tester.Ids.Wrong.RankImpreciseNoDim, new double[] { 1.0, 2.0, 3.0, 4.0 });
+
+            var result = await source.ParseResults(tester.Source.Token);
+            Assert.Equal(6, result.DestinationObjects.Count());
+            Assert.Equal(5, result.DestinationObjects.Count(node => node is UAVariable variable && variable.IsArray));
+            Assert.Equal(19, result.DestinationVariables.Count());
+            Assert.Single(result.SourceObjects);
+            Assert.Equal(5, result.SourceVariables.Count());
         }
     }
 }

@@ -106,11 +106,23 @@ namespace Cognite.OpcUa.NodeSources
             if (!Config.Extraction.DataTypes.EstimateArraySizes) return;
             nodes = nodes.Where(node =>
                 (node.ArrayDimensions == null || !node.ArrayDimensions.Any() || node.ArrayDimensions[0] == 0)
-                && (node.ValueRank == ValueRanks.OneDimension || node.ValueRank == ValueRanks.ScalarOrOneDimension));
+                && (node.ValueRank == ValueRanks.OneDimension
+                    || node.ValueRank == ValueRanks.ScalarOrOneDimension
+                    || node.ValueRank == ValueRanks.OneOrMoreDimensions
+                    || node.ValueRank == ValueRanks.Any));
             // Start by looking for "MaxArrayLength" standard property. This is defined in OPC-UA 5/6.3.2
             if (!nodes.Any()) return;
+
+            Log.Information("Estimating array length for {cnt} nodes", nodes.Count());
+
             await Extractor.ReadProperties(nodes);
             var toReadValues = new List<UAVariable>();
+
+            var maxLengthProperties = nodes
+                .SelectNonNull(node => node.Properties?.FirstOrDefault(prop => prop.DisplayName == "MaxArrayLength") as UAVariable);
+
+            Client.ReadNodeValues(maxLengthProperties, token);
+
             foreach (var node in nodes)
             {
                 var maxLengthProp = node.Properties?.FirstOrDefault(prop => prop.DisplayName == "MaxArrayLength");
