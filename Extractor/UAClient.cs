@@ -503,7 +503,11 @@ namespace Cognite.OpcUa
                 {
                     var result = results[i];
                     var node = toBrowse[i];
-                    if (StatusCode.IsBad(result.StatusCode)) throw new ServiceResultException(result.StatusCode);
+                    if (StatusCode.IsBad(result.StatusCode)
+                        && result.StatusCode != StatusCodes.BadNodeIdUnknown)
+                    {
+                        throw new ServiceResultException(result.StatusCode);
+                    }
 
                     node.AddReferences(result.References);
                     node.ContinuationPoint = result.ContinuationPoint;
