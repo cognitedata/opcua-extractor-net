@@ -68,12 +68,12 @@ namespace Cognite.OpcUa.NodeSources
             var update = Config.Extraction.Update;
             await GetExtraNodeData(update, token);
 
-            var mappedObjects = RawObjects.Where(obj => FilterObject(update, obj)).ToList();
+            var mappedObjects = RawObjects.Where(obj => FilterObject(update.Objects, obj)).ToList();
             FinalDestinationObjects.AddRange(mappedObjects);
             FinalSourceObjects.AddRange(mappedObjects);
             foreach (var variable in RawVariables)
             {
-                SortVariable(update, variable);
+                SortVariable(update.Variables, variable);
             }
 
             foreach (var node in FinalSourceObjects.Concat(FinalSourceVariables))

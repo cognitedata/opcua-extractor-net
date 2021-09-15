@@ -207,29 +207,10 @@ namespace Cognite.OpcUa.NodeSources
         /// </summary>
         /// <param name="update">Configuration used to determine what nodes have changed.</param>
         /// <param name="node">Node to sort.</param>
-        protected void SortVariable(UpdateConfig update, UAVariable node)
+        protected void SortVariable(TypeUpdateConfig update, UAVariable node)
         {
             if (!Extractor.DataTypeManager.AllowTSMap(node)) return;
-            if (update.AnyUpdate)
-            {
-                var oldChecksum = Extractor.State.GetNodeChecksum(node.Id);
-                if (oldChecksum != null)
-                {
-                    node.Changed |= oldChecksum != node.GetUpdateChecksum(
-                        update.Variables,
-                        Config.Extraction.DataTypes.DataTypeMetadata,
-                        Config.Extraction.NodeTypes.Metadata);
-
-                    if (node.Changed)
-                    {
-                        AddVariableToLists(node);
-                    }
-                    return;
-                }
-            }
-
-            Log.Verbose(node.ToString());
-            AddVariableToLists(node);
+            if (FilterObject(update, node)) AddVariableToLists(node);
         }
 
         /// <summary>
@@ -238,7 +219,7 @@ namespace Cognite.OpcUa.NodeSources
         /// <param name="update">Update configuration used to determine what nodes are changed.</param>
         /// <param name="node">Node to be filtered.</param>
         /// <returns>True if node should be considered for mapping, false otherwise.</returns>
-        protected bool FilterObject(UpdateConfig update, UANode node)
+        protected bool FilterObject(TypeUpdateConfig update, UANode node)
         {
             if (update.AnyUpdate)
             {
@@ -246,7 +227,7 @@ namespace Cognite.OpcUa.NodeSources
                 if (oldChecksum != null)
                 {
                     node.Changed |= oldChecksum != node.GetUpdateChecksum(
-                        update.Objects,
+                        update,
                         Config.Extraction.DataTypes.DataTypeMetadata,
                         Config.Extraction.NodeTypes.Metadata);
                     return node.Changed;
