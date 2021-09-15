@@ -219,11 +219,6 @@ namespace Cognite.OpcUa
         public void ApplyTransformation(UANode node, NamespaceTable ns)
         {
             if (node == null) return;
-            if (node.Parent != null)
-            {
-                node.Attributes.Ignore |= node.Parent.Ignore;
-                node.Attributes.IsProperty |= node.Parent.IsProperty;
-            }
             if (node.Ignore || node.IsProperty && Type == TransformationType.Property || !node.ShouldSubscribe && Type == TransformationType.DropSubscriptions) return;
             if (Filter.IsMatch(node, ns))
             {

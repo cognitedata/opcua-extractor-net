@@ -27,6 +27,9 @@
     <None Update="config.test.yml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="TestServer.NodeSet2.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

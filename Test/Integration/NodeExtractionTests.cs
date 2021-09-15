@@ -1117,5 +1117,140 @@ namespace Test.Integration
             Assert.Equal(NodeClass.ObjectType, customObjType.NodeClass);
         }
         #endregion
+
+        #region nodeset
+        [Fact]
+        public async Task TestNodeSetSource()
+        {
+            using var pusher = new DummyPusher(new DummyPusherConfig());
+            var extraction = tester.Config.Extraction;
+            extraction.Relationships.Enabled = true;
+            extraction.Relationships.Hierarchical = true;
+            extraction.Relationships.InverseHierarchical = true;
+            using var extractor = tester.BuildExtractor(true, null, pusher);
+
+            extraction.RootNode = CommonTestUtils.ToProtoNodeId(tester.Ids.Custom.Root, tester.Client);
+            extraction.DataTypes.AllowStringVariables = true;
+            extraction.DataTypes.MaxArraySize = 4;
+            extraction.DataTypes.DataTypeMetadata = true;
+            extraction.NodeTypes.Metadata = true;
+
+            tester.Config.History.Enabled = true;
+            tester.Config.Events.Enabled = true;
+            tester.Config.Source.NodeSetSource = new NodeSetSourceConfig
+            {
+                NodeSets = new[]
+                {
+                    new NodeSetConfig
+                    {
+                        Url = new Uri("https://files.opcfoundation.org/schemas/UA/1.04/Opc.Ua.NodeSet2.xml")
+                    },
+                    new NodeSetConfig
+                    {
+                        FileName = "TestServer.NodeSet2.xml"
+                    }
+                }
+            };
+
+            // Nothing enabled, default run, copy results
+            await extractor.RunExtractor(true);
+            var assets = pusher.PushedNodes.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            var tss = pusher.PushedVariables.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            var refs = pusher.PushedReferences.ToHashSet();
+
+            void CompareProperties(UANode node, UANode other)
+            {
+                var props = node.GetAllProperties();
+                var otherProps = other.GetAllProperties();
+                Assert.Equal(otherProps.Count(), props.Count());
+                var dict = otherProps.ToDictionary(prop => prop.Id);
+                foreach (var prop in props)
+                {
+                    Assert.True(dict.TryGetValue(prop.Id, out var otherProp));
+                    Assert.Equal(prop.DisplayName, otherProp.DisplayName);
+                    Assert.True(prop.IsProperty);
+                    Assert.True(otherProp.IsProperty);
+                    if (otherProp is UAVariable otherVar)
+                    {
+                        var propVar = Assert.IsType<UAVariable>(prop);
+                        Assert.Equal(otherVar.DataType.Raw, propVar.DataType.Raw);
+                        Assert.Equal(otherVar.Value, propVar.Value);
+                    }
+                }
+            }
+
+
+            void Compare(IEnumerable<UANode> nodes, IEnumerable<UAVariable> variables, HashSet<UAReference> references)
+            {
+                Assert.Equal(assets.Count, nodes.Count());
+                Assert.Equal(tss.Count, variables.Count());
+                Assert.Equal(refs.Count, references.Count);
+                foreach (var node in nodes)
+                {
+                    Console.WriteLine("Investigate object: " + node.Id + ", " + node.DisplayName);
+                    Assert.True(assets.TryGetValue(node.Id, out var other));
+                    Assert.Equal(other.DisplayName, node.DisplayName);
+                    Assert.Equal(other.ShouldSubscribe, node.ShouldSubscribe);
+                    Assert.Equal(other.NodeType?.Id, node.NodeType?.Id);
+                    Assert.False(node.IsProperty);
+                    Assert.Equal(other.ParentId, node.ParentId);
+                    Assert.Equal(other.EventNotifier, node.EventNotifier);
+                    CompareProperties(node, other);
+                }
+
+                foreach (var node in variables)
+                {
+                    Console.WriteLine("Investigate variable: " + node.Id + ", " + node.DisplayName);
+                    Assert.True(tss.TryGetValue((node.Id, node.Index), out var other));
+                    Assert.Equal(other.DisplayName, node.DisplayName);
+                    Assert.Equal(other.ShouldSubscribe, node.ShouldSubscribe);
+                    Assert.Equal(other.NodeType?.Id, node.NodeType?.Id);
+                    Assert.False(node.IsProperty);
+                    Assert.Equal(other.ParentId, node.ParentId);
+                    Assert.Equal(other.EventNotifier, node.EventNotifier);
+                    Assert.Equal(other.DataType.Raw, node.DataType.Raw);
+                    // This is a really, really weird issue. Turns out there is a discrepancy in the C# language and
+                    // .NET runtime, so an array can be uint under the hood, but int in code, which the language
+                    // doesn't allow, but the runtime is fine with. Shouldn't matter when running, but we get this magic.
+                    // Your IDE/compiler might complain about meaningless casts here, but it's wrong.
+                    Assert.Equal(other.ArrayDimensions?.Select(i => (int)i),
+                        other.ArrayDimensions?.Select(i => (int)i));
+                    Assert.Equal(other.ReadHistory, node.ReadHistory);
+                    Assert.Equal(other.Index, node.Index);
+                    Assert.Equal(other.ValueRank, node.ValueRank);
+                    Assert.Equal(other.IsArray, node.IsArray);
+                    CompareProperties(node, other);
+                }
+
+                foreach (var rf in references)
+                {
+                    Assert.Contains(rf, refs);
+                }
+            }
+
+            pusher.Wipe();
+
+            // Enable types only
+            tester.Config.Source.NodeSetSource.Types = true;
+            tester.Client.ResetVisitedNodes();
+            tester.Client.ClearEventFields();
+            tester.Client.DataTypeManager.Reset();
+            tester.Client.ObjectTypeManager.Reset();
+            await extractor.RunExtractor(true);
+            Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
+
+            // Enable instance as well
+
+            pusher.Wipe();
+
+            tester.Config.Source.NodeSetSource.Instance = true;
+            tester.Client.ResetVisitedNodes();
+            tester.Client.ClearEventFields();
+            tester.Client.DataTypeManager.Reset();
+            tester.Client.ObjectTypeManager.Reset();
+            await extractor.RunExtractor(true);
+            Compare(pusher.PushedNodes.Values, pusher.PushedVariables.Values, pusher.PushedReferences);
+        }
+        #endregion
     }
 }

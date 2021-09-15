@@ -795,7 +795,7 @@ namespace Test.Unit
 
             try
             {
-                var fields = tester.Client.GetEventFields(tester.Source.Token);
+                var fields = tester.Client.GetEventFields(null, tester.Source.Token);
                 Assert.True(fields.ContainsKey(tester.Server.Ids.Event.CustomType));
                 Assert.True(fields.ContainsKey(ObjectTypeIds.AuditActivateSessionEventType));
             }
@@ -831,7 +831,7 @@ namespace Test.Unit
 
             try
             {
-                tester.Client.GetEventFields(tester.Source.Token);
+                tester.Client.GetEventFields(null, tester.Source.Token);
 
                 tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.Source.Token);
                 tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.Source.Token);
@@ -879,7 +879,7 @@ namespace Test.Unit
             }
             try
             {
-                tester.Client.GetEventFields(tester.Source.Token);
+                tester.Client.GetEventFields(null, tester.Source.Token);
                 tester.Client.SubscribeToEvents(emitters, handler, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);

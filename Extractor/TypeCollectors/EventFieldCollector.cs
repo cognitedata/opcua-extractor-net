@@ -68,11 +68,16 @@ namespace Cognite.OpcUa.TypeCollectors
         }
     }
 
+    public interface IEventFieldSource
+    {
+        Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token);
+    }
+
     /// <summary>
     /// Collects the fields of events. It does this by mapping out the entire event type hierarchy,
     /// and collecting the fields of each node on the way.
     /// </summary>
-    public class EventFieldCollector
+    public class EventFieldCollector : IEventFieldSource
     {
         private readonly UAClient uaClient;
         private readonly Dictionary<NodeId, UAEventType> types = new Dictionary<NodeId, UAEventType>();

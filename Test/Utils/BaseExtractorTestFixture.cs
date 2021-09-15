@@ -40,8 +40,8 @@ namespace Test.Utils
             Provider = Services.BuildServiceProvider();
 
             Server = new ServerController(new[] {
-                PredefinedSetup.Base, PredefinedSetup.Full, PredefinedSetup.Auditing,
-                PredefinedSetup.Custom, PredefinedSetup.Events, PredefinedSetup.Wrong }, Port);
+                PredefinedSetup.Custom, PredefinedSetup.Base, PredefinedSetup.Events, 
+                PredefinedSetup.Full, PredefinedSetup.Auditing, PredefinedSetup.Wrong }, Port);
             Server.Start().Wait();
 
             Client = new UAClient(Config);
@@ -104,6 +104,7 @@ namespace Test.Utils
                 Client.RemoveSubscription("EventListener");
                 Client.RemoveSubscription("DataChangeListener");
                 Client.RemoveSubscription("AuditListener");
+                Client.ObjectTypeManager.Reset();
                 Client.IgnoreFilters = null;
             }
             return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
