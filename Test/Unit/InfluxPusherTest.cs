@@ -231,6 +231,9 @@ namespace Test.Unit
             Assert.Null(await pusher.PushEvents(invalidEvents, tester.Source.Token));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_skipped_events_influx", 2));
 
+            var eventType = new UAEventType(new NodeId("type"), "EventType");
+            extractor.State.ActiveEvents[eventType.Id] = eventType;
+
             var time = DateTime.UtcNow;
 
             var events = new[]
@@ -240,7 +243,7 @@ namespace Test.Unit
                     Time = time,
                     EmittingNode = new NodeId("emitter"),
                     SourceNode = new NodeId("source"),
-                    EventType = new UAEventType(new NodeId("type"), "EventType"),
+                    EventType = eventType,
                     EventId = "someid",
                     MetaData = new Dictionary<string, string>
                     {
@@ -253,7 +256,7 @@ namespace Test.Unit
                     Time = time.AddSeconds(1),
                     EmittingNode = new NodeId("emitter"),
                     SourceNode = new NodeId("source"),
-                    EventType = new UAEventType(new NodeId("type"), "EventType"),
+                    EventType = eventType,
                     EventId = "someid2",
                     MetaData = new Dictionary<string, string>
                     {
