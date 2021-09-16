@@ -104,17 +104,6 @@ namespace Cognite.OpcUa
             return null;
         }
 
-        public static void RemoveWhere<R, T>(this IDictionary<R, T> dict,
-            Func<R, bool>? keyPred, Func<T, bool>? valuePred = null)
-        {
-            foreach (var kvp in dict.ToList())
-            {
-                if (keyPred != null && keyPred(kvp.Key) || valuePred != null && valuePred(kvp.Value))
-                {
-                    dict.Remove(kvp.Key);
-                }
-            }
-        }
         /// <summary>
         /// Log exception, silencing SilentServiceExceptions and formatting results properly.
         /// </summary>

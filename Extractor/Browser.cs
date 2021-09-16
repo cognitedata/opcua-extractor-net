@@ -53,7 +53,7 @@ namespace Cognite.OpcUa
             DirectoryBrowseParams options)
         {
             if (options.InitialParams == null
-                || options.InitialParams.Nodes == null) throw new ArgumentNullException("InitialParams");
+                || options.InitialParams.Nodes == null) throw new ArgumentNullException(nameof(options.InitialParams));
             this.throttler = throttler;
             uaClient = client;
             this.options = options;
