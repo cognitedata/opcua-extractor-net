@@ -67,8 +67,7 @@ namespace Cognite.OpcUa.NodeSources
             Client = client;
         }
 
-
-        public abstract Task<BrowseResult?> ParseResults(CancellationToken token);
+        public abstract Task<NodeSourceResult?> ParseResults(CancellationToken token);
 
         /// <summary>
         /// Write a variable to the correct output lists. This assumes the variable should be mapped.

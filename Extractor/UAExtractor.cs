@@ -162,7 +162,7 @@ namespace Cognite.OpcUa
                 client.DataTypeManager.Configure();
                 client.ClearNodeOverrides();
                 client.ClearEventFields();
-                client.ResetVisitedNodes();
+                client.Browser.ResetVisitedNodes();
                 RestartExtractor();
             }
         }
@@ -272,9 +272,9 @@ namespace Cognite.OpcUa
             extraNodesToBrowse.Clear();
             Started = false;
             await historyReader.Terminate(source.Token, 30);
-            await uaClient.WaitForOperations();
+            await uaClient.WaitForOperations(source.Token);
             ConfigureExtractor();
-            uaClient.ResetVisitedNodes();
+            uaClient.Browser.ResetVisitedNodes();
 
             var synchTasks = await RunMapping(RootNodes, true, false);
 
@@ -329,7 +329,7 @@ namespace Cognite.OpcUa
                     "",
                     "");
             }
-            uaClient.WaitForOperations().Wait(10000);
+            uaClient.WaitForOperations(source.Token).Wait();
             log.Information("Extractor closed");
         }
 
@@ -455,7 +455,8 @@ namespace Cognite.OpcUa
         private async Task<IEnumerable<Task>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited, bool initial)
         {
             bool readFromOpc = true;
-            NodeSources.BrowseResult? result = null;
+
+            NodeSourceResult? result = null;
             IEventFieldSource? eventSource = null;
             if ((config.Cognite?.RawNodeBuffer?.Enable ?? false) && initial)
             {
@@ -510,10 +511,10 @@ namespace Cognite.OpcUa
             if (readFromOpc)
             {
                 log.Debug("Begin mapping directory");
-                var handler = new BrowseResultHandler(config, this, uaClient);
+                var handler = new UANodeSource(config, this, uaClient);
                 try
                 {
-                    await uaClient.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, source.Token, ignoreVisited);
+                    await uaClient.Browser.BrowseNodeHierarchy(nodesToBrowse, handler.Callback, source.Token, ignoreVisited);
                 }
                 catch (Exception ex)
                 {
@@ -542,7 +543,7 @@ namespace Cognite.OpcUa
         /// This is the entry point for mapping on the extractor.
         /// </summary>
         /// <returns>A list of history tasks</returns>
-        private async Task<IEnumerable<Task>> MapUAToDestinations(NodeSources.BrowseResult? result)
+        private async Task<IEnumerable<Task>> MapUAToDestinations(NodeSourceResult? result)
         {
             if (result == null) return Enumerable.Empty<Task>();
 
@@ -624,8 +625,8 @@ namespace Cognite.OpcUa
             {
                 log.Debug(trans.ToString());
             }
-
-            uaClient.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
+            
+            uaClient.Browser.IgnoreFilters = transformations.Where(trans => trans.Type == TransformationType.Ignore).Select(trans => trans.Filter).ToList();
             Transformations = transformations;
         }
 

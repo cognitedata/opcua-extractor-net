@@ -152,8 +152,7 @@ namespace Cognite.OpcUa.NodeSources
             Log.Information("Retrieved {as} objects and {ts} variables from CDF Raw", readNodes.Count, readVariables.Count);
         }
 
-
-        public override async Task<BrowseResult?> ParseResults(CancellationToken token)
+        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
         {
             if (!readVariables.Any() && !readNodes.Any()) return null;
 
@@ -186,7 +185,7 @@ namespace Cognite.OpcUa.NodeSources
                 FinalDestinationObjects.Count, FinalDestinationVariables.Count,
                 FinalSourceObjects.Count, FinalSourceVariables.Count);
 
-            return new BrowseResult(
+            return new NodeSourceResult(
                 FinalSourceObjects,
                 FinalSourceVariables,
                 FinalDestinationObjects,

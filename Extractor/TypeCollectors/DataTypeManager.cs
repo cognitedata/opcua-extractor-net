@@ -250,7 +250,16 @@ namespace Cognite.OpcUa.TypeCollectors
 
             log.Information("Get enum properties for {cnt} enum types", typeSet.Count);
             var enumPropMap = new Dictionary<NodeId, NodeId>();
-            var children = await Task.Run(() => uaClient.GetNodeChildren(typeSet, ReferenceTypes.HierarchicalReferences, (uint)NodeClass.Variable, token));
+
+            var nodes = typeSet.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
+
+            var baseParams = new BrowseParams
+            {
+                NodeClassMask = (uint)NodeClass.Variable,
+                ReferenceTypeId = ReferenceTypes.HierarchicalReferences,
+                Nodes = nodes
+            };
+            var children = await Task.Run(() => uaClient.Browser.BrowseLevel(baseParams, token));
 
             foreach (var id in typeSet)
             {
@@ -293,7 +302,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
             }
 
-            await Task.Run(() => uaClient.BrowseDirectory(new List<NodeId> { DataTypeIds.BaseDataType },
+            await Task.Run(() => uaClient.Browser.BrowseDirectory(new List<NodeId> { DataTypeIds.BaseDataType },
                 Callback,
                 token,
                 ReferenceTypeIds.HasSubtype,

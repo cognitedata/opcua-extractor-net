@@ -116,7 +116,7 @@ namespace Cognite.OpcUa
         private readonly HistoryReadType type;
         private readonly DateTime historyStartTime;
         private readonly TimeSpan historyGranularity;
-        private readonly HistoryThrottlingConfig throttling;
+        private readonly ContinuationPointThrottlingConfig throttling;
         private readonly ILogger log = Log.Logger.ForContext<HistoryScheduler>();
 
         private readonly BlockingCollection<HistoryReadParams> finishedReads = new BlockingCollection<HistoryReadParams>();
@@ -127,7 +127,7 @@ namespace Cognite.OpcUa
         {
             if (config.Throttling == null)
             {
-                throttling = new HistoryThrottlingConfig { MaxNodeParallelism = 0, MaxParallelism = 0, MaxPerMinute = 0 };
+                throttling = new ContinuationPointThrottlingConfig { MaxNodeParallelism = 0, MaxParallelism = 0, MaxPerMinute = 0 };
             }
             else
             {

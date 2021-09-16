@@ -103,6 +103,7 @@ namespace Cognite.OpcUa
 
             return null;
         }
+
         /// <summary>
         /// Log exception, silencing SilentServiceExceptions and formatting results properly.
         /// </summary>
