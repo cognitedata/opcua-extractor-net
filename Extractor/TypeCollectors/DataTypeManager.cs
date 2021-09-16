@@ -279,29 +279,7 @@ namespace Cognite.OpcUa.TypeCollectors
             var values = await Task.Run(() => uaClient.ReadRawValues(enumPropMap.Values.Distinct(), token));
             foreach (var kvp in enumPropMap)
             {
-                var type = dataTypes[kvp.Key];
-                var value = values[kvp.Value];
-                if (value.Value is LocalizedText[] strings)
-                {
-                    for (int i = 0; i < strings.Length; i++)
-                    {
-                        type.EnumValues![i] = strings[i].Text;
-                    }
-                }
-                else if (value.Value is ExtensionObject[] exts)
-                {
-                    foreach (var ext in exts)
-                    {
-                        if (ext.Body is EnumValueType val)
-                        {
-                            type.EnumValues![val.Value] = val.DisplayName.Text;
-                        }
-                    }
-                }
-                else
-                {
-                    log.Warning("Unknown enum strings type: {type}", value.Value.GetType());
-                }
+                SetEnumStrings(kvp.Key, values[kvp.Value].Value);
             }
         }
         /// <summary>
@@ -331,6 +309,56 @@ namespace Cognite.OpcUa.TypeCollectors
                 (uint)NodeClass.DataType,
                 false,
                 false), CancellationToken.None);
+        }
+        /// <summary>
+        /// Manually register a type in the manager, used when type hierarchy is obtained from file
+        /// </summary>
+        /// <param name="id">NodeId of type</param>
+        /// <param name="parent">NodeId of supertype, if present</param>
+        /// <param name="name">Name of node</param>
+        public void RegisterType(NodeId id, NodeId parent, string? name)
+        {
+            parentIds[id] = parent;
+            if (id.NamespaceIndex != 0 && name != null)
+            {
+                customTypeNames[id] = name;
+            }
+            if (!dataTypes.ContainsKey(id))
+            {
+                GetDataType(id);
+            }
+        }
+        /// <summary>
+        /// Set the enumStrings property on the datatype given by <paramref name="node"/>
+        /// </summary>
+        /// <param name="node"></param>
+        /// <param name="value"></param>
+        public void SetEnumStrings(NodeId node, object value)
+        {
+            if (value is Variant variant) SetEnumStrings(node, variant.Value);
+            var type = dataTypes[node];
+
+            if (value is LocalizedText[] strings)
+            {
+                for (int i = 0; i < strings.Length; i++)
+                {
+                    type.EnumValues![i] = strings[i].Text;
+                }
+            }
+            else if (value is ExtensionObject[] exts)
+            {
+                foreach (var ext in exts)
+                {
+                    if (ext.Body is EnumValueType val)
+                    {
+                        type.EnumValues![val.Value] = val.DisplayName.Text;
+                    }
+                }
+            }
+            else
+            {
+                log.Warning("Unknown enum strings type: {type}", value.GetType());
+            }
         }
         /// <summary>
         /// Reset the manager, GetDataTypeStructure and GetDataTypeMetadata will need to be re-run.

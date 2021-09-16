@@ -34,7 +34,7 @@ namespace Cognite.OpcUa.NodeSources
     {
         private readonly CDFPusher pusher;
         private readonly CDFNodeSourceConfig sourceConfig;
-        private readonly ILogger log = Log.Logger.ForContext(typeof(CDFNodeSource));
+        protected override ILogger Log { get; set; } = Serilog.Log.Logger.ForContext(typeof(CDFNodeSource));
         private readonly string database;
 
         public CDFNodeSource(FullConfig config, UAExtractor extractor, UAClient client, CDFPusher pusher)
@@ -82,7 +82,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 catch (Exception ex)
                 {
-                    log.Error("Failed to retrieve and deserialize raw timeseries from CDF: {msg}", ex.Message);
+                    Log.Error("Failed to retrieve and deserialize raw timeseries from CDF: {msg}", ex.Message);
                     return;
                 }
 
@@ -128,7 +128,7 @@ namespace Cognite.OpcUa.NodeSources
                 }
                 catch (Exception ex)
                 {
-                    log.Error("Failed to retrieve and deserialize raw assets from CDF: {msg}", ex.Message);
+                    Log.Error("Failed to retrieve and deserialize raw assets from CDF: {msg}", ex.Message);
                     return;
                 }
 
@@ -149,7 +149,7 @@ namespace Cognite.OpcUa.NodeSources
                     readNodes.Add(obj);
                 }
             }
-            log.Information("Retrieved {as} objects and {ts} variables from CDF Raw", readNodes.Count, readVariables.Count);
+            Log.Information("Retrieved {as} objects and {ts} variables from CDF Raw", readNodes.Count, readVariables.Count);
         }
 
         public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
@@ -171,7 +171,7 @@ namespace Cognite.OpcUa.NodeSources
 
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {
-                log.Information("Mapping resulted in no new nodes");
+                Log.Information("Mapping resulted in no new nodes");
                 return null;
             }
 
@@ -180,7 +180,7 @@ namespace Cognite.OpcUa.NodeSources
                 InitNodeState(Config.Extraction.Update, node);
             }
 
-            log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
+            Log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
                 " {robj} objects and {var} variables.",
                 FinalDestinationObjects.Count, FinalDestinationVariables.Count,
                 FinalSourceObjects.Count, FinalSourceVariables.Count);

@@ -1026,11 +1026,14 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="token"></param>
         /// <returns>The collected event fields</returns>
-        public Dictionary<NodeId, HashSet<EventField>> GetEventFields(CancellationToken token)
+        public Dictionary<NodeId, HashSet<EventField>> GetEventFields(IEventFieldSource? source, CancellationToken token)
         {
             if (eventFields != null) return eventFields;
-            var collector = new EventFieldCollector(this, config.Events);
-            eventFields = collector.GetEventIdFields(token);
+            if (source == null)
+            {
+                source = new EventFieldCollector(this, config.Events);
+            }
+            eventFields = source.GetEventIdFields(token);
             foreach (var pair in eventFields)
             {
                 log.Verbose("Collected event field: {id}", pair.Key);

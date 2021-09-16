@@ -18,6 +18,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
+using Serilog;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -35,6 +36,12 @@ namespace Cognite.OpcUa.NodeSources
     /// </summary>
     public abstract class BaseNodeSource
     {
+        protected virtual ILogger Log { get; set; } = Serilog.Log.Logger.ForContext(typeof(BaseNodeSource));
+        // Initial collection of nodes, in a map.
+        protected Dictionary<NodeId, UANode> NodeMap { get; } = new Dictionary<NodeId, UANode>();
+        protected List<UANode> RawObjects { get; } = new List<UANode>();
+        protected List<UAVariable> RawVariables { get; } = new List<UAVariable>();
+
         // Nodes that are treated as variables (and synchronized) in the source system
         protected List<UAVariable> FinalSourceVariables { get; } = new List<UAVariable>();
         // Nodes that are treated as objects (so not synchronized) in the source system.
@@ -149,6 +156,85 @@ namespace Cognite.OpcUa.NodeSources
                     Extractor.State.SetNodeState(state);
                 }
             }
+        }
+        /// <summary>
+        /// Apply transformations and sort the given node as variable, object or property.
+        /// </summary>
+        /// <param name="node"></param>
+        protected void SortNode(UANode node)
+        {
+            bool initialProperty = node.IsProperty;
+            if (node.ParentId != null && !node.ParentId.IsNullNodeId && NodeMap.TryGetValue(node.ParentId, out var parent))
+            {
+                node.Parent = parent;
+                node.Attributes.Ignore |= node.Parent.Ignore;
+                node.Attributes.IsProperty |= node.Parent.IsProperty || node.Parent.NodeClass == NodeClass.Variable;
+            }
+
+            if (Extractor.Transformations != null)
+            {
+                foreach (var trns in Extractor.Transformations)
+                {
+                    trns.ApplyTransformation(node, Client.NamespaceTable!);
+                    if (node.Ignore) return;
+                }
+            }
+
+            if (node.IsProperty)
+            {
+                if (node.Parent == null) return;
+                node.Parent.AddProperty(node);
+                // Edge-case, since attributes are read before transformations, if transformations cause a node to become a property,
+                // ArrayDimensions won't be read. We can just read them later at minimal cost.
+                if (!initialProperty && Config.Extraction.DataTypes.MaxArraySize == 0 && (node is UAVariable variable) && variable.ValueRank >= 0)
+                {
+                    node.Attributes.DataRead = false;
+                }
+            }
+            else if (node is UAVariable variable)
+            {
+                RawVariables.Add(variable);
+            }
+            else
+            {
+                RawObjects.Add(node);
+            }
+        }
+
+        /// <summary>
+        /// Filter a node, creating new objects and variables based on attributes and config.
+        /// </summary>
+        /// <param name="update">Configuration used to determine what nodes have changed.</param>
+        /// <param name="node">Node to sort.</param>
+        protected void SortVariable(TypeUpdateConfig update, UAVariable node)
+        {
+            if (!Extractor.DataTypeManager.AllowTSMap(node)) return;
+            if (FilterObject(update, node)) AddVariableToLists(node);
+        }
+
+        /// <summary>
+        /// Returns true if the raw object should be added to the final list of objects.
+        /// </summary>
+        /// <param name="update">Update configuration used to determine what nodes are changed.</param>
+        /// <param name="node">Node to be filtered.</param>
+        /// <returns>True if node should be considered for mapping, false otherwise.</returns>
+        protected bool FilterObject(TypeUpdateConfig update, UANode node)
+        {
+            if (update.AnyUpdate)
+            {
+                var oldChecksum = Extractor.State.GetNodeChecksum(node.Id);
+                if (oldChecksum != null)
+                {
+                    node.Changed |= oldChecksum != node.GetUpdateChecksum(
+                        update,
+                        Config.Extraction.DataTypes.DataTypeMetadata,
+                        Config.Extraction.NodeTypes.Metadata);
+                    return node.Changed;
+                }
+            }
+            Log.Verbose(node.ToString());
+
+            return true;
         }
     }
 }

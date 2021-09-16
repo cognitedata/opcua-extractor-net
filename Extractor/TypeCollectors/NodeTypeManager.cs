@@ -74,5 +74,12 @@ namespace Cognite.OpcUa.TypeCollectors
                 toRead[i].Name = (values[i].Value as LocalizedText)?.Text;
             }
         }
+        /// <summary>
+        /// Reset object type manager
+        /// </summary>
+        public void Reset()
+        {
+            mappedTypes.Clear();
+        }
     }
 }
