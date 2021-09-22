@@ -453,11 +453,11 @@ namespace Cognite.OpcUa
                 return null;
             }
 
-            var eventType = eventFields[eventTypeIndex].Value as NodeId;
+            var typeId = eventFields[eventTypeIndex].Value as NodeId;
             // Many servers don't handle filtering on history data.
-            if (eventType == null || !extractor.State.ActiveEvents.TryGetValue(eventType, out var targetEventFields))
+            if (typeId == null || !extractor.State.ActiveEvents.TryGetValue(typeId, out var eventType))
             {
-                log.Verbose("Invalid event type: {eventType}", eventType);
+                log.Verbose("Invalid event type: {eventType}", typeId);
                 return null;
             }
 
@@ -467,7 +467,7 @@ namespace Cognite.OpcUa
             {
                 var clause = filter.SelectClauses[i];
                 var field = new EventField(clause.BrowsePath);
-                if (!targetEventFields.Contains(field)) continue;
+                if (!eventType.CollectedFields.Contains(field)) continue;
 
                 string name = string.Join('_', clause.BrowsePath.Select(name => name.Name));
                 if (name != "EventId" && name != "SourceNode" && name != "EventType" && config.Events.DestinationNameMap.TryGetValue(name, out var mapped))
@@ -483,7 +483,7 @@ namespace Cognite.OpcUa
 
             if (!extractedProperties.TryGetValue("EventId", out var rawEventId) || !(rawEventId.Value.Value is byte[] byteEventId))
             {
-                log.Verbose("Event of type {type} lacks id", eventType);
+                log.Verbose("Event of type {type} lacks id", typeId);
                 return null;
             }
 
@@ -495,7 +495,7 @@ namespace Cognite.OpcUa
 
             if (!extractedProperties.TryGetValue("Time", out var rawTime) || !(rawTime.Value.Value is DateTime time))
             {
-                log.Verbose("Event lacks specified time, type: {type}", eventType);
+                log.Verbose("Event lacks specified time, type: {type}", typeId);
                 return null;
             }
 

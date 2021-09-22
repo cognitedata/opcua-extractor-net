@@ -53,7 +53,7 @@ namespace Cognite.OpcUa
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         private CancellationToken liveToken;
-        private Dictionary<NodeId, HashSet<EventField>>? eventFields;
+        private Dictionary<NodeId, UAEventType>? eventFields;
 
         private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
@@ -1026,7 +1026,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="token"></param>
         /// <returns>The collected event fields</returns>
-        public Dictionary<NodeId, HashSet<EventField>> GetEventFields(IEventFieldSource? source, CancellationToken token)
+        public Dictionary<NodeId, UAEventType> GetEventFields(IEventFieldSource? source, CancellationToken token)
         {
             if (eventFields != null) return eventFields;
             if (source == null)
@@ -1037,7 +1037,7 @@ namespace Cognite.OpcUa
             foreach (var pair in eventFields)
             {
                 log.Verbose("Collected event field: {id}", pair.Key);
-                foreach (var fields in pair.Value)
+                foreach (var fields in pair.Value.CollectedFields)
                 {
                     log.Verbose("    {browse}", fields.Name);
                 }
@@ -1065,7 +1065,7 @@ namespace Cognite.OpcUa
              */
             var whereClause = new ContentFilter();
 
-            if (eventFields == null) eventFields = new Dictionary<NodeId, HashSet<EventField>>();
+            if (eventFields == null) eventFields = new Dictionary<NodeId, UAEventType>();
 
             if (eventFields.Keys.Any() && ((config.Events.EventIds?.Any() ?? false) || !config.Events.AllEvents))
             {
@@ -1087,7 +1087,7 @@ namespace Cognite.OpcUa
 
 
             var fieldList = eventFields
-                .Aggregate((IEnumerable<EventField>)new List<EventField>(), (agg, kvp) => agg.Concat(kvp.Value))
+                .Aggregate((IEnumerable<EventField>)new List<EventField>(), (agg, kvp) => agg.Concat(kvp.Value.CollectedFields))
                 .Distinct();
 
             if (!fieldList.Any())

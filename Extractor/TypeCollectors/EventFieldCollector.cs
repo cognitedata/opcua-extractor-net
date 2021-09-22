@@ -70,14 +70,14 @@ namespace Cognite.OpcUa.TypeCollectors
 
     public interface IEventFieldSource
     {
-        Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token);
+        Dictionary<NodeId, UAEventType> GetEventIdFields(CancellationToken token);
     }
 
     /// <summary>
     /// Collects the fields of events. It does this by mapping out the entire event type hierarchy,
     /// and collecting the fields of each node on the way.
     /// </summary>
-    public class EventFieldCollector : IEventFieldSource
+    public partial class EventFieldCollector : IEventFieldSource
     {
         private readonly UAClient uaClient;
         private readonly Dictionary<NodeId, UAEventType> types = new Dictionary<NodeId, UAEventType>();
@@ -107,7 +107,7 @@ namespace Cognite.OpcUa.TypeCollectors
         /// then builds a list of eventfields for each type by recursively collecting the properties of all parents.
         /// </summary>
         /// <returns>The collected fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).</returns>
-        public Dictionary<NodeId, HashSet<EventField>> GetEventIdFields(CancellationToken token)
+        public Dictionary<NodeId, UAEventType> GetEventIdFields(CancellationToken token)
         {
             types[ObjectTypeIds.BaseEventType] = new UAEventType(ObjectTypeIds.BaseEventType, "BaseEventType");
 
@@ -121,7 +121,7 @@ namespace Cognite.OpcUa.TypeCollectors
                 false,
                 true);
 
-            var result = new Dictionary<NodeId, HashSet<EventField>>();
+            var result = new Dictionary<NodeId, UAEventType>();
 
             HashSet<NodeId>? whitelist = null;
             if (config.EventIds != null && config.EventIds.Any())
@@ -137,7 +137,7 @@ namespace Cognite.OpcUa.TypeCollectors
                     if (!whitelist.Contains(type.Id)) continue;
                 }
                 else if (!config.AllEvents && type.Id.NamespaceIndex == 0) continue;
-                result[type.Id] = new HashSet<EventField>(type.CollectedFields);
+                result[type.Id] = type;
             }
 
             return result;
@@ -182,98 +182,6 @@ namespace Cognite.OpcUa.TypeCollectors
                     || child.TypeDefinition != VariableTypeIds.PropertyType)
                 {
                     nodes[id] = node;
-                }
-            }
-        }
-        /// <summary>
-        /// Internal representation of an event type.
-        /// </summary>
-        private class UAEventType
-        {
-            public NodeId Id { get; }
-            public LocalizedText DisplayName { get; }
-            public UAEventType? Parent { get; set; }
-            private IList<ChildNode> children = new List<ChildNode>();
-            public UAEventType(NodeId id, LocalizedText displayName)
-            {
-                Id = id;
-                DisplayName = displayName;
-            }
-            /// <summary>
-            /// Add a child node to the internal collection of children
-            /// </summary>
-            /// <param name="desc">ReferenceDescription of child</param>
-            /// <returns>Created child node</returns>
-            public ChildNode AddChild(ReferenceDescription desc)
-            {
-                var node = new ChildNode(desc.BrowseName, desc.NodeClass);
-                children.Add(node);
-                return node;
-            }
-            /// <summary>
-            /// Retrieve all fields for this type, combining own fields with parent node fields.
-            /// </summary>
-            public IEnumerable<EventField> CollectedFields
-            {
-                get
-                {
-                    var childFields = children.SelectMany(child => child.ToFields());
-                    return Parent?.CollectedFields?.Concat(childFields) ?? childFields;
-                }
-            }
-        }
-        /// <summary>
-        /// Internal representation of node in EventType hierarchy
-        /// </summary>
-        private class ChildNode
-        {
-            private readonly NodeClass nodeClass;
-            private readonly QualifiedName browseName;
-            private IList<ChildNode>? children;
-
-            public ChildNode(QualifiedName browseName, NodeClass nc)
-            {
-                this.browseName = browseName;
-                nodeClass = nc;
-            }
-            /// <summary>
-            /// Add a child node to the internal collection of children
-            /// </summary>
-            /// <param name="desc">ReferenceDescription of child</param>
-            /// <returns>Created child node</returns>
-            public ChildNode AddChild(ReferenceDescription desc)
-            {
-                var node = new ChildNode(desc.BrowseName, desc.NodeClass);
-                if (children == null)
-                {
-                    children = new List<ChildNode> { node };
-                }
-                children.Add(node);
-                return node;
-            }
-            /// <summary>
-            /// Convert this node to a list of EventFields, also collects
-            /// fields for all its children, and appends its own browseName to their path.
-            /// </summary>
-            /// <returns>Full list of fields for this node and its children</returns>
-            public IEnumerable<EventField> ToFields()
-            {
-                if (nodeClass == NodeClass.Object && children == null) yield break;
-                if (nodeClass == NodeClass.Variable)
-                {
-                    yield return new EventField(browseName);
-                }
-                if (children != null)
-                {
-                    foreach (var child in children)
-                    {
-                        var childFields = child.ToFields();
-                        foreach (var childField in childFields)
-                        {
-                            childField.BrowsePath.Insert(0, browseName);
-                            yield return childField;
-                        }
-                    }
                 }
             }
         }

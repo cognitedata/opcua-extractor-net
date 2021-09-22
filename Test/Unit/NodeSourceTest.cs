@@ -158,22 +158,22 @@ namespace Test.Unit
             Assert.Equal(96, fields.Count);
 
             // Check that all parent properties are present in a deep event
-            Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].Count);
+            Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields.Count);
             Assert.Contains(new EventField(new QualifiedName("EventType")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
             Assert.Contains(new EventField(new QualifiedName("ActionTimeStamp")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
             Assert.Contains(new EventField(new QualifiedName("ParameterDataTypeId")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
             Assert.Contains(new EventField(new QualifiedName("UpdatedNode")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
             Assert.Contains(new EventField(new QualifiedName("OldValues")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
 
             // Check that nodes in the middle only have higher level properties
-            Assert.Equal(13, fields[ObjectTypeIds.AuditHistoryUpdateEventType].Count);
+            Assert.Equal(13, fields[ObjectTypeIds.AuditHistoryUpdateEventType].CollectedFields.Count);
             Assert.DoesNotContain(new EventField(new QualifiedName("OldValues")),
-                fields[ObjectTypeIds.AuditHistoryUpdateEventType]);
+                fields[ObjectTypeIds.AuditHistoryUpdateEventType].CollectedFields);
 
             var result = await source.ParseResults(tester.Source.Token);
             var nodeDict = result.DestinationObjects.ToDictionary(obj => obj.Id);

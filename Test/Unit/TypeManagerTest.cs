@@ -384,31 +384,31 @@ namespace Test.Unit
             var fields = collector.GetEventIdFields(tester.Source.Token);
             Assert.Equal(5, fields.Count);
             var eventIds = tester.Server.Ids.Event;
-            Assert.Equal(7, fields[eventIds.BasicType1].Count);
-            Assert.Contains(new EventField(new QualifiedName("SourceNode")), fields[eventIds.BasicType1]);
-            Assert.Contains(new EventField(new QualifiedName("Time")), fields[eventIds.BasicType1]);
-            Assert.Contains(new EventField(new QualifiedName("Severity")), fields[eventIds.BasicType1]);
-            Assert.Contains(new EventField(new QualifiedName("Message")), fields[eventIds.BasicType1]);
-            Assert.Contains(new EventField(new QualifiedName("EventId")), fields[eventIds.BasicType1]);
-            Assert.Contains(new EventField(new QualifiedName("EventType")), fields[eventIds.BasicType1]);
+            Assert.Equal(7, fields[eventIds.BasicType1].CollectedFields.Count);
+            Assert.Contains(new EventField(new QualifiedName("SourceNode")), fields[eventIds.BasicType1].CollectedFields);
+            Assert.Contains(new EventField(new QualifiedName("Time")), fields[eventIds.BasicType1].CollectedFields);
+            Assert.Contains(new EventField(new QualifiedName("Severity")), fields[eventIds.BasicType1].CollectedFields);
+            Assert.Contains(new EventField(new QualifiedName("Message")), fields[eventIds.BasicType1].CollectedFields);
+            Assert.Contains(new EventField(new QualifiedName("EventId")), fields[eventIds.BasicType1].CollectedFields);
+            Assert.Contains(new EventField(new QualifiedName("EventType")), fields[eventIds.BasicType1].CollectedFields);
 
-            Assert.Equal(7, fields[eventIds.BasicType2].Count);
-            foreach (var field in fields[eventIds.BasicType1])
+            Assert.Equal(7, fields[eventIds.BasicType2].CollectedFields.Count);
+            foreach (var field in fields[eventIds.BasicType1].CollectedFields)
             {
-                Assert.Contains(field, fields[eventIds.BasicType2]);
+                Assert.Contains(field, fields[eventIds.BasicType2].CollectedFields);
             }
 
-            Assert.Equal(8, fields[eventIds.CustomType].Count);
-            Assert.Contains(new EventField(new QualifiedName("TypeProp")), fields[eventIds.CustomType]);
+            Assert.Equal(8, fields[eventIds.CustomType].CollectedFields.Count);
+            Assert.Contains(new EventField(new QualifiedName("TypeProp")), fields[eventIds.CustomType].CollectedFields);
 
-            Assert.Equal(10, fields[eventIds.PropType].Count);
-            Assert.Contains(new EventField(new QualifiedName("PropertyNum")), fields[eventIds.PropType]);
-            Assert.Contains(new EventField(new QualifiedName("PropertyString")), fields[eventIds.PropType]);
-            Assert.Contains(new EventField(new QualifiedName("SubType")), fields[eventIds.PropType]);
+            Assert.Equal(10, fields[eventIds.PropType].CollectedFields.Count);
+            Assert.Contains(new EventField(new QualifiedName("PropertyNum")), fields[eventIds.PropType].CollectedFields);
+            Assert.Contains(new EventField(new QualifiedName("PropertyString")), fields[eventIds.PropType].CollectedFields);
+            Assert.Contains(new EventField(new QualifiedName("SubType")), fields[eventIds.PropType].CollectedFields);
 
-            Assert.Equal(11, fields[eventIds.DeepType].Count);
+            Assert.Equal(11, fields[eventIds.DeepType].CollectedFields.Count);
             Assert.Contains(new EventField(new QualifiedNameCollection { new QualifiedName("DeepObj", 2), new QualifiedName("DeepProp") }),
-                fields[eventIds.DeepType]);
+                fields[eventIds.DeepType].CollectedFields);
         }
         [Fact]
         public void TestCollectAllEvents()
@@ -422,22 +422,22 @@ namespace Test.Unit
             Assert.Equal(96, fields.Count);
 
             // Check that all parent properties are present in a deep event
-            Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].Count);
+            Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields.Count);
             Assert.Contains(new EventField(new QualifiedName("EventType")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
             Assert.Contains(new EventField(new QualifiedName("ActionTimeStamp")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
             Assert.Contains(new EventField(new QualifiedName("ParameterDataTypeId")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
             Assert.Contains(new EventField(new QualifiedName("UpdatedNode")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
             Assert.Contains(new EventField(new QualifiedName("OldValues")),
-                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType]);
+                fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields);
 
             // Check that nodes in the middle only have higher level properties
-            Assert.Equal(13, fields[ObjectTypeIds.AuditHistoryUpdateEventType].Count);
+            Assert.Equal(13, fields[ObjectTypeIds.AuditHistoryUpdateEventType].CollectedFields.Count);
             Assert.DoesNotContain(new EventField(new QualifiedName("OldValues")),
-                fields[ObjectTypeIds.AuditHistoryUpdateEventType]);
+                fields[ObjectTypeIds.AuditHistoryUpdateEventType].CollectedFields);
         }
         [Fact]
         public void TestIgnoreEvents()
@@ -467,10 +467,10 @@ namespace Test.Unit
             Assert.Equal(5, fields.Count);
 
             var eventIds = tester.Server.Ids.Event;
-            Assert.Equal(9, fields[eventIds.PropType].Count);
-            Assert.Contains(new EventField(new QualifiedName("PropertyNum")), fields[eventIds.PropType]);
-            Assert.Contains(new EventField(new QualifiedName("PropertyString")), fields[eventIds.PropType]);
-            Assert.DoesNotContain(new EventField(new QualifiedName("SubType")), fields[eventIds.PropType]);
+            Assert.Equal(9, fields[eventIds.PropType].CollectedFields.Count);
+            Assert.Contains(new EventField(new QualifiedName("PropertyNum")), fields[eventIds.PropType].CollectedFields);
+            Assert.Contains(new EventField(new QualifiedName("PropertyString")), fields[eventIds.PropType].CollectedFields);
+            Assert.DoesNotContain(new EventField(new QualifiedName("SubType")), fields[eventIds.PropType].CollectedFields);
         }
         [Fact]
         public void TestEventWhitelist()
@@ -493,9 +493,9 @@ namespace Test.Unit
             var fields = collector.GetEventIdFields(tester.Source.Token);
 
             Assert.Equal(3, fields.Count);
-            Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].Count);
-            Assert.Equal(10, fields[eventIds.PropType].Count);
-            Assert.Equal(7, fields[eventIds.BasicType1].Count);
+            Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields.Count);
+            Assert.Equal(10, fields[eventIds.PropType].CollectedFields.Count);
+            Assert.Equal(7, fields[eventIds.BasicType1].CollectedFields.Count);
         }
         #endregion
         #region nodetypemanager

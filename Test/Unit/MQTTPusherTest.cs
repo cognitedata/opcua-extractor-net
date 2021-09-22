@@ -190,7 +190,7 @@ namespace Test.Unit
                     Time = time,
                     EmittingNode = new NodeId("emitter"),
                     SourceNode = new NodeId("source"),
-                    EventType = new NodeId("type"),
+                    EventType = new UAEventType(new NodeId("type"), "EventType"),
                     EventId = "someid"
                 },
                 new UAEvent
@@ -198,7 +198,7 @@ namespace Test.Unit
                     Time = time,
                     EmittingNode = new NodeId("emitter"),
                     SourceNode = new NodeId("missingsource"),
-                    EventType = new NodeId("type"),
+                    EventType = new UAEventType(new NodeId("type"), "EventType"),
                     EventId = "someid2"
                 }
             };
@@ -219,7 +219,7 @@ namespace Test.Unit
                 Time = time,
                 EmittingNode = new NodeId("emitter"),
                 SourceNode = new NodeId("source"),
-                EventType = new NodeId("type"),
+                EventType = new UAEventType(new NodeId("type"), "EventType"),
                 EventId = "someid3"
             }).ToArray();
 

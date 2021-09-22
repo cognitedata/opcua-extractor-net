@@ -29,7 +29,7 @@ namespace Test.Utils
 
             var fields = baseFields.Select(field => new EventField(new QualifiedName(field)));
             fields = fields.Append(new EventField(new QualifiedName("EUProp")));
-            extractor.State.ActiveEvents[new NodeId("test")] = fields.ToHashSet();
+            extractor.State.ActiveEvents[new NodeId("test")] = new UAEventType(new NodeId("test"), "TestEvent", fields.ToHashSet());
 
             return state;
         }

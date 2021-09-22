@@ -935,12 +935,12 @@ namespace Test.Unit
                 EventId = "test.test",
                 Time = now,
                 EmittingNode = new NodeId("emitter"),
-                EventType = new NodeId("type")
+                EventType = new UAEventType(new NodeId("type"), "EventType")
             };
             var str = evt.ToString();
             var refStr = "Event: test.test\n"
                        + $"Time: {now.ToString(CultureInfo.InvariantCulture)}\n"
-                       + "Type: s=type\n"
+                       + "Type: EventType\n"
                        + "Emitter: s=emitter\n";
             Assert.Equal(refStr, str);
 
@@ -956,7 +956,7 @@ namespace Test.Unit
             str = evt.ToString();
             refStr = "Event: test.test\n"
                    + $"Time: {now.ToString(CultureInfo.InvariantCulture)}\n"
-                   + "Type: s=type\n"
+                   + "Type: EventType\n"
                    + "Emitter: s=emitter\n"
                    + "Message: message\n"
                    + "SourceNode: s=source\n"
@@ -976,13 +976,15 @@ namespace Test.Unit
             var state = new EventExtractionState(tester.Client, new NodeId("emitter"), true, true, true);
             extractor.State.SetEmitterState(state);
             extractor.State.RegisterNode(new NodeId("type"), tester.Client.GetUniqueId(new NodeId("type")));
+            var type = new UAEventType(new NodeId("type"), "EventType");
+            extractor.State.ActiveEvents[type.Id] = type;
             // No event should be created without all of these
             var evt = new UAEvent
             {
                 EventId = "test.test",
                 Time = DateTime.MinValue,
                 EmittingNode = new NodeId("emitter"),
-                EventType = new NodeId("type"),
+                EventType = type,
                 SourceNode = NodeId.Null
             };
 
@@ -1041,7 +1043,7 @@ namespace Test.Unit
                 EmittingNode = new NodeId("emitter"),
                 MetaData = new Dictionary<string, string>(),
                 EventId = "eventid",
-                EventType = new NodeId("type"),
+                EventType = new UAEventType(new NodeId("type"), "EventType"),
                 Message = "message",
                 SourceNode = new NodeId("source"),
                 Time = ts
@@ -1052,8 +1054,9 @@ namespace Test.Unit
             var conv = evt.ToStatelessCDFEvent(extractor, 123, null);
             Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
             Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
-            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal(4, conv.Metadata.Count);
             Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("EventType", conv.Metadata["TypeName"]);
             Assert.Equal("gp.base:s=type", conv.Type);
             Assert.Equal("eventid", conv.ExternalId);
             Assert.Equal("message", conv.Description);
@@ -1078,8 +1081,9 @@ namespace Test.Unit
             conv = evt.ToStatelessCDFEvent(extractor, 123, null);
             Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
             Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
-            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal(4, conv.Metadata.Count);
             Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("EventType", conv.Metadata["TypeName"]);
             Assert.Equal("SomeOtherType", conv.Type);
             Assert.Equal("SomeSubType", conv.Subtype);
             Assert.Equal("eventid", conv.ExternalId);
@@ -1101,7 +1105,7 @@ namespace Test.Unit
                 EmittingNode = new NodeId("emitter"),
                 MetaData = new Dictionary<string, string>(),
                 EventId = "eventid",
-                EventType = new NodeId("type"),
+                EventType = new UAEventType(new NodeId("type"), "EventType"),
                 Message = "message",
                 SourceNode = new NodeId("source"),
                 Time = ts
@@ -1117,8 +1121,9 @@ namespace Test.Unit
             var conv = evt.ToCDFEvent(extractor, 123, null);
             Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
             Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
-            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal(4, conv.Metadata.Count);
             Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("EventType", conv.Metadata["TypeName"]);
             Assert.Equal("gp.base:s=type", conv.Type);
             Assert.Equal("eventid", conv.ExternalId);
             Assert.Equal("message", conv.Description);
@@ -1136,8 +1141,9 @@ namespace Test.Unit
             conv = evt.ToCDFEvent(extractor, 123, nodeToAsset);
             Assert.Equal("gp.base:s=emitter", conv.Metadata["Emitter"]);
             Assert.Equal("gp.base:s=source", conv.Metadata["SourceNode"]);
-            Assert.Equal(3, conv.Metadata.Count);
+            Assert.Equal(4, conv.Metadata.Count);
             Assert.Equal("value", conv.Metadata["field"]);
+            Assert.Equal("EventType", conv.Metadata["TypeName"]);
             Assert.Equal("SomeOtherType", conv.Type);
             Assert.Equal("SomeSubType", conv.Subtype);
             Assert.Equal("eventid", conv.ExternalId);
@@ -1158,7 +1164,7 @@ namespace Test.Unit
             {
                 EmittingNode = new NodeId("emitter"),
                 EventId = "eventid",
-                EventType = new NodeId("type"),
+                EventType = new UAEventType(new NodeId("type"), "EventType"),
                 Message = "message",
                 SourceNode = new NodeId("source"),
                 Time = ts

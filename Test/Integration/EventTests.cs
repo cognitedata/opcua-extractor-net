@@ -76,7 +76,7 @@ namespace Test.Integration
             Assert.Equal("100", evt.MetaData["Severity"]);
             Assert.Equal("Object 1", evt.MetaData["SourceName"]);
             Assert.True(evt.Time > DateTime.UtcNow.AddSeconds(-5));
-            Assert.Equal(ids.PropType, evt.EventType);
+            Assert.Equal(ids.PropType, evt.EventType.Id);
             Assert.StartsWith(tester.Config.Extraction.IdPrefix, evt.EventId, StringComparison.InvariantCulture);
 
             await BaseExtractorTestFixture.TerminateRunTask(runTask, extractor);
@@ -116,7 +116,7 @@ namespace Test.Integration
             Assert.Equal("100", evt.MetaData["Severity"]);
             Assert.Equal("Object 1", evt.MetaData["SourceName"]);
             Assert.True(evt.Time > DateTime.UtcNow.AddSeconds(-5));
-            Assert.Equal(ids.PropType, evt.EventType);
+            Assert.Equal(ids.PropType, evt.EventType.Id);
             Assert.StartsWith(tester.Config.Extraction.IdPrefix, evt.EventId, StringComparison.InvariantCulture);
 
             evt = pusher.Events[ObjectIds.Server].First(evt => evt.Message == "mapped 0");
@@ -165,7 +165,7 @@ namespace Test.Integration
             Assert.Equal("EventRoot", evt.MetaData["SourceName"]);
             Assert.Equal(@"{""DeepProp"":""deepValue""}", evt.MetaData["DeepObj"]);
             Assert.True(evt.Time > DateTime.UtcNow.AddSeconds(-5));
-            Assert.Equal(ids.DeepType, evt.EventType);
+            Assert.Equal(ids.DeepType, evt.EventType.Id);
         }
         [Fact]
         public async Task TestDisableSubscriptions()
@@ -288,7 +288,7 @@ namespace Test.Integration
             Assert.Equal("sub-type", evt.MetaData["SubType"]);
             Assert.Equal("100", evt.MetaData["Severity"]);
             Assert.Equal("Object 1", evt.MetaData["SourceName"]);
-            Assert.Equal(ids.PropType, evt.EventType);
+            Assert.Equal(ids.PropType, evt.EventType.Id);
             Assert.StartsWith(tester.Config.Extraction.IdPrefix, evt.EventId, StringComparison.InvariantCulture);
 
             evt = pusher.Events[ObjectIds.Server].First(evt => evt.Message == "mapped 0");
