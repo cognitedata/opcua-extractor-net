@@ -48,8 +48,7 @@ namespace Cognite.OpcUa
         private SessionReconnectHandler? reconnectHandler;
         public DataTypeManager DataTypeManager { get; }
         public NodeTypeManager ObjectTypeManager { get; }
-        private readonly object visitedNodesLock = new object();
-        protected ISet<NodeId> VisitedNodes { get; } = new HashSet<NodeId>();
+
         private readonly object subscriptionLock = new object();
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
@@ -58,12 +57,8 @@ namespace Cognite.OpcUa
 
         private Dictionary<ushort, string> nsPrefixMap = new Dictionary<ushort, string>();
 
-        public IEnumerable<NodeFilter>? IgnoreFilters { get; set; }
-
         public event EventHandler? OnServerDisconnect;
         public event EventHandler? OnServerReconnect;
-
-        private int pendingOperations;
 
         private static readonly Counter connects = Metrics
             .CreateCounter("opcua_connects", "Number of times the client has connected to and mapped the opcua server");
@@ -77,8 +72,6 @@ namespace Cognite.OpcUa
             .CreateCounter("opcua_history_reads", "Number of historyread operations performed");
         private static readonly Counter numBrowse = Metrics
             .CreateCounter("opcua_browse_operations", "Number of browse operations performed");
-        private static readonly Gauge depth = Metrics
-            .CreateGauge("opcua_tree_depth", "Depth of node tree from rootnode");
         private static readonly Counter attributeRequestFailures = Metrics
             .CreateCounter("opcua_attribute_request_failures", "Number of failed requests for attributes to OPC-UA");
         private static readonly Counter historyReadFailures = Metrics
@@ -90,8 +83,8 @@ namespace Cognite.OpcUa
 
         private readonly ILogger log = Log.Logger.ForContext(typeof(UAClient));
 
-        public StringConverter StringConverter { get; }
-
+        public StringConverter StringConverter { get; } 
+        public Browser Browser { get; }
 
         /// <summary>
         /// Constructor, does not start the client.
@@ -107,6 +100,7 @@ namespace Cognite.OpcUa
                 metricsManager = new NodeMetricsManager(this, config.Source, config.Metrics.Nodes);
             }
             StringConverter = new StringConverter(this, config);
+            Browser = new Browser(this, config);
         }
         #region Session management
         /// <summary>
@@ -307,10 +301,7 @@ namespace Cognite.OpcUa
         /// </summary>
         private async Task StartSession()
         {
-            lock (visitedNodesLock)
-            {
-                VisitedNodes.Clear();
-            }
+            Browser.ResetVisitedNodes();
             // A restarted Session might mean a restarted server, so all server-relevant data must be cleared.
             // This includes any stored NodeId, which may refer to an outdated namespaceIndex
             eventFields?.Clear();
@@ -415,26 +406,15 @@ namespace Cognite.OpcUa
                     eventArgs.Certificate.Subject, eventArgs.Error.StatusCode);
             }
         }
-        /// <summary>
-        /// Safely increment number of active opcua operations
-        /// </summary>
-        private void IncOperations()
-        {
-            Interlocked.Increment(ref pendingOperations);
-        }
-        /// <summary>
-        /// Safely decrement number of active opcua operations
-        /// </summary>
-        private void DecOperations()
-        {
-            Interlocked.Decrement(ref pendingOperations);
-        }
+
+        private readonly OperationWaiter waiter = new OperationWaiter();
+
         /// <summary>
         /// Wait for all opcua operations to finish
         /// </summary>
-        public async Task WaitForOperations()
+        public async Task WaitForOperations(CancellationToken token)
         {
-            while (pendingOperations > 0) await Task.Delay(100);
+            await waiter.Wait(100_000, token);
         }
 
         /// <summary>
@@ -449,116 +429,14 @@ namespace Cognite.OpcUa
 
         #region Browse
         /// <summary>
-        /// Browse node hierarchy for single root node
-        /// </summary>
-        /// <param name="root">Root node to browse for</param>
-        /// <param name="callback">Callback to call for each found node</param>
-        /// <param name="ignoreVisited">Default true, do not call callback for previously visited nodes</param>
-        public Task BrowseNodeHierarchy(NodeId root,
-            Action<ReferenceDescription, NodeId> callback,
-            CancellationToken token,
-            bool ignoreVisited = true)
-        {
-            return BrowseNodeHierarchy(new[] { root }, callback, token, ignoreVisited);
-        }
-        /// <summary>
-        /// Browse an opcua directory, calling callback for all relevant nodes found.
-        /// </summary>
-        /// <param name="roots">Initial nodes to start mapping.</param>
-        /// <param name="callback">Callback for each mapped node, takes a description of a single node, and its parent id</param>
-        /// <param name="ignoreVisited">Default true, do not call callback for previously visited nodes</param>
-        public async Task BrowseNodeHierarchy(IEnumerable<NodeId> roots,
-            Action<ReferenceDescription, NodeId> callback,
-            CancellationToken token,
-            bool ignoreVisited = true)
-        {
-            log.Debug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
-            foreach (var root in roots)
-            {
-                bool docb = true;
-                lock (visitedNodesLock)
-                {
-                    if (!VisitedNodes.Add(root) && ignoreVisited)
-                    {
-                        docb = false;
-                    }
-                }
-                if (docb)
-                {
-                    var rootNode = GetRootNode(root);
-                    if (rootNode == null) throw new ExtractorFailureException($"Root node does not exist: {root}");
-                    callback?.Invoke(rootNode, NodeId.Null);
-                }
-            }
-            uint classMask = (uint)NodeClass.Variable | (uint)NodeClass.Object;
-            if (config.Extraction.NodeTypes.AsNodes)
-            {
-                classMask |= (uint)NodeClass.VariableType | (uint)NodeClass.ObjectType;
-            }
-            await Task.Run(() => BrowseDirectory(roots, callback, token, null,
-                classMask, ignoreVisited), token);
-        }
-        /// <summary>
-        /// Get the root node and return it as a reference description.
-        /// </summary>
-        /// <param name="nodeId">Id of the root node</param>
-        /// <returns>A partial description of the root node</returns>
-        private ReferenceDescription? GetRootNode(NodeId nodeId)
-        {
-            if (Session == null) throw new InvalidOperationException("Requires open session");
-            var attributes = new List<uint>
-            {
-                Attributes.NodeId,
-                Attributes.BrowseName,
-                Attributes.DisplayName,
-                Attributes.NodeClass
-            };
-            var readValueIds = attributes.Select(attr => new ReadValueId { NodeId = nodeId, AttributeId = attr }).ToList();
-            DataValueCollection results;
-            try
-            {
-                Session.Read(null, 0, TimestampsToReturn.Neither, new ReadValueIdCollection(readValueIds), out results, out _);
-            }
-            catch (ServiceResultException ex)
-            {
-                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadRootNode);
-            }
-            var refd = new ReferenceDescription();
-            refd.NodeId = results[0].GetValue(NodeId.Null);
-            if (refd.NodeId == NodeId.Null) return null;
-            refd.BrowseName = results[1].GetValue(QualifiedName.Null);
-            refd.DisplayName = results[2].GetValue(LocalizedText.Null);
-            refd.NodeClass = (NodeClass)results[3].GetValue(0);
-
-            if (config.Extraction.NodeTypes.Metadata)
-            {
-                try
-                {
-                    Session.Browse(null, null, nodeId, 1, BrowseDirection.Forward, ReferenceTypeIds.HasTypeDefinition, false,
-                        (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType, out var _, out var references);
-                    if (references.Any())
-                    {
-                        refd.TypeDefinition = references.First().NodeId;
-                    }
-                }
-                catch (ServiceResultException ex)
-                {
-                    throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadRootNode);
-                }
-            }
-
-            refd.ReferenceTypeId = null;
-            refd.IsForward = true;
-            return refd;
-        }
-        /// <summary>
         /// Retrieve a representation of the server node
         /// </summary>
         /// <returns></returns>
         public UANode GetServerNode(CancellationToken token)
         {
-            var desc = GetRootNode(ObjectIds.Server);
+            var desc = Browser.GetRootNodes(new[] { ObjectIds.Server }, token).FirstOrDefault();
             if (desc == null) throw new ExtractorFailureException("Server node is null. Invalid server configuration");
+            
             var node = new UANode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null, NodeClass.Object);
             ReadNodeData(new[] { node }, token);
             return node;
@@ -580,241 +458,95 @@ namespace Cognite.OpcUa
         {
             nodeOverrides.Clear();
         }
-        /// <summary>
-        /// Get all children of the given list of parents as a map from parentId to list of children descriptions
-        /// </summary>
-        /// <param name="parents">List of parents to browse</param>
-        /// <param name="referenceTypes">Referencetype to browse, defaults to HierarchicalReferences</param>
-        /// <param name="nodeClassMask">Mask for node classes, as specified in the OPC-UA specification</param>
-        /// <param name="direction">BrowseDirection, default forward</param>
-        /// <returns>Dictionary from parent nodeId to collection of children as ReferenceDescriptions</returns>
-        public Dictionary<NodeId, ReferenceDescriptionCollection> GetNodeChildren(
-            IEnumerable<NodeId> parents,
-            NodeId? referenceTypes,
-            uint nodeClassMask,
-            CancellationToken token,
-            BrowseDirection direction = BrowseDirection.Forward)
+
+        public void GetReferences(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
         {
+            if (browseParams == null || browseParams.Nodes == null) throw new ArgumentNullException(nameof(browseParams));
             if (Session == null) throw new InvalidOperationException("Requires open session");
-            var finalResults = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-            IncOperations();
-            var tobrowse = new BrowseDescriptionCollection(parents.Select(id =>
-                new BrowseDescription
-                {
-                    NodeId = id,
-                    ReferenceTypeId = referenceTypes ?? ReferenceTypeIds.HierarchicalReferences,
-                    IncludeSubtypes = true,
-                    NodeClassMask = nodeClassMask,
-                    BrowseDirection = direction,
-                    ResultMask = (uint)BrowseResultMask.NodeClass | (uint)BrowseResultMask.DisplayName | (uint)BrowseResultMask.IsForward
-                        | (uint)BrowseResultMask.ReferenceTypeId | (uint)BrowseResultMask.TypeDefinition | (uint)BrowseResultMask.BrowseName
-                }
-            ));
-            if (!parents.Any())
+
+            var toBrowse = new List<BrowseNode>();
+            var toBrowseNext = new List<BrowseNode>();
+            foreach (var node in browseParams.Nodes.Values)
             {
-                DecOperations();
-                return finalResults;
+                if (node.ContinuationPoint == null) toBrowse.Add(node);
+                else toBrowseNext.Add(node);
             }
-            try
+
+            using var operation = waiter.GetInstance();
+
+            if (toBrowse.Any())
             {
+                var descriptions = new BrowseDescriptionCollection(toBrowse.Select(node => browseParams.ToDescription(node)));
                 BrowseResultCollection results;
-                DiagnosticInfoCollection diagnostics;
                 try
                 {
                     Session.Browse(
                         null,
                         null,
-                        (uint)config.Source.BrowseChunk,
-                        tobrowse,
+                        browseParams.MaxPerNode,
+                        descriptions,
                         out results,
-                        out diagnostics
+                        out var _
                     );
+                    numBrowse.Inc();
                 }
                 catch (ServiceResultException ex)
                 {
+                    browseFailures.Inc();
                     throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.Browse);
                 }
+                if (toBrowse.Count != results.Count) throw
+                        new FatalException($"Incorrect number of results from browse service. Got {results.Count}, expected {toBrowse.Count}. " +
+                        "This is illegal behavior, and caused by a bug in the server.");
 
-                var indexMap = new NodeId[parents.Count()];
-                var continuationPoints = new ByteStringCollection();
-                int index = 0;
-                int bindex = 0;
-                foreach (var result in results)
+                for (int i = 0; i < toBrowse.Count; i++)
                 {
-                    if (StatusCode.IsBad(result.StatusCode))
-                    {
-                        throw new ServiceResultException(result.StatusCode);
-                    }
-                    var nodeId = parents.ElementAt(bindex++);
-                    log.Verbose("GetNodeChildren Browse result {nodeId}: {cnt}", nodeId, result.References.Count);
-                    finalResults[nodeId] = result.References;
-                    if (result.ContinuationPoint != null)
-                    {
-                        indexMap[index++] = nodeId;
-                        continuationPoints.Add(result.ContinuationPoint);
-                    }
+                    var result = results[i];
+                    var node = toBrowse[i];
+                    if (StatusCode.IsBad(result.StatusCode)) throw new ServiceResultException(result.StatusCode);
+
+                    node.AddReferences(result.References);
+                    node.ContinuationPoint = result.ContinuationPoint;
+                    if (node.ContinuationPoint != null && readToCompletion) toBrowseNext.Add(node);
                 }
-                numBrowse.Inc();
-                while (continuationPoints.Any() && !token.IsCancellationRequested)
+            }
+
+            while (toBrowseNext.Any())
+            {
+                var cps = new ByteStringCollection(toBrowseNext.Select(node => node.ContinuationPoint));
+                var ids = toBrowseNext;
+                toBrowseNext = new List<BrowseNode>();
+                BrowseResultCollection results;
+                try
                 {
-                    try
-                    {
-                        Session.BrowseNext(
-                            null,
-                            false,
-                            continuationPoints,
-                            out results,
-                            out diagnostics
-                        );
-                    }
-                    catch (ServiceResultException ex)
-                    {
-                        throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
-                    }
-
-                    int nindex = 0;
-                    int pindex = 0;
-                    continuationPoints.Clear();
-                    foreach (var result in results)
-                    {
-                        if (StatusCode.IsBad(result.StatusCode))
-                        {
-                            throw new ServiceResultException(result.StatusCode);
-                        }
-                        var nodeId = indexMap[pindex++];
-                        log.Verbose("GetNodeChildren BrowseNext result {nodeId}", nodeId);
-                        finalResults[nodeId].AddRange(result.References);
-                        if (result.ContinuationPoint == null) continue;
-                        indexMap[nindex++] = nodeId;
-                        continuationPoints.Add(result.ContinuationPoint);
-                    }
-
+                    Session.BrowseNext(
+                        null,
+                        token.IsCancellationRequested,
+                        cps,
+                        out results,
+                        out var _);
                     numBrowse.Inc();
                 }
-            }
-            catch
-            {
-                browseFailures.Inc();
-                throw;
-            }
-            finally
-            {
-                DecOperations();
-            }
-            return finalResults;
-        }
-        /// <summary>
-        /// Clear internal list of visited nodes, allowing callbacks to be called for visited nodes again.
-        /// </summary>
-        public void ResetVisitedNodes()
-        {
-            lock (visitedNodesLock)
-            {
-                VisitedNodes.Clear();
-            }
-        }
-        /// <summary>
-        /// Apply ignore filters, if any are set.
-        /// </summary>
-        /// <param name="displayName">DisplayName of node to filter</param>
-        /// <param name="id">NodeId of node to filter</param>
-        /// <param name="typeDefinition">TypeDefinition of node to filter</param>
-        /// <param name="nc">NodeClass of node to filter</param>
-        /// <returns>True if the node should be kept</returns>
-        public bool NodeFilter(string displayName, NodeId id, NodeId typeDefinition, NodeClass nc)
-        {
-            if (IgnoreFilters == null) return true;
-            if (IgnoreFilters.Any(filter => filter.IsBasicMatch(displayName, id, typeDefinition, NamespaceTable!, nc))) return false;
-            return true;
-        }
-
-        /// <summary>
-        /// Get all children of root nodes recursively and invoke the callback for each.
-        /// </summary>
-        /// <param name="roots">Root nodes to browse</param>
-        /// <param name="callback">Callback for each node</param>
-        /// <param name="referenceTypes">Permitted reference types, defaults to HierarchicalReferences</param>
-        /// <param name="nodeClassMask">Mask for node classes as described in the OPC-UA specification</param>
-        /// <param name="doFilter">True to apply the node filter to discovered nodes</param>
-        /// <param name="ignoreVisited">True to not call callback on already visited nodes.</param>
-        /// <param name="readVariableChildren">Read the children of variables.</param>
-        public void BrowseDirectory(
-            IEnumerable<NodeId> roots,
-            Action<ReferenceDescription, NodeId> callback,
-            CancellationToken token,
-            NodeId? referenceTypes = null,
-            uint nodeClassMask = (uint)NodeClass.Variable | (uint)NodeClass.Object,
-            bool ignoreVisited = true,
-            bool doFilter = true,
-            bool readVariableChildren = false)
-        {
-            var nextIds = roots.ToList();
-            int levelCnt = 0;
-            int nodeCnt = 0;
-            var localVisitedNodes = new HashSet<NodeId>();
-            foreach (var root in roots)
-            {
-                localVisitedNodes.Add(root);
-            }
-            do
-            {
-                var references = new Dictionary<NodeId, ReferenceDescriptionCollection>();
-                var total = nextIds.Count;
-                int count = 0;
-                int countChildren = 0;
-                foreach (var chunk in nextIds.ChunkBy(config.Source.BrowseNodesChunk))
+                catch (ServiceResultException ex)
                 {
-                    if (token.IsCancellationRequested) return;
-                    var result = GetNodeChildren(chunk, referenceTypes, nodeClassMask, token);
-                    foreach (var res in result)
-                    {
-                        references[res.Key] = res.Value;
-                        countChildren += res.Value.Count;
-                    }
-                    count += result.Count;
-                    log.Debug("Read node children {cnt} / {total}. Children: {childcnt}", count, total, countChildren);
+                    browseFailures.Inc();
+                    throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
                 }
+                if (ids.Count != results.Count) throw
+                        new FatalException($"Incorrect number of results from browseNext service. Got {results.Count}, expected {toBrowseNext.Count}. " +
+                        "This is illegal behavior, and caused by a bug in the server.");
 
-                nextIds.Clear();
-                levelCnt++;
-                foreach (var (parentId, children) in references)
+                for (int i = 0; i < ids.Count; i++)
                 {
-                    nodeCnt += children.Count;
-                    foreach (var rd in children)
-                    {
-                        var nodeId = ToNodeId(rd.NodeId);
-                        if (rd.NodeId == ObjectIds.Server || rd.NodeId == ObjectIds.Aliases) continue;
-                        if (doFilter && !NodeFilter(rd.DisplayName.Text, ToNodeId(rd.TypeDefinition), ToNodeId(rd.NodeId), rd.NodeClass))
-                        {
-                            log.Verbose("Ignoring filtered {nodeId}", nodeId);
-                            continue;
-                        }
+                    var result = results[i];
+                    var node = ids[i];
+                    if (StatusCode.IsBad(result.StatusCode)) throw new ServiceResultException(result.StatusCode);
 
-                        bool docb = true;
-                        lock (visitedNodesLock)
-                        {
-                            if (ignoreVisited && !VisitedNodes.Add(nodeId))
-                            {
-                                docb = false;
-                                log.Verbose("Ignoring visited {nodeId}", nodeId);
-                            }
-                        }
-                        if (docb)
-                        {
-                            log.Verbose("Discovered new node {nodeid}", nodeId);
-                            callback?.Invoke(rd, parentId);
-                        }
-                        if (!readVariableChildren && rd.NodeClass == NodeClass.Variable) continue;
-                        if (readVariableChildren && rd.TypeDefinition == VariableTypeIds.PropertyType) continue;
-                        if (localVisitedNodes.Add(nodeId))
-                        {
-                            nextIds.Add(nodeId);
-                        }
-                    }
+                    node.AddReferences(result.References);
+                    node.ContinuationPoint = result.ContinuationPoint;
+                    if (node.ContinuationPoint != null && readToCompletion) toBrowseNext.Add(node);
                 }
-            } while (nextIds.Any());
-            log.Information("Found {NumUANodes} nodes in {NumNodeLevels} levels", nodeCnt, levelCnt);
-            depth.Set(levelCnt);
+            }
         }
 
         #endregion
@@ -832,7 +564,7 @@ namespace Cognite.OpcUa
             if (Session == null) throw new InvalidOperationException("Requires open session");
             var values = new List<DataValue>();
             if (readValueIds == null || !readValueIds.Any()) return values;
-            IncOperations();
+            using var operation = waiter.GetInstance();
             int total = readValueIds.Count;
             int attrCount = 0;
             try
@@ -863,10 +595,7 @@ namespace Cognite.OpcUa
                 attributeRequestFailures.Inc();
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
-            finally
-            {
-                DecOperations();
-            }
+
             return values;
         }
 
@@ -1027,7 +756,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
+            Browser.BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
                 (uint)NodeClass.Object | (uint)NodeClass.Variable, false, true, true);
 
             log.Information("Read attributes for {cnt} properties", properties.Count);
@@ -1047,7 +776,8 @@ namespace Cognite.OpcUa
         public IEnumerable<(HistoryReadNode Node, IEncodeable RawData)> DoHistoryRead(HistoryReadParams readParams)
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");
-            IncOperations();
+            using var operation = waiter.GetInstance();
+
             var ids = new HistoryReadValueIdCollection();
             foreach (var node in readParams.Nodes)
             {
@@ -1106,10 +836,6 @@ namespace Cognite.OpcUa
                 historyReadFailures.Inc();
                 throw;
             }
-            finally
-            {
-                DecOperations();
-            }
 
             return result;
         }
@@ -1147,7 +873,7 @@ namespace Cognite.OpcUa
                 var hasSubscription = subscription.MonitoredItems.Select(sub => sub.ResolvedNodeId).ToHashSet();
                 int total = nodeList.Count();
 
-                IncOperations();
+                using var operation = waiter.GetInstance();
                 try
                 {
                     foreach (var chunk in nodeList.ChunkBy(config.Source.SubscriptionChunk))
@@ -1195,7 +921,6 @@ namespace Cognite.OpcUa
                 }
                 finally
                 {
-                    DecOperations();
                     if (!subscription.Created)
                     {
                         subscription.Dispose();
@@ -1467,7 +1192,7 @@ namespace Cognite.OpcUa
                 subscription.AddItem(item);
                 log.Information("Subscribe to auditing events on the server node");
 
-                IncOperations();
+                using var operation = waiter.GetInstance();
                 try
                 {
                     if (subscription.Created && subscription.MonitoredItemCount == 0)
@@ -1489,10 +1214,6 @@ namespace Cognite.OpcUa
                 {
                     log.Error("Failed to create audit subscription");
                     throw;
-                }
-                finally
-                {
-                    DecOperations();
                 }
             }
         }
@@ -1725,6 +1446,7 @@ namespace Cognite.OpcUa
             }
             reconnectHandler?.Dispose();
             reverseConnectManager?.Dispose();
+            waiter.Dispose();
             if (AppConfig != null)
             {
                 AppConfig.CertificateValidator.CertificateValidation -= CertificateValidationHandler;

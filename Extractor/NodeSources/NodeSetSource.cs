@@ -383,9 +383,9 @@ namespace Cognite.OpcUa.NodeSources
 
         #region parse
 
-        public override Task<BrowseResult?> ParseResults(CancellationToken token)
+        public override Task<NodeSourceResult?> ParseResults(CancellationToken token)
         {
-            if (!NodeMap.Any()) return Task.FromResult<BrowseResult?>(null);
+            if (!NodeMap.Any()) return Task.FromResult<NodeSourceResult?>(null);
 
             RawObjects.Clear();
             RawVariables.Clear();
@@ -433,7 +433,7 @@ namespace Cognite.OpcUa.NodeSources
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {
                 Log.Information("Mapping resulted in no new nodes");
-                return Task.FromResult<BrowseResult?>(null);
+                return Task.FromResult<NodeSourceResult?>(null);
             }
 
             Log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
@@ -446,7 +446,7 @@ namespace Cognite.OpcUa.NodeSources
                 Log.Information("Found a total of {cnt} references", FinalReferences.Count);
             }
 
-            return Task.FromResult<BrowseResult?>(new BrowseResult(
+            return Task.FromResult<NodeSourceResult?>(new NodeSourceResult(
                 FinalSourceObjects,
                 FinalSourceVariables,
                 FinalDestinationObjects,

@@ -111,7 +111,7 @@ namespace Cognite.OpcUa.TypeCollectors
         {
             types[ObjectTypeIds.BaseEventType] = new UAEventType(ObjectTypeIds.BaseEventType, "BaseEventType");
 
-            uaClient.BrowseDirectory(
+            uaClient.Browser.BrowseDirectory(
                 new List<NodeId> { ObjectTypeIds.BaseEventType },
                 EventTypeCallback,
                 token,

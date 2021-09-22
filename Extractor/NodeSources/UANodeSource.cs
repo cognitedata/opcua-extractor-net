@@ -30,7 +30,7 @@ namespace Cognite.OpcUa.NodeSources
     /// Contains the results of a browse operation, and parses the nodes to produce
     /// lists of nodes that should be mapped to destinations.
     /// </summary>
-    public class BrowseResultHandler : BaseNodeSource
+    public class UANodeSource : BaseNodeSource
     {
         protected override ILogger Log { get; set; } = Serilog.Log.Logger.ForContext(typeof(UAExtractor));
 
@@ -39,7 +39,7 @@ namespace Cognite.OpcUa.NodeSources
         private List<(ReferenceDescription Node, NodeId ParentId)> references = new List<(ReferenceDescription, NodeId)>();
         public Action<ReferenceDescription, NodeId> Callback => HandleNode;
 
-        public BrowseResultHandler(FullConfig config, UAExtractor extractor, UAClient client)
+        public UANodeSource(FullConfig config, UAExtractor extractor, UAClient client)
             : base(config, extractor, client)
         {
         }
@@ -52,7 +52,7 @@ namespace Cognite.OpcUa.NodeSources
         /// This reads necessary information from the state and the server.
         /// </summary>
         /// <returns>Resulting lists of populated and sorted nodes.</returns>
-        public override async Task<BrowseResult?> ParseResults(CancellationToken token)
+        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
         {
             if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
             if (!NodeMap.Any()) return null;
@@ -101,7 +101,7 @@ namespace Cognite.OpcUa.NodeSources
                 Log.Information("Found a total of {cnt} references", FinalReferences.Count);
             }
 
-            return new BrowseResult(
+            return new NodeSourceResult(
                 FinalSourceObjects,
                 FinalSourceVariables,
                 FinalDestinationObjects,
