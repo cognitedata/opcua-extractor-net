@@ -361,5 +361,54 @@ namespace Test.Unit
             Assert.True(nodes[2].IsProperty);
             Assert.False(nodes[3].IsProperty);
         }
+        [Fact]
+        public void TestLogTransformation()
+        {
+            var raw = new RawNodeTransformation
+            {
+                Filter = new RawNodeFilter
+                {
+                    Name = "name",
+                    Namespace = "namespace",
+                    NodeClass = NodeClass.Variable,
+                    Description = "description",
+                    TypeDefinition = "typeDefinition",
+                    Id = "id",
+                    IsArray = true,
+                    Parent = new RawNodeFilter
+                    {
+                        Name = "name2",
+                        Namespace = "namespace2",
+                        NodeClass = NodeClass.Object,
+                        Description = "description2",
+                        TypeDefinition = "typeDefinition2",
+                        Id = "id2",
+                        IsArray = false,
+                    }
+                },
+                Type = TransformationType.Property
+            };
+            var trans = new NodeTransformation(raw, 0);
+            var result = trans.ToString();
+            Assert.Equal("Transformation 0:\n"
+                       + "Type: Property\n"
+                       + "Filter:\n"
+                       + "    Name: name\n"
+                       + "    Description: description\n"
+                       + "    Id: id\n"
+                       + "    IsArray: True\n"
+                       + "    Namespace: namespace\n"
+                       + "    TypeDefinition: typeDefinition\n"
+                       + "    NodeClass: Variable\n"
+                       + "    Parent:\n"
+                       + "        Name: name2\n"
+                       + "        Description: description2\n"
+                       + "        Id: id2\n"
+                       + "        IsArray: False\n"
+                       + "        Namespace: namespace2\n"
+                       + "        TypeDefinition: typeDefinition2\n"
+                       + "        NodeClass: Object\n", result);
+
+        }
     }
 }
