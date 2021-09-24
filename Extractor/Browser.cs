@@ -53,7 +53,8 @@ namespace Cognite.OpcUa
             DirectoryBrowseParams options)
         {
             if (options.InitialParams == null
-                || options.InitialParams.Nodes == null) throw new ArgumentNullException(nameof(options.InitialParams));
+                || options.InitialParams.Nodes == null) throw new ArgumentNullException(
+                    "Missing initial nodes", nameof(options.InitialParams));
             this.throttler = throttler;
             uaClient = client;
             this.options = options;
@@ -61,7 +62,7 @@ namespace Cognite.OpcUa
             callback = options.Callback;
             baseParams = options.InitialParams;
             filters = options.Filters;
-            if (baseParams.Nodes?.Any() ?? false)
+            if (baseParams.Nodes.Any())
             {
                 foreach (var node in baseParams.Nodes)
                 {

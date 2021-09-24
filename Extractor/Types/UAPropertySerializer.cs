@@ -543,10 +543,10 @@ namespace Cognite.OpcUa.Types
             switch (value.IdType)
             {
                 case IdType.Numeric:
-                    writer.WriteValue(value.Identifier as uint? ?? 0);
+                    writer.WriteValue(value.Identifier is uint iVal ? iVal : 0);
                     break;
                 case IdType.Guid:
-                    writer.WriteValue(value.Identifier as Guid? ?? Guid.Empty);
+                    writer.WriteValue(value.Identifier is Guid gVal ? gVal : Guid.Empty);
                     break;
                 case IdType.Opaque:
                     writer.WriteValue(value.Identifier as byte[]);

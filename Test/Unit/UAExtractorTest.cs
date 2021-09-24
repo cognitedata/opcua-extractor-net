@@ -383,6 +383,28 @@ namespace Test.Unit
             Assert.Equal("Test2", tester.Client.GetUniqueId(new NodeId("test2", 2)));
             Assert.Equal("Test1[0]", extractor.GetUniqueId(new NodeId("test"), 0));
         }
-        
+
+        [Fact]
+        public void TestServerConfigLimit()
+        {
+            var helper = new ServerInfoHelper(tester.Client);
+            tester.Config.History.Throttling.MaxNodeParallelism = 100;
+            tester.Config.Source.BrowseThrottling.MaxNodeParallelism = 10000;
+            helper.LimitConfigValues(tester.Config, tester.Source.Token);
+
+            Assert.Equal(100, tester.Config.History.Throttling.MaxNodeParallelism);
+            Assert.Equal(1000, tester.Config.Source.BrowseThrottling.MaxNodeParallelism);
+
+            tester.Config.History.Throttling.MaxNodeParallelism = 0;
+            tester.Config.Source.BrowseThrottling.MaxNodeParallelism = 0;
+            tester.Config.Source.BrowseNodesChunk = 100;
+
+            helper.LimitConfigValues(tester.Config, tester.Source.Token);
+
+            Assert.Equal(1000, tester.Config.History.Throttling.MaxNodeParallelism);
+            Assert.Equal(1000, tester.Config.Source.BrowseThrottling.MaxNodeParallelism);
+            Assert.Equal(100, tester.Config.Source.BrowseNodesChunk);
+        }
+
     }
 }
