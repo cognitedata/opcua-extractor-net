@@ -40,8 +40,8 @@ namespace Test.Utils
             Provider = Services.BuildServiceProvider();
 
             Server = new ServerController(new[] {
-                PredefinedSetup.Custom, PredefinedSetup.Base, PredefinedSetup.Events, 
-                PredefinedSetup.Full, PredefinedSetup.Auditing, PredefinedSetup.Wrong }, Port);
+                PredefinedSetup.Custom, PredefinedSetup.Base, PredefinedSetup.Events,
+                PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing }, Port);
             Server.Start().Wait();
 
             Client = new UAClient(Config);
