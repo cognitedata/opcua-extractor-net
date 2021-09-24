@@ -145,6 +145,7 @@ namespace Cognite.OpcUa
         public bool NullAsNumeric { get; set; }
         public bool ExpandNodeIds { get; set; }
         public bool AppendInternalValues { get; set; }
+        public bool EstimateArraySizes { get; set; }
     }
 
     public class RelationshipConfig
