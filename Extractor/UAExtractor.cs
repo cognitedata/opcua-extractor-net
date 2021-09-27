@@ -33,6 +33,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
+
+[assembly: CLSCompliant(false)]
 namespace Cognite.OpcUa
 {
     /// <summary>
@@ -687,6 +689,9 @@ namespace Cognite.OpcUa
                 }
             }
             BuildTransformations();
+
+            var helper = new ServerInfoHelper(uaClient);
+            helper.LimitConfigValues(config, source.Token);
         }
 
         /// <summary>

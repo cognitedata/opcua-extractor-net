@@ -83,6 +83,10 @@ source:
         # instance: false
         # Map types. This skips mapping of data-types, events types, reference types and object types.
         # types: false
+    # Default true, use the Server_ServerCapabilities object to limit chunk sizes.
+    # Turn this off only if you want to set the limits higher and are certain that the server is reporting the wrong limits.
+    # If these limits are exceeded the extractor will typically crash.
+    limit-to-server-config: true
 
 # Config for reading of history from the server
 history:
