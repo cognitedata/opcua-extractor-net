@@ -118,9 +118,14 @@ namespace Cognite.OpcUa
             }
             else if (e is AggregateException aex)
             {
-                foreach (var exc in aex.Flatten().InnerExceptions)
+                var flat = aex.Flatten();
+                foreach (var exc in flat.InnerExceptions)
                 {
                     LogException(log, exc, message, silentMessage);
+                }
+                if (!flat.InnerExceptions.Any())
+                {
+                    log.Error(e, message + " - {msg}", e.Message);
                 }
             }
             else if (e is SilentServiceException silent)
