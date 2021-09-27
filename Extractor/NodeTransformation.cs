@@ -175,10 +175,15 @@ namespace Cognite.OpcUa
                 builder.Append(' ', (idx + 1) * 4);
                 builder.AppendFormat("Namespace: {0}\n", Namespace);
             }
-            if (Namespace != null)
+            if (TypeDefinition != null)
             {
                 builder.Append(' ', (idx + 1) * 4);
                 builder.AppendFormat("TypeDefinition: {0}\n", TypeDefinition);
+            }
+            if (NodeClass != null)
+            {
+                builder.Append(' ', (idx + 1) * 4);
+                builder.AppendFormat("NodeClass: {0}\n", NodeClass);
             }
             if (Parent != null)
             {

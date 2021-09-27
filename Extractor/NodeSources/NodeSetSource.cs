@@ -383,9 +383,9 @@ namespace Cognite.OpcUa.NodeSources
 
         #region parse
 
-        public override Task<NodeSourceResult?> ParseResults(CancellationToken token)
+        public override async Task<NodeSourceResult?> ParseResults(CancellationToken token)
         {
-            if (!NodeMap.Any()) return Task.FromResult<NodeSourceResult?>(null);
+            if (!NodeMap.Any()) return null;
 
             RawObjects.Clear();
             RawVariables.Clear();
@@ -407,6 +407,11 @@ namespace Cognite.OpcUa.NodeSources
                     properties.Add(variable);
                 }
                 node.Attributes.PropertiesRead = true;
+            }
+
+            if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
+            {
+                await EstimateArraySizes(RawVariables, token);
             }
 
             var update = Config.Extraction.Update;
@@ -433,7 +438,8 @@ namespace Cognite.OpcUa.NodeSources
             if (!FinalDestinationObjects.Any() && !FinalDestinationVariables.Any() && !FinalSourceVariables.Any() && !FinalReferences.Any())
             {
                 Log.Information("Mapping resulted in no new nodes");
-                return Task.FromResult<NodeSourceResult?>(null);
+                
+                return null;
             }
 
             Log.Information("Mapping resulted in {obj} destination objects and {ts} destination timeseries," +
@@ -446,12 +452,12 @@ namespace Cognite.OpcUa.NodeSources
                 Log.Information("Found a total of {cnt} references", FinalReferences.Count);
             }
 
-            return Task.FromResult<NodeSourceResult?>(new NodeSourceResult(
+            return new NodeSourceResult(
                 FinalSourceObjects,
                 FinalSourceVariables,
                 FinalDestinationObjects,
                 FinalDestinationVariables,
-                FinalReferences));
+                FinalReferences);
         }
 
         private void GetRelationshipData(IEnumerable<UANode> mappedNodes)

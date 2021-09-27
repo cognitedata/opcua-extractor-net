@@ -669,6 +669,7 @@ namespace Cognite.OpcUa
         public void ReadNodeValues(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
             nodes = nodes.Where(node => !node.ValueRead && node.Index == -1).ToList();
+            if (!nodes.Any()) return;
             var readValueIds = new ReadValueIdCollection(
                 nodes.Select(node => new ReadValueId { AttributeId = Attributes.Value, NodeId = node.Id }));
             IEnumerable<DataValue> values;

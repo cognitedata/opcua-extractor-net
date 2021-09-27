@@ -826,7 +826,20 @@ namespace Server
                 var nullType = CreateVariable("NullType", NodeId.Null);
                 AddNodeRelation(nullType, root, ReferenceTypeIds.HasComponent);
 
-                AddPredefinedNodes(SystemContext, root, rankImp, rankImpNoDim, wrongDim, tooLargeDimProp, nullType);
+                var noDim = CreateVariable("NoDim", DataTypes.Double);
+                noDim.Value = new double[] { 1.0, 2.0, 3.0 };
+                noDim.ValueRank = ValueRanks.OneDimension;
+                AddNodeRelation(noDim, root, ReferenceTypeIds.HasComponent);
+
+                var dimInProp = CreateVariable("DimInProp", DataTypes.Double);
+                dimInProp.ValueRank = ValueRanks.OneDimension;
+                var maxLengthProp = dimInProp.AddProperty<int>("MaxArrayLength", DataTypes.Int32, ValueRanks.Scalar);
+                maxLengthProp.NodeId = GenerateNodeId();
+                maxLengthProp.Value = 4;
+                AddNodeRelation(dimInProp, root, ReferenceTypeIds.HasComponent);
+
+                AddPredefinedNodes(SystemContext, root, rankImp, rankImpNoDim, wrongDim, tooLargeDimProp, nullType, noDim,
+                    dimInProp, maxLengthProp);
 
                 Ids.Wrong.Root = root.NodeId;
                 Ids.Wrong.RankImprecise = rankImp.NodeId;
@@ -834,6 +847,8 @@ namespace Server
                 Ids.Wrong.WrongDim = wrongDim.NodeId;
                 Ids.Wrong.TooLargeProp = tooLargeDimProp.NodeId;
                 Ids.Wrong.NullType = nullType.NodeId;
+                Ids.Wrong.NoDim = noDim.NodeId;
+                Ids.Wrong.DimInProp = dimInProp.NodeId;
             }
         }
 
@@ -1519,6 +1534,8 @@ namespace Server
         public NodeId WrongDim { get; set; }
         public NodeId TooLargeProp { get; set; }
         public NodeId NullType { get; set; }
+        public NodeId NoDim { get; set; }
+        public NodeId DimInProp { get; set; }
     }
     #endregion
 }

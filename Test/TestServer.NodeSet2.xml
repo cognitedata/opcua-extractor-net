@@ -454,4 +454,74 @@
       <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
     </References>
   </UAObject>
+  <!-- Wrong hierarchy -->
+  <UAObject NodeId="ns=1;i=62" BrowseName="1:WrongRoot">
+    <DisplayName>WrongRoot</DisplayName>
+    <References>
+      <Reference ReferenceType="Organizes" IsForward="false">i=85</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=58</Reference>
+    </References>
+  </UAObject>
+  
+  <UAVariable NodeId="ns=1;i=63" BrowseName="1:RankImprecise" DataType="i=11" AccessLevel="1" UserAccessLevel="1" ValueRank="-2" ArrayDimensions="4">
+    <DisplayName>RankImprecise</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=62</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=66" BrowseName="1:TooLargeDim" DataType="i=6" AccessLevel="1" UserAccessLevel="1" ValueRank="1" ArrayDimensions="20">
+    <DisplayName>PropertyNum</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=63</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
+  
+  <UAVariable NodeId="ns=1;i=64" BrowseName="1:RankImpreciseNoDim" DataType="i=11" AccessLevel="1" UserAccessLevel="1" ValueRank="-3">
+    <DisplayName>RankImpreciseNoDim</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=62</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  
+  <UAVariable NodeId="ns=1;i=65" BrowseName="1:WrongDim" DataType="i=11" AccessLevel="1" UserAccessLevel="1" ValueRank="1" ArrayDimensions="4">
+    <DisplayName>WrongDim</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=62</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  
+  <UAVariable NodeId="ns=1;i=67" BrowseName="1:NullType" DataType="i=0" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>NullType</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=62</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  
+  <UAVariable NodeId="ns=1;i=68" BrowseName="1:NoDim" DataType="i=11" AccessLevel="1" UserAccessLevel="1" ValueRank="1">
+    <DisplayName>NoDim</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=62</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+
+  <UAVariable NodeId="ns=1;i=69" BrowseName="1:DimInProp" DataType="i=11" AccessLevel="1" UserAccessLevel="1" ValueRank="1">
+    <DisplayName>DimInProp</DisplayName>
+    <References>
+      <Reference ReferenceType="HasComponent" IsForward="false">ns=1;i=62</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=63</Reference>
+    </References>
+  </UAVariable>
+  <UAVariable NodeId="ns=1;i=70" BrowseName="1:MaxArrayLength" DataType="i=10" AccessLevel="1" UserAccessLevel="1">
+    <DisplayName>MaxArrayLength</DisplayName>
+    <References>
+      <Reference ReferenceType="HasProperty" IsForward="false">ns=1;i=69</Reference>
+      <Reference ReferenceType="HasTypeDefinition" IsForward="true">i=68</Reference>
+    </References>
+  </UAVariable>
 </UANodeSet>
