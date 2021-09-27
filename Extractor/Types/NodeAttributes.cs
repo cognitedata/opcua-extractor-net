@@ -92,6 +92,7 @@ namespace Cognite.OpcUa.Types
         /// <returns>New index in list</returns>
         public virtual int HandleAttributeRead(FullConfig config, IList<DataValue> values, int idx, UAClient client)
         {
+            int startIdx = idx;
             Description = values[idx++].GetValue<LocalizedText?>(null)?.Text;
             if ((NodeClass == NodeClass.Object || NodeClass == NodeClass.Variable) && config.Events.Enabled && config.Events.DiscoverEmitters)
             {
@@ -102,6 +103,13 @@ namespace Cognite.OpcUa.Types
                 ShouldSubscribe = false;
             }
             DataRead = true;
+            for (int i = startIdx; i < idx; i++)
+            {
+                if (values[i].StatusCode == StatusCodes.BadNodeIdUnknown)
+                {
+                    Ignore = true;
+                }
+            }
             return idx;
         }
     }
@@ -129,6 +137,7 @@ namespace Cognite.OpcUa.Types
         /// <returns>New index in list</returns>
         public override int HandleAttributeRead(FullConfig config, IList<DataValue> values, int idx, UAClient client)
         {
+            int startIdx = idx;
             Description = values[idx++].GetValue<LocalizedText?>(null)?.Text;
             if (NodeClass == NodeClass.Variable)
             {
@@ -163,6 +172,14 @@ namespace Cognite.OpcUa.Types
                 if (values[idx++].GetValue(typeof(int[])) is int[] dimVal)
                 {
                     ArrayDimensions = dimVal;
+                }
+            }
+
+            for (int i = startIdx; i < idx; i++)
+            {
+                if (values[i].StatusCode == StatusCodes.BadNodeIdUnknown)
+                {
+                    Ignore = true;
                 }
             }
 
