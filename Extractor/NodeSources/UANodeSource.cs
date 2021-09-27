@@ -57,13 +57,18 @@ namespace Cognite.OpcUa.NodeSources
             if (parsed) throw new InvalidOperationException("Browse result has already been parsed");
             if (!NodeMap.Any()) return null;
             await Task.Run(() => Client.ReadNodeData(NodeMap.Values, token), CancellationToken.None);
-
+            
             foreach (var node in NodeMap.Values)
             {
                 SortNode(node);
             }
             parsed = true;
             NodeMap.Clear();
+
+            if (Config.Extraction.DataTypes.MaxArraySize != 0 && Config.Extraction.DataTypes.EstimateArraySizes == true)
+            {
+                await EstimateArraySizes(RawVariables, token);
+            }
 
             var update = Config.Extraction.Update;
             await GetExtraNodeData(update, token);

@@ -19,7 +19,10 @@ using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Serilog;
+using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -96,6 +99,69 @@ namespace Cognite.OpcUa.NodeSources
             else
             {
                 FinalSourceObjects.Add(node);
+            }
+        }
+        protected async Task EstimateArraySizes(IEnumerable<UAVariable> nodes, CancellationToken token)
+        {
+            if (!Config.Extraction.DataTypes.EstimateArraySizes) return;
+            nodes = nodes.Where(node =>
+                (node.ArrayDimensions == null || !node.ArrayDimensions.Any() || node.ArrayDimensions[0] == 0)
+                && (node.ValueRank == ValueRanks.OneDimension
+                    || node.ValueRank == ValueRanks.ScalarOrOneDimension
+                    || node.ValueRank == ValueRanks.OneOrMoreDimensions
+                    || node.ValueRank == ValueRanks.Any));
+            // Start by looking for "MaxArrayLength" standard property. This is defined in OPC-UA 5/6.3.2
+            if (!nodes.Any()) return;
+
+            Log.Information("Estimating array length for {cnt} nodes", nodes.Count());
+
+            await Extractor.ReadProperties(nodes);
+            var toReadValues = new List<UAVariable>();
+
+            var maxLengthProperties = nodes
+                .SelectNonNull(node => node.Properties?.FirstOrDefault(prop => prop.DisplayName == "MaxArrayLength") as UAVariable);
+
+            Client.ReadNodeValues(maxLengthProperties, token);
+
+            foreach (var node in nodes)
+            {
+                var maxLengthProp = node.Properties?.FirstOrDefault(prop => prop.DisplayName == "MaxArrayLength");
+                if (maxLengthProp != null && maxLengthProp is UAVariable varProp)
+                {
+                    try
+                    {
+                        int size = Convert.ToInt32(varProp.Value.Value);
+                        if (size > 1)
+                        {
+                            node.VariableAttributes.ArrayDimensions = new[] { size };
+                        }
+                        continue;
+                    }
+                    catch { }
+                }
+                toReadValues.Add(node);
+            }
+            if (!toReadValues.Any()) return;
+
+            Client.ReadNodeValues(toReadValues, token);
+
+            foreach (var node in toReadValues)
+            {
+                object val = node.Value.Value;
+                int size = 0;
+                if (val is ICollection coll)
+                {
+                    size = coll.Count;
+                }
+                else if (val is IEnumerable enumVal)
+                {
+                    var e = enumVal.GetEnumerator();
+                    while (e.MoveNext()) size++;
+                }
+                if (size > 1)
+                {
+                    node.VariableAttributes.ArrayDimensions = new[] { size };
+                }
             }
         }
         /// <summary>

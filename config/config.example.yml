@@ -551,7 +551,13 @@ extraction:
 
         # Add attributes generally used internally like AccessLevel, Historizing, ArrayDimensions, ValueRank etc.
         # to data pushed to Raw.
-        append-internal-values: false 
+        append-internal-values: false
+        
+        # If max-array-size is set, this looks for the MaxArraySize property on each node with one-dimension ValueRank,
+        # if it is not found, it tries to read the value as well, and look at the current size.
+        # ArrayDimensions is still the prefered way to identify array sizes, this is not guaranteed to generate
+        # reasonable or useful values.
+        estimate-array-sizes: false
 
 
     # Time in minutes between each call to browse the OPC-UA directory, then push new nodes to destinations.
