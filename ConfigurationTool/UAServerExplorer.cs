@@ -27,6 +27,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
+[assembly: CLSCompliant(false)]
 namespace Cognite.OpcUa.Config
 {
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Summary struct")]
@@ -178,6 +179,7 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     await Run(token);
+                    LimitConfigValues(token);
                 }
                 catch (Exception ex)
                 {
@@ -288,6 +290,20 @@ namespace Cognite.OpcUa.Config
 
             return nodes;
         }
+        private void LimitConfigValues(CancellationToken token)
+        {
+            var helper = new ServerInfoHelper(this);
+            helper.LimitConfigValues(config, token);
+
+            baseConfig.Source.BrowseThrottling.MaxNodeParallelism = config.Source.BrowseThrottling.MaxNodeParallelism;
+            baseConfig.History.Throttling.MaxNodeParallelism = config.History.Throttling.MaxNodeParallelism;
+            baseConfig.Source.SubscriptionChunk = config.Source.SubscriptionChunk;
+            baseConfig.Source.BrowseNodesChunk = config.Source.BrowseNodesChunk;
+            baseConfig.History.DataNodesChunk = config.History.DataNodesChunk;
+            baseConfig.History.EventNodesChunk = config.History.EventNodesChunk;
+            baseConfig.Source.AttributesChunk = config.Source.AttributesChunk;
+        }
+
         /// <summary>
         /// Try to get the optimal values for the browse-chunk and browse-nodes-chunk config options.
         /// This defaults to just using as large values as possible, then performs an extra test
@@ -300,6 +316,7 @@ namespace Cognite.OpcUa.Config
             if (Session == null || !Session.Connected)
             {
                 await Run(token);
+                LimitConfigValues(token);
             }
 
             IEnumerable<UANode> testNodes = null;
@@ -347,7 +364,7 @@ namespace Cognite.OpcUa.Config
                     {
                         NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
                         Nodes = browseNodes
-                    }, true, token)), 30);
+                    }, true, token), CancellationToken.None), 30);
                     break;
                 }
                 catch (Exception ex)
@@ -389,7 +406,7 @@ namespace Cognite.OpcUa.Config
                     {
                         NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
                         Nodes = nodes
-                    }, true, token)), 60);
+                    }, true, token), CancellationToken.None), 60);
                     children = nodes.ToDictionary(node => node.Key, node => node.Value.Result);
                 }
                 catch (Exception ex)
@@ -614,6 +631,7 @@ namespace Cognite.OpcUa.Config
             if (Session == null || !Session.Connected)
             {
                 Run(token).Wait(token);
+                LimitConfigValues(token);
             }
             PopulateDataTypes(token);
 
@@ -642,6 +660,7 @@ namespace Cognite.OpcUa.Config
             if (Session == null || !Session.Connected)
             {
                 await Run(token);
+                LimitConfigValues(token);
             }
 
             await PopulateNodes(token);

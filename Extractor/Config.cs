@@ -62,6 +62,7 @@ namespace Cognite.OpcUa
         public ContinuationPointThrottlingConfig BrowseThrottling {
             get => browseThrottling; set => browseThrottling = value ?? browseThrottling; }
         public NodeSetSourceConfig? NodeSetSource { get; set; }
+        public bool LimitToServerConfig { get; set; } = true;
     }
     public enum X509CertificateLocation
     {
@@ -390,7 +391,9 @@ namespace Cognite.OpcUa
         public int Granularity { get; set; } = 600;
         public bool IgnoreContinuationPoints { get; set; }
         public int RestartPeriod { get; set; }
-        public ContinuationPointThrottlingConfig? Throttling { get; set; }
+        public ContinuationPointThrottlingConfig Throttling {
+            get => throttling; set => throttling = value ?? throttling; }
+        private ContinuationPointThrottlingConfig throttling = new ContinuationPointThrottlingConfig();
     }
     public class UAThrottlingConfig
     {

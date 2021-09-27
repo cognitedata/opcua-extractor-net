@@ -125,14 +125,7 @@ namespace Cognite.OpcUa
         private bool Data => type == HistoryReadType.FrontfillData || type == HistoryReadType.BackfillData;
         public HistoryScheduler(UAClient uaClient, UAExtractor extractor, HistoryConfig config, HistoryReadType type)
         {
-            if (config.Throttling == null)
-            {
-                throttling = new ContinuationPointThrottlingConfig { MaxNodeParallelism = 0, MaxParallelism = 0, MaxPerMinute = 0 };
-            }
-            else
-            {
-                throttling = config.Throttling;
-            }
+            throttling = config.Throttling;
             this.extractor = extractor;
             this.uaClient = uaClient;
             this.config = config;
