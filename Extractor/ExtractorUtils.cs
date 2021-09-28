@@ -118,25 +118,24 @@ namespace Cognite.OpcUa
             }
             else if (e is AggregateException aex)
             {
-                var silent = GetRootExceptionOfType<SilentServiceException>(aex);
-                if (silent != null)
+                var flat = aex.Flatten();
+                foreach (var exc in flat.InnerExceptions)
                 {
-                    log.Debug(silent, silentMessage);
-                    return;
+                    LogException(log, exc, message, silentMessage);
                 }
-
-                var failure = GetRootExceptionOfType<ExtractorFailureException>(aex);
-                if (failure != null)
+                if (!flat.InnerExceptions.Any())
                 {
-                    log.Error(message + " - {msg}", failure.Message);
-                    log.Debug(failure, message);
-                    return;
+                    log.Error(e, message + " - {msg}", e.Message);
                 }
-                log.Error(e, message + " - {msg}", aex.InnerException?.Message ?? aex.Message);
             }
             else if (e is SilentServiceException silent)
             {
-                log.Debug(silent, silentMessage);
+                log.Debug("Silenced service exception: {msg} - {info}", silentMessage,
+                    silent.InnerServiceException?.AdditionalInfo);
+            }
+            else if (e is ServiceResultException service)
+            {
+                log.Error(e, message + " - {msg}: {info}", service.Message, service.AdditionalInfo);
             }
             else if (e is ExtractorFailureException failure)
             {
@@ -145,7 +144,7 @@ namespace Cognite.OpcUa
             }
             else
             {
-                log.Error(e, message);
+                log.Error(e, message + " - {msg}", e.Message);
             }
         }
         /// <summary>
@@ -396,11 +395,13 @@ namespace Cognite.OpcUa
     {
         public ExtractorUtils.SourceOp Operation { get; }
         public uint StatusCode { get; }
+        public ServiceResultException? InnerServiceException { get; }
 
         public SilentServiceException(string msg, ServiceResultException ex, ExtractorUtils.SourceOp op) : base(msg, ex)
         {
             Operation = op;
             StatusCode = ex?.StatusCode ?? StatusCodes.Bad;
+            InnerServiceException = ex;
         }
 
         public SilentServiceException()
@@ -419,6 +420,7 @@ namespace Cognite.OpcUa
         {
             Operation = ExtractorUtils.SourceOp.Unknown;
             StatusCode = StatusCodes.Bad;
+            InnerServiceException = innerException as ServiceResultException;
         }
     }
     /// <summary>
