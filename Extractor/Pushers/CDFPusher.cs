@@ -105,7 +105,9 @@ namespace Cognite.OpcUa.Pushers
             Dictionary<string, List<UADataPoint>> dataPointList = points
                 .Where(dp => dp.Timestamp > DateTime.UnixEpoch)
                 .GroupBy(dp => dp.Id)
-                .Where(group => !mismatchedTimeseries.Contains(group.Key) && !missingTimeseries.Contains(group.Key))
+                .Where(group => group.Any()
+                    && !mismatchedTimeseries.Contains(group.Key)
+                    && !missingTimeseries.Contains(group.Key))
                 .ToDictionary(group => group.Key, group => group.ToList());
 
             int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count);
