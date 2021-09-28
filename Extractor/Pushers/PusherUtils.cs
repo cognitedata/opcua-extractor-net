@@ -131,7 +131,8 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.TimeSeriesMetadataMaxPerKey,
                         Sanitation.TimeSeriesMetadataMaxPairs,
                         Sanitation.TimeSeriesMetadataMaxPerValue,
-                        Sanitation.TimeSeriesMetadataMaxBytes);
+                        Sanitation.TimeSeriesMetadataMaxBytes,
+                        out _);
 
                 if (newMetaData.Any() && (old.Metadata == null
                         || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal)))
@@ -185,7 +186,8 @@ namespace Cognite.OpcUa.Pushers
                         Sanitation.AssetMetadataMaxPerKey,
                         Sanitation.AssetMetadataMaxPairs,
                         Sanitation.AssetMetadataMaxPerValue,
-                        Sanitation.AssetMetadataMaxBytes);
+                        Sanitation.AssetMetadataMaxBytes,
+                        out _);
 
                 if (newMetaData.Any() && (old.Metadata == null
                         || !newMetaData.All(kvp => old.Metadata.TryGetValue(kvp.Key, out var oldVal) && kvp.Value == oldVal)))

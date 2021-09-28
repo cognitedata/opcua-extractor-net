@@ -17,6 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extensions;
 using Cognite.Extractor.Common;
+using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa.HistoryStates;
 using Cognite.OpcUa.NodeSources;
@@ -105,17 +106,7 @@ namespace Cognite.OpcUa.Pushers
                 .Where(dp => dp.Timestamp > DateTime.UnixEpoch)
                 .GroupBy(dp => dp.Id)
                 .Where(group => !mismatchedTimeseries.Contains(group.Key) && !missingTimeseries.Contains(group.Key))
-                .ToDictionary(group => group.Key, group =>
-                    group.SelectNonNull(dp =>
-                    {
-                        if (dp.IsString) return dp;
-                        if (!double.IsFinite(dp.DoubleValue.Value))
-                        {
-                            if (config.NonFiniteReplacement == null) return null;
-                            return new UADataPoint(dp, config.NonFiniteReplacement.Value);
-                        }
-                        return dp;
-                    }).ToList());
+                .ToDictionary(group => group.Key, group => group.ToList());
 
             int count = dataPointList.Aggregate(0, (seed, points) => seed + points.Value.Count);
 
@@ -130,36 +121,38 @@ namespace Cognite.OpcUa.Pushers
 
             try
             {
-                var error = await destination.InsertDataPointsIgnoreErrorsAsync(inserts, token);
-                // No reason to return failure, even if these happen, nothing can be done about it. The log should reflect it,
-                // and perhaps we should handle it better in the future.
-                if (error.IdsNotFound.Any())
+                var result = await destination.InsertDataPointsAsync(inserts, SanitationMode.Clean, RetryMode.OnError, token);
+                int realCount = count;
+
+                if (result.Errors != null)
                 {
-                    log.Error("Failed to push datapoints to CDF, missing ids: {ids}", error.IdsNotFound);
-                    foreach (var id in error.IdsNotFound)
+                    var missing = result.Errors.FirstOrDefault(err => err.Type == ErrorType.ItemMissing);
+                    if (missing != null)
                     {
-                        missingTimeseries.Add(id.ExternalId);
+                        log.Error("Failed to push datapoints to CDF, missing ids: {ids}", missing.Skipped.Select(ms => ms.Id));
+                        foreach (var skipped in missing.Skipped)
+                        {
+                            missingTimeseries.Add(skipped.Id.ExternalId);
+                            realCount -= skipped.DataPoints.Count();
+                        }
+                        missingTimeseriesCnt.Set(missing.Skipped.Count());
                     }
-                    missingTimeseriesCnt.Set(missingTimeseries.Count);
-                }
-                if (error.IdsWithMismatchedData.Any())
-                {
-                    log.Error("Failed to push datapoints to CDF, mismatched timeseries: {ids}", error.IdsWithMismatchedData);
-                    foreach (var id in error.IdsWithMismatchedData)
+
+                    var mismatched = result.Errors.FirstOrDefault(err => err.Type == ErrorType.MismatchedType);
+                    if (mismatched != null)
                     {
-                        mismatchedTimeseries.Add(id.ExternalId);
+                        log.Error("Failed to push datapoints to CDF, mismatched timeseries: {ids}", mismatched.Skipped.Select(ms => ms.Id));
+                        foreach (var skipped in mismatched.Skipped)
+                        {
+                            mismatchedTimeseries.Add(skipped.Id.ExternalId);
+                            realCount -= skipped.DataPoints.Count();
+                        }
+                        mismatchedTimeseriesCnt.Set(mismatched.Skipped.Count());
                     }
-                    mismatchedTimeseriesCnt.Set(mismatchedTimeseries.Count);
                 }
 
-                int realCount = count;
-                if (error.IdsNotFound.Any() || error.IdsWithMismatchedData.Any())
-                {
-                    foreach (var id in error.IdsNotFound.Concat(error.IdsWithMismatchedData))
-                    {
-                        realCount -= dataPointList[id.ExternalId].Count;
-                    }
-                }
+                result.ThrowOnFatal();
+                
                 log.Debug("Successfully pushed {real} / {total} points to CDF", realCount, count);
                 dataPointPushes.Inc();
                 dataPointsCounter.Inc(realCount);
