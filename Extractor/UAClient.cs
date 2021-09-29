@@ -553,6 +553,28 @@ namespace Cognite.OpcUa
             }
         }
 
+        public void AbortBrowse(IEnumerable<BrowseNode> nodes)
+        {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
+            var toAbort = nodes.Where(node => node.ContinuationPoint != null).ToList();
+            if (!toAbort.Any()) return;
+            var cps = new ByteStringCollection(nodes.Select(node => node.ContinuationPoint));
+            try
+            {
+                Session.BrowseNext(
+                    null,
+                    true,
+                    cps,
+                    out _,
+                    out _);
+            }
+            catch (ServiceResultException ex)
+            {
+                browseFailures.Inc();
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
+            }
+        }
+
         #endregion
 
         #region Get node data

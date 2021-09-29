@@ -56,7 +56,11 @@ namespace Cognite.OpcUa
 
         private readonly List<int> depthCounts = new List<int>();
 
+        private readonly List<Exception> exceptions = new List<Exception>();
+
         private int numReads;
+
+        private bool failed;
 
         private static readonly Gauge depth = Metrics
             .CreateGauge("opcua_tree_depth", "Depth of node tree from rootnode");
@@ -94,7 +98,14 @@ namespace Cognite.OpcUa
 
         protected override void AbortChunk(IChunk<BrowseNode> chunk, CancellationToken token)
         {
-            // TODO
+            try
+            {
+                client.AbortBrowse(chunk.Items);
+            }
+            catch (Exception e)
+            {
+                ExtractorUtils.LogException(log, e, "Failed to abort browse chunk", "Failed to abort browse chunk");
+            }
         }
 
         protected override async Task ConsumeChunk(IChunk<BrowseNode> chunk, CancellationToken token)
@@ -128,6 +139,16 @@ namespace Cognite.OpcUa
         protected override IEnumerable<BrowseNode> HandleTaskResult(IChunk<BrowseNode> chunk, CancellationToken token)
         {
             var result = new List<BrowseNode>();
+
+            if (failed) return Enumerable.Empty<BrowseNode>();
+
+            if (chunk.Exception != null)
+            {
+                ExtractorUtils.LogException(log, chunk.Exception, "Unexpected failure during browse", "Unexpected failure during browse");
+                failed = true;
+                exceptions.Add(chunk.Exception);
+                return Enumerable.Empty<BrowseNode>();
+            }
 
             foreach (var node in chunk.Items)
             {
@@ -189,6 +210,10 @@ namespace Cognite.OpcUa
             }
             await base.RunAsync();
             LogBrowseResult();
+            if (exceptions.Any())
+            {
+                throw new AggregateException(exceptions);
+            }
         }
 
         private int currentFinished;
