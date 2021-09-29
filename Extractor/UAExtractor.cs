@@ -45,7 +45,7 @@ namespace Cognite.OpcUa
         private readonly UAClient uaClient;
         private readonly FullConfig config;
         public FullConfig FullConfig => config;
-        public Looper Looper { get; }
+        public Looper2 Looper { get; }
         public FailureBuffer? FailureBuffer { get; }
         public IExtractionStateStore? StateStorage { get; }
         public State State { get; }
@@ -136,7 +136,8 @@ namespace Cognite.OpcUa
             {
                 pusher.Extractor = this;
             }
-            Looper = new Looper(this, config, pushers);
+            var scheduler = new PeriodicScheduler(source.Token);
+            Looper = new Looper2(scheduler, this, config, pushers);
         }
 
         /// <summary>
@@ -234,8 +235,7 @@ namespace Cognite.OpcUa
             }
             if (quitAfterMap) return;
             Pushing = true;
-            await Looper.InitTaskLoop(synchTasks, source.Token);
-
+            await Looper.Run(synchTasks, source.Token);
         }
         /// <summary>
         /// Initializes restart of the extractor. Waits for history, reset states, then schedule restart on the looper.
@@ -454,7 +454,7 @@ namespace Cognite.OpcUa
 
         #region Mapping
 
-        private async Task<IEnumerable<Task>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited, bool initial)
+        private async Task<IEnumerable<Func<CancellationToken, Task>>> RunMapping(IEnumerable<NodeId> nodesToBrowse, bool ignoreVisited, bool initial)
         {
             bool readFromOpc = true;
 
@@ -924,20 +924,20 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="variables">Variables to synchronize</param>
         /// <returns>Two tasks, one for data and one for events</returns>
-        private IEnumerable<Task> Synchronize(IEnumerable<UAVariable> variables)
+        private IEnumerable<Func<CancellationToken, Task>> Synchronize(IEnumerable<UAVariable> variables)
         {
             var states = variables.Select(ts => ts.Id).Distinct().SelectNonNull(id => State.GetNodeState(id));
 
             log.Information("Synchronize {NumNodesToSynch} nodes", variables.Count());
-            var tasks = new List<Task>();
+            var tasks = new List<Func<CancellationToken, Task>>();
             // Create tasks to subscribe to nodes, then start history read. We might lose data if history read finished before subscriptions were created.
             if (states.Any())
             {
-                tasks.Add(SynchronizeNodes(states));
+                tasks.Add(token => SynchronizeNodes(states));
             }
             if (State.EmitterStates.Any())
             {
-                tasks.Add(SynchronizeEvents());
+                tasks.Add(token => SynchronizeEvents());
             }
 
             if (config.Extraction.EnableAuditDiscovery)
