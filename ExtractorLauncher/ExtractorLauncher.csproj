@@ -20,7 +20,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
-    <None Include="../.editorconfig" />
   </ItemGroup>
   <PropertyGroup>
     <GitCleanVersion>

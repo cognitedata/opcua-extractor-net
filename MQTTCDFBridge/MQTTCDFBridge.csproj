@@ -6,11 +6,5 @@
     <RootNamespace>Cognite.Bridge</RootNamespace>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
   </PropertyGroup>
-  <ItemGroup>
-    <None Remove=".editorconfig" />
-  </ItemGroup>
-  <ItemGroup>
-    <AdditionalFiles Include=".editorconfig" />
-  </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

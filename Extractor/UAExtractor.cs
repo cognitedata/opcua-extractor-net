@@ -502,7 +502,7 @@ namespace Cognite.OpcUa
 
             if (config.Events.Enabled)
             {
-                var eventFields = uaClient.GetEventFields(eventSource, source.Token);
+                var eventFields = await uaClient.GetEventFields(eventSource, source.Token);
                 foreach (var field in eventFields)
                 {
                     State.ActiveEvents[field.Key] = field.Value;

@@ -761,7 +761,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            Browser.BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
+            await Browser.BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
                 (uint)NodeClass.Object | (uint)NodeClass.Variable, false, true, true);
 
             log.Information("Read attributes for {cnt} properties", properties.Count);
@@ -1031,14 +1031,14 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="token"></param>
         /// <returns>The collected event fields</returns>
-        public Dictionary<NodeId, UAEventType> GetEventFields(IEventFieldSource? source, CancellationToken token)
+        public async Task<Dictionary<NodeId, UAEventType>> GetEventFields(IEventFieldSource? source, CancellationToken token)
         {
             if (eventFields != null) return eventFields;
             if (source == null)
             {
                 source = new EventFieldCollector(this, config.Events);
             }
-            eventFields = source.GetEventIdFields(token);
+            eventFields = await source.GetEventIdFields(token);
             foreach (var pair in eventFields)
             {
                 log.Verbose("Collected event field: {id}", pair.Key);
