@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using AdysTech.InfluxDB.Client.Net;
 using Cognite.Extractor.Common;
-using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Prometheus;

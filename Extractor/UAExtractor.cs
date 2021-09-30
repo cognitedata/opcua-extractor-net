@@ -17,7 +17,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. 
 
 using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
-using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;

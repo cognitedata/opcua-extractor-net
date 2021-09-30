@@ -20,7 +20,7 @@ using Cognite.Extractor.StateStorage;
 using Opc.Ua;
 using System;
 
-namespace Cognite.OpcUa.HistoryStates
+namespace Cognite.OpcUa.History
 {
     public class UAHistoryExtractionState : HistoryExtractionState
     {

@@ -1,7 +1,7 @@
 ﻿using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
-using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;

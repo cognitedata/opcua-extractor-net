@@ -1,7 +1,7 @@
 ﻿using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
 using Cognite.OpcUa;
-using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Microsoft.Extensions.DependencyInjection;
 using Opc.Ua;

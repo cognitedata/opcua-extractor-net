@@ -16,7 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
-using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using Prometheus;
@@ -32,60 +32,6 @@ using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
-    public enum HistoryReadType
-    {
-        FrontfillData,
-        BackfillData,
-        FrontfillEvents,
-        BackfillEvents
-    }
-    /// <summary>
-    /// Parameter class containing the state of a single history read operation.
-    /// </summary>
-    public class HistoryReadParams
-    {
-        public HistoryReadDetails Details { get; }
-        public IList<HistoryReadNode> Nodes { get; set; }
-        public Exception? Exception { get; set; }
-
-        public HistoryReadParams(IEnumerable<HistoryReadNode> nodes, HistoryReadDetails details)
-        {
-            Nodes = nodes.ToList();
-            Details = details;
-        }
-    }
-    public class HistoryReadNode
-    {
-        public HistoryReadNode(HistoryReadType type, UAHistoryExtractionState state)
-        {
-            Type = type;
-            State = state;
-            Id = state.SourceId;
-            if (Id == null || Id.IsNullNodeId) throw new InvalidOperationException("NodeId may not be null");
-        }
-        /// <summary>
-        /// Results in silently uninitilized State, unsafe.
-        /// </summary>
-        /// <param name="type"></param>
-        /// <param name="id"></param>
-        public HistoryReadNode(HistoryReadType type, NodeId id)
-        {
-            Type = type;
-            Id = id;
-            if (Id == null || Id.IsNullNodeId) throw new InvalidOperationException("NodeId may not be null");
-        }
-        public HistoryReadType Type { get; }
-        [NotNull, AllowNull]
-        public UAHistoryExtractionState? State { get; set; }
-        public DateTime Time =>
-            Type == HistoryReadType.BackfillData || Type == HistoryReadType.BackfillEvents
-            ? State.SourceExtractedRange.First : State.SourceExtractedRange.Last;
-        public NodeId Id { get; }
-        public byte[]? ContinuationPoint { get; set; }
-        public bool Completed { get; set; }
-        public int LastRead { get; set; }
-        public int TotalRead { get; set; }
-    }
 
     public class HistoryScheduler : IDisposable
     {
@@ -553,7 +499,6 @@ namespace Cognite.OpcUa
                 var buffDps = extractor.Streamer.ToDataPoint(datapoint, nodeState);
                 foreach (var buffDp in buffDps)
                 {
-                    log.Verbose("History DataPoint {dp}", buffDp.ToDebugDescription());
                     cnt++;
                 }
                 extractor.Streamer.Enqueue(buffDps);
