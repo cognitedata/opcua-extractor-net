@@ -105,8 +105,7 @@ namespace Cognite.OpcUa.Pushers
             Dictionary<string, List<UADataPoint>> dataPointList = points
                 .Where(dp => dp.Timestamp > DateTime.UnixEpoch)
                 .GroupBy(dp => dp.Id)
-                .Where(group => group.Any()
-                    && !mismatchedTimeseries.Contains(group.Key)
+                .Where(group => !mismatchedTimeseries.Contains(group.Key)
                     && !missingTimeseries.Contains(group.Key))
                 .ToDictionary(group => group.Key, group => group.ToList());
 
@@ -158,6 +157,8 @@ namespace Cognite.OpcUa.Pushers
                 log.Debug("Successfully pushed {real} / {total} points to CDF", realCount, count);
                 dataPointPushes.Inc();
                 dataPointsCounter.Inc(realCount);
+
+                if (realCount == 0) return null;
             }
             catch (Exception e)
             {

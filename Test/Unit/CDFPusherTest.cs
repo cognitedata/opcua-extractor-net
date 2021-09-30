@@ -113,6 +113,14 @@ namespace Test.Unit
 
             var time = DateTime.UtcNow;
 
+            var invalidDps = new[]
+            {
+                new UADataPoint(DateTime.MaxValue, "test-ts-double", 123),
+                new UADataPoint(time.AddSeconds(1), "test-ts-double", double.NaN)
+            };
+
+            Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
+
             var dps = new[]
             {
                 new UADataPoint(time, "test-ts-double", 123),
@@ -167,7 +175,7 @@ namespace Test.Unit
             Assert.Equal(4, handler.Datapoints["test-ts-string"].StringDatapoints.Count);
 
             // Final batch, all should now be filtered off
-            var invalidDps = new[]
+            invalidDps = new[]
             {
                 new UADataPoint(DateTime.UtcNow, "test-ts-double", 123),
                 new UADataPoint(time, "test-ts-double", 123),
