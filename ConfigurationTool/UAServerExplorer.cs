@@ -458,7 +458,7 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// Populate the dataTypes list with nodes representing data types if it has not already been populated.
         /// </summary>
-        private void PopulateDataTypes(CancellationToken token)
+        private async Task PopulateDataTypes(CancellationToken token)
         {
             if (dataTypesRead) return;
             dataTypes = new List<UANode>();
@@ -466,7 +466,7 @@ namespace Cognite.OpcUa.Config
             log.Information("Mapping out data type hierarchy");
             try
             {
-                Browser.BrowseDirectory(
+                await Browser.BrowseDirectory(
                     new List<NodeId> { DataTypes.BaseDataType },
                     ToolUtil.GetSimpleListWriterCallback(dataTypes, this),
                     token,
@@ -626,14 +626,14 @@ namespace Cognite.OpcUa.Config
         /// <summary>
         /// Browse the datatype hierarchy, checking for custom numeric datatypes.
         /// </summary>
-        public void ReadCustomTypes(CancellationToken token)
+        public async Task ReadCustomTypes(CancellationToken token)
         {
             if (Session == null || !Session.Connected)
             {
                 Run(token).Wait(token);
                 LimitConfigValues(token);
             }
-            PopulateDataTypes(token);
+            await PopulateDataTypes(token);
 
             customNumericTypes = new List<ProtoDataType>();
             foreach (var type in dataTypes)
@@ -740,7 +740,7 @@ namespace Cognite.OpcUa.Config
             config.Extraction.DataTypes.MaxArraySize = 10;
 
             await PopulateNodes(token);
-            PopulateDataTypes(token);
+            await PopulateDataTypes(token);
             ReadNodeData(token);
 
             log.Information("Mapping out variable datatypes");
@@ -1183,7 +1183,7 @@ namespace Cognite.OpcUa.Config
             {
                 config.Events.AllEvents = true;
                 config.Events.Enabled = true;
-                GetEventFields(null, token);
+                await GetEventFields(null, token);
             }
             catch (Exception ex)
             {
@@ -1216,7 +1216,7 @@ namespace Cognite.OpcUa.Config
             var emitterReferences = new List<UANode>();
             try
             {
-                Browser.BrowseDirectory(nodeList.Select(node => node.Id).Append(ObjectIds.Server).ToList(),
+                await Browser.BrowseDirectory(nodeList.Select(node => node.Id).Append(ObjectIds.Server).ToList(),
                     ToolUtil.GetSimpleListWriterCallback(emitterReferences, this),
                     token,
                     ReferenceTypeIds.GeneratesEvent, (uint)NodeClass.ObjectType, false);

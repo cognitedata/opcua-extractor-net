@@ -302,13 +302,13 @@ namespace Cognite.OpcUa.TypeCollectors
                 }
             }
 
-            await Task.Run(() => uaClient.Browser.BrowseDirectory(new List<NodeId> { DataTypeIds.BaseDataType },
+            await uaClient.Browser.BrowseDirectory(new List<NodeId> { DataTypeIds.BaseDataType },
                 Callback,
                 token,
                 ReferenceTypeIds.HasSubtype,
                 (uint)NodeClass.DataType,
                 false,
-                false), CancellationToken.None);
+                false);
         }
         /// <summary>
         /// Manually register a type in the manager, used when type hierarchy is obtained from file

@@ -378,12 +378,12 @@ namespace Test.Unit
         [InlineData(0, 5, 1)]
         [InlineData(1, 10, 2)]
         [InlineData(15, 80, 16)]
-        public void TestBrowseDepth(int depth, int numNodes, int numBrowse)
+        public async Task TestBrowseDepth(int depth, int numNodes, int numBrowse)
         {
             CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
             tester.Client.Browser.ResetVisitedNodes();
             var (callback, nodes) = UAClientTestFixture.GetCallback();
-            tester.Client.Browser.BrowseDirectory(new[] { tester.Server.Ids.Full.DeepRoot }, callback, tester.Source.Token,
+            await tester.Client.Browser.BrowseDirectory(new[] { tester.Server.Ids.Full.DeepRoot }, callback, tester.Source.Token,
                 null, 3, true, true, false, depth);
 
             Assert.Equal(numNodes, nodes.Sum(node => node.Value.Count));
@@ -535,6 +535,51 @@ namespace Test.Unit
             Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 10));
             Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 11));
         }
+        [Fact]
+        public void TestAbortBrowse()
+        {
+            var nodes = new[]
+            {
+                new BrowseNode(tester.Server.Ids.Full.WideRoot),
+                new BrowseNode(tester.Server.Ids.Custom.Root),
+            };
+            var opt = new BrowseParams()
+            {
+                Nodes = nodes.ToDictionary(node => node.Id),
+                BrowseDirection = BrowseDirection.Forward,
+                NodeClassMask = (uint)(NodeClass.Object | NodeClass.Variable),
+                IncludeSubTypes = true,
+                ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
+                MaxPerNode = 50
+            };
+            tester.Client.GetReferences(opt, false, tester.Source.Token);
+            Assert.Null(nodes[1].ContinuationPoint);
+            Assert.NotNull(nodes[0].ContinuationPoint);
+            tester.Client.AbortBrowse(new[] { nodes[1] });
+            tester.Client.AbortBrowse(nodes);
+            Assert.Null(nodes[0].ContinuationPoint);
+        }
+        [Fact]
+        public async Task TestFailBrowse()
+        {
+            CommonTestUtils.ResetMetricValues("opcua_browse_operations", "opcua_tree_depth");
+            tester.Client.Browser.ResetVisitedNodes();
+            var (callback, nodes) = UAClientTestFixture.GetCallback();
+
+            tester.Server.Issues.RemainingBrowseCount = 5;
+            var ex = await Assert.ThrowsAsync<AggregateException>(async () =>
+                await tester.Client.Browser.BrowseNodeHierarchy(tester.Server.Ids.Full.DeepRoot, callback, tester.Source.Token)
+            );
+
+            var root = ex.InnerException;
+            Assert.IsType<FatalException>(root);
+
+            // Root node is browsed once
+            Assert.Equal(21, nodes.Aggregate(0, (seed, kvp) => seed + kvp.Value.Count));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_browse_operations", 5));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_tree_depth", 5));
+        }
+
         #endregion
 
         #region nodedata
@@ -864,13 +909,13 @@ namespace Test.Unit
         #region events
         // Just basic testing here, separate tests should be written for the event field collector itself.
         [Fact]
-        public void TestGetEventFields()
+        public async Task TestGetEventFields()
         {
             tester.Config.Events.Enabled = true;
 
             try
             {
-                var fields = tester.Client.GetEventFields(null, tester.Source.Token);
+                var fields = await tester.Client.GetEventFields(null, tester.Source.Token);
                 Assert.True(fields.ContainsKey(tester.Server.Ids.Event.CustomType));
                 Assert.True(fields.ContainsKey(ObjectTypeIds.AuditActivateSessionEventType));
             }
@@ -906,7 +951,7 @@ namespace Test.Unit
 
             try
             {
-                tester.Client.GetEventFields(null, tester.Source.Token);
+                await tester.Client.GetEventFields(null, tester.Source.Token);
 
                 tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.Source.Token);
                 tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.Source.Token);
@@ -954,7 +999,7 @@ namespace Test.Unit
             }
             try
             {
-                tester.Client.GetEventFields(null, tester.Source.Token);
+                await tester.Client.GetEventFields(null, tester.Source.Token);
                 tester.Client.SubscribeToEvents(emitters, handler, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);

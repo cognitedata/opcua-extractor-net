@@ -156,10 +156,10 @@ namespace Test.Unit
             tester.Server.Issues.MaxBrowseNodes = 0;
         }
         [Fact]
-        public void TestGetCustomDataTypes()
+        public async Task TestGetCustomDataTypes()
         {
             // Config doesn't really impact this
-            tester.Explorer.ReadCustomTypes(tester.Source.Token);
+            await tester.Explorer.ReadCustomTypes(tester.Source.Token);
             var summary = tester.Explorer.Summary;
             Assert.Equal(1, summary.CustomNumTypesCount);
             Assert.True(tester.BaseConfig.Extraction.DataTypes.AutoIdentifyTypes);

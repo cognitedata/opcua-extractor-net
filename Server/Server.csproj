@@ -8,7 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
-    <None Include="..\.editorconfig" />
   </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

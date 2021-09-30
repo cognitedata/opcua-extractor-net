@@ -375,13 +375,13 @@ namespace Test.Unit
             Assert.Equal(field5.GetHashCode(), field7.GetHashCode());
         }
         [Fact]
-        public void TestCollectCustomOnly()
+        public async Task TestCollectCustomOnly()
         {
             tester.Client.Browser.ResetVisitedNodes();
             var config = new EventConfig() { Enabled = true, AllEvents = false };
             var collector = new EventFieldCollector(tester.Client, config);
 
-            var fields = collector.GetEventIdFields(tester.Source.Token);
+            var fields = await collector.GetEventIdFields(tester.Source.Token);
             Assert.Equal(5, fields.Count);
             var eventIds = tester.Server.Ids.Event;
             Assert.Equal(7, fields[eventIds.BasicType1].CollectedFields.Count);
@@ -411,13 +411,13 @@ namespace Test.Unit
                 fields[eventIds.DeepType].CollectedFields);
         }
         [Fact]
-        public void TestCollectAllEvents()
+        public async Task TestCollectAllEvents()
         {
             tester.Client.Browser.ResetVisitedNodes();
             var config = new EventConfig { Enabled = true, AllEvents = true };
             var collector = new EventFieldCollector(tester.Client, config);
 
-            var fields = collector.GetEventIdFields(tester.Source.Token);
+            var fields = await collector.GetEventIdFields(tester.Source.Token);
 
             Assert.Equal(96, fields.Count);
 
@@ -440,7 +440,7 @@ namespace Test.Unit
                 fields[ObjectTypeIds.AuditHistoryUpdateEventType].CollectedFields);
         }
         [Fact]
-        public void TestIgnoreEvents()
+        public async Task TestIgnoreEvents()
         {
             tester.Client.Browser.ResetVisitedNodes();
             // Audit and conditions/alarms account for most of the event types in the base namespace
@@ -448,7 +448,7 @@ namespace Test.Unit
             var config = new EventConfig { Enabled = true, AllEvents = true, ExcludeEventFilter = "Audit|Condition|Alarm|SystemEventType" };
             var collector = new EventFieldCollector(tester.Client, config);
 
-            var fields = collector.GetEventIdFields(tester.Source.Token);
+            var fields = await collector.GetEventIdFields(tester.Source.Token);
 
             Assert.Equal(21, fields.Count);
 
@@ -456,13 +456,13 @@ namespace Test.Unit
             Assert.True(fields.ContainsKey(ObjectTypeIds.DeviceFailureEventType));
         }
         [Fact]
-        public void TestEventExcludeProperties()
+        public async Task TestEventExcludeProperties()
         {
             tester.Client.Browser.ResetVisitedNodes();
             var config = new EventConfig { Enabled = true, AllEvents = false, ExcludeProperties = new List<string> { "SubType" } };
             var collector = new EventFieldCollector(tester.Client, config);
 
-            var fields = collector.GetEventIdFields(tester.Source.Token);
+            var fields = await collector.GetEventIdFields(tester.Source.Token);
 
             Assert.Equal(5, fields.Count);
 
@@ -473,7 +473,7 @@ namespace Test.Unit
             Assert.DoesNotContain(new EventField(new QualifiedName("SubType")), fields[eventIds.PropType].CollectedFields);
         }
         [Fact]
-        public void TestEventWhitelist()
+        public async Task TestEventWhitelist()
         {
             tester.Client.Browser.ResetVisitedNodes();
             var eventIds = tester.Server.Ids.Event;
@@ -490,7 +490,7 @@ namespace Test.Unit
             };
             var collector = new EventFieldCollector(tester.Client, config);
 
-            var fields = collector.GetEventIdFields(tester.Source.Token);
+            var fields = await collector.GetEventIdFields(tester.Source.Token);
 
             Assert.Equal(3, fields.Count);
             Assert.Equal(16, fields[ObjectTypeIds.AuditHistoryAtTimeDeleteEventType].CollectedFields.Count);

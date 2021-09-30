@@ -501,7 +501,7 @@ namespace Test.Unit
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            var fields = tester.Client.GetEventFields(null, tester.Source.Token);
+            var fields = await tester.Client.GetEventFields(null, tester.Source.Token);
             foreach (var pair in fields)
             {
                 extractor.State.ActiveEvents[pair.Key] = pair.Value;
@@ -600,7 +600,7 @@ namespace Test.Unit
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            var fields = tester.Client.GetEventFields(null, tester.Source.Token);
+            var fields = await tester.Client.GetEventFields(null, tester.Source.Token);
             foreach (var pair in fields)
             {
                 extractor.State.ActiveEvents[pair.Key] = pair.Value;

@@ -154,7 +154,7 @@ namespace Test.Unit
 
             tester.Config.Events.AllEvents = true;
             tester.Config.Events.Enabled = true;
-            var fields = source.GetEventIdFields(tester.Source.Token);
+            var fields = await source.GetEventIdFields(tester.Source.Token);
 
             Assert.Equal(96, fields.Count);
 

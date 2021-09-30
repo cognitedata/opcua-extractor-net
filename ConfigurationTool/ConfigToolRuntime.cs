@@ -53,7 +53,7 @@ namespace Cognite.OpcUa.Config
                 await explorer.GetEndpoints(source.Token);
                 await explorer.GetBrowseChunkSizes(source.Token);
                 await explorer.GetAttributeChunkSizes(source.Token);
-                explorer.ReadCustomTypes(source.Token);
+                await explorer.ReadCustomTypes(source.Token);
                 await explorer.IdentifyDataTypeSettings(source.Token);
                 await explorer.GetSubscriptionChunkSizes(source.Token);
                 await explorer.GetHistoryReadConfig(source.Token);

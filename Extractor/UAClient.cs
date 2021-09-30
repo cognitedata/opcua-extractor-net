@@ -459,6 +459,42 @@ namespace Cognite.OpcUa
             nodeOverrides.Clear();
         }
 
+        private List<BrowseNode> HandleBrowseResult(List<BrowseNode> nodes, BrowseResultCollection results,
+            ExtractorUtils.SourceOp op)
+        {
+            var ret = new List<BrowseNode>();
+            if (nodes.Count != results.Count)
+            {
+                StatusCode? code = null;
+                foreach (var res in results)
+                {
+                    if (StatusCode.IsBad(res.StatusCode))
+                    {
+                        code = res.StatusCode;
+                        break;
+                    }
+                }
+                throw new FatalException($"Incorrect number of results from {op} service. Got {results.Count}, expected {nodes.Count}. " +
+                    $"This is illegal behavior, and caused by a bug in the server. Status: {code}");
+            }
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                var result = results[i];
+                var node = nodes[i];
+                if (StatusCode.IsBad(result.StatusCode)
+                    && result.StatusCode != StatusCodes.BadNodeIdUnknown)
+                {
+                    throw ExtractorUtils.HandleServiceResult(log, new ServiceResultException(result.StatusCode), op);
+                }
+
+                node.AddReferences(result.References);
+                node.ContinuationPoint = result.ContinuationPoint;
+                if (node.ContinuationPoint != null) ret.Add(node);
+            }
+            return ret;
+        }
+
         public void GetReferences(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
         {
             if (browseParams == null || browseParams.Nodes == null) throw new ArgumentNullException(nameof(browseParams));
@@ -495,31 +531,14 @@ namespace Cognite.OpcUa
                     browseFailures.Inc();
                     throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.Browse);
                 }
-                if (toBrowse.Count != results.Count) throw
-                        new FatalException($"Incorrect number of results from browse service. Got {results.Count}, expected {toBrowse.Count}. " +
-                        "This is illegal behavior, and caused by a bug in the server.");
 
-                for (int i = 0; i < toBrowse.Count; i++)
-                {
-                    var result = results[i];
-                    var node = toBrowse[i];
-                    if (StatusCode.IsBad(result.StatusCode)
-                        && result.StatusCode != StatusCodes.BadNodeIdUnknown)
-                    {
-                        throw new ServiceResultException(result.StatusCode);
-                    }
-
-                    node.AddReferences(result.References);
-                    node.ContinuationPoint = result.ContinuationPoint;
-                    if (node.ContinuationPoint != null && readToCompletion) toBrowseNext.Add(node);
-                }
+                var next = HandleBrowseResult(toBrowse, results, ExtractorUtils.SourceOp.Browse);
+                if (readToCompletion) toBrowseNext.AddRange(next);
             }
 
             while (toBrowseNext.Any())
             {
                 var cps = new ByteStringCollection(toBrowseNext.Select(node => node.ContinuationPoint));
-                var ids = toBrowseNext;
-                toBrowseNext = new List<BrowseNode>();
                 BrowseResultCollection results;
                 try
                 {
@@ -536,21 +555,33 @@ namespace Cognite.OpcUa
                     browseFailures.Inc();
                     throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
                 }
-                if (ids.Count != results.Count) throw
-                        new FatalException($"Incorrect number of results from browseNext service. Got {results.Count}, expected {toBrowseNext.Count}. " +
-                        "This is illegal behavior, and caused by a bug in the server.");
-
-                for (int i = 0; i < ids.Count; i++)
-                {
-                    var result = results[i];
-                    var node = ids[i];
-                    if (StatusCode.IsBad(result.StatusCode)) throw new ServiceResultException(result.StatusCode);
-
-                    node.AddReferences(result.References);
-                    node.ContinuationPoint = result.ContinuationPoint;
-                    if (node.ContinuationPoint != null && readToCompletion) toBrowseNext.Add(node);
-                }
+                var next = HandleBrowseResult(toBrowseNext, results, ExtractorUtils.SourceOp.BrowseNext);
+                if (readToCompletion) toBrowseNext = next;
+                else break;
             }
+        }
+
+        public void AbortBrowse(IEnumerable<BrowseNode> nodes)
+        {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
+            var toAbort = nodes.Where(node => node.ContinuationPoint != null).ToList();
+            if (!toAbort.Any()) return;
+            var cps = new ByteStringCollection(nodes.Select(node => node.ContinuationPoint));
+            try
+            {
+                Session.BrowseNext(
+                    null,
+                    true,
+                    cps,
+                    out _,
+                    out _);
+            }
+            catch (ServiceResultException ex)
+            {
+                browseFailures.Inc();
+                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
+            }
+            foreach (var node in toAbort) node.ContinuationPoint = null;
         }
 
         #endregion
@@ -761,7 +792,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            Browser.BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
+            await Browser.BrowseDirectory(idsToCheck, cb, token, ReferenceTypeIds.HierarchicalReferences,
                 (uint)NodeClass.Object | (uint)NodeClass.Variable, false, true, true);
 
             log.Information("Read attributes for {cnt} properties", properties.Count);
@@ -1031,14 +1062,14 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="token"></param>
         /// <returns>The collected event fields</returns>
-        public Dictionary<NodeId, UAEventType> GetEventFields(IEventFieldSource? source, CancellationToken token)
+        public async Task<Dictionary<NodeId, UAEventType>> GetEventFields(IEventFieldSource? source, CancellationToken token)
         {
             if (eventFields != null) return eventFields;
             if (source == null)
             {
                 source = new EventFieldCollector(this, config.Events);
             }
-            eventFields = source.GetEventIdFields(token);
+            eventFields = await source.GetEventIdFields(token);
             foreach (var pair in eventFields)
             {
                 log.Verbose("Collected event field: {id}", pair.Key);

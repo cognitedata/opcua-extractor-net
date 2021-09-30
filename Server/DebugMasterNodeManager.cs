@@ -13,6 +13,7 @@ namespace Server
         public int MaxAttributes { get; set; }
         public int MaxSubscriptions { get; set; }
         public int MaxHistoryNodes { get; set; }
+        public int RemainingBrowseCount { get; set; }
     }
     /// <summary>
     /// The master node manager is called from the server with most "regular" service calls.
@@ -104,6 +105,18 @@ namespace Server
                 results = new BrowseResultCollection() { new BrowseResult { StatusCode = StatusCodes.BadTooManyOperations } };
                 diagnosticInfos = new DiagnosticInfoCollection();
                 return;
+            }
+
+            if (issues.RemainingBrowseCount > 0)
+            {
+                if (issues.RemainingBrowseCount == 1)
+                {
+                    results = new BrowseResultCollection { new BrowseResult { StatusCode = StatusCodes.BadTooManyOperations } };
+                    diagnosticInfos = new DiagnosticInfoCollection();
+                    issues.RemainingBrowseCount = 0;
+                    return;
+                }
+                issues.RemainingBrowseCount--;
             }
 
             base.Browse(context, view, maxReferencesPerNode, nodesToBrowse, out results, out diagnosticInfos);

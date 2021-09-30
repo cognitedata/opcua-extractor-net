@@ -21,6 +21,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cognite.OpcUa.TypeCollectors
 {
@@ -70,7 +71,7 @@ namespace Cognite.OpcUa.TypeCollectors
 
     public interface IEventFieldSource
     {
-        Dictionary<NodeId, UAEventType> GetEventIdFields(CancellationToken token);
+        Task<Dictionary<NodeId, UAEventType>> GetEventIdFields(CancellationToken token);
     }
 
     /// <summary>
@@ -107,11 +108,11 @@ namespace Cognite.OpcUa.TypeCollectors
         /// then builds a list of eventfields for each type by recursively collecting the properties of all parents.
         /// </summary>
         /// <returns>The collected fields in a dictionary on the form EventTypeId -> (SourceTypeId, BrowseName).</returns>
-        public Dictionary<NodeId, UAEventType> GetEventIdFields(CancellationToken token)
+        public async Task<Dictionary<NodeId, UAEventType>> GetEventIdFields(CancellationToken token)
         {
             types[ObjectTypeIds.BaseEventType] = new UAEventType(ObjectTypeIds.BaseEventType, "BaseEventType");
 
-            uaClient.Browser.BrowseDirectory(
+            await uaClient.Browser.BrowseDirectory(
                 new List<NodeId> { ObjectTypeIds.BaseEventType },
                 EventTypeCallback,
                 token,

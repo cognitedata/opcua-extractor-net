@@ -548,7 +548,7 @@ namespace Cognite.OpcUa.NodeSources
         private HashSet<string>? excludeProperties;
         private HashSet<string>? baseExcludeProperties;
 
-        public Dictionary<NodeId, UAEventType> GetEventIdFields(CancellationToken token)
+        public Task<Dictionary<NodeId, UAEventType>> GetEventIdFields(CancellationToken token)
         {
             Build();
 
@@ -599,7 +599,7 @@ namespace Cognite.OpcUa.NodeSources
                 result[type.NodeId] = new UAEventType(type.NodeId, type.DisplayName, CollectFields(type));
             }
 
-            return result;
+            return Task.FromResult(result);
         }
         #endregion
     }
