@@ -217,12 +217,11 @@ namespace Cognite.OpcUa
         public CDFNodeSourceConfig? RawNodeBuffer { get; set; }
         public double? NonFiniteReplacement
         {
-            get => nonFiniteReplacement;
-            set => nonFiniteReplacement = value == null || double.IsFinite(value.Value)
+            get => NanReplacement;
+            set => NanReplacement = value == null || double.IsFinite(value.Value)
                 && value.Value > CogniteUtils.NumericValueMin
                 && value.Value < CogniteUtils.NumericValueMax ? value : null;
         }
-        private double? nonFiniteReplacement;
         public IPusher ToPusher(IServiceProvider provider)
         {
             return new CDFPusher(provider, this);

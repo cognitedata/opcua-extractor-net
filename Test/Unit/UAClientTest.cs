@@ -729,7 +729,7 @@ namespace Test.Unit
         }
 
         [Fact]
-        public async Task TestMissingNodes()
+        public void TestMissingNodes()
         {
             var nodes = new[]
             {

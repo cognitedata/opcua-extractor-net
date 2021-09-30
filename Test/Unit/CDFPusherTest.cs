@@ -109,19 +109,17 @@ namespace Test.Unit
             // Null input
             Assert.Null(await pusher.PushDataPoints(null, tester.Source.Token));
 
-            // Test filtering out dps
-            var invalidDps = new[]
-            {
-                new UADataPoint(DateTime.MinValue, "test-ts-double", 123),
-                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NaN),
-                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.NegativeInfinity),
-                new UADataPoint(DateTime.UtcNow, "test-ts-double", double.PositiveInfinity),
-            };
-            Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
-
             tester.Config.Cognite.Debug = true;
 
             var time = DateTime.UtcNow;
+
+            var invalidDps = new[]
+            {
+                new UADataPoint(DateTime.MaxValue, "test-ts-double", 123),
+                new UADataPoint(time.AddSeconds(1), "test-ts-double", double.NaN)
+            };
+
+            Assert.Null(await pusher.PushDataPoints(invalidDps, tester.Source.Token));
 
             var dps = new[]
             {

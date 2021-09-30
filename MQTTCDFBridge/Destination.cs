@@ -136,7 +136,7 @@ namespace Cognite.Bridge
 
             var createdIds = new ConcurrentBag<string>();
 
-            CogniteResult<Asset> found;
+            CogniteResult<Asset, AssetCreate> found;
             try
             {
                 found = await destination.GetOrCreateAssetsAsync(idsToTest, ids =>
@@ -279,7 +279,7 @@ namespace Cognite.Bridge
 
             var createdIds = new ConcurrentBag<string>();
 
-            CogniteResult<TimeSeries> found;
+            CogniteResult<TimeSeries, TimeSeriesCreate> found;
 
             try
             {

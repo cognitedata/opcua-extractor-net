@@ -120,8 +120,8 @@ namespace Cognite.OpcUa
             if (!string.IsNullOrEmpty(setup.User)) setup.Config.Source.Username = setup.User;
             if (!string.IsNullOrEmpty(setup.Password)) setup.Config.Source.Password = setup.Password;
             setup.Config.Source.Secure |= setup.Secure;
-            if (!string.IsNullOrEmpty(setup.LogLevel)) setup.Config.Logger.Console = new LogConfig() { Level = setup.LogLevel };
-            else if (setup.NoConfig) setup.Config.Logger.Console = new LogConfig { Level = "information" };
+            if (!string.IsNullOrEmpty(setup.LogLevel)) setup.Config.Logger.Console = new ConsoleConfig { Level = setup.LogLevel };
+            else if (setup.NoConfig) setup.Config.Logger.Console = new ConsoleConfig { Level = "information" };
             if (!string.IsNullOrEmpty(setup.LogDir))
             {
                 if (setup.Config.Logger.File == null)
