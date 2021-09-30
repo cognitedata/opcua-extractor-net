@@ -93,6 +93,8 @@ namespace Cognite.OpcUa
 
         private readonly CancellationTokenSource source;
 
+        private readonly PeriodicScheduler scheduler;
+
         /// <summary>
         /// Construct extractor with list of pushers
         /// </summary>
@@ -136,7 +138,7 @@ namespace Cognite.OpcUa
             {
                 pusher.Extractor = this;
             }
-            var scheduler = new PeriodicScheduler(source.Token);
+            scheduler = new PeriodicScheduler(source.Token);
             Looper = new Looper2(scheduler, this, config, pushers);
         }
 
@@ -235,7 +237,7 @@ namespace Cognite.OpcUa
             }
             if (quitAfterMap) return;
             Pushing = true;
-            await Looper.Run(synchTasks, source.Token);
+            await Looper.Run(synchTasks);
         }
         /// <summary>
         /// Initializes restart of the extractor. Waits for history, reset states, then schedule restart on the looper.
@@ -280,7 +282,11 @@ namespace Cognite.OpcUa
 
             var synchTasks = await RunMapping(RootNodes, true, false);
 
-            Looper.ScheduleTasks(synchTasks);
+            int idx = 0;
+            foreach (var task in synchTasks)
+            {
+                Looper.Scheduler.ScheduleTask($"RestartHistory{idx++}", task);
+            }
             Started = true;
             log.Information("Successfully restarted extractor");
         }
@@ -299,7 +305,11 @@ namespace Cognite.OpcUa
                 }
                 var historyTasks = await RunMapping(nodesToBrowse.Distinct(), true, false);
 
-                Looper.ScheduleTasks(historyTasks);
+                int idx = 0;
+                foreach (var task in historyTasks)
+                {
+                    Looper.Scheduler.ScheduleTask($"ExtraHistory{idx++}", task);
+                }
             }
         }
 
@@ -433,7 +443,11 @@ namespace Cognite.OpcUa
             var historyTasks = await RunMapping(RootNodes,
                 !config.Extraction.Update.AnyUpdate && !config.Extraction.Relationships.Enabled,
                 false);
-            Looper.ScheduleTasks(historyTasks);
+            int idx = 0;
+            foreach (var task in historyTasks)
+            {
+                Looper.Scheduler.ScheduleTask($"RebrowseHistory{idx++}", task);
+            }
         }
 
         /// <summary>
@@ -545,9 +559,9 @@ namespace Cognite.OpcUa
         /// This is the entry point for mapping on the extractor.
         /// </summary>
         /// <returns>A list of history tasks</returns>
-        private async Task<IEnumerable<Task>> MapUAToDestinations(NodeSourceResult? result)
+        private async Task<IEnumerable<Func<CancellationToken, Task>>> MapUAToDestinations(NodeSourceResult? result)
         {
-            if (result == null) return Enumerable.Empty<Task>();
+            if (result == null) return Enumerable.Empty<Func<CancellationToken, Task>>();
 
             Streamer.AllowData = State.NodeStates.Any();
             await PushNodes(result.DestinationObjects, result.DestinationVariables, result.DestinationReferences);
@@ -1013,8 +1027,7 @@ namespace Cognite.OpcUa
                         extraNodesToBrowse.Enqueue(id);
                     }
                 }
-
-                Looper.ScheduleUpdate();
+                Looper.Scheduler.TriggerTask("ExtraTasks");
                 return;
             }
 
@@ -1049,7 +1062,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            Looper.ScheduleUpdate();
+            Looper.Scheduler.TriggerTask("ExtraTasks");
         }
         #endregion
 
@@ -1066,7 +1079,7 @@ namespace Cognite.OpcUa
                 Starting.Set(0);
                 source?.Cancel();
                 source?.Dispose();
-                Looper?.Dispose();
+                scheduler?.Dispose();
                 uaClient.OnServerDisconnect -= UaClient_OnServerDisconnect;
                 uaClient.OnServerReconnect -= UaClient_OnServerReconnect;
             }

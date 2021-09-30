@@ -55,33 +55,38 @@ namespace Cognite.OpcUa
             this.pushers = pushers;
         }
 
-        private static TimeSpan ToTimespan(int ms, bool allowZero)
+        private static TimeSpan ToTimespan(int t, bool allowZero, string unit)
         {
-            if (ms < 0) return Timeout.InfiniteTimeSpan;
-            if (ms == 0 && !allowZero) return Timeout.InfiniteTimeSpan;
-            return TimeSpan.FromMilliseconds(ms);
+            if (t < 0) return Timeout.InfiniteTimeSpan;
+            if (t == 0 && !allowZero) return Timeout.InfiniteTimeSpan;
+            switch (unit)
+            {
+                case "s":
+                    return TimeSpan.FromSeconds(t);
+                case "ms":
+                    return TimeSpan.FromMilliseconds(t);
+                case "m":
+                    return TimeSpan.FromMinutes(t);
+            }
+            return TimeSpan.FromSeconds(t);
         }
 
-        public Task Run(IEnumerable<Func<CancellationToken, Task>> synchTasks, CancellationToken token)
+        public Task Run(IEnumerable<Func<CancellationToken, Task>> synchTasks)
         {
-            var pusherPeriod = config.Extraction.DataPushDelay < 0
-                    ? Timeout.InfiniteTimeSpan
-                    : TimeSpan.FromMilliseconds(config.Extraction.DataPushDelay);
-            Scheduler.SchedulePeriodicTask(nameof(Pushers), ToTimespan(config.Extraction.DataPushDelay, true), Pushers, true);
+            Scheduler.SchedulePeriodicTask(nameof(Pushers), ToTimespan(config.Extraction.DataPushDelay, true, "ms"), Pushers, true);
             Scheduler.SchedulePeriodicTask(nameof(ExtraTasks), Timeout.InfiniteTimeSpan, ExtraTasks, false);
             int idx = 0;
             foreach (var task in synchTasks)
             {
                 Scheduler.ScheduleTask($"Synch{idx++}", task);
             }
-
-            Scheduler.SchedulePeriodicTask(nameof(Rebrowse), ToTimespan(config.Extraction.AutoRebrowsePeriod, false), Rebrowse, false);
+            Scheduler.SchedulePeriodicTask(nameof(Rebrowse), ToTimespan(config.Extraction.AutoRebrowsePeriod, false, "m"), Rebrowse, false);
             if (extractor.StateStorage != null)
             {
-                Scheduler.SchedulePeriodicTask(nameof(StoreState), ToTimespan(config.StateStorage.Interval, false), StoreState, 
+                Scheduler.SchedulePeriodicTask(nameof(StoreState), ToTimespan(config.StateStorage.Interval, false, "s"), StoreState, 
                     config.StateStorage.Interval > 0);
             }
-            Scheduler.SchedulePeriodicTask(nameof(HistoryRestart), ToTimespan(config.History.RestartPeriod, false), HistoryRestart, false);
+            Scheduler.SchedulePeriodicTask(nameof(HistoryRestart), ToTimespan(config.History.RestartPeriod, false, "s"), HistoryRestart, false);
 
             return Scheduler.WaitForAll();
         }
@@ -207,6 +212,7 @@ namespace Cognite.OpcUa
         private async Task Rebrowse(CancellationToken token)
         {
             if (token.IsCancellationRequested) return;
+            Console.WriteLine("Trigger rebrowse");
             await extractor.Rebrowse();
         }
 
