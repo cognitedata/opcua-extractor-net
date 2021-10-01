@@ -143,12 +143,18 @@ namespace Test.Integration
 
             await extractor.WaitForSubscriptions();
 
-            await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
-            foreach (var kvp in pusher.DataPoints)
+            try
             {
-                kvp.Value.Clear();
+                await CommonTestUtils.WaitForCondition(() => pusher.DataPoints.Any(kvp => kvp.Value.Any()), 5);
             }
-
+            finally
+            {
+                foreach (var kvp in pusher.DataPoints)
+                {
+                    kvp.Value.Clear();
+                }
+            }
+            
             // enum
             tester.Server.UpdateNode(ids.EnumVar1, 2);
             // enum array

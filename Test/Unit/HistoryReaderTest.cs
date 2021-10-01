@@ -46,8 +46,15 @@ namespace Test.Unit
                 Data = true
             };
 
-            using var reader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.FrontfillData);
-            using var backfillReader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.BackfillData);
+            using var throttler = new TaskThrottler(2, false);
+            var cps = new BlockingResourceCounter(1000);
+
+            var dummyState = new UAHistoryExtractionState(tester.Client, new NodeId("test"), true, true);
+
+            using var reader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.FrontfillData,
+                throttler, cps, new [] { dummyState }, tester.Source.Token);
+            using var backfillReader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.BackfillData,
+                throttler, cps, new[] { dummyState }, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
 
@@ -66,7 +73,7 @@ namespace Test.Unit
 
             // Test null historyData
             var node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1")) { Completed = true };
-            historyDataHandler.Invoke(reader, new object[] { null, node, null });
+            historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(0, node.TotalRead);
 
             // Test null datavalues
@@ -81,14 +88,16 @@ namespace Test.Unit
             historyData.DataValues = frontfillDataValues;
 
             node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("badstate")) { Completed = true };
-            historyDataHandler.Invoke(reader, new object[] { historyData, node, null });
+            node.LastResult = historyData;
+            historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(0, node.TotalRead);
             Assert.False(state1.IsFrontfilling);
             state1.RestartHistory();
 
             // Test frontfill OK
             node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1")) { Completed = true };
-            historyDataHandler.Invoke(reader, new object[] { historyData, node, null });
+            node.LastResult = historyData;
+            historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(100, node.TotalRead);
             Assert.Equal(start.AddSeconds(99), state1.SourceExtractedRange.Last);
             Assert.False(state1.IsFrontfilling);
@@ -100,7 +109,8 @@ namespace Test.Unit
             historyData.DataValues = backfillDataValues;
             Assert.True(state1.IsBackfilling);
             node = new HistoryReadNode(HistoryReadType.BackfillData, new NodeId("state1")) { Completed = true };
-            historyDataHandler.Invoke(backfillReader, new object[] { historyData, node, null });
+            node.LastResult = historyData;
+            historyDataHandler.Invoke(backfillReader, new object[] { node });
             Assert.Equal(100, node.TotalRead);
             Assert.Equal(new TimeRange(start.AddSeconds(-99), start.AddSeconds(99)), state1.SourceExtractedRange);
             Assert.False(state1.IsBackfilling);
@@ -114,7 +124,8 @@ namespace Test.Unit
             state1.RestartHistory();
             queue.Clear();
             node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1")) { Completed = false };
-            historyDataHandler.Invoke(reader, new object[] { historyData, node, null });
+            node.LastResult = historyData;
+            historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(100, node.TotalRead);
             Assert.Equal(start.AddSeconds(99), state1.SourceExtractedRange.Last);
             Assert.True(state1.IsFrontfilling);
@@ -129,7 +140,8 @@ namespace Test.Unit
             // at the extractor before the history data was parsed. This is an edge-case, but a potential lost datapoint 
             state1.UpdateFromStream(new[] { new UADataPoint(start.AddSeconds(100), "state1", 1.0) });
             node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1")) { Completed = true };
-            historyDataHandler.Invoke(reader, new object[] { historyData, node, null });
+            node.LastResult = historyData;
+            historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(100, node.TotalRead);
             Assert.False(state1.IsFrontfilling);
             Assert.Equal(101, queue.Count);
@@ -141,7 +153,8 @@ namespace Test.Unit
             queue.Clear();
             cfg.IgnoreContinuationPoints = true;
             node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1")) { Completed = true };
-            historyDataHandler.Invoke(reader, new object[] { historyData, node, null });
+            node.LastResult = historyData;
+            historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(100, node.TotalRead);
             Assert.True(state1.IsFrontfilling);
             Assert.Equal(100, queue.Count);
@@ -149,7 +162,8 @@ namespace Test.Unit
 
             historyData.DataValues = null;
             node = new HistoryReadNode(HistoryReadType.FrontfillData, new NodeId("state1")) { Completed = false };
-            historyDataHandler.Invoke(reader, new object[] { historyData, node, null });
+            node.LastResult = historyData;
+            historyDataHandler.Invoke(reader, new object[] { node });
             Assert.Equal(0, node.TotalRead);
             Assert.False(state1.IsFrontfilling);
         }
@@ -162,8 +176,15 @@ namespace Test.Unit
                 Backfill = true
             };
 
-            using var reader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.FrontfillEvents);
-            using var backfillReader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.BackfillEvents);
+            using var throttler = new TaskThrottler(2, false);
+            var cps = new BlockingResourceCounter(1000);
+
+            var dummyState = new UAHistoryExtractionState(tester.Client, new NodeId("test"), true, true);
+
+            using var reader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.FrontfillEvents,
+                throttler, cps, new[] { dummyState }, tester.Source.Token);
+            using var backfillReader = new HistoryScheduler(tester.Client, extractor, cfg, HistoryReadType.BackfillEvents,
+                throttler, cps, new[] { dummyState }, tester.Source.Token);
 
             var state = EventUtils.PopulateEventData(extractor, tester, false);
 
@@ -181,7 +202,7 @@ namespace Test.Unit
             // Test null historydata
             details.Filter = filter;
             var node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter")) { Completed = true };
-            historyEventHandler.Invoke(reader, new object[] { null, node, details });
+            historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(0, node.TotalRead);
             Assert.False(state.IsFrontfilling);
             state.RestartHistory();
@@ -193,18 +214,21 @@ namespace Test.Unit
                 .Select(values => new HistoryEventFieldList { EventFields = values }));
             var historyEvents = new HistoryEvent { Events = frontfillEvents };
             node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter")) { Completed = true };
-            historyEventHandler.Invoke(reader, new object[] { historyEvents, node, null });
+            node.LastResult = historyEvents;
+            historyEventHandler.Invoke(reader, new object[] { node, null });
             Assert.Equal(0, node.TotalRead);
 
             // Test bad emitter
             historyEvents.Events = frontfillEvents;
             node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("bademitter")) { Completed = true };
-            historyEventHandler.Invoke(reader, new object[] { historyEvents, node, details });
+            node.LastResult = historyEvents;
+            historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(0, node.TotalRead);
 
             // Test frontfill OK
             node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter")) { Completed = true };
-            historyEventHandler.Invoke(reader, new object[] { historyEvents, node, details });
+            node.LastResult = historyEvents;
+            historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(100, node.TotalRead);
             Assert.Equal(start.AddSeconds(99), state.SourceExtractedRange.Last);
             Assert.False(state.IsFrontfilling);
@@ -217,7 +241,8 @@ namespace Test.Unit
             historyEvents.Events = backfillEvents;
             Assert.True(state.IsBackfilling);
             node = new HistoryReadNode(HistoryReadType.BackfillEvents, new NodeId("emitter")) { Completed = true };
-            historyEventHandler.Invoke(backfillReader, new object[] { historyEvents, node, details });
+            node.LastResult = historyEvents;
+            historyEventHandler.Invoke(backfillReader, new object[] { node, details });
             Assert.Equal(100, node.TotalRead);
             Assert.Equal(new TimeRange(start.AddSeconds(-99), start.AddSeconds(99)), state.SourceExtractedRange);
             Assert.False(state.IsBackfilling);
@@ -238,7 +263,8 @@ namespace Test.Unit
             state.RestartHistory();
             queue.Clear();
             node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter")) { Completed = false };
-            historyEventHandler.Invoke(reader, new object[] { historyEvents, node, details });
+            node.LastResult = historyEvents;
+            historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(0, node.TotalRead);
             Assert.Equal(start.AddSeconds(99), state.SourceExtractedRange.Last);
             Assert.True(state.IsFrontfilling);
@@ -251,7 +277,8 @@ namespace Test.Unit
             queue.Clear();
             state.UpdateFromStream(new UAEvent { Time = start.AddSeconds(100) });
             node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter")) { Completed = true };
-            historyEventHandler.Invoke(reader, new object[] { historyEvents, node, details });
+            node.LastResult = historyEvents;
+            historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(100, node.TotalRead);
             Assert.False(state.IsFrontfilling);
             Assert.Equal(101, queue.Count);
@@ -263,7 +290,8 @@ namespace Test.Unit
             queue.Clear();
             cfg.IgnoreContinuationPoints = true;
             node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter")) { Completed = true };
-            historyEventHandler.Invoke(reader, new object[] { historyEvents, node, details });
+            node.LastResult = historyEvents;
+            historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(100, node.TotalRead);
             Assert.True(state.IsFrontfilling);
             Assert.Equal(100, queue.Count);
@@ -271,7 +299,8 @@ namespace Test.Unit
 
             historyEvents.Events = null;
             node = new HistoryReadNode(HistoryReadType.FrontfillEvents, new NodeId("emitter")) { Completed = false };
-            historyEventHandler.Invoke(reader, new object[] { historyEvents, node, details });
+            node.LastResult = historyEvents;
+            historyEventHandler.Invoke(reader, new object[] { node, details });
             Assert.Equal(0, node.TotalRead);
             Assert.False(state.IsFrontfilling);
         }
@@ -286,7 +315,7 @@ namespace Test.Unit
                 Data = true
             };
 
-            var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -358,15 +387,15 @@ namespace Test.Unit
             }
 
             // Test read without using continuation points
-            // We expect this to give the exact same results as normal chunking, except we get one extra read.
+            // We expect this to give one duplicate on each read, and one extra read at the end.
             cfg.IgnoreContinuationPoints = true;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
             await Task.WhenAny(reader.FrontfillData(states), Task.Delay(10000));
-            Assert.Equal(3500, queue.Count);
+            Assert.Equal(3542, queue.Count);
             queue.Clear();
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 6));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 7));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3542));
             foreach (var state in states)
             {
                 Assert.False(state.IsFrontfilling);
@@ -383,7 +412,7 @@ namespace Test.Unit
                 Backfill = true
             };
 
-            var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -454,15 +483,15 @@ namespace Test.Unit
             }
 
             // Test read without using continuation points
-            // We expect this to give the exact same results as normal chunking, except we get one extra read.
+            // We expect this to give duplicates on each read and one extra read at the end.
             cfg.IgnoreContinuationPoints = true;
             foreach (var state in states) state.RestartHistory();
             CommonTestUtils.ResetMetricValues("opcua_backfill_data_count", "opcua_backfill_data_points");
             await Task.WhenAny(reader.BackfillData(states), Task.Delay(10000));
-            Assert.Equal(3500, queue.Count);
+            Assert.Equal(3542, queue.Count);
             queue.Clear();
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 6));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_points", 3500));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_count", 7));
+            Assert.True(CommonTestUtils.TestMetricValue("opcua_backfill_data_points", 3542));
             foreach (var state in states)
             {
                 Assert.False(state.IsBackfilling);
@@ -480,7 +509,7 @@ namespace Test.Unit
                 Data = true
             };
 
-            var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
 
             var states = new[]
             {
@@ -579,7 +608,7 @@ namespace Test.Unit
                 Backfill = true,
             };
 
-            var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
 
             var states = new[]
             {
@@ -680,7 +709,7 @@ namespace Test.Unit
                 Granularity = granularity
             };
 
-            var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
+            using var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -718,40 +747,6 @@ namespace Test.Unit
 
             Assert.True(CommonTestUtils.TestMetricValue("opcua_history_reads", expectedReads));
         }
-        [Fact(Timeout = 10000)]
-        public async Task TestTerminate()
-        {
-            using var extractor = tester.BuildExtractor();
-
-            var cfg = new HistoryConfig
-            {
-                Backfill = true
-            };
-
-            var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
-
-            // There is no good way to test if it actually terminates, but we can do a superficial test of the terminate method itself.
-            Assert.True(await reader.Terminate(tester.Source.Token, 0));
-
-            // Set the running field
-            reader.GetType()
-                .GetField("running", BindingFlags.NonPublic | BindingFlags.Instance)
-                .SetValue(reader, 1);
-            // Try to terminate with 0 timeout.
-            Assert.False(await reader.Terminate(tester.Source.Token, 0));
-
-            var waitTask = reader.Terminate(tester.Source.Token, 5);
-            await Task.Delay(100);
-            var source = (CancellationTokenSource)reader.GetType()
-                .GetField("source", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(reader);
-            Assert.True(source.IsCancellationRequested);
-            reader.GetType()
-                .GetField("running", BindingFlags.NonPublic | BindingFlags.Instance)
-                .SetValue(reader, 0);
-
-            Assert.True(await waitTask);
-        }
 
         [Fact(Timeout = 10000)]
         public async Task TestHistoryThrottling()
@@ -764,7 +759,6 @@ namespace Test.Unit
                 Data = true
             };
 
-            var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token);
 
             var dt = new UADataType(DataTypeIds.Double);
             var dt2 = new UADataType(DataTypeIds.String);
@@ -799,39 +793,46 @@ namespace Test.Unit
             {
                 MaxNodeParallelism = 1,
             };
+            using (var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token))
+            {
+                await reader.FrontfillData(states);
+                Assert.Equal(3500, queue.Count);
+                // 4 since nodes may not be read in parallel
+                Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 4));
+                Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
 
-            await reader.FrontfillData(states);
-            Assert.Equal(3500, queue.Count);
-            // 4 since nodes may not be read in parallel
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 4));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
+                // Similar for 2 parallelism
+                cfg.Throttling.MaxNodeParallelism = 2;
+            }
 
-            // Similar for 2 parallelism
-            cfg.Throttling.MaxNodeParallelism = 2;
-            queue.Clear();
-            foreach (var state in states) state.RestartHistory();
-            CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
-            await reader.FrontfillData(states);
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
 
-            // Task throttling should have no effect on metrics, since this is about the number of actual parallel tasks in total
-            cfg.Throttling.MaxParallelism = 2;
-            queue.Clear();
-            foreach (var state in states) state.RestartHistory();
-            CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
-            await reader.FrontfillData(states);
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
+            using (var reader = new HistoryReader(tester.Client, extractor, cfg, tester.Source.Token))
+            {
+                queue.Clear();
+                foreach (var state in states) state.RestartHistory();
+                CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
+                await reader.FrontfillData(states);
+                Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
+                Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
 
-            // Expect this to not cause issues
-            cfg.Throttling.MaxPerMinute = 2;
-            queue.Clear();
-            foreach (var state in states) state.RestartHistory();
-            CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
-            await reader.FrontfillData(states);
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
-            Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
+                // Task throttling should have no effect on metrics, since this is about the number of actual parallel tasks in total
+                cfg.Throttling.MaxParallelism = 2;
+                queue.Clear();
+                foreach (var state in states) state.RestartHistory();
+                CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
+                await reader.FrontfillData(states);
+                Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
+                Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
+
+                // Expect this to not cause issues
+                cfg.Throttling.MaxPerMinute = 2;
+                queue.Clear();
+                foreach (var state in states) state.RestartHistory();
+                CommonTestUtils.ResetMetricValues("opcua_frontfill_data_count", "opcua_frontfill_data_points");
+                await reader.FrontfillData(states);
+                Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_count", 2));
+                Assert.True(CommonTestUtils.TestMetricValue("opcua_frontfill_data_points", 3500));
+            }
         }
     }
 }

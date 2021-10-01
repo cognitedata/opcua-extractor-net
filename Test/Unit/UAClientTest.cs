@@ -820,28 +820,27 @@ namespace Test.Unit
 
             try
             {
-                var results = tester.Client.DoHistoryRead(req);
+                tester.Client.DoHistoryRead(req);
 
-                Assert.Equal(3, results.Count());
                 Assert.True(CommonTestUtils.TestMetricValue("opcua_history_reads", 1));
 
-                foreach (var result in results)
+                foreach (var node in nodes)
                 {
-                    var historyData = result.RawData as HistoryData;
+                    var result = node.LastResult;
+                    var historyData = result as HistoryData;
                     Assert.Equal(600, historyData.DataValues.Count);
-                    Assert.False(result.Node.Completed);
-                    Assert.NotNull(result.Node.ContinuationPoint);
+                    Assert.False(node.Completed);
+                    Assert.NotNull(node.ContinuationPoint);
                 }
 
-                results = tester.Client.DoHistoryRead(req);
+                tester.Client.DoHistoryRead(req);
 
-                Assert.Equal(3, results.Count());
-
-                foreach (var result in results)
+                foreach (var node in nodes)
                 {
-                    var historyData = result.RawData as HistoryData;
+                    var result = node.LastResult;
+                    var historyData = result as HistoryData;
                     Assert.Equal(400, historyData.DataValues.Count);
-                    Assert.True(result.Node.Completed);
+                    Assert.True(node.Completed);
                 }
             }
             finally

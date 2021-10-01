@@ -1016,14 +1016,14 @@ namespace Cognite.OpcUa.Config
             {
                 var chunk = historizingStates.Take(chunkSize);
                 var historyParams = new HistoryReadParams(
-                    chunk.Select(state => new HistoryReadNode(HistoryReadType.FrontfillData, state)), details);
+                    chunk.Select(state => new HistoryReadNode(HistoryReadType.FrontfillData, state)).ToList(), details);
                 try
                 {
-                    var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
+                    await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
 
-                    foreach (var (node, rawData) in result)
+                    foreach (var node in historyParams.Items)
                     {
-                        var data = ToolUtil.ReadResultToDataPoints(rawData, stateMap[node.Id], this);
+                        var data = ToolUtil.ReadResultToDataPoints(node.LastResult, stateMap[node.Id], this);
                         // If we want to do analysis of how best to read history, we need some number of datapoints
                         // If this number is too low, it typically means that there is no real history to read.
                         // Some servers write a single datapoint to history on startup, having a decently large number here
@@ -1120,9 +1120,9 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                var result = await ToolUtil.RunWithTimeout(() => DoHistoryRead(backfillParams), 10);
+                await ToolUtil.RunWithTimeout(() => DoHistoryRead(backfillParams), 10);
 
-                var data = ToolUtil.ReadResultToDataPoints(result.First().RawData, stateMap[result.First().Node.Id], this);
+                var data = ToolUtil.ReadResultToDataPoints(nodeWithData.LastResult, stateMap[nodeWithData.Id], this);
 
                 log.Information("Last ts: {ts}, {now}", data.First().Timestamp, DateTime.UtcNow);
 

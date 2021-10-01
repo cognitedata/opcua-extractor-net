@@ -43,7 +43,7 @@ namespace Cognite.OpcUa.History
     }
 
 
-    public class HistoryScheduler2 : SharedResourceScheduler<HistoryReadNode>
+    public class HistoryScheduler : SharedResourceScheduler<HistoryReadNode>
     {
         private readonly UAClient uaClient;
         private readonly UAExtractor extractor;
@@ -52,7 +52,7 @@ namespace Cognite.OpcUa.History
         private readonly HistoryReadType type;
         private readonly DateTime historyStartTime;
         private readonly TimeSpan historyGranularity;
-        private readonly ILogger log = Log.Logger.ForContext<HistoryScheduler2>();
+        private readonly ILogger log = Log.Logger.ForContext<HistoryScheduler>();
 
         private bool Frontfill => type == HistoryReadType.FrontfillData || type == HistoryReadType.FrontfillEvents;
         private bool Data => type == HistoryReadType.FrontfillData || type == HistoryReadType.BackfillData;
@@ -62,8 +62,11 @@ namespace Cognite.OpcUa.History
         private HistoryMetrics metrics;
         private int chunkSize;
 
+        private int nodeCount;
 
-        public HistoryScheduler2(
+        private readonly List<Exception> exceptions = new List<Exception>();
+
+        public HistoryScheduler(
             UAClient uaClient,
             UAExtractor extractor,
             HistoryConfig config,
@@ -73,7 +76,7 @@ namespace Cognite.OpcUa.History
             IEnumerable<UAHistoryExtractionState> states,
             CancellationToken token)
             : base(
-                  states.Select(st => new HistoryReadNode(type, st)),
+                  GetNodes(states, Log.Logger.ForContext<HistoryScheduler>(), type, config.StartTime, out var count),
                   throttler,
                   (type == HistoryReadType.FrontfillData || type == HistoryReadType.BackfillData)
                     ? config.DataNodesChunk
@@ -87,12 +90,38 @@ namespace Cognite.OpcUa.History
             this.type = type;
             chunkSize = Data ? config.DataNodesChunk : config.EventNodesChunk;
 
+            nodeCount = count;
+
             historyStartTime = CogniteTime.FromUnixTimeMilliseconds(config.StartTime);
             historyGranularity = config.Granularity <= 0
                 ? TimeSpan.Zero
                 : TimeSpan.FromSeconds(config.Granularity);
 
             metrics = new HistoryMetrics(type);
+        }
+
+        private static IEnumerable<HistoryReadNode> GetNodes(
+            IEnumerable<UAHistoryExtractionState> states,
+            ILogger log,
+            HistoryReadType type,
+            long historyStart,
+            out int count)
+        {
+            var nodes = states.Select(state => new HistoryReadNode(type, state)).ToList();
+
+            var startTime = CogniteTime.FromUnixTimeMilliseconds(historyStart);
+            if (type == HistoryReadType.BackfillData || type == HistoryReadType.BackfillEvents)
+            {
+                var toTerminate = nodes.Where(node => node.Time <= startTime).ToList();
+                nodes = nodes.Where(node => node.Time > startTime).ToList();
+                foreach (var node in toTerminate)
+                {
+                    node.State.UpdateFromBackfill(CogniteTime.DateTimeEpoch, true);
+                }
+                LogHistoryTermination(log, toTerminate, type);
+            }
+            count = nodes.Count;
+            return nodes;
         }
 
 
@@ -193,6 +222,20 @@ namespace Cognite.OpcUa.History
             return base.GetNextChunks(items, capacity, out newItems);
         }
 
+        public new async Task RunAsync()
+        {
+            log.Information("Begin reading history of type {type} for {cnt} nodes", type, nodeCount);
+            await base.RunAsync();
+            log.Information("Finish reading history of type {type} for {cnt} nodes. " +
+                "Took a total of {op} operations", type, nodeCount, numReads);
+            if (exceptions.Any())
+            {
+                throw new AggregateException(exceptions);
+            }
+        }
+
+
+
         #region results
 
         private void LogReadFailure(IChunk<HistoryReadNode> finishedRead)
@@ -203,7 +246,7 @@ namespace Cognite.OpcUa.History
             ExtractorUtils.LogException(log, finishedRead.Exception, "Critical failure in HistoryRead", "Failure in HistoryRead");
         }
 
-        private string GetResourceName()
+        private static string GetResourceName(HistoryReadType type)
         {
             switch (type)
             {
@@ -217,19 +260,20 @@ namespace Cognite.OpcUa.History
             throw new InvalidOperationException();
         }
 
-        private void LogHistoryTermination(List<HistoryReadNode> toTerminate)
+        private static void LogHistoryTermination(ILogger log, List<HistoryReadNode> toTerminate, HistoryReadType type)
         {
             if (!toTerminate.Any()) return;
-            string name = GetResourceName();
+            string name = GetResourceName(type);
             var builder = new StringBuilder();
             builder.AppendFormat("Finish reading {0}. Retrieved:", type);
+            bool frontfill = type == HistoryReadType.FrontfillData || type == HistoryReadType.FrontfillEvents;
             foreach (var node in toTerminate)
             {
                 builder.AppendFormat("\n    {0} {1} total for {2}. End is now at {3}",
                     node.TotalRead,
                     name,
                     node.State.Id,
-                    Frontfill ? node.State.SourceExtractedRange.Last : node.State.SourceExtractedRange.First);
+                    frontfill ? node.State.SourceExtractedRange.Last : node.State.SourceExtractedRange.First);
             }
             log.Debug(builder.ToString());
         }
@@ -244,6 +288,7 @@ namespace Cognite.OpcUa.History
             if (chunk.Exception != null)
             {
                 LogReadFailure(chunk);
+                exceptions.Add(chunk.Exception);
                 return Enumerable.Empty<HistoryReadNode>();
             }
 
@@ -266,23 +311,16 @@ namespace Cognite.OpcUa.History
                 metrics.NumItems.Inc(node.LastRead);
             }
 
-            if (config.IgnoreContinuationPoints && Data)
-            {
-                if (readChunk.Details is ReadRawModifiedDetails details)
-                {
-                    details.StartTime = details.StartTime.AddTicks(Frontfill ? 1 : -1);
-                }
-            }
-
             var toTerminate = chunk.Items.Where(node => node.Completed).ToList();
-            LogHistoryTermination(toTerminate);
+            LogHistoryTermination(log, toTerminate, type);
 
             return Enumerable.Empty<HistoryReadNode>();
         }
 
         protected override void OnIteration(int pending, int operations, int finished, int total)
         {
-            throw new NotImplementedException();
+            log.Debug("Read history of type {type}: {pend} pending, {op} total operations. {fin}/{tot}",
+                type, pending, operations, finished, total);
         }
 
 
