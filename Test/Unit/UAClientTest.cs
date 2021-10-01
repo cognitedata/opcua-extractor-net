@@ -802,7 +802,7 @@ namespace Test.Unit
             CommonTestUtils.ResetMetricValues("opcua_history_reads");
 
             var nodes = new[] { tester.Server.Ids.Custom.Array, tester.Server.Ids.Custom.MysteryVar, tester.Server.Ids.Base.StringVar }
-                .Select(id => new HistoryReadNode(HistoryReadType.FrontfillData, id));
+                .Select(id => new HistoryReadNode(HistoryReadType.FrontfillData, id)).ToList();
 
             var req = new HistoryReadParams(nodes,
                 new ReadRawModifiedDetails
@@ -827,6 +827,7 @@ namespace Test.Unit
                 foreach (var node in nodes)
                 {
                     var result = node.LastResult;
+                    Console.WriteLine($"{node.Id} {result}");
                     var historyData = result as HistoryData;
                     Assert.Equal(600, historyData.DataValues.Count);
                     Assert.False(node.Completed);
