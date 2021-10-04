@@ -43,24 +43,26 @@ namespace Test.Unit
             using var source = CancellationTokenSource.CreateLinkedTokenSource(tester.Source.Token);
 
             var loopTask = extractor.Looper.Run(
-                new Func<CancellationToken, Task>[] { token =>
+                new Func<CancellationToken, Task>[] { async token =>
                     {
                         synch1 = true;
-                        return Task.CompletedTask;
+                        await Task.Delay(100, token);
+                        Console.WriteLine("Terminate synch 1");
                     },
                     token =>
                     {
                         synch2 = true;
+                        Console.WriteLine("Terminate synch 2");
                         return Task.CompletedTask;
                     } });
 
             await CommonTestUtils.WaitForCondition(() => synch1 && synch2, 5);
 
-            await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 2, 5);
+            /* await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 2, 5);
 
-            extractor.Looper.Scheduler.TriggerTask("StoreState");
+            Assert.True(extractor.Looper.Scheduler.TryTriggerTask("StoreState"));
 
-            await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 4, 5);
+            await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 4, 5); */
 
             bool int1 = false, int2 = false;
 
@@ -92,7 +94,7 @@ namespace Test.Unit
 
             evt.Reset();
             // Try to schedule a failing task
-            extractor.Looper.Scheduler.ScheduleTask("Failing", async token =>
+            extractor.Looper.Scheduler.ScheduleTask("failing", async token =>
             {
                 await Task.Delay(100, token);
                 Console.Write("Throw exception");
@@ -100,12 +102,9 @@ namespace Test.Unit
             });
 
             await CommonTestUtils.WaitForCondition(() => loopTask.IsFaulted || loopTask.IsCompleted, 5);
-
-            Assert.Equal("SomeException", ExtractorUtils.GetRootExceptionOfType<ExtractorFailureException>(loopTask.Exception).Message);
-
-            loopTask = extractor.Looper.Run(Enumerable.Empty<Func<CancellationToken, Task>>());
-            source.Cancel();
-            await CommonTestUtils.WaitForCondition(() => loopTask.IsCanceled, 5);
+            var ex = loopTask.Exception.Flatten();
+            Assert.IsType<ExtractorFailureException>(ex.InnerException);
+            Assert.Equal("SomeException", ex.InnerException.Message);
         }
 
         private void InitPusherLoopTest(UAExtractor extractor, params DummyPusher[] pushers)
@@ -155,6 +154,8 @@ namespace Test.Unit
             var evts2 = pusher2.Events[new NodeId("id")] = new List<UAEvent>();
 
             var loopTask = extractor.Looper.Run(Enumerable.Empty<Func<CancellationToken, Task>>());
+
+            await extractor.Looper.WaitForNextPush(false);
 
             Assert.Empty(dps1);
             Assert.Empty(dps2);

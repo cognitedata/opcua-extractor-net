@@ -15,278 +15,193 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
+using Cognite.Extractor.Common;
 using Prometheus;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Runtime.ExceptionServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Cognite.OpcUa
 {
-    /// <summary>
-    /// Looper used to manage loops in the extractor.
-    /// </summary>
-    public sealed class Looper : IDisposable
+    public sealed class Looper
     {
         private readonly UAExtractor extractor;
         private readonly FullConfig config;
 
-        private bool nextPushFlag;
-        private bool restart;
+        public PeriodicScheduler Scheduler { get; }
 
-        private readonly object taskListLock = new object();
-        private readonly List<Task> tasks = new List<Task>();
         private readonly IEnumerable<IPusher> pushers;
         private readonly ILogger log = Log.Logger.ForContext(typeof(Looper));
-        private readonly ManualResetEvent triggerUpdateOperations = new ManualResetEvent(false);
-        private readonly ManualResetEvent triggerHistoryRestart = new ManualResetEvent(false);
-        private readonly ManualResetEvent triggerGrowTaskList = new ManualResetEvent(false);
-        private readonly ManualResetEvent triggerPush = new ManualResetEvent(false);
-        private readonly ManualResetEvent triggerStoreState = new ManualResetEvent(false);
-        private readonly ManualResetEvent triggerRebrowse = new ManualResetEvent(false);
+
+        private TaskCompletionSource<bool>? pushWaiterSource;
+        private bool restart;
+
+        private List<IPusher> failingPushers = new List<IPusher>();
+        private List<IPusher> passingPushers = new List<IPusher>();
 
         private static readonly Counter numPushes = Metrics.CreateCounter("opcua_num_pushes",
             "Increments by one after each push to destination systems");
 
-        public Looper(UAExtractor extractor, FullConfig config, IEnumerable<IPusher> pushers)
+        public Looper(PeriodicScheduler scheduler, UAExtractor extractor, FullConfig config, IEnumerable<IPusher> pushers)
         {
+            Scheduler = scheduler;
             this.extractor = extractor;
             this.config = config;
             this.pushers = pushers;
+            failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
+            passingPushers = pushers.Except(failingPushers).ToList();
         }
-        /// <summary>
-        /// Wait for the next push of data to CDF
-        /// </summary>
-        /// <param name="timeout">Timeout in 1/10th of a second</param>
-        public async Task WaitForNextPush(bool trigger = false, int timeout = 100)
+
+        private static TimeSpan ToTimespan(int t, bool allowZero, string unit)
         {
-            nextPushFlag = false;
-            if (trigger)
+            if (t < 0) return Timeout.InfiniteTimeSpan;
+            if (t == 0 && !allowZero) return Timeout.InfiniteTimeSpan;
+            switch (unit)
             {
-                TriggerPush();
+                case "s":
+                    return TimeSpan.FromSeconds(t);
+                case "ms":
+                    return TimeSpan.FromMilliseconds(t);
+                case "m":
+                    return TimeSpan.FromMinutes(t);
             }
-            int time = 0;
-            while (!nextPushFlag && time++ < timeout) await Task.Delay(100);
-            if (time >= timeout && !nextPushFlag)
-            {
-                throw new TimeoutException("Waiting for push timed out");
-            }
-            log.Debug("Waited {s} milliseconds for push", time * 100);
+            return TimeSpan.FromSeconds(t);
         }
-        /// <summary>
-        /// Trigger a push immediately, if one is not currently happening
-        /// </summary>
-        public void TriggerPush()
+
+        public Task Run(IEnumerable<Func<CancellationToken, Task>> synchTasks)
         {
-            triggerPush.Set();
+            Scheduler.SchedulePeriodicTask(nameof(Pushers), ToTimespan(config.Extraction.DataPushDelay, true, "ms"), Pushers, true);
+            Scheduler.SchedulePeriodicTask(nameof(ExtraTasks), Timeout.InfiniteTimeSpan, ExtraTasks, false);
+
+            foreach (var task in synchTasks)
+            {
+                Scheduler.ScheduleTask(null, task);
+            }
+            Scheduler.SchedulePeriodicTask(nameof(Rebrowse), ToTimespan(config.Extraction.AutoRebrowsePeriod, false, "m"), Rebrowse, false);
+            if (extractor.StateStorage != null)
+            {
+                Scheduler.SchedulePeriodicTask(nameof(StoreState), ToTimespan(config.StateStorage.Interval, false, "s"), StoreState, 
+                    config.StateStorage.Interval > 0);
+            }
+            Scheduler.SchedulePeriodicTask(nameof(HistoryRestart), ToTimespan(config.History.RestartPeriod, false, "s"), HistoryRestart, false);
+
+            return Scheduler.WaitForAll();
         }
+
         /// <summary>
         /// Schedule a restart of the extractor.
         /// </summary>
         public void Restart()
         {
             restart = true;
-            triggerUpdateOperations.Set();
+            Scheduler.TryTriggerTask(nameof(ExtraTasks));
         }
+
         /// <summary>
-        /// Schedule update in the update loop.
+        /// Wait for the next push of data to CDF
         /// </summary>
-        public void ScheduleUpdate()
+        /// <param name="timeout">Timeout in 1/10th of a second</param>
+        public async Task WaitForNextPush(bool trigger = false, int timeout = 100)
         {
-            triggerUpdateOperations.Set();
-        }
-        /// <summary>
-        /// Schedule a list of tasks in the main task loop.
-        /// </summary>
-        public void ScheduleTasks(IEnumerable<Task> newTasks)
-        {
-            lock (taskListLock)
+            pushWaiterSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (trigger)
             {
-                tasks.AddRange(newTasks);
+                Scheduler.TryTriggerTask(nameof(Pushers));
             }
-            triggerGrowTaskList.Set();
-        }
-        public void TriggerHistoryRestart()
-        {
-            triggerHistoryRestart.Set();
-        }
-        public void TriggerRebrowse()
-        {
-            triggerRebrowse.Set();
-        }
-        public void TriggerStoreState()
-        {
-            triggerStoreState.Set();
-        }
-        /// <summary>
-        /// Main task loop, terminates on any task failure or if all tasks are finished.
-        /// </summary>
-        /// <param name="synchTasks">Initial history tasks</param>
-        public async Task InitTaskLoop(IEnumerable<Task> synchTasks, CancellationToken token)
-        {
-            tasks.Clear();
-            tasks.Add(Task.Run(() => PushersLoop(token), token));
-            tasks.Add(Task.Run(() => ExtraTaskLoop(token), token));
-            tasks.AddRange(synchTasks);
+            var t = new Stopwatch();
+            t.Start();
+            var waitTask = pushWaiterSource.Task;
+            var task = await Task.WhenAny(waitTask, Task.Delay(timeout * 100));
+            pushWaiterSource = null;
+            if (task != waitTask) throw new TimeoutException("Waiting for push timed out");
+            t.Stop();
 
-            if (config.Extraction.AutoRebrowsePeriod > 0)
+            log.Debug("Waited {s} milliseconds for push", t.ElapsedMilliseconds);
+        }
+
+
+        private async Task Pushers(CancellationToken token)
+        {
+            if (token.IsCancellationRequested) return;
+            if (failingPushers.Any())
             {
-                tasks.Add(Task.Run(() => RebrowseLoop(token), CancellationToken.None));
+                var result = await Task.WhenAll(failingPushers.Select(pusher => pusher.TestConnection(config, token)));
+                var recovered = result.Select((res, idx) => (result: res, pusher: failingPushers.ElementAt(idx)))
+                    .Where(x => x.result == true).ToList();
+
+                if (recovered.Any())
+                {
+                    log.Information("Pushers {names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
+                }
+
+
+                if (recovered.Any(pair => !pair.pusher.Initialized))
+                {
+                    var tasks = new List<Task>();
+                    var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);
+                    foreach (var pusher in toInit)
+                    {
+                        var (nodes, timeseries) = ExtractorUtils.SortNodes(pusher.PendingNodes);
+                        var references = pusher.PendingReferences.ToList();
+                        pusher.PendingNodes.Clear();
+                        pusher.PendingReferences.Clear();
+                        pusher.NoInit = false;
+                        tasks.Add(extractor.PushNodes(nodes, timeseries, references, pusher, true));
+                    }
+
+                    await Task.WhenAll(tasks);
+                }
+                foreach (var pair in recovered)
+                {
+                    if (pair.pusher.Initialized)
+                    {
+                        pair.pusher.DataFailing = true;
+                        pair.pusher.EventsFailing = true;
+                        failingPushers.Remove(pair.pusher);
+                        passingPushers.Add(pair.pusher);
+                    }
+                }
             }
 
-            if (extractor.StateStorage != null && config.StateStorage.Interval > 0)
-            {
-                tasks.Add(Task.Run(() => StoreStateLoop(token), CancellationToken.None));
-            }
-            tasks.Add(Task.Run(() => HistoryRestartLoop(token), CancellationToken.None));
+            var results = await Task.WhenAll(
+                Task.Run(async () =>
+                    await extractor.Streamer.PushDataPoints(passingPushers, failingPushers, token), token),
+                Task.Run(async () => await extractor.Streamer.PushEvents(passingPushers, failingPushers, token), token));
 
-            tasks.Add(SafeWait(triggerGrowTaskList, Timeout.InfiniteTimeSpan, token));
-
-            Task? failedTask = null;
-
-            while (tasks.Any())
+            if (results.Any(res => res))
             {
                 try
                 {
-                    var terminated = await Task.WhenAny(tasks);
-                    if (terminated.IsFaulted)
-                    {
-                        ExtractorUtils.LogException(log, terminated.Exception,
-                            "Unexpected error in main task list",
-                            "Handled error in main task list");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    ExtractorUtils.LogException(log, ex, "Unexpected error in main task list", "Handled error in main task list");
-                }
-                lock (taskListLock)
-                {
-                    failedTask = tasks.FirstOrDefault(task => task.IsFaulted || task.IsCanceled);
-
-                    if (failedTask != null) break;
-
-                    var toRemove = tasks.Where(task => task.IsCompleted).ToList();
-                    foreach (var task in toRemove)
-                    {
-                        tasks.Remove(task);
-                    }
-
-                    if (triggerGrowTaskList.WaitOne(0))
-                    {
-                        triggerGrowTaskList.Reset();
-                        tasks.Add(SafeWait(triggerGrowTaskList, Timeout.InfiniteTimeSpan, token));
-                    }
-                }
+                    Scheduler.TryTriggerTask(nameof(HistoryRestart));
+                } catch { }
             }
 
-            if (token.IsCancellationRequested) throw new TaskCanceledException();
-            if (failedTask != null) ExceptionDispatchInfo.Capture(failedTask.Exception).Throw();
-        }
-        /// <summary>
-        /// Wait until the manual event is triggered, the token is canceled, or a timeout has occured.
-        /// </summary>
-        /// <param name="manual">Manual event</param>
-        /// <param name="delay">Maximum time to wait</param>
-        /// <param name="token">CancellationToken</param>
-        /// <returns>Task that terminates when the delay has passed, the event has triggered, or the token is cancelled.</returns>
-        private static Task SafeWait(EventWaitHandle manual, TimeSpan delay, CancellationToken token)
-        {
-            return Task.Run(() => WaitHandle.WaitAny(new[] { manual, token.WaitHandle }, delay));
-        }
-
-        /// <summary>
-        /// Main loop for pushing data and events to destinations.
-        /// </summary>
-        private async Task PushersLoop(CancellationToken token)
-        {
-            var failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
-            var passingPushers = pushers.Except(failingPushers).ToList();
-
-            while (!token.IsCancellationRequested)
+            var failedPushers = passingPushers.Where(pusher =>
+                pusher.DataFailing && extractor.Streamer.AllowData
+                || pusher.EventsFailing && extractor.Streamer.AllowEvents
+                || !pusher.Initialized).ToList();
+            foreach (var pusher in failedPushers)
             {
-                if (failingPushers.Any())
-                {
-                    var result = await Task.WhenAll(failingPushers.Select(pusher => pusher.TestConnection(config, token)));
-                    var recovered = result.Select((res, idx) => (result: res, pusher: failingPushers.ElementAt(idx)))
-                        .Where(x => x.result == true).ToList();
-
-                    if (recovered.Any())
-                    {
-                        log.Information("Pushers {names} recovered", string.Join(", ", recovered.Select(val => val.pusher.GetType())));
-                    }
-
-
-                    if (recovered.Any(pair => !pair.pusher.Initialized))
-                    {
-                        var tasks = new List<Task>();
-                        var toInit = recovered.Select(pair => pair.pusher).Where(pusher => !pusher.Initialized);
-                        foreach (var pusher in toInit)
-                        {
-                            var (nodes, timeseries) = ExtractorUtils.SortNodes(pusher.PendingNodes);
-                            var references = pusher.PendingReferences.ToList();
-                            pusher.PendingNodes.Clear();
-                            pusher.PendingReferences.Clear();
-                            pusher.NoInit = false;
-                            tasks.Add(extractor.PushNodes(nodes, timeseries, references, pusher, true));
-                        }
-
-                        await Task.WhenAll(tasks);
-                    }
-                    foreach (var pair in recovered)
-                    {
-                        if (pair.pusher.Initialized)
-                        {
-                            pair.pusher.DataFailing = true;
-                            pair.pusher.EventsFailing = true;
-                            failingPushers.Remove(pair.pusher);
-                            passingPushers.Add(pair.pusher);
-                        }
-                    }
-                }
-
-                var waitTask = SafeWait(triggerPush, config.Extraction.DataPushDelay < 0
-                    ? Timeout.InfiniteTimeSpan : TimeSpan.FromMilliseconds(config.Extraction.DataPushDelay), token);
-
-                var results = await Task.WhenAll(
-                    Task.Run(async () =>
-                        await extractor.Streamer.PushDataPoints(passingPushers, failingPushers, token), token),
-                    Task.Run(async () => await extractor.Streamer.PushEvents(passingPushers, failingPushers, token), token));
-
-                if (results.Any(res => res))
-                {
-                    triggerHistoryRestart.Set();
-                }
-
-                var failedPushers = passingPushers.Where(pusher =>
-                    pusher.DataFailing && extractor.Streamer.AllowData
-                    || pusher.EventsFailing && extractor.Streamer.AllowEvents
-                    || !pusher.Initialized).ToList();
-                foreach (var pusher in failedPushers)
-                {
-                    pusher.DataFailing = extractor.Streamer.AllowData;
-                    pusher.EventsFailing = extractor.Streamer.AllowEvents;
-                    failingPushers.Add(pusher);
-                    passingPushers.Remove(pusher);
-                }
-
-                numPushes.Inc();
-
-                await waitTask;
-                triggerPush.Reset();
-                nextPushFlag = true;
+                pusher.DataFailing = extractor.Streamer.AllowData;
+                pusher.EventsFailing = extractor.Streamer.AllowEvents;
+                failingPushers.Add(pusher);
+                passingPushers.Remove(pusher);
             }
+
+            numPushes.Inc();
+
+            if (pushWaiterSource != null) pushWaiterSource.TrySetResult(true);
         }
-        /// <summary>
-        /// Store the current state to the state store.
-        /// </summary>
-        /// <param name="token"></param>
-        /// <returns></returns>
+
+
         public async Task StoreState(CancellationToken token)
         {
+            if (token.IsCancellationRequested) return;
             if (extractor.StateStorage == null) return;
             await Task.WhenAll(
                 extractor.StateStorage.StoreExtractionState(extractor.State.NodeStates
@@ -295,103 +210,56 @@ namespace Cognite.OpcUa
                     .Where(state => state.FrontfillEnabled), config.StateStorage.EventStore, token)
             );
         }
-        /// <summary>
-        /// Loop for periodically storing extraction states to litedb.
-        /// </summary>
-        private async Task StoreStateLoop(CancellationToken token)
-        {
-            var delay = TimeSpan.FromSeconds(config.StateStorage.Interval);
-            while (!token.IsCancellationRequested)
-            {
-                var waitTask = SafeWait(triggerStoreState, delay, token);
-                await StoreState(token);
-                await waitTask;
-                triggerStoreState.Reset();
-            }
-        }
-        /// <summary>
-        /// Loop for periodically browsing the UA hierarchy and adding subscriptions to any new nodes.
-        /// </summary>
-        private async Task RebrowseLoop(CancellationToken token)
-        {
-            var delay = TimeSpan.FromMinutes(config.Extraction.AutoRebrowsePeriod);
-            await SafeWait(triggerRebrowse, delay, token);
-            while (!token.IsCancellationRequested)
-            {
-                var waitTask = SafeWait(triggerRebrowse, delay, token);
-                await extractor.Rebrowse();
-                await waitTask;
-                triggerRebrowse.Reset();
-            }
-        }
-        /// <summary>
-        /// Waits for triggerUpdateOperations to fire, then executes all the tasks in the queue.
-        /// </summary>
-        private async Task ExtraTaskLoop(CancellationToken token)
-        {
-            while (!token.IsCancellationRequested)
-            {
-                await SafeWait(triggerUpdateOperations, Timeout.InfiniteTimeSpan, token);
-                triggerUpdateOperations.Reset();
-                if (token.IsCancellationRequested) break;
-                var newTasks = new List<Task>();
 
-                bool restarted = false;
-                if (restart)
-                {
-                    restarted = true;
-                    newTasks.Add(extractor.FinishExtractorRestart());
-                }
-                else
-                {
-                    newTasks.Add(extractor.PushExtraNodes());
-                }
-                await Task.WhenAll(newTasks);
-                if (restarted)
-                {
-                    restart = false;
-                }
+        private async Task Rebrowse(CancellationToken token)
+        {
+            if (token.IsCancellationRequested) return;
+            await extractor.Rebrowse();
+        }
+
+        private async Task ExtraTasks(CancellationToken token)
+        {
+            if (token.IsCancellationRequested) return;
+            var newTasks = new List<Task>();
+
+            bool restarted = false;
+            if (restart)
+            {
+                restarted = true;
+                newTasks.Add(extractor.FinishExtractorRestart());
+            }
+            else
+            {
+                newTasks.Add(extractor.PushExtraNodes());
+            }
+            await Task.WhenAll(newTasks);
+            if (restarted)
+            {
+                restart = false;
             }
         }
 
-        private async Task HistoryRestartLoop(CancellationToken token)
+        private async Task HistoryRestart(CancellationToken token)
         {
-            var delay = config.History.RestartPeriod > 0 ? TimeSpan.FromSeconds(config.History.RestartPeriod) : Timeout.InfiniteTimeSpan;
-            await SafeWait(triggerHistoryRestart, delay, token);
-            while (!token.IsCancellationRequested)
+            if (token.IsCancellationRequested) return;
+            log.Information("Restarting history...");
+            bool success = await extractor.TerminateHistory(30);
+            if (!success) throw new ExtractorFailureException("Failed to terminate history");
+            if (config.History.Enabled && config.History.Data)
             {
-                triggerHistoryRestart.Reset();
-                var waitTask = SafeWait(triggerHistoryRestart, delay, token);
-                log.Information("Restarting history...");
-                bool success = await extractor.TerminateHistory(30);
-                if (!success) throw new ExtractorFailureException("Failed to terminate history");
-                if (config.History.Enabled && config.History.Data)
+                foreach (var state in extractor.State.NodeStates.Where(state => state.FrontfillEnabled))
                 {
-                    foreach (var state in extractor.State.NodeStates.Where(state => state.FrontfillEnabled))
-                    {
-                        state.RestartHistory();
-                    }
+                    state.RestartHistory();
                 }
-                if (config.Events.History && config.Events.Enabled)
-                {
-                    foreach (var state in extractor.State.EmitterStates.Where(state => state.FrontfillEnabled))
-                    {
-                        state.RestartHistory();
-                    }
-                }
-                await extractor.RestartHistory();
-                await waitTask;
             }
+            if (config.Events.History && config.Events.Enabled)
+            {
+                foreach (var state in extractor.State.EmitterStates.Where(state => state.FrontfillEnabled))
+                {
+                    state.RestartHistory();
+                }
+            }
+            await extractor.RestartHistory();
         }
-        public void Dispose()
-        {
-            triggerUpdateOperations?.Dispose();
-            triggerHistoryRestart?.Dispose();
-            triggerGrowTaskList?.Dispose();
-            triggerPush?.Dispose();
-            triggerStoreState?.Dispose();
-            triggerRebrowse?.Dispose();
-        }
-
     }
 }

@@ -75,7 +75,7 @@ namespace Cognite.OpcUa
             lock (dataPointMutex)
             {
                 dataPointQueue.Enqueue(dp);
-                if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TriggerTask("Pushers");
+                if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
             }
         }
         /// <summary>
@@ -88,7 +88,7 @@ namespace Cognite.OpcUa
             lock (dataPointMutex)
             {
                 foreach (var dp in dps) dataPointQueue.Enqueue(dp);
-                if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TriggerTask("Pushers");
+                if (dataPointQueue.Count >= maxDpCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
 
             }
         }
@@ -101,7 +101,7 @@ namespace Cognite.OpcUa
             lock (eventMutex)
             {
                 eventQueue.Enqueue(evt);
-                if (eventQueue.Count >= maxEventCount) extractor.Looper.Scheduler.TriggerTask("Pushers");
+                if (eventQueue.Count >= maxEventCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
             }
         }
         /// <summary>
@@ -114,7 +114,7 @@ namespace Cognite.OpcUa
             lock (eventMutex)
             {
                 foreach (var evt in events) eventQueue.Enqueue(evt);
-                if (eventQueue.Count >= maxEventCount) extractor.Looper.Scheduler.TriggerTask("Pushers");
+                if (eventQueue.Count >= maxEventCount) extractor.Looper.Scheduler.TryTriggerTask("Pushers");
             }
         }
         /// <summary>

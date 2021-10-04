@@ -45,7 +45,7 @@ namespace Cognite.OpcUa
         private readonly UAClient uaClient;
         private readonly FullConfig config;
         public FullConfig FullConfig => config;
-        public Looper2 Looper { get; }
+        public Looper Looper { get; }
         public FailureBuffer? FailureBuffer { get; }
         public IExtractionStateStore? StateStorage { get; }
         public State State { get; }
@@ -139,7 +139,7 @@ namespace Cognite.OpcUa
                 pusher.Extractor = this;
             }
             scheduler = new PeriodicScheduler(source.Token);
-            Looper = new Looper2(scheduler, this, config, pushers);
+            Looper = new Looper(scheduler, this, config, pushers);
         }
 
         /// <summary>
@@ -282,10 +282,9 @@ namespace Cognite.OpcUa
 
             var synchTasks = await RunMapping(RootNodes, true, false);
 
-            int idx = 0;
             foreach (var task in synchTasks)
             {
-                Looper.Scheduler.ScheduleTask($"RestartHistory{idx++}", task);
+                Looper.Scheduler.ScheduleTask(null, task);
             }
             Started = true;
             log.Information("Successfully restarted extractor");
@@ -305,10 +304,9 @@ namespace Cognite.OpcUa
                 }
                 var historyTasks = await RunMapping(nodesToBrowse.Distinct(), true, false);
 
-                int idx = 0;
                 foreach (var task in historyTasks)
                 {
-                    Looper.Scheduler.ScheduleTask($"ExtraHistory{idx++}", task);
+                    Looper.Scheduler.ScheduleTask(null, task);
                 }
             }
         }
@@ -443,10 +441,10 @@ namespace Cognite.OpcUa
             var historyTasks = await RunMapping(RootNodes,
                 !config.Extraction.Update.AnyUpdate && !config.Extraction.Relationships.Enabled,
                 false);
-            int idx = 0;
+
             foreach (var task in historyTasks)
             {
-                Looper.Scheduler.ScheduleTask($"RebrowseHistory{idx++}", task);
+                Looper.Scheduler.ScheduleTask(null, task);
             }
         }
 
@@ -1027,7 +1025,7 @@ namespace Cognite.OpcUa
                         extraNodesToBrowse.Enqueue(id);
                     }
                 }
-                Looper.Scheduler.TriggerTask("ExtraTasks");
+                Looper.Scheduler.TryTriggerTask("ExtraTasks");
                 return;
             }
 
@@ -1062,7 +1060,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            Looper.Scheduler.TriggerTask("ExtraTasks");
+            Looper.Scheduler.TryTriggerTask("ExtraTasks");
         }
         #endregion
 

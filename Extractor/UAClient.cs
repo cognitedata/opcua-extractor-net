@@ -1056,7 +1056,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Return MessageContext, used for serialization
         /// </summary>
-        public ServiceMessageContext? MessageContext => Session?.MessageContext;
+        public IServiceMessageContext? MessageContext => Session?.MessageContext;
         /// <summary>
         /// Fetch event fields from the server and store them on the client
         /// </summary>
