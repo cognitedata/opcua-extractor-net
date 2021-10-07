@@ -30,10 +30,12 @@ namespace Server
         private ApplicationConfiguration fullConfig;
 
         public bool AllowAnonymous { get; set; } = true;
+        private readonly string mqttUrl;
 
-        public TestServer(IEnumerable<PredefinedSetup> setups)
+        public TestServer(IEnumerable<PredefinedSetup> setups, string mqttUrl)
         {
             this.setups = setups;
+            this.mqttUrl = mqttUrl;
         }
 
         protected override void OnServerStarting(ApplicationConfiguration configuration)
@@ -44,6 +46,11 @@ namespace Server
                 ConnectInterval = 1000,
                 Clients = new ReverseConnectClientCollection()
             };
+
+            Utils.SetTraceOutput(Utils.TraceOutput.DebugAndFile);
+            Utils.SetTraceMask(Utils.TraceMasks.All);
+            Utils.SetTraceLog("./logs/opcua-server.log", true);
+            Utils.Trace("Test");
 
             base.OnServerStarting(configuration);
             fullConfig = configuration;
@@ -80,7 +87,7 @@ namespace Server
 
         protected override MasterNodeManager CreateMasterNodeManager(IServerInternal server, ApplicationConfiguration configuration)
         {
-            custom = new TestNodeManager(server, configuration, setups);
+            custom = new TestNodeManager(server, configuration, setups, mqttUrl);
             var nodeManagers = new List<INodeManager> { custom };
             // create the custom node managers.
 

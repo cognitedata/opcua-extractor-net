@@ -23,6 +23,8 @@ namespace Server
         public NodeIdReference Ids { get; }
         private readonly ILogger log = Log.Logger.ForContext(typeof(TestNodeManager));
 
+        private PubSubManager pubSub;
+
         public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration)
             : base(server, configuration, "opc.tcp://test.localhost")
         {
@@ -32,10 +34,14 @@ namespace Server
             Ids = new NodeIdReference();
         }
 
-        public TestNodeManager(IServerInternal server, ApplicationConfiguration configuration, IEnumerable<PredefinedSetup> predefinedNodes) :
+        public TestNodeManager(IServerInternal server,
+            ApplicationConfiguration configuration,
+            IEnumerable<PredefinedSetup> predefinedNodes,
+            string mqttUrl) :
             this(server, configuration)
         {
             this.predefinedNodes = predefinedNodes;
+            pubSub = new PubSubManager(mqttUrl);
         }
         #region access
         public void UpdateNode(NodeId id, object value, DateTime? timestamp = null)
@@ -43,13 +49,15 @@ namespace Server
             PredefinedNodes.TryGetValue(id, out var pstate);
             var state = pstate as BaseDataVariableState;
             if (state == null) return;
+            var ts = timestamp ?? DateTime.UtcNow;
             state.Value = value;
-            state.Timestamp = timestamp ?? DateTime.UtcNow;
+            state.Timestamp = ts;
             if (state.Historizing)
             {
                 store.UpdateNode(state);
             }
             state.ClearChangeMasks(SystemContext, false);
+            pubSub.ReportDataChange(new DataValue(new Variant(value), StatusCodes.Good, ts, DateTime.UtcNow), id);
         }
 
         public IEnumerable<DataValue> FetchHistory(NodeId id)
@@ -371,6 +379,8 @@ namespace Server
                         auditing.Value = true;
                     }
 
+
+                    var dataSets = (BaseObjectState)cfnm.Find(ObjectIds.PublishSubscribe_PublishedDataSets);
                 }
 
                 if (predefinedNodes != null)
@@ -400,6 +410,9 @@ namespace Server
                             case PredefinedSetup.VeryLarge:
                                 CreateVeryLargeAddressSpace(externalReferences);
                                 break;
+                            case PredefinedSetup.PubSub:
+                                CreatePubSubNodes(externalReferences);
+                                break;
                         }
                     }
                 }
@@ -420,12 +433,15 @@ namespace Server
                 var myvar = CreateVariable("Variable 1", DataTypes.Double);
                 myvar.Value = 0.0;
                 AddNodeRelation(myvar, myobj, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(myvar, BuiltInType.Double, 0);
 
                 var myvar2 = CreateVariable("Variable 2", DataTypes.Double);
                 AddNodeRelation(myvar2, myobj, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(myvar2, BuiltInType.Double, 0);
 
                 var mystring = CreateVariable("Variable string", DataTypes.String);
                 AddNodeRelation(mystring, myobj, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(mystring, BuiltInType.String, 0);
 
                 var tsprop1 = myvar.AddProperty<string>("TS Property 1", DataTypes.String, -1);
                 tsprop1.Value = "test";
@@ -445,9 +461,11 @@ namespace Server
 
                 var mybool = CreateVariable("Variable bool", DataTypes.Boolean);
                 AddNodeRelation(mybool, myobj, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(mybool, BuiltInType.Boolean, 0);
 
                 var myint = CreateVariable("Variable int", DataTypes.Int64);
                 AddNodeRelation(myint, myobj, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(myint, BuiltInType.Int64, 0);
 
                 store.AddHistorizingNode(myvar);
                 store.AddHistorizingNode(mystring);
@@ -516,10 +534,12 @@ namespace Server
                 var myarray = CreateVariable("Variable Array", DataTypes.Double, 4);
                 myarray.Value = new double[] { 0, 0, 0, 0 };
                 AddNodeRelation(myarray, root, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(myarray, BuiltInType.Double, 1);
 
                 var mystrarray = CreateVariable("Variable StringArray", DataTypes.String, 2);
                 mystrarray.Value = new[] { "test1", "test2" };
                 AddNodeRelation(mystrarray, root, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(mystrarray, BuiltInType.String, 1);
 
                 // Custom types
                 // String parseable type
@@ -534,15 +554,19 @@ namespace Server
                 // Create instances
                 var stringyVar = CreateVariable("StringyVar", stringyType.NodeId);
                 AddNodeRelation(stringyVar, root, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(stringyVar, BuiltInType.String, 1);
 
                 var ignoreVar = CreateVariable("IgnoreVar", ignoreType.NodeId);
                 AddNodeRelation(ignoreVar, root, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(ignoreVar, BuiltInType.String, 1);
 
                 var mysteryVar = CreateVariable("MysteryVar", numberType.NodeId);
                 AddNodeRelation(mysteryVar, root, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(mysteryVar, BuiltInType.Double, 1);
 
                 var numberVar2 = CreateVariable("NumberVar", numberType2.NodeId);
                 AddNodeRelation(numberVar2, root, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(numberVar2, BuiltInType.Double, 1);
 
                 var euinf = new EUInformation("°C", "degree Celsius", "http://www.opcfoundation.org/UA/units/un/cefact")
                 {
@@ -610,15 +634,18 @@ namespace Server
                 var enumVar1 = CreateVariable("EnumVar1", enumType1.NodeId);
                 enumVar1.Value = 1;
                 AddNodeRelation(enumVar1, root, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(enumVar1, BuiltInType.Enumeration, 1);
 
                 var enumVar2 = CreateVariable("EnumVar2", enumType2.NodeId);
                 enumVar2.NodeId = new NodeId("enumvar", NamespaceIndex);
                 enumVar2.Value = 123;
                 AddNodeRelation(enumVar2, root, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(enumVar2, BuiltInType.Enumeration, 1);
 
                 var enumVar3 = CreateVariable("EnumVar3", enumType2.NodeId, 4);
                 enumVar3.Value = new[] { 123, 123, 321, 123 };
                 AddNodeRelation(enumVar3, root, ReferenceTypeIds.HasComponent);
+                pubSub.AddPubSubVariable(enumVar3, BuiltInType.Enumeration, 1);
 
                 // Custom references
                 var refType1 = CreateReferenceType("HasCustomRelation", "IsCustomRelationOf",
@@ -883,6 +910,201 @@ namespace Server
                 
             }
         }
+
+        public void CreatePubSubNodes(IDictionary<NodeId, IList<IReference>> externalReferences)
+        {
+            var cfnm = (ConfigurationNodeManager)Server.NodeManager.NodeManagers.First(nm => nm.GetType() == typeof(ConfigurationNodeManager));
+            lock (cfnm.Lock)
+            {
+                // Update state
+                var status = (BaseDataVariableState)cfnm.Find(VariableIds.PublishSubscribeType_Status_State);
+                status.Value = PubSubState.Operational;
+            }
+            var dataSetMap = new Dictionary<string, IList<NodeState>>();
+
+
+            var config = pubSub.Build();
+            
+            foreach (var conn in config.Connections)
+            {
+                var c = CreateObject<PubSubConnectionState>(conn.Name);
+                AddNodeToExt(c, ObjectIds.PublishSubscribe, ReferenceTypeIds.HasPubSubConnection, externalReferences);
+                AddProperty(c, "PublisherId", DataTypeIds.BaseDataType, -1, conn.PublisherId);
+
+                var cProp = AddProperty(c, "ConnectionProperties", DataTypeIds.KeyValuePair,
+                    conn.ConnectionProperties.Count, conn.ConnectionProperties.ToArray());
+
+                var cAddr = CreateObject<NetworkAddressUrlState>("Address");
+                AddNodeRelation(cAddr, c, ReferenceTypeIds.HasComponent);
+
+                var addr = conn.Address.Body as NetworkAddressUrlDataType;
+                var cAddrInt = AddVariable<string, SelectionListState>("NetworkInterface", DataTypeIds.String, -1, addr.NetworkInterface);
+                AddNodeRelation(cAddrInt, cAddr, ReferenceTypeIds.HasComponent);
+                var cAddrUrl = AddVariable<string, BaseDataVariableState>("Url", DataTypeIds.String, -1, addr.Url);
+                AddNodeRelation(cAddrUrl, cAddr, ReferenceTypeIds.HasComponent);
+
+                var cStatus = CreateObject<PubSubStatusState>("Status");
+                AddNodeRelation(cStatus, c, ReferenceTypeIds.HasComponent);
+                var cStatusState = AddVariable<PubSubState, BaseDataVariableState>("State", DataTypeIds.PubSubState, -1, PubSubState.Operational);
+                AddNodeRelation(cStatusState, cStatus, ReferenceTypeIds.HasComponent);
+
+                var cTProfile = AddVariable<string, SelectionListState>("TransportProfileUri", DataTypeIds.String, -1, conn.TransportProfileUri);
+                AddNodeRelation(cTProfile, c, ReferenceTypeIds.HasComponent);
+
+                if (conn.TransportSettings?.Body is BrokerConnectionTransportDataType tSettings)
+                {
+                    var cTSettings = CreateObject<BrokerConnectionTransportState>("TransportSettings");
+                    AddNodeRelation(cTSettings, c, ReferenceTypeIds.HasComponent);
+                    AddProperty(cTSettings, "AuthenticationProfileUri", DataTypeIds.String, -1, tSettings.AuthenticationProfileUri);
+                    AddProperty(cTSettings, "ResourceUri", DataTypeIds.String, -1, tSettings.ResourceUri);
+                    AddPredefinedNode(SystemContext, cTSettings);
+                }
+
+                foreach (var group in conn.WriterGroups)
+                {
+                    var g = CreateObject<WriterGroupState>(group.Name);
+                    AddNodeRelation(g, c, ReferenceTypeIds.HasWriterGroup);
+
+                    AddProperty(g, "GroupProperties", DataTypeIds.KeyValuePair, group.GroupProperties.Count, group.GroupProperties.ToArray());
+                    AddProperty(g, "HeaderLayoutUri", DataTypeIds.String, -1, group.HeaderLayoutUri);
+                    AddProperty(g, "KeepAliveTime", DataTypeIds.Duration, -1, group.KeepAliveTime);
+                    AddProperty(g, "LocalId", DataTypeIds.LocaleId, group.LocaleIds.Count, group.LocaleIds.ToArray());
+                    AddProperty(g, "MaxNetworkMessageSize", DataTypeIds.UInt32, -1, group.MaxNetworkMessageSize);
+                    AddProperty(g, "Priority", DataTypeIds.Byte, -1, group.Priority);
+                    AddProperty(g, "PublishingInterval", DataTypeIds.Duration, -1, group.PublishingInterval);
+                    AddProperty(g, "SecurityMode", DataTypeIds.MessageSecurityMode, -1, group.SecurityMode);
+                    AddProperty(g, "WriterGroupId", DataTypeIds.UInt16, -1, group.WriterGroupId);
+
+                    var gStatus = CreateObject<PubSubStatusState>("Status");
+                    AddNodeRelation(gStatus, g, ReferenceTypeIds.HasComponent);
+                    var gStatusState = AddVariable<PubSubState, BaseDataVariableState>("State", DataTypeIds.PubSubState, -1, PubSubState.Operational);
+                    AddNodeRelation(gStatusState, gStatus, ReferenceTypeIds.HasComponent);
+
+                    if (group.MessageSettings?.Body is UadpWriterGroupMessageDataType mSettings)
+                    {
+                        var gMSettings = CreateObject<UadpWriterGroupMessageState>("MessageSettings");
+                        AddNodeRelation(gMSettings, g, ReferenceTypeIds.HasComponent);
+                        AddProperty(gMSettings, "DataSetOrdering", DataTypeIds.DataSetOrderingType, -1, mSettings.DataSetOrdering);
+                        AddProperty(gMSettings, "GroupVersion", DataTypeIds.VersionTime, -1, mSettings.GroupVersion);
+                        AddProperty(gMSettings, "NetworkMessageContentMask",
+                            DataTypeIds.UadpNetworkMessageContentMask, -1, mSettings.NetworkMessageContentMask);
+                        AddProperty(gMSettings, "PublishingOffset", DataTypeIds.Duration,
+                            mSettings.PublishingOffset.Count, mSettings.PublishingOffset.ToArray());
+                        AddProperty(gMSettings, "SamplingOffset", DataTypeIds.Duration, -1, mSettings.SamplingOffset);
+                        AddPredefinedNode(SystemContext, gMSettings);
+                    }
+                    else if (group.MessageSettings?.Body is JsonWriterGroupMessageDataType jmSettings)
+                    {
+                        var gMSettings = CreateObject<JsonWriterGroupMessageState>("MessageSettings");
+                        AddNodeRelation(gMSettings, g, ReferenceTypeIds.HasComponent);
+                        AddProperty(gMSettings, "NetworkMessageContentMask", DataTypeIds.JsonNetworkMessageContentMask,
+                            -1, jmSettings.NetworkMessageContentMask);
+                        AddPredefinedNode(SystemContext, gMSettings);
+                    }
+
+                    if (group.TransportSettings?.Body is BrokerWriterGroupTransportDataType tSettingsG)
+                    {
+                        var gTSettings = CreateObject<BrokerWriterGroupTransportState>("TransportSettings");
+                        AddNodeRelation(gTSettings, g, ReferenceTypeIds.HasComponent);
+                        AddProperty(gTSettings, "AuthenticationProfileUri", DataTypeIds.String, -1, tSettingsG.AuthenticationProfileUri);
+                        AddProperty(gTSettings, "QueueName", DataTypeIds.String, -1, tSettingsG.QueueName);
+                        AddProperty(gTSettings, "RequestedDeliveryGuarantee", DataTypeIds.BrokerTransportQualityOfService,
+                            -1, tSettingsG.RequestedDeliveryGuarantee);
+                        AddProperty(gTSettings, "ResourceUri", DataTypeIds.String, -1, tSettingsG.ResourceUri);
+                        AddPredefinedNode(SystemContext, gTSettings);
+                    }
+
+                    foreach (var writer in group.DataSetWriters)
+                    {
+                        var w = CreateObject<DataSetWriterState>(writer.Name);
+                        AddNodeRelation(w, g, ReferenceTypeIds.HasDataSetWriter);
+
+                        if (!dataSetMap.TryGetValue(writer.DataSetName, out var items))
+                        {
+                            dataSetMap[writer.DataSetName] = items = new List<NodeState>();
+                        }
+                        items.Add(w);
+
+                            AddProperty(w, "DataSetFieldContentMask", DataTypeIds.DataSetFieldContentMask, -1, writer.DataSetFieldContentMask);
+                        AddProperty(w, "DataSetWriterId", DataTypeIds.UInt16, -1, writer.DataSetWriterId);
+                        AddProperty(w, "DataSetWriterProperties", DataTypeIds.KeyValuePair,
+                            writer.DataSetWriterProperties.Count, writer.DataSetWriterProperties.ToArray());
+                        AddProperty(w, "KeyFrameCount", DataTypeIds.UInt32, -1, writer.KeyFrameCount);
+
+                        var wStatus = CreateObject<PubSubStatusState>("Status");
+                        AddNodeRelation(wStatus, w, ReferenceTypeIds.HasComponent);
+                        var wStatusState = AddVariable<PubSubState, BaseDataVariableState>("State", DataTypeIds.PubSubState, -1, PubSubState.Operational);
+                        AddNodeRelation(wStatusState, wStatus, ReferenceTypeIds.HasComponent);
+
+                        if (writer.MessageSettings?.Body is UadpDataSetWriterMessageDataType mSettingsW)
+                        {
+                            var wMSettings = CreateObject<UadpDataSetWriterMessageState>("MessageSettings");
+                            AddNodeRelation(wMSettings, w, ReferenceTypeIds.HasComponent);
+                            AddProperty(wMSettings, "ConfiguredSize", DataTypeIds.UInt16, -1, mSettingsW.ConfiguredSize);
+                            AddProperty(wMSettings, "DataSetMessageContentMask",
+                                DataTypeIds.UadpDataSetMessageContentMask, -1, mSettingsW.DataSetMessageContentMask);
+                            AddProperty(wMSettings, "DataSetOffset", DataTypeIds.UInt16, -1, mSettingsW.DataSetOffset);
+                            AddProperty(wMSettings, "NetworkMessageNumber", DataTypeIds.UInt16, -1, mSettingsW.NetworkMessageNumber);
+                            AddPredefinedNode(SystemContext, wMSettings);
+                        }
+                        else if (group.MessageSettings?.Body is JsonDataSetWriterMessageDataType jmSettingsW)
+                        {
+                            var gMSettings = CreateObject<JsonDataSetWriterMessageState>("MessageSettings");
+                            AddNodeRelation(gMSettings, g, ReferenceTypeIds.HasComponent);
+                            AddProperty(gMSettings, "DataSetMessageContentMask", DataTypeIds.JsonDataSetMessageContentMask,
+                                -1, jmSettingsW.DataSetMessageContentMask);
+                            AddPredefinedNode(SystemContext, gMSettings);
+                        }
+
+                        if (writer.TransportSettings?.Body is BrokerDataSetWriterTransportDataType tSettingsW)
+                        {
+                            var wTSettings = CreateObject<BrokerDataSetWriterTransportState>("TransportSettings");
+                            AddNodeRelation(wTSettings, w, ReferenceTypeIds.HasComponent);
+                            AddProperty(wTSettings, "AuthenticationProfileUri", DataTypeIds.String, -1, tSettingsW.AuthenticationProfileUri);
+                            AddProperty(wTSettings, "MetaDataQueueName", DataTypeIds.String, -1, tSettingsW.MetaDataQueueName);
+                            AddProperty(wTSettings, "MetaDataUpdateTime", DataTypeIds.Duration, -1, tSettingsW.MetaDataUpdateTime);
+                            AddProperty(wTSettings, "QueueName", DataTypeIds.String, -1, tSettingsW.QueueName);
+                            AddProperty(wTSettings, "RequestedDeliveryGuarantee", DataTypeIds.BrokerTransportQualityOfService,
+                                -1, tSettingsW.RequestedDeliveryGuarantee);
+                            AddProperty(wTSettings, "ResourceUri", DataTypeIds.String, -1, tSettingsW.ResourceUri);
+                            AddPredefinedNode(SystemContext, wTSettings);
+                        }
+
+                        AddPredefinedNodes(SystemContext, w, wStatus, wStatusState);
+                    }
+
+                    AddPredefinedNodes(SystemContext, g, gStatus, gStatusState);
+                }
+
+                AddPredefinedNodes(SystemContext, c, cAddr, cAddrInt, cAddrUrl, cStatus, cStatusState, cTProfile);
+            }
+
+            foreach (var set in config.PublishedDataSets)
+            {
+                var s = CreateObject<PublishedDataSetState>(set.Name);
+                AddNodeToExt(s, ObjectIds.PublishSubscribe_PublishedDataSets, ReferenceTypeIds.Organizes, externalReferences);
+
+                if (dataSetMap.TryGetValue(set.Name, out var writers))
+                {
+                    foreach (var state in writers)
+                    {
+                        AddNodeRelation(state, s, ReferenceTypeIds.DataSetToWriter);
+                    }
+                }
+
+                AddProperty(s, "ConfigurationVersion", DataTypeIds.ConfigurationVersionDataType, -1, set.DataSetMetaData.ConfigurationVersion);
+                AddProperty(s, "DataSetClassId", DataTypeIds.Guid, -1, set.DataSetMetaData.DataSetClassId);
+                AddProperty(s, "DataSetMetaData", DataTypeIds.DataSetMetaDataType, -1, set.DataSetMetaData);
+                if (set.DataSetSource?.Body is PublishedDataItemsDataTypeCollection items)
+                {
+                    AddProperty(s, "PublishedData", DataTypeIds.PublishedDataItemsDataType, items.Count, items.ToArray());
+                }
+
+                AddPredefinedNode(SystemContext, s);
+            }
+            pubSub.Start();
+        }
+
         // Utility methods to create nodes
         private static void AddNodeToExt(NodeState state, NodeId id, NodeId typeId,
             IDictionary<NodeId, IList<IReference>> externalReferences)
@@ -899,6 +1121,53 @@ namespace Server
         {
             state.AddReference(typeId, true, parent.NodeId);
             parent.AddReference(typeId, false, state.NodeId);
+        }
+
+        private TVar AddVariable<TValue, TVar>(string name, NodeId dataType, int dim = -1, TValue value = default)
+            where TVar : BaseVariableState
+        {
+            var state = (TVar)Activator.CreateInstance(typeof(TVar), new object[] { null });
+            state.NodeId = GenerateNodeId();
+            state.BrowseName = new QualifiedName(name, NamespaceIndex);
+            state.DisplayName = state.BrowseName.Name;
+            state.TypeDefinitionId = state.GetDefaultTypeDefinitionId(SystemContext);
+
+            if (dim > -1)
+            {
+                state.ArrayDimensions = new[] { (uint)dim };
+                state.ValueRank = ValueRanks.OneDimension;
+            }
+            else
+            {
+                state.ValueRank = ValueRanks.Scalar;
+            }
+            state.DataType = dataType;
+            state.Value = value;
+
+            return state;
+        }
+
+        private PropertyState AddProperty<T>(NodeState parent, string name, NodeId dataType, int dim = -1, T value = default)
+        {
+            var prop = parent.AddProperty<T>(name, dataType, dim > -1 ? ValueRanks.OneDimension : ValueRanks.Scalar);
+            if (dim > -1)
+            {
+                prop.ArrayDimensions = new[] { (uint)dim };
+            }
+            prop.Value = value;
+            prop.NodeId = GenerateNodeId();
+
+            return prop;
+        }
+
+        private T CreateObject<T>(string name) where T : BaseObjectState
+        {
+            var state = (T)Activator.CreateInstance(typeof(T), new object[] { null });
+            state.NodeId = GenerateNodeId();
+            state.BrowseName = new QualifiedName(name, NamespaceIndex);
+            state.DisplayName = state.BrowseName.Name;
+            state.TypeDefinitionId = state.GetDefaultTypeDefinitionId(SystemContext);
+            return state;
         }
 
         private BaseObjectState CreateObject(string name)
@@ -1432,7 +1701,8 @@ namespace Server
         Events,
         Auditing,
         Wrong,
-        VeryLarge
+        VeryLarge,
+        PubSub
     }
 
     #region nodeid_reference
