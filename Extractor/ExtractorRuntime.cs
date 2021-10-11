@@ -84,11 +84,15 @@ namespace Cognite.OpcUa
             }
             finally
             {
-                extractor.Close();
-                foreach (var pusher in pushers)
+                try
                 {
-                    pusher.Dispose();
+                    extractor.Close();
+                    foreach (var pusher in pushers)
+                    {
+                        pusher.Dispose();
+                    }
                 }
+                catch { }
             }
         }
     }

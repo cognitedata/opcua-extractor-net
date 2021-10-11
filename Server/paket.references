@@ -1,7 +1,4 @@
 Microsoft.CSharp
-OPCFoundation.NetStandard.Opc.Ua.Server
-OPCFoundation.NetStandard.Opc.Ua.Configuration
-OPCFoundation.NetStandard.Opc.Ua.PubSub
 Microsoft.NetCore.Platforms
 YamlDotNet
 LiteDB

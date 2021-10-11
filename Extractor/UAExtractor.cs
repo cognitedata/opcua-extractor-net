@@ -19,6 +19,7 @@ using Cognite.Extractor.Common;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
+using Cognite.OpcUa.PubSub;
 using Cognite.OpcUa.Pushers;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
@@ -64,6 +65,7 @@ namespace Cognite.OpcUa
         private readonly List<Task> propertyReadTasks = new List<Task>();
         public IEnumerable<NodeTransformation>? Transformations { get; private set; }
         public StringConverter StringConverter => uaClient.StringConverter;
+        private readonly PubSubManager pubSubManager;
 
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
@@ -130,6 +132,9 @@ namespace Cognite.OpcUa
             }
             historyReader = new HistoryReader(uaClient, this, config.History, source.Token);
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
+
+            pubSubManager = new PubSubManager(uaClient);
+
             if (config.Extraction.IdPrefix == "events.")
             {
                 throw new ConfigurationException("Avoid using \"events.\" as IdPrefix, as it is used internally");
@@ -243,6 +248,11 @@ namespace Cognite.OpcUa
                 return;
             }
             Pushing = true;
+
+            await pubSubManager.Start(source.Token);
+
+            log.Information("PubSub manager started");
+
             await Looper.Run(synchTasks);
         }
         /// <summary>
@@ -1099,6 +1109,7 @@ namespace Cognite.OpcUa
                 scheduler?.Dispose();
                 uaClient.OnServerDisconnect -= UaClient_OnServerDisconnect;
                 uaClient.OnServerReconnect -= UaClient_OnServerReconnect;
+                pubSubManager?.Dispose();
             }
         }
     }

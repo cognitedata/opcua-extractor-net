@@ -184,6 +184,10 @@ namespace Cognite.OpcUa
                 throw new ExtractorFailureException("Failed to load OPC-UA xml configuration file", exc);
             }
 
+            Utils.SetTraceOutput(Utils.TraceOutput.DebugAndFile);
+            Utils.SetTraceMask(Utils.TraceMasks.All);
+            Utils.SetTraceLog("./logs/opcua-client.log", true);
+
             string certificateDir = Environment.GetEnvironmentVariable("OPCUA_CERTIFICATE_DIR");
             if (!string.IsNullOrEmpty(certificateDir))
             {
