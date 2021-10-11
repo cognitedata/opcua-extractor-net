@@ -436,6 +436,8 @@ logger:
         retention-limit: 31
         # Rolling interval for log files. Either "day" or "hour".
         rolling-interval: "day"
+    # Optionally capture OPC-UA trace. One of verbose, debug, information, warning, error fatal.
+    ua-trace-level:
     
 metrics:
     # Start a metrics server in the extractor for Prometheus scrape
