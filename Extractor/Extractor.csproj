@@ -12,9 +12,4 @@
     <None Include="$(SolutionDir)config\**" CopyToOutputDirectory="Always" LinkBase="config\" />
   </ItemGroup-->
   <Import Project="..\.paket\Paket.Restore.targets" />
-  <ItemGroup>
-    <ProjectReference Include="../../UA-.NETStandard/Libraries/Opc.Ua.PubSub/Opc.Ua.PubSub.csproj" />
-    <ProjectReference Include="../../UA-.NETStandard/Libraries/Opc.Ua.Client/Opc.Ua.Client.csproj" />
-    <ProjectReference Include="../../UA-.NETStandard/Libraries/Opc.Ua.Configuration/Opc.Ua.Configuration.csproj" />
-  </ItemGroup>
 </Project>
