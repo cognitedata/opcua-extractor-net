@@ -58,11 +58,11 @@ namespace Test.Unit
 
             await CommonTestUtils.WaitForCondition(() => synch1 && synch2, 5);
 
-            /* await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 2, 5);
+            await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 2, 5);
 
             Assert.True(extractor.Looper.Scheduler.TryTriggerTask("StoreState"));
 
-            await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 4, 5); */
+            await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 4, 5);
 
             bool int1 = false, int2 = false;
 
