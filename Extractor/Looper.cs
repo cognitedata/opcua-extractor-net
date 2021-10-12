@@ -53,8 +53,6 @@ namespace Cognite.OpcUa
             this.extractor = extractor;
             this.config = config;
             this.pushers = pushers;
-            failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
-            passingPushers = pushers.Except(failingPushers).ToList();
         }
 
         private static TimeSpan ToTimespan(int t, bool allowZero, string unit)
@@ -75,6 +73,9 @@ namespace Cognite.OpcUa
 
         public Task Run(IEnumerable<Func<CancellationToken, Task>> synchTasks)
         {
+            failingPushers = pushers.Where(pusher => pusher.DataFailing || pusher.EventsFailing || !pusher.Initialized).ToList();
+            passingPushers = pushers.Except(failingPushers).ToList();
+
             Scheduler.SchedulePeriodicTask(nameof(Pushers), ToTimespan(config.Extraction.DataPushDelay, true, "ms"), Pushers, true);
             Scheduler.SchedulePeriodicTask(nameof(ExtraTasks), Timeout.InfiniteTimeSpan, ExtraTasks, false);
 

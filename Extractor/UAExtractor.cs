@@ -235,7 +235,13 @@ namespace Cognite.OpcUa
             {
                 await FailureBuffer.InitializeBufferStates(State.NodeStates, State.EmitterStates, source.Token);
             }
-            if (quitAfterMap) return;
+            if (quitAfterMap)
+            {
+                // Since synchTasks is now a list of functions, we need to call them
+                // to start them if quitting before running the looper.
+                foreach (var task in synchTasks) _ = task(source.Token);
+                return;
+            }
             Pushing = true;
             await Looper.Run(synchTasks);
         }
