@@ -15,9 +15,13 @@ namespace Cognite.OpcUa.PubSub
         private readonly ServerPubSubConfigurator configurator;
         private UaPubSubApplication? app;
         private readonly ILogger log = Log.Logger.ForContext(typeof(PubSubManager));
-        public PubSubManager(UAClient client)
+        private readonly PubSubConfig config;
+        private readonly UAExtractor extractor;
+        public PubSubManager(UAClient client, UAExtractor extractor, PubSubConfig config)
         {
-            configurator = new ServerPubSubConfigurator(client);
+            this.config = config;
+            configurator = new ServerPubSubConfigurator(client, config);
+            this.extractor = extractor;
         }
 
         public async Task Start(CancellationToken token)
@@ -58,42 +62,44 @@ namespace Cognite.OpcUa.PubSub
             }
 
             app.DataReceived += DataReceived;
-            app.RawDataReceived += RawDataReceived;
             app.Start();
-        }
-
-        private void RawDataReceived(object sender, RawDataReceivedEventArgs e)
-        {
-            Console.WriteLine("RawDataReceived bytes:{0}, Source:{1}, TransportProtocol:{2}, MessageMapping:{3}",
-                e.Message.Length, e.Source, e.TransportProtocol, e.MessageMapping);
         }
 
         private void DataReceived(object sender, SubscribedDataEventArgs e)
         {
-            Console.WriteLine("DataReceived event:");
-
             if (e.NetworkMessage is UadpNetworkMessage uadpMessage)
             {
-                Console.WriteLine("UADP Network DataSetMessage ({0} DataSets): Source={1}, SequenceNumber={2}",
+                log.Verbose("UADP Network DataSetMessage ({0} DataSets): Source={1}, SequenceNumber={2}",
                         e.NetworkMessage.DataSetMessages.Count, e.Source, uadpMessage.SequenceNumber);
             }
             else if (e.NetworkMessage is JsonNetworkMessage jsonMessage)
             {
-                Console.WriteLine("JSON Network DataSetMessage ({0} DataSets): Source={1}, MessageId={2}",
+                log.Verbose("JSON Network DataSetMessage ({0} DataSets): Source={1}, MessageId={2}",
                         e.NetworkMessage.DataSetMessages.Count, e.Source, jsonMessage.MessageId);
             }
 
             foreach (var dataSetMessage in e.NetworkMessage.DataSetMessages)
             {
                 var dataSet = dataSetMessage.DataSet;
-                Console.WriteLine("\tDataSet.Name={0}, DataSetWriterId={1}, SequenceNumber={2}", dataSet.Name,
+                log.Verbose("\tDataSet.Name={0}, DataSetWriterId={1}, SequenceNumber={2}", dataSet.Name,
                     dataSet.DataSetWriterId, dataSetMessage.SequenceNumber);
 
                 for (int i = 0; i < dataSet.Fields.Length; i++)
                 {
-                    Console.WriteLine("\t\tTargetNodeId:{0}, Attribute:{1}, Value:{2}, TS:{3}",
-                        dataSet.Fields[i].TargetNodeId, dataSet.Fields[i].TargetAttribute, dataSetMessage.DataSet.Fields[i].Value,
-                        dataSet.Fields[i].Value.SourceTimestamp);
+                    var field = dataSet.Fields[i];
+                    log.Verbose("\t\tTargetNodeId:{0}, Attribute:{1}, Value:{2}, TS:{3}",
+                        field.TargetNodeId, field.TargetAttribute, field.Value, field.Value.SourceTimestamp);
+
+                    if (field.TargetAttribute != Attributes.Value) continue;
+
+                    var variable = extractor.State.GetNodeState(field.TargetNodeId);
+                    if (variable == null)
+                    {
+                        log.Verbose("Missing state for pub-sub node: {id}", field.TargetNodeId);
+                        continue;
+                    }
+
+                    extractor.Streamer.HandleStreamedDatapoint(field.Value, variable);
                 }
             }
         }

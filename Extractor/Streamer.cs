@@ -317,27 +317,35 @@ namespace Cognite.OpcUa
 
             foreach (var datapoint in item.DequeueValues())
             {
-                if (StatusCode.IsNotGood(datapoint.StatusCode))
-                {
-                    UAExtractor.BadDataPoints.Inc();
-                    log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", node.Id, datapoint.SourceTimestamp);
-                    continue;
-                }
-                var buffDps = ToDataPoint(datapoint, node);
-                node.UpdateFromStream(buffDps);
-
-                timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
-
-                if ((extractor.StateStorage == null || config.StateStorage.Interval <= 0)
-                    && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
-                        || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) continue;
-                foreach (var buffDp in buffDps)
-                {
-                    log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
-                    Enqueue(buffDp);
-                }
+                HandleStreamedDatapoint(datapoint, node);
             }
         }
+
+        public void HandleStreamedDatapoint(DataValue datapoint, VariableExtractionState node)
+        {
+            if (StatusCode.IsNotGood(datapoint.StatusCode))
+            {
+                UAExtractor.BadDataPoints.Inc();
+                log.Debug("Bad streaming datapoint: {BadDatapointExternalId} {SourceTimestamp}", node.Id, datapoint.SourceTimestamp);
+                return;
+            }
+            var buffDps = ToDataPoint(datapoint, node);
+            node.UpdateFromStream(buffDps);
+
+            timeToExtractorDps.Observe((DateTime.UtcNow - datapoint.SourceTimestamp).TotalSeconds);
+
+            if ((extractor.StateStorage == null || config.StateStorage.Interval <= 0)
+                && (node.IsFrontfilling && datapoint.SourceTimestamp > node.SourceExtractedRange.Last
+                    || node.IsBackfilling && datapoint.SourceTimestamp < node.SourceExtractedRange.First)) return;
+
+            foreach (var buffDp in buffDps)
+            {
+                log.Verbose("Subscription DataPoint {dp}", buffDp.ToDebugDescription());
+                Enqueue(buffDp);
+            }
+        }
+
+
         private static string GetArrayUniqueId(string baseId, int index)
         {
             if (index < 0) return baseId;

@@ -10,6 +10,31 @@ using Serilog;
 
 namespace Cognite.OpcUa.PubSub
 {
+    internal class ReaderWrapper
+    {
+        public TargetVariablesDataType? Targets { get; set; }
+        public DataSetReaderDataType Reader { get; }
+        public InternalNode ReaderNode { get; }
+        public ConnectionWrapper Connection { get; }
+        public ReaderWrapper(DataSetReaderDataType reader, InternalNode node, ConnectionWrapper connection)
+        {
+            Reader = reader;
+            ReaderNode = node;
+            Connection = connection;
+        }
+    }
+
+    internal class ConnectionWrapper
+    {
+        public PubSubConnectionDataType Connection { get; }
+        public IList<ReaderWrapper> FinalReaders { get; } = new List<ReaderWrapper>();
+        public ConnectionWrapper(PubSubConnectionDataType connection)
+        {
+            Connection = connection;
+        }
+    }
+
+
     /// <summary>
     /// Class responsible for loading configuration from an OPC-UA server.
     /// </summary>
@@ -19,12 +44,15 @@ namespace Cognite.OpcUa.PubSub
         private PubSubConfigurationDataType config;
         private readonly Dictionary<NodeId, InternalNode> nodeMap = new Dictionary<NodeId, InternalNode>();
         private readonly ILogger log = Log.Logger.ForContext(typeof(ServerPubSubConfigurator));
-        private readonly Dictionary<NodeId, DataSetReaderDataType> readers = new Dictionary<NodeId, DataSetReaderDataType>();
+        private readonly Dictionary<NodeId, ReaderWrapper> readers = new Dictionary<NodeId, ReaderWrapper>();
+        private readonly Dictionary<NodeId, ConnectionWrapper> connections = new Dictionary<NodeId, ConnectionWrapper>();
+        private readonly PubSubConfig pubSubConfig;
 
-        public ServerPubSubConfigurator(UAClient client)
+        public ServerPubSubConfigurator(UAClient client, PubSubConfig pubSubConfig)
         {
             this.client = client;
             config = new PubSubConfigurationDataType();
+            this.pubSubConfig = pubSubConfig;
         }
 
         private bool LoadNodeValues(CancellationToken token)
@@ -141,12 +169,47 @@ namespace Cognite.OpcUa.PubSub
                     });
                 }
 
+                // Select optimal reader based on configuration
+                ReaderWrapper? finalReader = null;
                 foreach (var writer in dataSet.AllChildren.Where(child => child.TypeDefinition == ObjectTypeIds.DataSetWriterType))
                 {
                     if (!readers.TryGetValue(writer.NodeId, out var reader)) continue;
 
-                    reader.DataSetMetaData = metaData;
-                    reader.SubscribedDataSet = new ExtensionObject(subscribedDataSet);
+                    // Either this is the first, it is using a UADP and the previous is using JSON,
+                    // or they are using the same profile, but this reader belongs to a connection with more
+                    // readers. (We try to keep as few connections as possible while covering all the data).
+                    if (finalReader != null)
+                    {
+                        var oldProfile = finalReader.Connection.Connection.TransportProfileUri;
+                        var profile = reader.Connection.Connection.TransportProfileUri;
+
+                        if (pubSubConfig.PreferUadp)
+                        {
+                            if (profile == Profiles.PubSubMqttJsonTransport
+                                && oldProfile == Profiles.PubSubMqttUadpTransport) continue;
+                        }
+                        else
+                        {
+                            if (profile == Profiles.PubSubMqttUadpTransport
+                                && oldProfile == Profiles.PubSubMqttJsonTransport) continue;
+                        }
+
+                        if (profile == oldProfile
+                            && reader.Connection.FinalReaders.Count <= finalReader.Connection.FinalReaders.Count) continue;
+                    }
+
+                    finalReader = reader;
+                }
+
+                if (finalReader != null)
+                {
+                    finalReader.Targets = subscribedDataSet;
+                    finalReader.Reader.DataSetMetaData = metaData;
+                    finalReader.Reader.SubscribedDataSet = new ExtensionObject(subscribedDataSet);
+                    if (subscribedDataSet.TargetVariables?.Any(v => v.AttributeId == Attributes.Value) ?? false)
+                    {
+                        finalReader.Connection.FinalReaders.Add(finalReader);
+                    }
                 }
             }
 
@@ -167,6 +230,9 @@ namespace Cognite.OpcUa.PubSub
                 if (cConn.TransportProfileUri != Profiles.PubSubMqttJsonTransport
                     && cConn.TransportProfileUri != Profiles.PubSubMqttUadpTransport) continue;
 
+                var wrapper = new ConnectionWrapper(cConn);
+                this.connections[conn.NodeId] = wrapper;
+
                 if (conn.Children.TryGetValue("Address", out var addr))
                 {
                     var cAddr = new NetworkAddressUrlDataType();
@@ -183,6 +249,7 @@ namespace Cognite.OpcUa.PubSub
                 }
                 cConn.PublisherId = conn.Children.GetValueOrDefault("PublisherId")?.Value?.WrappedValue ?? Variant.Null;
                 cConn.ReaderGroups = new ReaderGroupDataTypeCollection();
+
 
                 foreach (var group in conn.AllChildren.Where(child => child.ReferenceType == ReferenceTypeIds.HasWriterGroup))
                 {
@@ -259,12 +326,11 @@ namespace Cognite.OpcUa.PubSub
                         cReader.Enabled = true;
 
                         cGroup.DataSetReaders.Add(cReader);
-                        readers[writer.NodeId] = cReader;
+                        readers[writer.NodeId] = new ReaderWrapper(cReader, writer, wrapper);
                     }
 
                     cConn.ReaderGroups.Add(cGroup);
                 }
-                config.Connections.Add(cConn);
             }
         }
 
@@ -288,6 +354,13 @@ namespace Cognite.OpcUa.PubSub
             await CorrectWriterParents(token);
             BuildConnections();
             BuildDataSetMetadata();
+
+            // Add useful connections to the config.
+            foreach (var conn in connections.Values)
+            {
+                if (!conn.FinalReaders.Any()) continue;
+                config.Connections.Add(conn.Connection);
+            }
 
             return config;
         }

@@ -65,7 +65,7 @@ namespace Cognite.OpcUa
         private readonly List<Task> propertyReadTasks = new List<Task>();
         public IEnumerable<NodeTransformation>? Transformations { get; private set; }
         public StringConverter StringConverter => uaClient.StringConverter;
-        private readonly PubSubManager pubSubManager;
+        private readonly PubSubManager? pubSubManager;
 
         public bool Started { get; private set; }
         public bool Pushing { get; private set; }
@@ -133,7 +133,10 @@ namespace Cognite.OpcUa
             historyReader = new HistoryReader(uaClient, this, config.History, source.Token);
             log.Information("Building extractor with {NumPushers} pushers", pushers.Count());
 
-            pubSubManager = new PubSubManager(uaClient);
+            if (FullConfig.PubSub.Enabled)
+            {
+                pubSubManager = new PubSubManager(uaClient, this, FullConfig.PubSub);
+            }
 
             if (config.Extraction.IdPrefix == "events.")
             {
@@ -249,7 +252,17 @@ namespace Cognite.OpcUa
             }
             Pushing = true;
 
-            await pubSubManager.Start(source.Token);
+            if (pubSubManager != null)
+            {
+                try
+                {
+                    await pubSubManager.Start(source.Token);
+                }
+                catch (Exception ex)
+                {
+                    ExtractorUtils.LogException(log, ex, "Failed to launch PubSub client", "Failed to launch PubSub client");
+                }
+            }
 
             log.Information("PubSub manager started");
 
