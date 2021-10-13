@@ -76,7 +76,7 @@ namespace Cognite.OpcUa
         {
             if (roots == null) throw new ArgumentNullException(nameof(roots));
             log.Debug("Browse node tree for nodes {nodes}", string.Join(", ", roots));
-            var rootRefs = GetRootNodes(roots, token);
+            var rootRefs = await GetRootNodes(roots, token);
             foreach (var root in rootRefs)
             {
                 bool docb = true;
@@ -96,7 +96,7 @@ namespace Cognite.OpcUa
             }
             await BrowseDirectory(roots, callback, token, null, classMask, ignoreVisited);
         }
-        public IEnumerable<ReferenceDescription> GetRootNodes(IEnumerable<NodeId> ids, CancellationToken token)
+        public async Task<IEnumerable<ReferenceDescription>> GetRootNodes(IEnumerable<NodeId> ids, CancellationToken token)
         {
             var attributes = new uint[]
             {
@@ -112,7 +112,7 @@ namespace Cognite.OpcUa
             IList<DataValue> results;
             try
             {
-                results = uaClient.ReadAttributes(new ReadValueIdCollection(readValueIds), 1, token);
+                results = await uaClient.ReadAttributes(new ReadValueIdCollection(readValueIds), 1, token);
             }
             catch (ServiceResultException ex)
             {
@@ -143,7 +143,7 @@ namespace Cognite.OpcUa
                 {
                     var nodes = ids.Select(id => new BrowseNode(id)).ToDictionary(node => node.Id);
 
-                    uaClient.GetReferences(new BrowseParams
+                    await uaClient.GetReferences(new BrowseParams
                     {
                         NodeClassMask = (uint)NodeClass.ObjectType | (uint)NodeClass.VariableType,
                         ReferenceTypeId = ReferenceTypeIds.HasTypeDefinition,

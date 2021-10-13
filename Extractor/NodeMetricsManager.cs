@@ -128,7 +128,7 @@ namespace Cognite.OpcUa
                 .SelectMany(node => attributes.Select(attr => new ReadValueId { AttributeId = attr, NodeId = node }))
             );
 
-            var results = await Task.Run(() => client.ReadAttributes(readValueIds, nodes.Count, token));
+            var results = await client.ReadAttributes(readValueIds, nodes.Count, token);
 
             int attrPerNode = attributes.Length;
 

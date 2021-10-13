@@ -101,7 +101,7 @@ namespace Cognite.OpcUa
         {
             try
             {
-                client.AbortBrowse(chunk.Items);
+                client.AbortBrowse(chunk.Items).Wait(CancellationToken.None);
             }
             catch (Exception e)
             {
@@ -114,7 +114,7 @@ namespace Cognite.OpcUa
             if (token.IsCancellationRequested) return;
             numReads++;
             var browseChunk = (BrowseParams)chunk;
-            await Task.Run(() => client.GetReferences(browseChunk, false, token), CancellationToken.None);
+            await client.GetReferences(browseChunk, false, token);
         }
 
         protected override IChunk<BrowseNode> GetChunk(IEnumerable<BrowseNode> items)

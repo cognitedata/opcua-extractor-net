@@ -179,7 +179,7 @@ namespace Cognite.OpcUa.Config
                 try
                 {
                     await Run(token);
-                    LimitConfigValues(token);
+                    await LimitConfigValues(token);
                 }
                 catch (Exception ex)
                 {
@@ -221,7 +221,7 @@ namespace Cognite.OpcUa.Config
         /// </summary>
         /// <param name="nodesChunk">Chunk size to use when browsing</param>
         /// <returns>A list of discovered UANodes</returns>
-        private IEnumerable<UANode> GetTestNodeChunk(int nodesChunk, CancellationToken token)
+        private async Task<IEnumerable<UANode>> GetTestNodeChunk(int nodesChunk, CancellationToken token)
         {
             var root = ObjectIds.ObjectsFolder;
 
@@ -249,7 +249,7 @@ namespace Cognite.OpcUa.Config
                 {
                     if (token.IsCancellationRequested) return nodes;
                     var browseNodes = chunk.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
-                    GetReferences(new BrowseParams
+                    await GetReferences(new BrowseParams
                     {
                         NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
                         Nodes = browseNodes
@@ -290,10 +290,10 @@ namespace Cognite.OpcUa.Config
 
             return nodes;
         }
-        private void LimitConfigValues(CancellationToken token)
+        private async Task LimitConfigValues(CancellationToken token)
         {
             var helper = new ServerInfoHelper(this);
-            helper.LimitConfigValues(config, token);
+            await helper.LimitConfigValues(config, token);
 
             baseConfig.Source.BrowseThrottling.MaxNodeParallelism = config.Source.BrowseThrottling.MaxNodeParallelism;
             baseConfig.History.Throttling.MaxNodeParallelism = config.History.Throttling.MaxNodeParallelism;
@@ -316,7 +316,7 @@ namespace Cognite.OpcUa.Config
             if (Session == null || !Session.Connected)
             {
                 await Run(token);
-                LimitConfigValues(token);
+                await LimitConfigValues(token);
             }
 
             IEnumerable<UANode> testNodes = null;
@@ -360,11 +360,11 @@ namespace Cognite.OpcUa.Config
                 {
                     log.Information("Try to get the children of {cnt} nodes", ids.Count);
                     var browseNodes = ids.Select(node => new BrowseNode(node)).ToDictionary(node => node.Id);
-                    await ToolUtil.RunWithTimeout(Task.Run(() => GetReferences(new BrowseParams
+                    await ToolUtil.RunWithTimeout(GetReferences(new BrowseParams
                     {
                         NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
                         Nodes = browseNodes
-                    }, true, token), CancellationToken.None), 30);
+                    }, true, token), 30);
                     break;
                 }
                 catch (Exception ex)
@@ -402,11 +402,11 @@ namespace Cognite.OpcUa.Config
                     log.Information("Try to get the children of the {cnt} largest parent nodes, with return chunk size {size}",
                         toBrowse.Count, chunkSize);
                     var nodes = toBrowse.Select(group => new BrowseNode(group.Key)).ToDictionary(node => node.Id);
-                    await ToolUtil.RunWithTimeout(Task.Run(() => GetReferences(new BrowseParams
+                    await ToolUtil.RunWithTimeout(GetReferences(new BrowseParams
                     {
                         NodeClassMask = (uint)NodeClass.Object | (uint)NodeClass.Variable,
                         Nodes = nodes
-                    }, true, token), CancellationToken.None), 60);
+                    }, true, token), 60);
                     children = nodes.ToDictionary(node => node.Key, node => node.Value.Result);
                 }
                 catch (Exception ex)
@@ -487,7 +487,7 @@ namespace Cognite.OpcUa.Config
         /// Reconfigures the extractor to extract as much data as possible, but resets configuration
         /// before returning.
         /// </summary>
-        private void ReadNodeData(CancellationToken token)
+        private async Task ReadNodeData(CancellationToken token)
         {
             if (nodeDataRead) return;
             int oldArraySize = config.Extraction.DataTypes.MaxArraySize;
@@ -498,7 +498,7 @@ namespace Cognite.OpcUa.Config
             config.Events.Enabled = true;
             config.History.Enabled = true;
             config.History.Data = true;
-            ReadNodeData(nodeList, token);
+            await ReadNodeData(nodeList, token);
             config.Extraction.DataTypes.MaxArraySize = oldArraySize;
             config.Events.Enabled = oldEvents;
             config.History.Enabled = oldHistory;
@@ -630,8 +630,8 @@ namespace Cognite.OpcUa.Config
         {
             if (Session == null || !Session.Connected)
             {
-                Run(token).Wait(token);
-                LimitConfigValues(token);
+                await Run(token);
+                await LimitConfigValues(token);
             }
             await PopulateDataTypes(token);
 
@@ -660,7 +660,7 @@ namespace Cognite.OpcUa.Config
             if (Session == null || !Session.Connected)
             {
                 await Run(token);
-                LimitConfigValues(token);
+                await LimitConfigValues(token);
             }
 
             await PopulateNodes(token);
@@ -695,7 +695,7 @@ namespace Cognite.OpcUa.Config
                 config.Source.AttributesChunk = chunkSize;
                 try
                 {
-                    await ToolUtil.RunWithTimeout(() => ReadNodeData(toCheck, token), 120);
+                    await ToolUtil.RunWithTimeout(ReadNodeData(toCheck, token), 120);
                 }
                 catch (Exception e)
                 {
@@ -741,7 +741,7 @@ namespace Cognite.OpcUa.Config
 
             await PopulateNodes(token);
             await PopulateDataTypes(token);
-            ReadNodeData(token);
+            await ReadNodeData(token);
 
             log.Information("Mapping out variable datatypes");
 
@@ -873,7 +873,7 @@ namespace Cognite.OpcUa.Config
         public async Task GetSubscriptionChunkSizes(CancellationToken token)
         {
             await PopulateNodes(token);
-            ReadNodeData(token);
+            await ReadNodeData(token);
 
             bool failed = true;
             var states = nodeList.Where(node =>
@@ -975,7 +975,7 @@ namespace Cognite.OpcUa.Config
         public async Task GetHistoryReadConfig(CancellationToken token)
         {
             await PopulateNodes(token);
-            ReadNodeData(token);
+            await ReadNodeData(token);
 
             var historizingStates = nodeList.Where(node =>
                     (node is UAVariable variable) && !variable.IsProperty && variable.ReadHistory)
@@ -1019,7 +1019,7 @@ namespace Cognite.OpcUa.Config
                     chunk.Select(state => new HistoryReadNode(HistoryReadType.FrontfillData, state)).ToList(), details);
                 try
                 {
-                    await ToolUtil.RunWithTimeout(() => DoHistoryRead(historyParams), 10);
+                    await ToolUtil.RunWithTimeout(DoHistoryRead(historyParams, token), 10);
 
                     foreach (var node in historyParams.Items)
                     {
@@ -1120,7 +1120,7 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                await ToolUtil.RunWithTimeout(() => DoHistoryRead(backfillParams), 10);
+                await ToolUtil.RunWithTimeout(DoHistoryRead(backfillParams, token), 10);
 
                 var data = ToolUtil.ReadResultToDataPoints(nodeWithData.LastResult, stateMap[nodeWithData.Id], this);
 
@@ -1174,7 +1174,7 @@ namespace Cognite.OpcUa.Config
         public async Task GetEventConfig(CancellationToken token)
         {
             await PopulateNodes(token);
-            ReadNodeData(token);
+            await ReadNodeData(token);
 
             log.Information("Test for event configuration");
             eventTypes = new List<UANode>();
@@ -1191,7 +1191,7 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            var server = GetServerNode(token);
+            var server = await GetServerNode(token);
 
             var emitters = nodeList.Append(server).Where(node => (node.EventNotifier & EventNotifiers.SubscribeToEvents) != 0);
             var historizingEmitters = emitters.Where(node => (node.EventNotifier & EventNotifiers.HistoryRead) != 0);

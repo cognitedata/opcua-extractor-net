@@ -459,13 +459,13 @@ namespace Cognite.OpcUa
         /// Retrieve a representation of the server node
         /// </summary>
         /// <returns></returns>
-        public UANode GetServerNode(CancellationToken token)
+        public async Task<UANode> GetServerNode(CancellationToken token)
         {
-            var desc = Browser.GetRootNodes(new[] { ObjectIds.Server }, token).FirstOrDefault();
+            var desc = (await Browser.GetRootNodes(new[] { ObjectIds.Server }, token)).FirstOrDefault();
             if (desc == null) throw new ExtractorFailureException("Server node is null. Invalid server configuration");
             
             var node = new UANode(ObjectIds.Server, desc.DisplayName.Text, NodeId.Null, NodeClass.Object);
-            ReadNodeData(new[] { node }, token);
+            await ReadNodeData(new[] { node }, token);
             return node;
         }
         /// <summary>
@@ -522,7 +522,7 @@ namespace Cognite.OpcUa
             return ret;
         }
 
-        public void GetReferences(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
+        public async Task GetReferences(BrowseParams browseParams, bool readToCompletion, CancellationToken token)
         {
             if (browseParams == null || browseParams.Nodes == null) throw new ArgumentNullException(nameof(browseParams));
             if (Session == null) throw new InvalidOperationException("Requires open session");
@@ -543,16 +543,17 @@ namespace Cognite.OpcUa
                 BrowseResultCollection results;
                 try
                 {
-                    Session.Browse(
+                    var result = await Session.BrowseAsync(
                         null,
                         null,
                         browseParams.MaxPerNode,
                         descriptions,
-                        out results,
-                        out var _
-                    );
+                        token);
+
+                    results = result.Results;
                     numBrowse.Inc();
                 }
+                catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
                 catch (ServiceResultException ex)
                 {
                     browseFailures.Inc();
@@ -569,14 +570,16 @@ namespace Cognite.OpcUa
                 BrowseResultCollection results;
                 try
                 {
-                    Session.BrowseNext(
+                    var result = await Session.BrowseNextAsync(
                         null,
-                        token.IsCancellationRequested,
+                        false,
                         cps,
-                        out results,
-                        out var _);
+                        token);
+
+                    results = result.Results;
                     numBrowse.Inc();
                 }
+                catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
                 catch (ServiceResultException ex)
                 {
                     browseFailures.Inc();
@@ -588,7 +591,7 @@ namespace Cognite.OpcUa
             }
         }
 
-        public void AbortBrowse(IEnumerable<BrowseNode> nodes)
+        public async Task AbortBrowse(IEnumerable<BrowseNode> nodes)
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");
             var toAbort = nodes.Where(node => node.ContinuationPoint != null).ToList();
@@ -596,12 +599,11 @@ namespace Cognite.OpcUa
             var cps = new ByteStringCollection(nodes.Select(node => node.ContinuationPoint));
             try
             {
-                Session.BrowseNext(
+                await Session.BrowseNextAsync(
                     null,
                     true,
                     cps,
-                    out _,
-                    out _);
+                    CancellationToken.None);
             }
             catch (ServiceResultException ex)
             {
@@ -621,7 +623,7 @@ namespace Cognite.OpcUa
         /// <param name="distinctNodeCount">Number of distinct nodes</param>
         /// <returns>List of retrieved datavalues,
         /// if the server is compliant this will have length equal to <paramref name="readValueIds"/></returns>
-        public IList<DataValue> ReadAttributes(ReadValueIdCollection readValueIds, int distinctNodeCount, CancellationToken token)
+        public async Task<IList<DataValue>> ReadAttributes(ReadValueIdCollection readValueIds, int distinctNodeCount, CancellationToken token)
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");
             var values = new List<DataValue>();
@@ -636,6 +638,13 @@ namespace Cognite.OpcUa
                 {
                     if (token.IsCancellationRequested) break;
                     count++;
+                    await Session.ReadAsync(
+                        null,
+                        0,
+                        TimestampsToReturn.Source,
+                        new ReadValueIdCollection(nextValues),
+                        token);
+
                     Session.Read(
                         null,
                         0,
@@ -652,6 +661,7 @@ namespace Cognite.OpcUa
                 log.Information("Read {TotalAttributesRead} attributes with {NumAttributeReadOperations} operations for {nodeCount} nodes",
                     values.Count, count, distinctNodeCount);
             }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
             catch (ServiceResultException ex)
             {
                 attributeRequestFailures.Inc();
@@ -665,7 +675,7 @@ namespace Cognite.OpcUa
         /// Gets attributes for the given list of nodes. The attributes retrieved for each node depends on its NodeClass.
         /// </summary>
         /// <param name="nodes">Nodes to be updated with data from the opcua server</param>
-        public void ReadNodeData(IEnumerable<UANode> nodes, CancellationToken token)
+        public async Task ReadNodeData(IEnumerable<UANode> nodes, CancellationToken token)
         {
             nodes = nodes.Where(node => (!(node is UAVariable variable) || variable.Index == -1) && !node.DataRead).ToList();
 
@@ -681,7 +691,7 @@ namespace Cognite.OpcUa
             IList<DataValue> values;
             try
             {
-                values = ReadAttributes(readValueIds, nodes.Count(), token);
+                values = await ReadAttributes(readValueIds, nodes.Count(), token);
             }
             catch (ServiceResultException ex)
             {
@@ -709,10 +719,10 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="ids">Nodes to get values for</param>
         /// <returns>A map from given nodeId to DataValue</returns>
-        public Dictionary<NodeId, DataValue> ReadRawValues(IEnumerable<NodeId> ids, CancellationToken token)
+        public async Task<Dictionary<NodeId, DataValue>> ReadRawValues(IEnumerable<NodeId> ids, CancellationToken token)
         {
             var readValueIds = ids.Distinct().Select(id => new ReadValueId { AttributeId = Attributes.Value, NodeId = id }).ToList();
-            var values = ReadAttributes(new ReadValueIdCollection(readValueIds), ids.Count(), token);
+            var values = await ReadAttributes(new ReadValueIdCollection(readValueIds), ids.Count(), token);
             return values.Select((dv, index) => (ids.ElementAt(index), dv)).ToDictionary(pair => pair.Item1, pair => pair.dv);
         }
 
@@ -724,7 +734,7 @@ namespace Cognite.OpcUa
         /// To avoid complications, avoid fetching data of unknown large size here.
         /// </remarks>
         /// <param name="nodes">List of variables to be updated</param>
-        public void ReadNodeValues(IEnumerable<UAVariable> nodes, CancellationToken token)
+        public async Task ReadNodeValues(IEnumerable<UAVariable> nodes, CancellationToken token)
         {
             nodes = nodes.Where(node => !node.ValueRead && node.Index == -1).ToList();
             if (!nodes.Any()) return;
@@ -734,7 +744,7 @@ namespace Cognite.OpcUa
             try
             {
                 var attributes = new List<uint> { Attributes.Value };
-                values = ReadAttributes(readValueIds, nodes.Count(), token);
+                values = await ReadAttributes(readValueIds, nodes.Count(), token);
             }
             catch (ServiceResultException ex)
             {
@@ -823,10 +833,10 @@ namespace Cognite.OpcUa
                 (uint)NodeClass.Object | (uint)NodeClass.Variable, false, true, true);
 
             log.Information("Read attributes for {cnt} properties", properties.Count);
-            ReadNodeData(properties, token);
+            await ReadNodeData(properties, token);
             var toGetValue = properties.Where(node => DataTypeManager.AllowTSMap(node, 10, true)).ToList();
             await DataTypeManager.GetDataTypeMetadataAsync(toGetValue.SelectNonNull(prop => prop.DataType?.Raw), token);
-            ReadNodeValues(toGetValue, token);
+            await ReadNodeValues(toGetValue, token);
         }
         #endregion
 
@@ -836,7 +846,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="readParams"></param>
         /// <returns>Pairs of NodeId and history read results as IEncodable</returns>
-        public void DoHistoryRead(HistoryReadParams readParams)
+        public async Task DoHistoryRead(HistoryReadParams readParams, CancellationToken token)
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");
             using var operation = waiter.GetInstance();
@@ -853,15 +863,15 @@ namespace Cognite.OpcUa
 
             try
             {
-                Session.HistoryRead(
+                var response = await Session.HistoryReadAsync(
                     null,
                     new ExtensionObject(readParams.Details),
                     TimestampsToReturn.Source,
                     false,
                     ids,
-                    out HistoryReadResultCollection results,
-                    out _
-                );
+                    token);
+                var results = response.Results;
+
                 numHistoryReads.Inc();
                 for (int i = 0; i < readParams.Nodes.Count; i++)
                 {
@@ -886,6 +896,7 @@ namespace Cognite.OpcUa
                           + (readParams.Details is ReadEventDetails ? "events" : "datapoints")
                           + " for {nodeCount} nodes", readParams.Nodes.Count);
             }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
             catch (ServiceResultException ex)
             {
                 historyReadFailures.Inc();

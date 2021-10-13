@@ -202,7 +202,7 @@ namespace Cognite.OpcUa
                 }
             }
 
-            ConfigureExtractor();
+            await ConfigureExtractor();
             if (Config.Source.NodeSetSource == null
                 || (!Config.Source.NodeSetSource.NodeSets?.Any() ?? false)
                 || !Config.Source.NodeSetSource.Types)
@@ -297,9 +297,11 @@ namespace Cognite.OpcUa
             log.Information("Restarting extractor...");
             extraNodesToBrowse.Clear();
             Started = false;
+
             await historyReader.Terminate(Source.Token, 30);
             await uaClient.WaitForOperations(Source.Token);
-            ConfigureExtractor();
+            await ConfigureExtractor();
+
             uaClient.Browser.ResetVisitedNodes();
 
             var synchTasks = await RunMapping(RootNodes, true, false);
@@ -403,7 +405,7 @@ namespace Cognite.OpcUa
                 nodes = nodes.Where(node => !pendingProperties.Contains(node.Id) && !node.PropertiesRead).ToList();
                 if (nodes.Any())
                 {
-                    newTask = Task.Run(async () => await uaClient.GetNodeProperties(nodes, Source.Token));
+                    newTask = uaClient.GetNodeProperties(nodes, Source.Token);
                     propertyReadTasks.Add(newTask);
                 }
 
@@ -681,7 +683,7 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Set up extractor once UAClient is started. This resets the internal state of the extractor.
         /// </summary>
-        private void ConfigureExtractor()
+        private async Task ConfigureExtractor()
         {
             RootNodes = Config.Extraction.GetRootNodes(uaClient);
 
@@ -725,7 +727,7 @@ namespace Cognite.OpcUa
                 }
                 if (Config.Events.ReadServer)
                 {
-                    var serverNode = uaClient.GetServerNode(Source.Token);
+                    var serverNode = await uaClient.GetServerNode(Source.Token);
                     if (serverNode.EventNotifier != 0)
                     {
                         var history = (serverNode.EventNotifier & EventNotifiers.HistoryRead) != 0 && Config.Events.History;
@@ -737,7 +739,7 @@ namespace Cognite.OpcUa
             BuildTransformations();
 
             var helper = new ServerInfoHelper(uaClient);
-            helper.LimitConfigValues(Config, Source.Token);
+            await helper.LimitConfigValues(Config, Source.Token);
         }
 
         /// <summary>
