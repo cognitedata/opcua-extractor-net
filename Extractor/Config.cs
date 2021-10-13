@@ -471,5 +471,6 @@ namespace Cognite.OpcUa
     {
         public bool Enabled { get; set; }
         public bool PreferUadp { get; set; } = true;
+        public string? FileName { get; set; }
     }
 }

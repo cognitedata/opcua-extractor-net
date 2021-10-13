@@ -4,9 +4,12 @@ using Opc.Ua.PubSub.Encoding;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml;
 
 namespace Cognite.OpcUa.PubSub
 {
@@ -31,7 +34,7 @@ namespace Cognite.OpcUa.PubSub
                 app.Dispose();
             }
 
-            var config = await configurator.Build(token);
+            var config = await GetConfig(token);
             if (config == null)
             {
                 log.Error("Configuring subscriber failed");
@@ -63,6 +66,49 @@ namespace Cognite.OpcUa.PubSub
 
             app.DataReceived += DataReceived;
             app.Start();
+        }
+
+        private async Task<PubSubConfigurationDataType?> GetConfig(CancellationToken token)
+        {
+            var config = LoadConfig();
+            if (config == null)
+            {
+                config = await configurator.Build(token);
+                if (config != null) SaveConfig(config);
+            }
+            return config;
+        }
+
+        private PubSubConfigurationDataType? LoadConfig()
+        {
+            if (string.IsNullOrWhiteSpace(config.FileName)) return null;
+            if (!File.Exists(config.FileName)) return null;
+            try
+            {
+                using (var stream = new FileStream(config.FileName, FileMode.Open, FileAccess.Read))
+                {
+                    var s = new DataContractSerializer(typeof(PubSubConfigurationDataType));
+                    return (PubSubConfigurationDataType)s.ReadObject(stream);
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error("Failed to deserialize pubsub config file: {msg}", ex.Message);
+                return null;
+            }
+        }
+
+        private void SaveConfig(PubSubConfigurationDataType config)
+        {
+            if (string.IsNullOrWhiteSpace(this.config.FileName)) return;
+            log.Information("Saving PubSub configuration to {name}", this.config.FileName);
+            using (var stream = new FileStream(this.config.FileName, FileMode.Create, FileAccess.Write))
+            {
+                var s = new DataContractSerializer(typeof(PubSubConfigurationDataType));
+                var settings = new XmlWriterSettings { Indent = true };
+
+                using (var w = XmlWriter.Create(stream, settings)) s.WriteObject(w, config);
+            }
         }
 
         private void DataReceived(object sender, SubscribedDataEventArgs e)
