@@ -41,7 +41,7 @@ namespace Cognite.OpcUa.History
             if (Id == null || Id.IsNullNodeId) throw new InvalidOperationException("NodeId may not be null");
         }
         /// <summary>
-        /// Results in silently uninitilized State, unsafe.
+        /// Results in silently uninitialized State, unsafe.
         /// </summary>
         /// <param name="type"></param>
         /// <param name="id"></param>
