@@ -317,10 +317,15 @@ namespace Cognite.OpcUa
         public string? DatapointPath { get; set; }
         public string? EventPath { get; set; }
     }
+
+    public class UALoggerConfig : LoggerConfig
+    {
+        public string? UaTraceLevel { get; set; }
+    }
     public class FullConfig : VersionedConfig
     {
         public UAClientConfig Source { get; set; } = null!;
-        public LoggerConfig Logger { get; set; } = null!;
+        public UALoggerConfig Logger { get; set; } = null!;
         public UAMetricsConfig Metrics { get; set; } = null!;
         public CognitePusherConfig? Cognite { get; set; }
         public MqttPusherConfig? Mqtt { get; set; }
@@ -334,7 +339,7 @@ namespace Cognite.OpcUa
         public override void GenerateDefaults()
         {
             if (Source == null) Source = new UAClientConfig();
-            if (Logger == null) Logger = new LoggerConfig();
+            if (Logger == null) Logger = new UALoggerConfig();
             if (Metrics == null) Metrics = new UAMetricsConfig();
             if (Cognite != null)
             {
