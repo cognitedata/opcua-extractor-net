@@ -127,7 +127,8 @@ namespace Cognite.OpcUa.History
 
         protected override void AbortChunk(IChunk<HistoryReadNode> chunk, CancellationToken token)
         {
-            // TODO
+            var readChunk = (HistoryReadParams)chunk;
+            Task.Run(() => uaClient.DoHistoryRead(readChunk), CancellationToken.None).Wait();
         }
 
         private HistoryReadDetails GetReadDetails(IEnumerable<HistoryReadNode> nodes)
@@ -234,15 +235,14 @@ namespace Cognite.OpcUa.History
             }
         }
 
-
-
         #region results
 
         private void LogReadFailure(IChunk<HistoryReadNode> finishedRead)
         {
-            string msg = $"HistoryRead {type} failed for nodes" +
-                $" {string.Join(',', finishedRead.Items.Select(node => node.State.Id))}: {finishedRead.Exception?.Message ?? ""}";
-            log.Error(msg);
+            log.Error("HistoryRead {type} failed for nodes {nodes}: {msg}",
+                type,
+                string.Join(',', finishedRead.Items.Select(node => node.State.Id)),
+                finishedRead.Exception?.Message);
             ExtractorUtils.LogException(log, finishedRead.Exception, "Critical failure in HistoryRead", "Failure in HistoryRead");
         }
 

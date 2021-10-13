@@ -841,6 +841,70 @@ namespace Cognite.OpcUa
         #endregion
 
         #region Synchronization
+
+        /// <summary>
+        /// Abort a history read chunk, releasing continuation points
+        /// </summary>
+        /// <param name="readParams"></param>
+        /// <exception cref="InvalidOperationException"></exception>
+        public void AbortHistoryRead(HistoryReadParams readParams)
+        {
+            if (Session == null) throw new InvalidOperationException("Requires open session");
+            using var operation = waiter.GetInstance();
+
+            var ids = new HistoryReadValueIdCollection();
+            foreach (var node in readParams.Nodes)
+            {
+                if (node.ContinuationPoint == null) continue;
+                ids.Add(new HistoryReadValueId
+                {
+                    NodeId = node.Id,
+                    ContinuationPoint = node.ContinuationPoint
+                });
+            }
+            if (!ids.Any()) return;
+
+            if (readParams.Details is ReadRawModifiedDetails dpDetails)
+            {
+                dpDetails.NumValuesPerNode = 1;
+            }
+            else if (readParams.Details is ReadEventDetails evtDetails)
+            {
+                evtDetails.NumValuesPerNode = 1;
+            }
+
+            try
+            {
+                Session.HistoryRead(
+                    null,
+                    new ExtensionObject(readParams.Details),
+                    TimestampsToReturn.Source,
+                    true,
+                    ids,
+                    out _,
+                    out _);
+
+                foreach (var node in readParams.Nodes)
+                {
+                    node.ContinuationPoint = null;
+                    node.Completed = true;
+                }
+            }
+            catch (ServiceResultException ex)
+            {
+                historyReadFailures.Inc();
+                throw ExtractorUtils.HandleServiceResult(log, ex, readParams.Details is ReadEventDetails
+                    ? ExtractorUtils.SourceOp.HistoryReadEvents
+                    : ExtractorUtils.SourceOp.HistoryRead);
+            }
+            catch
+            {
+                historyReadFailures.Inc();
+                throw;
+            }
+        }
+
+
         /// <summary>
         /// Modifies passed HistoryReadParams while doing a single config-limited iteration of history read.
         /// </summary>
