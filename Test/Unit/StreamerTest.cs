@@ -39,13 +39,19 @@ namespace Test.Unit
             pusher.DataPoints[(new NodeId("id"), -1)] = dps;
             using var extractor = tester.BuildExtractor(pushers: pusher);
 
+            using var evt = new ManualResetEvent(false);
+
+            void DummyLooper(CancellationToken token)
+            {
+                if (token.IsCancellationRequested) return;
+                evt.Set();
+            }
+
+            extractor.Looper.Scheduler.SchedulePeriodicTask("Pushers", Timeout.InfiniteTimeSpan, DummyLooper, false);
+
             var queue = (Queue<UADataPoint>)extractor.Streamer.GetType()
                 .GetField("dataPointQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
-
-            var triggerPush = (ManualResetEvent)extractor.Looper.GetType()
-                .GetField("triggerPush", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(extractor.Looper);
 
             extractor.Streamer.AllowData = true;
             var start = DateTime.UtcNow;
@@ -58,7 +64,7 @@ namespace Test.Unit
 
             extractor.State.SetNodeState(state, "id");
 
-            Assert.False(triggerPush.WaitOne(0));
+            Assert.False(evt.WaitOne(100));
 
             extractor.Streamer.Enqueue(new UADataPoint(start, "id", -1));
             Assert.Single(queue);
@@ -69,20 +75,21 @@ namespace Test.Unit
 
             extractor.Streamer.Enqueue(Enumerable.Range(0, 2000000).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx)));
 
-            Assert.True(triggerPush.WaitOne(0));
+            Assert.True(evt.WaitOne(1000));
             Assert.Equal(2000000, queue.Count);
             await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
-            triggerPush.Reset();
 
+            evt.Reset();
             Assert.Equal(2000001, dps.Count);
             Assert.Empty(queue);
 
             extractor.Streamer.Enqueue(Enumerable.Range(2000000, 999999).Select(idx => new UADataPoint(start.AddMilliseconds(idx), "id", idx)));
-            Assert.False(triggerPush.WaitOne(0));
+
+            Assert.False(evt.WaitOne(100));
             Assert.Equal(999999, queue.Count);
 
             extractor.Streamer.Enqueue(new UADataPoint(start.AddMilliseconds(3000000), "id", 300));
-            Assert.True(triggerPush.WaitOne(0));
+            Assert.True(evt.WaitOne(1000));
             Assert.Equal(1000000, queue.Count);
 
             await extractor.Streamer.PushDataPoints(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
@@ -101,9 +108,15 @@ namespace Test.Unit
                 .GetField("eventQueue", BindingFlags.NonPublic | BindingFlags.Instance)
                 .GetValue(extractor.Streamer);
 
-            var triggerPush = (ManualResetEvent)extractor.Looper.GetType()
-                .GetField("triggerPush", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(extractor.Looper);
+            using var evt = new ManualResetEvent(false);
+
+            void DummyLooper(CancellationToken token)
+            {
+                if (token.IsCancellationRequested) return;
+                evt.Set();
+            }
+
+            extractor.Looper.Scheduler.SchedulePeriodicTask("Pushers", Timeout.InfiniteTimeSpan, DummyLooper, false);
 
             extractor.Streamer.AllowEvents = true;
             var start = DateTime.UtcNow;
@@ -113,7 +126,7 @@ namespace Test.Unit
             state.FinalizeRangeInit();
             extractor.State.SetEmitterState(state);
 
-            Assert.False(triggerPush.WaitOne(0));
+            Assert.False(evt.WaitOne(100));
 
             extractor.Streamer.Enqueue(new UAEvent { EmittingNode = id, Time = start });
             Assert.Single(queue);
@@ -127,10 +140,10 @@ namespace Test.Unit
             extractor.Streamer.Enqueue(Enumerable.Range(0, 200000).Select(idx =>
                 new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(idx) }));
 
-            Assert.True(triggerPush.WaitOne(0));
+            Assert.True(evt.WaitOne(1000));
             Assert.Equal(200000, queue.Count);
             await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
-            triggerPush.Reset();
+            evt.Reset();
 
             Assert.Equal(200001, evts.Count);
             Assert.Empty(queue);
@@ -138,11 +151,11 @@ namespace Test.Unit
             extractor.Streamer.Enqueue(Enumerable.Range(200000, 99999).Select(idx =>
                 new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(idx) }));
 
-            Assert.False(triggerPush.WaitOne(0));
+            Assert.False(evt.WaitOne(100));
             Assert.Equal(99999, queue.Count);
 
             extractor.Streamer.Enqueue(new UAEvent { EmittingNode = id, Time = start.AddMilliseconds(300000) });
-            Assert.True(triggerPush.WaitOne(0));
+            Assert.True(evt.WaitOne(1000));
             Assert.Equal(100000, queue.Count);
 
             await extractor.Streamer.PushEvents(new[] { pusher }, Enumerable.Empty<IPusher>(), tester.Source.Token);
