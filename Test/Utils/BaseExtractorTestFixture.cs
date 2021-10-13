@@ -25,7 +25,7 @@ namespace Test.Utils
         public CancellationTokenSource Source { get; protected set; }
         public IServiceProvider Provider { get; protected set; }
         protected ServiceCollection Services { get; }
-        protected BaseExtractorTestFixture()
+        protected BaseExtractorTestFixture(PredefinedSetup[] setups = null)
         {
             Port = CommonTestUtils.NextPort;
             // Set higher min thread count, this is required due to running both server and client in the same process.
@@ -39,9 +39,13 @@ namespace Test.Utils
             LoggingUtils.Configure(Config.Logger);
             Provider = Services.BuildServiceProvider();
 
-            Server = new ServerController(new[] {
-                PredefinedSetup.Custom, PredefinedSetup.Base, PredefinedSetup.Events,
-                PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing }, Port);
+            if (setups == null)
+            {
+                setups = new[] {
+                    PredefinedSetup.Custom, PredefinedSetup.Base, PredefinedSetup.Events,
+                    PredefinedSetup.Wrong, PredefinedSetup.Full, PredefinedSetup.Auditing };
+            }
+            Server = new ServerController(setups, Port);
             Server.Start().Wait();
 
             Client = new UAClient(Config);

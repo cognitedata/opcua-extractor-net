@@ -32,6 +32,7 @@ namespace Cognite.OpcUa.PubSub
             if (app != null)
             {
                 app.Dispose();
+                app = null;
             }
 
             var config = await GetConfig(token);
@@ -66,6 +67,14 @@ namespace Cognite.OpcUa.PubSub
 
             app.DataReceived += DataReceived;
             app.Start();
+        }
+
+        public void Stop()
+        {
+            if (app != null)
+            {
+                app.Stop();
+            }
         }
 
         private async Task<PubSubConfigurationDataType?> GetConfig(CancellationToken token)
@@ -141,7 +150,7 @@ namespace Cognite.OpcUa.PubSub
                     var variable = extractor.State.GetNodeState(field.TargetNodeId);
                     if (variable == null)
                     {
-                        log.Verbose("Missing state for pub-sub node: {id}", field.TargetNodeId);
+                        log.Verbose("\t\tMissing state for pub-sub node: {id}", field.TargetNodeId);
                         continue;
                     }
 

@@ -141,8 +141,6 @@ namespace Cognite.OpcUa.PubSub
                     ?.Body as ConfigurationVersionDataType;
                 var id = dataSet.Children.GetValueOrDefault("DataSetClassId")?.Value?.Value as Uuid?;
 
-                Console.WriteLine($"Discover dataset: {dataSet.BrowseName}, {publishedItems} {metaData} {version} {id}");
-
                 if (publishedItems == null || metaData == null || version == null) continue;
 
                 var subscribedDataSet = new TargetVariablesDataType();
