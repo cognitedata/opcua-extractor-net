@@ -3,45 +3,45 @@ NUGET
   remote: https://www.nuget.org/api/v2
     AdysTech.InfluxDB.Client.Net.Core (0.25)
       Newtonsoft.Json (>= 10.0.3) - restriction: || (>= net46) (>= netstandard2.0)
-    Cognite.Extensions (1.0.0-beta-011) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
+    Cognite.Extensions (1.0.0-beta-012) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
       CogniteSdk (>= 1.6.5) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 5.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http.Polly (>= 5.0.1) - restriction: >= netstandard2.0
       Polly.Extensions.Http (>= 3.0) - restriction: >= netstandard2.0
       prometheus-net (>= 5.0.1) - restriction: >= netstandard2.0
-    Cognite.Extractor.Common (1.0.0-beta-011) - restriction: >= netstandard2.0
+    Cognite.Extractor.Common (1.0.0-beta-012) - restriction: >= netstandard2.0
       System.Text.Json (>= 5.0.2) - restriction: >= netstandard2.0
-    Cognite.Extractor.Configuration (1.0.0-beta-011)
+    Cognite.Extractor.Configuration (1.0.0-beta-012)
       Microsoft.CSharp (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection (>= 5.0.2) - restriction: >= netstandard2.0
       YamlDotNet (>= 11.2.1) - restriction: >= netstandard2.0
-    Cognite.Extractor.Logging (1.0.0-beta-011)
+    Cognite.Extractor.Logging (1.0.0-beta-012)
       Microsoft.Extensions.DependencyInjection (>= 5.0.2) - restriction: >= netstandard2.0
       Serilog (>= 2.10) - restriction: >= netstandard2.0
       Serilog.Extensions.Logging (>= 3.0.1) - restriction: >= netstandard2.0
       Serilog.Sinks.Async (>= 1.5) - restriction: >= netstandard2.0
       Serilog.Sinks.Console (>= 4.0) - restriction: >= netstandard2.0
       Serilog.Sinks.File (>= 5.0) - restriction: >= netstandard2.0
-    Cognite.Extractor.Metrics (1.0.0-beta-011)
-      Cognite.Extractor.Common (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
+    Cognite.Extractor.Metrics (1.0.0-beta-012)
+      Cognite.Extractor.Common (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http (>= 5.0) - restriction: >= netstandard2.0
       Microsoft.Extensions.Http.Polly (>= 5.0.1) - restriction: >= netstandard2.0
       Polly.Extensions.Http (>= 3.0) - restriction: >= netstandard2.0
       prometheus-net (>= 5.0.1) - restriction: >= netstandard2.0
-    Cognite.Extractor.StateStorage (1.0.0-beta-011) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
+    Cognite.Extractor.StateStorage (1.0.0-beta-012) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
       LiteDB (>= 5.0.11) - restriction: >= netstandard2.0
-    Cognite.ExtractorUtils (1.0.0-beta-011)
-      Cognite.Extensions (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
-      Cognite.Extractor.Common (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
-      Cognite.Extractor.Configuration (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
-      Cognite.Extractor.Logging (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
-      Cognite.Extractor.Metrics (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
-      Cognite.Extractor.StateStorage (>= 1.0.0-beta-011) - restriction: >= netstandard2.0
+    Cognite.ExtractorUtils (1.0.0-beta-012)
+      Cognite.Extensions (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
+      Cognite.Extractor.Common (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
+      Cognite.Extractor.Configuration (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
+      Cognite.Extractor.Logging (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
+      Cognite.Extractor.Metrics (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
+      Cognite.Extractor.StateStorage (>= 1.0.0-beta-012) - restriction: >= netstandard2.0
       Microsoft.Bcl.AsyncInterfaces (>= 5.0) - restriction: >= netstandard2.0
       Microsoft.CSharp (>= 4.7) - restriction: >= netstandard2.0
       Microsoft.Extensions.DependencyInjection (>= 5.0.2) - restriction: >= netstandard2.0
@@ -258,7 +258,7 @@ NUGET
       runtime.win10-arm.Microsoft.Net.UWPCoreRuntimeSdk (>= 2.2.12) - restriction: >= uap10.1
       runtime.win10-x64.Microsoft.Net.UWPCoreRuntimeSdk (>= 2.2.12) - restriction: >= uap10.1
       runtime.win10-x86.Microsoft.Net.UWPCoreRuntimeSdk (>= 2.2.12) - restriction: >= uap10.1
-    Microsoft.NETCore.Platforms (5.0.3) - restriction: || (&& (< monoandroid) (>= monoandroid10.0)) (&& (< monoandroid) (>= monoandroid9.0) (< netcoreapp2.1)) (&& (< monoandroid) (< monotouch) (< net45) (>= netstandard1.6) (< netstandard2.0) (< win8) (< wpa81) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< monotouch) (< net452) (>= netstandard1.6) (< netstandard2.0) (< uap10.0) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< net45) (< net5.0-windows10.0.17763.0) (>= netstandard2.0) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< net45) (>= netstandard1.1) (< netstandard1.2) (< win8)) (&& (< monoandroid) (< net45) (>= netstandard1.2) (< netstandard1.3) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.3) (< win8)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.4) (< win8)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.5) (< win8)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.6) (< win8)) (&& (< monoandroid) (< net45) (>= netstandard1.3) (< netstandard1.4) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.3) (>= netstandard1.4) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.3) (>= netstandard1.5) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.3) (>= netstandard1.6) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (>= netstandard1.4) (< netstandard1.5) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.4) (>= netstandard1.5) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.4) (>= netstandard1.6) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (>= netstandard1.5) (< netstandard1.6) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.5) (>= netstandard1.6) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (>= netstandard2.0) (< win8) (< wpa81) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (>= netcoreapp1.0) (< netcoreapp2.1) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.2) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.3) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.4) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.5) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.6) (< win8)) (&& (< monoandroid9.0) (< net45) (< net5.0-windows10.0.17763.0) (>= netstandard2.0) (< uap10.0) (< xamarinios) (< xamarinmac)) (&& (< net45) (>= net46) (< netstandard1.3)) (&& (< net45) (>= net46) (< netstandard1.4)) (&& (< net45) (>= net462)) (&& (>= netcoreapp2.0) (< netcoreapp2.1) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netcoreapp2.1) (>= netstandard2.1)) (&& (>= netcoreapp2.1) (< netstandard2.1)) (>= netcoreapp3.0) (&& (>= netstandard1.0) (< portable-net45+win8+wpa81) (< wp8)) (&& (>= netstandard1.1) (< portable-net45+win8+wpa81)) (&& (< netstandard1.1) (>= uap10.0) (< win8)) (&& (< netstandard1.2) (>= uap10.0) (< win8)) (&& (>= netstandard1.3) (< portable-net45+win8+wpa81)) (&& (< netstandard1.3) (>= uap10.0) (< win8) (< wpa81)) (&& (< netstandard1.5) (>= uap10.0) (< win8) (< wpa81)) (&& (>= netstandard2.0) (>= uap10.0)) (>= uap10.1)
+    Microsoft.NETCore.Platforms (5.0.4) - restriction: || (&& (< monoandroid) (>= monoandroid10.0)) (&& (< monoandroid) (>= monoandroid9.0) (< netcoreapp2.1)) (&& (< monoandroid) (< monotouch) (< net45) (>= netstandard1.6) (< netstandard2.0) (< win8) (< wpa81) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< monotouch) (< net452) (>= netstandard1.6) (< netstandard2.0) (< uap10.0) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< net45) (< net5.0-windows10.0.17763.0) (>= netstandard2.0) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< net45) (>= netstandard1.1) (< netstandard1.2) (< win8)) (&& (< monoandroid) (< net45) (>= netstandard1.2) (< netstandard1.3) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.3) (< win8)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.4) (< win8)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.5) (< win8)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.6) (< win8)) (&& (< monoandroid) (< net45) (>= netstandard1.3) (< netstandard1.4) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.3) (>= netstandard1.4) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.3) (>= netstandard1.5) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.3) (>= netstandard1.6) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (>= netstandard1.4) (< netstandard1.5) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.4) (>= netstandard1.5) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.4) (>= netstandard1.6) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (>= netstandard1.5) (< netstandard1.6) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.5) (>= netstandard1.6) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (>= netstandard2.0) (< win8) (< wpa81) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (>= netcoreapp1.0) (< netcoreapp2.1) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.2) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.3) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.4) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.5) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.6) (< win8)) (&& (< monoandroid9.0) (< net45) (< net5.0-windows10.0.17763.0) (>= netstandard2.0) (< uap10.0) (< xamarinios) (< xamarinmac)) (&& (< net45) (>= net46) (< netstandard1.3)) (&& (< net45) (>= net46) (< netstandard1.4)) (&& (< net45) (>= net462)) (&& (>= netcoreapp2.0) (< netcoreapp2.1) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netcoreapp2.1) (>= netstandard2.1)) (&& (>= netcoreapp2.1) (< netstandard2.1)) (>= netcoreapp3.0) (&& (>= netstandard1.0) (< portable-net45+win8+wpa81) (< wp8)) (&& (>= netstandard1.1) (< portable-net45+win8+wpa81)) (&& (< netstandard1.1) (>= uap10.0) (< win8)) (&& (< netstandard1.2) (>= uap10.0) (< win8)) (&& (>= netstandard1.3) (< portable-net45+win8+wpa81)) (&& (< netstandard1.3) (>= uap10.0) (< win8) (< wpa81)) (&& (< netstandard1.5) (>= uap10.0) (< win8) (< wpa81)) (&& (>= netstandard2.0) (>= uap10.0)) (>= uap10.1)
     Microsoft.NETCore.Targets (5.0) - restriction: || (&& (< monoandroid) (< monotouch) (< net45) (>= netstandard1.6) (< netstandard2.0) (< win8) (< wpa81) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< monotouch) (< net452) (>= netstandard1.6) (< netstandard2.0) (< uap10.0) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< net45) (>= netstandard1.1) (< netstandard1.2) (< win8)) (&& (< monoandroid) (< net45) (>= netstandard1.2) (< netstandard1.3) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.3) (< win8)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.4) (< win8)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.5) (< win8)) (&& (< monoandroid) (< net45) (< netstandard1.2) (>= netstandard1.6) (< win8)) (&& (< monoandroid) (< net45) (>= netstandard1.3) (< netstandard1.4) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.3) (>= netstandard1.4) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.3) (>= netstandard1.5) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.3) (>= netstandard1.6) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (>= netstandard1.4) (< netstandard1.5) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.4) (>= netstandard1.5) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (>= netstandard1.5) (< netstandard1.6) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (< netstandard1.5) (>= netstandard1.6) (< win8) (< wpa81)) (&& (< monoandroid) (< net45) (>= netstandard2.0) (< win8) (< wpa81) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.2) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.3) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.4) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.5) (< win8)) (&& (< monoandroid) (< netstandard1.1) (>= netstandard1.6) (< win8)) (&& (< monoandroid9.0) (< net45) (< net5.0-windows10.0.17763.0) (>= netstandard2.0) (< uap10.0) (< xamarinios) (< xamarinmac)) (&& (< net45) (>= net46) (< netstandard1.3)) (&& (< net45) (>= net46) (< netstandard1.4)) (&& (< net45) (>= net462)) (&& (>= netstandard1.0) (< portable-net45+win8+wpa81) (< wp8)) (&& (>= netstandard1.1) (< portable-net45+win8+wpa81)) (&& (< netstandard1.1) (>= uap10.0) (< win8)) (&& (< netstandard1.2) (>= uap10.0) (< win8)) (&& (>= netstandard1.3) (< portable-net45+win8+wpa81)) (&& (< netstandard1.3) (>= uap10.0) (< win8) (< wpa81)) (&& (< netstandard1.5) (>= uap10.0) (< win8) (< wpa81))
     Microsoft.NETCore.UniversalWindowsPlatform (6.2.12) - restriction: && (< netstandard2.0) (>= uap10.0)
       Microsoft.Net.Native.Compiler (>= 2.2.10-rel-29722-00) - restriction: >= uap10.1
@@ -394,28 +394,28 @@ NUGET
       System.Xml.XDocument (>= 4.3) - restriction: || (&& (< net45) (>= netstandard1.1) (< netstandard1.2) (< win8)) (&& (< net45) (>= netstandard1.2) (< netstandard1.3) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.3) (< netstandard1.4) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.4) (< netstandard1.5) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.5) (< netstandard1.6) (< win8) (< wpa81)) (&& (< net45) (>= netstandard1.6) (< netstandard2.0) (< win8) (< wpa81)) (&& (>= netstandard1.0) (< portable-net45+win8+wpa81) (< wp8)) (&& (< netstandard1.5) (>= uap10.0) (< uap10.1))
     Newtonsoft.Json (13.0.1) - restriction: || (>= net46) (>= netcoreapp1.0) (>= netstandard2.0) (>= uap10.0)
     NuGet.Frameworks (5.11) - restriction: || (&& (>= net45) (>= netcoreapp1.0) (< netstandard1.3)) (&& (>= net451) (>= netcoreapp1.0)) (&& (>= netcoreapp1.0) (< netstandard2.0)) (>= netcoreapp2.1)
-    OPCFoundation.NetStandard.Opc.Ua.Client (1.4.367.41)
-      OPCFoundation.NetStandard.Opc.Ua.Configuration (>= 1.4.367.41) - restriction: || (>= net462) (>= netstandard2.0)
-      OPCFoundation.NetStandard.Opc.Ua.Core (>= 1.4.367.41) - restriction: || (>= net462) (>= netstandard2.0)
-    OPCFoundation.NetStandard.Opc.Ua.Configuration (1.4.367.41)
-      OPCFoundation.NetStandard.Opc.Ua.Core (>= 1.4.367.41) - restriction: || (>= net462) (>= netstandard2.0)
-    OPCFoundation.NetStandard.Opc.Ua.Core (1.4.367.41) - restriction: || (>= net462) (>= netstandard2.0)
+    OPCFoundation.NetStandard.Opc.Ua.Client (1.4.367.42)
+      OPCFoundation.NetStandard.Opc.Ua.Configuration (>= 1.4.367.42) - restriction: || (>= net462) (>= netstandard2.0)
+      OPCFoundation.NetStandard.Opc.Ua.Core (>= 1.4.367.42) - restriction: || (>= net462) (>= netstandard2.0)
+    OPCFoundation.NetStandard.Opc.Ua.Configuration (1.4.367.42)
+      OPCFoundation.NetStandard.Opc.Ua.Core (>= 1.4.367.42) - restriction: || (>= net462) (>= netstandard2.0)
+    OPCFoundation.NetStandard.Opc.Ua.Core (1.4.367.42) - restriction: || (>= net462) (>= netstandard2.0)
       Newtonsoft.Json (>= 13.0.1) - restriction: || (>= net462) (>= netstandard2.0)
-      OPCFoundation.NetStandard.Opc.Ua.Security.Certificates (>= 1.4.367.41) - restriction: || (>= net462) (>= netstandard2.0)
+      OPCFoundation.NetStandard.Opc.Ua.Security.Certificates (>= 1.4.367.42) - restriction: || (>= net462) (>= netstandard2.0)
       System.Buffers (>= 4.5.1) - restriction: || (>= net462) (>= netstandard2.0)
       System.Data.Common (>= 4.3) - restriction: || (&& (< net462) (>= netstandard2.0)) (>= netstandard2.1)
       System.Net.NameResolution (>= 4.3) - restriction: || (&& (< net462) (>= netstandard2.0)) (>= netstandard2.1)
-    OPCFoundation.NetStandard.Opc.Ua.PubSub (1.4.367.41-beta)
+    OPCFoundation.NetStandard.Opc.Ua.PubSub (1.4.367.42-beta)
       MQTTnet (>= 3.0.16) - restriction: || (>= net462) (>= netstandard2.0)
-      OPCFoundation.NetStandard.Opc.Ua.Core (>= 1.4.367.41) - restriction: || (>= net462) (>= netstandard2.0)
+      OPCFoundation.NetStandard.Opc.Ua.Core (>= 1.4.367.42) - restriction: || (>= net462) (>= netstandard2.0)
       System.Net.NetworkInformation (>= 4.3) - restriction: || (>= net462) (>= netstandard2.0)
       System.Runtime.InteropServices.RuntimeInformation (>= 4.3) - restriction: >= net462
-    OPCFoundation.NetStandard.Opc.Ua.Security.Certificates (1.4.367.41) - restriction: || (>= net462) (>= netstandard2.0)
+    OPCFoundation.NetStandard.Opc.Ua.Security.Certificates (1.4.367.42) - restriction: || (>= net462) (>= netstandard2.0)
       Portable.BouncyCastle (>= 1.8.10) - restriction: || (>= net462) (&& (>= netstandard2.0) (< netstandard2.1))
       System.Formats.Asn1 (>= 5.0) - restriction: || (>= net462) (>= netstandard2.0)
-    OPCFoundation.NetStandard.Opc.Ua.Server (1.4.367.41)
-      OPCFoundation.NetStandard.Opc.Ua.Configuration (>= 1.4.367.41) - restriction: || (>= net462) (>= netstandard2.0)
-      OPCFoundation.NetStandard.Opc.Ua.Core (>= 1.4.367.41) - restriction: || (>= net462) (>= netstandard2.0)
+    OPCFoundation.NetStandard.Opc.Ua.Server (1.4.367.42)
+      OPCFoundation.NetStandard.Opc.Ua.Configuration (>= 1.4.367.42) - restriction: || (>= net462) (>= netstandard2.0)
+      OPCFoundation.NetStandard.Opc.Ua.Core (>= 1.4.367.42) - restriction: || (>= net462) (>= netstandard2.0)
     Oryx (4.0.1) - restriction: >= netstandard2.0
       FSharp.Core (>= 5.0.1) - restriction: >= netstandard2.0
       FsToolkit.ErrorHandling (>= 2.1.2) - restriction: >= netstandard2.0
@@ -685,8 +685,8 @@ NUGET
       System.IO.FileSystem.AccessControl (>= 5.0) - restriction: >= netcoreapp2.0
       System.Security.AccessControl (>= 5.0) - restriction: >= netcoreapp2.0
       System.Security.Principal.Windows (>= 5.0) - restriction: || (&& (< net45) (>= netstandard2.0)) (>= netcoreapp2.0)
-    System.DirectoryServices.Protocols (5.0) - restriction: || (&& (>= netcoreapp2.0) (< netcoreapp2.1) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netstandard2.0) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netstandard2.1)) (&& (>= netcoreapp2.1) (< netstandard2.1)) (>= netcoreapp3.0)
-      Microsoft.NETCore.Platforms (>= 5.0) - restriction: >= netcoreapp2.0
+    System.DirectoryServices.Protocols (5.0.1) - restriction: || (&& (>= netcoreapp2.0) (< netcoreapp2.1) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netstandard2.0) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netstandard2.1)) (&& (>= netcoreapp2.1) (< netstandard2.1)) (>= netcoreapp3.0)
+      Microsoft.NETCore.Platforms (>= 5.0.4) - restriction: >= netcoreapp2.0
       System.Security.Principal.Windows (>= 5.0) - restriction: || (&& (< net45) (>= netstandard2.0)) (>= netcoreapp2.0)
     System.Drawing.Common (5.0.2) - restriction: || (&& (>= netcoreapp2.0) (< netcoreapp2.1) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netstandard2.0) (< netstandard2.1)) (&& (< netcoreapp2.0) (>= netstandard2.1)) (&& (>= netcoreapp2.1) (< netstandard2.1)) (>= netcoreapp3.0)
       Microsoft.NETCore.Platforms (>= 5.0.1) - restriction: && (< monoandroid) (>= netcoreapp2.0) (< netcoreapp3.0) (< xamarinios) (< xamarinmac) (< xamarintvos) (< xamarinwatchos)

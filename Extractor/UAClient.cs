@@ -16,7 +16,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
 using Cognite.Extractor.Common;
-using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -24,6 +24,7 @@ using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using Prometheus;
 using Serilog;
+using Serilog.Events;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -129,6 +130,30 @@ namespace Cognite.OpcUa
             Started = false;
         }
 
+        private LogEventLevel? traceLevel;
+        private ILogger traceLogger = Log.Logger.ForContext(typeof(Tracing));
+
+        private void ConfigureUtilsTrace()
+        {
+            if (config.Logger?.UaTraceLevel == null) return;
+            Utils.SetTraceMask(Utils.TraceMasks.All);
+            if (traceLevel != null) return;
+            Utils.Tracing.TraceEventHandler += TraceEventHandler;
+            traceLevel = Enum.Parse<LogEventLevel>(config.Logger?.UaTraceLevel, true);
+        }
+
+        private void TraceEventHandler(object sender, TraceEventArgs e)
+        {
+            if (e.Exception != null)
+            {
+                traceLogger.Write(traceLevel!.Value, e.Exception, e.Format, e.Arguments);
+            }
+            else
+            {
+                traceLogger.Write(traceLevel!.Value, e.Format, e.Arguments);
+            }
+        }
+
         /// <summary>
         /// Load XML configuration file, override certain fields with environment variables if set.
         /// </summary>
@@ -179,6 +204,8 @@ namespace Cognite.OpcUa
                 config.Source.AutoAccept |= AppConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 AppConfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
+
+            ConfigureUtilsTrace();
         }
 
         private async Task CreateSessionDirect()
@@ -809,7 +836,7 @@ namespace Cognite.OpcUa
         /// </summary>
         /// <param name="readParams"></param>
         /// <returns>Pairs of NodeId and history read results as IEncodable</returns>
-        public IEnumerable<(HistoryReadNode Node, IEncodeable RawData)> DoHistoryRead(HistoryReadParams readParams)
+        public void DoHistoryRead(HistoryReadParams readParams)
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");
             using var operation = waiter.GetInstance();
@@ -824,7 +851,6 @@ namespace Cognite.OpcUa
                 });
             }
 
-            var result = new List<(HistoryReadNode, IEncodeable)>();
             try
             {
                 Session.HistoryRead(
@@ -845,7 +871,7 @@ namespace Cognite.OpcUa
                     {
                         throw new ServiceResultException(data.StatusCode);
                     }
-                    result.Add((node, ExtensionObject.ToEncodeable(data.HistoryData)));
+                    node.LastResult = ExtensionObject.ToEncodeable(data.HistoryData);
                     if (data.ContinuationPoint == null)
                     {
                         node.Completed = true;
@@ -872,8 +898,6 @@ namespace Cognite.OpcUa
                 historyReadFailures.Inc();
                 throw;
             }
-
-            return result;
         }
         /// <summary>
         /// Add MonitoredItems to the given list of states.

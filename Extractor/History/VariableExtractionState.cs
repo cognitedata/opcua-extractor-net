@@ -21,7 +21,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
-namespace Cognite.OpcUa.HistoryStates
+namespace Cognite.OpcUa.History
 {
     /// <summary>
     /// State of a node currently being extracted for data. Contains information about the data,

@@ -727,7 +727,7 @@ namespace Test.Integration
 
             extractor.Close(false);
 
-            await Assert.ThrowsAsync<TaskCanceledException>(async () => await runTask);
+            await runTask;
         }
         [Theory]
         [InlineData(true, false)]
@@ -786,7 +786,7 @@ namespace Test.Integration
             extractor.Close(false);
 
 
-            await Assert.ThrowsAsync<TaskCanceledException>(async () => await runTask);
+            await runTask;
         }
         #endregion
 

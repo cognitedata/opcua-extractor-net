@@ -1,5 +1,5 @@
 ﻿using Cognite.OpcUa;
-using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
 using System;
@@ -42,62 +42,69 @@ namespace Test.Unit
             bool synch2 = false;
             using var source = CancellationTokenSource.CreateLinkedTokenSource(tester.Source.Token);
 
-            var tasks = (List<Task>)extractor.Looper.GetType()
-                .GetField("tasks", BindingFlags.NonPublic | BindingFlags.Instance)
-                .GetValue(extractor.Looper);
-
-            var loopTask = extractor.Looper.InitTaskLoop(
-                new[] { Task.Run(() => synch1 = true), Task.Run(() => synch2 = true) }, source.Token);
+            var loopTask = extractor.Looper.Run(
+                new Func<CancellationToken, Task>[] { async token =>
+                    {
+                        synch1 = true;
+                        await Task.Delay(100, token);
+                        Console.WriteLine("Terminate synch 1");
+                    },
+                    token =>
+                    {
+                        synch2 = true;
+                        Console.WriteLine("Terminate synch 2");
+                        return Task.CompletedTask;
+                    } });
 
             await CommonTestUtils.WaitForCondition(() => synch1 && synch2, 5);
-            await CommonTestUtils.WaitForCondition(() => tasks.Count == 6, 5);
 
             await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 2, 5);
 
-            extractor.Looper.TriggerStoreState();
+            Assert.True(extractor.Looper.Scheduler.TryTriggerTask("StoreState"));
 
             await CommonTestUtils.WaitForCondition(() => stateStore.NumStoreState == 4, 5);
 
-            Assert.Equal(6, tasks.Count);
+            bool int1 = false, int2 = false;
 
             // Schedule some interruptable tasks
             using var evt = new ManualResetEvent(false);
             using var evt2 = new ManualResetEvent(false);
-            extractor.Looper.ScheduleTasks(new[]
+            extractor.Looper.Scheduler.ScheduleTask("Interupt1", token =>
             {
-                Task.Run(() => {
-                    Console.WriteLine("Starting task 1");
-                    evt.WaitOne();
-                    Console.WriteLine("Finishing task 1");
-                }),
-                Task.Run(() => {
-                    Console.WriteLine("Starting task 2");
-                    evt.WaitOne();
-                    Console.WriteLine("Triggered once on task 2");
-                    evt2.WaitOne();
-                    Console.WriteLine("Finish task 2");
-                })
+                Console.WriteLine("Starting task 1");
+                evt.WaitOne();
+                Console.WriteLine("Finishing task 1");
+                int1 = true;
+            });
+            extractor.Looper.Scheduler.ScheduleTask("Interupt2", token =>
+            {
+                Console.WriteLine("Starting task 2");
+                evt.WaitOne();
+                Console.WriteLine("Triggered once on task 2");
+                evt2.WaitOne();
+                Console.WriteLine("Finish task 2");
+                int2 = true;
             });
 
-            Assert.Equal(8, tasks.Count);
             evt.Set();
-            await CommonTestUtils.WaitForCondition(() => tasks.Count == 7, 5);
-            evt2.Set();
-            await CommonTestUtils.WaitForCondition(() => tasks.Count == 6, 5);
 
+            await CommonTestUtils.WaitForCondition(() => int1, 5);
+            evt2.Set();
+            await CommonTestUtils.WaitForCondition(() => int2, 5);
+
+            evt.Reset();
             // Try to schedule a failing task
-            extractor.Looper.ScheduleTasks(new[]
+            extractor.Looper.Scheduler.ScheduleTask("failing", async token =>
             {
-                Task.Run(() => throw new ExtractorFailureException("SomeException"))
+                await Task.Delay(100, token);
+                Console.Write("Throw exception");
+                throw new ExtractorFailureException("SomeException");
             });
 
-            await CommonTestUtils.WaitForCondition(() => loopTask.IsFaulted, 5);
-
-            Assert.Equal("SomeException", ExtractorUtils.GetRootExceptionOfType<ExtractorFailureException>(loopTask.Exception).Message);
-
-            loopTask = extractor.Looper.InitTaskLoop(Enumerable.Empty<Task>(), source.Token);
-            source.Cancel();
-            await CommonTestUtils.WaitForCondition(() => loopTask.IsCanceled, 5);
+            await CommonTestUtils.WaitForCondition(() => loopTask.IsFaulted || loopTask.IsCompleted, 5);
+            var ex = loopTask.Exception.Flatten();
+            Assert.IsType<ExtractorFailureException>(ex.InnerException);
+            Assert.Equal("SomeException", ex.InnerException.Message);
         }
 
         private void InitPusherLoopTest(UAExtractor extractor, params DummyPusher[] pushers)
@@ -146,7 +153,9 @@ namespace Test.Unit
             var evts1 = pusher1.Events[new NodeId("id")] = new List<UAEvent>();
             var evts2 = pusher2.Events[new NodeId("id")] = new List<UAEvent>();
 
-            var loopTask = extractor.Looper.InitTaskLoop(Enumerable.Empty<Task>(), tester.Source.Token);
+            var loopTask = extractor.Looper.Run(Enumerable.Empty<Func<CancellationToken, Task>>());
+
+            await extractor.Looper.WaitForNextPush(false);
 
             Assert.Empty(dps1);
             Assert.Empty(dps2);
@@ -252,7 +261,7 @@ namespace Test.Unit
             extractor.Streamer.Enqueue(dps);
             extractor.Streamer.Enqueue(evts);
 
-            var loopTask = extractor.Looper.InitTaskLoop(Enumerable.Empty<Task>(), tester.Source.Token);
+            var loopTask = extractor.Looper.Run(Enumerable.Empty<Func<CancellationToken, Task>>());
 
             // Verify that the two un-initialized pushers are set to failing
 
