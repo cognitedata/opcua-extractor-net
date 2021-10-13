@@ -24,6 +24,7 @@ using Opc.Ua.Client;
 using Opc.Ua.Configuration;
 using Prometheus;
 using Serilog;
+using Serilog.Events;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -129,6 +130,30 @@ namespace Cognite.OpcUa
             Started = false;
         }
 
+        private LogEventLevel? traceLevel;
+        private ILogger traceLogger = Log.Logger.ForContext(typeof(Tracing));
+
+        private void ConfigureUtilsTrace()
+        {
+            if (config.Logger?.UaTraceLevel == null) return;
+            Utils.SetTraceMask(Utils.TraceMasks.All);
+            if (traceLevel != null) return;
+            Utils.Tracing.TraceEventHandler += TraceEventHandler;
+            traceLevel = Enum.Parse<LogEventLevel>(config.Logger?.UaTraceLevel, true);
+        }
+
+        private void TraceEventHandler(object sender, TraceEventArgs e)
+        {
+            if (e.Exception != null)
+            {
+                traceLogger.Write(traceLevel!.Value, e.Exception, e.Format, e.Arguments);
+            }
+            else
+            {
+                traceLogger.Write(traceLevel!.Value, e.Format, e.Arguments);
+            }
+        }
+
         /// <summary>
         /// Load XML configuration file, override certain fields with environment variables if set.
         /// </summary>
@@ -179,6 +204,8 @@ namespace Cognite.OpcUa
                 config.Source.AutoAccept |= AppConfig.SecurityConfiguration.AutoAcceptUntrustedCertificates;
                 AppConfig.CertificateValidator.CertificateValidation += CertificateValidationHandler;
             }
+
+            ConfigureUtilsTrace();
         }
 
         private async Task CreateSessionDirect()
