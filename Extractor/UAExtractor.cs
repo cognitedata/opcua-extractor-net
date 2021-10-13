@@ -912,13 +912,13 @@ namespace Cognite.OpcUa
         /// <summary>
         /// Subscribe to event changes, then run history.
         /// </summary>
-        private async Task SynchronizeEvents()
+        private async Task SynchronizeEvents(CancellationToken token)
         {
             if (Config.Subscriptions.Events)
             {
                 var subscribeStates = State.EmitterStates.Where(state => state.ShouldSubscribe);
-                await Task.Run(() => uaClient.SubscribeToEvents(subscribeStates,
-                    Streamer.EventSubscriptionHandler, Source.Token));
+
+                await uaClient.SubscribeToEvents(subscribeStates, Streamer.EventSubscriptionHandler, Source.Token);
             }
 
             Interlocked.Increment(ref subscribed);
@@ -942,13 +942,14 @@ namespace Cognite.OpcUa
         /// Subscribe to data changes, then run history.
         /// </summary>
         /// <param name="states">States to subscribe to</param>
-        private async Task SynchronizeNodes(IEnumerable<VariableExtractionState> states)
+        private async Task SynchronizeNodes(IEnumerable<VariableExtractionState> states, CancellationToken token)
         {
             log.Information("Sub: {s}", Config.Subscriptions.DataPoints);
             if (Config.Subscriptions.DataPoints)
             {
                 var subscribeStates = states.Where(state => state.ShouldSubscribe);
-                await Task.Run(() => uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, Source.Token));
+
+                await uaClient.SubscribeToNodes(subscribeStates, Streamer.DataSubscriptionHandler, token);
             }
 
             Interlocked.Increment(ref subscribed);
@@ -982,16 +983,16 @@ namespace Cognite.OpcUa
             // Create tasks to subscribe to nodes, then start history read. We might lose data if history read finished before subscriptions were created.
             if (states.Any())
             {
-                tasks.Add(token => SynchronizeNodes(states));
+                tasks.Add(token => SynchronizeNodes(states, token));
             }
             if (State.EmitterStates.Any())
             {
-                tasks.Add(token => SynchronizeEvents());
+                tasks.Add(SynchronizeEvents);
             }
 
             if (Config.Extraction.EnableAuditDiscovery)
             {
-                uaClient.SubscribeToAuditEvents(AuditEventSubscriptionHandler);
+                tasks.Add(token => uaClient.SubscribeToAuditEvents(AuditEventSubscriptionHandler, token));
             }
             return tasks;
         }

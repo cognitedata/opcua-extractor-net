@@ -880,8 +880,8 @@ namespace Test.Unit
 
             try
             {
-                tester.Client.SubscribeToNodes(nodes.Take(1000), handler, tester.Source.Token);
-                tester.Client.SubscribeToNodes(nodes.Skip(1000), handler, tester.Source.Token);
+                await tester.Client.SubscribeToNodes(nodes.Take(1000), handler, tester.Source.Token);
+                await tester.Client.SubscribeToNodes(nodes.Skip(1000), handler, tester.Source.Token);
 
                 await CommonTestUtils.WaitForCondition(() => dps.Count == 2000, 5,
                     () => $"Expected to get 2000 datapoints, but got {dps.Count}");
@@ -953,8 +953,8 @@ namespace Test.Unit
             {
                 await tester.Client.GetEventFields(null, tester.Source.Token);
 
-                tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.Source.Token);
-                tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.Source.Token);
+                await tester.Client.SubscribeToEvents(emitters.Take(2), handler, tester.Source.Token);
+                await tester.Client.SubscribeToEvents(emitters.Skip(2), handler, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
 
@@ -1000,7 +1000,7 @@ namespace Test.Unit
             try
             {
                 await tester.Client.GetEventFields(null, tester.Source.Token);
-                tester.Client.SubscribeToEvents(emitters, handler, tester.Source.Token);
+                await tester.Client.SubscribeToEvents(emitters, handler, tester.Source.Token);
 
                 tester.Server.TriggerEvents(0);
 
@@ -1033,7 +1033,7 @@ namespace Test.Unit
 
             try
             {
-                tester.Client.SubscribeToAuditEvents(handler);
+                await tester.Client.SubscribeToAuditEvents(handler);
 
                 tester.Server.DirectGrowth();
 

@@ -906,9 +906,10 @@ namespace Cognite.OpcUa.Config
                 config.Source.SubscriptionChunk = chunkSize;
                 try
                 {
-                    await ToolUtil.RunWithTimeout(() =>
-                        SubscribeToNodes(states.Take(chunkSize),
-                            ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this), token), 120);
+                    await ToolUtil.RunWithTimeout(SubscribeToNodes(
+                        states.Take(chunkSize),
+                        ToolUtil.GetSimpleListWriterHandler(dps, states.ToDictionary(state => state.SourceId), this),
+                        token), 120);
                     baseConfig.Source.SubscriptionChunk = chunkSize;
                     failed = false;
                     break;
@@ -1286,7 +1287,7 @@ namespace Cognite.OpcUa.Config
 
             try
             {
-                await ToolUtil.RunWithTimeout(() => SubscribeToEvents(states.Take(baseConfig.Source.SubscriptionChunk), (item, args) => { }, token), 120);
+                await ToolUtil.RunWithTimeout(SubscribeToEvents(states.Take(baseConfig.Source.SubscriptionChunk), (item, args) => { }, token), 120);
             }
             catch (Exception ex)
             {

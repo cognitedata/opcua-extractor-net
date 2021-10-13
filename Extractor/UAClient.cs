@@ -50,7 +50,7 @@ namespace Cognite.OpcUa
         public DataTypeManager DataTypeManager { get; }
         public NodeTypeManager ObjectTypeManager { get; }
 
-        private readonly object subscriptionLock = new object();
+        private readonly SemaphoreSlim subscriptionSem = new SemaphoreSlim(1);
         private readonly Dictionary<NodeId, string> nodeOverrides = new Dictionary<NodeId, string>();
         public bool Started { get; private set; }
         private CancellationToken liveToken;
@@ -918,7 +918,7 @@ namespace Cognite.OpcUa
         /// <param name="handler">Callback for the items</param>
         /// <param name="builder">Method to build monitoredItems from states</param>
         /// <returns>Constructed subscription</returns>
-        public Subscription AddSubscriptions(
+        public async Task<Subscription> AddSubscriptions(
             IEnumerable<UAHistoryExtractionState> nodeList,
             string subName,
             MonitoredItemNotificationEventHandler handler,
@@ -926,80 +926,82 @@ namespace Cognite.OpcUa
             CancellationToken token)
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");
-            lock (subscriptionLock)
+
+
+            await subscriptionSem.WaitAsync(token);
+
+            Subscription? subscription = null;
+
+            using var operation = waiter.GetInstance();
+            try
             {
-                var subscription = Session.Subscriptions.FirstOrDefault(sub =>
-                                       sub.DisplayName.StartsWith(subName, StringComparison.InvariantCulture));
+                subscription = Session.Subscriptions
+                    .FirstOrDefault(sub => sub.DisplayName.StartsWith(subName, StringComparison.InvariantCulture));
+
                 if (subscription == null)
                 {
-#pragma warning disable CA2000 // Dispose objects before losing scope
                     subscription = new Subscription(Session.DefaultSubscription)
                     {
                         PublishingInterval = config.Source.PublishingInterval,
                         DisplayName = subName
                     };
-#pragma warning restore CA2000 // Dispose objects before losing scope
                 }
+
                 int count = 0;
                 var hasSubscription = subscription.MonitoredItems.Select(sub => sub.ResolvedNodeId).ToHashSet();
                 int total = nodeList.Count();
-
-                using var operation = waiter.GetInstance();
-                try
+                foreach (var chunk in nodeList.ChunkBy(config.Source.SubscriptionChunk))
                 {
-                    foreach (var chunk in nodeList.ChunkBy(config.Source.SubscriptionChunk))
-                    {
-                        if (token.IsCancellationRequested) break;
-                        int lcount = 0;
-                        subscription.AddItems(chunk
-                            .Where(node => !hasSubscription.Contains(node.SourceId))
-                            .Select(node =>
-                            {
-                                var monitor = builder(node);
-                                monitor.Notification += handler;
-                                lcount++;
-                                return monitor;
-                            })
-                        );
-                        log.Debug("Add subscriptions for {numnodes} nodes, {subscribed} / {total} done.", lcount, count, total);
-                        count += lcount;
+                    if (token.IsCancellationRequested) break;
+                    int lcount = 0;
+                    subscription.AddItems(chunk
+                        .Where(node => !hasSubscription.Contains(node.SourceId))
+                        .Select(node =>
+                        {
+                            var monitor = builder(node);
+                            monitor.Notification += handler;
+                            lcount++;
+                            return monitor;
+                        })
+                    );
+                    log.Debug("Add subscriptions for {numnodes} nodes, {subscribed} / {total} done.", lcount, count, total);
+                    count += lcount;
 
-                        if (lcount > 0 && subscription.Created)
+                    if (lcount > 0 && subscription.Created)
+                    {
+                        try
                         {
-                            try
-                            {
-                                subscription.CreateItems();
-                            }
-                            catch (ServiceResultException ex)
-                            {
-                                throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
-                            }
+                            await subscription.CreateItemsAsync(token);
                         }
-                        else if (lcount > 0)
+                        catch (ServiceResultException ex)
                         {
-                            try
-                            {
-                                Session.AddSubscription(subscription);
-                                subscription.Create();
-                            }
-                            catch (ServiceResultException ex)
-                            {
-                                throw ExtractorUtils.HandleServiceResult(log, ex,
-                                    ExtractorUtils.SourceOp.CreateSubscription);
-                            }
+                            throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
+                        }
+                    }
+                    else if (lcount > 0)
+                    {
+                        try
+                        {
+                            Session.AddSubscription(subscription);
+                            await subscription.CreateAsync(token);
+                        }
+                        catch (ServiceResultException ex)
+                        {
+                            throw ExtractorUtils.HandleServiceResult(log, ex,
+                                ExtractorUtils.SourceOp.CreateSubscription);
                         }
                     }
                 }
-                finally
-                {
-                    if (!subscription.Created)
-                    {
-                        subscription.Dispose();
-                    }
-                }
-                log.Information("Added {TotalAddedSubscriptions} / {total} subscriptions to {sub}", count, total, subscription.DisplayName);
-                return subscription;
             }
+            finally
+            {
+                if (subscription != null && !subscription.Created)
+                {
+                    subscription.Dispose();
+                }
+                subscriptionSem.Release();
+            }
+            return subscription;
         }
 
 
@@ -1009,14 +1011,13 @@ namespace Cognite.OpcUa
         /// <param name="nodeList">List of buffered variables to synchronize</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
-        public void SubscribeToNodes(IEnumerable<VariableExtractionState> nodeList,
+        public async Task SubscribeToNodes(IEnumerable<VariableExtractionState> nodeList,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
             if (!nodeList.Any()) return;
 
-#pragma warning disable CA2000 // Dispose objects before losing scope
-            var sub = AddSubscriptions(
+            var sub = await AddSubscriptions(
                 nodeList,
                 "DataChangeListener",
                 subscriptionHandler,
@@ -1031,7 +1032,6 @@ namespace Cognite.OpcUa
                     CacheQueueSize = Math.Max(0, config.Source.QueueLength),
                     Filter = config.Subscriptions.DataChangeFilter?.Filter
                 }, token);
-#pragma warning restore CA2000 // Dispose objects before losing scope
 
             numSubscriptions.Set(sub.MonitoredItemCount);
         }
@@ -1042,14 +1042,13 @@ namespace Cognite.OpcUa
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
         /// <returns>Map of fields, EventTypeId->(SourceTypeId, BrowseName)</returns>
-        public void SubscribeToEvents(IEnumerable<EventExtractionState> emitters,
+        public async Task SubscribeToEvents(IEnumerable<EventExtractionState> emitters,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
         {
             var filter = BuildEventFilter();
 
-#pragma warning disable CA2000 // Dispose objects before losing scope
-            AddSubscriptions(
+            await AddSubscriptions(
                 emitters,
                 "EventListener",
                 subscriptionHandler,
@@ -1064,7 +1063,6 @@ namespace Cognite.OpcUa
                     NodeClass = NodeClass.Object
                 },
                 token);
-#pragma warning restore CA2000 // Dispose objects before losing scope
         }
 
         /// <summary>
@@ -1235,20 +1233,22 @@ namespace Cognite.OpcUa
         /// Subscribe to audit events on the server node
         /// </summary>
         /// <param name="callback">Callback to use for subscriptions</param>
-        public void SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback)
+        public async Task SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback, CancellationToken token)
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");
             var filter = BuildAuditFilter();
-            lock (subscriptionLock)
+            await subscriptionSem.WaitAsync(token);
+
+            Subscription? subscription = null;
+            try
             {
-                var subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener", StringComparison.InvariantCulture))
-#pragma warning disable CA2000 // Dispose objects before losing scope
-                               ?? new Subscription(Session.DefaultSubscription)
-                               {
-                                   PublishingInterval = config.Source.PublishingInterval,
-                                   DisplayName = "AuditListener"
-                               };
-#pragma warning restore CA2000 // Dispose objects before losing scope
+                subscription = Session.Subscriptions.FirstOrDefault(sub => sub.DisplayName.StartsWith("AuditListener", StringComparison.InvariantCulture))
+                ?? new Subscription(Session.DefaultSubscription)
+                {
+                    PublishingInterval = config.Source.PublishingInterval,
+                    DisplayName = "AuditListener"
+                };
+
                 if (subscription.MonitoredItemCount != 0) return;
                 var item = new MonitoredItem
                 {
@@ -1264,28 +1264,30 @@ namespace Cognite.OpcUa
                 log.Information("Subscribe to auditing events on the server node");
 
                 using var operation = waiter.GetInstance();
-                try
+
+                if (subscription.Created && subscription.MonitoredItemCount == 0)
                 {
-                    if (subscription.Created && subscription.MonitoredItemCount == 0)
-                    {
-                        subscription.CreateItems();
-                    }
-                    else if (!subscription.Created)
-                    {
-                        log.Information("Add subscription to the Session");
-                        Session.AddSubscription(subscription);
-                        subscription.Create();
-                    }
-                    else
-                    {
-                        subscription.Dispose();
-                    }
+                    await subscription.CreateItemsAsync(token);
                 }
-                catch (Exception)
+                else if (!subscription.Created)
                 {
-                    log.Error("Failed to create audit subscription");
-                    throw;
+                    log.Information("Add subscription to the Session");
+                    Session.AddSubscription(subscription);
+                    await subscription.CreateAsync(token);
                 }
+            }
+            catch (Exception)
+            {
+                log.Error("Failed to create audit subscription");
+                throw;
+            }
+            finally
+            {
+                if (subscription != null && !subscription.Created)
+                {
+                    subscription.Dispose();
+                }
+                subscriptionSem.Release();
             }
         }
 
@@ -1526,6 +1528,7 @@ namespace Cognite.OpcUa
             {
                 Session.KeepAlive -= ClientKeepAlive;
             }
+            subscriptionSem.Dispose();
         }
         #endregion
     }

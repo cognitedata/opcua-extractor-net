@@ -153,7 +153,7 @@ namespace Cognite.OpcUa
 
             if (!metrics.Any()) return;
 
-            await Task.Run(() => client.AddSubscriptions(metrics.Values, "NodeMetrics", SubscriptionHandler,
+            await client.AddSubscriptions(metrics.Values, "NodeMetrics", SubscriptionHandler,
                 state => new MonitoredItem
                 {
                     StartNodeId = state.SourceId,
@@ -164,7 +164,7 @@ namespace Cognite.OpcUa
                     AttributeId = Attributes.Value,
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = 1
-                }, token));
+                }, token);
         }
         /// <summary>
         /// Converts datapoint callback to metric value
