@@ -32,17 +32,17 @@ namespace Cognite.OpcUa
                 }
             }
         }
-        public async Task Wait(int msTimeout, CancellationToken token)
+        public async Task<bool> Wait(int msTimeout, CancellationToken token)
         {
             lock (sLock)
             {
                 // If there are no current operations, return without waiting.
-                if (counter == 0) return;
+                if (counter == 0) return true;
                 // If not, increment the waiting token
                 waiting++;
             }
             // Then wait for the semaphore to be released
-            await sem.WaitAsync(msTimeout, token);
+            return await sem.WaitAsync(msTimeout, token);
         }
 
         public void Dispose()

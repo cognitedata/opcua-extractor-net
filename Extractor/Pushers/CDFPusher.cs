@@ -19,7 +19,7 @@ using Cognite.Extensions;
 using Cognite.Extractor.Common;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.Utils;
-using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.NodeSources;
 using Cognite.OpcUa.Types;
 using CogniteSdk;

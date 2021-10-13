@@ -1,7 +1,7 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
 using Cognite.Extractor.Common;
 using Cognite.OpcUa;
-using Cognite.OpcUa.HistoryStates;
+using Cognite.OpcUa.History;
 using Cognite.OpcUa.TypeCollectors;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
