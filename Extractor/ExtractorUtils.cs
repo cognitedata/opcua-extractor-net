@@ -436,14 +436,14 @@ namespace Cognite.OpcUa
     /// <summary>
     /// Indicates a fatal error in configuration
     /// </summary>
-    public class ConfigurationException : Exception
+    /* public class ConfigurationException : Exception
     {
         public ConfigurationException(string message) : base(message) { }
 
         public ConfigurationException(string message, Exception innerException) : base(message, innerException) { }
 
         public ConfigurationException() { }
-    }
+    } */
     /// <summary>
     /// Indicates a fatal error in some system
     /// </summary>

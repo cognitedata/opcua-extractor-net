@@ -1,5 +1,6 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
 using Cognite.Extractor.Common;
+using Cognite.Extractor.Configuration;
 using Cognite.Extractor.StateStorage;
 using Cognite.OpcUa;
 using Cognite.OpcUa.History;

@@ -61,12 +61,12 @@ namespace Cognite.OpcUa.Pushers
         private readonly HashSet<string> missingTimeseries = new HashSet<string>();
         private readonly CogniteDestination destination;
 
-        public CDFPusher(IServiceProvider clientProvider, CognitePusherConfig config)
+        public CDFPusher(ExtractionConfig extConfig, CognitePusherConfig config, CogniteDestination destination)
         {
             this.config = config;
             BaseConfig = config;
-            destination = clientProvider.GetRequiredService<CogniteDestination>();
-            extractionConfig = clientProvider.GetRequiredService<FullConfig>().Extraction;
+            this.destination = destination;
+            extractionConfig = extConfig;
         }
 
         private static readonly Counter dataPointsCounter = Metrics

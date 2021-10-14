@@ -65,15 +65,9 @@ namespace Cognite.OpcUa
     /// </summary>
     class Program
     {
-        private static readonly Gauge version =
-            Metrics.CreateGauge("opcua_version", $"version: {Version.GetVersion()}, status: {Version.Status()}");
-        private static Serilog.ILogger log;
-        static int Main(string[] args)
+        static async Task<int> Main(string[] args)
         {
-            // Temporary logger config for capturing logs during configuration.
-            Log.Logger = LoggingUtils.GetSerilogDefault();
-
-            return GetCommandLineOptions().InvokeAsync(args).Result;
+            return await GetCommandLineOptions().InvokeAsync(args);
         }        
 
         private static Parser GetCommandLineOptions()
@@ -181,142 +175,14 @@ namespace Cognite.OpcUa
         }
         private static void RunStandalone(ExtractorParams setup)
         {
-            var loader = new ConfigLoader(setup);
-            IServiceProvider provider;
-            try
-            {
-                provider = loader.LoadConfig();
-            }
-            catch { return; }
-            Log.Logger = provider.GetRequiredService<Serilog.ILogger>();
-            log = Log.Logger.ForContext<Program>();
-
-            log.Information("Starting OPC UA Extractor version {version}", Version.GetVersion());
-            log.Information("Revision information: {status}", Version.Status());
-
-            version.Set(0);
-
             if (setup.ConfigTool)
             {
-                string configOutput = setup.ConfigTarget ?? Path.Combine(setup.Config.Source.ConfigRoot, "config.config-tool-output.yml");
-                RunConfigTool(setup.Config, setup.BaseConfig, configOutput);
+                ExtractorStarter.RunConfigTool(null, setup, CancellationToken.None).Wait();
             }
             else
             {
-                var metrics = provider.GetRequiredService<MetricsService>();
-                metrics.Start();
-                RunExtractor(setup.Config, provider);
+                ExtractorStarter.RunExtractor(null, setup, CancellationToken.None).Wait();
             }
-        }
-
-        /// <summary>
-        /// Start the extractor and keep it running until canceled, restarting on crashes
-        /// </summary>
-        /// <param name="config"></param>
-        private static void RunExtractor(FullConfig config, IServiceProvider provider)
-        {
-            var runTime = new ExtractorRuntime(config, provider);
-
-            int waitRepeats = 0;
-
-            using var source = new CancellationTokenSource();
-            using var quitEvent = new ManualResetEvent(false);
-            bool canceled = false;
-            Console.CancelKeyPress += (sender, eArgs) =>
-            {
-                quitEvent?.Set();
-                eArgs.Cancel = true;
-                source?.Cancel();
-                canceled = true;
-            };
-            while (true)
-            {
-                if (canceled)
-                {
-                    log.Warning("Extractor stopped manually");
-                    break;
-                }
-
-                DateTime startTime = DateTime.UtcNow;
-                try
-                {
-                    log.Information("Starting extractor");
-                    runTime.Run(source.Token).Wait();
-                    log.Information("Extractor closed without error");
-                }
-                catch (TaskCanceledException)
-                {
-                }
-                catch (AggregateException aex)
-                {
-                    if (ExtractorUtils.GetRootExceptionOfType<ConfigurationException>(aex) != null)
-                    {
-                        log.Error("Invalid configuration, stopping: {msg}", aex.InnerException.Message);
-                        break;
-                    }
-                    if (ExtractorUtils.GetRootExceptionOfType<TaskCanceledException>(aex) != null)
-                    {
-                        log.Error("Extractor halted due to cancelled task");
-                    }
-                    else if (ExtractorUtils.GetRootExceptionOfType<SilentServiceException>(aex) == null)
-                    {
-                        log.Error(aex, "Unexpected failure in extractor: {msg}", aex.Message);
-                    }
-                }
-                catch (ConfigurationException)
-                {
-                    log.Error("Invalid configuration, stopping");
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    log.Error(ex, "Unexpected failure in extractor: {msg}", ex.Message);
-                }
-
-                if (config.Source.ExitOnFailure)
-                {
-                    break;
-                }
-
-                if (startTime > DateTime.UtcNow - TimeSpan.FromSeconds(600))
-                {
-                    waitRepeats++;
-                }
-                else
-                {
-                    waitRepeats = 0;
-                }
-
-                if (source.IsCancellationRequested)
-                {
-                    log.Warning("Extractor stopped manually");
-                    break;
-                }
-
-                try
-                {
-                    var sleepTime = TimeSpan.FromSeconds(Math.Pow(2, Math.Min(waitRepeats, 9)));
-                    log.Information("Sleeping for {time}", sleepTime);
-                    Task.Delay(sleepTime, source.Token).Wait();
-                }
-                catch (Exception)
-                {
-                    log.Warning("Extractor stopped manually");
-                    break;
-                }
-            }
-            Log.CloseAndFlush();
-        }
-        /// <summary>
-        /// Run the config tool
-        /// </summary>
-        /// <param name="config">Basic configuration for the config tool</param>
-        /// <param name="baseConfig">Configuration that will be modified and returned by the config tool</param>
-        /// <param name="output">Path to output config file</param>
-        private static void RunConfigTool(FullConfig config, FullConfig baseConfig, string output)
-        {
-            var runTime = new ConfigToolRuntime(config, baseConfig, output);
-            runTime.Run().Wait();
         }
     }
 }

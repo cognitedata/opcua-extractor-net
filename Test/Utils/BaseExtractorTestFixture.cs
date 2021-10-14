@@ -1,4 +1,5 @@
 ﻿using AdysTech.InfluxDB.Client.Net;
+using Cognite.Extractor.Common;
 using Cognite.Extractor.Configuration;
 using Cognite.Extractor.Logging;
 using Cognite.Extractor.StateStorage;
@@ -10,6 +11,7 @@ using Opc.Ua;
 using Server;
 using System;
 using System.IO;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -93,6 +95,17 @@ namespace Test.Utils
             Config.Source.EndpointUrl = $"opc.tcp://localhost:{Port}";
             Config.GenerateDefaults();
         }
+        private void InitInternal(UAExtractor ext)
+        {
+#pragma warning disable CA2000 // Dispose objects before losing scope
+            var t = typeof(BaseExtractor<FullConfig>);
+            var source = CancellationTokenSource.CreateLinkedTokenSource(Source.Token);
+            t.GetProperty("Source", BindingFlags.NonPublic | BindingFlags.Instance)
+                .SetValue(ext, source);
+            t.GetProperty("Scheduler", BindingFlags.NonPublic | BindingFlags.Instance)
+                .SetValue(ext, new PeriodicScheduler(source.Token));
+#pragma warning restore CA2000 // Dispose objects before losing scope
+        }
         public UAExtractor BuildExtractor(bool clear = true, IExtractionStateStore stateStore = null, params IPusher[] pushers)
         {
             if (clear)
@@ -107,7 +120,11 @@ namespace Test.Utils
                 Client.Browser.IgnoreFilters = null;
                 Client.ObjectTypeManager.Reset();
             }
-            return new UAExtractor(Config, pushers, Client, stateStore, Source.Token);
+            var ext = new UAExtractor(Config, Provider, pushers, Client, stateStore);
+            InitInternal(ext);
+            ext.Init();
+
+            return ext;
         }
 
 
@@ -126,7 +143,7 @@ namespace Test.Utils
             {
                 ClearLiteDB(client).Wait();
             }
-            var pusher = Config.Influx.ToPusher(null) as InfluxPusher;
+            var pusher = new InfluxPusher(Config.Influx);
             return (pusher, client);
         }
 
@@ -151,7 +168,8 @@ namespace Test.Utils
             CommonTestUtils.AddDummyProvider(handler, Services);
             Services.AddCogniteClient("appid", null, true, true, false);
             var provider = Services.BuildServiceProvider();
-            var pusher = Config.Cognite.ToPusher(provider) as CDFPusher;
+            var destination = provider.GetRequiredService<CogniteDestination>();
+            var pusher = new CDFPusher(Config.Extraction, Config.Cognite, destination);
             return (handler, pusher);
         }
 
@@ -196,7 +214,7 @@ namespace Test.Utils
         public static async Task TerminateRunTask(Task runTask, UAExtractor extractor)
         {
             if (extractor == null) throw new ArgumentNullException(nameof(extractor));
-            extractor.Close(false);
+            await extractor.Close(false);
             try
             {
                 await runTask;

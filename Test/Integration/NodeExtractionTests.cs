@@ -725,9 +725,10 @@ namespace Test.Integration
             Assert.False(pusher.NoInit);
             Assert.True(pusher.Initialized);
 
-            extractor.Close(false);
+            await extractor.Close(false);
 
-            await runTask;
+            var comp = await Task.WhenAny(runTask, Task.Delay(10000));
+            Assert.Equal(comp, runTask);
         }
         [Theory]
         [InlineData(true, false)]
@@ -783,8 +784,7 @@ namespace Test.Integration
 
             Assert.True(pusher.Initialized);
 
-            extractor.Close(false);
-
+            await extractor.Close(false);
 
             await runTask;
         }
