@@ -548,7 +548,19 @@ namespace Cognite.OpcUa
 
             try
             {
-                return await MapUAToDestinations(result);
+                var tasks = await MapUAToDestinations(result);
+                if (initial && !readFromOpc && config.Source.AltSourceBackgroundBrowse)
+                {
+                    tasks = tasks.Append(async token =>
+                    {
+                        var tasks = await RunMapping(RootNodes, false, false);
+                        foreach (var task in tasks)
+                        {
+                            Looper.Scheduler.ScheduleTask(null, task);
+                        }
+                    });
+                }
+                return tasks;
             }
             catch (Exception ex)
             {
