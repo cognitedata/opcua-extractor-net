@@ -90,10 +90,33 @@ namespace Cognite.OpcUa
             }
         }
 
+        private static void SetWorkingDir(ExtractorParams setup)
+        {
+            string path = null;
+            if (setup.WorkingDir != null)
+            {
+                path = setup.WorkingDir;
+            }
+            else if (setup.Service)
+            {
+                path = Directory.GetParent(AppContext.BaseDirectory).Parent.FullName;
+            }
+            if (path != null)
+            {
+                if (!Directory.Exists(path))
+                {
+                    throw new ConfigurationException($"Target directory does not exist: {path}");
+                }
+                Directory.SetCurrentDirectory(path);
+            }
+        }
+
         public static async Task RunConfigTool(ILogger log, ExtractorParams setup, CancellationToken token)
         {
             var services = new ServiceCollection();
             string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
+
+            SetWorkingDir(setup);
 
             if (log == null)
             {
@@ -140,6 +163,8 @@ namespace Cognite.OpcUa
         {
             var services = new ServiceCollection();
             string configDir = setup.ConfigDir ?? Environment.GetEnvironmentVariable("OPCUA_CONFIG_DIR") ?? "config/";
+
+            SetWorkingDir(setup);
 
             if (log == null)
             {
