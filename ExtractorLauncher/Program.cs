@@ -15,24 +15,15 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA. */
 
-using Cognite.Extractor.Configuration;
-using Cognite.Extractor.Logging;
-using Cognite.Extractor.Metrics;
-using Cognite.Extractor.StateStorage;
-using Cognite.Extractor.Utils;
-using Cognite.OpcUa.Config;
 using Cognite.OpcUa.Service;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Prometheus;
-using Serilog;
 using System;
 using System.CommandLine;
 using System.CommandLine.Builder;
 using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -63,9 +54,9 @@ namespace Cognite.OpcUa
     /// Console launcher for the OPC-UA extractor and Configuration tool. Includes basic setup of logging/config/metrics and
     /// parsing of command-line arguments
     /// </summary>
-    class Program
+    public static class Program
     {
-        static async Task<int> Main(string[] args)
+        public static async Task<int> Main(string[] args)
         {
             return await GetCommandLineOptions().InvokeAsync(args);
         }        
