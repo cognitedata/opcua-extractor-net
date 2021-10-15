@@ -154,6 +154,7 @@ namespace Test.Unit
             var evts1 = pusher1.Events[new NodeId("id")] = new List<UAEvent>();
             var evts2 = pusher2.Events[new NodeId("id")] = new List<UAEvent>();
 
+            tester.Config.Extraction.DataPushDelay = 100;
             extractor.Looper.Run();
             var loopTask = extractor.Looper.Scheduler.WaitForAll();
 
