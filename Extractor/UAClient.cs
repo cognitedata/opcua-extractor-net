@@ -216,7 +216,7 @@ namespace Cognite.OpcUa
             {
                 selectedEndpoint = CoreClientUtils.SelectEndpoint(config.Source.EndpointUrl, config.Source.Secure);
             }
-            catch (ServiceResultException ex)
+            catch (Exception ex)
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
             }
@@ -245,7 +245,7 @@ namespace Cognite.OpcUa
                     null
                 );
             }
-            catch (ServiceResultException ex)
+            catch (Exception ex)
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
             }
@@ -279,7 +279,7 @@ namespace Cognite.OpcUa
             {
                 selectedEndpoint = CoreClientUtils.SelectEndpoint(AppConfig, connection, config.Source.Secure, 30000);
             }
-            catch (ServiceResultException ex)
+            catch (Exception ex)
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.SelectEndpoint);
             }
@@ -317,7 +317,7 @@ namespace Cognite.OpcUa
                     identity,
                     null);
             }
-            catch (ServiceResultException ex)
+            catch (Exception ex)
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateSession);
             }
@@ -554,7 +554,7 @@ namespace Cognite.OpcUa
                     numBrowse.Inc();
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
-                catch (ServiceResultException ex)
+                catch (Exception ex)
                 {
                     browseFailures.Inc();
                     throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.Browse);
@@ -580,7 +580,7 @@ namespace Cognite.OpcUa
                     numBrowse.Inc();
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
-                catch (ServiceResultException ex)
+                catch (Exception ex)
                 {
                     browseFailures.Inc();
                     throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
@@ -605,7 +605,7 @@ namespace Cognite.OpcUa
                     cps,
                     CancellationToken.None);
             }
-            catch (ServiceResultException ex)
+            catch (Exception ex)
             {
                 browseFailures.Inc();
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.BrowseNext);
@@ -662,7 +662,7 @@ namespace Cognite.OpcUa
                     values.Count, count, distinctNodeCount);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-            catch (ServiceResultException ex)
+            catch (Exception ex)
             {
                 attributeRequestFailures.Inc();
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
@@ -693,7 +693,7 @@ namespace Cognite.OpcUa
             {
                 values = await ReadAttributes(readValueIds, nodes.Count(), token);
             }
-            catch (ServiceResultException ex)
+            catch (Exception ex)
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
@@ -746,7 +746,7 @@ namespace Cognite.OpcUa
                 var attributes = new List<uint> { Attributes.Value };
                 values = await ReadAttributes(readValueIds, nodes.Count(), token);
             }
-            catch (ServiceResultException ex)
+            catch (Exception ex)
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadAttributes);
             }
@@ -897,17 +897,12 @@ namespace Cognite.OpcUa
                           + " for {nodeCount} nodes", readParams.Nodes.Count);
             }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-            catch (ServiceResultException ex)
+            catch (Exception ex)
             {
                 historyReadFailures.Inc();
                 throw ExtractorUtils.HandleServiceResult(log, ex, readParams.Details is ReadEventDetails
                     ? ExtractorUtils.SourceOp.HistoryReadEvents
                     : ExtractorUtils.SourceOp.HistoryRead);
-            }
-            catch
-            {
-                historyReadFailures.Inc();
-                throw;
             }
         }
         /// <summary>
@@ -918,6 +913,8 @@ namespace Cognite.OpcUa
         /// <param name="handler">Callback for the items</param>
         /// <param name="builder">Method to build monitoredItems from states</param>
         /// <returns>Constructed subscription</returns>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+            Justification = "Bad analysis")]
         public async Task<Subscription> AddSubscriptions(
             IEnumerable<UAHistoryExtractionState> nodeList,
             string subName,
@@ -940,11 +937,13 @@ namespace Cognite.OpcUa
 
                 if (subscription == null)
                 {
+#pragma warning disable CA2000 // Dispose objects before losing scope
                     subscription = new Subscription(Session.DefaultSubscription)
                     {
                         PublishingInterval = config.Source.PublishingInterval,
                         DisplayName = subName
                     };
+#pragma warning restore CA2000 // Dispose objects before losing scope
                 }
 
                 int count = 0;
@@ -973,7 +972,7 @@ namespace Cognite.OpcUa
                         {
                             await subscription.CreateItemsAsync(token);
                         }
-                        catch (ServiceResultException ex)
+                        catch (Exception ex)
                         {
                             throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.CreateMonitoredItems);
                         }
@@ -985,7 +984,7 @@ namespace Cognite.OpcUa
                             Session.AddSubscription(subscription);
                             await subscription.CreateAsync(token);
                         }
-                        catch (ServiceResultException ex)
+                        catch (Exception ex)
                         {
                             throw ExtractorUtils.HandleServiceResult(log, ex,
                                 ExtractorUtils.SourceOp.CreateSubscription);
@@ -1005,12 +1004,15 @@ namespace Cognite.OpcUa
         }
 
 
+
         /// <summary>
         /// Create datapoint subscriptions for given list of nodes
         /// </summary>
         /// <param name="nodeList">List of buffered variables to synchronize</param>
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+            Justification = "Bad analysis")]
         public async Task SubscribeToNodes(IEnumerable<VariableExtractionState> nodeList,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
@@ -1042,6 +1044,8 @@ namespace Cognite.OpcUa
         /// <param name="subscriptionHandler">Subscription handler, should be a function returning void that takes a
         /// <see cref="MonitoredItem"/> and <see cref="MonitoredItemNotificationEventArgs"/></param>
         /// <returns>Map of fields, EventTypeId->(SourceTypeId, BrowseName)</returns>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+            Justification = "Bad analysis")]
         public async Task SubscribeToEvents(IEnumerable<EventExtractionState> emitters,
             MonitoredItemNotificationEventHandler subscriptionHandler,
             CancellationToken token)
@@ -1233,6 +1237,8 @@ namespace Cognite.OpcUa
         /// Subscribe to audit events on the server node
         /// </summary>
         /// <param name="callback">Callback to use for subscriptions</param>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+            Justification = "Bad analysis")]
         public async Task SubscribeToAuditEvents(MonitoredItemNotificationEventHandler callback, CancellationToken token)
         {
             if (Session == null) throw new InvalidOperationException("Requires open session");

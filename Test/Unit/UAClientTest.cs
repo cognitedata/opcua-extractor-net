@@ -1033,7 +1033,7 @@ namespace Test.Unit
 
             try
             {
-                await tester.Client.SubscribeToAuditEvents(handler);
+                await tester.Client.SubscribeToAuditEvents(handler, tester.Source.Token);
 
                 tester.Server.DirectGrowth();
 

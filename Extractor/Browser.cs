@@ -114,7 +114,7 @@ namespace Cognite.OpcUa
             {
                 results = await uaClient.ReadAttributes(new ReadValueIdCollection(readValueIds), 1, token);
             }
-            catch (ServiceResultException ex)
+            catch (Exception ex)
             {
                 throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadRootNode);
             }
@@ -160,7 +160,7 @@ namespace Cognite.OpcUa
                         }
                     }
                 }
-                catch (ServiceResultException ex)
+                catch (Exception ex)
                 {
                     throw ExtractorUtils.HandleServiceResult(log, ex, ExtractorUtils.SourceOp.ReadRootNode);
                 }

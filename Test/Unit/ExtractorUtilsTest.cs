@@ -1,4 +1,5 @@
 ﻿using Cognite.Extractor.Common;
+using Cognite.Extractor.Logging;
 using Cognite.OpcUa;
 using Cognite.OpcUa.Types;
 using Opc.Ua;
@@ -8,14 +9,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-
+using Xunit.Abstractions;
 using SourceOp = Cognite.OpcUa.ExtractorUtils.SourceOp;
 
 
 namespace Test.Unit
 {
-    public class ExtractorUtilsTest
+    public class ExtractorUtilsTest : MakeConsoleWork
     {
+        public ExtractorUtilsTest(ITestOutputHelper output) : base(output)
+        {
+        }
+
         [Fact]
         public void TestSortNodes()
         {
@@ -116,11 +121,11 @@ namespace Test.Unit
         [InlineData(StatusCodes.BadServerNotConnected, SourceOp.Browse, 2, true)]
         [InlineData(StatusCodes.BadServerHalted, SourceOp.Browse, 1, true)]
         [InlineData(StatusCodes.BadNotConnected, SourceOp.SelectEndpoint, 2, true)]
-        [InlineData(StatusCodes.BadNotConnected, SourceOp.Browse, 0, false)]
+        [InlineData(StatusCodes.BadNotConnected, SourceOp.Browse, 1, false)]
         [InlineData(StatusCodes.BadIdentityTokenInvalid, SourceOp.CreateSession, 2, true)]
         [InlineData(StatusCodes.BadIdentityTokenRejected, SourceOp.CreateSession, 1, true)]
         [InlineData(StatusCodes.BadCertificateUntrusted, SourceOp.CreateSession, 2, true)]
-        [InlineData(StatusCodes.BadCertificateUntrusted, SourceOp.Browse, 0, false)]
+        [InlineData(StatusCodes.BadCertificateUntrusted, SourceOp.Browse, 1, false)]
         [InlineData(StatusCodes.BadNodeIdInvalid, SourceOp.ReadRootNode, 1, true)]
         [InlineData(StatusCodes.BadNodeIdInvalid, SourceOp.Browse, 1, true)]
         [InlineData(StatusCodes.BadNodeIdInvalid, SourceOp.ReadAttributes, 1, true)]
@@ -141,17 +146,41 @@ namespace Test.Unit
         [InlineData(StatusCodes.BadNoContinuationPoints, SourceOp.CreateMonitoredItems, 2, true)]
         [InlineData(StatusCodes.BadTooManyOperations, SourceOp.CreateMonitoredItems, 2, true)]
         [InlineData(StatusCodes.BadTooManyOperations, SourceOp.CloseSession, 1, true)]
-        public void TestHandleServiceException(uint code, SourceOp sourceOp, int errC, bool isSilent)
+        [InlineData(StatusCodes.BadRequestInterrupted, SourceOp.CreateSubscription, 1, true)]
+        public void TestHandleServiceException(uint code, SourceOp sourceOp, int errC, bool isHandled)
         {
             var logger = new DummyLogger();
             var serviceException = new ServiceResultException(code);
             var exc = ExtractorUtils.HandleServiceResult(logger, serviceException, sourceOp);
             Assert.Equal(errC, logger.Events.Count(evt => evt.Level == LogEventLevel.Error));
             Assert.Equal(errC, logger.Events.Count);
-            if (isSilent)
+            var serviceEx = Assert.IsType<SilentServiceException>(exc);
+            if (isHandled) Assert.NotNull(serviceEx.InnerServiceException);
+
+            exc = ExtractorUtils.HandleServiceResult(logger, new AggregateException(serviceException), sourceOp);
+            Assert.Equal(errC * 2, logger.Events.Count(evt => evt.Level == LogEventLevel.Error));
+            Assert.Equal(errC * 2, logger.Events.Count);
+            serviceEx = Assert.IsType<SilentServiceException>(exc);
+            if (isHandled) Assert.NotNull(serviceEx.InnerServiceException);
+        }
+
+        [Fact]
+        public void TestHandleNestedException()
+        {
+            var logger = new DummyLogger();
+            var inner = new ServiceResultException(StatusCodes.BadRequestTooLarge);
+            var exception = new ServiceResultException(StatusCodes.BadRequestInterrupted, inner);
+
+            var exc = ExtractorUtils.HandleServiceResult(logger, exception, SourceOp.CreateSubscription);
+            var dLog = LoggingUtils.GetSerilogDefault();
+            foreach (var evt in logger.Events)
             {
-                Assert.IsType<SilentServiceException>(exc);
+                dLog.Write(evt);
             }
+            Assert.Equal(3, logger.Events.Count);
+            
+            var serviceEx = Assert.IsType<SilentServiceException>(exc);
+            Assert.NotNull(serviceEx.InnerServiceException);
         }
     }
 }

@@ -356,7 +356,7 @@ namespace Cognite.OpcUa
             {
                 uaClient.Close();
             }
-            catch (ServiceResultException e)
+            catch (Exception e)
             {
                 ExtractorUtils.LogException(log,
                     ExtractorUtils.HandleServiceResult(log, e, ExtractorUtils.SourceOp.CloseSession),
