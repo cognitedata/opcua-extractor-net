@@ -153,6 +153,7 @@ namespace Cognite.OpcUa
 
             if (!metrics.Any()) return;
 
+#pragma warning disable CA2000 // Dispose objects before losing scope
             await client.AddSubscriptions(metrics.Values, "NodeMetrics", SubscriptionHandler,
                 state => new MonitoredItem
                 {
@@ -165,6 +166,7 @@ namespace Cognite.OpcUa
                     NodeClass = NodeClass.Variable,
                     CacheQueueSize = 1
                 }, token);
+#pragma warning restore CA2000 // Dispose objects before losing scope
         }
         /// <summary>
         /// Converts datapoint callback to metric value

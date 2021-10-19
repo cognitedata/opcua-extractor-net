@@ -152,7 +152,7 @@ namespace Cognite.OpcUa.Config
                 using var disc = new DiscoveryClient(channel);
                 try
                 {
-                    endpoints = disc.GetEndpoints(null);
+                    endpoints = await disc.GetEndpointsAsync(null);
                     summary.Endpoints = endpoints.Select(ep => $"{ep.EndpointUrl}: {ep.SecurityPolicyUri}").ToList();
                 }
                 catch (Exception e)
@@ -967,7 +967,7 @@ namespace Cognite.OpcUa.Config
                 summary.SilentSubscriptionsWarning = true;
             }
 
-            Session.RemoveSubscriptions(Session.Subscriptions.ToList());
+            await Session.RemoveSubscriptionsAsync(Session.Subscriptions.ToList());
         }
         /// <summary>
         /// Attempts history read if possible, getting chunk sizes. It also determines granularity, 
@@ -1295,7 +1295,7 @@ namespace Cognite.OpcUa.Config
                 return;
             }
 
-            Session.RemoveSubscriptions(Session.Subscriptions.ToList());
+            await Session.RemoveSubscriptionsAsync(Session.Subscriptions.ToList());
         }
 
 
