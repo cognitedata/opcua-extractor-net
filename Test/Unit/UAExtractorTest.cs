@@ -309,12 +309,12 @@ namespace Test.Unit
         }
 
         [Fact]
-        public void TestServerConfigLimit()
+        public async Task TestServerConfigLimit()
         {
             var helper = new ServerInfoHelper(tester.Client);
             tester.Config.History.Throttling.MaxNodeParallelism = 100;
             tester.Config.Source.BrowseThrottling.MaxNodeParallelism = 10000;
-            helper.LimitConfigValues(tester.Config, tester.Source.Token);
+            await helper.LimitConfigValues(tester.Config, tester.Source.Token);
 
             Assert.Equal(100, tester.Config.History.Throttling.MaxNodeParallelism);
             Assert.Equal(1000, tester.Config.Source.BrowseThrottling.MaxNodeParallelism);
@@ -323,7 +323,7 @@ namespace Test.Unit
             tester.Config.Source.BrowseThrottling.MaxNodeParallelism = 0;
             tester.Config.Source.BrowseNodesChunk = 100;
 
-            helper.LimitConfigValues(tester.Config, tester.Source.Token);
+            await helper.LimitConfigValues(tester.Config, tester.Source.Token);
 
             Assert.Equal(1000, tester.Config.History.Throttling.MaxNodeParallelism);
             Assert.Equal(1000, tester.Config.Source.BrowseThrottling.MaxNodeParallelism);
