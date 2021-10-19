@@ -111,6 +111,8 @@ namespace Cognite.OpcUa
             this.pushers = pushers;
             this.config = config;
 
+            log.Debug("config:\n{conf}", ExtractorUtils.ConfigToString(this.config));
+
             this.uaClient.OnServerReconnect += UaClient_OnServerReconnect;
             this.uaClient.OnServerDisconnect += UaClient_OnServerDisconnect;
 
